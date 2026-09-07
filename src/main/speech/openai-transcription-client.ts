@@ -95,6 +95,11 @@ export class OpenAiTranscriptionSession {
     this.chunks.push(new Float32Array(normalized))
   }
 
+  clear(): void {
+    this.chunks = []
+    this.audioSeconds = 0
+  }
+
   async finish(): Promise<string> {
     if (this.chunks.length === 0) {
       return ''

@@ -1,6 +1,7 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
 import { parentPort, workerData } from 'node:worker_threads'
 import { resampleToRate } from './stt-audio-resample'
+import { clearSttWorkerUtterance } from './stt-worker-clear'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
 import { buildHotwordsConfig, resolveFile, resolveTokens } from './stt-worker-model-config'
 
@@ -16,6 +17,7 @@ type WorkerMessage =
       modelingUnit?: string
     }
   | { type: 'feed'; samples: Float32Array; sampleRate: number }
+  | { type: 'clear' }
   | { type: 'stop' }
   | { type: 'teardown' }
 
@@ -262,6 +264,16 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
   }
 }
 
+function handleClear(): void {
+  stream = clearSttWorkerUtterance({
+    sherpa,
+    recognizer,
+    stream,
+    isStreaming,
+    resetOfflineSessionState
+  })
+}
+
 function handleStop(): void {
   if (!recognizer || !stream) {
     parentPort?.postMessage({ type: 'stopped' })
@@ -319,6 +331,9 @@ parentPort?.on('message', (msg: WorkerMessage) => {
       break
     case 'feed':
       handleFeed(msg)
+      break
+    case 'clear':
+      handleClear()
       break
     case 'stop':
       handleStop()

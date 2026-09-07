@@ -55,7 +55,11 @@ export type SpeechErrorEvent = {
   sessionId: string
 }
 
-export type DictationState = 'idle' | 'starting' | 'listening' | 'stopping' | 'error'
+export type DictationState = 'idle' | 'starting' | 'listening' | 'paused' | 'stopping' | 'error'
+
+export function isDictationSessionOpen(state: DictationState): boolean {
+  return state === 'starting' || state === 'listening' || state === 'paused' || state === 'stopping'
+}
 
 export type UserModelConfig = {
   id: string

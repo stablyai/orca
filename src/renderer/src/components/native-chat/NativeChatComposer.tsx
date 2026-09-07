@@ -3,6 +3,7 @@ import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
+import { isDictationSessionOpen } from '../../../../shared/speech-types'
 import { structuredSlashCommands } from '../../../../shared/structured-agent-session-composer'
 import {
   applyMentionSuggestion,
@@ -103,11 +104,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     const dictationState = useAppStore((store) => store.dictationState)
     const voiceSettings = useAppStore((store) => store.settings?.voice)
     const dictationDisabled = voiceSettings?.enabled !== true || !voiceSettings.sttModel
-    const isDictating =
-      dictationPressed ||
-      dictationState === 'starting' ||
-      dictationState === 'listening' ||
-      dictationState === 'stopping'
+    const isDictating = dictationPressed || isDictationSessionOpen(dictationState)
 
     const agentCommands = useMemo(
       () =>

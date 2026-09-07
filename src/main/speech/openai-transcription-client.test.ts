@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeOpenAiTranscriptionErrorMessage } from './openai-transcription-client'
+import {
+  OpenAiTranscriptionSession,
+  sanitizeOpenAiTranscriptionErrorMessage
+} from './openai-transcription-client'
 
 describe('sanitizeOpenAiTranscriptionErrorMessage', () => {
   it('does not expose the invalid OpenAI API key echoed by the provider', () => {
@@ -16,5 +19,15 @@ describe('sanitizeOpenAiTranscriptionErrorMessage', () => {
         'Request failed for sk-testSecret123 with Authorization: Bearer token-value_123'
       )
     ).toBe('Request failed for [redacted] with Authorization: Bearer [redacted]')
+  })
+})
+
+describe('OpenAiTranscriptionSession.clear', () => {
+  it('drops buffered audio so a later finish has nothing to send', async () => {
+    const session = new OpenAiTranscriptionSession('openai-gpt-4o-transcribe', () => 'key')
+    session.feedAudio(new Float32Array([0.5, -0.5]), 16000)
+    session.clear()
+
+    await expect(session.finish()).resolves.toBe('')
   })
 })

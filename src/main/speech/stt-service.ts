@@ -50,6 +50,24 @@ export class SttService {
     ])
   }
 
+  clearUtterance(owner = 'desktop'): void {
+    if (this.state.stopping) {
+      return
+    }
+    const currentOwner = this.state.activeOwner ?? this.state.startingOwner
+    if (!currentOwner) {
+      return
+    }
+    if (currentOwner !== owner) {
+      throw new Error('dictation_owner_mismatch')
+    }
+    if (this.state.cloudSession) {
+      this.state.cloudSession.clear()
+      return
+    }
+    this.state.worker?.postMessage({ type: 'clear' })
+  }
+
   stopDictation(
     owner = 'desktop',
     options: { cancelStarting?: boolean } = { cancelStarting: true }

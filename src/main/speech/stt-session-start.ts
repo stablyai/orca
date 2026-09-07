@@ -19,6 +19,24 @@ import {
 } from './stt-worker-startup'
 import { START_DICTATION_TIMEOUT_MS } from './stt-session-timeouts'
 
+export function isSameDesktopWindowOwner(left: string, right: string): boolean {
+  const windowId = (owner: string): string | null => {
+    const match = /^desktop:(\d+):/.exec(owner)
+    return match ? match[1] : null
+  }
+  const leftWindow = windowId(left)
+  const rightWindow = windowId(right)
+  return leftWindow !== null && leftWindow === rightWindow
+}
+
+function conflictingDesktopOwner(state: SttSessionState, owner: string): string | null {
+  const current = state.startingOwner ?? state.activeOwner
+  if (!current || current === owner) {
+    return null
+  }
+  return isSameDesktopWindowOwner(current, owner) ? current : null
+}
+
 export async function startSttDictation(
   state: SttSessionState,
   modelId: string,
@@ -26,18 +44,38 @@ export async function startSttDictation(
   hotwordsFilePath?: string,
   owner = 'desktop'
 ): Promise<void> {
-  if (state.starting) {
+  const conflicting = conflictingDesktopOwner(state, owner)
+  if (conflicting) {
+    const pendingStart = state.startSettled
+    await stopSttDictation(state, conflicting)
+    await pendingStart?.catch(() => undefined)
+  } else if (state.starting) {
     if (state.startingOwner !== owner) {
       throw new Error('dictation_already_active')
     }
     return
-  }
-  if ((state.worker || state.cloudSession) && state.activeOwner && state.activeOwner !== owner) {
+  } else if (
+    (state.worker || state.cloudSession) &&
+    state.activeOwner &&
+    state.activeOwner !== owner
+  ) {
     throw new Error('dictation_already_active')
   }
+
+  if (state.starting) {
+    if (state.startingOwner === owner) {
+      return
+    }
+    throw new Error('dictation_already_active')
+  }
+
   state.starting = true
   state.startingOwner = owner
   state.startingModelId = modelId
+  let settleStart = (): void => {}
+  state.startSettled = new Promise<void>((resolve) => {
+    settleStart = resolve
+  })
   clearSttIdleTeardownTimer(state)
 
   try {
@@ -52,6 +90,10 @@ export async function startSttDictation(
     state.startingOwner = null
     state.startingModelId = null
     state.canceledOwners.delete(owner)
+    settleStart()
+    if (state.startSettled) {
+      state.startSettled = null
+    }
   }
 }
 

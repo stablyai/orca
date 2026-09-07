@@ -19,6 +19,7 @@ export type SttSessionState = {
   startingOwner: string | null
   startingModelId: string | null
   starting: boolean
+  startSettled: Promise<void> | null
   canceledOwners: Set<string>
   eventSink: SttEventSink | null
   idleTeardownTimer: NodeJS.Timeout | null
@@ -38,6 +39,7 @@ export function createSttSessionState(modelManager: ModelManager): SttSessionSta
     startingOwner: null,
     startingModelId: null,
     starting: false,
+    startSettled: null,
     canceledOwners: new Set(),
     eventSink: null,
     idleTeardownTimer: null,
