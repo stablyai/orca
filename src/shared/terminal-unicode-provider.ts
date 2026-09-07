@@ -18,22 +18,29 @@ const KEYCAP_NUMBER_SIGN = 0x23
 const KEYCAP_ASTERISK = 0x2a
 const KEYCAP_DIGIT_FIRST = 0x30
 const KEYCAP_DIGIT_LAST = 0x39
-/** U+00A9 COPYRIGHT SIGN, the lowest code point carrying the Emoji property. */
-const LOWEST_EMOJI_BASE = 0xa9
+const COPYRIGHT_SIGN = 0xa9
+const REGISTERED_SIGN = 0xae
+/**
+ * U+203C DOUBLE EXCLAMATION MARK. Below it the Emoji property holds only the
+ * keycap bases, U+00A9 and U+00AE, so every Emoji base sorts either into those
+ * four cases or above this floor, and the scripts in between stay out.
+ */
+const LOWEST_CONTIGUOUS_EMOJI_BASE = 0x203c
 
 /**
- * Bases a VS16 can legitimately switch to emoji presentation: the keycap bases
- * plus everything at or above the first Emoji code point. Deliberately coarser
- * than the Emoji property table, which would have to be embedded and kept in
- * step with each Unicode release; what it has to exclude is Latin text, where a
- * trailing VS16 is malformed rather than a presentation request.
+ * Bases a VS16 can switch to emoji presentation. Enumerating the Emoji property
+ * exactly would mean embedding a table and keeping it in step with each Unicode
+ * release; this admits a superset of it that still excludes every text script,
+ * where a trailing VS16 is malformed rather than a presentation request.
  */
 function acceptsEmojiPresentation(codepoint: number): boolean {
   return (
     codepoint === KEYCAP_NUMBER_SIGN ||
     codepoint === KEYCAP_ASTERISK ||
     (codepoint >= KEYCAP_DIGIT_FIRST && codepoint <= KEYCAP_DIGIT_LAST) ||
-    codepoint >= LOWEST_EMOJI_BASE
+    codepoint === COPYRIGHT_SIGN ||
+    codepoint === REGISTERED_SIGN ||
+    codepoint >= LOWEST_CONTIGUOUS_EMOJI_BASE
   )
 }
 

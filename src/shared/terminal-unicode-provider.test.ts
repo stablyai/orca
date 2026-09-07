@@ -50,8 +50,10 @@ describe('Orca terminal unicode provider', () => {
     await expect(cursorAdvance(terminal, `1${VS16}\u{20E3}`)).resolves.toBe(2)
     await expect(cursorAdvance(terminal, `#${VS16}\u{20E3}`)).resolves.toBe(2)
     await expect(cursorAdvance(terminal, `*${VS16}\u{20E3}`)).resolves.toBe(2)
-    // U+00A9 is the lowest code point the selector can promote.
+    // U+00A9 and U+00AE are the only Emoji bases between the keycaps and U+203C.
     await expect(cursorAdvance(terminal, `\u{00A9}${VS16}`)).resolves.toBe(2)
+    await expect(cursorAdvance(terminal, `\u{00AE}${VS16}`)).resolves.toBe(2)
+    await expect(cursorAdvance(terminal, `\u{203C}${VS16}`)).resolves.toBe(2)
 
     terminal.dispose()
   })
@@ -64,6 +66,12 @@ describe('Orca terminal unicode provider', () => {
     await expect(cursorAdvance(terminal, `A${VS16}`)).resolves.toBe(1)
     await expect(cursorAdvance(terminal, `z${VS16}`)).resolves.toBe(1)
     await expect(cursorAdvance(terminal, ` ${VS16}`)).resolves.toBe(1)
+    // Accented Latin, Greek and Cyrillic all sort above U+00AE and below the
+    // floor, so they are the cases the two-sided predicate has to keep out.
+    await expect(cursorAdvance(terminal, `\u{00E9}${VS16}`)).resolves.toBe(1)
+    await expect(cursorAdvance(terminal, `\u{00F1}${VS16}`)).resolves.toBe(1)
+    await expect(cursorAdvance(terminal, `\u{03B1}${VS16}`)).resolves.toBe(1)
+    await expect(cursorAdvance(terminal, `\u{0416}${VS16}`)).resolves.toBe(1)
 
     terminal.dispose()
   })
