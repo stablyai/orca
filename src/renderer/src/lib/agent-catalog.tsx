@@ -223,7 +223,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   },
   {
     id: 'freebuff',
-    label: translate('auto.lib.agent.catalog.b0b350de65', 'Freebuff'),
+    label: translate('auto.lib.agent.catalog.freebuff_label', 'Freebuff'),
     cmd: 'freebuff',
     faviconDomain: 'freebuff.com',
     homepageUrl: 'https://freebuff.com/cli'
