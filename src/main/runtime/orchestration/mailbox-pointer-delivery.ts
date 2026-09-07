@@ -1,7 +1,7 @@
-import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './db'
 import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
 import {
   hasUnfilteredOrchestrationWaiter,
+  selectOrchestrationPointerBatch,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxLeaf } from './mailbox-owner'
@@ -104,16 +104,11 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     ) {
       return
     }
-    // Every waiter here is type-filtered (unfiltered ones returned above), so SQL exclusion is exact.
-    const excludedTypes = new Set(options.reservedTypes)
-    for (const waiter of waiters ?? []) {
-      for (const type of waiter.typeFilter ?? []) {
-        excludedTypes.add(type)
-      }
-    }
-    const unread = db.getUndeliveredUnreadMessages(mailboxHandle, undefined, {
-      excludeTypes: [...excludedTypes],
-      limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
+    const unread = selectOrchestrationPointerBatch({
+      db,
+      mailboxHandle,
+      waiters,
+      reservedTypes: options.reservedTypes
     })
     if (unread.length === 0 || !leaf.writable || !leaf.ptyId) {
       return

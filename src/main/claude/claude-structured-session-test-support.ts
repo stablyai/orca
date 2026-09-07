@@ -52,6 +52,7 @@ export function fakeClaude(
     initModel?: string
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
+    initCommands?: unknown
     exitBeforeInit?: string
     settings?: unknown
     replayUuid?: string | null
@@ -111,6 +112,7 @@ export function fakeClaude(
         }
         return {
           models: [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
+          ...(options.initCommands === undefined ? {} : { commands: options.initCommands }),
           ...(options.initAccount === undefined ? {} : { account: options.initAccount })
         }
       },

@@ -17,7 +17,7 @@ const AUDITED_NON_NET_FETCH_CALLS = new Map<string, number>([
   ['main/rate-limits/opencode-go-usage-fetcher.ts', 2],
   // Isolated cookie-jar session that does NOT apply the proxy — a pre-existing gap, not a
   // regression: no proxy has ever reached this partition. Keep it listed so it stays visible.
-  ['main/rate-limits/minimax-request-context.ts', 2],
+  ['main/rate-limits/minimax/minimax-request-context.ts', 2],
   // Injected HttpClient, not a session: resolves to net.fetch on defaultSession
   // (main/host/electron-http-client.ts) or to the global-fetch-audited Node fallback.
   ['main/jira/authenticated-request.ts', 1]

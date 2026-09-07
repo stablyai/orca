@@ -6,7 +6,10 @@ import {
   HostChallengeSchema,
   HostDataAuthSchema,
   HostHelloAckSchema,
-  HostHelloSchema
+  HostHelloSchema,
+  parseRelayHostCapabilities,
+  RELAY_HOST_CAPABILITIES_HEADER,
+  RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS
 } from './control-messages.js'
 import {
   DeviceCredentialInstallSchema,
@@ -343,5 +346,49 @@ describe('relay protocol contract', () => {
         acceptedCredentialVersion: 99
       }).success
     ).toBe(false)
+  })
+})
+
+describe('pending connection details capability', () => {
+  it('reads a pending entry with or without the stated kind and device', () => {
+    const ack = {
+      v: 1 as const,
+      generation: 3,
+      controlResumeSecret: 'R'.repeat(43),
+      leaseExpiresAt: 1_800_000_000_000,
+      activeConnIds: []
+    }
+    const identifiers = { connId: 'conn-1', connTicket: 'T'.repeat(43) }
+    expect(HostHelloAckSchema.safeParse({ ...ack, pendingConns: [identifiers] }).success).toBe(true)
+    expect(
+      HostHelloAckSchema.safeParse({
+        ...ack,
+        pendingConns: [{ ...identifiers, kind: 'resume', relayDeviceId: 'device-1' }]
+      }).success
+    ).toBe(true)
+    // Still strict otherwise: an unannounced key must not slip through as data.
+    expect(
+      HostHelloAckSchema.safeParse({
+        ...ack,
+        pendingConns: [{ ...identifiers, reservationId: 'injected' }]
+      }).success
+    ).toBe(false)
+  })
+
+  it('pins the header and token the desktop mirrors by hand', () => {
+    // The desktop cannot import this package; drift silently disables the
+    // feature, so both literals are asserted on each side.
+    expect(RELAY_HOST_CAPABILITIES_HEADER).toBe('x-orca-host-capabilities')
+    expect(RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS).toBe('pending-conn-details')
+  })
+
+  it('reads the advertised capabilities from a control upgrade header', () => {
+    expect(
+      parseRelayHostCapabilities(` ${RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS} , future-thing`)
+    ).toEqual(new Set([RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS, 'future-thing']))
+    // A host that predates the header sends nothing; absence is never capable.
+    expect(parseRelayHostCapabilities(undefined).size).toBe(0)
+    expect(parseRelayHostCapabilities('').size).toBe(0)
+    expect(parseRelayHostCapabilities('x'.repeat(65)).size).toBe(0)
   })
 })

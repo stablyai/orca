@@ -44,7 +44,8 @@ function resolverFor(
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
-    resolveRollout
+    resolveRollout,
+    isWindowsProcessStartTimeAvailable: () => true
   })
 }
 
@@ -68,13 +69,30 @@ describe('codex structured launch resolution', () => {
       const resolveLaunch = createCodexStructuredLaunchResolver({
         store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
         resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
-        resolveCommand: () => command
+        resolveCommand: () => command,
+        isWindowsProcessStartTimeAvailable: () => true
       })
 
       await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
         command,
         args: ['app-server']
       })
+    })
+  })
+
+  it('fails closed before resolving a Windows launch without creation-time proof', async () => {
+    await withPlatform('win32', async () => {
+      const resolveWorkspacePath = vi.fn(async () => String.raw`C:\workspaces\orca`)
+      const resolveLaunch = createCodexStructuredLaunchResolver({
+        store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+        resolveWorkspacePath,
+        isWindowsProcessStartTimeAvailable: () => false
+      })
+
+      await expect(resolveLaunch({ identity: IDENTITY })).rejects.toThrow(
+        'Windows process creation-time proof'
+      )
+      expect(resolveWorkspacePath).not.toHaveBeenCalled()
     })
   })
 

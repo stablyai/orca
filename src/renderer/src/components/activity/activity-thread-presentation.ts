@@ -1,4 +1,4 @@
-import { agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
@@ -8,6 +8,7 @@ import {
   resolveActivityThreadStatusPreview
 } from '@/lib/activity-thread-display'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
+import { translate } from '@/i18n/i18n'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { ActivityEvent, AgentPaneThread } from './activity-thread-types'
@@ -109,9 +110,44 @@ export function threadAgentState(thread: AgentPaneThread): AgentDotState {
 export function threadAgentStateLabel(thread: AgentPaneThread): string {
   const state = threadAgentState(thread)
   if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
-    return 'Interrupted'
+    return translate('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
   }
-  return agentStateLabel(state)
+  // Literal keys with literal fallbacks: a dynamic key registers no catalog reference
+  // and forces every state string into the boot bundle.
+  switch (state) {
+    case 'working':
+      return translate('auto.components.activity.ActivityPrototypePage.state.working', 'Working')
+    case 'monitoring':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.monitoring',
+        'Monitoring background tasks'
+      )
+    case 'blocked':
+      return translate('auto.components.activity.ActivityPrototypePage.state.blocked', 'Blocked')
+    case 'waiting':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.waiting',
+        'Waiting for input'
+      )
+    case 'interrupted':
+      return translate('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
+    case 'failed':
+      return translate('auto.components.activity.ActivityPrototypePage.state.failed', 'Failed')
+    case 'done':
+      return translate('auto.components.activity.ActivityPrototypePage.state.done', 'Done')
+    case 'idle':
+      return translate('auto.components.activity.ActivityPrototypePage.state.idle', 'Idle')
+    case 'unverifiable':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.unverifiable',
+        'No recent update'
+      )
+    case 'permission':
+      return translate(
+        'auto.components.activity.ActivityPrototypePage.state.permission',
+        'Needs attention'
+      )
+  }
 }
 
 export type ActivityThreadStatusKind = 'tool' | 'message' | 'state' | 'none'

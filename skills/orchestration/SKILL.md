@@ -63,24 +63,7 @@ reference that gate names with
 (`--references` lists the names). If that binary rejects `--reference`, run
 `ORCA skills get orchestration --full` and read the named bundled reference before acting.
 
-Don't guess subcommands or flags from memory or from a cached copy of this stub. They
-change between Orca releases, and this file deliberately no longer lists them. Confirm the
-app is up with `ORCA status --json` (start it with `ORCA open --json` if needed), and
-prefer `--json` for agent-driven calls.
-
-## If an older Orca does not recognize `skills get`
-
-Use this fallback only when the selected binary explicitly reports that `skills get` is an
-unknown command. Another failure is not proof of an older binary; report it rather than
-guessing or changing executables. For a confirmed pre-guide binary, use only this bounded,
-read-only bootstrap to orient. Do not dead-end and do not invent commands:
-
-```text
-ORCA status --json
-ORCA orchestration task-list --json
-ORCA terminal list --json
-```
-
-Then tell the user that updating Orca restores the full, version-matched guide via
-`ORCA skills get orchestration`. Beyond these commands, ask the user rather than guessing a
-command surface this older binary may not support.
+Prefer `--json`. Use the selected executable's `--help` for commands or flags the guide does
+not cover. If a command reports that Orca is not running, start it with `ORCA open --json`
+and retry. If `skills get` is unknown, explain that updating Orca restores the guide; use
+`--help` for read-only discovery and do not guess unsupported commands.

@@ -5,6 +5,10 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
+import {
+  observeStructuredWorker,
+  resolveStructuredWorkerForDispatch
+} from '../../orchestration-structured-worker-lifecycle'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -29,6 +33,28 @@ export async function inspectWorkerTerminal(
     worker?.agent_terminal_handle ?? db.getDispatchContextById(dispatchId)?.assignee_handle
   if (!terminalHandle) {
     return { terminal: null, exact: false, status: 'unattached' }
+  }
+  const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
+  if (structured) {
+    // Exactness is the recorded pane and lineage, which the runtime getters answer from the
+    // structured registry; there is no terminal to show.
+    //
+    // `agentWait` is deliberately ABSENT rather than null. Null is the contract's "Orca looked and
+    // found no wait", and nothing here looks: a structured worker parks on a journal question item,
+    // which no terminal prompt scan can see. Reporting null would tell a coordinator the worker is
+    // not waiting, which is the one thing the field's own documentation forbids inferring.
+    const exact = db.isDispatchProcessCurrent({
+      dispatchId,
+      paneKey: structured.paneKey,
+      processIncarnation: structured.processIncarnation
+    })
+    const observation = observeStructuredWorker(structured)
+    return {
+      terminal: null,
+      exact,
+      status: exact ? observation.status : 'identity_changed',
+      ...(exact && observation.reason ? { reason: observation.reason } : {})
+    }
   }
   const terminal = await runtime.showTerminal(terminalHandle).catch(() => null)
   if (!terminal) {

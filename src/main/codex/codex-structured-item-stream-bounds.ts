@@ -1,3 +1,5 @@
+import { toolExecutionMetadata } from '../../shared/native-chat-tool-identity'
+
 export const MAX_CODEX_ITEM_STREAM_STATES = 256
 export const MAX_CODEX_ITEM_STREAM_PENDING_PATCHES = 128
 export const MAX_CODEX_ITEM_STREAM_RETAINED_BYTES = 32 * 1024 * 1024
@@ -31,6 +33,6 @@ export function boundStreamItem(item: Record<string, unknown>): Record<string, u
     ...(typeof item.command === 'string' ? { command: item.command.slice(0, 4096) } : {}),
     ...(typeof item.cwd === 'string' ? { cwd: item.cwd.slice(0, 4096) } : {}),
     ...(typeof item.status === 'string' ? { status: item.status } : {}),
-    ...(typeof item.exitCode === 'number' ? { exitCode: item.exitCode } : {})
+    ...toolExecutionMetadata(item)
   }
 }

@@ -4,6 +4,7 @@ import {
   type StructuredPromptDeliveryResult
 } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
+import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 
 export type StructuredRefusalFallback = () =>
   | void
@@ -14,6 +15,9 @@ export type StructuredAgentLaunchOptions = {
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready'
   onPromptDelivered?: () => void
+  /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
+   *  identity, not a preference — see `launchIdentity`. */
+  resumeFrom?: StructuredAgentSessionResumeSource
 }
 
 export type StructuredLaunchCaller = {

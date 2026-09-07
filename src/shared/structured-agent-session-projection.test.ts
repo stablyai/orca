@@ -283,3 +283,66 @@ describe('structured agent session status projection', () => {
     ])
   })
 })
+
+describe('notice projection for desktop and mobile consumers', () => {
+  it.each([
+    { presentation: 'compaction' },
+    { presentation: 'plan-document' },
+    { tone: 'warning' },
+    { tone: 'error' },
+    { tone: 'notice' },
+    { presentation: 'future-presentation', tone: 'future-tone' }
+  ])('preserves readable text alongside optional metadata: %j', (metadata) => {
+    const projected = projectStructuredItemToNativeChat(
+      item('notice', 1, {
+        kind: 'status',
+        text: 'A readable document or notice',
+        ...metadata
+      })
+    )
+    expect(projected).toMatchObject({
+      role: 'system',
+      blocks: [{ type: 'text', text: 'A readable document or notice', ...metadata }]
+    })
+  })
+})
+
+it('preserves optional tool annotations for desktop and mobile projection', () => {
+  const metadata = {
+    exitCode: 127,
+    durationMs: 400,
+    webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]
+  }
+  const projected = projectStructuredItemToNativeChat(
+    item('annotated', 1, {
+      kind: 'tool-call',
+      name: 'shell',
+      input: null,
+      state: 'failed',
+      ...metadata
+    })
+  )
+  expect(projected?.blocks[0]).toEqual({
+    type: 'tool-call',
+    name: 'shell',
+    input: null,
+    state: 'failed',
+    ...metadata
+  })
+})
+
+it('preserves confirmed MCP identity and the raw name through projection', () => {
+  const body = {
+    kind: 'tool-call' as const,
+    name: 'my_server/ns.tool',
+    input: null,
+    state: 'running' as const,
+    mcpIdentity: { server: 'my_server', tool: 'ns.tool' }
+  }
+  const projected = projectStructuredItemToNativeChat(item('mcp', 1, body))
+  expect(projected?.blocks[0]).toMatchObject({
+    name: body.name,
+    mcpIdentity: body.mcpIdentity,
+    type: 'tool-call'
+  })
+})

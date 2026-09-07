@@ -603,3 +603,68 @@ describe('codex journal translation', () => {
     expect(tap.rows).toEqual([])
   })
 })
+
+describe('notice journal pipeline', () => {
+  it('replaces a legacy compaction divider with its canonical item at the same journal key', () => {
+    const { translator, tap } = translatorWith()
+    translator.handle(notification('thread/compacted', { threadId: THREAD_ID, turnId: TURN_ID }))
+    translator.handle(
+      notification('item/completed', {
+        turnId: TURN_ID,
+        item: { id: 'compact', type: 'contextCompaction' }
+      })
+    )
+    expect(tap.rows).toHaveLength(2)
+    expect([...new Map(tap.rows.map((row) => [row.key, row.body])).values()]).toEqual([
+      expect.objectContaining({
+        kind: 'status',
+        text: 'Context compacted',
+        presentation: 'compaction'
+      })
+    ])
+    translator.dispose()
+  })
+  it('preserves every notice after generic traffic reaches its cap', () => {
+    const { translator, tap, window } = translatorWith()
+    translator.handle(TURN_STARTED)
+    for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN; index += 1) {
+      translator.handle(notification('future/notification', { value: index }))
+    }
+    for (const method of ['warning', 'guardianWarning', 'configWarning', 'deprecationNotice']) {
+      translator.handle(notification(method, { message: method, summary: method }))
+    }
+    window.fire()
+    expect(tap.rows.slice(-4).map((row) => row.body)).toEqual([
+      expect.objectContaining({ text: 'warning', tone: 'warning' }),
+      expect.objectContaining({ text: 'guardianWarning', tone: 'warning' }),
+      expect.objectContaining({ text: 'configWarning', tone: 'warning' }),
+      expect.objectContaining({ text: 'deprecationNotice', tone: 'notice' })
+    ])
+    translator.dispose()
+  })
+  it('keeps the plan document marker during streamed updates and completion', () => {
+    const { translator, tap, window } = translatorWith()
+    translator.handle(
+      notification('item/started', {
+        turnId: TURN_ID,
+        item: { id: 'plan', type: 'plan', text: '' }
+      })
+    )
+    translator.handle(
+      notification('item/plan/delta', { turnId: TURN_ID, itemId: 'plan', delta: '# Plan' })
+    )
+    window.fire()
+    expect(tap.rows.at(-1)?.body).toMatchObject({ text: '# Plan', presentation: 'plan-document' })
+    translator.handle(
+      notification('item/completed', {
+        turnId: TURN_ID,
+        item: { id: 'plan', type: 'plan', text: '# Plan\n\nComplete' }
+      })
+    )
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      text: '# Plan\n\nComplete',
+      presentation: 'plan-document'
+    })
+    translator.dispose()
+  })
+})

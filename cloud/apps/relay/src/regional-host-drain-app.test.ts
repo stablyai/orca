@@ -315,6 +315,7 @@ describe('regional rehome director controls', () => {
       notBefore: 100,
       ratePerMinute: 10,
       preferenceMaxAgeMs: 24 * 60 * 60_000,
+      hostCooldownMs: 7 * 24 * 60 * 60_000,
       drainGraceMs: 60_000,
       confirmation: 'ENABLE_REGIONAL_REHOMING'
     }
@@ -342,6 +343,14 @@ describe('regional rehome director controls', () => {
       '/v1/admin/regional-rehome-control',
       'deploy-token',
       { ...apply, confirmation: 'DISABLE_REGIONAL_REHOMING' }
+    )).status).toBe(400)
+    // The per-host cooldown is part of the durable shape an operator must state.
+    const { hostCooldownMs: _omitted, ...withoutCooldown } = apply
+    expect((await postPath(
+      app,
+      '/v1/admin/regional-rehome-control',
+      'deploy-token',
+      withoutCooldown
     )).status).toBe(400)
   })
 
@@ -409,6 +418,78 @@ describe('regional rehome director controls', () => {
     })
     expect(requests.every(({ init }) => init?.signal instanceof AbortSignal)).toBe(true)
     expect(JSON.stringify(responseBody)).not.toContain('rehome-token')
+  })
+
+  it('probes a source cell in any region, not only the default one', async () => {
+    // Rehoming moves hosts in both directions, so an asia-east2 cell is a
+    // source too and its trust has to be provable the same way.
+    const cellDeploymentStatus = vi.fn().mockResolvedValue({
+      cellId: 'production-gce-c27',
+      cellUrl: 'https://c27.relay.example.test',
+      region: 'asia-east2',
+      runtime: {
+        cellIncarnation,
+        ready: true,
+        heartbeatFresh: true,
+        regionalRehomeProtocol: 1
+      }
+    })
+    const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
+      store: {} as never,
+      assignments: { cellDeploymentStatus } as never,
+      drain: vi.fn(),
+      regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
+      regionalRehomeFetch: (async () =>
+        Response.json({
+          v: 1,
+          outcome: 'host-not-connected',
+          sharedRuntimeIdentityRejected: true
+        })) as typeof fetch,
+      ready: vi.fn(async () => true)
+    })
+
+    const response = await postPath(
+      app,
+      '/v1/admin/regional-rehome-trust-probe',
+      'deploy-token',
+      { v: 1, sourceCellId: 'production-gce-c27', sourceCellIncarnation: cellIncarnation }
+    )
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ proven: true })
+  })
+
+  it('still refuses a trust probe against a cell without the drain protocol', async () => {
+    const cellDeploymentStatus = vi.fn().mockResolvedValue({
+      cellId: 'production-gce-c27',
+      cellUrl: 'https://c27.relay.example.test',
+      region: 'asia-east2',
+      runtime: {
+        cellIncarnation,
+        ready: true,
+        heartbeatFresh: true,
+        regionalRehomeProtocol: 0
+      }
+    })
+    const sourceFetch = vi.fn<typeof fetch>()
+    const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
+      store: {} as never,
+      assignments: { cellDeploymentStatus } as never,
+      drain: vi.fn(),
+      regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
+      regionalRehomeFetch: sourceFetch,
+      ready: vi.fn(async () => true)
+    })
+
+    const response = await postPath(
+      app,
+      '/v1/admin/regional-rehome-trust-probe',
+      'deploy-token',
+      { v: 1, sourceCellId: 'production-gce-c27', sourceCellIncarnation: cellIncarnation }
+    )
+
+    expect(response.status).toBe(409)
+    expect(sourceFetch).not.toHaveBeenCalled()
   })
 
   it('restricts trust probes to deploy authorization and strict input', async () => {

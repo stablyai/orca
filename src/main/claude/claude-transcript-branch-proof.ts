@@ -13,7 +13,7 @@ type TranscriptNode = {
 
 export type ClaudeTranscriptBranchProof = {
   leafUuid: string
-  relation: 'initial' | 'same' | 'descendant'
+  relation: 'initial' | 'same' | 'descendant' | 'intentional-rewind'
 }
 
 function nonEmptyString(value: unknown): string | null {
@@ -83,6 +83,7 @@ export function proveClaudeTranscriptBranchFromJsonl(input: {
   contents: string
   providerSessionId: string
   previousLeafUuid: string | null
+  intentionalRewindUuid?: string
 }): ClaudeTranscriptBranchProof {
   const nodes = new Map<string, TranscriptNode>()
   let leafUuid: string | null = null
@@ -156,6 +157,21 @@ export function proveClaudeTranscriptBranchFromJsonl(input: {
     throw transcriptError('marker precedes its leaf record')
   }
   const previousLeafUuid = input.previousLeafUuid
+  if (input.intentionalRewindUuid !== undefined) {
+    if (leafUuid !== input.intentionalRewindUuid || !input.previousLeafUuid) {
+      throw transcriptError('rewind target does not match the observed leaf')
+    }
+    proveMainLineAncestry(nodes, input.previousLeafUuid, input.providerSessionId)
+    proveAppendOrder(nodes)
+    let ancestor = nodes.get(input.previousLeafUuid)?.parentUuid ?? null
+    for (let depth = 0; ancestor !== null && depth < MAX_CLAUDE_TRANSCRIPT_ANCESTRY; depth += 1) {
+      if (ancestor === leafUuid) {
+        return { leafUuid, relation: 'intentional-rewind' }
+      }
+      ancestor = nodes.get(ancestor)?.parentUuid ?? null
+    }
+    throw transcriptError('rewind target is not an ancestor of the previous cursor')
+  }
   if (!previousLeafUuid) {
     proveMainLineAncestry(nodes, leafUuid, input.providerSessionId)
     // A branch proof is based on an append-only snapshot. A child that appears
@@ -210,11 +226,13 @@ export async function proveClaudeTranscriptBranch(input: {
   transcriptPath: string
   providerSessionId: string
   previousLeafUuid: string | null
+  intentionalRewindUuid?: string
 }): Promise<ClaudeTranscriptBranchProof> {
   return proveClaudeTranscriptBranchFromJsonl({
     contents: await readFile(input.transcriptPath, 'utf8'),
     providerSessionId: input.providerSessionId,
-    previousLeafUuid: input.previousLeafUuid
+    previousLeafUuid: input.previousLeafUuid,
+    intentionalRewindUuid: input.intentionalRewindUuid
   })
 }
 

@@ -28,7 +28,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
         clientKind,
         clientCapabilities,
-        clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+        isStructuredNativeChatEnabled(runtime)
       )
     }
   }),
@@ -121,7 +121,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
           initial,
           clientKind,
           clientCapabilities,
-          clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+          isStructuredNativeChatEnabled(runtime)
         )
       })
       initialized = true
@@ -137,7 +137,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
               snapshot,
               clientKind,
               clientCapabilities,
-              clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+              isStructuredNativeChatEnabled(runtime)
             )
           })
         }

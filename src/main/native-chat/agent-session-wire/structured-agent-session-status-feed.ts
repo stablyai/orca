@@ -46,6 +46,7 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
     a.workspaceId === b.workspaceId &&
     a.agent === b.agent &&
     a.status === b.status &&
+    a.rewindBlockedReason === b.rewindBlockedReason &&
     // Settled activity changes ranking; streaming active turns must stay quiet.
     (a.status !== 'idle' || a.updatedAt === b.updatedAt) &&
     a.latestPrompt === b.latestPrompt &&
@@ -126,6 +127,9 @@ export class StructuredAgentSessionStatusFeed {
       workspaceId: session.params.location.workspaceId,
       agent: session.params.provider,
       ...projectStructuredAgentSessionStatusSummary(items),
+      ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
+        ? { rewindBlockedReason: 'outcome-unknown' as const }
+        : {}),
       ...(model ? { model } : {}),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()

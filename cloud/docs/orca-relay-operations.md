@@ -464,6 +464,18 @@ Once a target control is registered, do not force the pre-registration rollback.
 
 After a deployment traffic shift, preserve the old revision/tag until metrics and live reconnect checks pass. If the new revision is unhealthy, shift traffic back only while old controls are still valid, then issue a strictly newer director migration rather than reusing a prior epoch.
 
+## Regional rehoming
+
+Rehoming moves a host to a general cell in the region its desktop last reported, in either
+direction. Both roles need the drain protocol: a cell without it can be neither a source nor a
+target, and it is not part of the fleet whose telemetry gates the worker. Until the asia-east2
+cells run `regionalRehomeProtocol` 1 they are none of the three, so no host is moved into or out
+of Asia and an Asia cell in distress does not pause the worker.
+
+`host-cooldown-ms` is the minimum gap between two rehomes of one host. It bounds the damage from
+a desktop whose region probe flips: without it the host would be dragged back across the ocean on
+every flip, since the preference age never expires while the host keeps reconnecting.
+
 ## Game-day matrix
 
 Run and record each scenario in staging before launch:

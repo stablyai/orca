@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url'
 import { exportJWK, generateKeyPair, jwtVerify, SignJWT } from 'jose'
 import {
   buildHostProofMacInput,
-  HOST_CHALLENGE_PLAINTEXT_DOMAIN
+  HOST_CHALLENGE_PLAINTEXT_DOMAIN,
+  RELAY_HOST_CAPABILITIES_HEADER,
+  RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS
 } from '@orca-cloud/relay-contract'
 import nacl from 'tweetnacl'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -282,11 +284,17 @@ async function openHostControl(input?: {
   previousGeneration?: number
   keyPair?: nacl.BoxKeyPair
   assignmentEpoch?: number
+  capabilities?: string
 }): Promise<{ socket: WebSocket; ack: Record<string, unknown>; keyPair: nacl.BoxKeyPair }> {
   const keyPair = input?.keyPair ?? nacl.box.keyPair()
   const hostId = createHash('sha256').update(keyPair.publicKey).digest('base64url').slice(0, 16)
   const socket = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/host/control`, {
-    headers: { authorization: `Bearer ${await relayToken('orca-relay', hostId)}` },
+    headers: {
+      authorization: `Bearer ${await relayToken('orca-relay', hostId)}`,
+      ...(input?.capabilities
+        ? { [RELAY_HOST_CAPABILITIES_HEADER]: input.capabilities }
+        : {})
+    },
     perMessageDeflate: false
   })
   await new Promise<void>((resolveOpen, reject) => {
@@ -651,6 +659,69 @@ describe('served relay URL', () => {
     const result = await closed
     expect(result.code).toBe(4409)
     expect(result.reason).not.toContain('http')
+  })
+
+  it('restates a pending connection to the rebound control, detailed only when advertised', async () => {
+    // The one link the unit tests cannot reach: an upgrade that really carries
+    // x-orca-host-capabilities must reach acceptControl and change the ack. A
+    // typo in the header name here passes every other test in the suite.
+    const host = await openHostControl()
+    const hostId = createHash('sha256')
+      .update(host.keyPair.publicKey)
+      .digest('base64url')
+      .slice(0, 16)
+    const inviteResponse = nextMessage(host.socket)
+    host.socket.send(
+      JSON.stringify({
+        type: 'invite-create',
+        reqId: 'capability-invite',
+        relayDeviceId: 'capability-device'
+      })
+    )
+    const invite = await inviteResponse
+    const phone = new WebSocket(`${relayUrl.replace('http:', 'ws:')}/v1/connect/${hostId}`, {
+      headers: forwardedHeaders()
+    })
+    await new Promise<void>((resolveOpen, reject) => {
+      phone.once('open', resolveOpen)
+      phone.once('error', reject)
+    })
+    const connectionPromise = nextMessage(host.socket)
+    phone.send(
+      JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential: invite.inviteToken })
+    )
+    // Never attached: the connection stays pending, which is what the ack restates.
+    const connection = await connectionPromise
+    expect(connection.type).toBe('conn-open')
+
+    const capable = await openHostControl({
+      keyPair: host.keyPair,
+      controlResumeSecret: String(host.ack.controlResumeSecret),
+      previousGeneration: 1,
+      capabilities: RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS
+    })
+    expect(capable.ack.pendingConns).toEqual([
+      {
+        connId: connection.connId,
+        connTicket: connection.connTicket,
+        kind: 'invite',
+        relayDeviceId: 'capability-device'
+      }
+    ])
+
+    const legacy = await openHostControl({
+      keyPair: host.keyPair,
+      controlResumeSecret: String(capable.ack.controlResumeSecret),
+      previousGeneration: 1
+    })
+    // A shipped host parses these entries strictly, so an unannounced key would
+    // fail the whole ack and kill a control that was working.
+    expect(legacy.ack.pendingConns).toEqual([
+      { connId: connection.connId, connTicket: connection.connTicket }
+    ])
+
+    phone.close()
+    legacy.socket.close()
   })
 
   it('keeps a pending attach usable after a bad ticket and rejects ticket replay', async () => {

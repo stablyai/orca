@@ -2,6 +2,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { isAgentPromptStalledError } from '../../../../agent-prompt-submission-verification'
 import { isUnknownWorkerStartOutcome, type WorkerSetupReceipt } from './worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
+import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
 import { isAgentSessionPtyWriteRefusedError } from '../../../../../../shared/agent-session-pty-write-admission'
 import type { FailedStartTerminalAdoption } from '../../../../orchestration/db/worker-terminal/failed-start-terminal-adoption'
 import { structuredChatPtyWriteRefusalCopy } from '../../../../../../shared/agent-session-pty-write-refusal-copy'
@@ -15,6 +16,7 @@ export function failWorkerStartWithReceipt(args: {
   error: unknown
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
+  mode: WorkerStartModeReceipt
   /** The terminal this start created and never handed to an owner. */
   residualAgentTerminal?: FailedStartTerminalAdoption
 }): unknown {
@@ -49,6 +51,7 @@ export function failWorkerStartWithReceipt(args: {
     lastError: reason,
     setup: args.setup,
     launch: args.launch,
+    mode: args.mode,
     effects: JSON.parse(worker.effects) as unknown[],
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
     ...(agentSessionRefusal ? { agentSessionRefusal } : {}),

@@ -52,7 +52,6 @@ import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
-import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -69,8 +68,7 @@ export function NativeChatResolvedView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions,
-  orchestrationDispatchStatus
+  contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
@@ -383,7 +381,6 @@ export function NativeChatResolvedView({
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
-      <NativeChatOrchestrationPausedNotice dispatchStatus={orchestrationDispatchStatus} />
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />

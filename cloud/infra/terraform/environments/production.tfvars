@@ -402,7 +402,11 @@ relay_region_rehome_source_cell_ids = [
   "production-gce-c23",
   "production-gce-c24",
   "production-gce-c25",
-  "production-gce-c26"
+  "production-gce-c26",
+  # Asia cells carry the same trust so mis-homed hosts can be drained back off them.
+  "production-gce-c27",
+  "production-gce-c28",
+  "production-gce-c29"
 ]
 
 # Slack #orca-relay-alerts, created out of band on 2026-08-05. Declared here because an apply
