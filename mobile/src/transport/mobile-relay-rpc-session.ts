@@ -9,6 +9,7 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
+import { RelayDialStageLog } from './relay-dial-stage-log'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
@@ -80,6 +81,7 @@ export function connectMobileRelayRpcSession(args: {
     settleResumeConfirmed = resolve
   })
   const dialStage = new RelayDialStageTracker()
+  const dialStageLog = new RelayDialStageLog(dialStage, logSessionId, args.onLog)
   const streams = new MobileRelayRpcStreams({
     nextId: () => pending.nextId(),
     sendFrame,
@@ -94,7 +96,7 @@ export function connectMobileRelayRpcSession(args: {
     desktopPublicKeyB64: args.desktopPublicKeyB64,
     createSocket: args.createSocket,
     onHostCloseReason: args.onHostCloseReason,
-    onOpen: () => dialStage.advance('awaiting-hello'),
+    onOpen: () => dialStageLog.enter('awaiting-hello'),
     onHello: (hello) => {
       if (
         hello.credentialKind !== 'resume' ||
@@ -105,7 +107,7 @@ export function connectMobileRelayRpcSession(args: {
       }
       attachDeadlineAt = hello.leaseExpiresAt
       resumeExpiresAt = hello.resumeExpiresAt
-      dialStage.advance('handshaking')
+      dialStageLog.enter('handshaking')
       publishState('handshaking')
     },
     onAuthenticated: () => publishAuthenticated(),
@@ -193,7 +195,7 @@ export function connectMobileRelayRpcSession(args: {
     if (closed) {
       return
     }
-    dialStage.advance('confirming')
+    dialStageLog.enter('confirming')
     void confirmResume().then(settleResumeConfirmed, settleResumeConfirmed)
     // Why: an unanswered advisory says nothing, but a frame that never reached the
     // wire proves the socket cannot carry traffic — that alone still fails.
@@ -224,6 +226,9 @@ export function connectMobileRelayRpcSession(args: {
       }
       resumeConfirmation = result.resumeConfirmation
       resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
+      // The dial's last stage ends when the desktop has confirmed the resume, not when
+      // 'connected' was published at authentication ahead of it.
+      dialStageLog.settle(true)
     } catch (error) {
       fail(asError(error))
     }
@@ -325,6 +330,7 @@ export function connectMobileRelayRpcSession(args: {
     }
     closed = true
     settleResumeConfirmed()
+    dialStageLog.settle(false, error.message)
     livenessWatchdog.stop(livenessIdentity)
     streams.clear()
     link.close()

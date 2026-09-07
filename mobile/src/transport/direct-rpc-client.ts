@@ -48,14 +48,14 @@ export class DirectRpcClient implements RpcClient {
     this.reconnect = new RpcClientReconnectSchedule({
       openConnection: () => this.openConnection(),
       rejectConnectWaiters: (reason) => this.connectionState.rejectWaiters(reason),
-      emitLog: (message, detail) =>
-        this.connectionLog.emit('info', message, detail, { code: 'retry-scheduled' })
+      emitLog: this.connectionLog.retryScheduled
     })
     this.connectionState = new RpcClientConnectionState({
       endpoint,
       initialListener: options.onStateChange,
       getReconnectAttempt: () => this.reconnect.getAttempt(),
-      isClosed: () => this.intentionallyClosed
+      isClosed: () => this.intentionallyClosed,
+      onStateDwell: this.connectionLog.stateDwell
     })
     this.streams = new RpcClientStreamRegistry({
       nextId: () => this.nextId(),
@@ -102,8 +102,7 @@ export class DirectRpcClient implements RpcClient {
     this.authenticationRetry = new RpcClientAuthenticationRetry({
       endpoint,
       stopLiveness: () => this.stopLiveness(),
-      emitWarning: (message, detail) =>
-        this.connectionLog.emit('warn', message, detail, { code: 'authentication-rejected' }),
+      emitWarning: this.connectionLog.authenticationRejected,
       retry: (reason) => this.retryAuthentication(reason),
       latchFailure: (reason) => this.latchAuthenticationFailure(reason)
     })

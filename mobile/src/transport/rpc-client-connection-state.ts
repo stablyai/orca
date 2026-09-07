@@ -1,3 +1,4 @@
+import { elapsedMs, monotonicNowMs } from './monotonic-clock'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionState } from './types'
 
@@ -12,12 +13,13 @@ type ConnectionStateOptions = {
   initialListener?: (state: ConnectionState) => void
   getReconnectAttempt: () => number
   isClosed: () => boolean
+  onStateDwell?: (previous: ConnectionState, next: ConnectionState, dweltMs: number) => void
 }
 
 export class RpcClientConnectionState {
   private state: ConnectionState = 'disconnected'
   private lastConnectedAt: number | null = null
-  private stateEnteredAt = Date.now()
+  private stateEnteredAt = monotonicNowMs()
   private readonly listeners = new Set<(state: ConnectionState) => void>()
   private readonly waiters: ConnectWaiter[] = []
 
@@ -40,9 +42,10 @@ export class RpcClientConnectionState {
       return
     }
     const previous = this.state
-    const dweltMs = Date.now() - this.stateEnteredAt
+    const dweltMs = elapsedMs(this.stateEnteredAt)
     this.state = next
-    this.stateEnteredAt = Date.now()
+    this.stateEnteredAt = monotonicNowMs()
+    this.options.onStateDwell?.(previous, next, dweltMs)
     console.log('[net] state', {
       from: previous,
       to: next,

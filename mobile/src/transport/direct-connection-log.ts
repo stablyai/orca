@@ -4,6 +4,7 @@ import type {
   ConnectionLogEntry,
   ConnectionLogLevel,
   ConnectionLogSink,
+  ConnectionState,
   MobileConnectionDiagnosticPath
 } from './types'
 
@@ -22,7 +23,7 @@ export class DirectConnectionLog {
     level: ConnectionLogLevel,
     message: string,
     detail?: string,
-    evidence?: Pick<ConnectionLogEntry, 'code' | 'path'>
+    evidence?: Pick<ConnectionLogEntry, 'code' | 'path' | 'timing'>
   ): void => {
     this.sink?.({
       id: `log-${++this.sequence}-${Date.now()}`,
@@ -42,6 +43,23 @@ export class DirectConnectionLog {
       `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`,
       { code: 'liveness-timeout' }
     )
+  }
+
+  // Why: how long the client sat in each ConnectionState used to go only to
+  // console, so a shared diagnostics report could not show where a slow connect
+  // spent its seconds.
+  stateDwell = (previous: ConnectionState, next: ConnectionState, dweltMs: number): void => {
+    this.emit('info', `Connection state ${previous} → ${next}`, `${dweltMs}ms in ${previous}`, {
+      timing: { kind: 'connection-state', name: previous, ms: dweltMs, complete: true }
+    })
+  }
+
+  retryScheduled = (message: string, detail?: string): void => {
+    this.emit('info', message, detail, { code: 'retry-scheduled' })
+  }
+
+  authenticationRejected = (message: string, detail?: string): void => {
+    this.emit('warn', message, detail, { code: 'authentication-rejected' })
   }
 
   connected = (): void => {

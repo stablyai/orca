@@ -23,6 +23,39 @@ describe('persisted connection log store', () => {
     vi.resetModules()
   })
 
+  it('rehydrates well-formed phase timings and drops corrupted ones', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(
+      JSON.stringify([
+        {
+          id: 'stage-ok',
+          ts: 900,
+          level: 'info',
+          message: 'Relay dial stage awaiting-hello finished',
+          timing: { kind: 'relay-dial-stage', name: 'awaiting-hello', ms: 6_400, complete: true }
+        },
+        {
+          id: 'stage-corrupt',
+          ts: 950,
+          level: 'info',
+          message: 'Relay dial stage handshaking finished',
+          timing: { kind: 'relay-dial-stage', name: 'handshaking', ms: 'soon' }
+        }
+      ])
+    )
+    vi.resetModules()
+    const { connectionLogStore } = await import('./persisted-connection-log-store')
+
+    await connectionLogStore.hydrate('host-timings')
+
+    expect(connectionLogStore.get('host-timings').map((entry) => entry.id)).toEqual(['stage-ok'])
+    expect(connectionLogStore.get('host-timings')[0]!.timing).toEqual({
+      kind: 'relay-dial-stage',
+      name: 'awaiting-hello',
+      ms: 6_400,
+      complete: true
+    })
+  })
+
   it('keeps a new client-session boundary when a restart shares the prior timestamp', async () => {
     const stored: ConnectionLogEntry[] = [
       {

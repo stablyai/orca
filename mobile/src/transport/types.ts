@@ -58,6 +58,17 @@ export type ConnectionDiagnosticCode =
   | 'relay-credential-unavailable'
   | 'host-open-failed'
 
+// Why: a 10s connect used to read as one opaque "connecting" span. Attaching the
+// duration of the phase an entry closes out lets the report say where the time
+// went. Diagnostics only — nothing schedules from these.
+export type ConnectionLogTiming = {
+  kind: 'relay-dial-stage' | 'connection-state'
+  name: string
+  ms: number
+  // False when the phase never finished (the dial died inside it).
+  complete: boolean
+}
+
 export type ConnectionLogEntry = {
   id: string
   ts: number
@@ -68,6 +79,7 @@ export type ConnectionLogEntry = {
   detail?: string
   code?: ConnectionDiagnosticCode
   path?: MobileConnectionDiagnosticPath
+  timing?: ConnectionLogTiming
 }
 
 export type ConnectionLogSink = (entry: ConnectionLogEntry) => void
@@ -76,7 +88,7 @@ export type ConnectionLogEmitter = (
   level: ConnectionLogLevel,
   message: string,
   detail?: string,
-  evidence?: Pick<ConnectionLogEntry, 'code' | 'path'>
+  evidence?: Pick<ConnectionLogEntry, 'code' | 'path' | 'timing'>
 ) => void
 
 export type ConnectionState =

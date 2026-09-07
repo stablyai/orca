@@ -16,6 +16,25 @@ describe('connection log buffer', () => {
     expect(store.get('host-b').map((e) => e.id)).toEqual(['log-2'])
   })
 
+  it('retains phase timings through redaction and the cap', () => {
+    const store = createConnectionLogStore(2)
+    store.append('host-a', {
+      ...entry(1),
+      detail: '4280ms in connecting; resumeToken=secret-resume-token',
+      timing: { kind: 'connection-state', name: 'connecting', ms: 4_280, complete: true }
+    })
+    store.append('host-a', {
+      ...entry(2),
+      timing: { kind: 'relay-dial-stage', name: 'awaiting-hello', ms: 9_100, complete: false }
+    })
+
+    expect(store.get('host-a').map((e) => e.timing)).toEqual([
+      { kind: 'connection-state', name: 'connecting', ms: 4_280, complete: true },
+      { kind: 'relay-dial-stage', name: 'awaiting-hello', ms: 9_100, complete: false }
+    ])
+    expect(store.get('host-a')[0]!.detail).toBe('4280ms in connecting; resumeToken=[redacted]')
+  })
+
   it('drops the oldest entries past the cap', () => {
     const store = createConnectionLogStore(3)
     for (let i = 1; i <= 5; i++) {
