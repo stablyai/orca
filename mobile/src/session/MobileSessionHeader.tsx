@@ -14,6 +14,10 @@ import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
 import { triggerMediumImpact } from '../platform/haptics'
 import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import {
+  getMobileSessionTabTitle,
+  resolveMobileTerminalTabAgentId
+} from './mobile-terminal-tab-agent'
 import { colors } from '../theme/mobile-theme'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import { styles } from './mobile-session-styles'
@@ -28,6 +32,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     forceReconnectHost,
     worktreeName,
     activePanel,
+    activeSessionTabId,
     activeSessionTabIdRef,
     tabStripRef,
     tabStripOffsetRef,
@@ -47,7 +52,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     scrollActiveTabIntoView,
     switchSessionTab,
     openSessionTabActionSheetAfterKeyboardDismiss,
-    tabStripRows,
+    visibleTabs,
     showConnectionRetry,
     terminalSummary,
     handlePanelTap,
@@ -112,7 +117,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         ) : null}
       </View>
 
-      {tabStripRows.length > 0 && (
+      {visibleTabs.length > 0 && (
         <View style={styles.tabBar}>
           {/* Why: tab taps must register on first press with the keyboard open instead of being eaten by dismissal (#5106). */}
           <ScrollView
@@ -135,51 +140,45 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
               scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
             }}
           >
-            {tabStripRows.map(({ entry, isActive, tab }) => (
+            {visibleTabs.map((t) => (
               <Pressable
-                key={entry.id}
-                style={[
-                  styles.tab,
-                  isActive && styles.tabActive,
-                  tab === null && styles.tabPreview
-                ]}
+                key={t.id}
+                style={[styles.tab, t.id === activeSessionTabId && styles.tabActive]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
-                  tabLayoutsRef.current.set(entry.id, { x, width })
-                  if (entry.id === activeSessionTabIdRef.current) {
-                    scrollActiveTabIntoView(entry.id, false)
+                  tabLayoutsRef.current.set(t.id, { x, width })
+                  if (t.id === activeSessionTabIdRef.current) {
+                    scrollActiveTabIntoView(t.id, false)
                   }
                 }}
-                // A cached preview row has no live tab behind it, so both gestures need the
-                // reconnect to land first.
-                disabled={tab === null}
-                onPress={tab === null ? undefined : () => switchSessionTab(tab)}
-                onLongPress={
-                  tab === null
-                    ? undefined
-                    : () => {
-                        triggerMediumImpact()
-                        openSessionTabActionSheetAfterKeyboardDismiss(tab)
-                      }
-                }
+                onPress={() => switchSessionTab(t)}
+                onLongPress={() => {
+                  triggerMediumImpact()
+                  openSessionTabActionSheetAfterKeyboardDismiss(t)
+                }}
                 delayLongPress={400}
               >
                 <View style={styles.tabLabelRow}>
-                  {entry.type === 'browser' && (
+                  {t.type === 'browser' && (
                     <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />
                   )}
-                  {entry.type === 'markdown' && (
+                  {t.type === 'markdown' && (
                     <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
                   )}
-                  {entry.type === 'file' && (
+                  {t.type === 'file' && (
                     <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
                   )}
-                  {entry.agentId !== null && <MobileAgentIcon agentId={entry.agentId} size={13} />}
+                  {t.type === 'agent-session' && <MobileAgentIcon agentId={t.agent} size={13} />}
+                  {t.type === 'terminal' &&
+                    (() => {
+                      const agentId = resolveMobileTerminalTabAgentId(t)
+                      return agentId ? <MobileAgentIcon agentId={agentId} size={13} /> : null
+                    })()}
                   <Text
-                    style={[styles.tabText, isActive && styles.tabTextActive]}
+                    style={[styles.tabText, t.id === activeSessionTabId && styles.tabTextActive]}
                     numberOfLines={1}
                   >
-                    {entry.title}
+                    {getMobileSessionTabTitle(t)}
                   </Text>
                 </View>
               </Pressable>

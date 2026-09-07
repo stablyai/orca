@@ -33,7 +33,6 @@ export const MOBILE_SESSION_ROUTE_SOURCE_FILES = [
   './use-mobile-session-content-create-actions.ts',
   './use-mobile-session-close-actions.ts',
   './use-mobile-session-bulk-close.ts',
-  './use-mobile-session-tab-strip-cache.ts',
   './use-mobile-session-presentation.ts',
   './use-mobile-session-panel-route-actions.tsx',
   './MobileSessionMarkdownReader.tsx',

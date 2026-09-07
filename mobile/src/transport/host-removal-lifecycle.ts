@@ -1,4 +1,3 @@
-import { deleteCachedSessionTabStripForHost } from '../cache/session-tab-strip-cache'
 import {
   clearWatermark,
   forgetHostNotificationSession
@@ -18,12 +17,4 @@ export async function removeHostAndCloseClient(
   // re-pair of the same host would inherit a watermark for a counter it never saw.
   forgetHostNotificationSession(hostId)
   void clearWatermark(hostId)
-  // Why: the cached tab strip is plaintext and host-scoped, so forgetting the host has to drop
-  // it here too — nothing else in the app ever expires an entry. Awaited so a storage failure
-  // is observed rather than swallowed, but never fatal: the metadata removal has already
-  // committed and the client is closed, so failing here would report a finished removal as
-  // failed. The cache refuses further saves for this host either way.
-  await deleteCachedSessionTabStripForHost(hostId).catch((error: unknown) => {
-    console.warn('[host-removal] cached tab strip delete failed', error)
-  })
 }

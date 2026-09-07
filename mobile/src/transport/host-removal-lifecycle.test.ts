@@ -18,12 +18,6 @@ vi.mock('./host-store', () => ({
 
 import { removeHostAndCloseClient } from './host-removal-lifecycle'
 import {
-  getSessionTabStripCacheKey,
-  readCachedSessionTabStrip,
-  resetSessionTabStripCacheForTests,
-  saveCachedSessionTabStrip
-} from '../cache/session-tab-strip-cache'
-import {
   getHostNotificationSession,
   resetHostNotificationSessionsForTests
 } from '../notifications/notification-reconnect-catchup'
@@ -32,9 +26,7 @@ describe('host removal lifecycle', () => {
   beforeEach(() => {
     removeHostMock.mockReset()
     asyncStorage.removeItem.mockClear()
-    asyncStorage.setItem.mockReset().mockResolvedValue(undefined)
     resetHostNotificationSessionsForTests()
-    resetSessionTabStripCacheForTests()
   })
 
   it('closes the client only after metadata removal commits', async () => {
@@ -95,41 +87,5 @@ describe('host removal lifecycle', () => {
     await Promise.resolve()
 
     expect(asyncStorage.removeItem).toHaveBeenCalledWith('orca:mobileNotificationsWatermark:host-1')
-  })
-
-  it('drops the removed host cached tab strip and keeps every other host', async () => {
-    // Why: the strip is plaintext and nothing else in the app ever expires an entry, so a
-    // forgotten host would keep its tab titles on disk and get them rewritten by the next
-    // save for any surviving host.
-    removeHostMock.mockResolvedValue(undefined)
-    const removed = getSessionTabStripCacheKey('host-1', 'wt-1')
-    const kept = getSessionTabStripCacheKey('host-2', 'wt-1')
-    const strip = {
-      tabs: [{ id: 'tab-1', type: 'terminal' as const, title: 'Terminal', agentId: null }],
-      activeTabId: 'tab-1'
-    }
-    saveCachedSessionTabStrip(removed, strip)
-    saveCachedSessionTabStrip(kept, strip)
-
-    await removeHostAndCloseClient('host-1', vi.fn())
-    // Fire-and-forget, like clearWatermark above; let its microtasks land.
-    await vi.waitFor(() => expect(readCachedSessionTabStrip(removed)).toBeNull())
-
-    expect(readCachedSessionTabStrip(kept)?.tabs).toHaveLength(1)
-  })
-  it('finishes the removal even when the cached tab strip write fails', async () => {
-    // The metadata removal has already committed and the client is closed by this
-    // point, so a cache write that fails must be reported, not thrown: surfacing it
-    // as a failed removal would leave the user staring at a host that is really gone.
-    removeHostMock.mockResolvedValue(undefined)
-    asyncStorage.setItem.mockRejectedValue(new Error('storage full'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const closeHostClient = vi.fn()
-
-    await expect(removeHostAndCloseClient('host-1', closeHostClient)).resolves.toBeUndefined()
-
-    expect(closeHostClient).toHaveBeenCalledWith('host-1')
-    expect(warn).toHaveBeenCalled()
-    warn.mockRestore()
   })
 })

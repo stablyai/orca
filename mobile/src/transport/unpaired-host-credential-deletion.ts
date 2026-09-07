@@ -1,4 +1,3 @@
-import { deleteCachedSessionTabStripForHost } from '../cache/session-tab-strip-cache'
 import { deleteHostDeviceToken } from './host-device-token-store'
 import {
   clearHostCredentialWriteRevision,
@@ -49,18 +48,6 @@ export function createUnpairedHostCredentialDeletion(dependencies: DeletionDepen
     }
     assertWriteRevisionUnchanged(hostId, writeRevision)
     await deleteMobileRelayDirectUpgradeJournal(hostId)
-    if (await shouldSkip(hostId, writeRevision)) {
-      return
-    }
-    assertWriteRevisionUnchanged(hostId, writeRevision)
-    // The cached tab strip is not a credential, but it is host-scoped plaintext that outlives
-    // the pairing unless this sweep takes it too. Warned rather than thrown, as
-    // removeHostAndCloseClient does: every credential above is already gone, so aborting here
-    // would strand the write revision and leave onDeleted's token cache holding a host whose
-    // credentials no longer exist. The cache refuses further saves for this host either way.
-    await deleteCachedSessionTabStripForHost(hostId).catch((error: unknown) => {
-      console.warn('[unpaired-host-cleanup] cached tab strip delete failed', error)
-    })
     if (await shouldSkip(hostId, writeRevision)) {
       return
     }
