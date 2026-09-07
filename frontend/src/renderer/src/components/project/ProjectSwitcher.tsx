@@ -220,6 +220,18 @@ export function ProjectSwitcher() {
           projectId={project.id}
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
+          onDeleted={() => {
+            // The just-deleted project is gone from WorkspaceContext's own
+            // state (it only clears on switchProject) — refetch the list and
+            // hop to whatever's left, same as CreateProjectDialog's onCreated.
+            void refetchProjects().then((list) => {
+              if (list.length > 0) {
+                switchProject(list[0].id).catch(() => {
+                  toast.error('Project deleted, but could not switch away from it.')
+                })
+              }
+            })
+          }}
         />
       ) : null}
     </div>
