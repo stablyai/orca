@@ -36,12 +36,12 @@ That keeps an accidental or automated invocation inert instead of live traffic.
 The guards are in `relay-bench-invocation.mjs` and `relay-bench-state-file.mjs`, and
 `relay-bench-invocation.test.mjs` / `relay-bench-state-file.test.mjs` pin them:
 
-| Guard                     | What it stops                                                                  |
-| ------------------------- | ------------------------------------------------------------------------------ |
-| https-only origins        | An `http:` director or cell, where an on-path observer reads bench credentials |
-| Public-destination check  | A director aiming the harness at your loopback, link-local, or private network |
-| Bounded integer arguments | `--runs=Infinity` and friends, which loop forever and generate relay traffic   |
-| `0600` state file         | An existing state file staying group- or world-readable, or being a symlink    |
+| Guard                     | What it stops                                                                                                                       |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| https-only origins        | An `http:` director or cell, where an on-path observer reads bench credentials                                                      |
+| Public-destination check  | A director aiming the harness at your loopback, link-local, or private network, by literal address or by a name that resolves there |
+| Bounded integer arguments | `--runs=Infinity` and friends, which loop forever and generate relay traffic                                                        |
+| `0600` state file         | An existing state file staying group- or world-readable, or being a symlink                                                         |
 
 A director you name also _supplies_ URLs: the region catalog's probe origins and the cell URL from
 `/v1/resolve`. Those go through the same public-https check as an origin you typed, so a compromised

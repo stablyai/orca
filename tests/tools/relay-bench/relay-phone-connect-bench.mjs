@@ -25,7 +25,8 @@ import {
   parseArgs,
   refuse,
   requireBoundedInteger,
-  requireLiveRun
+  requireLiveRun,
+  resolvesToPublicAddress
 } from './relay-bench-invocation.mjs'
 import { readSecretFile, writeSecretFile } from './relay-bench-state-file.mjs'
 
@@ -314,9 +315,10 @@ async function refreshCell(state, row) {
   if (resolved.status !== 200) {
     return
   }
-  // The director names the next destination, so vet it the same way the operator's own --cell
-  // argument is vetted rather than dialing whatever comes back.
-  const verdict = classifyPublicHttpsOrigin(resolved.body?.cellUrl)
+  // The director names the next destination, so vet it the same way a probe origin is vetted:
+  // the literal check first, then DNS, so a public-looking name that resolves into the operator's
+  // network is refused before the resume credential is sent anywhere.
+  const verdict = await vetCellUrl(resolved.body?.cellUrl)
   if (!verdict.ok) {
     row.resolve = { ...resolved, error: `director named an unusable cell: ${verdict.reason}` }
     return
@@ -326,6 +328,15 @@ async function refreshCell(state, row) {
     cellUrl: resolved.body.cellUrl,
     assignmentEpoch: resolved.body.assignmentEpoch
   }
+}
+
+export async function vetCellUrl(cellUrl, deps) {
+  const verdict = classifyPublicHttpsOrigin(cellUrl)
+  if (!verdict.ok) {
+    return verdict
+  }
+  const resolved = await resolvesToPublicAddress(verdict.origin, deps)
+  return resolved.ok ? verdict : resolved
 }
 
 function loadState(statePath) {
@@ -354,7 +365,7 @@ async function pair(pairingUrl, statePath) {
     throw new Error('offer has no relay block (desktop relay offline?)')
   }
   const relay = offer.relay
-  const verdict = classifyPublicHttpsOrigin(relay.cellUrl)
+  const verdict = await vetCellUrl(relay.cellUrl)
   if (!verdict.ok) {
     throw new Error(`offer names an unusable cell: ${verdict.reason}`)
   }
