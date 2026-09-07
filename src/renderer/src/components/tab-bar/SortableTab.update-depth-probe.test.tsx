@@ -18,6 +18,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
 import SortableTab from './SortableTab'
+import { requestTerminalTabRename } from './terminal-tab-rename-request'
 
 type ProbeState = {
   unreadTerminalTabs: Record<string, boolean>
@@ -27,9 +28,7 @@ type ProbeState = {
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   ptyIdsByTabId: Record<string, string[]>
   terminalLayoutsByTabId: Record<string, unknown>
-  renamingTabId: string | null
   keybindings: Record<string, unknown>
-  setRenamingTabId: (tabId: string | null) => void
 }
 
 type StoreApiWithHook = {
@@ -44,7 +43,7 @@ async function createProbeStore(): Promise<StoreApiWithHook> {
   const globals = globalThis as Record<string, unknown>
   if (!globals[globalKey]) {
     const { create } = await import('zustand')
-    globals[globalKey] = create<ProbeState>((set) => ({
+    globals[globalKey] = create<ProbeState>(() => ({
       unreadTerminalTabs: {},
       unreadAgentCompletionPanes: {},
       agentStatusByPaneKey: {},
@@ -52,9 +51,7 @@ async function createProbeStore(): Promise<StoreApiWithHook> {
       runtimePaneTitlesByTabId: {},
       ptyIdsByTabId: {},
       terminalLayoutsByTabId: {},
-      renamingTabId: null,
-      keybindings: {},
-      setRenamingTabId: (tabId) => set({ renamingTabId: tabId })
+      keybindings: {}
     }))
   }
   return globals[globalKey] as StoreApiWithHook
@@ -101,6 +98,15 @@ vi.mock('@/components/ui/input', () => ({
   Input: (props: Record<string, unknown>) => <input {...props} />
 }))
 
+// Counts SortableTab's own renders: it is rendered unconditionally inside the tab body, so one
+// stub render == one SortableTab render, which the Harness counter above cannot see.
+vi.mock('./TerminalTabLeadingIcon', () => ({
+  TerminalTabLeadingIcon: () => {
+    tabRenderCount += 1
+    return <span />
+  }
+}))
+
 vi.mock('./shell-icons', () => ({ ShellIcon: () => <span /> }))
 vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => <span /> }))
 vi.mock('../sidebar/WorktreeCardHelpers', () => ({ FilledBellIcon: () => <span /> }))
@@ -127,6 +133,7 @@ const dragData: TabDragItemData = {
 const probeStore = useAppStore as unknown as StoreApiWithHook
 
 let renderCount = 0
+let tabRenderCount = 0
 
 function Harness({ tab }: { tab: TerminalTab }): ReactElement {
   renderCount += 1
@@ -170,23 +177,50 @@ function ChurningHarness({ titles }: { titles: string[] }): ReactElement {
 
 afterEach(() => {
   cleanup()
-  probeStore.setState({ renamingTabId: null, unreadTerminalTabs: {}, agentStatusEpoch: 0 })
+  probeStore.setState({ unreadTerminalTabs: {}, agentStatusEpoch: 0 })
   renderCount = 0
+  tabRenderCount = 0
 })
 
 describe('SortableTab update-depth probe', () => {
-  it('settles when the rename shortcut arms renamingTabId', () => {
-    probeStore.setState({ renamingTabId: 'terminal-tab-1' })
+  it('settles when the rename shortcut targets this tab', () => {
     const { container } = render(<Harness tab={makeTab()} />)
+    act(() => requestTerminalTabRename('terminal-tab-1'))
     expect(container.querySelector('[data-tab-rename-input]')).not.toBeNull()
-    expect(probeStore.getState().renamingTabId).toBeNull()
     expect(renderCount).toBeLessThan(20)
   })
 
   it('settles under title churn while the rename editor is open', () => {
-    probeStore.setState({ renamingTabId: 'terminal-tab-1' })
     render(<ChurningHarness titles={['a', 'b', 'c', 'd', 'e', 'f']} />)
+    act(() => requestTerminalTabRename('terminal-tab-1'))
     expect(renderCount).toBeLessThan(40)
+  })
+
+  // Regression: the shortcut used to arm a store field every tab subscribed to, so one rename
+  // re-rendered every mounted tab twice — once to notice the id, once when the tab cleared it.
+  it('re-renders only the targeted tab, once, per rename request', () => {
+    render(
+      <>
+        <Harness tab={makeTab({ id: 'terminal-tab-1' })} />
+        <Harness tab={makeTab({ id: 'terminal-tab-2' })} />
+        <Harness tab={makeTab({ id: 'terminal-tab-3' })} />
+      </>
+    )
+    const mountRenders = tabRenderCount
+    act(() => requestTerminalTabRename('terminal-tab-1'))
+    expect(tabRenderCount - mountRenders).toBe(1)
+  })
+
+  it('does not re-render any tab for a rename request no mounted tab owns', () => {
+    render(
+      <>
+        <Harness tab={makeTab({ id: 'terminal-tab-1' })} />
+        <Harness tab={makeTab({ id: 'terminal-tab-2' })} />
+      </>
+    )
+    const mountRenders = tabRenderCount
+    act(() => requestTerminalTabRename('terminal-tab-9'))
+    expect(tabRenderCount).toBe(mountRenders)
   })
 
   it('settles under a store write storm', () => {
@@ -201,12 +235,12 @@ describe('SortableTab update-depth probe', () => {
   })
 
   it('settles in StrictMode double-invoked effects', () => {
-    probeStore.setState({ renamingTabId: 'terminal-tab-1' })
-    render(
+    const { container } = render(
       <StrictMode>
         <Harness tab={makeTab()} />
       </StrictMode>
     )
-    expect(probeStore.getState().renamingTabId).toBeNull()
+    act(() => requestTerminalTabRename('terminal-tab-1'))
+    expect(container.querySelector('[data-tab-rename-input]')).not.toBeNull()
   })
 })

@@ -23,6 +23,9 @@ describe('OrcaRuntimeService', () => {
       ...store,
       getSettings: () => ({
         ...store.getSettings(),
+        hostSettingOverrides: {
+          'ssh:target-1': { displayLabel: 'Build host', defaultWorktreeLocation: '/srv/worktrees' }
+        },
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
@@ -39,6 +42,9 @@ describe('OrcaRuntimeService', () => {
       minimaxUsageModels: 'general,abab6.5'
     })
     expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
+    expect(runtime.getClientSettings().hostSettingOverrides).toEqual({
+      'ssh:target-1': { displayLabel: 'Build host' }
+    })
     expect(runtime.getClientTerminalQuickCommands()).toEqual(terminalQuickCommands)
   })
 

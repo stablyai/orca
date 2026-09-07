@@ -21,16 +21,16 @@ import {
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
+import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
+import type { MobileChatPermission } from './mobile-native-chat-permission'
+import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
-import { MobileNativeChatAsk } from './MobileNativeChatAsk'
-import { MobileNativeChatPermission } from './MobileNativeChatPermission'
-import type { MobileChatPermission } from './mobile-native-chat-permission'
-import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
-import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 const INPUT_LOCK_SETTLE_MS = 600
@@ -49,6 +49,9 @@ type Props = {
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
   agentWorking?: boolean
+  /** Structured lane: per-turn "Working for N" status plus live tool progress,
+   *  replacing the bridge lane's static three-dot working row (desktop parity). */
+  structuredActivityUi?: boolean
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   onStop?: () => void
   /** Live partial assistant text to show as an in-progress bubble, already gated
@@ -126,6 +129,7 @@ export function MobileNativeChatView({
   error,
   agent,
   agentWorking,
+  structuredActivityUi = false,
   onStop,
   streaming,
   hasMore,
@@ -252,6 +256,15 @@ export function MobileNativeChatView({
     listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
   }, [])
 
+  // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
+  // owns them; the bridge lane keeps its three-dot indicator.
+  const turns = useMobileNativeChatTurnDisclosure({
+    messages: data,
+    enabled: structuredActivityUi,
+    isWorking: agentWorking === true,
+    scopeKey: sendSurfaceId
+  })
+
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
       <MobileNativeChatMessage
@@ -261,9 +274,12 @@ export function MobileNativeChatView({
         messageIndex={index}
         onScrollToMessage={onScrollToMessage}
         onOpenFile={onOpenFile}
+        structuredActivityUi={structuredActivityUi}
+        onToggleTurn={turns.onToggleTurn}
+        {...turns.resolveRow(index, item)}
       />
     ),
-    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
+    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile, structuredActivityUi, turns]
   )
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
@@ -337,6 +353,15 @@ export function MobileNativeChatView({
                   </Pressable>
                 ) : null
               }
+              ListFooterComponent={
+                turns.activeTurnIsUnanchored && turns.active ? (
+                  <MobileNativeChatTurnStatus
+                    startedAt={turns.active.startedAt}
+                    thinking={turns.active.thinking}
+                    workedSeconds={turns.active.workedSeconds}
+                  />
+                ) : null
+              }
               ListEmptyComponent={
                 emptyState ? (
                   <View style={styles.center}>
@@ -360,47 +385,22 @@ export function MobileNativeChatView({
           ) : null}
         </GestureHandlerRootView>
       )}
-      {/* Pending agent prompt: a structured AskUserQuestion wins, then a
-          heuristic permission, then a heuristic question. The controller owns
-          dismissal (it must survive this subtree unmounting on a view toggle);
-          `ask` arrives already nulled while dismissed. */}
-      {ask ? (
-        <MobileNativeChatAsk
-          key={askKey ?? 'ask'}
-          prompt={ask}
-          onAnswer={async (selections) => {
-            const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
-            if (accepted) {
-              onDismissAsk?.()
-            }
-            return accepted
-          }}
-          onCancel={async () => {
-            const accepted = (await onCancelAsk?.()) ?? false
-            if (accepted) {
-              onDismissAsk?.()
-            }
-            return accepted
-          }}
-        />
-      ) : permission ? (
-        <MobileNativeChatPermission
-          key={JSON.stringify(permission)}
-          permission={permission}
-          onRespond={async (send) => (await onRespondPermission?.(send)) ?? false}
-        />
-      ) : question ? (
-        <MobileNativeChatQuestion
-          key={mobileChatQuestionKey(question)}
-          question={question}
-          onAnswer={async (text) => (await onAnswerQuestion?.(text)) ?? false}
-        />
-      ) : null}
+      <MobileNativeChatPromptCard
+        ask={ask}
+        askKey={askKey}
+        onDismissAsk={onDismissAsk}
+        onAnswerAsk={onAnswerAsk}
+        onCancelAsk={onCancelAsk}
+        permission={permission}
+        onRespondPermission={onRespondPermission}
+        question={question}
+        onAnswerQuestion={onAnswerQuestion}
+      />
       {/* Chrome row above the composer: the working indicator and the global
           tool-calls expand/collapse toggle on the left, Stop in the far corner. */}
       <View style={styles.chromeRow}>
         <View style={styles.chromeLeft}>
-          {agentWorking ? <MobileAgentWorkingIndicator /> : null}
+          {agentWorking && !structuredActivityUi ? <MobileAgentWorkingIndicator /> : null}
           <Pressable
             style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
             onPress={() => setToolsExpanded((v) => !v)}

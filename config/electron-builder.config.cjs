@@ -19,6 +19,7 @@ const {
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -90,7 +91,19 @@ const bundledPluginResources = {
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
-const commonExtraResources = [relayExtraResource, bundledPluginResources, skillFreshnessResources]
+// Why the single file rather than the package root: app.asar carries no node_modules, so main's
+// lazy require in deferred-emoji-shortcode-dataset.ts resolves only out of Resources/node_modules,
+// but emojibase-data is 49 MB of locale datasets and worktree naming reads exactly this 166 KB file.
+const emojiShortcodeDatasetResource = {
+  from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
+  to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
+}
+const commonExtraResources = [
+  relayExtraResource,
+  bundledPluginResources,
+  skillFreshnessResources,
+  emojiShortcodeDatasetResource
+]
 // Why: native speech addons must be real files outside app.asar; copy only the
 // package matching the artifact target instead of every optional variant.
 const macSpeechNativeResource = {
@@ -389,9 +402,17 @@ module.exports = {
     // name is absent. An unsigned build that still claimed 'SignPath Foundation'
     // would therefore reject its own channel's next build — and its way back to
     // stable with it. Dropping it is what makes dev→dev and dev→stable work.
-    ...(isWinDevChannel
-      ? { verifyUpdateCodeSignature: false }
-      : { signtoolOptions: { publisherName: 'SignPath Foundation' } }),
+    // Why a sign hook on a build that does not sign: it is the only moment
+    // electron-builder exposes the NSIS uninstaller (built in its own makensis
+    // pass, embedded, then deleted). The hook signs nothing — it relays the file
+    // to and from the CI SignPath request, and is inert when the relay env vars
+    // are unset, so local and dev builds are unaffected. publisherName stays on
+    // its existing channel split above.
+    signtoolOptions: {
+      sign: signWindowsUninstallerViaSignPath,
+      ...(isWinDevChannel ? {} : { publisherName: 'SignPath Foundation' })
+    },
+    ...(isWinDevChannel ? { verifyUpdateCodeSignature: false } : {}),
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('win32'),

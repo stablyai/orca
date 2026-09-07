@@ -93,10 +93,7 @@ export function installWorkspaceCleanupApi(
         scan,
         getCachedScan,
         dismiss: vi.fn().mockResolvedValue(undefined),
-        clearDismissals: vi.fn().mockResolvedValue(undefined),
-        hasKillableLocalProcesses: vi.fn().mockResolvedValue({
-          hasKillableProcesses: false
-        })
+        clearDismissals: vi.fn().mockResolvedValue(undefined)
       }
     }
   }

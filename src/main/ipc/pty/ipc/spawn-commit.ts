@@ -24,10 +24,12 @@ import {
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
+import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
-  const { rendererPreSignaled, rendererAlreadyRegistered } = await persistPtyIpcSpawnCommit(ctx)
+  const { rendererPreSignaled, rendererAlreadyRegistered, committedSize } =
+    await persistPtyIpcSpawnCommit(ctx)
 
   // Why: seed the headless emulator before registerPty so concurrent live PTY data lands on top of the seed, not replacing it (mobile keeps the daemon-restored scrollback).
   // Skip when the renderer will be authoritative — its xterm buffer is richer than the daemon snapshot.
@@ -71,6 +73,15 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ctx.deps.runtime.seedHeadlessTerminal(ctx.result.id, ctx.result.replay)
     }
   }
+  // Why after the seed: a seed skips an existing model, and live bytes may have lazily created
+  // one at the 80x24 default before the spawn reply revealed the session's real grid.
+  reflowHeadlessTerminalToCommittedGrid({
+    result: ctx.result,
+    committedSize,
+    reflowHeadlessTerminalToPtyGrid: ctx.deps.runtime?.reflowHeadlessTerminalToPtyGrid?.bind(
+      ctx.deps.runtime
+    )
+  })
   if (
     typeof args.worktreeId === 'string' &&
     args.worktreeId.length > 0 &&

@@ -80,6 +80,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
+    const miniMaxEndpoint = miniMaxConfigResult.config.endpoint
+    const miniMaxApiKey = miniMaxConfigResult.config.apiKey
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
@@ -94,7 +96,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const opencodeGeneration = this.opencodeFetchGeneration
 
-    const currentMiniMaxConfigHash = `${miniMaxCookie}|${miniMaxGroupId}|${miniMaxModels}|${miniMaxConfigResult.error ?? ''}`
+    const currentMiniMaxConfigHash = `${miniMaxCookie}|${miniMaxGroupId}|${miniMaxModels}|${miniMaxEndpoint}|${miniMaxApiKey}|${miniMaxConfigResult.error ?? ''}`
     const miniMaxConfigChanged = currentMiniMaxConfigHash !== this.lastMiniMaxConfigHash
     if (miniMaxConfigChanged) {
       this.lastMiniMaxConfigHash = currentMiniMaxConfigHash
@@ -167,7 +169,9 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           : fetchMiniMaxRateLimits({
               cookie: miniMaxCookie,
               groupId: miniMaxGroupId,
-              models: miniMaxModels
+              models: miniMaxModels,
+              endpointMode: miniMaxEndpoint,
+              apiKey: miniMaxApiKey
             })
       ])
 

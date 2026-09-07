@@ -12,6 +12,11 @@ const TRUNCATION_MARKER = '\n… (truncated)'
 const DISPATCH_CAPABILITY_PATTERN = /\bdcap_[A-Za-z0-9_-]{20,}\b/g
 const DISPATCH_CAPABILITY_REDACTION = '[dispatch capability redacted]'
 
+type TranscriptBoundState = {
+  warnings: Set<string>
+  clipped: boolean
+}
+
 export function clampWorkerTranscriptLimit(limit: number | undefined): number {
   if (!Number.isFinite(limit) || (limit ?? 0) <= 0) {
     return DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT
@@ -43,47 +48,45 @@ export function boundWorkerTranscriptMessages(
   limited: boolean
   warnings: string[]
 } {
-  const warnings = new Set<string>()
+  const state: TranscriptBoundState = { warnings: new Set<string>(), clipped: false }
   const bounded: NativeChatMessage[] = []
   let bytes = 2
   for (const message of messages) {
-    const next = boundMessage(message, transcriptPath, warnings)
+    const next = boundMessage(message, transcriptPath, state)
     const serializedBytes = Buffer.byteLength(JSON.stringify(next), 'utf8') + 1
     if (bounded.length > 0 && bytes + serializedBytes > MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES) {
-      warnings.add('Transcript response was clipped to the wire-size limit.')
-      return { messages: bounded, limited: true, warnings: [...warnings] }
+      markClipped(state, 'Transcript response was clipped to the wire-size limit.')
+      return { messages: bounded, limited: true, warnings: [...state.warnings] }
     }
     bounded.push(next)
     bytes += serializedBytes
   }
-  return { messages: bounded, limited: false, warnings: [...warnings] }
+  return { messages: bounded, limited: state.clipped, warnings: [...state.warnings] }
 }
 
 function boundMessage(
   message: NativeChatMessage,
   transcriptPath: string | undefined,
-  warnings: Set<string>
+  state: TranscriptBoundState
 ): NativeChatMessage {
   const blocks = message.blocks.slice(0, MAX_WORKER_TRANSCRIPT_BLOCKS)
   if (blocks.length < message.blocks.length) {
-    warnings.add('Some transcript blocks were omitted from oversized messages.')
+    markClipped(state, 'Some transcript blocks were omitted from oversized messages.')
   }
   return {
     ...message,
-    id: boundIdentifier(message.id, transcriptPath, warnings),
-    ...(message.turnId
-      ? { turnId: boundIdentifier(message.turnId, transcriptPath, warnings) }
-      : {}),
-    blocks: blocks.map((block) => boundBlock(block, warnings))
+    id: boundIdentifier(message.id, transcriptPath, state),
+    ...(message.turnId ? { turnId: boundIdentifier(message.turnId, transcriptPath, state) } : {}),
+    blocks: blocks.map((block) => boundBlock(block, state))
   }
 }
 
-function boundBlock(block: NativeChatBlock, warnings: Set<string>): NativeChatBlock {
+function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): NativeChatBlock {
   if (block.type === 'text') {
-    return { ...block, text: clipText(block.text, warnings) }
+    return { ...block, text: clipText(block.text, state) }
   }
   if (block.type === 'tool-result') {
-    return { ...block, output: clipText(block.output, warnings) }
+    return { ...block, output: clipText(block.output, state) }
   }
   if (block.type === 'tool-call') {
     const budget = {
@@ -92,34 +95,34 @@ function boundBlock(block: NativeChatBlock, warnings: Set<string>): NativeChatBl
     }
     return {
       ...block,
-      name: clipMetadata(block.name, warnings),
-      input: boundToolInput(block.input, budget, 0, warnings)
+      name: clipMetadata(block.name, state),
+      input: boundToolInput(block.input, budget, 0, state)
     }
   }
   if (block.path || (block.url && isLocalFileLocator(block.url))) {
-    warnings.add('Local image paths were omitted from transcript output.')
+    markClipped(state, 'Local image paths were omitted from transcript output.')
     return {
       type: 'image-ref',
-      ...(block.alt ? { alt: clipText(block.alt, warnings) } : {})
+      ...(block.alt ? { alt: clipText(block.alt, state) } : {})
     }
   }
   return {
     ...block,
-    ...(block.url ? { url: clipMetadata(block.url, warnings) } : {}),
-    ...(block.alt ? { alt: clipText(block.alt, warnings) } : {})
+    ...(block.url ? { url: clipMetadata(block.url, state) } : {}),
+    ...(block.alt ? { alt: clipText(block.alt, state) } : {})
   }
 }
 
 function boundIdentifier(
   value: string,
   transcriptPath: string | undefined,
-  warnings: Set<string>
+  state: TranscriptBoundState
 ): string {
   if (transcriptPath && value.includes(transcriptPath)) {
-    warnings.add('Transcript-backed message identifiers were made opaque.')
+    state.warnings.add('Transcript-backed message identifiers were made opaque.')
     return `worker-message-${createHash('sha256').update(value).digest('base64url').slice(0, 32)}`
   }
-  return clipMetadata(value, warnings)
+  return clipMetadata(value, state)
 }
 
 function isLocalFileLocator(value: string): boolean {
@@ -131,21 +134,21 @@ function isLocalFileLocator(value: string): boolean {
   )
 }
 
-function clipMetadata(value: string, warnings: Set<string>): string {
-  const redacted = redactSensitiveText(value, warnings)
+function clipMetadata(value: string, state: TranscriptBoundState): string {
+  const redacted = redactSensitiveText(value, state.warnings)
   if (redacted.length <= 512) {
     return redacted
   }
-  warnings.add('Oversized transcript metadata was clipped.')
+  markClipped(state, 'Oversized transcript metadata was clipped.')
   return redacted.slice(0, 512)
 }
 
-function clipText(value: string, warnings: Set<string>): string {
-  const redacted = redactSensitiveText(value, warnings)
+function clipText(value: string, state: TranscriptBoundState): string {
+  const redacted = redactSensitiveText(value, state.warnings)
   if (redacted.length <= MAX_WORKER_TRANSCRIPT_BLOCK_CHARS) {
     return redacted
   }
-  warnings.add('Oversized transcript text was clipped.')
+  markClipped(state, 'Oversized transcript text was clipped.')
   return `${redacted.slice(0, MAX_WORKER_TRANSCRIPT_BLOCK_CHARS)}${TRUNCATION_MARKER}`
 }
 
@@ -153,19 +156,19 @@ function boundToolInput(
   value: unknown,
   budget: { remaining: number; nodes: number },
   depth: number,
-  warnings: Set<string>
+  state: TranscriptBoundState
 ): unknown {
   budget.nodes--
   if (budget.nodes < 0 || budget.remaining <= 0) {
-    warnings.add('Oversized tool input was clipped.')
+    markClipped(state, 'Oversized tool input was clipped.')
     return '… (truncated)'
   }
   if (typeof value === 'string') {
-    const redacted = redactSensitiveText(value, warnings)
+    const redacted = redactSensitiveText(value, state.warnings)
     const length = Math.min(redacted.length, budget.remaining)
     budget.remaining -= length
     if (length < redacted.length) {
-      warnings.add('Oversized tool input was clipped.')
+      markClipped(state, 'Oversized tool input was clipped.')
       return `${redacted.slice(0, length)}… (truncated)`
     }
     return redacted
@@ -174,15 +177,15 @@ function boundToolInput(
     return value
   }
   if (depth >= 5) {
-    warnings.add('Deep tool input was clipped.')
+    markClipped(state, 'Deep tool input was clipped.')
     return '… (truncated)'
   }
   if (Array.isArray(value)) {
     const result = value
       .slice(0, MAX_WORKER_TRANSCRIPT_INPUT_ITEMS)
-      .map((item) => boundToolInput(item, budget, depth + 1, warnings))
+      .map((item) => boundToolInput(item, budget, depth + 1, state))
     if (value.length > MAX_WORKER_TRANSCRIPT_INPUT_ITEMS) {
-      warnings.add('Oversized tool input was clipped.')
+      markClipped(state, 'Oversized tool input was clipped.')
       result.push('… (truncated)')
     }
     return result
@@ -191,17 +194,25 @@ function boundToolInput(
   let count = 0
   for (const [rawKey, entry] of Object.entries(value)) {
     if (count >= MAX_WORKER_TRANSCRIPT_INPUT_ITEMS || budget.remaining <= 0) {
-      warnings.add('Oversized tool input was clipped.')
+      markClipped(state, 'Oversized tool input was clipped.')
       result['…'] = 'truncated'
       break
     }
-    const redactedKey = redactSensitiveText(rawKey, warnings)
+    const redactedKey = redactSensitiveText(rawKey, state.warnings)
     const key = redactedKey.slice(0, Math.min(redactedKey.length, budget.remaining, 128))
+    if (key.length < redactedKey.length) {
+      markClipped(state, 'Oversized tool input was clipped.')
+    }
     budget.remaining -= key.length
-    result[key] = boundToolInput(entry, budget, depth + 1, warnings)
+    result[key] = boundToolInput(entry, budget, depth + 1, state)
     count++
   }
   return result
+}
+
+function markClipped(state: TranscriptBoundState, warning: string): void {
+  state.clipped = true
+  state.warnings.add(warning)
 }
 
 function redactSensitiveText(value: string, warnings: Set<string>): string {

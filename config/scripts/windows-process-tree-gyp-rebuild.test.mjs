@@ -10,8 +10,9 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  inspectWindowsProcessTreeAddon,
   nodeGypRebuildInvocation,
   stageWindowsProcessTreeNodeAddonApiHeaders,
   WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS,
@@ -57,5 +58,42 @@ describe('windows-process-tree node-gyp rebuild', () => {
     } finally {
       rmSync(packageDir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('inspecting a compiled windows-process-tree addon', () => {
+  let dir
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'orca-windows-process-tree-addon-'))
+  })
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('reports a binary that still imports ReadProcessMemory as unpatched', () => {
+    const addonPath = join(dir, 'windows_process_tree.node')
+    writeFileSync(addonPath, Buffer.from('MZ\0\0KERNEL32.dll\0ReadProcessMemory\0', 'binary'))
+    expect(inspectWindowsProcessTreeAddon(addonPath)).toBe('unpatched')
+  })
+
+  it('reports a binary without the import as clean', () => {
+    const addonPath = join(dir, 'windows_process_tree.node')
+    writeFileSync(addonPath, Buffer.from('MZ\0\0ntdll.dll\0NtQueryInformationProcess\0', 'binary'))
+    expect(inspectWindowsProcessTreeAddon(addonPath)).toBe('clean')
+  })
+
+  // The whole point of the tri-state: absence is not evidence of safety, and a
+  // boolean made "there is no binary" indistinguishable from "checked, clean".
+  it('reports an absent binary as missing rather than clean', () => {
+    expect(inspectWindowsProcessTreeAddon(join(dir, 'windows_process_tree.node'))).toBe('missing')
+  })
+
+  it('inspects whatever path it is handed, including a relay-staged addon', () => {
+    // The relay loads `./windows-process-tree.node` beside its bundle, which is
+    // nowhere near a node_modules package directory.
+    const staged = join(dir, 'windows-process-tree.node')
+    writeFileSync(staged, Buffer.from('MZ\0\0ReadProcessMemory\0', 'binary'))
+    expect(inspectWindowsProcessTreeAddon(staged)).toBe('unpatched')
   })
 })

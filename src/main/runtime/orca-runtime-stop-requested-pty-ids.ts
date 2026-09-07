@@ -57,7 +57,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     resolveOwner: (handle) => this.resolveNativeChatLaunchDraftOwner(handle),
     listMobileSnapshots: () => this.mobileSessionTabsByWorktree,
     setMobileSnapshot: (worktreeId, snapshot) =>
-      this.mobileSessionTabsByWorktree.set(worktreeId, snapshot),
+      this.storeMobileSessionSnapshot(worktreeId, snapshot),
     scheduleMobileSnapshot: (worktreeId) => this.scheduleMobileSessionTabsChanged(worktreeId),
     notifyResolved: (tabId, resolution, event) => {
       this.notifier?.nativeChatLaunchDraftResolved?.(tabId, resolution)
@@ -104,7 +104,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getWorktreeId: (handle) => this.getWorktreeIdForTerminalHandle(handle),
     getHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
     getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle),
-    getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle)
+    getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle),
+    getAgentStatusSnapshot: () => this.getOrchestrationFleetAgentStatusSnapshot()
   })
 
   protected readonly terminalList = new RuntimeTerminalList({
@@ -136,7 +137,8 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     listResolved: () => this.listResolvedWorktrees(),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     selectRepos: (selector) => this.selectReposBySelector(selector),
-    scanRepo: (repo) => this.listRepoWorktreesForResolution(repo)
+    scanRepo: (repo) => this.listRepoWorktreesForResolution(repo),
+    listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
   protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
@@ -196,7 +198,9 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title,
+    getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+    resolveSubmitTarget: (leaf, ptyId) => this.resolveOrchestrationPointerSubmitTarget(leaf, ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),

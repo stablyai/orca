@@ -46,6 +46,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       return Promise.resolve(null)
     }
     session.authoritativeReattachGeneration += 1
+    // Every fresh connect creates or rebinds a PTY. Do not let a legacy
+    // response that omits `incarnationId` inherit the predecessor's fence.
+    session.remotePtyIncarnationId = null
     session.clearPaneMode2031State()
     session.clearHiddenOutputRestoreState()
     // Why: a canceled old replay clear can preserve xterm's native
@@ -188,6 +191,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           spawnedPtyId && typeof spawnedPtyId === 'object' && 'id' in spawnedPtyId
             ? spawnedPtyId
             : null
+        // Old hosts may return a string or an object without the optional
+        // field; either way remote evidence must remain client-only
+        // unverifiable until a stamped attach result arrives.
+        session.remotePtyIncarnationId = connectResult?.incarnationId ?? null
         if (connectResult?.isReattach) {
           session.pendingStartupCommand = null
           const accepted = await session.handleReattachResult(

@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import type { AgentStatusCacheIdentity } from '../../shared/agent-status-types'
 import {
   clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey
@@ -7,7 +8,7 @@ import {
 import { isValidAgentStatusDropTabId } from './agent-status-ipc-boundary'
 
 /**
- * The three renderer-initiated ways a status row goes away. All fire-and-forget
+ * The renderer-initiated ways a status row goes away. All fire-and-forget
  * (`ipcRenderer.send` → `ipcMain.on`), so none round-trips a response; removing the
  * listeners first keeps re-registration safe.
  *
@@ -15,8 +16,13 @@ import { isValidAgentStatusDropTabId } from './agent-status-ipc-boundary'
  * still be alive; a confirmed process exit must take them too, or a surviving Claude latch resolves
  * the pane's next event straight back to `working`.
  */
+// Why a cap: the renderer sends one batch per Clear-completed click, bounded by visible rows.
+const MAX_DROP_PERSISTED_BATCH = 5_000
+
 export function registerAgentStatusRowTeardownIpcHandlers(): void {
   ipcMain.removeAllListeners('agentStatus:drop')
+  ipcMain.removeAllListeners('agentStatus:dropPersisted')
+  ipcMain.removeAllListeners('agentStatus:dropPersistedBatch')
   ipcMain.removeAllListeners('agentStatus:reconcileEndedProcess')
   ipcMain.removeAllListeners('agentStatus:dropByTabPrefix')
 
@@ -33,6 +39,36 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
       clearMigrationUnsupportedPtysForPaneKey(paneKey)
     } catch (err) {
       console.warn('[agent-hooks] dropStatusEntry failed:', err)
+    }
+  })
+
+  ipcMain.on('agentStatus:dropPersisted', (_event, request: unknown) => {
+    if (!isValidAgentStatusCacheIdentity(request)) {
+      return
+    }
+    try {
+      if (agentHookServer.dropPersistedStatusEntry(request)) {
+        clearMigrationUnsupportedPtysForPaneKey(request.paneKey)
+      }
+    } catch (err) {
+      console.warn('[agent-hooks] dropPersistedStatusEntry failed:', err)
+    }
+  })
+
+  ipcMain.on('agentStatus:dropPersistedBatch', (_event, request: unknown) => {
+    if (!Array.isArray(request) || request.length > MAX_DROP_PERSISTED_BATCH) {
+      return
+    }
+    const identities = request.filter(isValidAgentStatusCacheIdentity)
+    if (identities.length === 0) {
+      return
+    }
+    try {
+      for (const paneKey of agentHookServer.dropPersistedStatusEntries(identities)) {
+        clearMigrationUnsupportedPtysForPaneKey(paneKey)
+      }
+    } catch (err) {
+      console.warn('[agent-hooks] dropPersistedStatusEntries failed:', err)
     }
   })
 
@@ -66,4 +102,19 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
       console.warn('[agent-hooks] dropStatusEntriesByTabPrefix failed:', err)
     }
   })
+}
+
+function isValidAgentStatusCacheIdentity(value: unknown): value is AgentStatusCacheIdentity {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  const request = value as Record<string, unknown>
+  return (
+    typeof request.paneKey === 'string' &&
+    isValidPaneKey(request.paneKey) &&
+    typeof request.receivedAt === 'number' &&
+    Number.isFinite(request.receivedAt) &&
+    typeof request.stateStartedAt === 'number' &&
+    Number.isFinite(request.stateStartedAt)
+  )
 }

@@ -1,4 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
+import { imagePasteWritesFollowedByText } from '../../../src/shared/image-paste-following-text'
 import { buildMobileImagePastePayload } from './mobile-clipboard-image'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
@@ -23,6 +24,7 @@ type PasteImagesArgs = {
   readonly terminal: string
   readonly deviceToken: string | null
   readonly imagePaths: readonly string[]
+  readonly followedByText: boolean
   /** Budget shared with the rest of the user action (the text body that follows, or
    *  the send this is healing for). Omit to open a fresh one for this paste alone. */
   readonly deadline?: number
@@ -42,6 +44,7 @@ export async function pasteMobileNativeChatImagePaths({
   terminal,
   deviceToken,
   imagePaths,
+  followedByText,
   deadline: sharedDeadline,
   clearInput
 }: PasteImagesArgs): Promise<boolean> {
@@ -55,7 +58,7 @@ export async function pasteMobileNativeChatImagePaths({
   const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
   for (const text of [
     clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
-    ...imagePaths.map(buildMobileImagePastePayload)
+    ...imagePasteWritesFollowedByText(imagePaths.map(buildMobileImagePastePayload), followedByText)
   ]) {
     const remainingMs = deadline - Date.now()
     // Why: the budget is the whole sequence's — starting a write it can't fund would

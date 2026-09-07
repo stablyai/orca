@@ -302,7 +302,7 @@ describe('codex journal translation', () => {
     ).toBe('idle')
   })
 
-  it('journals a user turn and the assistant answer under durable codex keys', () => {
+  it('counts a user echo without rendering it and preserves the assistant ordinal', () => {
     const { translator, tap } = translatorWith()
 
     translator.handle(TURN_STARTED)
@@ -317,15 +317,35 @@ describe('codex journal translation', () => {
       })
     )
 
-    expect(tap.rows.map((row) => row.key)).toEqual([
-      'codex:thread-abc:turn-1:0',
-      'codex:thread-abc:turn-1:1'
-    ])
-    expect(tap.rows[1]?.body).toEqual({
+    expect(tap.rows.map((row) => row.key)).toEqual(['codex:thread-abc:turn-1:1'])
+    expect(tap.rows[0]?.body).toEqual({
       kind: 'message',
       role: 'assistant',
       blocks: [{ type: 'text', text: 'hello' }]
     })
+  })
+
+  it('suppresses both echo lifecycle frames, including skill and unknown parts', () => {
+    const { translator, tap } = translatorWith()
+    translator.handle(TURN_STARTED)
+    const item = {
+      type: 'userMessage',
+      id: 'echo',
+      content: [
+        { type: 'text', text: 'Expanded instructions' },
+        { type: 'skill', name: 'example', path: '/tmp/SKILL.md' },
+        { type: 'future_context', text: 'More context' }
+      ]
+    }
+    translator.handle(notification('item/started', { item }))
+    translator.handle(notification('item/completed', { item }))
+    expect(tap.rows).toEqual([])
+    translator.handle(
+      notification('item/completed', {
+        item: { type: 'agentMessage', id: 'answer', text: 'Done' }
+      })
+    )
+    expect(tap.rows.map((row) => row.key)).toEqual(['codex:thread-abc:turn-1:1'])
   })
 
   it('folds streamed deltas into one snapshot row on the same key the item started under', () => {

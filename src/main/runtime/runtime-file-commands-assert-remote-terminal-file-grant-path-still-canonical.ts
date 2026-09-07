@@ -10,6 +10,11 @@ import {
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE,
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
+import {
+  requireRuntimeFileProvider,
+  runtimeFileRouteForTarget,
+  runtimeFileSshTargetId
+} from './runtime-file-command-target'
 import { readdir, stat } from 'node:fs/promises'
 import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -56,11 +61,8 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
 
   async readFileExplorerDir(worktreeSelector: string, relativePath: string): Promise<DirEntry[]> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
-    const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-    if (target.connectionId) {
-      if (!provider) {
-        throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
-      }
+    const provider = requireRuntimeFileProvider(target)
+    if (provider) {
       // Why: re-sort locally — the remote relay may be an older build with
       // lexicographic ordering.
       return sortDirEntries(await provider.readDir(target.path))
@@ -83,22 +85,29 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
     signal?: AbortSignal
   ): Promise<() => Promise<void>> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
+    // Why: watcher keys must scope teardown to the owning host; a `runtime:` host throws here
+    // rather than registering a lease under this client's namespace.
+    const sshTargetId = runtimeFileSshTargetId(target)
     const open = async (): Promise<{
       unsubscribe: () => Promise<void>
       rootPaths: string[]
     }> => {
-      const finishInstall = beginWatcherInstall(target.path, target.connectionId)
+      const finishInstall = beginWatcherInstall(target.path, sshTargetId)
       try {
-        const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
-        if (target.connectionId) {
-          if (!provider) {
+        // Re-resolved per open: a reconnect mints a fresh provider for the same target.
+        const route = runtimeFileRouteForTarget(target)
+        if (route.kind === 'ssh') {
+          if (!route.provider) {
             throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
           }
           // Why: the RPC layer already threads AbortSignal for local watches; SSH must cancel the remote fs.watch, not wait it out.
-          const close = await provider.watch(target.path, callback, { signal, onTerminalError })
+          const close = await route.provider.watch(target.path, callback, {
+            signal,
+            onTerminalError
+          })
           const rearm = armSshFileExplorerWatchRearm({
             runtimeId: this.host.getRuntimeId(),
-            connectionId: target.connectionId,
+            connectionId: route.connectionId,
             rootPath: target.path,
             callback,
             onTerminalError,
@@ -132,7 +141,7 @@ export class RuntimeFileCommandsWithAssertRemoteTerminalFileGrantPathStillCanoni
     const initial = await open()
     return registerRuntimeFileWatcherRelease(
       this.host.getRuntimeId(),
-      target.connectionId,
+      sshTargetId,
       initial.rootPaths,
       initial.unsubscribe,
       async () => (await open()).unsubscribe,

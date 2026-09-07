@@ -365,6 +365,16 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getTerminalProcessIncarnation(handle)).toBe(incarnation)
   })
 
+  it('keeps prompt bindings fenced across runtime restarts without provider incarnation', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const handle = runtime.preAllocateHandleForPty('pty-1')
+    syncSinglePty(runtime)
+
+    const binding = runtime.getTerminalPromptRequestBinding(handle)
+
+    expect(binding.processIncarnation).toBe(`${runtime.getRuntimeId()}:pty-1:${binding.generation}`)
+  })
+
   it('preserves PTY process identity while a renderer surface detaches and reattaches', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

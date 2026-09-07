@@ -14,6 +14,7 @@ import type {
   AgentProviderSessionMetadata,
   DropAgentStatusByTabPrefixOptions,
   DropAgentStatusByWorktreeOptions,
+  DropAgentStatusOptions,
   DropHibernatedAgentPaneOptions,
   RetainedAgentEntry,
   AllAgentSessionCaptureMode
@@ -49,6 +50,10 @@ export type AgentStatusSlice = {
 
   /** Durable agent sessions captured on sleep (not live rows); power the one-click CLI resume on wake. */
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord>
+
+  /** Panes the runtime fenced against automatic resume. Held separately because a worker can
+   *  settle while its tab is open, before the sleeping record the fence belongs on exists. */
+  automaticResumeBlockedPaneKeys: Record<string, true>
 
   /** Ephemeral launch snapshots keyed by pane; hook payloads lack Orca launch settings, so the renderer supplies them from startup. */
   agentLaunchConfigByPaneKey: Record<string, AgentLaunchConfigRegistryEntry>
@@ -133,7 +138,7 @@ export type AgentStatusSlice = {
   clearTransientAgentStatuses: (connectionId: string, clearedAt: number) => void
 
   /** Remove a single entry AND suppress re-retention on its next disappearance (user-initiated teardown: X button, pane close). */
-  dropAgentStatus: (paneKey: string) => void
+  dropAgentStatus: (paneKey: string, opts?: DropAgentStatusOptions) => void
 
   /** Remove all entries under a tab AND suppress re-retention for each (tab close — no rows may reappear). */
   dropAgentStatusByTabPrefix: (
@@ -166,6 +171,9 @@ export type AgentStatusSlice = {
 
   /** Dismiss a retained entry by its paneKey. */
   dismissRetainedAgent: (paneKey: string) => void
+
+  /** Dismiss several retained entries in one set (Activity "Clear completed"). */
+  dismissRetainedAgents: (paneKeys: readonly string[]) => void
 
   /** Dismiss all retained entries belonging to a worktree. */
   dismissRetainedAgentsByWorktree: (worktreeId: string) => void

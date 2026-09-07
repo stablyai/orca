@@ -35,7 +35,7 @@ export function useMobileSessionFoundation() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider (docs/mobile-shared-client-per-host.md).
-  const { client, state: connState } = useHostClient(hostId)
+  const { client, clientId, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
@@ -96,6 +96,7 @@ export function useMobileSessionFoundation() {
     router,
     insets,
     client,
+    clientId,
     connState,
     reconnectAttempts,
     lastConnectedAt,

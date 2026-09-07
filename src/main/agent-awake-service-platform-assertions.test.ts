@@ -22,6 +22,20 @@ function workingStatus(): AgentAwakeStatus {
   }
 }
 
+describe('AgentAwakeService status array ownership', () => {
+  it('does not observe rows appended to the caller array after setStatuses', () => {
+    const service = new AgentAwakeService()
+    service.setMode('auto')
+    const statuses: AgentAwakeStatus[] = [workingStatus()]
+
+    service.setStatuses(statuses)
+    const before = service.getWorkingAgentCount()
+    statuses.push(workingStatus(), workingStatus())
+
+    expect(service.getWorkingAgentCount()).toBe(before)
+  })
+})
+
 function createBlocker() {
   const startedIds = new Set<number>()
   let nextId = 1

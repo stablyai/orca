@@ -109,6 +109,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
+      '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Only --peek and --all filter their rows.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
       'A bound Run replays the same Delivery until --ack; process every message before acknowledging.'
     ]

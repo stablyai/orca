@@ -141,6 +141,8 @@ export type RuntimeSyncedLeaf = {
   ptyId: string | null
   paneTitle?: string | null
   title?: string | null
+  /** True when this leaf is retained by a parked PTY watcher, not mounted in the renderer. */
+  parked?: boolean
 }
 
 export type RuntimeSyncWindowGraph = {
