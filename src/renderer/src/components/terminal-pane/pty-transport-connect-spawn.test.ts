@@ -26,6 +26,24 @@ describe('createIpcPtyTransport', () => {
     restorePtySpecWindow(originalWindow)
   })
 
+  it.each([0, 420])(
+    'preserves snapshot sequence and keyboard proof %s across IPC reattach',
+    async (seq) => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      vi.mocked(window.api.pty.spawn).mockResolvedValue({
+        id: 'existing',
+        isReattach: true,
+        snapshot: 'ready',
+        snapshotSeq: seq,
+        snapshotKittyKeyboardFlags: 0
+      })
+      const transport = createIpcPtyTransport({})
+      const result = await transport.connect({ url: '', sessionId: 'existing', callbacks: {} })
+      expect(result).toMatchObject({ snapshotSeq: seq, snapshotKittyKeyboardFlags: 0 })
+      transport.detach?.()
+    }
+  )
+
   it('leaves title tracking to the PTY data stream (no OpenCode IPC channel)', async () => {
     // Why: the OpenCode status IPC channel is gone (now the agent-hooks server), so the transport has no per-agent status callback.
     const { createIpcPtyTransport } = await import('./pty-transport')

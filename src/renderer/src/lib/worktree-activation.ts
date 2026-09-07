@@ -10,10 +10,7 @@ import {
   activateWebRuntimeSessionWorktree,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
-import {
-  setWorktreeNavActivator,
-  setWorktreeNavViewActivator
-} from '@/store/slices/worktree-nav-history'
+import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-registration'
 import {
   gateWorktreeAgentActivation,
   workspaceHasSleepingAgentSessions
@@ -33,7 +30,10 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type { IssueCommandLaunch } from '@/lib/worktree-setup-issue-command-queue'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
+import {
+  ensureWorktreeHasInitialTerminal,
+  reseedGatedEmptyWorkspace
+} from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 
@@ -53,6 +53,9 @@ function ensureFolderWorkspaceInitialTerminal(
   startup?: WorktreeStartupPayload,
   providesInitialSurface?: boolean
 ): string | null {
+  if (providesInitialSurface === true && startup === undefined) {
+    return null
+  }
   const state = useAppStore.getState()
   const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
   const primaryTabId = ensureWorktreeHasInitialTerminal(
@@ -79,6 +82,7 @@ export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: {
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
+    revealInSidebar?: boolean
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
@@ -146,8 +150,8 @@ export function activateAndRevealFolderWorkspace(
   }
   if (shouldGateAgentActivation) {
     void gateWorktreeAgentActivation(workspaceKey).then((outcome) => {
-      if (outcome === 'empty' && useAppStore.getState().activeWorktreeId === workspaceKey) {
-        ensureFolderWorkspaceInitialTerminal(folderWorkspace)
+      if (outcome === 'empty') {
+        reseedGatedEmptyWorkspace(workspaceKey, opts?.providesInitialSurface)
       }
     })
   }
@@ -159,10 +163,11 @@ export function activateAndRevealFolderWorkspace(
         opts?.providesInitialSurface
       )
 
-  if (opts?.sidebarRevealBehavior) {
-    state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
-  } else {
-    state.revealWorktreeInSidebar(workspaceKey)
+  if (opts?.revealInSidebar !== false) {
+    state.revealWorktreeInSidebar(
+      workspaceKey,
+      opts?.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : undefined
+    )
   }
 
   return { primaryTabId }
@@ -181,12 +186,16 @@ export function activateAndRevealWorktree(
     revealInSidebar?: boolean
     executionHostId?: ExecutionHostId
     backendStartupTerminalSpawned?: boolean
+    /** Install a preserved fallback startup beside setup/default terminals already seeded. */
+    createNewTerminalForStartup?: boolean
     /** Set by callers that navigate here only to open their own non-terminal surface
      *  (an editor file, a diff). Activation then leaves a closed-last-terminal workspace
      *  empty instead of adding a shell the user never asked for. Caveat: on a
      *  runtime-owned workspace with a live web session the host owns terminal creation,
      *  so ensureWebRuntimeWorktreeTerminalAfterWake may still seed one (matches main). */
     providesInitialSurface?: boolean
+    /** Keep sidebar filters intact when navigating to a hidden target. */
+    clearSidebarFilters?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -256,9 +265,8 @@ export function activateAndRevealWorktree(
   }
   if (shouldGateAgentActivation) {
     void gateWorktreeAgentActivation(worktreeId).then((outcome) => {
-      const currentState = useAppStore.getState()
-      if (outcome === 'empty' && currentState.activeWorktreeId === worktreeId) {
-        ensureWorktreeHasInitialTerminal(currentState, worktreeId)
+      if (outcome === 'empty') {
+        reseedGatedEmptyWorkspace(worktreeId, opts?.providesInitialSurface)
       }
     })
   }
@@ -266,37 +274,43 @@ export function activateAndRevealWorktree(
   // 4. Ensure a focusable surface exists for externally-created worktrees
   const primaryTabId = shouldGateAgentActivation
     ? null
-    : ensureWorktreeHasInitialTerminal(
-        useAppStore.getState(),
-        worktreeId,
-        opts?.startup,
-        opts?.setup,
-        opts?.issueCommand,
-        opts?.defaultTabs,
-        {
-          ...(opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : {}),
-          reseedEmptiedWorkspace: opts?.providesInitialSurface !== true
-        }
-      )
+    : opts?.providesInitialSurface === true && !hasActivationWork
+      ? null
+      : ensureWorktreeHasInitialTerminal(
+          useAppStore.getState(),
+          worktreeId,
+          opts?.startup,
+          opts?.setup,
+          opts?.issueCommand,
+          opts?.defaultTabs,
+          {
+            ...(opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : {}),
+            ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
+            ...(opts?.providesInitialSurface === true ? { callerProvidesSurface: true } : {}),
+            reseedEmptiedWorkspace: opts?.providesInitialSurface !== true
+          }
+        )
   if (primaryTabId && opts?.initialCwd) {
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
 
   // 5. Clear sidebar filters hiding the target — reveal needs the card rendered, else it silently no-ops.
-  if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
-    state.setFilterRepoIds([])
-  }
-  if (
-    state.hideAutomationGeneratedWorkspaces &&
-    wt.automationProvenance?.kind === 'created-by-automation'
-  ) {
-    state.setHideAutomationGeneratedWorkspaces(false)
-  }
-  if (state.hideCliCreatedWorkspaces && wt.cliProvenance?.kind === 'created-by-cli') {
-    state.setHideCliCreatedWorkspaces(false)
-  }
-  if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
-    state.setHideDetachedHeadWorkspaces(false)
+  if (opts?.clearSidebarFilters !== false) {
+    if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
+      state.setFilterRepoIds([])
+    }
+    if (
+      state.hideAutomationGeneratedWorkspaces &&
+      wt.automationProvenance?.kind === 'created-by-automation'
+    ) {
+      state.setHideAutomationGeneratedWorkspaces(false)
+    }
+    if (state.hideCliCreatedWorkspaces && wt.cliProvenance?.kind === 'created-by-cli') {
+      state.setHideCliCreatedWorkspaces(false)
+    }
+    if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
+      state.setHideDetachedHeadWorkspaces(false)
+    }
   }
 
   // 6. Reveal in sidebar
@@ -326,16 +340,20 @@ export function activateAndRevealWorktree(
  */
 export function activateAndRevealWorkspace(
   workspaceId: string,
-  opts?: { executionHostId?: ExecutionHostId; providesInitialSurface?: boolean }
+  opts?: {
+    executionHostId?: ExecutionHostId
+    providesInitialSurface?: boolean
+    revealInSidebar?: boolean
+    /** Worktree-only: folder workspaces are never filter-hidden. */
+    clearSidebarFilters?: boolean
+  }
 ): ActivateAndRevealResult | false {
   const workspaceScope = parseWorkspaceKey(workspaceId)
-  if (workspaceScope?.type === 'folder') {
-    return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
+  if (workspaceScope?.type !== 'folder') {
+    return activateAndRevealWorktree(workspaceId, opts)
   }
-  return activateAndRevealWorktree(workspaceId, opts)
+  return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
 }
 
 // Why: break the import cycle — nav-history slice (under @/store) can't import activation directly, so register the activator here.
-setWorktreeNavActivator(activateAndRevealWorkspace)
-
-setWorktreeNavViewActivator(applyWorktreeNavViewEntry)
+registerWorktreeActivation(activateAndRevealWorkspace, applyWorktreeNavViewEntry)

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { parseStrictProcessTableRows } from '../../shared/process-table-snapshot'
 import {
   buildProcessTableIndex,
-  parseStrictProcessTableRows,
   type ProcessTableIndexStats
-} from '../../shared/process-table-snapshot'
+} from '../../shared/process-table-index'
 import {
   resolveAgentForegroundProcessesBatch,
   resolveAgentForegroundProcessesFromIndex
@@ -22,7 +22,28 @@ describe('batched foreground process correlation', () => {
       resolveAgentForegroundProcessesFromIndex(buildProcessTableIndex(rows), [
         { rootPid: 100, fallbackProcess: 'zsh' }
       ])
-    ).toEqual([{ available: true, processName: 'codex' }])
+    ).toEqual([{ available: true, processName: 'codex', shellOwnsEveryTtyProcessGroup: false }])
+  })
+
+  it('reports whether the shell itself owns the terminal, named process or not', () => {
+    // The only host-observable "nothing is running here". pid 200's own pgid owns the terminal;
+    // pid 300 has an unrecognized command in the foreground, which nothing else here can see.
+    const rows = parseStrictProcessTableRows(
+      [
+        '200 1 200 200 Ss /bin/zsh',
+        '300 1 300 301 Ss /bin/zsh',
+        '301 300 301 301 S+ vim notes.md'
+      ].join('\n')
+    )
+    expect(
+      resolveAgentForegroundProcessesFromIndex(buildProcessTableIndex(rows), [
+        { rootPid: 200, fallbackProcess: 'zsh' },
+        { rootPid: 300, fallbackProcess: 'zsh' }
+      ])
+    ).toEqual([
+      { available: true, processName: null, shellOwnsEveryTtyProcessGroup: true },
+      { available: true, processName: null, shellOwnsEveryTtyProcessGroup: false }
+    ])
   })
 
   it('returns unverifiable for a missing root or no controlling tty', () => {

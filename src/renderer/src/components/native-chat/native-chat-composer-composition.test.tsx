@@ -34,6 +34,7 @@ function TestField(props: TestFieldProps): React.JSX.Element {
 
 function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
   return {
+    composerScopeKey: 'pane-test',
     textareaRef: createRef<HTMLTextAreaElement>(),
     draft: '',
     disabled: false,
@@ -73,6 +74,18 @@ function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
 function textarea(): HTMLTextAreaElement {
   return screen.getByRole('textbox') as HTMLTextAreaElement
 }
+
+describe('native chat composer drop-scope marker', () => {
+  // The drop pipeline stops walking at the drop-target marker, so a scope key on
+  // any other element would never reach the payload.
+  it('publishes the scope key on the same element as the drop-target marker', () => {
+    const view = render(<TestField {...fieldProps({ composerScopeKey: 'tab-7:pane-9' })} />)
+    const marker = view.container.querySelector('[data-native-file-drop-target="composer"]')
+    expect(marker).not.toBeNull()
+    expect(marker?.getAttribute('data-composer-scope-key')).toBe('tab-7:pane-9')
+    expect(view.container.querySelectorAll('[data-composer-scope-key]')).toHaveLength(1)
+  })
+})
 
 describe('native chat composer composition ownership', () => {
   it('preserves the focused browser preedit through 120 stale streaming rerenders', () => {

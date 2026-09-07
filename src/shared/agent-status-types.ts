@@ -3,6 +3,7 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import {
   normalizeInteractivePromptField,
@@ -15,6 +16,7 @@ import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit
 
 export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 export type {
+  AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -79,6 +81,8 @@ export type AgentStatusOrchestrationContext = {
   parentPaneKey?: string
   coordinatorHandle?: string
   orchestrationRunId?: string
+  /** Durable orchestration categories combined with the current push-fed status observation. */
+  attention?: OrchestrationFleetAttention
 }
 
 export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle'

@@ -89,11 +89,11 @@ describe('codex journal translation', () => {
     const { translator, tap } = translatorWith()
     let rejectTerminal = true
     const appendItem = tap.sink.appendItem
-    tap.sink.tryAppendItem = (identity, body, blobs, options) => {
+    tap.sink.tryAppendItem = (identity, body, options) => {
       if (rejectTerminal && body.kind === 'tool-call' && body.state === 'failed') {
         return { accepted: false as const, reason: 'backpressure' as const }
       }
-      appendItem(identity, body, blobs, options)
+      appendItem(identity, body, options)
       return { accepted: true as const }
     }
     for (let index = 0; index <= 256; index += 1) {
@@ -157,7 +157,7 @@ describe('codex journal translation', () => {
 
     translator.handle(TURN_STARTED)
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-0', text: 'hi' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-0', text: 'hi' } })
     )
 
     expect(tap.publishes()).toBe(1)
@@ -520,7 +520,7 @@ describe('codex journal translation', () => {
     expect(timeline).toEqual([])
   })
 
-  it('projects only user and assistant content for a complete turn with hooks', () => {
+  it('projects assistant content without provider user echoes for a complete turn with hooks', () => {
     const { translator, tap } = translatorWith()
 
     translator.handle(notification('thread/started', { thread: { id: THREAD_ID } }))
@@ -552,7 +552,6 @@ describe('codex journal translation', () => {
       }))
     )
     expect(timeline.map(({ role, blocks }) => ({ role, blocks }))).toEqual([
-      { role: 'user', blocks: [{ type: 'text', text: 'hi' }] },
       { role: 'assistant', blocks: [{ type: 'text', text: 'hello' }] }
     ])
   })
@@ -602,5 +601,70 @@ describe('codex journal translation', () => {
     window.fire()
 
     expect(tap.rows).toEqual([])
+  })
+})
+
+describe('notice journal pipeline', () => {
+  it('replaces a legacy compaction divider with its canonical item at the same journal key', () => {
+    const { translator, tap } = translatorWith()
+    translator.handle(notification('thread/compacted', { threadId: THREAD_ID, turnId: TURN_ID }))
+    translator.handle(
+      notification('item/completed', {
+        turnId: TURN_ID,
+        item: { id: 'compact', type: 'contextCompaction' }
+      })
+    )
+    expect(tap.rows).toHaveLength(2)
+    expect([...new Map(tap.rows.map((row) => [row.key, row.body])).values()]).toEqual([
+      expect.objectContaining({
+        kind: 'status',
+        text: 'Context compacted',
+        presentation: 'compaction'
+      })
+    ])
+    translator.dispose()
+  })
+  it('preserves every notice after generic traffic reaches its cap', () => {
+    const { translator, tap, window } = translatorWith()
+    translator.handle(TURN_STARTED)
+    for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN; index += 1) {
+      translator.handle(notification('future/notification', { value: index }))
+    }
+    for (const method of ['warning', 'guardianWarning', 'configWarning', 'deprecationNotice']) {
+      translator.handle(notification(method, { message: method, summary: method }))
+    }
+    window.fire()
+    expect(tap.rows.slice(-4).map((row) => row.body)).toEqual([
+      expect.objectContaining({ text: 'warning', tone: 'warning' }),
+      expect.objectContaining({ text: 'guardianWarning', tone: 'warning' }),
+      expect.objectContaining({ text: 'configWarning', tone: 'warning' }),
+      expect.objectContaining({ text: 'deprecationNotice', tone: 'notice' })
+    ])
+    translator.dispose()
+  })
+  it('keeps the plan document marker during streamed updates and completion', () => {
+    const { translator, tap, window } = translatorWith()
+    translator.handle(
+      notification('item/started', {
+        turnId: TURN_ID,
+        item: { id: 'plan', type: 'plan', text: '' }
+      })
+    )
+    translator.handle(
+      notification('item/plan/delta', { turnId: TURN_ID, itemId: 'plan', delta: '# Plan' })
+    )
+    window.fire()
+    expect(tap.rows.at(-1)?.body).toMatchObject({ text: '# Plan', presentation: 'plan-document' })
+    translator.handle(
+      notification('item/completed', {
+        turnId: TURN_ID,
+        item: { id: 'plan', type: 'plan', text: '# Plan\n\nComplete' }
+      })
+    )
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      text: '# Plan\n\nComplete',
+      presentation: 'plan-document'
+    })
+    translator.dispose()
   })
 })

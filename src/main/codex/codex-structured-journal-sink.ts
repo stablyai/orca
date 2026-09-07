@@ -4,7 +4,6 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import type {
   StructuredAgentSessionEventSink,
-  StructuredAgentSessionJournalBlob,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
@@ -20,13 +19,12 @@ function criticalAdmission(
 export function appendCodexLifecycleItem(
   sink: StructuredAgentSessionEventSink,
   identity: AgentJournalItemIdentity,
-  body: AgentJournalItemBody,
-  blobs: readonly StructuredAgentSessionJournalBlob[] = []
+  body: AgentJournalItemBody
 ): CodexJournalTranslationAdmission {
   if (sink.tryAppendItem) {
-    return criticalAdmission(sink.tryAppendItem(identity, body, blobs, { lifecycle: true }))
+    return criticalAdmission(sink.tryAppendItem(identity, body, { lifecycle: true }))
   }
-  sink.appendItem(identity, body, blobs, { lifecycle: true })
+  sink.appendItem(identity, body, { lifecycle: true })
   return CODEX_JOURNAL_ADMITTED
 }
 

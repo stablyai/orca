@@ -2,6 +2,7 @@ export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string
   title: string
+  faviconUrl?: string | null
   lastVisitedAt: number
   visitCount: number
 }

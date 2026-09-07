@@ -19,6 +19,7 @@
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
+import { SHORT_RELAY_SOCKET_DIR_PREFIX } from './relay-socket-path-limit'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import {
   describeRelayEndpointIncumbent,
@@ -53,6 +54,8 @@ export type SupersededRelaySweepOptions = {
   currentRelayDir: string
   /** Stable per-target socket filename, from `relaySocketNameForInstanceId`. */
   sockName: string
+  /** Set only when this launch relocated its socket; that directory is never swept. */
+  currentShortSocketDir?: string
   nodePath: string
   signal?: AbortSignal
 }
@@ -63,15 +66,23 @@ export function supersededRelayEndpointListCommand(options: {
   remoteHome: string
   currentRelayDir: string
   sockName: string
+  currentShortSocketDir?: string
 }): string {
   return [
     `base=${shellEscape(`${options.remoteHome}/${RELAY_REMOTE_DIR}`)}`,
     `sock_name=${shellEscape(options.sockName)}`,
     `current=${shellEscape(options.currentRelayDir)}`,
-    'for sock in "$base"/relay-*/"$sock_name"; do',
+    // Why the second base: a host whose `$HOME` pushes the endpoint past `sun_path` binds
+    // under `/tmp/.orca-relay-<uid>/relay-<versionHash>/` instead (relay-socket-path-limit.ts).
+    // Those orphans are the same population this sweep exists to make visible, and the
+    // `$HOME` glob cannot see them. The uid is resolved on the host; the client never knows it.
+    `short_current=${shellEscape(options.currentShortSocketDir ?? '')}`,
+    `short_base="${SHORT_RELAY_SOCKET_DIR_PREFIX}$(id -u 2>/dev/null)"`,
+    'for sock in "$base"/relay-*/"$sock_name" "$short_base"/relay-*/"$sock_name"; do',
     '  [ -S "$sock" ] || continue',
     '  dir=${sock%/*}',
     '  [ "$dir" = "$current" ] && continue',
+    '  [ -n "$short_current" ] && [ "$dir" = "$short_current" ] && continue',
     '  printf \'%s\\n\' "$sock"',
     'done'
   ].join('\n')
@@ -79,7 +90,14 @@ export function supersededRelayEndpointListCommand(options: {
 
 /** Remove a socket inode proven to have no holder, so version-dir GC can reclaim the tree. */
 export function removeStaleRelayEndpointCommand(sockPath: string): string {
-  return `rm -f ${shellEscape(sockPath)}`
+  const remove = `rm -f ${shellEscape(sockPath)}`
+  if (!sockPath.startsWith(SHORT_RELAY_SOCKET_DIR_PREFIX)) {
+    return remove
+  }
+  // `gcOldRelayVersions` only walks `$HOME/.orca-remote`, so nothing else would ever
+  // reclaim a relocated version segment. `rmdir` fails while another target of the same
+  // build still has a socket there, which is exactly the condition for keeping it.
+  return `${remove}; rmdir ${shellEscape(sockPath.slice(0, sockPath.lastIndexOf('/')))} 2>/dev/null || true`
 }
 
 export function classifySupersededRelay(

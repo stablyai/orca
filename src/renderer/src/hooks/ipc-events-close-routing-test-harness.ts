@@ -21,6 +21,7 @@ export type TerminalTabCloseRequestListener = (data: {
   requestId: string
   tabId: string
   localPtyTeardownOwnedExternally?: boolean
+  force?: boolean
 }) => void
 
 export async function useIpcEventsForCloseRouting({

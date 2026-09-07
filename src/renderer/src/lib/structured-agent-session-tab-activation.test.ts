@@ -67,7 +67,7 @@ describe('activateStructuredAgentSessionTab', () => {
 
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mocks.activateTab).toHaveBeenCalledWith('structured-tab-1', { worktreeId: 'wt-1' })
-    expect(mocks.setActiveTabType).toHaveBeenCalledWith('agent-session')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('agent-session', 'wt-1')
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'session.tabs.activate',

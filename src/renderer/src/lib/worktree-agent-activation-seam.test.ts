@@ -231,6 +231,37 @@ describe('worktree agent activation seam', () => {
     expect(tabs[0]?.ptyId).toBeNull()
   })
 
+  it('re-seeds an explicitly activated workspace with a closed terminal tombstone', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState({
+      ...baseState(),
+      // An empty row is persisted after the user closes the last terminal.
+      tabsByWorktree: { [worktree.id]: [] }
+    })
+    stubInventory()
+
+    expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
+    expect(tabs).toHaveLength(1)
+    // A fresh shell, never a second surface forked onto the live agent's PTY.
+    expect(tabs[0]?.ptyId).toBeNull()
+  })
+
+  it('does not race an explicitly promised surface with a fallback terminal', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState(baseState())
+    stubInventory()
+
+    expect(activateAndRevealWorktree(worktree.id, { providesInitialSurface: true })).toEqual({
+      primaryTabId: null
+    })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
+  })
+
   // A paired-runtime owner is always omitted from its own scoped census, and an SSH relay that
   // never answered omits everything. Declining to mint is right; leaving the workspace with no
   // surface at all is not — the user asked for a pane and must get one.
@@ -245,7 +276,6 @@ describe('worktree agent activation seam', () => {
 
     const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
     expect(tabs).toHaveLength(1)
-    // A fresh shell, never a second surface forked onto the live agent's PTY.
     expect(tabs[0]?.ptyId).toBeNull()
   })
 

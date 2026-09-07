@@ -8,12 +8,7 @@ describe('unhandled provider frame journal fallback', () => {
       'future-provider',
       'notification:new/event',
       { body: 'abcdefghij' },
-      {
-        inlineHeadBytes: 8,
-        maxSessionBytes: 1024,
-        maxAppendsPerWindow: 10,
-        appendWindowMs: 1000
-      }
+      { inlineHeadBytes: 8 }
     )
 
     expect(item).not.toBeNull()
@@ -32,12 +27,6 @@ describe('unhandled provider frame journal fallback', () => {
     expect(
       Buffer.byteLength(item.body.providerFrame?.payload.head ?? '', 'utf8')
     ).toBeLessThanOrEqual(8)
-    expect(item.blobs).toEqual([
-      {
-        digest: item.body.providerFrame?.payload.digest,
-        payload: '{"body":"abcdefghij"}'
-      }
-    ])
   })
 
   it('turns an unserializable message-shaped payload into an explicit visible value', () => {
@@ -198,12 +187,7 @@ describe('unhandled provider frame journal fallback', () => {
       'codex',
       'notification:warning',
       { message },
-      {
-        inlineHeadBytes: 8,
-        maxSessionBytes: 1024,
-        maxAppendsPerWindow: 10,
-        appendWindowMs: 1000
-      }
+      { inlineHeadBytes: 8 }
     )
 
     expect(row?.body.text).toContain('abcdefgh')
@@ -249,5 +233,43 @@ describe('a failed provider dependency', () => {
         status: 'starting'
       })
     ).toBeNull()
+  })
+})
+
+describe('typed notice metadata', () => {
+  it('publishes readable compaction statuses for both provider forms', () => {
+    expect(
+      unhandledProviderFrameJournalItem('codex', 'notification:thread/compacted', {})
+    ).toMatchObject({
+      classification: 'timeline-substantive',
+      body: { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
+    })
+    expect(unhandledProviderFrameJournalItem('codex', 'item:contextCompaction', {})).toMatchObject({
+      body: { kind: 'status', text: 'Context compacted', presentation: 'compaction' }
+    })
+  })
+  it.each([
+    ['warning', { message: 'Check this' }, 'warning', 'Check this'],
+    ['guardianWarning', { message: 'Review required' }, 'warning', 'Review required'],
+    [
+      'configWarning',
+      { summary: 'Invalid option', details: 'Remove the option' },
+      'warning',
+      'Invalid option\n\nRemove the option'
+    ],
+    [
+      'deprecationNotice',
+      { summary: 'Old option', details: 'Use its replacement' },
+      'notice',
+      'Old option\n\nUse its replacement'
+    ],
+    ['error', { error: { message: 'Connection failed' } }, 'error', 'Connection failed']
+  ])('assigns the tone and readable text for %s', (method, payload, tone, text) => {
+    expect(
+      unhandledProviderFrameJournalItem('codex', `notification:${method}`, payload)
+    ).toMatchObject({
+      classification: 'error-surface',
+      body: { kind: 'status', text, tone }
+    })
   })
 })

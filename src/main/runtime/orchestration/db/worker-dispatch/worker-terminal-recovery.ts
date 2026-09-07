@@ -8,6 +8,8 @@ import { OrchestrationError } from '../../orchestration-error'
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
+import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
 
 export function listLegacyWorkerTerminalRecoveryRows(
   this: OrchestrationDb
@@ -21,9 +23,18 @@ export function listLegacyWorkerTerminalRecoveryRows(
        FROM dispatch_contexts dc
        INNER JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
        WHERE wd.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+          -- A settled worker whose terminal orchestration still owns keeps a resumable agent
+          -- session; it needs the resume fence until release or retain retires the pane.
+          OR (wd.state IN (${WORKER_SETTLED_STATES.map(() => '?').join(', ')})
+              AND EXISTS (
+                SELECT 1 FROM worker_terminal_resources wtr
+                 WHERE wtr.owner_dispatch_id = dc.id
+                   AND wtr.ownership_state = 'owned'
+                   AND wtr.release_state NOT IN ('released', 'retained')
+              ))
        ORDER BY dc.rowid`
     )
-    .all() as LegacyWorkerTerminalRecoveryRow[]
+    .all(...WORKER_SETTLED_STATES) as LegacyWorkerTerminalRecoveryRow[]
 }
 
 export function reconcileMissingWorkerTerminal(
@@ -49,40 +60,53 @@ export function reconcileMissingWorkerTerminal(
       const failureCount = dispatch.failure_count + 1
       const dispatchStatus: DispatchStatus =
         failureCount >= DISPATCH_CIRCUIT_BREAK_FAILURES ? 'circuit_broken' : 'failed'
-      this.db
-        .prepare(
-          `UPDATE dispatch_contexts
-           SET status = ?, failure_count = ?, last_failure = ?,
-               completed_at = datetime('now'),
-               capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
-           WHERE id = ? AND status IN ('pending', 'dispatched')`
-        )
-        .run(dispatchStatus, failureCount, reason, dispatchId)
+      transitionLifecycleWithDb(this.db, {
+        entity: 'dispatch',
+        id: dispatchId,
+        from: dispatch.status,
+        to: dispatchStatus,
+        projection: {
+          failure_count: failureCount,
+          last_failure: reason,
+          completed_at: new Date().toISOString(),
+          capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
+        }
+      })
       if (!stopWasPending) {
         const taskStatus: TaskStatus = dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
         reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
-        this.db
-          .prepare(
-            `UPDATE tasks
-             SET status = ?, completed_at = CASE WHEN ? = 'failed' THEN datetime('now') ELSE NULL END
-             WHERE id = ? AND status IN ('dispatched', 'blocked')
-               AND NOT EXISTS (
-                 SELECT 1 FROM dispatch_contexts
-                 WHERE task_id = tasks.id AND status IN ('pending', 'dispatched')
-               )`
-          )
-          .run(taskStatus, taskStatus, dispatch.task_id)
+        const task = this.getTask(dispatch.task_id)
+        if (
+          task &&
+          ['dispatched', 'blocked'].includes(task.status) &&
+          !this.db
+            .prepare(
+              "SELECT 1 FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
+            )
+            .get(dispatch.task_id)
+        ) {
+          transitionLifecycleWithDb(this.db, {
+            entity: 'task',
+            id: dispatch.task_id,
+            from: task.status,
+            to: taskStatus,
+            projection: { completed_at: taskStatus === 'failed' ? new Date().toISOString() : null }
+          })
+        }
       }
       this.closeQuestionsForDispatch(dispatchId)
     }
-    this.db
-      .prepare(
-        `UPDATE worker_dispatches
-         SET state = ?, stage = 'terminal_missing', last_error = ?, updated_at = datetime('now')
-         WHERE dispatch_id = ?
-           AND state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')`
-      )
-      .run(stopWasPending ? 'stopped' : 'abandoned', reason, dispatchId)
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: dispatchId,
+      from: worker.state,
+      to: stopWasPending ? 'stopped' : 'abandoned',
+      projection: {
+        stage: 'terminal_missing',
+        last_error: reason,
+        updated_at: new Date().toISOString()
+      }
+    })
     this.db.exec('COMMIT')
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {

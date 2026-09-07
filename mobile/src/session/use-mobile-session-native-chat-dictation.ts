@@ -77,6 +77,12 @@ export function useMobileSessionNativeChatDictation(
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
+  const nativeChatOverlayInputLockReason =
+    activeSessionTab?.type === 'agent-session'
+      ? connState === 'connected'
+        ? null
+        : 'disconnected'
+      : nativeChatInputLockReason
   const routeKey = nativeChatScopeKey ?? `${hostId}\0${worktreeId}`
   const getSendCompletionGeneration = useMobileSendCompletionGeneration({
     onBlur: resetLiveInputFocus,
@@ -211,6 +217,7 @@ export function useMobileSessionNativeChatDictation(
     nativeChatInputLeaseReady,
     nativeChatInputLeaseReadyRef,
     nativeChatInputLockReason,
+    nativeChatOverlayInputLockReason,
     markNativeChatInputLeaseReady,
     clearNativeChatInputLease,
     nativeChatController,

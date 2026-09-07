@@ -1,194 +1,205 @@
-// Loading a journal from disk: snapshot + log → folded state.
+// Loading a journal: the session projection names the live epoch, and that
+// epoch's rows are folded through the reducer in sequence order.
 //
-// The snapshot is authoritative for the current epoch. Log rows belonging to a
-// superseded epoch are dropped rather than merged — a crash between publishing
-// a rollover snapshot and rewriting the log is the ordinary way that happens.
-// A gap in the surviving sequence is corruption, and the caller rolls the epoch
+// There is no snapshot to anchor to and no superseded-epoch rows to drop — a
+// roll deletes them in the same transaction that publishes the new epoch. A gap
+// in the surviving sequence is corruption, and the caller rolls the epoch
 // rather than rendering a partial timeline.
 
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import { existsSync } from 'node:fs'
+import type Database from '../../sqlite/sync-database'
 import { findSequenceGap } from './journal-cursor'
-import {
-  quarantineInvalidJournalSnapshot,
-  readJournalLog,
-  readJournalSnapshot,
-  type JournalSnapshotFile
-} from './journal-log-file'
+import { openJournalDatabase } from './journal-database'
+import { journalDatabaseFile } from './journal-paths'
 import {
   applyJournalRow,
   createJournalReducerState,
-  rememberAppliedSettlementId,
   type JournalReducerState
 } from './journal-reducer'
-import { journalRowByteLength, type JournalRow } from './journal-row-schema'
+import {
+  readJournalEpochRows,
+  readJournalRowsAfter,
+  readJournalSessionEpoch
+} from './journal-row-table'
+import { JOURNAL_REPAIR_DISCLOSURE_ITEM_ID } from './journal-repair-disclosure'
+import { pendingJournalRepairSequence } from './journal-repair-marker'
+import { parseJournalRow, type JournalRow } from './journal-row-schema'
+
+/** Every epoch row is sequence 1, and no compaction moves that floor. */
+const FIRST_JOURNAL_SEQUENCE = 1
 
 export type JournalLoad = {
   state: JournalReducerState
-  /** Rows still individually replayable, oldest first. */
-  tailRows: JournalRow[]
-  /** Highest sequence folded into the snapshot; the tail starts after it. */
-  compactedThrough: number
-  /** A future schema version was met: no writes, no compaction, no deletion. */
+  /** A future schema version was met: no writes, no deletion. */
   readOnly: boolean
   /** Set when the surviving prefix is unusable and the caller must roll the epoch. */
   corrupt: boolean
-  /** Log lines skipped because they failed to parse (schema-version rows are
+  /** Rows skipped because their body failed to parse (future-version rows are
    *  `readOnly`, never counted here). The store discloses these in the timeline. */
   malformedRows: number
-  sizeBytes: number
-  /** Raw unreadable suffix retained for quarantine instead of deletion. */
-  quarantineRemainder?: string
+  /** Directory-internal: the first sequence of an unusable suffix. The store
+   *  deletes from here before it accepts a write; a probe leaves it alone. */
+  truncateFrom?: number
 }
 
-/** Returns null when no journal exists yet for this session. */
-export async function loadJournal(
-  journalDir: string,
-  sessionId: string,
-  quota?: { maxBytes: number }
-): Promise<JournalLoad | null> {
-  const snapshotRead = await readJournalSnapshot(journalDir)
-  if (snapshotRead.status === 'unreadable') {
-    // Written by a newer schema: not corrupt, so never quarantined. The file
-    // stays authoritative in place, and this build must not write, compact,
-    // delete, or render a partial timeline from rows it cannot anchor to the
-    // snapshot it cannot read.
+/**
+ * Replay on a connection this function does NOT own. Returns null when the
+ * session has no journal yet.
+ */
+export function replayJournal(
+  db: Database.Database,
+  readOnly: boolean,
+  sessionId: string
+): JournalLoad | null {
+  if (readOnly) {
     return emptyReadOnlyLoad(sessionId)
   }
-  if (snapshotRead.status === 'invalid') {
-    await quarantineInvalidJournalSnapshot(
-      journalDir,
-      quota ? { sessionId, maxBytes: quota.maxBytes } : undefined
-    )
-  }
-  const snapshot = snapshotRead.status === 'valid' ? snapshotRead.snapshot : null
-  const log = await readJournalLog(journalDir)
-  const epoch = resolveEpoch(snapshot, log.rows)
+  const epoch = readJournalSessionEpoch(db, sessionId)
   if (!epoch) {
-    return snapshotRead.status === 'invalid' || log.hasBytes ? emptyReadOnlyLoad(sessionId) : null
+    return null
+  }
+  const state = createJournalReducerState(sessionId, epoch)
+  const stored = readJournalEpochRows(db, sessionId, epoch)
+  // A partial repair keeps its prefix, so the surviving rows look contiguous and
+  // anchored however much of the timeline it deleted. Its marker is what still
+  // says otherwise, naming the sequence past which the epoch would be its own
+  // history again.
+  const repairedFrom = pendingJournalRepairSequence(db, sessionId, epoch)
+  const rows: JournalRow[] = []
+  let malformedRows = 0
+  let latched = false
+  let truncateFrom: number | undefined
+  for (const entry of stored) {
+    const parsed = parseJournalRow(entry.rowJson)
+    if (parsed.ok) {
+      rows.push(parsed.row)
+      continue
+    }
+    // Reading STOPS at the first row this build cannot represent. A future
+    // version latches read-only; anything else is one skipped row, disclosed.
+    truncateFrom = entry.seq
+    if (parsed.unreadable) {
+      latched = true
+    } else {
+      malformedRows = 1
+    }
+    break
   }
 
-  const compactedThrough = snapshot?.epoch === epoch ? snapshot.compactedThrough : 0
-  const state = seedState(sessionId, epoch, snapshot?.epoch === epoch ? snapshot : null)
-  const liveRows = log.rows.filter((row) => row.epoch === epoch)
-  let tailRows = unionBySequence(snapshot?.epoch === epoch ? snapshot.tail : [], liveRows, epoch)
-
-  const oldest = tailRows[0]?.seq ?? compactedThrough + 1
+  // Anchored at 1, never at the first row that HAPPENS to remain: nothing trims
+  // a prefix, so a missing epoch row is a hole like any other and everything
+  // behind it is unanchored. Validating from `rows[0].seq` would call the
+  // leftovers contiguous and leave them out of the repair that runs before
+  // provider history replaces the epoch.
   const gap = findSequenceGap(
-    tailRows.map((row) => row.seq),
-    oldest
+    rows.map((row) => row.seq),
+    FIRST_JOURNAL_SEQUENCE
   )
-  // A hole below the snapshot boundary is unrecoverable too: the snapshot only
-  // covers `compactedThrough`, so a tail that starts above it lost rows.
-  let corrupt = Boolean(gap) || oldest > compactedThrough + 1 || log.malformed > 0
-  let quarantineRemainder = log.remainder
   if (gap) {
-    const firstBad = tailRows.findIndex((row, index) => {
-      const expected = (tailRows[0]?.seq ?? compactedThrough + 1) + index
-      return row.seq !== expected
-    })
+    const firstBad = rows.findIndex((row, index) => row.seq !== FIRST_JOURNAL_SEQUENCE + index)
     if (firstBad !== -1) {
-      const suffix = tailRows.slice(firstBad)
-      tailRows = tailRows.slice(0, firstBad)
-      quarantineRemainder ??= `${suffix.map((row) => JSON.stringify(row)).join('\n')}\n`
+      truncateFrom = rows[firstBad]?.seq ?? truncateFrom
+      rows.length = firstBad
     }
   }
-
-  for (const row of tailRows) {
-    if (row.seq > compactedThrough) {
-      applyJournalRow(state, row)
-    }
+  // Contiguity from 1 is not the whole invariant: sequence 1 has to BE the epoch
+  // row. An ordinary row there is an epoch nothing anchors, and replaying it as
+  // clean is how a repaired journal silently adopts a timeline whose real
+  // history was never rebuilt.
+  if (rows.length > 0 && rows[0]?.kind !== 'epoch') {
+    truncateFrom = rows[0]?.seq ?? truncateFrom
+    rows.length = 0
   }
-  state.oldestSequence = oldest
-  state.lastSequence = Math.max(state.lastSequence, compactedThrough)
+  for (const row of rows) {
+    applyJournalRow(state, row)
+  }
+  state.oldestSequence = FIRST_JOURNAL_SEQUENCE
 
+  // A latched journal reduces to nothing by design; only a writable one can be
+  // held to the anchor.
+  const unanchored = !latched && rows[0]?.kind !== 'epoch'
   return {
     state,
-    tailRows,
-    compactedThrough,
-    // A future-version snapshot never reaches here: it is classified
-    // unreadable above, so `valid` implies a version this build can write.
-    readOnly: log.unreadable,
-    corrupt,
-    malformedRows: log.malformed,
-    sizeBytes: tailRows.reduce((total, row) => total + journalRowByteLength(row), 0),
-    quarantineRemainder
+    readOnly: latched,
+    corrupt:
+      Boolean(gap) ||
+      malformedRows > 0 ||
+      unanchored ||
+      (repairedFrom !== null && awaitsRebuild(rows, repairedFrom)) ||
+      awaitsProviderHistory(rows),
+    malformedRows,
+    ...(truncateFrom !== undefined && !latched ? { truncateFrom } : {})
+  }
+}
+
+/**
+ * The epoch a total repair published, still holding nothing but its own anchor
+ * and disclosure. The rows it dropped were never reconstructed, so provider
+ * history has to be retried rather than this being called a clean timeline.
+ */
+function awaitsProviderHistory(rows: readonly JournalRow[]): boolean {
+  const anchor = rows[0]
+  if (anchor?.kind !== 'epoch' || anchor.reason !== 'unreconcilable_prefix') {
+    return false
+  }
+  // The anchor sits at sequence 1, so content of the epoch's own starts at 2.
+  return awaitsRebuild(rows, FIRST_JOURNAL_SEQUENCE + 1)
+}
+
+/**
+ * True while everything at or above `contentFrom` is the repair's own
+ * bookkeeping: the deleted history was never rebuilt, so the provider has to be
+ * asked again. The moment the session writes content of its own past that
+ * sequence the epoch IS its own history, and the retry stops rather than a
+ * later import replacing rows the user has since seen.
+ */
+function awaitsRebuild(rows: readonly JournalRow[], contentFrom: number): boolean {
+  return rows.every(
+    (row) =>
+      row.seq < contentFrom ||
+      (row.kind === 'item' && row.itemId === JOURNAL_REPAIR_DISCLOSURE_ITEM_ID)
+  )
+}
+
+/** Rows after a cursor, in sequence order. Stops at the first row this build
+ *  cannot parse, exactly as replay does. */
+export function readJournalRowsAfterCursor(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string,
+  afterSequence: number
+): JournalRow[] {
+  const rows: JournalRow[] = []
+  for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence)) {
+    const parsed = parseJournalRow(stored.rowJson)
+    if (!parsed.ok) {
+      break
+    }
+    rows.push(parsed.row)
+  }
+  return rows
+}
+
+/** Standalone probe. Opens its own connection and closes it before returning,
+ *  so a caller holding only the returned value holds no handle. */
+export function loadJournal(journalDir: string, sessionId: string): JournalLoad | null {
+  const dbPath = journalDatabaseFile(journalDir)
+  if (!existsSync(dbPath)) {
+    return null
+  }
+  const opened = openJournalDatabase(dbPath)
+  try {
+    return replayJournal(opened.db, opened.readOnly, sessionId)
+  } finally {
+    opened.db.close()
   }
 }
 
 function emptyReadOnlyLoad(sessionId: string): JournalLoad {
-  const state = createJournalReducerState(sessionId, '')
   return {
-    state,
-    tailRows: [],
-    compactedThrough: 0,
+    state: createJournalReducerState(sessionId, ''),
     readOnly: true,
     corrupt: false,
-    malformedRows: 0,
-    sizeBytes: 0
+    malformedRows: 0
   }
-}
-
-/** The snapshot names the live epoch; without one, the newest valid row does. */
-function resolveEpoch(snapshot: JournalSnapshotFile | null, rows: JournalRow[]): string | null {
-  if (snapshot?.epoch) {
-    return snapshot.epoch
-  }
-  return rows.at(-1)?.epoch ?? null
-}
-
-function seedState(
-  sessionId: string,
-  epoch: string,
-  snapshot: JournalSnapshotFile | null
-): JournalReducerState {
-  const state = createJournalReducerState(sessionId, epoch)
-  if (!snapshot) {
-    return state
-  }
-  for (const item of snapshot.items) {
-    state.items.set(item.itemId, item)
-  }
-  for (const submission of snapshot.submissions) {
-    state.submissions.set(submission.clientMessageId, { ...submission } as AgentJournalSubmission)
-  }
-  for (const receipt of snapshot.receipts) {
-    state.receipts.set(receipt.clientMessageId, {
-      clientMessageId: receipt.clientMessageId,
-      providerItemId: receipt.providerItemId,
-      cursor: { epoch: receipt.epoch, sequence: receipt.sequence },
-      acceptedAt: receipt.acceptedAt
-    })
-  }
-  for (const alias of snapshot.aliases) {
-    state.aliases.set(alias.providerItemId, alias.itemId)
-  }
-  for (const tombstone of snapshot.tombstones ?? []) {
-    state.tombstones.set(tombstone.itemId, tombstone.revision)
-  }
-  for (const settlementId of snapshot.appliedSettlementIds ?? []) {
-    rememberAppliedSettlementId(state, settlementId)
-  }
-  state.highestFence = snapshot.highestFence ?? 0
-  state.lastSequence = snapshot.compactedThrough
-  state.oldestSequence = snapshot.compactedThrough + 1
-  return state
-}
-
-/** Merge the snapshot's retained tail with the live log, preferring the log's
- *  copy of any sequence both hold, and dropping rows from a superseded epoch. */
-function unionBySequence(
-  retained: readonly JournalRow[],
-  live: readonly JournalRow[],
-  epoch: string
-): JournalRow[] {
-  const bySequence = new Map<number, JournalRow>()
-  for (const row of retained) {
-    if (row.epoch === epoch) {
-      bySequence.set(row.seq, row)
-    }
-  }
-  for (const row of live) {
-    bySequence.set(row.seq, row)
-  }
-  return [...bySequence.values()].sort((a, b) => a.seq - b.seq)
 }

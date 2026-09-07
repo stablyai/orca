@@ -1,10 +1,7 @@
-import { writeFileSync } from 'node:fs'
-import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { expect, test } from './helpers/orca-app'
 import { readHostBrowserPageIds, readHostTabs } from './helpers/host-session-tabs'
-import { openFileExplorer } from './helpers/file-explorer'
 import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
@@ -16,8 +13,6 @@ import {
   type RuntimeDesktopPairingOffer
 } from './helpers/paired-electron-client'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-
-const FIXTURE_NAME = 'paired-browser-reconcile-failure.html'
 
 type FaultSnapshot = {
   armed: boolean
@@ -34,6 +29,22 @@ type FaultWindow = Window & {
     reset: () => void
     snapshot: () => FaultSnapshot
   }
+}
+
+// Drives the real create menu so the failure surfaces through handleNewBrowserTab's toast.
+async function startBrowserCreate(page: Page): Promise<void> {
+  await page.evaluate(() => window.__store?.getState().setBrowserDefaultUrl('about:blank'))
+  await page.getByRole('button', { name: 'New tab' }).first().click()
+  const newBrowserTab = page.getByRole('menuitem', { name: /New Browser Tab/i })
+  await expect(newBrowserTab).toBeVisible({ timeout: 30_000 })
+  await newBrowserTab.click()
+}
+
+async function readStableHostTabs(hostClient: RuntimeClient, repoPath: string) {
+  const { publicationEpoch, snapshotVersion, ...state } = await readHostTabs(hostClient, repoPath)
+  expect(publicationEpoch).not.toBe('')
+  expect(snapshotVersion).toBeGreaterThan(0)
+  return state
 }
 
 type ClientTabState = {
@@ -115,14 +126,7 @@ async function runReconciliationFailureJourney(args: {
       })
       .toMatchObject({ terminalTabIds: expect.arrayContaining([expect.any(String)]) })
 
-    await openFileExplorer(page)
-    const fixtureRow = page.locator('[data-file-explorer-row]').filter({ hasText: FIXTURE_NAME })
-    await expect(fixtureRow).toBeVisible({ timeout: 30_000 })
-    await fixtureRow.click()
-    const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
-    await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
     const baselineClient = await readClientTabs(page, worktreeId)
-    expect(baselineClient.editorTabIds).not.toHaveLength(0)
     expect(baselineClient.terminalTabIds).not.toHaveLength(0)
     const baselineHostBrowserIds = await readHostBrowserPageIds(args.hostClient, args.repoPath)
 
@@ -133,7 +137,7 @@ async function runReconciliationFailureJourney(args: {
       }
       fault.arm()
     })
-    await openPreviewToSide.click()
+    await startBrowserCreate(page)
 
     const faultSnapshot = await expect
       .poll(
@@ -155,9 +159,8 @@ async function runReconciliationFailureJourney(args: {
     }
 
     expect(await readHostBrowserPageIds(args.hostClient, args.repoPath)).toContain(createdPageId)
-    // Why: the tab is staged on click, so while the create is held the user already sees it —
-    // exactly one of it, in the new split. The rollback assertions after release are what prove
-    // the optimism is unwound rather than stranded.
+    // The managed-browser action stages one tab in the active group while the host create is held.
+    // The rollback assertions prove that optimism is unwound rather than stranded.
     const heldClient = await readClientTabs(page, worktreeId)
     const addedSince = (baseline: string[], held: string[]): string[] => {
       expect(held).toEqual(expect.arrayContaining(baseline))
@@ -169,7 +172,7 @@ async function runReconciliationFailureJourney(args: {
     ).toHaveLength(1)
     expect(heldClient.editorTabIds).toEqual(baselineClient.editorTabIds)
     expect(heldClient.terminalTabIds).toEqual(baselineClient.terminalTabIds)
-    expect(addedSince(baselineClient.groupIds, heldClient.groupIds)).toHaveLength(1)
+    expect(heldClient.groupIds).toEqual(baselineClient.groupIds)
 
     await page.screenshot({
       path: args.testInfo.outputPath(`${args.topology}-browser-reconciliation-held.png`),
@@ -181,9 +184,9 @@ async function runReconciliationFailureJourney(args: {
       )
     ).toBe(true)
 
-    await expect(page.getByText('Unable to open this file in Orca Browser.')).toBeVisible({
-      timeout: 30_000
-    })
+    await expect(
+      page.getByText('The paired runtime could not create a managed browser tab.')
+    ).toBeVisible({ timeout: 30_000 })
     await expect
       .poll(() => readHostBrowserPageIds(args.hostClient, args.repoPath), {
         timeout: 30_000,
@@ -261,14 +264,8 @@ async function runCapabilityFailureJourney(args: {
       })
       .toMatchObject({ terminalTabIds: expect.arrayContaining([expect.any(String)]) })
 
-    await openFileExplorer(page)
-    const fixtureRow = page.locator('[data-file-explorer-row]').filter({ hasText: FIXTURE_NAME })
-    await expect(fixtureRow).toBeVisible({ timeout: 30_000 })
-    await fixtureRow.click()
-    const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
-    await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
     const baselineClient = await readClientTabs(page, worktreeId)
-    const baselineHost = await readHostTabs(args.hostClient, args.repoPath)
+    const baselineHost = await readStableHostTabs(args.hostClient, args.repoPath)
 
     await page.evaluate(() => {
       const fault = (window as FaultWindow).__webRuntimeBrowserCreationFault
@@ -277,18 +274,25 @@ async function runCapabilityFailureJourney(args: {
       }
       fault.armCapabilityRejection()
     })
-    await openPreviewToSide.click()
+    await startBrowserCreate(page)
 
-    await expect(page.getByText('Unable to open this file in Orca Browser.')).toBeVisible({
+    await expect(page.getByText(/E2E forced browser capability rejection/)).toBeVisible({
       timeout: 30_000
     })
+    // Why: baseline equality alone also holds for a create that was rolled back. A null page id is
+    // what separates rejecting before the host create from undoing one afterwards.
+    expect(
+      await page.evaluate(
+        () => (window as FaultWindow).__webRuntimeBrowserCreationFault?.snapshot() ?? null
+      )
+    ).toMatchObject({ createdPageId: null })
     await expect
       .poll(() => readClientTabs(page, worktreeId), {
         timeout: 30_000,
         message: 'client split state did not settle after capability rejection'
       })
       .toEqual(baselineClient)
-    expect(await readHostTabs(args.hostClient, args.repoPath)).toEqual(baselineHost)
+    expect(await readStableHostTabs(args.hostClient, args.repoPath)).toEqual(baselineHost)
     await page.screenshot({
       path: args.testInfo.outputPath(`${args.topology}-browser-capability-rejected.png`),
       fullPage: true
@@ -305,10 +309,6 @@ test('rolls back a headed-host browser when client reconciliation times out @hea
   testRepoPath
 }, testInfo) => {
   test.setTimeout(300_000)
-  writeFileSync(
-    path.join(testRepoPath, FIXTURE_NAME),
-    '<!doctype html><html><body><h1>browser reconciliation fault</h1></body></html>\n'
-  )
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
@@ -326,16 +326,12 @@ test('rolls back a headed-host browser when client reconciliation times out @hea
   })
 })
 
-test('cleans up a headed-host preview when capability rejects after preflight @headful', async ({
+test('cleans up a headed-host browser when capability rejects before create @headful', async ({
   electronApp,
   orcaPage,
   testRepoPath
 }, testInfo) => {
   test.setTimeout(300_000)
-  writeFileSync(
-    path.join(testRepoPath, FIXTURE_NAME),
-    '<!doctype html><html><body><h1>browser capability fault</h1></body></html>\n'
-  )
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
@@ -355,10 +351,6 @@ test('cleans up a headed-host preview when capability rejects after preflight @h
 
 test('keeps browser failure cleanup on a headless host', async ({ testRepoPath }, testInfo) => {
   test.setTimeout(300_000)
-  writeFileSync(
-    path.join(testRepoPath, FIXTURE_NAME),
-    '<!doctype html><html><body><h1>headless capability fault</h1></body></html>\n'
-  )
   const host: HeadlessPairedRuntimeHost = await launchHeadlessPairedRuntimeHost()
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })

@@ -46,6 +46,11 @@ import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-c
 import { buildQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
+import {
+  hasExplicitTuiLaunchCustomization,
+  resolveAgentLaunchRoute
+} from '@/lib/agent-launch-routing'
+import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -193,6 +198,24 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         }
       }
 
+      const agentLaunchRoute = agent
+        ? resolveAgentLaunchRoute({
+            agent,
+            settings,
+            executionHostId: ephemeralVmRecipe
+              ? 'runtime:pending-ephemeral-vm'
+              : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? 'local'),
+            hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
+            workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+            promptDelivery: quickDraftPrompt ? 'draft' : 'auto-submit',
+            launchText: quickDraftPrompt ?? quickPrompt,
+            nativeChatTranscriptIsLocalReadable: !selectedRepoIsRemote,
+            requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(settings, agent),
+            initialSessionOptions: startupPlan?.sessionOptions
+          })
+        : 'terminal-tui'
+      const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
+
       const request = buildQuickCreationRequest({
         repoId,
         ephemeralVmRecipe,
@@ -217,6 +240,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedPR: submitLinkedPR,
         pushTarget: submitPushTarget,
         agent,
+        agentLaunchRoute,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
@@ -226,7 +250,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedGitLabMR,
         linkedGitLabIssue,
         includeGitLabLinks: smartGitHubResolution.kind === 'none',
-        startup: backendStartup,
+        startup: structuredLaunch ? undefined : backendStartup,
         issueCommand,
         pendingFirstAgentMessageRename,
         note: trimmedNote,

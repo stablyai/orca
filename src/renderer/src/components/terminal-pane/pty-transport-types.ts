@@ -60,6 +60,10 @@ export type PtyReplayDataMeta = {
   snapshotSeq?: number
   alternateScreen?: boolean
   terminalOwner?: 'shell'
+  /** Grid the payload was serialized at. Present only when the producer proved
+   *  it; the drain replays there and fits back to the pane afterwards. */
+  snapshotCols?: number
+  snapshotRows?: number
 }
 
 export type LocalPtySessionMetadata = {
@@ -69,6 +73,8 @@ export type LocalPtySessionMetadata = {
 
 export type PtyConnectResult = {
   id: string
+  /** Host-owned PTY incarnation used to fence remote identity observations. */
+  incarnationId?: string
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
@@ -265,7 +271,7 @@ export type IpcPtyTransportOptions = {
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */
-  onPtyRebind?: (ptyId: string, replacedPtyId: string) => void
+  onPtyRebind?: (ptyId: string, replacedPtyId: string, incarnationId?: string | null) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
   onAgentBecameWorking?: () => void

@@ -4,6 +4,11 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
+import {
+  isTerminalWaitWhitespace,
+  startOfLastLines,
+  startOfLastNonBlankLines
+} from './terminal-wait-tail-window'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
@@ -153,11 +158,6 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
   return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
 }
 
-function isTerminalWaitWhitespace(value: string, index: number): boolean {
-  const code = value.charCodeAt(index)
-  return code === 32 || (code >= 9 && code <= 13)
-}
-
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
   /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
 
@@ -206,25 +206,28 @@ function isCursorApprovalChoiceLine(line: string): boolean {
   )
 }
 
-function startOfLastLines(value: string, count: number): number {
-  let cursor = value.length
-  for (let seen = 0; seen < count; seen += 1) {
-    const previous = value.lastIndexOf('\n', cursor - 1)
-    if (previous === -1) {
-      return 0
-    }
-    cursor = previous
-  }
-  return cursor + 1
-}
+// Why bounded: answered dialogs and quoted prompt wording (agents grep this file and its specs) stay in the
+// retained tail; only a dialog owning the screen bottom is live. Real Codex dialogs (trust, hooks review,
+// update, exec approval) are 4-8 lines; the slack covers a wrapped command or a longer hook list.
+const LIVE_PROMPT_TAIL_LINES = 12
 
 function findTerminalWaitBlockedSignal(
-  normalized: string
+  fullTail: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
-  // Why: one combined negative scan over the up-to-256 KiB tail avoids a dozen full-tail searches when no prompt can match.
+  const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
+  const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
+  // Why: one combined negative scan avoids a dozen searches when no prompt can match.
   if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
     return null
   }
+  const signal = findBlockedSignalInLiveWindow(normalized)
+  // Why: callers compare this index against ready-header indexes found over the full tail.
+  return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
+}
+
+function findBlockedSignalInLiveWindow(
+  normalized: string
+): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
   const updateIndex = normalized.lastIndexOf('update available')
   if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {

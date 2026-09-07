@@ -8,6 +8,7 @@
 
 import {
   adjudicateAgentSessionRestart,
+  agentSessionRestartEvictionSettlementId,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
 } from '../../shared/agent-session-lease-adjudication'
@@ -207,6 +208,7 @@ export function evictAgentSessionOwner(args: {
   expectedFence: number
   probe: AgentSessionOwnerProbe
   now: number
+  journalSettlement: 'required' | 'not-required'
 }): AgentSessionRecord {
   const { record } = args
   assertFence(record.lease, args.expectedFence)
@@ -232,6 +234,7 @@ export function evictAgentSessionOwner(args: {
   if (adjudication.disposition !== 'evicted') {
     throw new Error('agent_session_ownership_unknown')
   }
+  const settlementRequired = args.journalSettlement === 'required'
   return withLease(record, {
     ...record.lease,
     runtimeFence: adjudication.nextFence,
@@ -242,7 +245,11 @@ export function evictAgentSessionOwner(args: {
     claimStatus: 'released',
     lastRenewedAt: args.now,
     handoffOperationId: null,
-    deathEvidence: adjudication.evidence
+    deathEvidence: adjudication.evidence,
+    settlementRetryRequired: settlementRequired ? true : undefined,
+    settlementRetryId: settlementRequired
+      ? agentSessionRestartEvictionSettlementId(record.lease, adjudication)
+      : undefined
   })
 }
 
