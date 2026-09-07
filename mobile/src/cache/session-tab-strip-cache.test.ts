@@ -367,4 +367,40 @@ describe('session tab strip cache', () => {
     expect(asyncStorage.setItem).toHaveBeenCalledTimes(2)
     expect(lastWrittenFile().workspaces.map((w) => w.key)).toEqual([hostB])
   })
+  it('cannot let an older overlapping write commit after the purge', async () => {
+    // Why: two debounced writes can sit on the bridge at once, and the second used to replace
+    // the in-flight handle. The purge then awaited only the newer one, so the older blob --
+    // snapshotted while the forgotten host was still in the map -- could commit last.
+    const hostA = getSessionTabStripCacheKey('host-a', 'wt-1')
+    const hostB = getSessionTabStripCacheKey('host-b', 'wt-1')
+    let stored = ''
+    const gates: Array<() => void> = []
+    asyncStorage.setItem.mockImplementation(
+      (_key: string, value: string) =>
+        new Promise<void>((resolve) => {
+          gates.push(() => {
+            stored = value
+            resolve()
+          })
+        })
+    )
+
+    saveCachedSessionTabStrip(hostA, preview('tab-a'))
+    await vi.advanceTimersByTimeAsync(300)
+    saveCachedSessionTabStrip(hostB, preview('tab-b'))
+    await vi.advanceTimersByTimeAsync(300)
+
+    const deletion = deleteCachedSessionTabStripForHost('host-a')
+    // Newest released first: only writes that queue behind one another survive this.
+    for (let step = 0; step < 6 && gates.length > 0; step += 1) {
+      gates.pop()?.()
+      await vi.advanceTimersByTimeAsync(0)
+    }
+    await deletion
+
+    const keys = (JSON.parse(stored) as { workspaces: { key: string }[] }).workspaces.map(
+      (workspace) => workspace.key
+    )
+    expect(keys).toEqual([hostB])
+  })
 })

@@ -70,6 +70,28 @@ describe('unpaired host credential deletion', () => {
     expect(readCachedSessionTabStrip(other)?.tabs).toHaveLength(1)
   })
 
+  it('finishes the cleanup when the cache purge fails', async () => {
+    // Why: every credential above is already deleted by this point. Aborting on the cache
+    // would strand the write revision and leave onDeleted's token cache holding a host whose
+    // credentials are gone, retried only by an explicit Settings action.
+    const onDeleted = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    asyncStorage.setItem.mockRejectedValueOnce(new Error('disk full'))
+
+    await expect(
+      createUnpairedHostCredentialDeletion({
+        waitForHostMutations: async () => undefined,
+        hasStoredHost: async () => false,
+        onDeleted
+      })('host-1', 0)
+    ).resolves.toBeUndefined()
+
+    expect(deletions.clearWriteRevision).toHaveBeenCalledWith('host-1')
+    expect(onDeleted).toHaveBeenCalledWith('host-1')
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('leaves the strip alone when the host turned out to still be paired', async () => {
     const stillPaired = getSessionTabStripCacheKey('host-1', 'wt-1')
     saveCachedSessionTabStrip(stillPaired, strip)

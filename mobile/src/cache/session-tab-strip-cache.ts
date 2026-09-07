@@ -33,8 +33,8 @@ type StoredFile = { workspaces: StoredWorkspace[] }
 let memoryCache: Map<string, MobileSessionTabStripPreview> | null = null
 let loadPromise: Promise<Map<string, MobileSessionTabStripPreview>> | null = null
 let writeTimer: ReturnType<typeof setTimeout> | null = null
-// The debounced write already on the wire. It snapshotted the map when it started, so a
-// deletion has to let it land before writing, or the stale blob can be the last word.
+// Tail of the write chain. Every write queues behind it, so an older setItem can never
+// settle after a newer one and make its stale blob the last word on disk.
 let writeInFlight: Promise<void> | null = null
 // Hosts forgotten this session. A save racing the deletion would re-insert the host and
 // the next debounced write would put its tab titles back on disk, so refuse those saves
@@ -126,9 +126,8 @@ export async function deleteCachedSessionTabStripForHost(hostId: string): Promis
     clearTimeout(writeTimer)
     writeTimer = null
   }
-  await writeInFlight
-  writeInFlight = null
-  await writeFile(cache)
+  // Queued, not raced: the purge is the last write, and its failure is the caller's.
+  await enqueueWrite(cache)
 }
 
 export function resetSessionTabStripCacheForTests(): void {
@@ -208,10 +207,19 @@ function scheduleWrite(cache: Map<string, MobileSessionTabStripPreview>): void {
   writeTimer = setTimeout(() => {
     writeTimer = null
     // Best effort by design: a dropped cache refresh costs one repaint, and the next
-    // save rewrites the whole map. Only the deletion path needs the failure, and it
-    // needs the handle so it can order itself last.
-    writeInFlight = writeFile(cache).catch(() => {})
+    // save rewrites the whole map. Only the deletion path needs the failure.
+    void enqueueWrite(cache).catch(() => {})
   }, WRITE_DEBOUNCE_MS)
+}
+
+// Why the chain rather than one handle: two debounced writes can overlap on the bridge, and
+// the second overwrote the handle. A deletion then awaited only the newer one, so the older
+// write -- serialized before the purge, host rows and all -- could land last and restore them.
+function enqueueWrite(cache: Map<string, MobileSessionTabStripPreview>): Promise<void> {
+  const queued = (writeInFlight ?? Promise.resolve()).then(() => writeFile(cache))
+  // A rejected link must not break the chain for the writes queued behind it.
+  writeInFlight = queued.catch(() => {})
+  return queued
 }
 
 async function writeFile(cache: Map<string, MobileSessionTabStripPreview>): Promise<void> {
