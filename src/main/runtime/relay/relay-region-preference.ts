@@ -176,10 +176,13 @@ export class RelayRegionPreferenceResolver {
       this.log(relayRegionCatalogFailureEvent(this.options.directorUrl))
     )
     const measurements = measuredRegions(reports)
-    // Why: a region may only win against a measured competitor. With a rejected
-    // or unmeasurable peer, director default placement beats a lone survivor.
+    // Why: a region may only win against a measured competitor. A rejected or
+    // unmeasurable peer, or one the director left out of the catalog because it
+    // has no serving cell right now (a roll wave), means director default
+    // placement beats a lone survivor. Withholding costs one hour; a hint won
+    // against nothing pins the desktop to that region for a day.
     const selected =
-      measurements.length < reports.length
+      measurements.length < reports.length || reports.length < RELAY_REGIONS.length
         ? null
         : selectRegionMeasurement(measurements, previous?.region ?? null)
     const ttlMs = selected ? CACHE_TTL_MS : NO_HINT_TTL_MS
