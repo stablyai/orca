@@ -18,6 +18,7 @@ import { createRequire } from 'node:module'
 import { performance } from 'node:perf_hooks'
 import { pathToFileURL } from 'node:url'
 import { b64url, PhoneE2EE, sha256, utf8 } from './phone-e2ee-v2-session.mjs'
+import { LIVE_ENV_VAR, parseArgs, requireLiveRun } from './relay-bench-invocation.mjs'
 
 const require = createRequire(import.meta.url)
 const WebSocket = require('ws')
@@ -414,27 +415,8 @@ async function foreground(statePath, opts) {
 }
 
 // ---------- cli ----------
-function parseArgs(argv) {
-  const flags = new Set()
-  const options = new Map()
-  const positional = []
-  for (const arg of argv) {
-    if (!arg.startsWith('--')) {
-      positional.push(arg)
-      continue
-    }
-    const equals = arg.indexOf('=')
-    if (equals === -1) {
-      flags.add(arg)
-    } else {
-      options.set(arg.slice(0, equals), arg.slice(equals + 1))
-    }
-  }
-  return { flags, options, positional }
-}
-
 const USAGE = [
-  'usage:',
+  `every command dials a real desktop over the production relay, so prefix it with ${LIVE_ENV_VAR}=1:`,
   "  pair '<orca://pair?code=...>' [state.json]",
   '  run [state.json] [runs] [--resolve] [--gap=ms]',
   '  foreground [state.json] [--hold=ms] [--resolve] [--force-redial]'
@@ -443,6 +425,9 @@ const USAGE = [
 async function main(argv) {
   const [cmd, ...rest] = argv
   const { flags, options, positional } = parseArgs(rest)
+  if (cmd === 'pair' || cmd === 'run' || cmd === 'foreground') {
+    requireLiveRun(`${LIVE_ENV_VAR}=1 node relay-phone-connect-bench.mjs ${cmd} ...`)
+  }
   if (cmd === 'pair') {
     await pair(positional[0], positional[1] ?? DEFAULT_STATE_PATH)
     return

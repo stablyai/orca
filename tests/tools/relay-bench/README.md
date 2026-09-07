@@ -24,6 +24,11 @@ a bench that quietly measures a handshake nobody ships.
 - Revoke the bench device when you are done. See "Cleaning up" below.
 - Do not point the bench at a desktop you do not own.
 
+No script here has a production default. Every one of them refuses to open a socket unless
+`ORCA_RELAY_BENCH_LIVE=1` is set, and the two that talk to the director require its origin from
+`--director=<origin>` or `ORCA_RELAY_BENCH_DIRECTOR`. Without those, they print one line of usage
+and exit 2. That keeps an accidental or automated invocation inert instead of live traffic.
+
 ## Requirements
 
 `ws` and `tweetnacl` resolve from the repo root `node_modules`. Measured against `ws` 8.21.3 and
@@ -65,18 +70,24 @@ The `orca://pair?code=...` value in that output is the pairing link.
 ## Commands
 
 ```bash
+export ORCA_RELAY_BENCH_LIVE=1
+BENCH=tests/tools/relay-bench/relay-phone-connect-bench.mjs
+
 # One-time: dial the invite, provision a resume credential, save the bundle.
-node tests/tools/relay-bench/relay-phone-connect-bench.mjs pair '<orca://pair?code=...>' /tmp/relay-bench/state.json
+node $BENCH pair '<orca://pair?code=...>' /tmp/relay-bench/state.json
 
 # Steady-state foreground reconnect, 10 times, 2 s apart, re-resolving the cell each time.
-node tests/tools/relay-bench/relay-phone-connect-bench.mjs run /tmp/relay-bench/state.json 10 --resolve --gap=2000
+node $BENCH run /tmp/relay-bench/state.json 10 --resolve --gap=2000
 
 # Resume after background: connect, idle 45 s, then probe the retained socket.
-node tests/tools/relay-bench/relay-phone-connect-bench.mjs foreground /tmp/relay-bench/state.json --hold=45000
+node $BENCH foreground /tmp/relay-bench/state.json --hold=45000
 
 # Same, but crossing the relay's ~105 s client silence watchdog.
-node tests/tools/relay-bench/relay-phone-connect-bench.mjs foreground /tmp/relay-bench/state.json --hold=120000
+node $BENCH foreground /tmp/relay-bench/state.json --hold=120000
 ```
+
+The bench reads the director and cell for a resume dial out of `state.json`, which the pairing
+offer supplied, so it takes no `--director`.
 
 `run` prints one JSON row per iteration plus a `SUMMARY` line with medians.
 
@@ -98,11 +109,21 @@ socket does. The silence watchdog counts application traffic, not pongs.
 
 Two supporting scripts:
 
-- `relay-hop-latency.mjs [relayHostId] [cellOrigin] [runs]` measures the infrastructure floor with
-  a throwaway credential: director `/v1/resolve` plus cell WebSocket open to `relay-hello`. It
-  needs no pairing, because every cell answers a bogus credential.
-- `region-probe-replay.mjs [rounds]` replays the desktop's region selection with the same probe,
-  sample count, and spread rule, and prints why each region passed or failed.
+- `relay-hop-latency.mjs --cell=<origin> --director=<origin> [--host=<relayHostId>] [--runs=N]`
+  measures the infrastructure floor with a throwaway credential: director `/v1/resolve` plus cell
+  WebSocket open to `relay-hello`. It needs no pairing, because a cell answers a bogus credential
+  without reaching a desktop. `--host` defaults to an id no desktop owns.
+- `region-probe-replay.mjs --director=<origin> [--rounds=N]` replays the desktop's region
+  selection with the same probe, sample count, and spread rule, and prints why each region passed
+  or failed.
+
+Both take the director from `--director` or `ORCA_RELAY_BENCH_DIRECTOR`, and both need
+`ORCA_RELAY_BENCH_LIVE=1`:
+
+```bash
+ORCA_RELAY_BENCH_LIVE=1 ORCA_RELAY_BENCH_DIRECTOR=<director origin> \
+  node tests/tools/relay-bench/region-probe-replay.mjs --rounds=3
+```
 
 ## What each phase means
 
