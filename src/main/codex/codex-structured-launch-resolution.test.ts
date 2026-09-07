@@ -105,6 +105,29 @@ describe('codex structured launch resolution', () => {
     ])
   })
 
+  it.each(['git-worktree', 'folder'] as const)(
+    'translates a saved YOLO flag when reopening a %s Chat session',
+    async (workspaceKind) => {
+      const saved = record({
+        launchArgs: ['--dangerously-bypass-approvals-and-sandbox'],
+        providerHandleChain: [
+          { handle: { provider: 'codex', threadId: 'thread-current' } }
+        ] as AgentSessionRecord['providerHandleChain']
+      })
+      saved.location.workspaceKind = workspaceKind
+      const launch = await resolverFor(saved)({ identity: IDENTITY })
+
+      expect(launch.args).toEqual([
+        '-c',
+        'approval_policy="never"',
+        '-c',
+        'sandbox_mode="danger-full-access"',
+        'app-server'
+      ])
+      expect(launch.resumeThreadId).toBe('thread-current')
+    }
+  )
+
   it('pins resume to the rollout file that proved the durable thread', async () => {
     const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
     const launch = await resolverFor(
