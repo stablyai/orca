@@ -299,6 +299,64 @@ describe('OrcaSocketClient', () => {
     await expect(client.sendRequest('status.get')).rejects.toThrow(/Authentication failed/)
   })
 
+  it('finding #9 (CWE-345): a pre-auth PLAINTEXT e2ee_error never latches — the client reconnects instead', async () => {
+    vi.useFakeTimers()
+    const harness = createHarness('token-1')
+    const client = new OrcaSocketClient({
+      endpoint: 'ws://test',
+      deviceToken: 'token-1',
+      serverPublicKeyB64: harness.serverPublicKeyB64,
+      socketFactory: harness.socketFactory
+    })
+    await flushMicrotasks()
+
+    // An on-path attacker (or a confused host) sends a plaintext e2ee_error BEFORE
+    // authentication — it carries no cryptographic proof of origin, unlike the encrypted
+    // rejection the "latches auth-failed" test above exercises.
+    harness.servers[0]!.socket.send(JSON.stringify({ type: 'e2ee_error' }))
+    await flushMicrotasks()
+
+    expect(client.getState()).not.toBe('auth-failed')
+    expect(client.getState()).toBe('reconnecting')
+
+    vi.advanceTimersByTime(1000)
+    await flushMicrotasks()
+
+    // A fresh socket was opened and the (real, un-forged) handshake completes normally.
+    expect(harness.sockets.length).toBeGreaterThanOrEqual(2)
+    expect(client.getState()).toBe('connected')
+  })
+
+  it('finding #8: closes the socket when beginE2eeHandshake throws on open, instead of leaving it dangling', async () => {
+    const harness = createHarness('token-1')
+    // beginE2eeHandshake's only fallible operation on a fresh socket is socket.send(hello) —
+    // make exactly that first send throw, simulating a real failure mid-handshake-start.
+    let throwOnSend = true
+    const socketFactory = (url: string): WebSocketLike => {
+      const socket = harness.socketFactory(url)
+      const realSend = socket.send.bind(socket)
+      socket.send = (data) => {
+        if (throwOnSend) {
+          throwOnSend = false
+          throw new Error('simulated beginE2eeHandshake failure')
+        }
+        realSend(data)
+      }
+      return socket
+    }
+    const client = new OrcaSocketClient({
+      endpoint: 'ws://test',
+      deviceToken: 'token-1',
+      serverPublicKeyB64: harness.serverPublicKeyB64,
+      socketFactory
+    })
+    await flushMicrotasks()
+
+    // Before the fix, handleSocketClosed ran without ever calling session.socket.close().
+    expect(harness.sockets[0]!.closed).toBe(true)
+    expect(client.getState()).toBe('reconnecting')
+  })
+
   it('re-sends active subscriptions after a reconnect + re-authentication', async () => {
     vi.useFakeTimers()
     const harness = createHarness('token-1')

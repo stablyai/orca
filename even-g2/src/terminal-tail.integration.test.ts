@@ -76,6 +76,10 @@ describe('terminal tail integration', () => {
     ) {
       throw new Error('terminal.subscribe did not request capabilities.terminalBinaryStream: 1')
     }
+    // resolveViewableTerminalHandle (finding #1: terminal.resolveActive is not on the mobile
+    // allowlist) picks whichever of wt-1's terminals has an agentIdentity and the newest
+    // lastOutputAt — read back which one it actually opened rather than assume term-wt1-1.
+    const openedTerminalId = subscribe!.params!.terminal as string
     // HIGH finding terminal-tail-decoder.ts:65: SnapshotStart carries JSON metadata
     // (kind/cols/rows/...), never terminal text — it must never leak into the rendered tail.
     const firstBody = textContent(bridge.pageSnapshot()!.containers, 2)
@@ -85,7 +89,7 @@ describe('terminal tail integration', () => {
 
     // Push enough output that the tail overflows one page (paginateHudBody: 9 lines/400 chars).
     for (let i = 0; i < 20; i++) {
-      server.pushTerminalOutputForTest('term-wt1-1', `line ${i}\n`)
+      server.pushTerminalOutputForTest(openedTerminalId, `line ${i}\n`)
     }
 
     // Finding #8: `frame.page` is an offset from the LATEST page (0 = latest), and the wearer

@@ -2,33 +2,49 @@
 // sending and terminal-tail opening (spec S7/S8). Fail-closed (finding #1 of the critical
 // review): a most-recent-output heuristic over terminal.list can guess the wrong terminal —
 // sending "1\r"/"\r"/Esc keystrokes to an unrelated agent or a plain shell — whenever
-// agentIdentity is absent or a worktree hosts multiple agents. terminal.resolveActive is the
-// host's own authoritative "the" active terminal for a worktree; if it returns no handle, there
-// is no terminal to answer to and callers must not send.
+// agentIdentity is absent or a worktree hosts multiple agents.
+//
+// terminal.resolveActive is NOT in the mobile RPC allowlist (it tracks desktop focus, which a
+// mobile-scoped pairing has no business reading anyway), so it must never be called from even-g2.
+// Viewing a terminal tail tolerates ambiguity — unlike the ask path below, which must fail closed
+// — so resolveViewableTerminalHandle uses the allowlisted terminal.list and picks the best
+// candidate to look at rather than the one true answerable terminal.
 import type {
   RuntimeTerminalAgentStatus,
   RuntimeTerminalSummary
 } from '@orca-shared/runtime-terminal-contracts'
 import type { RpcPort, RpcSuccess } from '../transport/orca-rpc-wire'
 
-type ResolveActiveResult = { handle?: string | null }
+type TerminalListResult = { terminals?: Pick<RuntimeTerminalSummary, 'handle'>[] }
+type ViewableTerminalRow = Pick<RuntimeTerminalSummary, 'handle' | 'agentIdentity' | 'lastOutputAt'>
+type ViewableTerminalListResult = { terminals?: ViewableTerminalRow[] }
 
-/** Returns the worktree's authoritative active terminal handle, or null if none/ambiguous. */
-export async function resolveActiveTerminalHandle(
+/**
+ * Picks a terminal worth VIEWING for the terminal-tail screen: prefer a row that carries a
+ * host-resolved agentIdentity (an actual agent, not a plain shell), tie-broken by the newest
+ * lastOutputAt; otherwise fall back to the newest lastOutputAt across all candidates. Returns
+ * null when the worktree has no terminals at all. Ambiguity here is fine — the wearer is just
+ * looking, not sending keystrokes — so this never fails closed the way resolveWaitingTerminalHandle
+ * does.
+ */
+export async function resolveViewableTerminalHandle(
   port: RpcPort,
   worktreeId: string
 ): Promise<string | null> {
-  const response = await port.sendRequest('terminal.resolveActive', {
-    worktree: `id:${worktreeId}`
-  })
+  const response = await port.sendRequest('terminal.list', { worktree: `id:${worktreeId}` })
   if (!response.ok) {
     return null
   }
-  const result = (response as RpcSuccess).result as ResolveActiveResult
-  return result.handle ?? null
+  const terminals = ((response as RpcSuccess).result as ViewableTerminalListResult).terminals ?? []
+  if (terminals.length === 0) {
+    return null
+  }
+  const withIdentity = terminals.filter((t) => t.agentIdentity != null)
+  const pool = withIdentity.length > 0 ? withIdentity : terminals
+  return pool.reduce((best, candidate) =>
+    (candidate.lastOutputAt ?? -Infinity) > (best.lastOutputAt ?? -Infinity) ? candidate : best
+  ).handle
 }
-
-type TerminalListResult = { terminals?: Pick<RuntimeTerminalSummary, 'handle'>[] }
 
 // VERIFIED contract (src/shared/runtime-terminal-contracts.ts): terminal.agentStatus {terminal}
 // -> RuntimeTerminalAgentStatus = { handle, isRunningAgent, status }, where status is

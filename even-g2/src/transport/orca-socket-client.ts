@@ -182,7 +182,8 @@ export class OrcaSocketClient implements RpcPort {
       this.log(`ws open — sending e2ee_hello (${this.options.endpoint})`)
       startHandshakeStage(session, this.serverPublicKey, handshakeTimeoutMs, {
         onTimeout: () => this.forceReconnect(session, 'handshake timed out'),
-        onFailure: () => this.handleSocketClosed(session)
+        // Finding #8: forceReconnect (not handleSocketClosed) so the socket actually closes.
+        onFailure: () => this.forceReconnect(session, 'beginE2eeHandshake threw')
       })
     }
     socket.onmessage = (event) => {
@@ -229,7 +230,10 @@ export class OrcaSocketClient implements RpcPort {
         session.authenticated = true
         this.handleAuthenticated(session)
       },
-      onRejected: () => this.handleAuthRejected(session)
+      onRejected: () => this.handleAuthRejected(session),
+      // Finding #9 (CWE-345): a plaintext pre-auth e2ee_error has no proof of origin — reconnect,
+      // never latch (an attacker could otherwise permanently kill the session with one packet).
+      onTransientError: () => this.forceReconnect(session, 'pre-auth e2ee_error — reconnecting')
     })
   }
 

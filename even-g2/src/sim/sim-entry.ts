@@ -4,11 +4,33 @@
 import { startAppShell } from '../app/app-shell'
 import { HostProfileStore } from '../transport/host-profile-store'
 import type { WebSocketLike } from '../transport/orca-socket-client'
+import type { GlassesCanvasPreview } from './glasses-canvas-preview'
 import { createGlassesCanvasPreview } from './glasses-canvas-preview'
 import { MockGlassesBridge } from './mock-glasses-bridge'
 import { createMemorySocketPair } from './memory-socket-pair'
 import { toWebSocketLike } from './memory-socket-web-socket-adapter'
 import { MockOrcaServer } from './mock-orca-server'
+
+/** Duck-typed to just the two bridge reads the repaint hook needs, so this stays testable
+ *  without constructing a full MockGlassesBridge. */
+export type RepaintSource = {
+  pageSnapshot: MockGlassesBridge['pageSnapshot']
+  getListSelection: MockGlassesBridge['getListSelection']
+}
+
+/** Repaints the preview from the bridge's current page, or blanks it when there's no HUD page
+ *  (e.g. after a hard shutdown / confirmed exit) so the sim doesn't keep showing a stale frame. */
+export function renderPreviewFrame(
+  bridge: RepaintSource,
+  preview: GlassesCanvasPreview | null
+): void {
+  const page = bridge.pageSnapshot()
+  if (page) {
+    preview?.paint(page, { listSelectedIndex: bridge.getListSelection() })
+  } else {
+    preview?.clear()
+  }
+}
 
 async function main(): Promise<void> {
   const root = document.getElementById('app')
@@ -22,12 +44,7 @@ async function main(): Promise<void> {
   const preview = createGlassesCanvasPreview(canvasMount)
 
   const bridge = new MockGlassesBridge()
-  bridge.setOnRepaint(() => {
-    const page = bridge.pageSnapshot()
-    if (page) {
-      preview?.paint(page, { listSelectedIndex: bridge.getListSelection() })
-    }
-  })
+  bridge.setOnRepaint(() => renderPreviewFrame(bridge, preview))
   // flushRenders() is intentionally not auto-triggered by the bridge (tests want full control
   // over repaint timing) — drive it once per frame here for the live sim.
   const tick = (): void => {

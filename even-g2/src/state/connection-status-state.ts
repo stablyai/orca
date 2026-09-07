@@ -52,7 +52,14 @@ export class ConnectionStatusController {
   ) {}
 
   start(hostId: string | null = null): () => void {
-    return this.inputs.onState((state) => this.handleState(hostId, state))
+    const unsubscribe = this.inputs.onState((state) => this.handleState(hostId, state))
+    return () => {
+      // Finding #6: disposing the subscription (e.g. host teardown) must invalidate any
+      // in-flight probe too, or its continuation can land after a NEWER session has already
+      // taken over the shared connection slice.
+      this.probeSeq++
+      unsubscribe()
+    }
   }
 
   private handleState(hostId: string | null, state: ConnectionState): void {
@@ -67,6 +74,10 @@ export class ConnectionStatusController {
     }))
 
     if (state !== 'connected') {
+      // Finding #6: ANY non-connected transition (not just a fresh 'connected') invalidates a
+      // still-running probe from a prior 'connected' episode — a disconnect/reconnect cycle
+      // must not let that stale continuation write into this newer episode's slice.
+      this.probeSeq++
       return
     }
 

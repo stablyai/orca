@@ -5,14 +5,10 @@
 // glasses-e2ee.ts module without changing wire behavior.
 import nacl from 'tweetnacl'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/orca-rpc-wire'
-import {
-  base64ToBytes,
-  bytesToBase64,
-  decryptText,
-  encryptText
-} from './mock-orca-server-encryption'
+import { bytesToBase64, decryptText, encryptText } from './mock-orca-server-encryption'
 import type { MemorySocketLike } from './memory-socket-pair'
 import { MEMORY_SOCKET_READY_STATE } from './memory-socket-pair'
+import { handleAuth, handleHello, type HandshakeContext } from './mock-orca-server-handshake'
 import {
   createFixtureNotifications,
   createFixtureWorktrees,
@@ -21,6 +17,7 @@ import {
   type FixtureWorktreeStatus
 } from './mock-orca-fixtures'
 import { MockTerminalRegistry } from './mock-terminal-registry'
+import { PerSocketSendQueue } from './mock-orca-server-send-queue'
 import type { ConnectionState, RpcRequestLike } from './mock-orca-connection-state'
 import {
   handleTerminalAgentStatus,
@@ -59,11 +56,24 @@ export class MockOrcaServer {
   private readonly terminals = new MockTerminalRegistry(FIXTURE_TERMINAL_SCROLLBACK, this.worktrees)
   private nextStreamId = 1
   private rejectNextAuth = false
+  private readonly sendQueue = new PerSocketSendQueue()
   private readonly terminalRpc: TerminalRpcContext = {
     respond: (socket, state, response) => this.respond(socket, state, response),
     sendEncryptedText: (socket, state, message) => this.sendEncryptedText(socket, state, message),
     success: (id, result, streaming) => this.success(id, result, streaming),
-    allocateStreamId: () => this.nextStreamId++
+    allocateStreamId: () => this.nextStreamId++,
+    enqueueSend: (socket, run) => this.sendQueue.enqueue(socket, run, 0)
+  }
+  private readonly handshakeCtx: HandshakeContext = {
+    getServerSecretKey: () => this.keyPair.secretKey,
+    getDeviceToken: () => this.deviceToken,
+    consumeRejectNextAuth: () => {
+      const rejectThisAuth = this.rejectNextAuth
+      this.rejectNextAuth = false
+      return rejectThisAuth
+    },
+    registerConnection: (socket, state) => this.connections.set(socket, state),
+    sendEncryptedText: (socket, state, message) => this.sendEncryptedText(socket, state, message)
   }
 
   constructor(options?: MockOrcaServerOptions) {
@@ -75,11 +85,15 @@ export class MockOrcaServer {
   /** Wires a server-side memory socket into the handshake/RPC pipeline. Returns a detach fn. */
   attach(socket: MemorySocketLike): () => void {
     socket.onmessage = (event) => this.handleMessage(socket, event.data)
-    socket.onclose = () => this.connections.delete(socket)
+    socket.onclose = () => {
+      this.connections.delete(socket)
+      this.sendQueue.forget(socket)
+    }
     return () => {
       socket.onmessage = null
       socket.onclose = null
       this.connections.delete(socket)
+      this.sendQueue.forget(socket)
     }
   }
 
@@ -87,16 +101,24 @@ export class MockOrcaServer {
 
   pushNotification(event: FixtureNotificationEvent): void {
     for (const [socket, state] of this.connections) {
-      if (
-        state.notificationSubscriptionId &&
-        socket.readyState === MEMORY_SOCKET_READY_STATE.OPEN
-      ) {
-        this.sendEncryptedText(
-          socket,
-          state,
-          this.success(state.notificationSubscriptionId, event, true)
-        )
-      }
+      this.deliverNotification(socket, state, event)
+    }
+  }
+
+  /** Sends one notification event to a single connection iff it's subscribed and open — shared
+   *  by the pushNotification() broadcast and the per-subscriber initial backlog replay so a
+   *  second client subscribing doesn't re-deliver the fixture backlog to every other client. */
+  private deliverNotification(
+    socket: MemorySocketLike,
+    state: ConnectionState,
+    event: FixtureNotificationEvent
+  ): void {
+    if (state.notificationSubscriptionId && socket.readyState === MEMORY_SOCKET_READY_STATE.OPEN) {
+      this.sendEncryptedText(
+        socket,
+        state,
+        this.success(state.notificationSubscriptionId, event, true)
+      )
     }
   }
 
@@ -149,7 +171,7 @@ export class MockOrcaServer {
   private handleMessage(socket: MemorySocketLike, data: string | ArrayBuffer): void {
     const state = this.connections.get(socket)
     if (!state) {
-      this.handleHello(socket, data)
+      handleHello(this.handshakeCtx, socket, data)
       return
     }
     if (typeof data !== 'string') {
@@ -157,66 +179,10 @@ export class MockOrcaServer {
       return
     }
     if (!state.authenticated) {
-      this.handleAuth(socket, state, data)
+      handleAuth(this.handshakeCtx, socket, state, data)
       return
     }
     this.handlePostAuthText(socket, state, data)
-  }
-
-  private handleHello(socket: MemorySocketLike, data: string | ArrayBuffer): void {
-    if (typeof data !== 'string') {
-      socket.close(1002, 'expected e2ee_hello')
-      return
-    }
-    let hello: { type?: string; publicKeyB64?: string }
-    try {
-      hello = JSON.parse(data)
-    } catch {
-      socket.send(JSON.stringify({ type: 'e2ee_error', message: 'Invalid JSON' }))
-      socket.close()
-      return
-    }
-    if (hello.type !== 'e2ee_hello' || typeof hello.publicKeyB64 !== 'string') {
-      socket.send(JSON.stringify({ type: 'e2ee_error', message: 'Expected e2ee_hello' }))
-      socket.close()
-      return
-    }
-    const clientPublicKey = base64ToBytes(hello.publicKeyB64)
-    if (clientPublicKey.length !== 32) {
-      socket.send(JSON.stringify({ type: 'e2ee_error', message: 'Invalid public key' }))
-      socket.close()
-      return
-    }
-    const sharedKey = nacl.box.before(clientPublicKey, this.keyPair.secretKey)
-    this.connections.set(socket, {
-      sharedKey,
-      authenticated: false,
-      notificationSubscriptionId: null,
-      terminalSubscriptions: new Map()
-    })
-    socket.send(JSON.stringify({ type: 'e2ee_ready' }))
-  }
-
-  private handleAuth(socket: MemorySocketLike, state: ConnectionState, data: string): void {
-    const plaintext = decryptText(data, state.sharedKey)
-    if (plaintext === null) {
-      return
-    }
-    let auth: { type?: string; deviceToken?: string }
-    try {
-      auth = JSON.parse(plaintext)
-    } catch {
-      return
-    }
-    const rejectThisAuth = this.rejectNextAuth
-    this.rejectNextAuth = false
-    if (rejectThisAuth || auth.type !== 'e2ee_auth' || auth.deviceToken !== this.deviceToken) {
-      this.sendEncryptedText(socket, state, { type: 'e2ee_error', error: { code: 'unauthorized' } })
-      socket.close()
-      return
-    }
-    state.authenticated = true
-    this.sendEncryptedText(socket, state, { type: 'e2ee_authenticated' })
   }
 
   // ---- RPC ----------------------------------------------------------------------------------
@@ -299,7 +265,7 @@ export class MockOrcaServer {
           this.success(request.id, { type: 'ready', subscriptionId: request.id }, true)
         )
         for (const event of createFixtureNotifications()) {
-          this.pushNotification(event)
+          this.deliverNotification(socket, state, event)
         }
         return
 
@@ -317,16 +283,15 @@ export class MockOrcaServer {
   }
 
   private respond(socket: MemorySocketLike, state: ConnectionState, response: RpcResponse): void {
-    const deliver = () => {
-      if (socket.readyState === MEMORY_SOCKET_READY_STATE.OPEN) {
-        this.sendEncryptedText(socket, state, response)
-      }
-    }
-    if (this.delayMs > 0) {
-      setTimeout(deliver, this.delayMs)
-    } else {
-      deliver()
-    }
+    this.sendQueue.enqueue(
+      socket,
+      () => {
+        if (socket.readyState === MEMORY_SOCKET_READY_STATE.OPEN) {
+          this.sendEncryptedText(socket, state, response)
+        }
+      },
+      this.delayMs
+    )
   }
 
   private success(id: string, result: unknown, streaming?: true): RpcSuccess {

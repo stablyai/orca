@@ -40,6 +40,13 @@ function brightnessLevel(value: number | undefined): (typeof GREEN_LEVELS)[numbe
   return GREEN_LEVELS[index] ?? GREEN_LEVELS[3]
 }
 
+/** Blanks the canvas to the display's off state — used when there's no HUD page to show (e.g.
+ *  after a hard shutdown / confirmed exit) so the sim doesn't keep showing a stale frame. */
+export function clearHudCanvas(ctx: CanvasRenderingContext2D): void {
+  ctx.fillStyle = '#000000'
+  ctx.fillRect(0, 0, GLASSES_WIDTH, GLASSES_HEIGHT)
+}
+
 /** Paints one page onto a 2D context sized GLASSES_WIDTH x GLASSES_HEIGHT. */
 export function paintHudPage(
   ctx: CanvasRenderingContext2D,
@@ -85,6 +92,8 @@ export function paintHudPage(
 export type GlassesCanvasPreview = {
   canvas: HTMLCanvasElement
   paint: (page: HudPageBuild, opts?: GlassesCanvasPaintOptions) => void
+  /** Blanks the preview — call when there's no HUD page to show. */
+  clear: () => void
 }
 
 /**
@@ -105,6 +114,7 @@ export function createGlassesCanvasPreview(container: HTMLElement): GlassesCanva
   container.appendChild(canvas)
   return {
     canvas,
-    paint: (page, opts) => paintHudPage(ctx, page, opts)
+    paint: (page, opts) => paintHudPage(ctx, page, opts),
+    clear: () => clearHudCanvas(ctx)
   }
 }

@@ -36,6 +36,10 @@ class TestClient {
   sharedKey: Uint8Array | null = null
   readonly messages: unknown[] = []
   readonly binaryMessages: Uint8Array[] = []
+  /** Chronological text/binary arrival order, index-aligned with messages/binaryMessages
+   *  (one 'text' entry per messages.push, one 'binary' entry per binaryMessages.push) — lets
+   *  ordering tests correlate a specific message's position against frame arrivals. */
+  readonly order: ('text' | 'binary')[] = []
   closed = false
   // The handshake's `e2ee_ready` (or `e2ee_error`) reply is the last PLAINTEXT message —
   // sharedKey is computed client-side before sending hello (needed to encrypt e2ee_auth),
@@ -50,11 +54,13 @@ class TestClient {
   private onMessage(data: string | ArrayBuffer): void {
     if (typeof data !== 'string') {
       this.binaryMessages.push(this.decryptBytes(new Uint8Array(data)))
+      this.order.push('binary')
       return
     }
     if (!this.sawReady) {
       const parsed = JSON.parse(data) as { type?: string }
       this.messages.push(parsed)
+      this.order.push('text')
       if (parsed.type === 'e2ee_ready') {
         this.sawReady = true
       }
@@ -63,6 +69,7 @@ class TestClient {
     const plaintext = this.decryptText(data)
     if (plaintext !== null) {
       this.messages.push(JSON.parse(plaintext))
+      this.order.push('text')
     }
   }
 
@@ -371,5 +378,82 @@ describe('MockOrcaServer handshake', () => {
     server.dropConnection()
     await waitMicrotasks(2)
     expect(client.closed).toBe(true)
+  })
+
+  it('a second client subscribing to notifications does not re-deliver the backlog to the first', async () => {
+    const first = await connectAndHandshake(server)
+    first.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
+    await waitMicrotasks(2)
+    first.sendEncrypted({
+      id: 'req-notif-1',
+      deviceToken: 'mock-device-token',
+      method: 'notifications.subscribe'
+    })
+    await waitMicrotasks(2)
+    // Last two messages: ready reply + the single fixture backlog notification (notif-1) —
+    // earlier entries are the e2ee_ready/e2ee_authenticated handshake messages.
+    const firstResults = first.messages
+      .slice(-2)
+      .map((m) => (m as { result: Record<string, unknown> }).result)
+    expect(firstResults).toEqual([
+      { type: 'ready', subscriptionId: 'req-notif-1' },
+      expect.objectContaining({ notificationId: 'notif-1' })
+    ])
+    const firstCountBeforeSecondSubscribes = first.messages.length
+
+    const second = await connectAndHandshake(server)
+    second.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
+    await waitMicrotasks(2)
+    second.sendEncrypted({
+      id: 'req-notif-2',
+      deviceToken: 'mock-device-token',
+      method: 'notifications.subscribe'
+    })
+    await waitMicrotasks(2)
+
+    // The first client must not have received a second copy of notif-1.
+    expect(first.messages.length).toBe(firstCountBeforeSecondSubscribes)
+    // The second client still gets its own initial backlog.
+    expect(
+      second.messages.some(
+        (m) => (m as { result?: { notificationId?: string } }).result?.notificationId === 'notif-1'
+      )
+    ).toBe(true)
+  })
+
+  it('with delayMs>0, terminal.subscribe delivers the subscribed response before any binary frame', async () => {
+    server.delayMs = 25
+    const client = await connectAndHandshake(server)
+    client.sendEncrypted({ type: 'e2ee_auth', deviceToken: 'mock-device-token' })
+    await waitMicrotasks(2)
+    client.sendEncrypted({
+      id: 'req-sub',
+      deviceToken: 'mock-device-token',
+      method: 'terminal.subscribe',
+      params: { terminal: 'term-wt1-1', capabilities: { terminalBinaryStream: 1 } }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    await waitMicrotasks(4)
+
+    const subscribedMsgIndex = client.messages.findIndex(
+      (m) => (m as { result?: { type?: string } }).result?.type === 'subscribed'
+    )
+    expect(subscribedMsgIndex).toBeGreaterThanOrEqual(0)
+    // nth (1-based) occurrence of 'text' in the interleaved arrival order corresponds to the
+    // (nth-1)-indexed entry in `messages`.
+    let textSeen = 0
+    let subscribedOrderIndex = -1
+    for (let i = 0; i < client.order.length; i++) {
+      if (client.order[i] === 'text') {
+        if (textSeen === subscribedMsgIndex) {
+          subscribedOrderIndex = i
+          break
+        }
+        textSeen++
+      }
+    }
+    const firstBinaryOrderIndex = client.order.indexOf('binary')
+    expect(firstBinaryOrderIndex).toBeGreaterThan(-1)
+    expect(firstBinaryOrderIndex).toBeGreaterThan(subscribedOrderIndex)
   })
 })

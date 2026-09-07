@@ -50,7 +50,12 @@ export function reactToHandshakeMessage(
   event: HandshakeEvent,
   session: { socket: WebSocketLike; sharedKey: Uint8Array | null },
   deviceToken: string,
-  hooks: { onReady: () => void; onAuthenticated: () => void; onRejected: () => void }
+  hooks: {
+    onReady: () => void
+    onAuthenticated: () => void
+    onRejected: () => void
+    onTransientError: () => void
+  }
 ): void {
   switch (event.kind) {
     case 'ready':
@@ -63,6 +68,9 @@ export function reactToHandshakeMessage(
     case 'rejected':
       hooks.onRejected()
       break
+    case 'transientError':
+      hooks.onTransientError()
+      break
     case 'none':
       break
   }
@@ -72,6 +80,7 @@ export type HandshakeEvent =
   | { kind: 'ready' }
   | { kind: 'authenticated' }
   | { kind: 'rejected' }
+  | { kind: 'transientError' }
   | { kind: 'none' }
 
 export function parseHandshakeMessage(raw: string, sharedKey: Uint8Array | null): HandshakeEvent {
@@ -81,9 +90,12 @@ export function parseHandshakeMessage(raw: string, sharedKey: Uint8Array | null)
       return { kind: 'ready' }
     }
     if (message.type === 'e2ee_error') {
-      // Why: a plaintext rejection at the hello stage (spec S6 step 3) is treated the same as
-      // an authenticated `unauthorized` — no retry storm against a pairing the host refuses.
-      return { kind: 'rejected' }
+      // Finding #9 (CWE-345): this frame is PLAINTEXT — unlike the decrypted branch below, it
+      // carries no proof it came from the real host (anyone on-path can inject it before the
+      // shared key is even confirmed). Treating it as an authenticated rejection would let an
+      // attacker permanently latch (no-retry) a session with one forged packet. Transient only:
+      // reconnect and let the real handshake run again.
+      return { kind: 'transientError' }
     }
   } catch {
     // Not plaintext JSON — assume it's the encrypted e2ee_authenticated/e2ee_error reply.
@@ -104,6 +116,9 @@ export function parseHandshakeMessage(raw: string, sharedKey: Uint8Array | null)
   if (message.type === 'e2ee_authenticated') {
     return { kind: 'authenticated' }
   }
+  // This branch decrypted successfully with our ECDH-derived shared key — only someone holding
+  // the real server's private key could have produced it, unlike the plaintext branch above.
+  // That cryptographic proof of origin is what justifies latching (no retry) here.
   if (
     message.type === 'e2ee_error' ||
     (message.ok === false && message.error?.code === 'unauthorized')

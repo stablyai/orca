@@ -10,8 +10,10 @@ export default defineConfig({
   server: {
     port: 5173,
     fs: {
-      // Why: dev server must serve ../src/shared, which sits above project root.
-      allow: [path.resolve(__dirname, '..')]
+      // Explicit allow list REPLACES Vite's default (workspace root), so this project's own
+      // root must be re-added alongside ../src/shared — dev binds 0.0.0.0, and the prior '..'
+      // would have exposed the entire repo via /@fs/.
+      allow: [path.resolve(__dirname), path.resolve(__dirname, '../src/shared')]
     }
   }
 })

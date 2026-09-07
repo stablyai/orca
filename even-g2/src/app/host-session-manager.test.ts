@@ -144,4 +144,50 @@ describe('HostSessionManager', () => {
 
     await connectPromise
   })
+
+  it('close() resets connection/dashboard/inbox slices, not just terminalTail (finding #3)', async () => {
+    const server = new OrcaHandshakeTestServer({
+      deviceToken: DEVICE_TOKEN,
+      protocolVersion: 3,
+      minCompatibleMobileVersion: 2
+    })
+    const { manager, connectPromise } = connectAgainstServer(server)
+    await connectPromise
+    await flushMicrotasks()
+
+    expect(store.getState().connection.hostId).toBe('host-a')
+    // Fabricate leftover host-scoped state close() must also clear (dashboard/inbox aren't
+    // touched by ActiveHostSession.stop() at all).
+    store.update((s) => ({
+      ...s,
+      dashboard: {
+        rows: [{ worktreeId: 'wt-1', displayName: 'wt-1' }],
+        fetchedAt: 1,
+        stale: false
+      },
+      inbox: {
+        entries: [
+          {
+            notificationId: 'n1',
+            title: 't',
+            body: 'b',
+            worktreeId: 'wt-1',
+            receivedAt: 1,
+            kind: 'ask'
+          }
+        ]
+      }
+    }))
+
+    manager.close()
+
+    expect(store.getState().connection).toEqual({
+      hostId: null,
+      state: 'disconnected',
+      compat: null
+    })
+    expect(store.getState().dashboard).toEqual({ rows: [], fetchedAt: 0, stale: false })
+    expect(store.getState().inbox).toEqual({ entries: [] })
+    expect(store.getState().terminalTail).toEqual({ terminalId: null, lines: [], live: false })
+  })
 })

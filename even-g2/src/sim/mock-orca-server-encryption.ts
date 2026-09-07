@@ -11,6 +11,9 @@ export function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+// NOTE: throws (via atob) on malformed base64 — kept as-is since other callers (e.g. the hello
+// handshake's public key decode) rely on this signature. decryptText below is the one caller that
+// must fail closed instead of throwing, so it wraps its own call in try/catch.
 export function base64ToBytes(b64: string): Uint8Array {
   const binary = atob(b64)
   const bytes = new Uint8Array(binary.length)
@@ -33,8 +36,15 @@ export function encryptText(plaintext: string, sharedKey: Uint8Array): string {
   return bytesToBase64(encryptBytes(new TextEncoder().encode(plaintext), sharedKey))
 }
 
+/** Fails closed (returns null) on a malformed frame — a garbled/truncated base64 payload must
+ *  not throw out of atob and escape handleAuth / handlePostAuthText uncaught. */
 export function decryptText(encoded: string, sharedKey: Uint8Array): string | null {
-  const bundle = base64ToBytes(encoded)
+  let bundle: Uint8Array
+  try {
+    bundle = base64ToBytes(encoded)
+  } catch {
+    return null
+  }
   if (bundle.length < nacl.box.nonceLength + nacl.box.overheadLength) {
     return null
   }

@@ -251,11 +251,19 @@ export class NotificationInboxController {
   }
 
   private noteWatermark(event: NotificationEventFields): void {
+    // Finding #7: the host restarts its notification sequence at 0 for each new epoch. Reset
+    // the watermark BEFORE folding in this event's seq, or a high seq carried over from the
+    // prior epoch makes a legitimately low new-epoch seq look "already seen" — dropping missed
+    // notifications the next notifications.getMissedSince call should have replayed.
+    if (
+      typeof event.notificationEpoch === 'string' &&
+      event.notificationEpoch !== this.lastSeenEpoch
+    ) {
+      this.lastSeenSeq = 0
+      this.lastSeenEpoch = event.notificationEpoch
+    }
     if (typeof event.notificationSeq === 'number') {
       this.lastSeenSeq = Math.max(this.lastSeenSeq, event.notificationSeq)
-    }
-    if (typeof event.notificationEpoch === 'string') {
-      this.lastSeenEpoch = event.notificationEpoch
     }
   }
 

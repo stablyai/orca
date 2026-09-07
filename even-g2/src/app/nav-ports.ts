@@ -26,7 +26,7 @@ import {
   type NavPortsTimer
 } from './ask-interaction-tracking'
 import {
-  resolveActiveTerminalHandle,
+  resolveViewableTerminalHandle,
   resolveWaitingTerminalHandle
 } from './agent-terminal-resolution'
 import type { HostSessionManager } from './host-session-manager'
@@ -62,7 +62,7 @@ async function openTerminalTail(deps: NavPortsDeps, worktreeId: string): Promise
   if (!session) {
     return
   }
-  const terminalId = await resolveActiveTerminalHandle(session.client, worktreeId)
+  const terminalId = await resolveViewableTerminalHandle(session.client, worktreeId)
   // Stale if superseded by a later open()/close() call, the active host session changed while
   // resolving, or the user navigated off this terminal-tail frame in the meantime (finding #8)
   // — in every case, never establish the subscription.

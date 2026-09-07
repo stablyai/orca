@@ -83,6 +83,26 @@ describe('createMemorySocketPair', () => {
     expect(serverSocket.readyState).toBe(MEMORY_SOCKET_READY_STATE.CLOSED)
   })
 
+  it('closing both ends near-simultaneously fires onclose exactly once per end', async () => {
+    const { clientSocket, serverSocket } = createMemorySocketPair()
+    await waitMicrotasks(2)
+
+    let clientCloseCount = 0
+    let serverCloseCount = 0
+    clientSocket.onclose = () => clientCloseCount++
+    serverSocket.onclose = () => serverCloseCount++
+
+    // Both endpoints close before either's queued close-microtask has run.
+    clientSocket.close(1000, 'client done')
+    serverSocket.close(1000, 'server done')
+
+    await waitMicrotasks(3)
+    expect(clientCloseCount).toBe(1)
+    expect(serverCloseCount).toBe(1)
+    expect(clientSocket.readyState).toBe(MEMORY_SOCKET_READY_STATE.CLOSED)
+    expect(serverSocket.readyState).toBe(MEMORY_SOCKET_READY_STATE.CLOSED)
+  })
+
   it('throws when sending before open', () => {
     const { clientSocket } = createMemorySocketPair()
     expect(() => clientSocket.send('too early')).toThrow()

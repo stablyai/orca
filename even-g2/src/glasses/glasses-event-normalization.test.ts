@@ -36,6 +36,20 @@ describe('createGlassesEventNormalizer', () => {
     )
   })
 
+  it('finding #4: treats a list-source click with NEITHER metadata field as listSelect(-1), not a generic click', () => {
+    const normalize = createGlassesEventNormalizer()
+    expect(normalize(raw({ source: 'list', eventType: 0 }))).toEqual({
+      kind: 'listSelect',
+      index: -1,
+      label: undefined
+    })
+  })
+
+  it('finding #4: a sys-source click with neither metadata field still maps to a generic click', () => {
+    const normalize = createGlassesEventNormalizer()
+    expect(normalize(raw({ source: 'sys', eventType: 0 }))).toEqual({ kind: 'click' })
+  })
+
   it('maps DOUBLE_CLICK, FOREGROUND_ENTER/EXIT, SYSTEM_EXIT, ABNORMAL_EXIT', () => {
     const normalize = createGlassesEventNormalizer()
     expect(normalize(raw({ eventType: 3 }))).toEqual({ kind: 'doubleClick' })

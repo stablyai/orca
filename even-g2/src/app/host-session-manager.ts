@@ -150,6 +150,17 @@ export class HostSessionManager {
     this.connectSeq++ // invalidate any connect() still waiting on a compat verdict
     this.active?.stop()
     this.active = null
+    // Reset host-scoped slices explicitly (finding #3): stop() unsubscribes connectionController
+    // BEFORE client.close() emits 'disconnected', so ConnectionStatusController never observes
+    // that transition and store.connection would otherwise keep the old host id/state/compat.
+    // dashboard/inbox aren't touched by stop() at all; terminalTail is already reset by
+    // terminalTail.close() above.
+    this.deps.store.update((s) => ({
+      ...s,
+      connection: { hostId: null, state: 'disconnected', compat: null },
+      dashboard: { rows: [], fetchedAt: 0, stale: false },
+      inbox: { entries: [] }
+    }))
   }
 
   /** Resolves once ConnectionStatusController records a compat verdict for this connect() call,

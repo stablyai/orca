@@ -328,6 +328,44 @@ describe('NotificationInboxController', () => {
       expect(store.getState().inbox.entries).toEqual([])
     })
 
+    it('finding #7: resets the watermark on a new notificationEpoch so getMissedSince never uses a stale high seq', async () => {
+      const store = createHudStore(fixtureState())
+      const port = new FakeRpcPort()
+      new NotificationInboxController(store, { port }).start()
+
+      port.onData?.({ type: 'ready', epoch: 'epoch-1' }) // cold start
+      port.onData?.({
+        type: 'notification',
+        source: 'test',
+        title: 'old epoch',
+        body: 'b',
+        notificationId: 'n-old',
+        notificationSeq: 50,
+        notificationEpoch: 'epoch-1'
+      })
+      // Host restarted: new epoch, sequence restarts from 0-ish — a LOWER seq than before.
+      port.onData?.({
+        type: 'notification',
+        source: 'test',
+        title: 'new epoch',
+        body: 'b',
+        notificationId: 'n-new',
+        notificationSeq: 2,
+        notificationEpoch: 'epoch-2'
+      })
+
+      port.sendRequestQueue.push(okMissedResponse([], 'epoch-2'))
+      port.onData?.({ type: 'ready', epoch: 'epoch-2' }) // resubscribe after reconnect
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // Without the reset, this would carry over seq 50 and silently miss anything the host
+      // dispatched between seq 2 and 50 in the NEW epoch.
+      expect(port.sendRequestCalls).toEqual([
+        { method: 'notifications.getMissedSince', params: { lastSeenSeq: 2, epoch: 'epoch-2' } }
+      ])
+    })
+
     it('skips malformed missed items instead of throwing', async () => {
       const store = createHudStore(fixtureState())
       const port = new FakeRpcPort()

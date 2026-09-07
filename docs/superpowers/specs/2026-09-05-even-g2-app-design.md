@@ -67,7 +67,7 @@ even-g2/
 ├── pnpm-workspace.yaml       # packages: [] — keep self-contained
 ├── pnpm-lock.yaml
 ├── tsconfig.json             # includes ../src/shared via path mapping (see below)
-├── vite.config.ts            # server.fs.allow: ['..'] so ../src/shared resolves in dev
+├── vite.config.ts            # server.fs.allow: [root, ../src/shared] (scoped, not '..')
 ├── vitest.config.ts
 ├── app.json                  # EvenHub manifest (packaging, §11)
 ├── index.html                # loads src/main.ts; phone-side settings/pairing DOM
@@ -158,8 +158,12 @@ but simpler because Vite (unlike Metro) resolves outside the project root:
 - **tsconfig paths**: `"paths": { "@orca-shared/*": ["../src/shared/*"] }` with
   `"baseUrl": "."`; `include` covers `src` and `../src/shared`.
 - **vite.config.ts**: `resolve.alias: { '@orca-shared': path.resolve(__dirname, '../src/shared') }`
-  and `server.fs.allow: [path.resolve(__dirname, '..')]` so the dev server may serve files above
-  the project root.
+  and `server.fs.allow: [path.resolve(__dirname), path.resolve(__dirname, '../src/shared')]` —
+  scoped to just those two directories, not the whole repo (`'..'`): an explicit `fs.allow`
+  REPLACES Vite's default (workspace root), so the project's own root must be listed alongside
+  `../src/shared`, or dev serving of even-g2's own files breaks (verified: `vite --strictPort`
+  against `allow: ['../src/shared']` alone 403s on `/` and `/src/main.ts`). Dev binds `0.0.0.0`,
+  so an unscoped `'..'` would expose arbitrary repo files via `/@fs/`.
 - **Import only browser-pure modules** (pure TS + zod + tweetnacl). Approved imports:
   - `@orca-shared/mobile-relay-pairing-offer` — `PairingOfferSchema`, `PairingOffer`
   - `@orca-shared/protocol-compat` — `evaluateCompat`, `CompatVerdict` (canonical evaluator)

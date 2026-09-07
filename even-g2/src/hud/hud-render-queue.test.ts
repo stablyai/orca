@@ -230,6 +230,109 @@ describe('HudRenderQueue', () => {
     expect(bridge.createStartUpPage).toHaveBeenCalledTimes(1)
   })
 
+  it('finding #5: a rejecting rebuildPage is treated as failure, reports the throw, and still retries/errors rather than an unhandled rejection', async () => {
+    const bridge = createMockBridge()
+    const onRenderError = vi.fn()
+    const scheduled: { cb: () => void; ms: number }[] = []
+    const queue = new HudRenderQueue(bridge, {
+      setTimeout: (cb, ms) => scheduled.push({ cb, ms }),
+      onRenderError
+    })
+
+    const page1 = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    queue.submit(page1)
+    await flush()
+
+    const page2 = buildHudPage({ layout: 'text', header: 'H2', body: 'B2', footer: 'F2' })
+    bridge.rebuildPage.mockRejectedValueOnce(new Error('bridge exploded'))
+    bridge.rebuildPage.mockRejectedValueOnce(new Error('bridge exploded again'))
+    queue.submit(page2)
+    await flush()
+
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(1)
+    expect(onRenderError).toHaveBeenCalledWith(expect.stringContaining('rebuildPage threw'))
+    expect(scheduled).toHaveLength(1)
+
+    scheduled[0]?.cb()
+    await flush()
+
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(2)
+    expect(onRenderError).toHaveBeenCalledWith('rebuild failed after retry')
+  })
+
+  it('finding #5: recovers when a rejecting rebuildPage succeeds on the retry', async () => {
+    const bridge = createMockBridge()
+    const onRenderError = vi.fn()
+    const scheduled: { cb: () => void; ms: number }[] = []
+    const queue = new HudRenderQueue(bridge, {
+      setTimeout: (cb, ms) => scheduled.push({ cb, ms }),
+      onRenderError
+    })
+
+    const page1 = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    queue.submit(page1)
+    await flush()
+
+    const page2 = buildHudPage({ layout: 'text', header: 'H2', body: 'B2', footer: 'F2' })
+    bridge.rebuildPage.mockRejectedValueOnce(new Error('bridge exploded'))
+    queue.submit(page2)
+    await flush()
+    scheduled[0]?.cb()
+    await flush()
+
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(2)
+    expect(onRenderError).toHaveBeenCalledTimes(1) // only the initial throw, no "failed after retry"
+
+    // The successful retry updated `previous`, so an identical next submit is a noop.
+    queue.submit(page2)
+    await flush()
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(2)
+  })
+
+  it('finding #5: a rejecting upgradeText is treated as failure and falls back to rebuild', async () => {
+    const bridge = createMockBridge()
+    const onRenderError = vi.fn()
+    const queue = new HudRenderQueue(bridge, { onRenderError })
+
+    const page1 = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    queue.submit(page1)
+    await flush()
+
+    // Single-container text change -> 'upgrade' plan (<=2 changes), never 'rebuild'.
+    const page2 = buildHudPage({ layout: 'text', header: 'H', body: 'B2', footer: 'F' })
+    bridge.upgradeText.mockRejectedValueOnce(new Error('bridge exploded'))
+    queue.submit(page2)
+    await flush()
+
+    expect(bridge.upgradeText).toHaveBeenCalledTimes(1)
+    expect(onRenderError).toHaveBeenCalledWith(expect.stringContaining('upgradeText threw'))
+    expect(bridge.rebuildPage).toHaveBeenCalledTimes(1)
+    expect(bridge.rebuildPage).toHaveBeenCalledWith(page2)
+  })
+
+  it('finding #5: a submission queued while a rejecting bridge call is in flight still drains afterward', async () => {
+    const bridge = createMockBridge()
+    // Immediate (synchronous) retry delay — deterministic without relying on real timers.
+    const queue = new HudRenderQueue(bridge, { setTimeout: (cb) => cb() })
+
+    const page1 = buildHudPage({ layout: 'text', header: 'H', body: 'B', footer: 'F' })
+    queue.submit(page1)
+    await flush()
+
+    const page2 = buildHudPage({ layout: 'text', header: 'H2', body: 'B2', footer: 'F2' })
+    const page3 = buildHudPage({ layout: 'text', header: 'H3', body: 'B3', footer: 'F3' })
+    // page2's first rebuild attempt rejects; the retry and page3's own rebuild both succeed
+    // (default mock), so the queue must not get stuck on the rejected call.
+    bridge.rebuildPage.mockRejectedValueOnce(new Error('boom'))
+    queue.submit(page2)
+    queue.submit(page3) // coalesces into `pending` while page2 is still being processed
+
+    await flush(15)
+
+    expect(bridge.rebuildPage.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(bridge.rebuildPage.mock.calls.at(-1)?.[0]).toEqual(page3)
+  })
+
   it('recovers previous page state when the retried rebuild succeeds', async () => {
     const bridge = createMockBridge()
     const scheduled: { cb: () => void; ms: number }[] = []

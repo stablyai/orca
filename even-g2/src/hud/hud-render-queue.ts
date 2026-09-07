@@ -75,15 +75,27 @@ export class HudRenderQueue {
     return new Promise((resolve) => this.scheduleTimeout(resolve, ms))
   }
 
+  /** A rejecting bridge call must never escape as an unhandled rejection through runPlan's
+   *  `.finally()` (finally() doesn't catch) — treat a throw the same as an explicit `false` so
+   *  retry/rebuild recovery still runs. */
+  private async callRebuildPage(page: HudPageBuild): Promise<boolean> {
+    try {
+      return await this.bridge.rebuildPage(page)
+    } catch (err) {
+      this.onRenderError(`rebuildPage threw: ${String(err)}`)
+      return false
+    }
+  }
+
   /** Rebuild once; on failure wait and retry exactly once more before surfacing an error. */
   private async rebuildWithRetry(page: HudPageBuild): Promise<void> {
-    const ok = await this.bridge.rebuildPage(page)
+    const ok = await this.callRebuildPage(page)
     if (ok) {
       this.previous = page
       return
     }
     await this.scheduleDelay(REBUILD_RETRY_DELAY_MS)
-    const retryOk = await this.bridge.rebuildPage(page)
+    const retryOk = await this.callRebuildPage(page)
     if (retryOk) {
       this.previous = page
     } else {
@@ -162,7 +174,13 @@ export class HudRenderQueue {
         allOk = false
         continue
       }
-      const ok = await this.bridge.upgradeText(update)
+      let ok: boolean
+      try {
+        ok = await this.bridge.upgradeText(update)
+      } catch (err) {
+        this.onRenderError(`upgradeText threw: ${String(err)}`)
+        ok = false
+      }
       if (!ok) {
         allOk = false
       }

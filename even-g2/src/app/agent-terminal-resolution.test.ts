@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeTerminalAgentStatus } from '@orca-shared/runtime-terminal-contracts'
 import type { RpcPort, RpcResponse } from '../transport/orca-rpc-wire'
 import {
-  resolveActiveTerminalHandle,
+  resolveViewableTerminalHandle,
   resolveWaitingTerminalHandle
 } from './agent-terminal-resolution'
 
@@ -10,47 +10,92 @@ function fakePort(sendRequest: RpcPort['sendRequest']): RpcPort {
   return { sendRequest, subscribe: vi.fn() }
 }
 
-describe('resolveActiveTerminalHandle', () => {
-  it('sends terminal.resolveActive with the id: worktree selector', async () => {
+describe('resolveViewableTerminalHandle', () => {
+  it('finding #1: uses the allowlisted terminal.list, never terminal.resolveActive', async () => {
     const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
       id: '1',
       ok: true,
-      result: { handle: 'term-1' },
+      result: { terminals: [{ handle: 'term-1', agentIdentity: 'claude', lastOutputAt: 1 }] },
       _meta: { runtimeId: 'r' }
     }))
-    const handle = await resolveActiveTerminalHandle(fakePort(sendRequest), 'wt-1')
+    const handle = await resolveViewableTerminalHandle(fakePort(sendRequest), 'wt-1')
     expect(handle).toBe('term-1')
-    expect(sendRequest).toHaveBeenCalledWith('terminal.resolveActive', { worktree: 'id:wt-1' })
+    expect(sendRequest).toHaveBeenCalledWith('terminal.list', { worktree: 'id:wt-1' })
   })
 
-  it('fails closed (returns null) when the host reports no active terminal', async () => {
+  it('returns null when the worktree has no terminals at all', async () => {
     const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
       id: '1',
       ok: true,
-      result: { handle: null },
+      result: { terminals: [] },
       _meta: { runtimeId: 'r' }
     }))
-    expect(await resolveActiveTerminalHandle(fakePort(sendRequest), 'wt-1')).toBeNull()
+    expect(await resolveViewableTerminalHandle(fakePort(sendRequest), 'wt-1')).toBeNull()
   })
 
-  it('fails closed when the RPC itself fails', async () => {
+  it('returns null when the RPC itself fails', async () => {
     const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
       id: '1',
       ok: false,
       error: { code: 'internal', message: 'boom' },
       _meta: { runtimeId: 'r' }
     }))
-    expect(await resolveActiveTerminalHandle(fakePort(sendRequest), 'wt-1')).toBeNull()
+    expect(await resolveViewableTerminalHandle(fakePort(sendRequest), 'wt-1')).toBeNull()
   })
 
-  it('fails closed when handle is missing from the result', async () => {
+  it('returns null when terminals is missing from the result', async () => {
     const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
       id: '1',
       ok: true,
       result: {},
       _meta: { runtimeId: 'r' }
     }))
-    expect(await resolveActiveTerminalHandle(fakePort(sendRequest), 'wt-1')).toBeNull()
+    expect(await resolveViewableTerminalHandle(fakePort(sendRequest), 'wt-1')).toBeNull()
+  })
+
+  it('prefers a terminal with agentIdentity over a plain shell with newer output', async () => {
+    const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
+      id: '1',
+      ok: true,
+      result: {
+        terminals: [
+          { handle: 'shell', lastOutputAt: 100 }, // no agentIdentity, newest output
+          { handle: 'agent', agentIdentity: 'codex', lastOutputAt: 10 }
+        ]
+      },
+      _meta: { runtimeId: 'r' }
+    }))
+    expect(await resolveViewableTerminalHandle(fakePort(sendRequest), 'wt-1')).toBe('agent')
+  })
+
+  it('tie-breaks by the newest lastOutputAt among terminals that both have agentIdentity', async () => {
+    const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
+      id: '1',
+      ok: true,
+      result: {
+        terminals: [
+          { handle: 'older', agentIdentity: 'claude', lastOutputAt: 10 },
+          { handle: 'newer', agentIdentity: 'codex', lastOutputAt: 20 }
+        ]
+      },
+      _meta: { runtimeId: 'r' }
+    }))
+    expect(await resolveViewableTerminalHandle(fakePort(sendRequest), 'wt-1')).toBe('newer')
+  })
+
+  it('falls back to newest lastOutputAt when no terminal has agentIdentity', async () => {
+    const sendRequest = vi.fn(async (): Promise<RpcResponse> => ({
+      id: '1',
+      ok: true,
+      result: {
+        terminals: [
+          { handle: 'older', lastOutputAt: 10 },
+          { handle: 'newer', lastOutputAt: 20 }
+        ]
+      },
+      _meta: { runtimeId: 'r' }
+    }))
+    expect(await resolveViewableTerminalHandle(fakePort(sendRequest), 'wt-1')).toBe('newer')
   })
 })
 

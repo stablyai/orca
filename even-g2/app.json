@@ -11,9 +11,8 @@
     {
       "name": "network",
       "desc": "Connects to your paired Orca desktop.",
-      "whitelist": [
-        "TODO(R4): Orca desktop endpoints are arbitrary ws://<lan-ip>:<port> / Tailscale hosts, not fixed origins. Whether the Even App enforces this whitelist against WebSocket dials (and whether wildcards are supported) is unverified — see design spec docs/superpowers/specs/2026-09-05-even-g2-app-design.md §12 risk R4. v1 ships via QR-sideloaded dev URL; replace this placeholder and confirm enforcement behavior before any hub.evenrealities.com portal submission."
-      ]
+      "whitelist": [],
+      "_devOnlyNote": "R4 (unresolved): Orca desktop endpoints are arbitrary ws://<lan-ip>:<port> / Tailscale hosts, not fixed origins, so no fully-qualified whitelist entry exists yet. `whitelist` is intentionally empty — do NOT fill it with prose or a placeholder origin; Even may enforce it against WebSocket dials verbatim. This manifest is NOT portal-submission-ready: it only supports the v1 QR-sideloaded dev URL. See docs/superpowers/specs/2026-09-05-even-g2-app-design.md §12 risk R4 before any hub.evenrealities.com submission."
     }
   ]
 }

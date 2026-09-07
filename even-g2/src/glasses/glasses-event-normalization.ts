@@ -50,9 +50,17 @@ export function createGlassesEventNormalizer(
 
     if (eventType === CLICK) {
       // Quirk 3: item 0 click may omit listItemIndex (falsy protobuf value dropped);
-      // listItemName usually survives. Presence of either — not `source` (quirk 2: the
-      // simulator tags every event 'sys' regardless of origin) — marks this a list click.
-      if (raw.listItemIndex !== undefined || raw.listItemName !== undefined) {
+      // listItemName usually survives. Presence of either metadata field marks this a list
+      // click regardless of `source` (quirk 2: the simulator tags every event 'sys' regardless
+      // of origin). But a real host/worktree list click can ALSO omit both fields entirely
+      // while still reporting the real `source: 'list'` (finding #4) — treat that case as a
+      // list click too (index -1, unknown row), since falling through to a generic `click`
+      // silently no-ops in the dashboard/worktree-list reducers.
+      if (
+        raw.listItemIndex !== undefined ||
+        raw.listItemName !== undefined ||
+        raw.source === 'list'
+      ) {
         return { kind: 'listSelect', index: raw.listItemIndex ?? -1, label: raw.listItemName }
       }
       return { kind: 'click' }

@@ -29,18 +29,19 @@ export type TerminalRpcContext = {
   sendEncryptedText(socket: MemorySocketLike, state: ConnectionState, message: unknown): void
   success(id: string, result: unknown, streaming?: true): RpcSuccess
   allocateStreamId(): number
+  /** Runs `run` after every earlier send queued (via this or respond()) for `socket` has gone
+   *  out — keeps binary frames from racing ahead of a still-in-flight delayed RPC response. */
+  enqueueSend(socket: MemorySocketLike, run: () => void): void
 }
 
 export function pushTerminalFrame(
+  ctx: TerminalRpcContext,
   socket: MemorySocketLike,
   state: ConnectionState,
   subscription: TerminalSubscriptionState,
   opcode: TerminalStreamOpcode,
   text: string
 ): void {
-  if (socket.readyState !== MEMORY_SOCKET_READY_STATE.OPEN) {
-    return
-  }
   const payload = new TextEncoder().encode(text)
   const frame = encodeTerminalStreamFrame({
     opcode,
@@ -48,7 +49,11 @@ export function pushTerminalFrame(
     seq: subscription.seq++,
     payload
   })
-  socket.send(encryptBytes(frame, state.sharedKey))
+  ctx.enqueueSend(socket, () => {
+    if (socket.readyState === MEMORY_SOCKET_READY_STATE.OPEN) {
+      socket.send(encryptBytes(frame, state.sharedKey))
+    }
+  })
 }
 
 /** Routes host-originated bytes to a subscriber per its negotiated mode: a binary Output frame
@@ -63,7 +68,7 @@ export function publishTerminalOutput(
   text: string
 ): void {
   if (subscription.mode === 'binary') {
-    pushTerminalFrame(socket, state, subscription, TerminalStreamOpcode.Output, text)
+    pushTerminalFrame(ctx, socket, state, subscription, TerminalStreamOpcode.Output, text)
     return
   }
   ctx.sendEncryptedText(
@@ -191,7 +196,7 @@ export function handleTerminalSubscribe(
       ctx.success(request.id, buildSubscribedControlMessage(subscription.streamId, lines), true)
     )
     for (const frame of buildSnapshotFrames(scrollback)) {
-      pushTerminalFrame(socket, state, subscription, frame.opcode, frame.text)
+      pushTerminalFrame(ctx, socket, state, subscription, frame.opcode, frame.text)
     }
     return
   }

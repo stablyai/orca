@@ -156,6 +156,60 @@ describe('ConnectionStatusController', () => {
     expect(store.getState().connection.lastError).toBe('boom')
   })
 
+  it('finding #6: a disconnect/reconnect invalidates the stale probe — its late result never overwrites the newer episode', async () => {
+    const store = createHudStore(fixtureState())
+    let resolveFirstProbe!: (verdict: { kind: 'ok' }) => void
+    const firstProbe = new Promise<{ kind: 'ok' }>((r) => (resolveFirstProbe = r))
+    const probeCompat = vi
+      .fn()
+      .mockReturnValueOnce(firstProbe)
+      .mockReturnValueOnce(
+        Promise.resolve({ kind: 'blocked', reason: 'desktop-too-old', desktopVersion: 0 })
+      )
+    const { inputs, emit } = fakeInputs(probeCompat)
+    new ConnectionStatusController(store, inputs).start('host-1')
+
+    emit('connected') // starts the first (slow) probe
+    emit('disconnected') // finding #6: must invalidate the in-flight probe above
+    emit('connected') // newer episode starts its OWN probe, which resolves first
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(store.getState().connection.compat).toEqual({
+      kind: 'blocked',
+      reason: 'desktop-too-old',
+      desktopVersion: 0
+    })
+
+    resolveFirstProbe({ kind: 'ok' }) // the stale first probe finally lands
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // Must still show the newer episode's verdict, not get clobbered by the stale 'ok'.
+    expect(store.getState().connection.compat).toEqual({
+      kind: 'blocked',
+      reason: 'desktop-too-old',
+      desktopVersion: 0
+    })
+  })
+
+  it('finding #6: disposing the start() subscription invalidates any still-running probe', async () => {
+    const store = createHudStore(fixtureState())
+    let resolveProbe!: (verdict: { kind: 'ok' }) => void
+    const probe = new Promise<{ kind: 'ok' }>((r) => (resolveProbe = r))
+    const { inputs, emit } = fakeInputs(() => probe)
+    const stop = new ConnectionStatusController(store, inputs).start('host-1')
+
+    emit('connected')
+    stop() // host teardown while the probe is still in flight
+
+    resolveProbe({ kind: 'ok' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // The disposed session's probe must never write into the (now stale) connection slice.
+    expect(store.getState().connection.compat).toBeNull()
+  })
+
   it('createConnectionStatusInputs wires a real port into probeCompat', async () => {
     const port = new FakeRpcPort()
     const inputs = createConnectionStatusInputs(port, () => () => {})

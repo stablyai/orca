@@ -84,7 +84,11 @@ class MemorySocketEndpoint implements MemorySocketLike {
     queueMicrotask(() => {
       this.readyState = MEMORY_SOCKET_READY_STATE.CLOSED
       this.onclose?.({ code, reason })
-      if (peer && peer.readyState !== MEMORY_SOCKET_READY_STATE.CLOSED) {
+      // Only force-close the peer here if it's still OPEN. If the peer already began its own
+      // close() (CLOSING) or finished (CLOSED), its own queued microtask — or this same branch
+      // run from that microtask — already owns/will own its onclose, so calling it again here
+      // would double-fire onclose (double teardown/reconnect) for simultaneous close() calls.
+      if (peer && peer.readyState === MEMORY_SOCKET_READY_STATE.OPEN) {
         peer.readyState = MEMORY_SOCKET_READY_STATE.CLOSED
         peer.onclose?.({ code, reason })
       }
