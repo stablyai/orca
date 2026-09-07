@@ -311,7 +311,7 @@ describe('Relay region probe log', () => {
     })
   })
 
-  it('stays silent when the self-heal probe cannot reach the catalog', async () => {
+  it('reports a self-heal whose catalog failed as its own outcome, not a withheld hint', async () => {
     const path = userDataPath()
     writeCache(path, 'us-central1', 5_000)
     const { resolver, events } = resolverWithLog({
@@ -321,8 +321,10 @@ describe('Relay region probe log', () => {
 
     await resolver.invalidateIfAssignedCellIsFar(CELL)
 
-    // A self-heal that never chose a region must not log one withholding a hint.
-    expect(events).toEqual([])
+    // A self-heal that never chose a region must not log a probe event that
+    // reads as a withheld hint; it names the failure under its own event.
+    expect(events.map((event) => event.event)).toEqual([RELAY_REGION_SELF_HEAL_EVENT])
+    expect(events[0]).toMatchObject({ decision: 'kept', reason: 'catalog-unavailable' })
   })
 
   it('emits one credential-free line per event', () => {

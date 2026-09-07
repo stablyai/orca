@@ -36,7 +36,12 @@ export type RelayRegionSelfHealLogEvent = {
   assignedCellUrl: string
   assignedLatencyMs: number | null
   decision: RelayRegionSelfHealDecision
-  reason: 'best-matches-cache' | 'no-region-measured' | 'assigned-cell-near' | 'assigned-cell-far'
+  reason:
+    | 'best-matches-cache'
+    | 'no-region-measured'
+    | 'catalog-unavailable'
+    | 'assigned-cell-near'
+    | 'assigned-cell-far'
 }
 
 export type RelayRegionLogEvent = RelayRegionProbeLogEvent | RelayRegionSelfHealLogEvent

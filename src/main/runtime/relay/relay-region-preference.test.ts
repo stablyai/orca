@@ -504,6 +504,33 @@ describe('Relay region cache self-heal', () => {
     expect(existsSync(cachePath(path))).toBe(false)
   })
 
+  it('reports a director that cannot list its regions instead of failing silently', async () => {
+    const path = userDataPath()
+    writeCache(path, 'asia-east2', LIVE_EXPIRY)
+    const events: unknown[] = []
+    const resolver = new RelayRegionPreferenceResolver({
+      directorUrl: DIRECTOR,
+      userDataPath: path,
+      fetch: vi.fn<typeof globalThis.fetch>(async () => {
+        throw new Error('director offline')
+      }),
+      now: () => 1_000,
+      logEvent: (event) => events.push(event)
+    })
+
+    await resolver.invalidateIfAssignedCellIsFar(CELL)
+    expect(existsSync(cachePath(path))).toBe(true)
+    expect(events).toEqual([
+      expect.objectContaining({
+        event: 'relay_region_self_heal',
+        cachedRegion: 'asia-east2',
+        assignedCellUrl: CELL,
+        decision: 'kept',
+        reason: 'catalog-unavailable'
+      })
+    ])
+  })
+
   it('probes a given cell only once per process', async () => {
     const path = userDataPath()
     writeCache(path, 'asia-east2', LIVE_EXPIRY)

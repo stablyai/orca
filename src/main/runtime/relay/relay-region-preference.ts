@@ -121,21 +121,26 @@ export class RelayRegionPreferenceResolver {
       return
     }
     this.selfHealedCells.add(assignedCellOrigin)
+    const outcome: Omit<RelayRegionSelfHealLogEvent, 'directorHost'> = {
+      event: RELAY_REGION_SELF_HEAL_EVENT,
+      cachedRegion: cache.region,
+      bestRegion: null,
+      bestLatencyMs: null,
+      assignedCellUrl: assignedCellOrigin,
+      assignedLatencyMs: null,
+      decision: 'kept',
+      reason: 'catalog-unavailable'
+    }
     try {
       const fetch = this.options.fetch ?? globalThis.fetch
       const probe = this.createProbe(fetch)
-      const reports = await this.probeCatalog(fetch)
+      // A director that cannot list its regions is the one self-heal outcome a
+      // support log would otherwise never see, so it is reported before the throw.
+      const reports = await this.probeCatalog(fetch, () => this.logSelfHeal(outcome))
       const best = bestMeasurement(measuredRegions(reports))
-      const outcome: Omit<RelayRegionSelfHealLogEvent, 'directorHost'> = {
-        event: RELAY_REGION_SELF_HEAL_EVENT,
-        cachedRegion: cache.region,
-        bestRegion: best?.region ?? null,
-        bestLatencyMs: best?.latencyMs ?? null,
-        assignedCellUrl: assignedCellOrigin,
-        assignedLatencyMs: null,
-        decision: 'kept',
-        reason: best ? 'best-matches-cache' : 'no-region-measured'
-      }
+      outcome.bestRegion = best?.region ?? null
+      outcome.bestLatencyMs = best?.latencyMs ?? null
+      outcome.reason = best ? 'best-matches-cache' : 'no-region-measured'
       // A far cell under a cache that still names the best region is the
       // director declining the hint; deleting it would only re-probe.
       if (!best || best.region === cache.region) {
@@ -165,8 +170,8 @@ export class RelayRegionPreferenceResolver {
     now: number
   ): Promise<RelayRegion | undefined> {
     const fetch = this.options.fetch ?? globalThis.fetch
-    // Only a refresh withholds a hint, so only a refresh reports a director that
-    // could not list its regions; the self-heal path stays silent on failure.
+    // Only a refresh withholds a hint, so only a refresh reports the catalog
+    // failure as a probe event; self-heal reports it as its own outcome.
     const reports = await this.probeCatalog(fetch, () =>
       this.log(relayRegionCatalogFailureEvent(this.options.directorUrl))
     )
@@ -202,7 +207,11 @@ export class RelayRegionPreferenceResolver {
   ): Promise<RelayRegionProbeReport[]> {
     let catalog: RelayRegionCatalog
     try {
-      catalog = await this.fetchCatalog(fetch)
+      catalog = await fetchRelayRegionCatalog(
+        this.options.directorUrl,
+        fetch,
+        this.options.requestTimeoutMs ?? PROBE_TIMEOUT_MS
+      )
     } catch (error) {
       onCatalogFailure?.()
       throw error
@@ -253,14 +262,6 @@ export class RelayRegionPreferenceResolver {
           this.options.measureNow ?? (() => performance.now()),
           this.options.requestTimeoutMs ?? PROBE_TIMEOUT_MS
         ))
-    )
-  }
-
-  private async fetchCatalog(fetch: typeof globalThis.fetch): Promise<RelayRegionCatalog> {
-    return await fetchRelayRegionCatalog(
-      this.options.directorUrl,
-      fetch,
-      this.options.requestTimeoutMs ?? PROBE_TIMEOUT_MS
     )
   }
 }
