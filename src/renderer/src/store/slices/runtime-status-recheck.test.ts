@@ -66,7 +66,7 @@ describe('runtime status recheck', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.checkedAt).toBe(1)
   })
 
-  it('cancels on removal, capability loss, and null without probing again', async () => {
+  it('cancels on removal and capability loss without probing again', async () => {
     const getStatus = vi.fn()
     const store = createStore(getStatus)
     store.getState().setRuntimeEnvironmentStatus('env-a', {
