@@ -48,6 +48,23 @@ describe('getPiAgentStatusExtensionSource', () => {
     })
   })
 
+  it('forwards Pi UI prompt lifecycle events', async () => {
+    const harness = createHarness({ kind: 'pi' })
+
+    expect(harness.handlers.ui_prompt_start).toBeTypeOf('function')
+    expect(harness.handlers.ui_prompt_end).toBeTypeOf('function')
+
+    await harness.callHook('ui_prompt_start', undefined, { isIdle: () => false })
+    await harness.callHook('ui_prompt_end', undefined, { isIdle: () => true })
+
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    expect(
+      harness.fetchMock.mock.calls.map(
+        ([_event, init]) => JSON.parse(String(init?.body)).payload.hook_event_name
+      )
+    ).toEqual(['ui_prompt_start', 'ui_prompt_end'])
+  })
+
   it('includes the session id and file path in Pi status posts after session_start', async () => {
     const harness = createHarness({
       kind: 'pi',
