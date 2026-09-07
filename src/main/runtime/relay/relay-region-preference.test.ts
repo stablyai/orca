@@ -298,12 +298,13 @@ describe('Relay region preference', () => {
       ).resolves.toBeUndefined()
     }
 
-    const unstable = sampledProbe({ [US]: [15, 10, 20, 400] })
+    // Two-region catalog so the only reason for no hint is the flapping US path.
+    const unstable = sampledProbe({ [US]: [15, 10, 20, 400], [ASIA]: [300, 200, 205, 210] })
     await expect(
       new RelayRegionPreferenceResolver({
         directorUrl: DIRECTOR,
         userDataPath: path,
-        fetch: catalogFetch([{ region: 'us-central1', probeOrigins: [US] }]),
+        fetch: catalogFetch(BOTH_REGIONS),
         probe: unstable.probe,
         now: () => 1_000
       }).resolve()
