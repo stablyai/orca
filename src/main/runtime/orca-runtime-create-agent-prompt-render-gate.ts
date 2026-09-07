@@ -137,10 +137,17 @@ export class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRuntimeWithW
     }
   ): Promise<RuntimeTerminalWait> {
     if (options?.condition === 'tui-idle') {
-      const ptyId = this.getTerminalAgentStatusPtyId(handle)
-      await this.terminalAgentStatus.refreshModal(handle, ptyId)
-      if (this.terminalAgentStatus.isModalComposerReady(handle)) {
-        return this.buildTuiIdleProbeResult(handle, null)
+      try {
+        const ptyId = this.getTerminalAgentStatusPtyId(handle)
+        if (this.terminalAgentStatus.hasModalToRefresh(handle, ptyId)) {
+          await this.terminalAgentStatus.refreshModal(handle, ptyId)
+        }
+        if (this.terminalAgentStatus.isModalComposerReady(handle)) {
+          return this.buildTuiIdleProbeResult(handle, null)
+        }
+      } catch {
+        // Renderer reloads can retire the live projection during this optional read.
+        // The existing waiter owns retained-handle continuity and stale-handle errors.
       }
     }
     return this.terminalWait.wait(handle, options)

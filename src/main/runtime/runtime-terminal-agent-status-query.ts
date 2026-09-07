@@ -140,14 +140,17 @@ export class RuntimeTerminalAgentStatusQuery {
     return { handle, isRunningAgent, status: null }
   }
 
+  hasModalToRefresh(handle: string, ptyId: string): boolean {
+    return (
+      this.deps.isCodex(ptyId) && hasCodexModelPickerTail(this.getSnapshot(handle, ptyId).waitText)
+    )
+  }
+
   async refreshModal(handle: string, ptyId: string): Promise<void> {
-    if (!this.deps.isCodex(ptyId)) {
+    if (!this.hasModalToRefresh(handle, ptyId)) {
       return
     }
     const snapshot = this.getSnapshot(handle, ptyId)
-    if (!hasCodexModelPickerTail(snapshot.waitText)) {
-      return
-    }
     const record = this.deps.getLivePty(handle)?.pty ?? this.deps.getLiveLeaf(handle).leaf
     const before = this.deps.getModalFence(ptyId)
     const screen = await this.deps.readVisibleState(ptyId).catch(() => null)
