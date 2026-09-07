@@ -12,23 +12,15 @@ import { isRpcResponse } from './rpc-response-shape'
 import { RelayDialStageLog } from './relay-dial-stage-log'
 import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
-import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
+import { createRelaySessionLivenessWatchdog } from './relay-session-liveness-profile'
 import { settleMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
-// Ordinary foreground checks: two 4s misses, at most one voluntary probe per 10s.
-const RELAY_PROBE = { timeoutMs: 4_000, missedProbeLimit: 2, minIntervalMs: 10_000 }
-// A socket that died while the process was suspended must be admitted before the
-// user reads the screen as broken. Two 2s misses, not one: the first frame after a
-// resume rides a cold radio, and a single slow answer is not proof of a dead link.
-const RELAY_RESUME_PROBE = { timeoutMs: 2_000, missedProbeLimit: 2 }
 // Bounds the confirm exactly as migrateTo's own wait used to, so the supervisor's
 // mutex is never held for the full request timeout waiting on a silent cell.
 const RELAY_CONFIRM_TIMEOUT_MS = 12_000
-// Foreground-only sweep so a silently-dead relay surfaces without a user action.
-const RELAY_IDLE_PROBE_MS = 25_000
 let relayRpcSessionSequence = 0
 
 export type MobileRelayRpcSession = RpcClient &
@@ -161,30 +153,14 @@ export function connectMobileRelayRpcSession(args: {
     whenResumeConfirmed: () => resumeConfirmed,
     getFailure: () => failure
   }
-  const livenessWatchdog = new RpcSessionLivenessWatchdog({
-    transport: 'relay',
-    idleProbeMs: RELAY_IDLE_PROBE_MS,
-    probeTimeoutMs: RELAY_PROBE.timeoutMs,
-    missedProbeLimit: RELAY_PROBE.missedProbeLimit,
-    voluntaryProbeMinIntervalMs: RELAY_PROBE.minIntervalMs,
-    urgentProbeTimeoutMs: RELAY_RESUME_PROBE.timeoutMs,
-    urgentMissedProbeLimit: RELAY_RESUME_PROBE.missedProbeLimit,
-    shouldIdleProbe: () => args.isForeground?.() ?? true,
+  const livenessWatchdog = createRelaySessionLivenessWatchdog({
+    isForeground: args.isForeground,
     sendProbe: () =>
       state === 'connected' &&
       sendFrame({ id: pending.nextId(), method: 'status.get', params: undefined }),
-    onTimeout: (evidence) => {
-      args.onLog?.({
-        id: `relay-liveness-${logSessionId}-${++logSequence}`,
-        ts: Date.now(),
-        level: 'error',
-        code: 'liveness-timeout',
-        path: 'relay',
-        message: 'Relay health check failed',
-        detail: `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`
-      })
-    },
-    terminate: () => fail(new Error('relay session liveness timeout'))
+    terminate: () => fail(new Error('relay session liveness timeout')),
+    onLog: args.onLog,
+    nextLogId: () => `relay-liveness-${logSessionId}-${++logSequence}`
   })
   return client
 

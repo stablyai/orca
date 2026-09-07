@@ -101,7 +101,10 @@ function requestIdAt(call: number): string {
   return (JSON.parse(fakes.sendText.mock.calls[call]![0] as string) as { id: string }).id
 }
 
-async function driveToConnected(session: { getState(): string }): Promise<void> {
+async function driveToConnected(session: {
+  getState(): string
+  whenResumeConfirmed(): Promise<void>
+}): Promise<void> {
   fakes.linkOptions!.onOpen()
   fakes.linkOptions!.onHello({
     type: 'relay-hello',
@@ -113,7 +116,10 @@ async function driveToConnected(session: { getState(): string }): Promise<void> 
     resumeExpiresAt: Date.now() + 300_000
   })
   fakes.linkOptions!.onAuthenticated()
-  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+  // 'connected' is published at authentication; the resume confirm and the capability
+  // advisory are both already on the wire, so answer them in the order they were sent.
+  await vi.waitFor(() => expect(session.getState()).toBe('connected'))
+  expect(fakes.sendText).toHaveBeenCalledTimes(2)
   fakes.linkOptions!.onText(
     JSON.stringify({
       id: requestIdAt(0),
@@ -133,11 +139,10 @@ async function driveToConnected(session: { getState(): string }): Promise<void> 
       _meta: { runtimeId: 'runtime-1' }
     })
   )
-  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
   fakes.linkOptions!.onText(
     JSON.stringify({ id: requestIdAt(1), ok: true, result: {}, _meta: { runtimeId: 'runtime-1' } })
   )
-  await vi.waitFor(() => expect(session.getState()).toBe('connected'))
+  await session.whenResumeConfirmed()
 }
 
 describe('relay dial stage timings in the connection log', () => {
