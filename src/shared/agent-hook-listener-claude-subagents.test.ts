@@ -599,6 +599,35 @@ describe('shared agent-hook-listener', () => {
       expect(idled?.payload.interrupted).toBe(true)
     })
 
+    it('clears an inference-only interrupt when the turn completes with a clean Stop', () => {
+      // Why: the renderer infers an interrupt from a bare Escape keystroke, which cannot
+      // be told apart from an Escape that only dismisses a /model or /btw overlay. When
+      // the turn was never really interrupted, its own clean completion Stop (no
+      // is_interrupt) must clear the optimistic red, not inherit it.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'keep working' })
+      claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 5' }
+      })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+
+      const done = claudeEvent({ hook_event_name: 'Stop' })
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.interrupted).toBeUndefined()
+    })
+
+    it('keeps a hook-confirmed interrupt terminal even though the inference also fired', () => {
+      // Why: a real single-Escape interrupt trips the same inference, but Claude also
+      // emits Stop with is_interrupt. That confirmed interrupt must survive.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'cancel this' })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+
+      const done = claudeEvent({ hook_event_name: 'Stop', is_interrupt: true })
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.interrupted).toBe(true)
+    })
+
     it('does not resurrect persisted idle child rows after a restart', () => {
       // Why: the roster tracks only working children now. A persisted idle
       // snapshot (from a build that kept idle rows) is a finished child, so

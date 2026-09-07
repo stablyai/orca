@@ -40,6 +40,10 @@ export type HookListenerState = {
 export type ClaudeLeadTurnState = {
   state: AgentStatusState
   interrupted?: true
+  /** The `interrupted` above came from the renderer's keystroke inference, not a hook `is_interrupt`.
+   *  A bare Escape can also just dismiss a /model or /btw overlay, so this optimistic interrupt is
+   *  provisional: the turn's own clean completion Stop clears it instead of carrying it forward. */
+  interruptedInferred?: true
   /** Subagent that induced the wait; only its next tool activity may clear it, so other children's churn can't dismiss a pending human-input card. */
   waitingAgentId?: string
   /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
@@ -47,7 +51,10 @@ export type ClaudeLeadTurnState = {
   /** End time of the lead turn closed while background inventory kept the pane `working`. Repeated on the later all-clear `done`. */
   turnCompletedAt?: number
   /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
-  stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted' | 'turnCompletedAt'>
+  stateBeforeWait?: Pick<
+    ClaudeLeadTurnState,
+    'state' | 'interrupted' | 'interruptedInferred' | 'turnCompletedAt'
+  >
 }
 
 export type CodexLeadTurnState = {
