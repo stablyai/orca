@@ -1,4 +1,4 @@
-import type { TopLevelView } from './types'
+import type { TopLevelView } from './ui-chrome-types'
 
 // Record keys are exhaustive so adding a top-level view also updates every
 // persistence boundary that validates values loaded from disk or IPC.
@@ -10,6 +10,7 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   automations: true,
   space: true,
   skills: true,
+  artifacts: true,
   mobile: true
 }
 

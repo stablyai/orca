@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, realpath, symlink, writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { mkdtemp, mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
@@ -39,7 +40,9 @@ describe('sftp-upload', () => {
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
-    expect(writeStream.listenerCount('error')).toBe(0)
+    // One durable 'error' listener stays for the stream's whole life: a STATUS reply that
+    // lands after the transfer settles must not throw into ssh2's parser (#15479).
+    expect(writeStream.listenerCount('error')).toBe(1)
   })
 
   it('uses no-clobber writes for nested files during exclusive directory upload', async () => {
@@ -58,7 +61,9 @@ describe('sftp-upload', () => {
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
-    expect(writeStream.listenerCount('error')).toBe(0)
+    // One durable 'error' listener stays for the stream's whole life: a STATUS reply that
+    // lands after the transfer settles must not throw into ssh2's parser (#15479).
+    expect(writeStream.listenerCount('error')).toBe(1)
   })
 
   it('uploads files from valid dot-dot-prefixed local directories', async () => {
@@ -112,6 +117,62 @@ describe('sftp-upload', () => {
     await expect(uploadFile(sftp, linkPath, '/remote/link.txt')).rejects.toThrow()
 
     expect(sftp.createWriteStream).not.toHaveBeenCalled()
+  })
+
+  it('joins local file-descriptor teardown when a live upload is aborted', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-abort-'))
+    const localPath = join(localDir, 'relay.js')
+    const controller = new AbortController()
+    const blockedWrite = new Writable({
+      write() {}
+    })
+    const sftp = createSftpMock()
+    vi.mocked(sftp.createWriteStream).mockReturnValue(blockedWrite as never)
+    try {
+      await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
+      const upload = uploadFile(sftp, localPath, '/remote/relay.js', {
+        signal: controller.signal
+      })
+      await vi.waitFor(() => expect(sftp.createWriteStream).toHaveBeenCalledTimes(1))
+
+      controller.abort()
+
+      await expect(upload).rejects.toMatchObject({ name: 'AbortError' })
+      if (process.platform !== 'win32') {
+        const descriptorProbe = spawnSync(
+          'lsof',
+          ['-a', '-p', String(process.pid), '--', localPath],
+          { encoding: 'utf8' }
+        )
+        if (!descriptorProbe.error) {
+          expect(descriptorProbe.stdout).not.toContain(localPath)
+        }
+      }
+    } finally {
+      await rm(localDir, { recursive: true, force: true })
+    }
+  })
+
+  it('joins the local read when the remote write fails', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-failure-'))
+    const localPath = join(localDir, 'relay.js')
+    const sftp = createSftpMock()
+    vi.mocked(sftp.createWriteStream).mockReturnValue(
+      new Writable({
+        write(_chunk, _encoding, callback) {
+          callback(new Error('remote write failed'))
+        }
+      }) as never
+    )
+    try {
+      await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
+
+      await expect(uploadFile(sftp, localPath, '/remote/relay.js')).rejects.toThrow(
+        'remote write failed'
+      )
+    } finally {
+      await rm(localDir, { recursive: true, force: true })
+    }
   })
 
   it('removes remote directory contents before removing the directory', async () => {

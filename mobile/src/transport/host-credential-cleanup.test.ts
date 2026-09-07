@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  cancelPendingHostCredentialCleanup,
   loadPendingHostCredentialCleanup,
   loadPendingHostCredentialCleanupIds,
+  recordHostCredentialCleanupIntent,
   resetHostCredentialCleanupForTests,
   retryPendingHostCredentialCleanups,
   scheduleHostCredentialCleanup,
@@ -66,6 +68,12 @@ describe('host credential cleanup', () => {
     expect(deleteCredential).toHaveBeenCalledOnce()
   })
 
+  it('records cleanup intent without starting native deletion', async () => {
+    await recordHostCredentialCleanupIntent('host-1')
+
+    await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual(['host-1'])
+  })
+
   it('persists cleanup intent before a rejected delete for manual retry', async () => {
     const deleteCredential = vi.fn().mockRejectedValue(new Error('keychain unavailable'))
     const listener = vi.fn()
@@ -76,6 +84,18 @@ describe('host credential cleanup', () => {
     await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual(['host-1'])
     expect(listener).toHaveBeenCalled()
     unsubscribe()
+  })
+
+  it('cancels stale cleanup intent after replacement publication', async () => {
+    const deleteCredential = vi.fn().mockRejectedValue(new Error('superseded'))
+
+    await scheduleHostCredentialCleanup('host-1', deleteCredential, 20)
+    await vi.waitFor(() => expect(deleteCredential).toHaveBeenCalledOnce())
+    await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual(['host-1'])
+
+    await cancelPendingHostCredentialCleanup('host-1')
+
+    await expect(loadPendingHostCredentialCleanupIds()).resolves.toEqual([])
   })
 
   it('records intent before a stalled delete times out', async () => {

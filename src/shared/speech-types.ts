@@ -1,7 +1,20 @@
-export type SpeechModelType = 'transducer' | 'paraformer' | 'whisper' | 'openai'
+export type SpeechModelType =
+  | 'transducer'
+  | 'paraformer'
+  | 'whisper'
+  | 'senseVoice'
+  | 'nemo-ctc'
+  | 'openai'
 export type SpeechModelProvider = 'local' | 'openai'
 
 export type ModelingUnit = 'bpe' | 'cjkchar' | 'cjkchar+bpe'
+
+export type SpeechModelDownloadFile = {
+  name: string
+  url: string
+  sizeBytes: number
+  sha256: string
+}
 
 export type SpeechModelManifest = {
   id: string
@@ -11,9 +24,7 @@ export type SpeechModelManifest = {
   provider: SpeechModelProvider
   language: string
   sizeBytes?: number
-  downloadUrl?: string
-  archiveSha256?: string
-  archiveFormat?: 'tar.bz2'
+  downloadFiles?: SpeechModelDownloadFile[]
   files?: string[]
   sampleRate: number
   streaming: boolean
@@ -64,4 +75,8 @@ export type VoiceSettings = {
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean
+  /** null = system default input device */
+  microphoneDeviceId: string | null
+  /** Cached label for display when the preferred device is unplugged */
+  microphoneDeviceLabel: string | null
 }

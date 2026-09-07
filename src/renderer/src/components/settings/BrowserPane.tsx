@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useAppStore } from '../../store'
 import { matchesSettingsSearch } from './settings-search'
-import { getBrowserPaneSearchEntries, getBrowserLinkRoutingDescription } from './browser-search'
+import { getBrowserPaneSearchEntries } from './browser-search'
+import { getBrowserLinkRoutingDescription } from './browser-link-routing-copy'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { getBrowserPaneCombinedSearchEntries } from './browser-pane-search'
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
@@ -10,7 +11,12 @@ import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
+import { BrowserLinkRoutingModifierSetting } from './BrowserLinkRoutingModifierSetting'
+import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
+import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
+import { BrowserSshWorkspaceRoutingSetting } from './BrowserSshWorkspaceRoutingSetting'
+import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
 import {
@@ -21,11 +27,11 @@ import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
-  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
+import { resolveAvailableBrowserSessionHostId } from './browser-session-host-selection'
 export { getBrowserPaneCombinedSearchEntries }
 
 type BrowserPaneProps = {
@@ -59,7 +65,8 @@ export function BrowserPane({
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
+  const browserSessionHostIdOverride = useAppStore((s) => s.browserSessionHostIdOverride)
+  const setBrowserSessionHostId = useAppStore((s) => s.setBrowserSessionHostId)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const defaultBrowserSessionProfileId = useAppStore((s) => s.defaultBrowserSessionProfileId)
@@ -98,11 +105,26 @@ export function BrowserPane({
   const showSearchEngine = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[1]])
   const showDefaultZoom = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[2]])
   const showLinkRouting = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[3]])
-  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[4]])
-  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[5]])
+  const showLinkRoutingModifier = matchesSettingsSearch(searchQuery, [
+    getBrowserPaneSearchEntries()[4]
+  ])
+  const showTerminalLinkActions = matchesSettingsSearch(searchQuery, [
+    getBrowserPaneSearchEntries()[5]
+  ])
+  const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[6]])
+  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[7]])
+  const showClientHostedRemote = matchesSettingsSearch(searchQuery, [
+    getBrowserPaneSearchEntries()[8]
+  ])
+  const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [
+    getBrowserPaneSearchEntries()[9]
+  ])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
-  const linkRoutingDescription = getBrowserLinkRoutingDescription({ isMac })
+  const linkRoutingDescription = getBrowserLinkRoutingDescription(
+    { isMac },
+    settings.openLinksInAppModifierInverts === true
+  )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const browserSessionHostOptions = useMemo(
     () =>
@@ -137,19 +159,28 @@ export function BrowserPane({
       hostLabelOverrides
     ]
   )
-  const selectedBrowserSessionHostId = getSettingsFocusedExecutionHostId(settings)
+  const settingsFocusedHostId = getSettingsFocusedExecutionHostId(settings)
+  const selectedBrowserSessionHostId = resolveAvailableBrowserSessionHostId(
+    browserSessionHostOptions,
+    browserSessionHostIdOverride,
+    settingsFocusedHostId
+  )
+  useEffect(() => {
+    const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
+    if (selectedBrowserSessionHostId !== requestedHostId) {
+      void setBrowserSessionHostId(selectedBrowserSessionHostId)
+    }
+  }, [
+    browserSessionHostIdOverride,
+    selectedBrowserSessionHostId,
+    setBrowserSessionHostId,
+    settingsFocusedHostId
+  ])
   const selectBrowserSessionHost = useCallback(
     (hostId: ExecutionHostId) => {
-      const parsed = parseExecutionHostId(hostId)
-      if (parsed?.kind === 'runtime') {
-        void switchRuntimeEnvironment(parsed.environmentId)
-        return
-      }
-      if (parsed?.kind === 'local') {
-        void switchRuntimeEnvironment(null)
-      }
+      void setBrowserSessionHostId(hostId)
     },
-    [switchRuntimeEnvironment]
+    [setBrowserSessionHostId]
   )
 
   const requestSessionCookieScrollFrame = (callback: FrameRequestCallback): void => {
@@ -228,11 +259,46 @@ export function BrowserPane({
         />
       ) : null}
 
+      {showLinkRoutingModifier ? (
+        <BrowserLinkRoutingModifierSetting
+          settings={settings}
+          isMac={isMac}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
+      {showTerminalLinkActions ? (
+        <BrowserTerminalLinkActionsSetting
+          settings={settings}
+          isMac={isMac}
+          updateSettings={updateSettings}
+        />
+      ) : null}
+
       {showLocalhostLabels ? (
         <BrowserLocalhostWorktreeLabelsSetting
           settings={settings}
           updateSettings={updateSettings}
         />
+      ) : null}
+
+      {showClientHostedRemote || showSshWorkspaceRouting ? (
+        <SettingsSubsectionHeader
+          className="pt-2"
+          title={translate('settings.browser.remoteBrowsing.heading', 'Remote browsing')}
+          description={translate(
+            'settings.browser.remoteBrowsing.headingDescription',
+            'Where remote workspace pages render, and where their network traffic leaves from.'
+          )}
+        />
+      ) : null}
+
+      {showClientHostedRemote ? (
+        <BrowserClientHostedRemoteSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showSshWorkspaceRouting ? (
+        <BrowserSshWorkspaceRoutingSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showCookies ? (

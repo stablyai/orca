@@ -1,55 +1,36 @@
-import { MARINE_CREATURES } from '../constants/marine-creatures'
+import {
+  normalizeSuggestedName,
+  selectSuggestedCreatureName,
+  suggestionPathBasename
+} from '../../../src/shared/worktree-name-suggestion'
+import {
+  EMPTY_RETIRED_NAME_REGISTRY,
+  type RetiredNameRegistry
+} from '../../../src/shared/worktree/retired-name-registry'
 
-// Why: matches the desktop fallback in
-// src/renderer/src/components/sidebar/worktree-name-suggestions.ts. The
-// "already exists locally" collision is on the on-disk worktree directory
-// name (the path basename), not the user-facing displayName — so we derive
-// the used set from path basenames just like the desktop does.
+// Why: this used to hand-duplicate the desktop algorithm and the two drifted apart by
+// construction. Both now call the shared core so a name suggested on a phone and one suggested on
+// the desktop obey the same rules. The dedupe is on the on-disk directory basename, not the
+// user-facing displayName, because that is what actually collides.
 
-function stripTrailingSeparators(p: string): string {
-  return p.replace(/[\\/]+$/, '')
-}
-
-// Why: cross-platform path basename — handles both POSIX ("/") and Windows
-// ("\\") separators, mirroring src/renderer/src/lib/path.ts so the mobile
-// suggestion logic agrees with the desktop's collision check.
-function pathBasename(p: string): string {
-  const normalized = stripTrailingSeparators(p)
-  const idx = Math.max(normalized.lastIndexOf('/'), normalized.lastIndexOf('\\'))
-  return idx === -1 ? normalized : normalized.slice(idx + 1)
-}
-
-function normalize(name: string): string {
-  return name.trim().toLowerCase()
-}
-
-function pickRandom<T>(items: readonly T[], random: () => number): T {
-  return items[Math.floor(random() * items.length)]
-}
-
-// Why: pick randomly from the unused pool (not the first in list order) so
-// fresh worktrees don't all default to "Nautilus" and collide across repos.
+/** `retired` holds names already spent in the selected repo, including workspaces that have since
+ *  been deleted — their directories may still hold agent conversation state keyed by cwd, so
+ *  reissuing the name would hand it to the next occupant. Its `exhaustedTiers` watermark covers
+ *  the tiers the host has compacted away, whose names it therefore no longer sends individually.
+ *
+ *  Hosts older than these fields send nothing, in which case this degrades to deduping against
+ *  live paths only, exactly as it did before. */
 export function getSuggestedCreatureName(
   existingPaths: readonly string[],
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  retired: RetiredNameRegistry = EMPTY_RETIRED_NAME_REGISTRY
 ): string {
   const used = new Set<string>()
-  for (const p of existingPaths) {
-    used.add(normalize(pathBasename(p)))
+  for (const path of existingPaths) {
+    used.add(normalizeSuggestedName(suggestionPathBasename(path)))
   }
-  // Lowercased to match branch-name convention (fix/seahorse, not fix/Seahorse).
-  const available = MARINE_CREATURES.map(normalize).filter((name) => !used.has(name))
-  if (available.length > 0) {
-    return pickRandom(available, random)
+  for (const retiredName of retired.names) {
+    used.add(normalizeSuggestedName(retiredName))
   }
-  let suffix = 2
-  while (true) {
-    const numbered = MARINE_CREATURES.map((name) => `${normalize(name)}-${suffix}`).filter(
-      (name) => !used.has(name)
-    )
-    if (numbered.length > 0) {
-      return pickRandom(numbered, random)
-    }
-    suffix += 1
-  }
+  return selectSuggestedCreatureName(used, random, retired.exhaustedTiers)
 }

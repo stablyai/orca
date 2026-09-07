@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 export function showAutomationPromptNotSentToast(agent: TuiAgent): void {
   toast.message(

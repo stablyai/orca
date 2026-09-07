@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 export function buildLastVisitedAtByWorktreeId(snapshot: {
   lastVisitedAtByWorktreeId: WorkspaceSessionState['lastVisitedAtByWorktreeId']

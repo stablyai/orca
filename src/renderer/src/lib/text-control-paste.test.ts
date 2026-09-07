@@ -3,7 +3,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PASTE_PAYLOAD_CORPUS } from './paste-payload-corpus'
 import {
-  getTextControlPasteByteLength,
   measureTextControlPasteByteLength,
   pasteTextIntoTextControl,
   shouldHandleTextControlPaste
@@ -251,7 +250,7 @@ describe('text control paste', () => {
   })
 
   it('uses utf-8 byte thresholds for non-ascii text', () => {
-    expect(getTextControlPasteByteLength('a😀é')).toBe(7)
+    expect(measureTextControlPasteByteLength('a😀é').byteLength).toBe(7)
     expect(shouldHandleTextControlPaste('😀😀', { directMaxBytes: 7 })).toBe(true)
     expect(shouldHandleTextControlPaste('abc', { directMaxBytes: 7 })).toBe(false)
     expect(shouldHandleTextControlPaste('', { directMaxBytes: 0 })).toBe(false)
@@ -263,6 +262,8 @@ describe('text control paste', () => {
     })
 
     expect(measurement).toEqual({ byteLength: 8, exceededLimit: true })
-    expect(measurement.byteLength).toBeLessThan(getTextControlPasteByteLength('😀'.repeat(100)))
+    expect(measurement.byteLength).toBeLessThan(
+      measureTextControlPasteByteLength('😀'.repeat(100)).byteLength
+    )
   })
 })

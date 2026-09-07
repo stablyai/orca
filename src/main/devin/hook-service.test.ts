@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parse as parseJsonc } from 'jsonc-parser'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -104,7 +105,45 @@ describe('DevinHookService', () => {
     const status = new DevinHookService().install()
 
     expect(status.state).toBe('installed')
-    expect(JSON.parse(readFileSync(configPath, 'utf8')).hooks.UserPromptSubmit).toBeDefined()
+    // Why: parse as JSONC, not JSON — asserting with JSON.parse would only pass once the
+    // comment had been stripped, which is the regression this test exists to catch.
+    expect(parseJsonc(readFileSync(configPath, 'utf8')).hooks.UserPromptSubmit).toBeDefined()
+  })
+
+  it('keeps user comments and unrelated formatting when installing and removing', () => {
+    const configPath = getDevinConfigPath()
+    mkdirSync(dirname(configPath), { recursive: true })
+    writeFileSync(
+      configPath,
+      `{
+  // keep me: chosen deliberately
+  "permissions": { "mode": "normal" },
+  /* block comment */
+  "hooks": {
+    // the user's own hook
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "mine.sh" }] }]
+  }
+}
+`
+    )
+
+    const service = new DevinHookService()
+    service.install()
+
+    const installed = readFileSync(configPath, 'utf8')
+    expect(installed).toContain('// keep me: chosen deliberately')
+    expect(installed).toContain('/* block comment */')
+    expect(installed).toContain("// the user's own hook")
+    expect(installed).toContain('mine.sh')
+    expect(parseJsonc(installed).permissions.mode).toBe('normal')
+    expect(parseJsonc(installed).hooks.UserPromptSubmit).toBeDefined()
+
+    service.remove()
+
+    const removed = readFileSync(configPath, 'utf8')
+    expect(removed).toContain('// keep me: chosen deliberately')
+    expect(removed).toContain('mine.sh')
+    expect(parseJsonc(removed).hooks.UserPromptSubmit).toBeUndefined()
   })
 
   it('surfaces read_config_from overlap in status detail', () => {

@@ -71,6 +71,12 @@ function getNativePasteHandler():
   return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativePaste')?.[1]
 }
 
+function getNativeSelectionActionHandler():
+  | ((event: ReturnType<typeof makeUIEvent>, action: unknown) => void)
+  | undefined {
+  return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativeSelectionAction')?.[1]
+}
+
 describe('UI IPC', () => {
   beforeEach(() => {
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
@@ -185,6 +191,44 @@ describe('UI IPC', () => {
     expect(fromWebContentsMock).toHaveBeenCalledWith(sender)
     expect(paste).toHaveBeenCalledTimes(1)
     expect(pasteAndMatchStyle).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes native selection fallbacks to the requesting webContents', () => {
+    const copy = vi.fn()
+    const selectAll = vi.fn()
+    const event = makeUIEvent()
+    setTrustedUIRendererWebContentsId(17)
+    fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
+
+    registerUIHandlers(makeStore() as never)
+
+    expect(removeAllListenersMock).toHaveBeenCalledWith('ui:performNativeSelectionAction')
+    const handler = getNativeSelectionActionHandler()
+    handler?.(event, 'copy')
+    handler?.(event, 'select-all')
+    handler?.(event, 'invalid')
+
+    expect(copy).toHaveBeenCalledOnce()
+    expect(selectAll).toHaveBeenCalledOnce()
+  })
+
+  it('allows native selection fallback from the exact dashboard popout renderer', () => {
+    const copy = vi.fn()
+    const selectAll = vi.fn()
+    const event = makeUIEvent({ id: 42 })
+    const isDashboardPopoutRenderer = vi.fn((sender: unknown) => sender === event.sender)
+    fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
+
+    registerUIHandlers(makeStore() as never, { isDashboardPopoutRenderer })
+
+    const handler = getNativeSelectionActionHandler()
+    handler?.(event, 'copy')
+    handler?.(event, 'select-all')
+    handler?.(makeUIEvent({ id: 43 }), 'copy')
+
+    expect(isDashboardPopoutRenderer).toHaveBeenCalledWith(event.sender)
+    expect(copy).toHaveBeenCalledOnce()
+    expect(selectAll).toHaveBeenCalledOnce()
   })
 
   it('ignores native paste fallback from stale or browser senders', () => {

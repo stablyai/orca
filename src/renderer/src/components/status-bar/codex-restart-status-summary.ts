@@ -1,9 +1,12 @@
+import { awaitsCodexRestartAnswer } from '@/components/codex-restart-notice-state'
+import type { CodexRestartNotice } from '@/store/terminals/terminal-contracts'
+
 type TabLookup = Record<string, { id: string }[]>
 
 export type CodexRestartStatusSummaryInput = {
   tabsByWorktree: TabLookup
   ptyIdsByTabId: Record<string, string[]>
-  codexRestartNoticeByPtyId: Record<string, unknown>
+  codexRestartNoticeByPtyId: Record<string, CodexRestartNotice | undefined>
 }
 
 export type CodexRestartStatusSummary = {
@@ -25,7 +28,12 @@ export function summarizeCodexRestartStatus({
   ptyIdsByTabId,
   codexRestartNoticeByPtyId
 }: CodexRestartStatusSummaryInput): CodexRestartStatusSummary {
-  const stalePtyIds = Object.keys(codexRestartNoticeByPtyId)
+  // Why: a requested restart is already scheduled for its pane's next mount, so
+  // re-offering it here would leave a prompt whose button does nothing; a
+  // dismissed notice survives only as launch-account memory.
+  const stalePtyIds = Object.entries(codexRestartNoticeByPtyId)
+    .filter(([, notice]) => awaitsCodexRestartAnswer(notice))
+    .map(([ptyId]) => ptyId)
   if (stalePtyIds.length === 0) {
     return EMPTY_CODEX_RESTART_STATUS_SUMMARY
   }

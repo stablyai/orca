@@ -1,4 +1,4 @@
-import type { DiscoveredSkill } from '../../../../shared/skills'
+import type { DiscoveredSkill, SkillDiscoverySource } from '../../../../shared/skills'
 import type { OrchestrationSkillAgentStatus } from '@/lib/orchestration-skill-coverage'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
@@ -16,18 +16,40 @@ function getAgentCoverageSummary(props: {
   const { loading, totalCount, installedCount, fullCoverage, noCoverage } = props
 
   if (loading) {
-    return 'Checking installed agents and skill paths…'
+    return translate(
+      'auto.components.settings.OrchestrationSkillAgentCoverage.checking',
+      'Checking installed agents and skill paths…'
+    )
   }
   if (totalCount === 0) {
-    return 'No agent CLIs detected on PATH. Install agents in Settings → Agents, then re-check.'
+    return translate(
+      'auto.components.settings.OrchestrationSkillAgentCoverage.noAgents',
+      'No agent CLIs detected on PATH. Install agents in Settings → Agents, then re-check.'
+    )
   }
   if (fullCoverage) {
-    return `All ${totalCount} detected agents have the skill.`
+    return totalCount === 1
+      ? translate(
+          'auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage_one',
+          'All 1 detected agent has the skill.'
+        )
+      : translate(
+          'auto.components.settings.OrchestrationSkillAgentCoverage.fullCoverage_other',
+          'All {{value0}} detected agents have the skill.',
+          { value0: totalCount }
+        )
   }
   if (noCoverage) {
-    return 'Install the skill above, then re-check.'
+    return translate(
+      'auto.components.settings.OrchestrationSkillAgentCoverage.noCoverage',
+      'Install the skill above, then re-check.'
+    )
   }
-  return `${installedCount} of ${totalCount} detected agents have the skill.`
+  return translate(
+    'auto.components.settings.OrchestrationSkillAgentCoverage.partialCoverage',
+    '{{value0}} of {{value1}} detected agents have the skill.',
+    { value0: installedCount, value1: totalCount }
+  )
 }
 
 function AgentCoverageChip({
@@ -68,14 +90,17 @@ function AgentCoverageChip({
 
 export function OrchestrationSkillAgentCoverage(props: {
   skills: readonly DiscoveredSkill[]
+  sources: readonly SkillDiscoverySource[]
   loading: boolean
   embedded?: boolean
   className?: string
 }): React.JSX.Element {
-  const { skills, loading: skillsLoading, embedded = false, className } = props
-  const { detectedIds, isLoading: agentsLoading } = useDetectedAgents()
+  const { skills, sources, loading: skillsLoading, embedded = false, className } = props
+  const { detectedIds, isLoading: agentsLoading } = useDetectedAgents({
+    kind: 'local'
+  })
   const loading = skillsLoading || agentsLoading || detectedIds === null
-  const agentStatuses = getOrchestrationSkillAgentStatuses(skills, detectedIds ?? [])
+  const agentStatuses = getOrchestrationSkillAgentStatuses(skills, detectedIds ?? [], sources)
   const installedCount = agentStatuses.filter((status) => status.installed).length
   const totalCount = agentStatuses.length
   const fullCoverage = !loading && totalCount > 0 && installedCount === totalCount

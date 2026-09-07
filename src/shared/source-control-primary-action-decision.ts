@@ -3,6 +3,7 @@ import { supportsHostedReviewCreation } from './hosted-review-creation-providers
 import { resolveCreateReviewIntentEligibility } from './source-control-create-review-intent'
 import { resolveSourceControlPrimaryActionDuringRemoteOp } from './source-control-primary-action-in-flight'
 import type {
+  SourceControlCommitAreaPrimaryActionDecision,
   SourceControlPrimaryActionDecision,
   SourceControlPrimaryActionDecisionInputs
 } from './source-control-primary-action-decision-types'
@@ -11,6 +12,7 @@ import { resolveUnpublishedSourceControlPrimaryAction } from './source-control-p
 export type {
   SourceControlPrimaryActionKind,
   SourceControlRemoteOpKind,
+  SourceControlCommitAreaPrimaryActionDecision,
   SourceControlPrimaryActionDecision,
   SourceControlPrimaryActionDecisionInputs
 } from './source-control-primary-action-decision-types'
@@ -221,14 +223,14 @@ function shouldOfferCreateReviewLoadingAction(
 
 export function resolveSourceControlCommitAreaPrimaryActionDecision(
   inputs: SourceControlPrimaryActionDecisionInputs
-): SourceControlPrimaryActionDecision {
+): SourceControlCommitAreaPrimaryActionDecision {
   // Why: review creation is additive chrome. Commit/mobile bottom areas keep
   // the local/remote action they would have without review eligibility.
   return resolveSourceControlPrimaryActionDecision({
     ...inputs,
     hostedReviewCreation: null,
     isPrIntentInFlight: false
-  })
+  }) as SourceControlCommitAreaPrimaryActionDecision
 }
 
 function resolveCreatePrIntentDecision(

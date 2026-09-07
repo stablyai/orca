@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   resolveNativeChatFileLink,
   resolveNativeChatFileLinkContext,
@@ -32,6 +34,7 @@ function state(overrides: Partial<AppState> = {}): AppState {
     tabsByWorktree: {
       'wt-1': [terminalTab()]
     },
+    unifiedTabsByWorktree: {},
     worktreesByRepo: {
       repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo/worktree' } as never]
     },
@@ -65,6 +68,33 @@ describe('resolveNativeChatFileLinkContext', () => {
     expect(resolveNativeChatFileLinkContext(state({ tabsByWorktree: {} }), 'tab-1')).toBeNull()
   })
 
+  it('resolves the worktree context for a structured session tab', () => {
+    const structuredTab = {
+      id: 'structured-tab-1',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      contentType: 'agent-session',
+      entityId: 'session-1',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      isPinned: false,
+      agentSessionAgent: 'codex'
+    } satisfies Tab
+
+    expect(
+      resolveNativeChatFileLinkContext(
+        state({
+          tabsByWorktree: {},
+          unifiedTabsByWorktree: { 'wt-1': [structuredTab] }
+        }),
+        structuredTab.id
+      )
+    ).toEqual(context)
+  })
+
   it('falls back to repo-scoped worktrees when a known worktree has no path', () => {
     expect(
       resolveNativeChatFileLinkContext(
@@ -79,6 +109,27 @@ describe('resolveNativeChatFileLinkContext', () => {
     ).toEqual({
       worktreeId: 'wt-1',
       worktreePath: '/repo/fallback',
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('resolves a folder workspace tab from its folder path when no projected worktree path exists', () => {
+    const folderId = 'folder-1'
+    const folderKey = folderWorkspaceKey(folderId)
+    const folderTab = terminalTab({ worktreeId: folderKey })
+    expect(
+      resolveNativeChatFileLinkContext(
+        state({
+          tabsByWorktree: { [folderKey]: [folderTab] },
+          getKnownWorktreeById: () => undefined,
+          folderWorkspaces: [{ id: folderId, folderPath: '/workspace/platform' } as never],
+          worktreesByRepo: {}
+        }),
+        folderTab.id
+      )
+    ).toEqual({
+      worktreeId: folderKey,
+      worktreePath: '/workspace/platform',
       runtimeEnvironmentId: null
     })
   })

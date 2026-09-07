@@ -7,6 +7,14 @@ export function isPairedWebClientWindow(): boolean {
   return (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
 }
 
+export function isLocalWindowsDesktopClient(): boolean {
+  return (
+    !isPairedWebClientWindow() &&
+    typeof navigator !== 'undefined' &&
+    navigator.userAgent.includes('Windows')
+  )
+}
+
 export function shouldRenderDesktopWindowChrome({
   platform,
   isWebClient

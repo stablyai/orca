@@ -46,6 +46,13 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  countAgentPaneAuthorityAliasesForTests,
+  resetAgentPaneAuthorityAliasesForTests,
+  resolveAgentPaneAuthorityKey,
+  transferAgentPaneAuthorityAlias
+} from './agent-pane-authority'
 
 const WT = 'repo1::/path/wt1'
 const TAB = 'tab-1'
@@ -137,5 +144,28 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     expect(s.agentStatusByPaneKey[OTHER_PANE]).toBeDefined()
     expect(s.unreadTerminalTabs[OTHER_TAB]).toBe(true)
     expect(s.lastTerminalInputAtByPaneKey[OTHER_PANE]).toBe(2)
+  })
+
+  it('purgeWorktreeTerminalState forgets pane-authority aliases for the removed tabs', () => {
+    resetAgentPaneAuthorityAliasesForTests()
+    const store = createTestStore()
+    const leafId = '77777777-7777-4777-8777-777777777777'
+    const sourcePaneKey = makePaneKey('tab-detached', leafId)
+    const ownerPaneKey = makePaneKey(TAB, leafId)
+    seedPaneState(store)
+    transferAgentPaneAuthorityAlias({
+      fromPaneKey: sourcePaneKey,
+      toPaneKey: ownerPaneKey,
+      ptyId: 'pty-1'
+    })
+    expect(resolveAgentPaneAuthorityKey(sourcePaneKey)).toBe(ownerPaneKey)
+
+    store.getState().purgeWorktreeTerminalState([WT])
+
+    // Why: the alias registry outlives the store maps, so a purged tab must not
+    // keep routing status posts to a pane that no longer exists.
+    expect(resolveAgentPaneAuthorityKey(sourcePaneKey)).toBe(sourcePaneKey)
+    expect(countAgentPaneAuthorityAliasesForTests()).toBe(0)
+    resetAgentPaneAuthorityAliasesForTests()
   })
 })

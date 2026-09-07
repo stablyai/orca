@@ -13,6 +13,11 @@ export type PtyStartupIngressOptions = {
   ownerBackend?: PtyOwnerBackend
   write: (data: string) => void
   onEmission: (emission: PtyIngressEmission) => void
+  /**
+   * Reports whether the slave would echo a reply written to the master. When present,
+   * the reply waits for `quiet` instead of relying on echo-shape recognition. Absent
+   * on backends with no line discipline to read (ConPTY, wsl.exe).
+   */
 }
 
 export type PtyIngressSourceSpan = {
@@ -27,6 +32,7 @@ export type PtyStartupIngressOperation =
   | { kind: 'snapshot' }
   | { kind: 'teardown' }
   | { kind: 'expire' }
+  | { kind: 'release-echo' }
 
 export function slicePtyIngressSourceSpan(
   span: PtyIngressSourceSpan,

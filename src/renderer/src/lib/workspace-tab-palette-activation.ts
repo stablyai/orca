@@ -6,8 +6,15 @@ import {
 } from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorktree } from './worktree-activation'
+import {
+  findAmbiguousWorktreeIds,
+  getPaletteOwnershipWorktreeIds,
+  hasOpenFileExecutionHostEvidence,
+  isOpenFileOwnedByWorktree,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 import type { WorkspaceTabPaletteSearchResult } from './workspace-tab-palette-search'
 
 export type WorkspaceTabPaletteActivationFailure =
@@ -20,15 +27,20 @@ export type WorkspaceTabPaletteActivationResult =
   | { status: 'activated' }
   | { status: 'failed'; reason: WorkspaceTabPaletteActivationFailure }
 
+// Why: callers outside Cmd+J hold only the identifiers, not a full search result.
+export type WorkspaceTabPaletteActivationTarget = Pick<
+  WorkspaceTabPaletteSearchResult,
+  'contentType' | 'entityId' | 'groupId' | 'tabId' | 'worktreeId'
+> & { executionHostId?: ExecutionHostId }
+
 type WorkspaceTabPaletteActivationState = Pick<
   AppState,
   | 'activateTab'
-  | 'activeGroupIdByWorktree'
   | 'focusGroup'
+  | 'folderWorkspaces'
+  | 'getKnownWorktreeById'
   | 'groupsByWorktree'
   | 'openFiles'
-  | 'repos'
-  | 'settings'
   | 'setActiveFile'
   | 'setActiveTab'
   | 'setActiveTabType'
@@ -38,9 +50,14 @@ type WorkspaceTabPaletteActivationState = Pick<
 
 function validateTarget(
   state: WorkspaceTabPaletteActivationState,
-  result: WorkspaceTabPaletteSearchResult
+  result: WorkspaceTabPaletteActivationTarget
 ): WorkspaceTabPaletteActivationFailure | null {
-  if (!findWorktreeById(state.worktreesByRepo, result.worktreeId)) {
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(getPaletteOwnershipWorktreeIds(state))
+  if (!result.executionHostId && ambiguousWorktreeIds.has(result.worktreeId)) {
+    return 'missing-worktree'
+  }
+  const worktree = state.getKnownWorktreeById(result.worktreeId, result.executionHostId)
+  if (!worktree) {
     return 'missing-worktree'
   }
   const group = (state.groupsByWorktree[result.worktreeId] ?? []).find(
@@ -49,30 +66,38 @@ function validateTarget(
   if (!group) {
     return 'missing-group'
   }
-  const tab = (state.unifiedTabsByWorktree[result.worktreeId] ?? []).find(
+  const tabs = (state.unifiedTabsByWorktree[result.worktreeId] ?? []).filter(
+    (candidate) => candidate.id === result.tabId
+  )
+  const tab = tabs.find(
     (candidate) =>
-      candidate.id === result.tabId &&
       candidate.entityId === result.entityId &&
       candidate.groupId === result.groupId &&
       candidate.worktreeId === result.worktreeId &&
-      candidate.contentType === result.contentType
+      candidate.contentType === result.contentType &&
+      isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds)
   )
-  if (!tab) {
+  if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
   }
-  if (
-    result.contentType !== 'terminal' &&
-    !state.openFiles.some(
-      (file) => file.id === result.entityId && file.worktreeId === result.worktreeId
-    )
-  ) {
-    return 'missing-file'
+  if (result.contentType !== 'terminal') {
+    const files = state.openFiles.filter((file) => file.id === result.entityId)
+    if (files.length !== 1 || files[0].worktreeId !== result.worktreeId) {
+      return 'missing-file'
+    }
+    const file = files[0]
+    // A hostless file falls back to local ownership, which only decides the match when IDs collide.
+    const requiresOwnershipCheck =
+      hasOpenFileExecutionHostEvidence(file) || ambiguousWorktreeIds.has(worktree.id)
+    if (requiresOwnershipCheck && !isOpenFileOwnedByWorktree(file, worktree)) {
+      return 'missing-file'
+    }
   }
   return null
 }
 
 export function activateWorkspaceTabPaletteResult(
-  result: WorkspaceTabPaletteSearchResult
+  result: WorkspaceTabPaletteActivationTarget
 ): WorkspaceTabPaletteActivationResult {
   const initialState = useAppStore.getState()
   const initialFailure = validateTarget(initialState, result)
@@ -80,7 +105,11 @@ export function activateWorkspaceTabPaletteResult(
     return { status: 'failed', reason: initialFailure }
   }
 
-  const activated = activateAndRevealWorktree(result.worktreeId)
+  const executionHostId =
+    result.executionHostId ?? initialState.getKnownWorktreeById(result.worktreeId)?.hostId
+  const activated = executionHostId
+    ? activateAndRevealWorktree(result.worktreeId, { executionHostId })
+    : activateAndRevealWorktree(result.worktreeId)
   if (!activated) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
@@ -93,7 +122,7 @@ export function activateWorkspaceTabPaletteResult(
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, result.worktreeId)
   state.focusGroup(result.worktreeId, result.groupId)
-  state.activateTab(result.tabId)
+  state.activateTab(result.tabId, { worktreeId: result.worktreeId })
 
   if (result.contentType === 'terminal') {
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -110,6 +139,8 @@ export function activateWorkspaceTabPaletteResult(
   }
 
   state.setActiveFile(result.entityId)
+  // setActiveFile may pick an editor tab for the same entity instead of this diff.
+  state.activateTab(result.tabId, { worktreeId: result.worktreeId })
   state.setActiveTabType('editor')
   return { status: 'activated' }
 }

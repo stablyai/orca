@@ -5,7 +5,8 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ONBOARDING_FINAL_STEP } from '../../shared/constants'
-import type { GlobalSettings, OnboardingState } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { OnboardingState } from '../../shared/onboarding-state-types'
 import type { Store } from '../persistence'
 import {
   _resetSessionWarnFlagForTests,

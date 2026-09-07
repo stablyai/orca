@@ -1,3 +1,4 @@
+import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type {
   DeviceCredentialInstalled,
@@ -6,6 +7,7 @@ import type {
   MobileRelayEndpoint,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import {
   deriveRelayHostId,
@@ -15,6 +17,7 @@ import {
   type RelayAssignment
 } from './relay-http-client'
 import { RelayOriginPool } from './relay-origin-pool'
+import { relayRenewalDelayMs } from './relay-renewal-jitter'
 import type { RelayBrokerStatus, RelaySessionBrokerOptions } from './relay-session-broker-contract'
 
 export type { RelayBrokerStatus } from './relay-session-broker-contract'
@@ -45,6 +48,7 @@ export class RelaySessionBroker {
       mobileSocketWiring: options.mobileSocketWiring,
       isCurrent: () => this.isCurrent(),
       onStatus: (status) => this.publishStatus(status),
+      resolvePreferredRegion: options.resolvePreferredRegion,
       fetch: options.fetch,
       createControlSocket: options.createControlSocket,
       createDataSocket: options.createDataSocket,
@@ -75,6 +79,10 @@ export class RelaySessionBroker {
   get ownerIdentityKey(): string {
     const identity = this.options.identity
     return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
+  }
+
+  isLive(): boolean {
+    return !this.closed && this.originPool.hasLiveControl()
   }
 
   get endpoint(): MobileRelayEndpoint | null {
@@ -175,7 +183,7 @@ export class RelaySessionBroker {
     return result
   }
 
-  closeNow(): void {
+  closeNow(hostCloseReason?: RelayHostCloseReason): void {
     if (this.closed) {
       return
     }
@@ -185,7 +193,7 @@ export class RelaySessionBroker {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
-    this.originPool.closeNow()
+    this.originPool.closeNow(hostCloseReason)
     if (publishOffline) {
       this.options.onStatus('offline')
     }
@@ -193,17 +201,26 @@ export class RelaySessionBroker {
 
   private async open(accessToken: string): Promise<void> {
     this.publishStatus('connecting')
-    const authorization = await exchangeRelayAuthorization({
-      endpoint: this.options.authConfig.relayTokenEndpoint,
-      accessToken,
-      keypair: this.options.keypair,
-      fetch: this.options.fetch
-    })
+    const [authorization, preferredRegion] = await Promise.all([
+      exchangeRelayAuthorization({
+        endpoint: this.options.authConfig.relayTokenEndpoint,
+        accessToken,
+        keypair: this.options.keypair,
+        fetch: this.options.fetch
+      }),
+      this.options.resolvePreferredRegion?.().catch(() => undefined) ?? Promise.resolve(undefined)
+    ])
     this.assertCurrent()
     const assignment = await requestRelayAssignment({
       directorUrl: this.options.authConfig.relayDirectorUrl,
       relayToken: authorization.relayToken,
       relayHostId: this.relayHostId,
+      // Any previously paired host likely holds a durable assignment; the
+      // director verifies the claim, and first-ever pairing simply falls
+      // through to the placement lane.
+      reconnect: true,
+      preferredRegion,
+      isCurrent: () => this.isCurrent(),
       fetch: this.options.fetch
     })
     this.assertCurrent()
@@ -228,8 +245,7 @@ export class RelaySessionBroker {
     }
     const now = (this.options.now ?? Date.now)()
     const random = this.options.random ?? Math.random
-    const earlyMs = 60_000 + Math.floor(random() * 60_001)
-    const delay = Math.max(0, authorization.expiresAt - earlyMs - now)
+    const delay = relayRenewalDelayMs(authorization.expiresAt, now, random)
     this.refreshTimer = setTimeout(() => void this.refreshAuthorization(), delay)
   }
 
@@ -278,8 +294,15 @@ export class RelaySessionBroker {
   }
 
   private publishStatus(status: RelayBrokerStatus): void {
-    if (this.isCurrent()) {
-      this.options.onStatus(status)
+    if (!this.isCurrent()) {
+      return
+    }
+    const cellUrl = this.originPool.activeAssignment?.cellUrl
+    this.options.onStatus(status, relayStatusCellUrl(status, cellUrl))
+    if (status === 'registered' && cellUrl) {
+      // Fire-and-forget: the listener may probe this cell, and nothing about the
+      // live session is allowed to wait on that.
+      this.options.onAssignedCellActive?.(cellUrl)
     }
   }
 }

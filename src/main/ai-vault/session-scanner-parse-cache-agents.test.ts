@@ -163,7 +163,9 @@ describe('codex-specific resume behavior', () => {
       process.platform,
       stats
     )
-    expect(stats.incremental).toBe(1)
+    // The append is dismissed without a read, so it is an early stop rather
+    // than an incremental parse.
+    expect(stats).toMatchObject({ earlyStopped: 1, incremental: 0 })
     expect(grown).toBeNull()
   })
 
@@ -183,19 +185,18 @@ describe('codex-specific resume behavior', () => {
     )
     expect(seeded?.title).toBe('codex seed question')
 
-    // Codex names the thread lazily; the next (incremental) parse must adopt it.
+    // Codex names the thread lazily; an unchanged transcript must still adopt it.
     await writeFile(
       join(codexHome, 'session_index.jsonl'),
       `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Indexed thread title' })}\n`
     )
-    await appendFile(path, `${fixture.appendLines.join('\n')}\n`)
     const stats = createSessionParseStats()
     const renamed = await parseAgentSessionFileCached(
       await candidateFor('codex', path, codexHome),
       process.platform,
       stats
     )
-    expect(stats.incremental).toBe(1)
+    expect(stats.reused).toBe(1)
     expect(renamed?.title).toBe('Indexed thread title')
     expect(renamed).toEqual(
       await parseAgentSessionFile(await candidateFor('codex', path, codexHome), process.platform)

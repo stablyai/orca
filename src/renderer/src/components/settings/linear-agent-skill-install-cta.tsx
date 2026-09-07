@@ -143,7 +143,7 @@ export function LinearAgentSkillInstallCta({
                 )
               : translate(
                   'auto.components.settings.linear.agent.skill.install.cta.description',
-                  'Let your agents read and edit Linear tasks.'
+                  'Let agents read and edit Linear tasks. Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
                 )}
           </p>
           <div className={commandRowClass}>

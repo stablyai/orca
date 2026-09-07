@@ -117,7 +117,14 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
         'auto.lib.agent.skill.cli.prerequisite.windowsPathUnknown',
         'Orca could not check your Windows user PATH'
       ),
-      { description: status.detail ?? 'Refresh CLI registration status and try again.' }
+      {
+        description:
+          status.detail ??
+          translate(
+            'auto.lib.agent.skill.cli.prerequisite.refreshCliRegistration',
+            'Refresh CLI registration status and try again.'
+          )
+      }
     )
     return
   }

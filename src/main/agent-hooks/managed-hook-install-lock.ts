@@ -46,7 +46,8 @@ async function releaseInstallLock(
 async function acquireInstallLock(
   home: string,
   signal?: AbortSignal,
-  suppliedHostIdentity?: string
+  suppliedHostIdentity?: string,
+  waitTimeoutMs = LOCK_WAIT_TIMEOUT_MS
 ): Promise<() => Promise<void>> {
   const lockParent = join(home, '.orca')
   const lockPath = join(lockParent, 'managed-hook-install.lock')
@@ -57,7 +58,7 @@ async function acquireInstallLock(
   if (typeof processIdentity !== 'string') {
     throw new Error('Could not identify the managed-hook installer process')
   }
-  const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS
+  const deadline = Date.now() + waitTimeoutMs
 
   while (true) {
     signal?.throwIfAborted()
@@ -130,9 +131,15 @@ export async function withManagedHookInstallLock<T>(
   home: string,
   signal: AbortSignal | undefined,
   run: () => Promise<T>,
-  hostIdentity?: string
+  hostIdentity?: string,
+  options?: { waitTimeoutMs?: number }
 ): Promise<T> {
-  const release = await acquireInstallLock(home, signal, hostIdentity)
+  const release = await acquireInstallLock(
+    home,
+    signal,
+    hostIdentity,
+    options?.waitTimeoutMs ?? LOCK_WAIT_TIMEOUT_MS
+  )
   try {
     signal?.throwIfAborted()
     return await run()

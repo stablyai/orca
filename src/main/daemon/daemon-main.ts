@@ -1,4 +1,5 @@
-import { DaemonServer, type DaemonServerOptions } from './daemon-server'
+import { DaemonServer } from './daemon-server'
+import type { DaemonServerOptions } from './daemon-server-options'
 import type { DaemonFileLog } from './daemon-file-log'
 
 export type DaemonStartOptions = {
@@ -7,12 +8,19 @@ export type DaemonStartOptions = {
   pidPath?: string
   launchNonce?: string
   startedAtMs?: number
+  publishEndpointOwnership?: DaemonServerOptions['publishEndpointOwnership']
+  entryPath?: string
+  appVersion?: string
+  spawnerExecPath?: string
   /** Direct-construction seam for versioned protocol fixtures; never CLI/env configured. */
   protocolVersion?: number
   spawnSubprocess: DaemonServerOptions['spawnSubprocess']
   preparePtySpawn?: DaemonServerOptions['preparePtySpawn']
+  onPtySessionExit?: DaemonServerOptions['onPtySessionExit']
+  onAuthenticatedClientPair?: DaemonServerOptions['onAuthenticatedClientPair']
   log?: DaemonFileLog
   onIdleShutdown?: () => void
+  onRpcShutdown?: () => void
   initialAdoptionTestConfig?: DaemonServerOptions['initialAdoptionTestConfig']
 }
 
@@ -27,11 +35,22 @@ export async function startDaemon(opts: DaemonStartOptions): Promise<DaemonHandl
     ...(opts.pidPath ? { pidPath: opts.pidPath } : {}),
     ...(opts.launchNonce ? { launchNonce: opts.launchNonce } : {}),
     ...(opts.startedAtMs ? { startedAtMs: opts.startedAtMs } : {}),
+    ...(opts.publishEndpointOwnership
+      ? { publishEndpointOwnership: opts.publishEndpointOwnership }
+      : {}),
+    ...(opts.entryPath ? { entryPath: opts.entryPath } : {}),
+    ...(opts.appVersion ? { appVersion: opts.appVersion } : {}),
+    ...(opts.spawnerExecPath ? { spawnerExecPath: opts.spawnerExecPath } : {}),
     ...(opts.protocolVersion !== undefined ? { protocolVersion: opts.protocolVersion } : {}),
     spawnSubprocess: opts.spawnSubprocess,
     ...(opts.preparePtySpawn ? { preparePtySpawn: opts.preparePtySpawn } : {}),
+    ...(opts.onPtySessionExit ? { onPtySessionExit: opts.onPtySessionExit } : {}),
+    ...(opts.onAuthenticatedClientPair
+      ? { onAuthenticatedClientPair: opts.onAuthenticatedClientPair }
+      : {}),
     ...(opts.log ? { log: opts.log } : {}),
     ...(opts.onIdleShutdown ? { onIdleShutdown: opts.onIdleShutdown } : {}),
+    ...(opts.onRpcShutdown ? { onRpcShutdown: opts.onRpcShutdown } : {}),
     ...(opts.initialAdoptionTestConfig
       ? { initialAdoptionTestConfig: opts.initialAdoptionTestConfig }
       : {})

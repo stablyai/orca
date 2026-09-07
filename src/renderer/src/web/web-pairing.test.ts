@@ -32,6 +32,23 @@ describe('web pairing input', () => {
     })
   })
 
+  it('preserves optional paired device identity', () => {
+    expect(
+      parseWebPairingInput(`orca://pair?code=${encodeOffer({ pairedDeviceId: 'paired-device-a' })}`)
+    ).toEqual({
+      ...offer,
+      pairedDeviceId: 'paired-device-a'
+    })
+  })
+
+  it.each([
+    ['wss://proxy.example:443/orca/runtime', 'wss://proxy.example:443/orca/runtime'],
+    ['https://proxy.example/orca/runtime', 'wss://proxy.example/orca/runtime'],
+    ['http://proxy.example:8080/orca/runtime', 'ws://proxy.example:8080/orca/runtime']
+  ])('preserves reverse-proxy endpoint routing for %s', (endpoint, expected) => {
+    expect(parseWebPairingInput(encodeOffer({ endpoint }))).toMatchObject({ endpoint: expected })
+  })
+
   it('treats invalid device scope metadata as unknown', () => {
     expect(parseWebPairingInput(`orca://pair?code=${encodeOffer({ scope: 'admin' })}`)).toEqual(
       offer

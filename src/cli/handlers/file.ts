@@ -1,5 +1,7 @@
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
-import type { RuntimeFileOpenResult } from '../../shared/runtime-types'
+import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
+import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
@@ -43,6 +45,60 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
     )
   }
   return await resolveCurrentWorktreeSelector(cwd, client)
+}
+
+/**
+ * Why: a WSL workspace stores its worktree root as a Windows UNC path while the
+ * user types the Linux path they see inside the distro, so the two never match
+ * (#11393). Only the distro the caller is sitting in can name that Linux path, and
+ * only a UNC root wants the rewrite — a POSIX root already matches, so rewriting
+ * it would strand every absolute path.
+ *
+ * Backslash is a legal Linux filename character but a separator once the path
+ * reads as UNC, so `a\b.ts` would relativize to a different file, `a/b.ts`.
+ * Such a path has no Windows spelling; leave it to fail the match instead.
+ */
+function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): string {
+  // Why: WSL_DISTRO_NAME reaches this process only if interop forwards it, but the
+  // WSL launcher always sets ORCA_CLI_CWD, and its UNC form names the distro itself.
+  const distro = process.env.WSL_DISTRO_NAME || parseWslUncPath(cwd)?.distro
+  if (
+    !distro ||
+    !path.startsWith('/') ||
+    path.startsWith('//') ||
+    path.includes('\\') ||
+    !isWslUncPath(rootPath)
+  ) {
+    return path
+  }
+  return toWindowsWslPath(path, distro)
+}
+
+async function resolveFilePath(
+  ctx: HandlerContext,
+  worktree: string,
+  path: string
+): Promise<string> {
+  if (!isRuntimePathAbsolute(path)) {
+    return path
+  }
+  // Why: only in-worktree absolute paths should be relativized here; outside paths must reach the runtime guard unchanged.
+  const result = await ctx.client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+    worktree
+  })
+
+  const rootPath = result.result.worktree.path
+  const relativePath = relativePathInsideRoot(
+    rootPath,
+    toWorktreeRootPathFlavor(rootPath, ctx.cwd, path)
+  )
+  if (relativePath === '') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'The selected worktree root is a directory, not a file-open target.'
+    )
+  }
+  return relativePath ?? path
 }
 
 function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMode {
@@ -137,8 +193,9 @@ function formatFileDiff(result: RuntimeFileOpenResult): string {
 
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
   'file open': async (ctx) => {
-    const relativePath = getRequiredStringFlag(ctx.flags, 'path')
+    const path = getRequiredStringFlag(ctx.flags, 'path')
     const worktree = await getFileWorktreeSelector(ctx)
+    const relativePath = await resolveFilePath(ctx, worktree, path)
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
       worktree,
       relativePath
@@ -146,9 +203,10 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, ctx.json, formatFileOpen)
   },
   'file diff': async (ctx) => {
-    const relativePath = getRequiredStringFlag(ctx.flags, 'path')
+    const path = getRequiredStringFlag(ctx.flags, 'path')
     const staged = ctx.flags.get('staged') === true
     const worktree = await getFileWorktreeSelector(ctx)
+    const relativePath = await resolveFilePath(ctx, worktree, path)
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.openDiff', {
       worktree,
       relativePath,

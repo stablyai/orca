@@ -7,18 +7,18 @@ import type {
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 import {
+  agentLaunchCreateFields,
   buildTaskWorkspaceCreateParams,
   type WorkspaceCreateSetupDecision,
   type WorkspaceCreateTaskItem
 } from './workspace-create-params'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
+import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 
-// The agent bundle the modal already resolved: the choice drives
-// buildTaskWorkspaceCreateParams for work-item sources; the explicit launch
-// command is used for branch sources (which have no work-item URL to seed the draft).
+// The agent bundle the modal resolved: `choice` drives launch resolution — the
+// host applies the agent's launch args (permission flags) and shell quoting.
 export type WorkspaceCreateAgentBundle = {
   choice: WorkspaceAgentChoice
-  startupCommand: string | undefined
 }
 
 export type CreateWorkspaceFromComposerArgs = {
@@ -28,9 +28,9 @@ export type CreateWorkspaceFromComposerArgs = {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
-  note: string | undefined
   nameIsAutoManaged?: boolean
-  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
+  note: string | undefined
+  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }
 
 export async function createWorkspaceFromComposerSource(
@@ -91,9 +91,9 @@ async function createWorkItemWorkspace(args: {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
-  note: string | undefined
   nameIsAutoManaged?: boolean
-  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
+  note: string | undefined
+  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item
@@ -138,7 +138,7 @@ async function createWorkItemWorkspace(args: {
   return createWorktreeWithNameRetry({
     client,
     baseName,
-    supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
+    worktreeCreateIdempotency: args.worktreeCreateIdempotency,
     buildParams: (name) => ({ ...params, name })
   })
 }
@@ -150,16 +150,25 @@ async function createBranchWorkspace(args: {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
+  nameIsAutoManaged?: boolean
   note: string | undefined
-  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
+  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }): Promise<WorktreeCreateResult> {
-  const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
+  const {
+    client,
+    selection,
+    targetRepoId,
+    setupDecision,
+    agent,
+    workspaceName,
+    nameIsAutoManaged,
+    note
+  } = args
   const createdWithAgentId = agent.choice === 'blank' ? undefined : agent.choice
   const comment = note?.trim()
+  const manualDisplayName = nameIsAutoManaged === true ? undefined : workspaceName?.trim()
   const applyCommon = (params: Record<string, unknown>): Record<string, unknown> => {
-    if (createdWithAgentId) {
-      params.createdWithAgent = createdWithAgentId
-    }
+    Object.assign(params, agentLaunchCreateFields(createdWithAgentId))
     if (comment) {
       params.comment = comment
     }
@@ -177,16 +186,18 @@ async function createBranchWorkspace(args: {
     return createWorktreeWithNameRetry({
       client,
       baseName,
-      supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
+      worktreeCreateIdempotency: args.worktreeCreateIdempotency,
       maxAttempts: 1,
       buildParams: (name) =>
         applyCommon({
           repo: `id:${targetRepoId}`,
           name,
+          ...(manualDisplayName
+            ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
+            : {}),
           setupDecision,
           baseBranch: selection.refName,
-          branchNameOverride: selection.localBranchName,
-          startupCommand: agent.startupCommand
+          branchNameOverride: selection.localBranchName
         })
     })
   }
@@ -200,14 +211,16 @@ async function createBranchWorkspace(args: {
   return createWorktreeWithNameRetry({
     client,
     baseName,
-    supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
+    worktreeCreateIdempotency: args.worktreeCreateIdempotency,
     buildParams: (candidate) => {
       const params: Record<string, unknown> = {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
         baseBranch: selection.baseBranch,
-        startupCommand: agent.startupCommand
+        ...(manualDisplayName
+          ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
+          : {})
       }
       if (selection.branchNameOverride) {
         params.branchNameOverride = candidate
@@ -224,11 +237,22 @@ async function createNewBranchWorkspace(args: {
   setupDecision: WorkspaceCreateSetupDecision
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
+  nameIsAutoManaged?: boolean
   note: string | undefined
-  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
+  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }): Promise<WorktreeCreateResult> {
-  const { client, selection, targetRepoId, setupDecision, agent, note } = args
+  const {
+    client,
+    selection,
+    targetRepoId,
+    setupDecision,
+    agent,
+    workspaceName,
+    nameIsAutoManaged,
+    note
+  } = args
   const createdWithAgentId = agent.choice === 'blank' ? undefined : agent.choice
+  const manualDisplayName = nameIsAutoManaged === true ? undefined : workspaceName?.trim()
   const comment = note?.trim()
   // A brand-new branch off the repo's default base. The typed name is kept as the
   // git branch (via branchNameOverride) so a slash like `feature/login` survives;
@@ -237,17 +261,17 @@ async function createNewBranchWorkspace(args: {
   return createWorktreeWithNameRetry({
     client,
     baseName: selection.branchName,
-    supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
+    worktreeCreateIdempotency: args.worktreeCreateIdempotency,
     buildParams: (candidate) => {
       const params: Record<string, unknown> = {
         repo: `id:${targetRepoId}`,
         name: candidate,
         setupDecision,
         branchNameOverride: candidate,
-        startupCommand: agent.startupCommand
-      }
-      if (createdWithAgentId) {
-        params.createdWithAgent = createdWithAgentId
+        ...(manualDisplayName
+          ? { displayName: manualDisplayName, displayNameKind: 'user' as const }
+          : {}),
+        ...agentLaunchCreateFields(createdWithAgentId)
       }
       if (comment) {
         params.comment = comment

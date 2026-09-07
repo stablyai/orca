@@ -1,11 +1,13 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './helpers/orca-app'
-import { ensureTerminalVisible } from './helpers/store'
+import { ensureTerminalVisible, getActiveWorktreeId, switchToWorktree } from './helpers/store'
 import {
   getTerminalContent,
+  readPaneIdentitySnapshot,
   splitActiveTerminalPane,
+  UUID_RE,
   waitForActiveTerminalManager,
-  waitForPaneIdentitySnapshot
+  type PaneIdentitySnapshot
 } from './helpers/terminal'
 
 export type TerminalLoadPane = {
@@ -52,21 +54,93 @@ export async function focusPane(page: Page, paneKey: string): Promise<void> {
   )
 }
 
+export async function waitForTerminalPtyVisible(
+  page: Page,
+  ptyId: string,
+  timeoutMs = 10_000
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate((targetPtyId) => {
+          for (const manager of window.__paneManagers?.values() ?? []) {
+            const pane = manager
+              .getPanes?.()
+              .find((candidate) => candidate.container.dataset.ptyId === targetPtyId)
+            if (pane) {
+              return pane.container.isConnected && pane.container.getClientRects().length > 0
+            }
+          }
+          return false
+        }, ptyId),
+      {
+        timeout: timeoutMs,
+        message: `Terminal PTY ${ptyId} did not become visible`
+      }
+    )
+    .toBe(true)
+}
+
 export async function ensureActiveWorktreePaneLoad(
   page: Page,
   paneCount: number
 ): Promise<TerminalLoadPane[]> {
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
-  let snapshot = await waitForPaneIdentitySnapshot(page, 1)
+  const worktreeId = await getActiveWorktreeId(page)
+  if (!worktreeId) {
+    throw new Error('Active worktree is unavailable for terminal pane load')
+  }
+  let snapshot = await waitForActiveWorktreePaneLoad(page, worktreeId, 1)
   while (snapshot.panes.length < paneCount) {
     await splitActiveTerminalPane(page, snapshot.panes.length % 2 === 0 ? 'horizontal' : 'vertical')
-    snapshot = await waitForPaneIdentitySnapshot(page, snapshot.panes.length + 1)
+    snapshot = await waitForActiveWorktreePaneLoad(page, worktreeId, snapshot.panes.length + 1)
   }
   return snapshot.panes.slice(0, paneCount).map((pane) => ({
     paneKey: `${snapshot.tabId}:${pane.leafId}`,
     ptyId: pane.ptyId ?? ''
   }))
+}
+
+async function waitForActiveWorktreePaneLoad(
+  page: Page,
+  worktreeId: string,
+  paneCount: number
+): Promise<PaneIdentitySnapshot> {
+  let snapshot: PaneIdentitySnapshot | null = null
+  await expect
+    .poll(
+      async () => {
+        if ((await getActiveWorktreeId(page)) !== worktreeId) {
+          // Why: late session reconciliation can clear selection while split PTYs bind.
+          await switchToWorktree(page, worktreeId)
+          await ensureTerminalVisible(page)
+          await waitForActiveTerminalManager(page, 30_000)
+        }
+        snapshot = await readPaneIdentitySnapshot(page)
+        return Boolean(
+          snapshot &&
+          snapshot.panes.length === paneCount &&
+          snapshot.panes.every(
+            (pane) =>
+              UUID_RE.test(pane.leafId) &&
+              pane.stablePaneId === pane.leafId &&
+              pane.datasetLeafId === pane.leafId &&
+              pane.ptyId !== null &&
+              snapshot?.ptyIdsByLeafId[pane.leafId] === pane.ptyId
+          )
+        )
+      },
+      {
+        timeout: 15_000,
+        message: 'Artificial load panes did not settle with stable PTY bindings'
+      }
+    )
+    .toBe(true)
+  if (!snapshot) {
+    throw new Error('Artificial load pane snapshot is unavailable')
+  }
+  return snapshot
 }
 
 export async function waitForMarkerLatency(

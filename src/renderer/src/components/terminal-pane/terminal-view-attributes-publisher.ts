@@ -9,7 +9,7 @@
  * are app-global, so identical snapshots publish once.
  */
 import type { ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalColorSchemeMode } from '../../../../shared/terminal-color-scheme-protocol'
 import type {
   TerminalViewAttributes,

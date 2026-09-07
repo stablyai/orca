@@ -4,7 +4,7 @@ export type IntegrationStatusTone = 'connected' | 'attention' | 'neutral'
 
 const TONE_CLASSES: Record<IntegrationStatusTone, { pill: string; dot: string }> = {
   connected: {
-    pill: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
+    pill: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
     dot: 'bg-emerald-500'
   },
   attention: {

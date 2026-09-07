@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Project } from '../../../shared/types'
+import type { Project } from '../../../shared/project-types'
 import { getProjectHostCloneUrl } from './project-host-clone-url'
 
 function createProject(overrides: Partial<Project> = {}): Project {

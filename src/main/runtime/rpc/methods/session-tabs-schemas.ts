@@ -1,9 +1,10 @@
 import { z } from 'zod'
 import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal-quick-commands'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
+import { TAB_ACTIVATION_INTENTS } from '../../../../shared/tab-activation-intent'
 import { OptionalBoolean } from '../schemas'
 
 export const WorktreeTabSelector = z.object({
@@ -24,7 +25,22 @@ export const ActivateTab = WorktreeTabSelector.extend({
     .pipe(z.string().min(1, 'Missing tab id')),
   leafId: z.string().max(128).optional(),
   notifyClients: OptionalBoolean,
-  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
+  // Why: absent means user intent, so clients that predate this field keep the
+  // tab-open wake gesture. Only 'automatic' may be refused for a slept pane.
+  intent: z.enum(TAB_ACTIVATION_INTENTS).optional()
+})
+
+export const CloseTab = ActivateTab.extend({
+  // Why: optional preserves authenticated legacy user closes; lifecycle intent
+  // uses the additive evidence-bearing method instead.
+  reason: z.literal('user').optional()
+})
+
+export const CloseLifecycleTab = ActivateTab.extend({
+  reason: z.enum(['pty-exit', 'cleanup']),
+  publicationEpoch: z.string().min(1).max(128),
+  terminal: z.string().min(1).max(256)
 })
 
 export type TerminalPaneLayoutNodeInput =
@@ -69,7 +85,10 @@ function parseTerminalPaneLayoutNode(value: unknown): TerminalPaneLayoutNodeInpu
       }
       if (
         node.ratio !== undefined &&
-        (typeof node.ratio !== 'number' || node.ratio < 0 || node.ratio > 1)
+        (typeof node.ratio !== 'number' ||
+          !Number.isFinite(node.ratio) ||
+          node.ratio < 0 ||
+          node.ratio > 1)
       ) {
         return null
       }
@@ -81,7 +100,7 @@ function parseTerminalPaneLayoutNode(value: unknown): TerminalPaneLayoutNodeInpu
   return value as TerminalPaneLayoutNodeInput
 }
 
-const TerminalPaneLayoutNodeSchema = z
+export const TerminalPaneLayoutNodeSchema = z
   .unknown()
   .transform((value) => parseTerminalPaneLayoutNode(value))
   .pipe(

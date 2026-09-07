@@ -130,6 +130,9 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
           staged: item.scope === 'staged'
         })
   if (!response.ok) {
+    if (response.error?.code === 'diff_too_large') {
+      return { kind: 'too-large', itemKey: item.key }
+    }
     if (item.status === 'deleted') {
       return { kind: 'deleted', itemKey: item.key }
     }

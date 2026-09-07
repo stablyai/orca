@@ -57,12 +57,10 @@ export async function getWorktreeTabs(
     }
 
     const state = store.getState()
-    return (state.tabsByWorktree[worktreeId] ?? []).map(
-      (tab): TerminalTabSummary => ({
-        id: tab.id,
-        title: tab.customTitle || tab.title
-      })
-    )
+    return (state.tabsByWorktree[worktreeId] ?? []).map((tab): TerminalTabSummary => ({
+      id: tab.id,
+      title: tab.customTitle || tab.title
+    }))
   }, worktreeId)
 }
 
@@ -116,13 +114,11 @@ export async function getBrowserTabs(
     }
 
     const state = store.getState()
-    return (state.browserTabsByWorktree[worktreeId] ?? []).map(
-      (tab): BrowserTabSummary => ({
-        id: tab.id,
-        url: tab.url,
-        title: tab.title
-      })
-    )
+    return (state.browserTabsByWorktree[worktreeId] ?? []).map((tab): BrowserTabSummary => ({
+      id: tab.id,
+      url: tab.url,
+      title: tab.title
+    }))
   }, worktreeId)
 }
 
@@ -140,13 +136,11 @@ export async function getOpenFiles(
     const state = store.getState()
     return state.openFiles
       .filter((file) => file.worktreeId === worktreeId)
-      .map(
-        (file): ExplorerFileSummary => ({
-          id: file.id,
-          filePath: file.filePath,
-          relativePath: file.relativePath
-        })
-      )
+      .map((file): ExplorerFileSummary => ({
+        id: file.id,
+        filePath: file.filePath,
+        relativePath: file.relativePath
+      }))
   }, worktreeId)
 }
 
@@ -156,6 +150,22 @@ export async function waitForSessionReady(page: Page, timeoutMs = 30_000): Promi
     .poll(async () => getStoreState<boolean>(page, 'workspaceSessionReady'), {
       timeout: timeoutMs,
       message: 'workspaceSessionReady did not become true'
+    })
+    .toBe(true)
+}
+
+/**
+ * Wait until the deferred startup worktree scan has completed.
+ *
+ * Why: hydration fires an unawaited full catalog refresh after
+ * `workspaceSessionReady`; a fixture seeded before it lands is silently
+ * overwritten when it does.
+ */
+export async function waitForStartupWorktreeRefresh(page: Page, timeoutMs = 60_000): Promise<void> {
+  await expect
+    .poll(async () => getStoreState<boolean>(page, 'startupWorktreeRefreshCompleted'), {
+      timeout: timeoutMs,
+      message: 'startupWorktreeRefreshCompleted did not become true'
     })
     .toBe(true)
 }

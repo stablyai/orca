@@ -2,6 +2,25 @@ import { slowTaskRequiredIdleMs, type SlowTaskBackoffOptions } from './coalesced
 
 export type GitStatusRefreshReason = 'activity' | 'safety'
 
+// Why: run pacing must be shareable across scheduler instances — a rebuild
+// (execution-host or push-target change) that resets it lets sustained change
+// signals run git at the bare debounce, bypassing the #7983 floor.
+export type GitStatusRefreshPacing = {
+  lastRunEndedAt: number
+  lastRunDurationMs: number
+  nextRunId: number
+  latestFinishedRunId: number
+}
+
+export function createGitStatusRefreshPacing(): GitStatusRefreshPacing {
+  return {
+    lastRunEndedAt: -Infinity,
+    lastRunDurationMs: 0,
+    nextRunId: 0,
+    latestFinishedRunId: 0
+  }
+}
+
 export type GitStatusRefreshScheduler = {
   resumeSafety: () => void
   pause: () => void
@@ -27,6 +46,7 @@ export function createGitStatusRefreshScheduler(
     // task backoff when the previous scan itself was slow.
     activityMinGapMs: number
     slowTaskBackoff: SlowTaskBackoffOptions
+    pacing?: GitStatusRefreshPacing
   }
 ): GitStatusRefreshScheduler {
   let disposed = false
@@ -37,8 +57,7 @@ export function createGitStatusRefreshScheduler(
   let activityTimerFiresAt = Infinity
   let safetyTimer: ReturnType<typeof setTimeout> | null = null
   let activeController: AbortController | null = null
-  let lastRunEndedAt = -Infinity
-  let lastRunDurationMs = 0
+  const pacing = options.pacing ?? createGitStatusRefreshPacing()
 
   const clearActivityTimer = (): void => {
     if (activityTimer !== null) {
@@ -56,7 +75,7 @@ export function createGitStatusRefreshScheduler(
 
   const requiredActivityIdleMs = (): number =>
     slowTaskRequiredIdleMs(
-      lastRunDurationMs,
+      pacing.lastRunDurationMs,
       options.slowTaskBackoff.changeSignalMultiplier,
       options.activityMinGapMs,
       options.slowTaskBackoff.maxIntervalMs
@@ -68,7 +87,7 @@ export function createGitStatusRefreshScheduler(
     const delay = Math.max(
       options.safetyIntervalMs,
       slowTaskRequiredIdleMs(
-        lastRunDurationMs,
+        pacing.lastRunDurationMs,
         options.slowTaskBackoff.idleMultiplier,
         0,
         options.slowTaskBackoff.maxIntervalMs
@@ -91,7 +110,7 @@ export function createGitStatusRefreshScheduler(
       return
     }
     const now = Date.now()
-    const delay = Math.max(minDelayMs, lastRunEndedAt + requiredActivityIdleMs() - now)
+    const delay = Math.max(minDelayMs, pacing.lastRunEndedAt + requiredActivityIdleMs() - now)
     if (delay <= 0) {
       startRun('activity')
       return
@@ -121,6 +140,7 @@ export function createGitStatusRefreshScheduler(
     clearSafetyTimer()
     inFlight = true
     const startedAt = Date.now()
+    const runId = ++pacing.nextRunId
     const controller = new AbortController()
     activeController = controller
     let result: Promise<void>
@@ -134,12 +154,17 @@ export function createGitStatusRefreshScheduler(
         // Status refresh errors are transient; the next signal or safety run retries.
       })
       .finally(() => {
-        lastRunEndedAt = Date.now()
-        // Why: cancelled scans never delivered a useful result, so their wall
-        // time must not stretch the next activity/safety gap. Otherwise hide →
-        // reveal after a slow abort waits out the aborted scan's full duration
-        // before the catch-up refresh can start.
-        lastRunDurationMs = controller.signal.aborted ? 0 : Math.max(0, lastRunEndedAt - startedAt)
+        if (runId > pacing.latestFinishedRunId) {
+          pacing.latestFinishedRunId = runId
+          pacing.lastRunEndedAt = Date.now()
+          // Why: cancelled scans never delivered a useful result, so their wall
+          // time must not stretch the next activity/safety gap. Otherwise hide →
+          // reveal after a slow abort waits out the aborted scan's full duration
+          // before the catch-up refresh can start.
+          pacing.lastRunDurationMs = controller.signal.aborted
+            ? 0
+            : Math.max(0, pacing.lastRunEndedAt - startedAt)
+        }
         if (activeController === controller) {
           activeController = null
         }

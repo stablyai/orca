@@ -1,4 +1,5 @@
-import type { GlobalSettings, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { lookupReposBySlugFromCache } from '@/lib/repo-slug-cache'
 

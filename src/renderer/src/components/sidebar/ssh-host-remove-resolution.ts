@@ -1,4 +1,5 @@
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 /**

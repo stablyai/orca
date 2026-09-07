@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ActivateTab, UpdatePaneLayout } from './session-tabs-schemas'
+import { ActivateTab, CloseLifecycleTab, CloseTab, UpdatePaneLayout } from './session-tabs-schemas'
 
 const WT = 'id:wt'
 
@@ -10,6 +10,65 @@ describe('ActivateTab.navigation', () => {
     )
     expect(
       ActivateTab.safeParse({ worktree: WT, tabId: 'tab', navigation: 'others' }).success
+    ).toBe(false)
+  })
+})
+
+describe('CloseTab (session.tabs.close params)', () => {
+  it('accepts only explicit user intent on the legacy close method', () => {
+    const parsed = CloseTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'user' })
+    expect(parsed).toMatchObject({ tabId: 'tab-1', reason: 'user' })
+    expect(CloseTab.safeParse({ worktree: WT, tabId: 'tab-1', reason: 'pty-exit' }).success).toBe(
+      false
+    )
+    expect(CloseTab.safeParse({ worktree: WT, tabId: 'tab-1', reason: 'cleanup' }).success).toBe(
+      false
+    )
+  })
+
+  it('accepts a reasonless payload from legacy clients', () => {
+    // Why: parsing remains compatible; the RPC policy, not the schema, refuses missing intent.
+    const parsed = CloseTab.parse({ worktree: WT, tabId: 'tab-1' })
+    expect(parsed.tabId).toBe('tab-1')
+    expect(parsed.reason).toBeUndefined()
+  })
+
+  it('keeps a new explicit-user payload parseable by the previous server schema', () => {
+    // Why: old hosts use ActivateTab here and must strip the additive field,
+    // not reject a manual close from an updated client.
+    const parsed = ActivateTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'user' })
+    expect(parsed).toEqual({ worktree: WT, tabId: 'tab-1' })
+  })
+
+  it('rejects an unknown close reason', () => {
+    expect(() =>
+      CloseTab.parse({ worktree: WT, tabId: 'tab-1', reason: 'transport-glitch' })
+    ).toThrow()
+  })
+})
+
+describe('CloseLifecycleTab (session.tabs.closeLifecycle params)', () => {
+  it('requires lifecycle intent and incarnation evidence', () => {
+    expect(
+      CloseLifecycleTab.parse({
+        worktree: WT,
+        tabId: 'tab-1',
+        reason: 'pty-exit',
+        publicationEpoch: 'epoch-1',
+        terminal: 'term-1'
+      })
+    ).toMatchObject({ reason: 'pty-exit', publicationEpoch: 'epoch-1', terminal: 'term-1' })
+    expect(
+      CloseLifecycleTab.safeParse({ worktree: WT, tabId: 'tab-1', reason: 'pty-exit' }).success
+    ).toBe(false)
+    expect(
+      CloseLifecycleTab.safeParse({
+        worktree: WT,
+        tabId: 'tab-1',
+        reason: 'user',
+        publicationEpoch: 'epoch-1',
+        terminal: 'term-1'
+      }).success
     ).toBe(false)
   })
 })

@@ -85,6 +85,7 @@ vi.mock('./github-enterprise-repository', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: vi.fn(() => 0),
   getSshGitProvider: vi.fn()
 }))
 
@@ -225,10 +226,23 @@ describe('GitHub PR local runtime routing', () => {
         return { stdout: '[]' }
       }
       if (endpoint.endsWith('/pulls/7/comments/11/replies')) {
-        return { stdout: JSON.stringify({ id: 12, user: null, body: 'Reply' }) }
+        return {
+          stdout: JSON.stringify({ id: 12, node_id: 'PRRC_reply_12', user: null, body: 'Reply' })
+        }
       }
       if (endpoint.endsWith('/pulls/7/comments')) {
-        return { stdout: JSON.stringify({ id: 13, user: null, body: 'Inline' }) }
+        return {
+          stdout: JSON.stringify({ id: 13, node_id: 'PRRC_inline_13', user: null, body: 'Inline' })
+        }
+      }
+      if (args.length === 2 && endpoint === 'repos/acme/orca/pulls/7') {
+        return {
+          stdout: JSON.stringify({
+            number: 7,
+            head: { ref: 'feature', sha: 'head-oid' },
+            base: { ref: 'main', sha: 'base-oid' }
+          })
+        }
       }
       return { stdout: '', stderr: '' }
     })
@@ -250,7 +264,10 @@ describe('GitHub PR local runtime routing', () => {
         prRepo,
         localGitOptions
       )
-    ).resolves.toMatchObject({ ok: true })
+    ).resolves.toMatchObject({
+      ok: true,
+      comment: { reactionSubjectId: 'PRRC_reply_12' }
+    })
     await expect(
       addPRReviewComment({
         repoPath: '/repo-root',
@@ -263,7 +280,10 @@ describe('GitHub PR local runtime routing', () => {
         path: 'src/app.ts',
         line: 10
       })
-    ).resolves.toMatchObject({ ok: true })
+    ).resolves.toMatchObject({
+      ok: true,
+      comment: { reactionSubjectId: 'PRRC_inline_13' }
+    })
     await expect(
       updatePRTitle('/repo-root', 7, 'New title', null, prRepo, localGitOptions)
     ).resolves.toBe(true)
@@ -363,11 +383,11 @@ describe('GitHub PR local runtime routing', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
-  it('host-qualifies SSH-backed GitHub Enterprise review reads and mutations', async () => {
+  it('preserves a ported GHES host in SSH-backed review reads and mutations', async () => {
     const enterpriseRepo = {
       owner: 'team',
       repo: 'orca',
-      host: 'github.acme-corp.com'
+      host: 'github.acme-corp.com:8443'
     }
     getOwnerRepoMock.mockResolvedValue(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(enterpriseRepo)
@@ -392,7 +412,7 @@ describe('GitHub PR local runtime routing', () => {
             number: 7,
             title: 'Enterprise PR',
             state: 'OPEN',
-            url: 'https://github.acme-corp.com/team/orca/pull/7',
+            url: 'https://github.acme-corp.com:8443/team/orca/pull/7',
             labels: [],
             updatedAt: '2026-07-16T00:00:00Z',
             author: { login: 'pr-author' },
@@ -430,7 +450,7 @@ describe('GitHub PR local runtime routing', () => {
                 name: 'lint',
                 status: 'completed',
                 conclusion: 'failure',
-                details_url: 'https://github.acme-corp.com/team/orca/actions/runs/77/job/88'
+                details_url: 'https://github.acme-corp.com:8443/team/orca/actions/runs/77/job/88'
               }
             ]
           })
@@ -449,13 +469,22 @@ describe('GitHub PR local runtime routing', () => {
             name: 'lint',
             status: 'completed',
             conclusion: 'failure',
-            details_url: 'https://github.acme-corp.com/team/orca/actions/runs/77/job/88',
+            details_url: 'https://github.acme-corp.com:8443/team/orca/actions/runs/77/job/88',
             output: { title: 'Lint failed', summary: 'One error' }
           })
         }
       }
       if (endpoint.endsWith('/check-runs/88/annotations?per_page=20')) {
         return { stdout: '[]' }
+      }
+      if (args.length === 2 && endpoint === 'repos/team/orca/pulls/7') {
+        return {
+          stdout: JSON.stringify({
+            number: 7,
+            head: { ref: 'feature', sha: 'head-sha' },
+            base: { ref: 'main', sha: 'base-sha' }
+          })
+        }
       }
       if (query) {
         return { stdout: JSON.stringify({ data: { repository: {} } }) }
@@ -557,7 +586,7 @@ describe('GitHub PR local runtime routing', () => {
     // The runner host-qualifies argv at spawn time from options.host, so the
     // mocked call sees the unqualified --repo plus the host in exec options.
     expect(prViewCall?.[0]).toEqual(expect.arrayContaining(['--repo', 'team/orca']))
-    expect(prViewCall?.[1]).toEqual({ host: 'github.acme-corp.com' })
+    expect(prViewCall?.[1]).toEqual({ host: 'github.acme-corp.com:8443' })
     const prCalls = ghExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'pr')
     expect(
       prCalls.every(
@@ -570,7 +599,7 @@ describe('GitHub PR local runtime routing', () => {
       apiCalls.every(
         ([args, options]) =>
           !args.includes('--hostname') &&
-          options.host === 'github.acme-corp.com' &&
+          options.host === 'github.acme-corp.com:8443' &&
           options.cwd === undefined &&
           options.wslDistro === undefined
       )

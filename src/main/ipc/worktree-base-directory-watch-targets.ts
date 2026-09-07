@@ -3,7 +3,8 @@ import { realpath, stat } from 'node:fs/promises'
 import type { Stats } from 'node:fs'
 import type { Store } from '../persistence'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
-import type { GlobalSettings, Repo } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import {
@@ -14,7 +15,9 @@ import {
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import { getWorktreeMirrorDistro } from '../project-runtime-git-options'
 import {
   computeWorkspaceRoot,
   getWorktreePathSettings,
@@ -30,6 +33,9 @@ import type {
 
 const missingRootWarnings = new Set<string>()
 const skippedWslWarnings = new Set<string>()
+
+// Why: match existing worktree probe caps while bounding aggregate SSH filesystem RPC pressure.
+export const WORKTREE_BASE_TARGET_RESOLUTION_CONCURRENCY = 8
 
 function normalizeWatchKey(pathValue: string): string {
   return normalizeRuntimePathForComparison(normalize(pathValue))
@@ -120,25 +126,21 @@ function getBaseWatchLayout(
   }
 }
 
+function warnSkippedWslRoot(repoId: string, workspaceRoot: string): void {
+  if (shouldEmitBoundedWarning(skippedWslWarnings, `${repoId}:${workspaceRoot}`)) {
+    console.warn(`[worktree-base-watcher] skipping WSL worktree root watcher for ${workspaceRoot}`)
+  }
+}
+
 async function maybeAddBaseTarget(
   targets: Map<string, WorktreeBaseWatchTarget>,
   repo: Repo,
   settings: GlobalSettings,
+  mirrorDistro: string | undefined,
   connectionId?: string
 ): Promise<void> {
-  const pathSettings = getWorktreePathSettings(repo, settings)
+  const pathSettings = getWorktreePathSettings(repo, settings, mirrorDistro)
   const { workspaceRoot, nestWorkspaces } = getBaseWatchLayout(repo, pathSettings, connectionId)
-  // Why: WSL UNC roots are unreliable for native watching; avoid project-level polling.
-  if (isWslUncPath(workspaceRoot) || isWslUncPath(repo.path)) {
-    const key = `${repo.id}:${workspaceRoot}`
-    if (shouldEmitBoundedWarning(skippedWslWarnings, key)) {
-      console.warn(
-        `[worktree-base-watcher] skipping WSL worktree root watcher for ${workspaceRoot}`
-      )
-    }
-    return
-  }
-
   const config = {
     repoId: repo.id,
     repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
@@ -148,17 +150,28 @@ async function maybeAddBaseTarget(
   if (connectionId && !remoteProvider) {
     return
   }
-  try {
-    const rootStat = remoteProvider
-      ? await remoteProvider.stat(workspaceRoot)
-      : await stat(workspaceRoot)
-    if (isDirectoryStat(rootStat)) {
-      await addTarget(targets, 'base', workspaceRoot, config, connectionId)
-    }
-  } catch {
-    const key = normalizeWatchKey(workspaceRoot)
-    if (shouldEmitBoundedWarning(missingRootWarnings, key)) {
-      console.warn(`[worktree-base-watcher] worktree root unavailable: ${workspaceRoot}`)
+  // Why: WSL UNC paths are unreliable for native watching. A repo inside the
+  // distro has nothing watchable at all; a Windows-drive repo whose worktrees
+  // are mirrored into the distro still has its gitdir on the Windows side.
+  if (isWslUncPath(repo.path)) {
+    warnSkippedWslRoot(repo.id, workspaceRoot)
+    return
+  }
+  if (isWslUncPath(workspaceRoot)) {
+    warnSkippedWslRoot(repo.id, workspaceRoot)
+  } else {
+    try {
+      const rootStat = remoteProvider
+        ? await remoteProvider.stat(workspaceRoot)
+        : await stat(workspaceRoot)
+      if (isDirectoryStat(rootStat)) {
+        await addTarget(targets, 'base', workspaceRoot, config, connectionId)
+      }
+    } catch {
+      const key = normalizeWatchKey(workspaceRoot)
+      if (shouldEmitBoundedWarning(missingRootWarnings, key)) {
+        console.warn(`[worktree-base-watcher] worktree root unavailable: ${workspaceRoot}`)
+      }
     }
   }
 
@@ -171,8 +184,42 @@ async function maybeAddBaseTarget(
         }
       : undefined
   )
-  if (commonDir) {
+  if (commonDir && !isWslUncPath(commonDir)) {
     await addTarget(targets, 'git-common', commonDir, config, connectionId)
+  }
+}
+
+async function resolveRepoTargets(
+  repo: Repo,
+  settings: GlobalSettings,
+  mirrorDistro: string | undefined
+): Promise<Map<string, WorktreeBaseWatchTarget>> {
+  const targets = new Map<string, WorktreeBaseWatchTarget>()
+  if (isFolderRepo(repo)) {
+    return targets
+  }
+  const executionHostId = getRepoExecutionHostId(repo)
+  if (executionHostId === LOCAL_EXECUTION_HOST_ID) {
+    await maybeAddBaseTarget(targets, repo, settings, mirrorDistro)
+  } else if (repo.connectionId) {
+    await maybeAddBaseTarget(targets, repo, settings, mirrorDistro, repo.connectionId)
+  }
+  return targets
+}
+
+function mergeRepoTargets(
+  targets: Map<string, WorktreeBaseWatchTarget>,
+  repoTargets: Map<string, WorktreeBaseWatchTarget>
+): void {
+  for (const [key, target] of repoTargets) {
+    const existing = targets.get(key)
+    if (!existing) {
+      targets.set(key, target)
+      continue
+    }
+    for (const [repoId, config] of target.repos) {
+      existing.repos.set(repoId, config)
+    }
   }
 }
 
@@ -180,17 +227,14 @@ export async function buildWorktreeBaseDirectoryWatchTargets(
   store: Store
 ): Promise<Map<string, WorktreeBaseWatchTarget>> {
   const settings = store.getSettings()
+  const resolvedRepoTargets = await mapWithConcurrency(
+    store.getRepos(),
+    WORKTREE_BASE_TARGET_RESOLUTION_CONCURRENCY,
+    (repo) => resolveRepoTargets(repo, settings, getWorktreeMirrorDistro(store, repo))
+  )
   const targets = new Map<string, WorktreeBaseWatchTarget>()
-  for (const repo of store.getRepos()) {
-    if (isFolderRepo(repo)) {
-      continue
-    }
-    const executionHostId = getRepoExecutionHostId(repo)
-    if (executionHostId === LOCAL_EXECUTION_HOST_ID) {
-      await maybeAddBaseTarget(targets, repo, settings)
-    } else if (repo.connectionId) {
-      await maybeAddBaseTarget(targets, repo, settings, repo.connectionId)
-    }
+  for (const repoTargets of resolvedRepoTargets) {
+    mergeRepoTargets(targets, repoTargets)
   }
   return targets
 }

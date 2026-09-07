@@ -1,6 +1,7 @@
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { ComputerUsePermissionStatusResult } from '../../../../shared/computer-use-permissions-types'
-import type { GlobalSettings, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 export type SetupScriptProbeState = {
   signature: string | null

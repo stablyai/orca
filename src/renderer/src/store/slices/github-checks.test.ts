@@ -5,7 +5,7 @@ import {
   normalizeBranchName
 } from './github-checks'
 import type { AppState } from '../types'
-import type { PRCheckDetail } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
 
 describe('deriveCheckStatusFromChecks', () => {
   it('treats an action_required check as failure so it is not a silent pass', () => {
@@ -14,6 +14,13 @@ describe('deriveCheckStatusFromChecks', () => {
       { name: 'approval', status: 'completed', conclusion: 'action_required', url: null }
     ]
     expect(deriveCheckStatusFromChecks(checks)).toBe('failure')
+  })
+
+  it('keeps an unknown terminal conclusion neutral rather than pending', () => {
+    const checks = [
+      { name: 'future-check', status: 'completed', conclusion: 'future_state', url: null }
+    ] as unknown as PRCheckDetail[]
+    expect(deriveCheckStatusFromChecks(checks)).toBe('neutral')
   })
 })
 

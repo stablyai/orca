@@ -27,11 +27,14 @@ describe('registerManagedHookInstaller', () => {
     const installManagedHooks = vi.fn().mockResolvedValue({ installers: 14, errors: 0 })
     const handler = captureHandler(() => ({ installManagedHooks }))
 
-    await expect(handler({}, context(controller.signal))).resolves.toEqual({
+    await expect(handler({ agents: ['codex'] }, context(controller.signal))).resolves.toEqual({
       installers: 14,
       errors: 0
     })
-    expect(installManagedHooks).toHaveBeenCalledWith({ signal: controller.signal })
+    expect(installManagedHooks).toHaveBeenCalledWith({
+      signal: controller.signal,
+      agents: ['codex']
+    })
   })
 
   it('does not load or start the runtime for an already-cancelled request', async () => {
@@ -51,13 +54,44 @@ describe('registerManagedHookInstaller', () => {
     const handler = captureHandler(() => ({ installManagedHooks }))
     const fingerprint = 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
 
-    await handler({ hostKeyFingerprint: fingerprint }, context())
-    await handler({ hostKeyFingerprint: 'ssh://untrusted-host' }, context())
+    await handler({ hostKeyFingerprint: fingerprint, agents: ['codex'] }, context())
+    await handler({ hostKeyFingerprint: 'ssh://untrusted-host', agents: ['codex'] }, context())
 
     expect(installManagedHooks).toHaveBeenNthCalledWith(1, {
       signal: undefined,
-      hostKeyFingerprint: fingerprint
+      hostKeyFingerprint: fingerprint,
+      agents: ['codex']
     })
-    expect(installManagedHooks).toHaveBeenNthCalledWith(2, { signal: undefined })
+    expect(installManagedHooks).toHaveBeenNthCalledWith(2, {
+      signal: undefined,
+      agents: ['codex']
+    })
+  })
+
+  it('fails closed when the detected agent allowlist is omitted', async () => {
+    const installManagedHooks = vi.fn().mockResolvedValue({ installers: 0, errors: 0 })
+    const handler = captureHandler(() => ({ installManagedHooks }))
+
+    await handler({}, context())
+
+    expect(installManagedHooks).toHaveBeenCalledWith({
+      signal: undefined,
+      agents: []
+    })
+  })
+
+  it('validates, deduplicates, and forwards the detected agent allowlist', async () => {
+    const installManagedHooks = vi.fn().mockResolvedValue({ installers: 1, errors: 0 })
+    const handler = captureHandler(() => ({ installManagedHooks }))
+
+    await handler({ agents: ['codex', 'codex'] }, context())
+
+    expect(installManagedHooks).toHaveBeenCalledWith({
+      signal: undefined,
+      agents: ['codex']
+    })
+    await expect(handler({ agents: ['unknown'] }, context())).rejects.toThrow(
+      'invalid_managed_hook_agents'
+    )
   })
 })

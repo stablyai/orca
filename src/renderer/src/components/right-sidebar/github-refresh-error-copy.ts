@@ -1,4 +1,4 @@
-import type { PRRefreshUpstreamErrorType } from '../../../../shared/types'
+import type { PRRefreshUpstreamErrorType } from '../../../../shared/github/pull-request-refresh-types'
 import { translate } from '@/i18n/i18n'
 
 export type ChecksPanelErrorCopy = { title: string; description: string }

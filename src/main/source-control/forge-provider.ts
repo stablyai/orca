@@ -1,3 +1,4 @@
+import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
@@ -15,13 +16,19 @@ import {
   getBitbucketPullRequestForBranchOrThrow,
   getBitbucketRepoSlug
 } from '../bitbucket/client'
+import { createBitbucketPullRequest } from '../bitbucket/pull-request-creation'
 import {
   getGiteaPullRequest,
   getGiteaPullRequestForBranchOrThrow,
   getGiteaRepoSlug
 } from '../gitea/client'
 import { createGiteaPullRequest } from '../gitea/pull-request-creation'
-import { createGitHubPullRequest, getPRForBranchOutcome, getRepoSlug } from '../github/client'
+import {
+  createGitHubPullRequest,
+  getGitHubPRLookupRateLimitBlock,
+  getPRForBranchOutcome,
+  getRepoSlug
+} from '../github/client'
 import { getMergeRequest, getMergeRequestForBranchOrThrow, getProjectSlug } from '../gitlab/client'
 import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
 import {
@@ -31,6 +38,7 @@ import {
   mapGitHubReview,
   mapGitLabReview
 } from './forge-review-mappers'
+import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import {
   hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
@@ -41,7 +49,8 @@ export type ForgeProviderId = Exclude<HostedReviewProvider, 'unsupported'>
 
 export type ForgeProviderRepositoryContext = HostedReviewExecutionOptions & {
   repoPath: string
-  connectionId?: string | null
+  /** Resolved, never null: `local` and "unresolved" are no longer the same value. */
+  executionHostId: ExecutionHostId
 }
 
 export type ForgeReviewForBranchInput = ForgeProviderRepositoryContext & {
@@ -60,15 +69,20 @@ export type ForgeReviewByNumberInput = ForgeProviderRepositoryContext & {
 export type ForgeProvider = {
   id: ForgeProviderId
   supportsReviewCreation: boolean
-  resolveRepository(context: ForgeProviderRepositoryContext): Promise<unknown | null>
+  resolveRepository(context: ForgeProviderRepositoryContext): Promise<unknown>
   getReviewForBranch(input: ForgeReviewForBranchInput): Promise<HostedReviewInfo | null>
   getReviewByNumber(input: ForgeReviewByNumberInput): Promise<HostedReviewInfo | null>
   createReview?(
     repoPath: string,
     input: CreateHostedReviewInput,
-    connectionId?: string | null,
+    executionHostId: ExecutionHostId,
     options?: HostedReviewExecutionOptions
   ): Promise<CreateHostedReviewResult>
+}
+
+/** The forge CLIs (`gh`, `glab`, the REST clients) run here; only their git reads are host-routed. */
+function forgeConnectionId(context: ForgeProviderRepositoryContext): string | null {
+  return hostedReviewSshConnectionId(context.executionHostId)
 }
 
 function hostedReviewExecutionArgs(
@@ -83,7 +97,11 @@ const gitLabForgeProvider = {
   id: 'gitlab',
   supportsReviewCreation: true,
   resolveRepository: (context) =>
-    getProjectSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
+    getProjectSlug(
+      context.repoPath,
+      forgeConnectionId(context),
+      ...hostedReviewExecutionArgs(context)
+    ),
   async getReviewForBranch(input) {
     // Why: throw (not null) on a real lookup failure so eligibility records
     // `unavailable`, never a false "No merge request found" — same contract the
@@ -92,7 +110,7 @@ const gitLabForgeProvider = {
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
-      input.connectionId,
+      forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
     return mr ? mapGitLabReview(mr) : null
@@ -101,7 +119,7 @@ const gitLabForgeProvider = {
     const mr = await getMergeRequest(
       input.repoPath,
       input.number,
-      input.connectionId,
+      forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
     return mr ? mapGitLabReview(mr) : null
@@ -122,6 +140,29 @@ function unwrapGitHubPRForBranchOutcome(
   return outcome.kind === 'found' ? mapGitHubReview(outcome.pr) : null
 }
 
+/**
+ * Why (#11532): hosted-review lookups reach GitHub outside the PR refresh
+ * coordinator's paced queue, so they need the same rate-limit floor. Throwing
+ * (rather than returning null) keeps a low budget from reading as "no pull
+ * request" — callers preserve the last known review and back off.
+ */
+async function assertGitHubReviewRateLimitBudget(
+  input: ForgeProviderRepositoryContext
+): Promise<void> {
+  const block = await getGitHubPRLookupRateLimitBlock(
+    input.repoPath,
+    forgeConnectionId(input),
+    getHostedReviewLocalGitOptions(input)
+  )
+  if (block) {
+    throw new Error(
+      `GitHub PR lookup failed (rate_limited): GitHub rate limit is low. Try again after ${new Date(
+        block.resetAt * 1000
+      ).toLocaleTimeString()}.`
+    )
+  }
+}
+
 const gitHubForgeProvider = {
   id: 'github',
   supportsReviewCreation: true,
@@ -129,8 +170,13 @@ const gitHubForgeProvider = {
   // gh is authenticated to their host (the same signal GitLab uses for
   // self-hosted instances), so detection never falls through to Gitea (#8312).
   resolveRepository: async (context) =>
-    getRepoSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
+    getRepoSlug(
+      context.repoPath,
+      forgeConnectionId(context),
+      ...hostedReviewExecutionArgs(context)
+    ),
   async getReviewForBranch(input) {
+    await assertGitHubReviewRateLimitBudget(input)
     const fallbackReviewNumber =
       input.linkedReviewNumber == null ? (input.fallbackReviewNumber ?? null) : null
     const executionArgs = hostedReviewExecutionArgs(input)
@@ -138,7 +184,7 @@ const gitHubForgeProvider = {
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
-      input.connectionId,
+      forgeConnectionId(input),
       fallbackReviewNumber,
       {
         ...executionArgs[0],
@@ -149,6 +195,7 @@ const gitHubForgeProvider = {
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   async getReviewByNumber(input) {
+    await assertGitHubReviewRateLimitBudget(input)
     const executionArgs = hostedReviewExecutionArgs(input)
     const outcome =
       executionArgs.length > 0
@@ -156,11 +203,11 @@ const gitHubForgeProvider = {
             input.repoPath,
             '',
             input.number,
-            input.connectionId,
+            forgeConnectionId(input),
             null,
             ...executionArgs
           )
-        : await getPRForBranchOutcome(input.repoPath, '', input.number, input.connectionId)
+        : await getPRForBranchOutcome(input.repoPath, '', input.number, forgeConnectionId(input))
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   createReview: createGitHubPullRequest
@@ -168,11 +215,11 @@ const gitHubForgeProvider = {
 
 const bitbucketForgeProvider = {
   id: 'bitbucket',
-  supportsReviewCreation: false,
+  supportsReviewCreation: true,
   resolveRepository: (context) =>
     getBitbucketRepoSlug(
       context.repoPath,
-      context.connectionId,
+      forgeConnectionId(context),
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
@@ -182,7 +229,7 @@ const bitbucketForgeProvider = {
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
-      input.connectionId,
+      forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapBitbucketReview(pr) : null
@@ -191,11 +238,12 @@ const bitbucketForgeProvider = {
     const pr = await getBitbucketPullRequest(
       input.repoPath,
       input.number,
-      input.connectionId,
+      forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapBitbucketReview(pr) : null
-  }
+  },
+  createReview: createBitbucketPullRequest
 } satisfies ForgeProvider
 
 const azureDevOpsForgeProvider = {
@@ -204,7 +252,7 @@ const azureDevOpsForgeProvider = {
   resolveRepository: (context) =>
     getAzureDevOpsRepoSlug(
       context.repoPath,
-      context.connectionId,
+      forgeConnectionId(context),
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
@@ -214,7 +262,7 @@ const azureDevOpsForgeProvider = {
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
-      input.connectionId,
+      forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapAzureDevOpsReview(pr) : null
@@ -223,7 +271,7 @@ const azureDevOpsForgeProvider = {
     const pr = await getAzureDevOpsPullRequest(
       input.repoPath,
       input.number,
-      input.connectionId,
+      forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapAzureDevOpsReview(pr) : null
@@ -235,7 +283,11 @@ const giteaForgeProvider = {
   id: 'gitea',
   supportsReviewCreation: true,
   resolveRepository: (context) =>
-    getGiteaRepoSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
+    getGiteaRepoSlug(
+      context.repoPath,
+      forgeConnectionId(context),
+      ...hostedReviewExecutionArgs(context)
+    ),
   async getReviewForBranch(input) {
     // Why: surface a real lookup failure so eligibility records `unavailable`
     // instead of a false "No pull request found".
@@ -243,7 +295,7 @@ const giteaForgeProvider = {
       input.repoPath,
       input.branch,
       input.linkedReviewNumber ?? null,
-      input.connectionId,
+      forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapGiteaReview(pr) : null
@@ -252,7 +304,7 @@ const giteaForgeProvider = {
     const pr = await getGiteaPullRequest(
       input.repoPath,
       input.number,
-      input.connectionId,
+      forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapGiteaReview(pr) : null

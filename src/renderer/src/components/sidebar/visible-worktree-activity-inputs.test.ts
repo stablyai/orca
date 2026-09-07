@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserWorkspace, TerminalTab } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
+  createVisibleWorktreeTerminalActivityProjection,
   getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs,
-  getWorktreeSectionTerminalActivityTabs
+  getVisibleWorktreeTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
 
 function terminalTab(id: string, title: string): TerminalTab {
@@ -49,6 +50,28 @@ describe('visible worktree activity inputs', () => {
     expect(second).toBe(first)
     expect(second['wt-1']).toBe(first['wt-1'])
   })
+  it('inspects only the changed bucket in a 300-worktree title publication', () => {
+    const inspected: string[] = []
+    const projector = createVisibleWorktreeTerminalActivityProjection((worktreeId) =>
+      inspected.push(worktreeId)
+    )
+    const tabs = Object.fromEntries(
+      Array.from({ length: 300 }, (_, index) => {
+        const worktreeId = `wt-${index}`
+        return [worktreeId, [terminalTab(`tab-${index}`, `Title ${index}`)]]
+      })
+    )
+    const first = projector.project(tabs)
+    inspected.length = 0
+    const changedWorktreeId = 'wt-173'
+    const second = projector.project({
+      ...tabs,
+      [changedWorktreeId]: [{ ...tabs[changedWorktreeId][0], title: 'Changed display title' }]
+    })
+
+    expect(second).toBe(first)
+    expect(inspected).toEqual([changedWorktreeId])
+  })
 
   it('updates terminal activity projection when tab ids change', () => {
     const first = getVisibleWorktreeTerminalActivityTabs({
@@ -93,40 +116,6 @@ describe('visible worktree activity inputs', () => {
     expect(second).not.toBe(first)
     expect(Object.keys(second)).toEqual(['wt-1'])
     expect(second['wt-1']).toBe(first['wt-1'])
-  })
-
-  it('preserves section terminal projection when only wake bookkeeping changes', () => {
-    const first = getWorktreeSectionTerminalActivityTabs({
-      'wt-1': [terminalTab('tab-1', 'Codex working')]
-    })
-
-    const second = getWorktreeSectionTerminalActivityTabs({
-      'wt-1': [
-        {
-          ...terminalTab('tab-1', 'Codex working'),
-          generation: 2,
-          pendingActivationSpawn: true
-        }
-      ]
-    })
-
-    // Why: slept-workspace wake updates generation/pendingActivationSpawn to
-    // remount terminal panes; collapsed section dots only need id + title.
-    expect(second).toBe(first)
-    expect(second['wt-1']).toBe(first['wt-1'])
-  })
-
-  it('updates section terminal projection when terminal title changes', () => {
-    const first = getWorktreeSectionTerminalActivityTabs({
-      'wt-1': [terminalTab('tab-1', 'zsh')]
-    })
-
-    const second = getWorktreeSectionTerminalActivityTabs({
-      'wt-1': [terminalTab('tab-1', 'Codex working')]
-    })
-
-    expect(second).not.toBe(first)
-    expect(second['wt-1']).toEqual([{ id: 'tab-1', title: 'Codex working' }])
   })
 
   it('preserves browser activity projection when only browser metadata changes', () => {

@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi } from 'vitest'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 
 vi.mock('sonner', () => ({

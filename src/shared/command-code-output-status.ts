@@ -9,21 +9,15 @@ import {
   cleanCommandCodePromptCandidate,
   isCommandCodeIdlePromptCandidate
 } from './command-code-prompt-text'
+import { stripTerminalControl } from './terminal-control-stripping'
+import { escapeRegex } from './string-utils'
+
+export { stripTerminalControl } from './terminal-control-stripping'
 
 type CommandCodeOutputStatusDetector = {
   observe: (data: string) => boolean
 }
 
-const ESC = String.fromCharCode(0x1b)
-const BEL = String.fromCharCode(0x07)
-const ANSI_ESCAPE_RE = new RegExp(
-  `${ESC}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~]|\\][^${BEL}]*(?:${BEL}|${ESC}\\\\))`,
-  'g'
-)
-const INCOMPLETE_ANSI_ESCAPE_RE = new RegExp(
-  `${ESC}(?:\\[[0-?]*[ -/]*|\\][^${BEL}${ESC}]*|\\S?)?$`,
-  'g'
-)
 const RECENT_TEXT_LIMIT = 300
 const STATUS_SCAN_TEXT_LIMIT = 4096
 const COMMAND_CODE_STATUS_GLYPH_RE_SOURCE = '[·○◇☆✧⌘✻⎿]'
@@ -107,11 +101,7 @@ const COMMAND_CODE_LLM_STATUS_WORDS = [
   'Razzmatazzing'
 ] as const
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-const LLM_STATUS_WORDS_RE_SOURCE = COMMAND_CODE_LLM_STATUS_WORDS.map(escapeRegExp).join('|')
+const LLM_STATUS_WORDS_RE_SOURCE = COMMAND_CODE_LLM_STATUS_WORDS.map(escapeRegex).join('|')
 const ACTIVE_LLM_STATUS_RE = new RegExp(
   `(?:^|[\\r\\n])\\s*(?:${COMMAND_CODE_STATUS_GLYPH_RE_SOURCE}\\s*)?(?:${LLM_STATUS_WORDS_RE_SOURCE})\\b(?:…|\\.\\.\\.)`
 )
@@ -119,38 +109,16 @@ const ACTIVE_EXECUTION_STATUS_RE = new RegExp(
   `(?:^|[\\r\\n])\\s*(?:${COMMAND_CODE_STATUS_GLYPH_RE_SOURCE}\\s*)?(?:Executing:\\s+\\S|Running\\s*\\()`
 )
 const IDLE_PROMPT_RE = /(?:^|[\r\n])\s*[❯>]\s+Ask your question\.\.\./
-const COMMAND_CODE_BANNER_RE = /\bCommand Code\b/
-
-function stripTerminalControl(data: string): string {
-  if (!terminalControlMayAffectText(data)) {
-    return data
-  }
-  const withoutAnsi = data.replace(ANSI_ESCAPE_RE, '').replace(INCOMPLETE_ANSI_ESCAPE_RE, '')
-  let output = ''
-  for (let index = 0; index < withoutAnsi.length; index += 1) {
-    const code = withoutAnsi.charCodeAt(index)
-    if ((code <= 0x1f && code !== 0x0a && code !== 0x0d) || (code >= 0x7f && code <= 0x9f)) {
-      continue
-    }
-    output += withoutAnsi[index]
-  }
-  return output
-}
-
-function terminalControlMayAffectText(data: string): boolean {
-  for (let index = 0; index < data.length; index += 1) {
-    const code = data.charCodeAt(index)
-    if (
-      code === 0x0d ||
-      code === 0x1b ||
-      (code <= 0x1f && code !== 0x0a) ||
-      (code >= 0x7f && code <= 0x9f)
-    ) {
-      return true
-    }
-  }
-  return false
-}
+const SEMVER_NUMBER_RE_SOURCE = '(?:0|[1-9]\\d*)'
+const SEMVER_PRERELEASE_IDENTIFIER_RE_SOURCE = '(?:0|[1-9]\\d*|\\d*[A-Za-z-][0-9A-Za-z-]*)'
+const SEMVER_BUILD_IDENTIFIER_RE_SOURCE = '[0-9A-Za-z-]+'
+const COMMAND_CODE_BANNER_RE = new RegExp(
+  `(?:^|[\\r\\n])[ \\t]*#[ \\t]+Command Code[ \\t]+v` +
+    `${SEMVER_NUMBER_RE_SOURCE}\\.${SEMVER_NUMBER_RE_SOURCE}\\.${SEMVER_NUMBER_RE_SOURCE}` +
+    `(?:-${SEMVER_PRERELEASE_IDENTIFIER_RE_SOURCE}(?:\\.${SEMVER_PRERELEASE_IDENTIFIER_RE_SOURCE})*)?` +
+    `(?:\\+${SEMVER_BUILD_IDENTIFIER_RE_SOURCE}(?:\\.${SEMVER_BUILD_IDENTIFIER_RE_SOURCE})*)?` +
+    `(?=[ \\t]*[\\r\\n])`
+)
 
 function cleanPromptCandidate(value: string): string {
   return cleanCommandCodePromptCandidate(stripTerminalControl(value))
@@ -172,6 +140,21 @@ function rawTextMayContainCommandCodeBanner(rawText: string): boolean {
   // panes need the ANSI/control stripping path. Use a broad no-false-negative
   // letter prefilter so ANSI styling inside the banner words still works.
   return rawText.includes('C') && rawText.includes('o') && rawText.includes('d')
+}
+
+// COMMAND_CODE_BANNER_RE requires a literal '#', and stripTerminalControl only ever removes
+// characters, so raw bytes without one cannot produce a banner match.
+const BANNER_REQUIRED_RAW_CHAR = '#'
+
+/**
+ * Prefilter run against the raw chunk before the scan windows are built. Testing the whole carry
+ * plus chunk over-admits relative to the window test (the windows drop middle content), so it can
+ * never turn a match into a miss.
+ */
+function rawChunkMayContainCommandCodeBanner(previousRawText: string, data: string): boolean {
+  return (
+    data.includes(BANNER_REQUIRED_RAW_CHAR) || previousRawText.includes(BANNER_REQUIRED_RAW_CHAR)
+  )
 }
 
 function appendRecentRawText(previousRawText: string, data: string): string {
@@ -249,34 +232,46 @@ function isIdlePromptText(context: StatusScanContext): boolean {
 
 export function createCommandCodeOutputStatusDetector(args: {
   startupCommand?: string | null
+  /** Continuity seed for a detector created long after launch (parked watchers):
+   *  the banner is off-screen by then, so a turn known to be in flight both arms
+   *  the scrape and carries its prompt into the idle-composer done check. */
+  inFlightTurn?: { prompt: string } | null
   onWorking: (prompt: string) => void
   onDone?: (prompt: string) => void
 }): CommandCodeOutputStatusDetector {
-  let hasSeenCommandCodeUi = isCommandCodeLaunchCommand(args.startupCommand)
-  let lastSubmittedPrompt = ''
+  let hasSeenCommandCodeUi =
+    isCommandCodeLaunchCommand(args.startupCommand) || Boolean(args.inFlightTurn)
+  let lastSubmittedPrompt = args.inFlightTurn?.prompt ?? ''
   let recentRawText = ''
 
   return {
     observe(data: string): boolean {
       const previousRawText = recentRawText
       recentRawText = appendRecentRawText(previousRawText, data)
+      // Why before the windows: a non-Command-Code pane pays two ~4KB string builds per chunk
+      // otherwise, only to fail the same prefilter a few lines later.
+      if (!hasSeenCommandCodeUi && !rawChunkMayContainCommandCodeBanner(previousRawText, data)) {
+        return false
+      }
       const scanRawText = buildStatusScanRawText(previousRawText, data)
       const scanRawTextWithChunkBoundary = previousRawText
         ? buildStatusScanRawText(`${previousRawText}\n`, data)
         : scanRawText
 
       if (!hasSeenCommandCodeUi) {
-        if (
-          !rawTextMayContainCommandCodeBanner(scanRawText) &&
-          !rawTextMayContainCommandCodeBanner(scanRawTextWithChunkBoundary)
-        ) {
+        if (!rawTextMayContainCommandCodeBanner(scanRawText)) {
           return false
         }
         const scanText = stripTerminalControl(scanRawText)
         const scanTextWithChunkBoundary = stripTerminalControl(scanRawTextWithChunkBoundary)
+        const previousTextWithChunkBoundaryLength = previousRawText
+          ? stripTerminalControl(`${previousRawText}\n`).length
+          : 0
         if (
           !COMMAND_CODE_BANNER_RE.test(scanText) &&
-          !COMMAND_CODE_BANNER_RE.test(scanTextWithChunkBoundary)
+          !COMMAND_CODE_BANNER_RE.test(
+            scanTextWithChunkBoundary.slice(previousTextWithChunkBoundaryLength)
+          )
         ) {
           return false
         }

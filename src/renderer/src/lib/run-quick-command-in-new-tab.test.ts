@@ -81,6 +81,26 @@ describe('runQuickCommandInNewTab', () => {
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'build')
   })
 
+  it('records a host-qualified history id when provided', () => {
+    runQuickCommandInNewTab({
+      command: {
+        id: 'build',
+        label: 'Build',
+        action: 'terminal-command',
+        command: 'pnpm build',
+        appendEnter: true
+      },
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      historyId: 'runtime:server\0build'
+    })
+
+    expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
+      'group-1',
+      'runtime:server\0build'
+    )
+  })
+
   it('keeps single-line quick commands unchanged', () => {
     runQuickCommandInNewTab({
       command: {
@@ -155,6 +175,61 @@ describe('runQuickCommandInNewTab', () => {
       launchSource: 'quick_command',
       quickCommandLabel: 'Review'
     })
+    expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
+      'active-group',
+      'agent-review'
+    )
+  })
+
+  it('records history while a structured agent quick command publishes asynchronously', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      tabId: null,
+      startupPlan: {} as never,
+      pasteDraftAfterLaunch: false,
+      focusAfterMenuClose: 'structured-session'
+    })
+
+    const result = runQuickCommandInNewTab({
+      command: {
+        id: 'agent-review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1',
+      historyId: 'runtime:local\u0000agent-review'
+    })
+
+    expect(result).toBeNull()
+    expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
+      'group-1',
+      'runtime:local\u0000agent-review'
+    )
+  })
+
+  it('uses the active group for structured history when the caller has no group', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      tabId: null,
+      startupPlan: {} as never,
+      pasteDraftAfterLaunch: false,
+      focusAfterMenuClose: 'structured-session'
+    })
+    mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: null
+    })
+
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
       'active-group',
       'agent-review'

@@ -10,32 +10,99 @@ import {
   symlinkSync,
   writeFileSync
 } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { setAppEnvironment } from '../../shared/app-environment'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
 }))
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
-}))
+import {
+  OpenCodeHookService,
+  _internals,
+  getOpenCodeFamilyPluginSource,
+  getOpenCodePluginSource
+} from './hook-service'
 
-import { OpenCodeHookService, _internals } from './hook-service'
+beforeEach(() => {
+  setAppEnvironment({
+    getPath: getPathMock,
+    getAppPath: () => process.cwd(),
+    getVersion: () => '0.0.0-test',
+    isPackaged: () => false,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: () => []
+  })
+})
 
 const { isUsableId, toSafeDirName } = _internals
 
 describe('OpenCode hook plugin source', () => {
+  it('preserves the public module surface', async () => {
+    const module = await import('./hook-service')
+
+    expect(Object.keys(module).sort()).toEqual([
+      'OpenCodeHookService',
+      '_internals',
+      'getOpenCodeFamilyPluginSource',
+      'getOpenCodePluginSource',
+      'openCodeHookService'
+    ])
+    expect(Object.keys(module._internals).sort()).toEqual([
+      'getOpenCodePluginSource',
+      'isUsableId',
+      'toSafeDirName'
+    ])
+  })
+
+  it('keeps family routing and session-start policy separate', () => {
+    const primarySource = getOpenCodePluginSource()
+    const familySource = getOpenCodeFamilyPluginSource('/hook/mimo-code', {
+      emitSessionStart: false
+    })
+
+    expect(primarySource).toContain('http://127.0.0.1:${coords.port}/hook/opencode')
+    expect(primarySource).toContain('post("SessionStart", { sessionID: info.id })')
+    expect(familySource).toContain('http://127.0.0.1:${coords.port}/hook/mimo-code')
+    expect(familySource).not.toContain('post("SessionStart", { sessionID: info.id })')
+    expect(familySource).toContain('export const OrcaOpenCodeStatusPlugin')
+  })
+
+  it('keeps generated plugin bytes stable across the module split', () => {
+    const digest = (source: string): string => createHash('sha256').update(source).digest('hex')
+
+    expect(digest(getOpenCodePluginSource())).toBe(
+      'd14859a36c88aefe3a45cd232789503296e0a23438b151c773414bad64ab8eaa'
+    )
+    expect(
+      digest(getOpenCodeFamilyPluginSource('/hook/mimo-code', { emitSessionStart: false }))
+    ).toBe('4de14bee0c27ce55f29f70b19aa6ce9967e09b098bba139fb88f0511af7d4fca')
+  })
+
   it('filters child sessions via parentID lookup before forwarding events', () => {
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain('async function isChildSession(client, sessionID)')
-    expect(source).toContain('const sessions = await client.session.list();')
-    expect(source).toContain('const isChild = !!session?.parentID;')
-    expect(source).toContain('if (sessionID && (await isChildSession(client, sessionID))) {')
-    expect(source).toContain('return true;')
+    expect(source).toContain('walkSessionParents(client, sessionID, controller.signal)')
+    expect(source).toContain('currentSessionID = session.parentID;')
+    expect(source).toContain('rememberSessionRoot(id, currentSessionID)')
+    expect(source).toContain('{ path: { id: sessionID }, signal }')
+    expect(source).toContain('[{ sessionID }, { signal }]')
+    expect(source.indexOf('[{ sessionID }, { signal }]')).toBeLessThan(
+      source.indexOf('{ path: { id: sessionID }, signal }')
+    )
+    expect(source).toContain('return client.session.list({}, { signal });')
+    expect(source).toContain('return client.session.list({ signal });')
+    expect(source).toContain('return rootSessionID === null ? null : rootSessionID !== sessionID;')
+    expect(source).toContain(
+      'if (sessionID && (await isChildSession(client, sessionID)) !== false) {'
+    )
+    expect(source).toContain(
+      'if (sessionID && (await isChildSession(client, sessionID)) !== false) {\n      return;\n    }'
+    )
   })
 
   it('still accepts an optional opaque plugin context instead of destructuring', () => {
@@ -86,20 +153,27 @@ describe('OpenCode hook plugin source', () => {
     // Why: forward question.asked too (not just permission.asked), else the pane stays "working" while the agent idles on a human reply.
     const source = _internals.getOpenCodePluginSource()
 
-    expect(source).toContain('if (event.type === "question.asked")')
-    expect(source).toContain('await post("AskUserQuestion", event.properties || {});')
+    expect(source).toContain('event.type === "question.asked"')
+    expect(source).toContain(
+      'event.type === "permission.asked" ? "PermissionRequest" : "AskUserQuestion"'
+    )
+    expect(source).toContain('await setAttention(')
   })
 
   it('forwards sessionID on status and message posts for resume metadata', () => {
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain(
-      'await post("MessagePart", { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID });'
+      '{ role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID },'
     )
     expect(source).toContain('messageID: pending.messageID,')
     expect(source).toContain('sessionID: pending.sessionID,')
-    expect(source).toContain('await setStatus("busy", { sessionID });')
-    expect(source.match(/await setStatus\("idle", \{ sessionID \}\);/g) ?? []).toHaveLength(2)
+    expect(source).toContain(
+      'await setStatus("busy", { sessionID: busyOwner.sessionID }, busyOwner.factoryID);'
+    )
+    expect(source).toContain(
+      'await setStatus("idle", { sessionID: preferredSessionID }, fallbackFactoryID);'
+    )
   })
 
   it('guards endpoint-file parse warnings with a process-lifetime latch', () => {

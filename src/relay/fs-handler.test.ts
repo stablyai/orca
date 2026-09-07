@@ -8,6 +8,7 @@ import * as path from 'node:path'
 import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { subscribeWithInProcessWatcher } from '../main/ipc/parcel-watcher-in-process-fallback'
+import { createMockDispatcher } from './relay-fs-test-dispatcher'
 
 const { mockSubscribe } = vi.hoisted(() => ({
   mockSubscribe: vi.fn()
@@ -16,91 +17,6 @@ const { mockSubscribe } = vi.hoisted(() => ({
 vi.mock('@parcel/watcher', () => ({
   subscribe: mockSubscribe
 }))
-
-function createMockDispatcher() {
-  const requestHandlers = new Map<
-    string,
-    (
-      params: Record<string, unknown>,
-      context?: { clientId: number; isStale: () => boolean }
-    ) => Promise<unknown>
-  >()
-  const notificationHandlers = new Map<
-    string,
-    (
-      params: Record<string, unknown>,
-      context?: { clientId: number; isStale: () => boolean }
-    ) => void
-  >()
-  const detachListeners = new Set<(clientId: number) => void>()
-  const notifications: { method: string; params?: Record<string, unknown> }[] = []
-
-  return {
-    onRequest: vi.fn(
-      (
-        method: string,
-        handler: (
-          params: Record<string, unknown>,
-          context?: { clientId: number; isStale: () => boolean }
-        ) => Promise<unknown>
-      ) => {
-        requestHandlers.set(method, handler)
-      }
-    ),
-    onNotification: vi.fn(
-      (
-        method: string,
-        handler: (
-          params: Record<string, unknown>,
-          context?: { clientId: number; isStale: () => boolean }
-        ) => void
-      ) => {
-        notificationHandlers.set(method, handler)
-      }
-    ),
-    notify: vi.fn((method: string, params?: Record<string, unknown>) => {
-      notifications.push({ method, params })
-    }),
-    notifyClient: vi.fn(),
-    onClientDetached: vi.fn((listener: (clientId: number) => void) => {
-      detachListeners.add(listener)
-      return () => detachListeners.delete(listener)
-    }),
-    _requestHandlers: requestHandlers,
-    _notificationHandlers: notificationHandlers,
-    _notifications: notifications,
-    async callRequest(
-      method: string,
-      params: Record<string, unknown> = {},
-      context?: { clientId?: number; isStale: () => boolean }
-    ) {
-      const handler = requestHandlers.get(method)
-      if (!handler) {
-        throw new Error(`No handler for ${method}`)
-      }
-      return handler(params, {
-        clientId: context?.clientId ?? 1,
-        isStale: context?.isStale ?? (() => false)
-      })
-    },
-    callNotification(
-      method: string,
-      params: Record<string, unknown> = {},
-      context?: { clientId: number; isStale: () => boolean }
-    ) {
-      const handler = notificationHandlers.get(method)
-      if (!handler) {
-        throw new Error(`No handler for ${method}`)
-      }
-      handler(params, context ?? { clientId: 1, isStale: () => false })
-    },
-    detachClient(clientId: number) {
-      for (const listener of detachListeners) {
-        listener(clientId)
-      }
-    }
-  }
-}
 
 function statIdentity(stats: {
   dev?: number
@@ -164,19 +80,23 @@ describe('FsHandler', () => {
     await expect(dispatcher.callRequest('fs.tempDir')).resolves.toBe(tmpdir())
   })
 
-  it('readDir returns sorted entries with directories first', async () => {
+  it('readDir returns entries directories-first in natural name order', async () => {
     mkdirSync(path.join(tmpDir, 'subdir'))
-    writeFileSync(path.join(tmpDir, 'file.txt'), 'hello')
-    writeFileSync(path.join(tmpDir, 'aaa.txt'), 'world')
+    for (const name of ['file.txt', '100 - b.txt', '99 - a.txt', '9 - c.txt']) {
+      writeFileSync(path.join(tmpDir, name), 'x')
+    }
 
     const result = (await dispatcher.callRequest('fs.readDir', { dirPath: tmpDir })) as {
       name: string
       isDirectory: boolean
     }[]
-    expect(result[0].name).toBe('subdir')
-    expect(result[0].isDirectory).toBe(true)
-    expect(result.find((e) => e.name === 'file.txt')).toBeDefined()
-    expect(result.find((e) => e.name === 'aaa.txt')).toBeDefined()
+    expect(result[0]).toMatchObject({ name: 'subdir', isDirectory: true })
+    expect(result.slice(1).map((e) => e.name)).toEqual([
+      '9 - c.txt',
+      '99 - a.txt',
+      '100 - b.txt',
+      'file.txt'
+    ])
   })
 
   it('readDir reports symlinked directories as directories', async () => {
@@ -831,34 +751,6 @@ describe('FsHandler', () => {
 
     resolveUnsubscribe()
     await joined
-  })
-
-  it('blocks replacement watches behind physical unsubscribe and counts the pending slot', async () => {
-    let resolveUnsubscribe: () => void = () => {}
-    const unsubscribe = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveUnsubscribe = resolve
-        })
-    )
-    mockSubscribe.mockResolvedValue({ unsubscribe })
-    await dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
-    dispatcher.callNotification('fs.unwatch', { rootPath: tmpDir })
-
-    const replacement = dispatcher.callRequest('fs.watch', { rootPath: tmpDir })
-    for (let index = 0; index < 19; index += 1) {
-      await dispatcher.callRequest('fs.watch', {
-        rootPath: path.join(tmpDir, `pending-cap-${index}`)
-      })
-    }
-    await expect(
-      dispatcher.callRequest('fs.watch', { rootPath: path.join(tmpDir, 'over-pending-cap') })
-    ).rejects.toThrow('Maximum number of file watchers reached')
-    expect(mockSubscribe).toHaveBeenCalledTimes(20)
-
-    resolveUnsubscribe()
-    await replacement
-    expect(mockSubscribe).toHaveBeenCalledTimes(21)
   })
 
   it('retains a failed native unsubscribe slot until acknowledged retry succeeds', async () => {

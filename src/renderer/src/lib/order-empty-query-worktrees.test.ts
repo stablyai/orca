@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { orderEmptyQueryWorktrees } from './order-empty-query-worktrees'
 
 function wt(overrides: Partial<Worktree> & { id: string; displayName: string }): Worktree {
@@ -98,6 +98,20 @@ describe('orderEmptyQueryWorktrees', () => {
     })
     expect(result.switchableWorktreesForRows.map((w) => w.id)).toEqual(['other'])
     expect(result.visibleWorktreesForState.map((w) => w.id)).toEqual(['cur', 'other'])
+  })
+
+  // Why: `repoId::path` repeats across hosts, so a bare-id filter treated the SSH twin as
+  // current too and dropped it from the rows — the host it lived on became unreachable.
+  it('keeps the same-id worktree on the other host switchable', () => {
+    const local = wt({ id: 'shared', displayName: 'local', hostId: 'local' })
+    const ssh = wt({ id: 'shared', displayName: 'ssh', hostId: 'ssh:box' })
+    const result = orderEmptyQueryWorktrees({
+      visibleWorktrees: [local, ssh],
+      activeWorktreeId: 'shared',
+      activeWorkspaceExecutionHostId: 'local',
+      lastVisitedAtByWorktreeId: {}
+    })
+    expect(result.switchableWorktreesForRows.map((w) => w.displayName)).toEqual(['ssh'])
   })
 
   it('returns empty rows but non-empty state when only the current worktree is visible', () => {

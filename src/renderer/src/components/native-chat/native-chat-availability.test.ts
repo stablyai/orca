@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { canToggleNativeChat } from './native-chat-availability'
+import { canSwitchNativeChatView, canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 
 describe('canToggleNativeChat', () => {
@@ -90,6 +90,21 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
+  // Why: omp discloses no hook transcript path either, so its session file is
+  // only reachable when this process can read the agent's disk.
+  it('rejects Model-A SSH omp but accepts it local and runtime-owned', () => {
+    const forConnection = (connectionId: string | null): boolean =>
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'omp',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBe(false)
+    expect(forConnection(null)).toBe(true)
+    expect(forConnection('runtime-ssh-env-1')).toBe(true)
+  })
+
   it('lets an existing Model-A SSH Grok chat toggle back to terminal', () => {
     expect(
       canToggleNativeChat({
@@ -102,16 +117,19 @@ describe('canToggleNativeChat', () => {
     ).toBe(true)
   })
 
-  it('rejects an unsupported agent detected live (Gemini)', () => {
-    expect(
-      canToggleNativeChat({
-        experimentalNativeChatEnabled: true,
-        contentType: 'terminal',
-        launchAgent: null,
-        detectedAgent: 'gemini'
-      })
-    ).toBe(false)
-  })
+  it.each(['gemini', 'opencode'] as const)(
+    'rejects unsupported agent %s detected live',
+    (agent) => {
+      expect(
+        canToggleNativeChat({
+          experimentalNativeChatEnabled: true,
+          contentType: 'terminal',
+          launchAgent: null,
+          detectedAgent: agent
+        })
+      ).toBe(false)
+    }
+  )
 
   it('accepts Grok when resolved from the title', () => {
     expect(
@@ -203,6 +221,40 @@ describe('canToggleNativeChat', () => {
         experimentalNativeChatEnabled: true,
         contentType: 'browser',
         detectedAgent: 'claude'
+      })
+    ).toBe(false)
+  })
+})
+
+describe('canSwitchNativeChatView', () => {
+  it('allows bridge chat to expose a terminal/chat switcher', () => {
+    expect(
+      canSwitchNativeChatView({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'claude'
+      })
+    ).toBe(true)
+  })
+
+  it('keeps structured sessions free of terminal/chat switchers', () => {
+    expect(
+      canSwitchNativeChatView({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'codex',
+        structuredSessionId: 'thread-1'
+      })
+    ).toBe(false)
+  })
+
+  it('keeps structured sessions hidden even when toggling back', () => {
+    expect(
+      canSwitchNativeChatView({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        isChatViewMode: true,
+        structuredSessionId: 'thread-1'
       })
     ).toBe(false)
   })

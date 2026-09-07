@@ -1,6 +1,10 @@
-import type { Tab, TuiAgent } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
+import {
+  isNativeChatSupportedAgent,
+  nativeChatRequiresLocalTranscript
+} from '@/lib/native-chat-supported-agent'
 
 export { isNativeChatSupportedAgent }
 
@@ -46,8 +50,24 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
     return true
   }
   const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
-  if (agent === 'grok' && input.nativeChatTranscriptIsLocalReadable !== true) {
+  if (
+    nativeChatRequiresLocalTranscript(agent) &&
+    input.nativeChatTranscriptIsLocalReadable !== true
+  ) {
     return false
   }
   return isNativeChatSupportedAgent(agent)
+}
+
+/** Whether a user-facing terminal⇄chat switcher may be offered. A structured
+ *  session IS the conversation — it owns the surface with no live TUI beneath
+ *  it — so only terminal-backed (bridge) chat, which renders a terminal we can
+ *  return to, gets the switch. */
+export function canSwitchNativeChatView(
+  input: NativeChatAvailabilityInput & { structuredSessionId?: string | null }
+): boolean {
+  if (input.structuredSessionId) {
+    return false
+  }
+  return canToggleNativeChat(input)
 }

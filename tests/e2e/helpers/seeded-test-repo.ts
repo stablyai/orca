@@ -28,7 +28,7 @@ export function isValidGitRepo(repoPath: string): boolean {
   }
 }
 
-export function createSeededTestRepo(): string {
+export function createSeededTestRepo(options: { publishPath?: boolean } = {}): string {
   // Why: realpathSync so the seeded path matches the store's repo.path on
   // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
   // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
@@ -50,6 +50,7 @@ export function createSeededTestRepo(): string {
   writeFileSync(path.join(testRepoDir, '.gitignore'), 'node_modules/\n')
   mkdirSync(path.join(testRepoDir, 'src'), { recursive: true })
   writeFileSync(path.join(testRepoDir, 'src', 'index.ts'), 'export const hello = "world"\n')
+  writeFileSync(path.join(testRepoDir, 'src', 'diff-note-layout.ts'), 'export const seed = true\n')
 
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })
@@ -62,6 +63,8 @@ export function createSeededTestRepo(): string {
     stdio: 'pipe'
   })
 
-  writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
+  if (options.publishPath !== false) {
+    writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
+  }
   return testRepoDir
 }

@@ -16,7 +16,7 @@ export const NATIVE_FILE_DROP_TARGET = {
 export type NativeDropResolution =
   | { target: typeof NATIVE_FILE_DROP_TARGET.editor }
   | { target: typeof NATIVE_FILE_DROP_TARGET.terminal; tabId?: string; paneLeafId?: string }
-  | { target: typeof NATIVE_FILE_DROP_TARGET.composer }
+  | { target: typeof NATIVE_FILE_DROP_TARGET.composer; scopeKey?: string }
   | { target: typeof NATIVE_FILE_DROP_TARGET.fileExplorer; destinationDir: string }
   | { target: typeof NATIVE_FILE_DROP_TARGET.projectSidebar }
   | { target: 'rejected' }
@@ -29,7 +29,7 @@ export type NativeFileDropPayload =
       tabId?: string
       paneLeafId?: string
     }
-  | { paths: string[]; target: typeof NATIVE_FILE_DROP_TARGET.composer }
+  | { paths: string[]; target: typeof NATIVE_FILE_DROP_TARGET.composer; scopeKey?: string }
   | {
       paths: string[]
       target: typeof NATIVE_FILE_DROP_TARGET.fileExplorer
@@ -48,6 +48,7 @@ export type NativeFileDropRejectedPayload = {
 export type NativeFileDropPathEntry = {
   nativeFileDropTarget?: string
   nativeFileDropDir?: string
+  composerScopeKey?: string
   terminalTabId?: string
   terminalPaneLeafId?: string
 }
@@ -102,14 +103,21 @@ export function resolveNativeFileDropPath(
   let foundExplorer = false
   let destinationDir: string | undefined
   let terminalPaneLeafId: string | undefined
+  let composerScopeKey: string | undefined
 
   for (const entry of path) {
     terminalPaneLeafId ??= entry.terminalPaneLeafId
+    composerScopeKey ??= entry.composerScopeKey
     const target = entry.nativeFileDropTarget
     if (target === NATIVE_FILE_DROP_TARGET.terminal) {
       return { target, tabId: entry.terminalTabId, paneLeafId: terminalPaneLeafId }
     }
-    if (target === NATIVE_FILE_DROP_TARGET.editor || target === NATIVE_FILE_DROP_TARGET.composer) {
+    if (target === NATIVE_FILE_DROP_TARGET.composer) {
+      // Composer drops fan out window-wide, so carry the receiving composer's
+      // scope key the way a terminal drop carries its pane leaf id.
+      return { target, ...(composerScopeKey ? { scopeKey: composerScopeKey } : {}) }
+    }
+    if (target === NATIVE_FILE_DROP_TARGET.editor) {
       return { target }
     }
     if (target === NATIVE_FILE_DROP_TARGET.projectSidebar) {
@@ -133,14 +141,6 @@ export function resolveNativeFileDropPath(
   }
 
   return null
-}
-
-export function measureNativeFileDropPathBytes(paths: readonly string[]): number {
-  let byteLength = 0
-  for (const path of paths) {
-    byteLength += measureClipboardTextByteLength(path).byteLength
-  }
-  return byteLength
 }
 
 export function validateNativeFileDropPaths(
@@ -213,6 +213,14 @@ export function createNativeFileDropPayload(
     }
   }
 
+  if (resolution?.target === NATIVE_FILE_DROP_TARGET.composer) {
+    return {
+      paths: [...paths],
+      target: resolution.target,
+      ...(resolution.scopeKey ? { scopeKey: resolution.scopeKey } : {})
+    }
+  }
+
   const target = resolution?.target ?? NATIVE_FILE_DROP_TARGET.editor
   if (resolution?.target === NATIVE_FILE_DROP_TARGET.terminal) {
     return {
@@ -260,10 +268,11 @@ export function isNativeFileDropPayload(value: unknown): value is NativeFileDrop
   if (target === NATIVE_FILE_DROP_TARGET.fileExplorer) {
     return typeof payload.destinationDir === 'string'
   }
+  if (target === NATIVE_FILE_DROP_TARGET.composer) {
+    return isOptionalNativeFileDropString(payload.scopeKey)
+  }
 
   return (
-    target === NATIVE_FILE_DROP_TARGET.editor ||
-    target === NATIVE_FILE_DROP_TARGET.composer ||
-    target === NATIVE_FILE_DROP_TARGET.projectSidebar
+    target === NATIVE_FILE_DROP_TARGET.editor || target === NATIVE_FILE_DROP_TARGET.projectSidebar
   )
 }

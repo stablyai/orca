@@ -73,6 +73,12 @@ vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
+  CopyX: function CopyX(props: Record<string, unknown>) {
+    return { type: 'CopyX', props }
+  },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
+  },
   Copy: function Copy(props: Record<string, unknown>) {
     return { type: 'Copy', props }
   },
@@ -248,10 +254,14 @@ async function renderEditorFileTab(
     isActive: true,
     isPinned: false,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
+    tabCount: 1,
     statusByRelativePath: new Map(),
     onActivate,
     onClose: () => {},
+    onCloseOthers: () => {},
     onCloseToRight: () => {},
+    onCloseToLeft: () => {},
     onCloseAll: () => {},
     onMakePermanent,
     onTogglePin: () => {},
@@ -335,6 +345,15 @@ function findMenuItemByText(node: unknown, label: string): ReactElementLike {
   return item
 }
 
+/** Picks Rename, then fires the close-autofocus that actually opens the input. */
+function selectRenameFromMenu(node: unknown): void {
+  ;(findMenuItemByText(node, 'Rename').props.onSelect as () => void)()
+  const content = findElementsByType(node, 'DropdownMenuContent')[0]!
+  ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
+    preventDefault: vi.fn()
+  })
+}
+
 function findSpanByText(node: unknown, label: string): ReactElementLike {
   const span = findElementsByType(node, 'span').find(
     (candidate) =>
@@ -391,7 +410,7 @@ describe('EditorFileTab rename menu', () => {
     // isUntitled; the tab menu must let users rename the screenshot-style
     // "untitled-N.md" files directly.
     expect(renameItem.props.disabled).toBe(false)
-    ;(renameItem.props.onSelect as () => void)()
+    selectRenameFromMenu(firstRender)
 
     const secondRender = expandNode((await renderEditorFileTab(file, onActivate)).element)
     const inputs = findElementsByType(secondRender, 'input')
@@ -415,9 +434,8 @@ describe('EditorFileTab rename menu', () => {
   it('ignores IME composition Enter before renaming the editor file tab', async () => {
     const file = baseFile()
     const firstRender = expandNode((await renderEditorFileTab(file)).element)
-    const renameItem = findMenuItemByText(firstRender, 'Rename')
 
-    ;(renameItem.props.onSelect as () => void)()
+    selectRenameFromMenu(firstRender)
 
     const secondRender = expandNode((await renderEditorFileTab(file)).element)
     const input = findElementsByType(secondRender, 'input')[0]
@@ -442,6 +460,29 @@ describe('EditorFileTab rename menu', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
+  })
+
+  it('does not re-commit when unmounting the rename input emits multiple blur events', async () => {
+    const file = baseFile()
+    const firstRender = expandNode((await renderEditorFileTab(file)).element)
+
+    selectRenameFromMenu(firstRender)
+
+    const secondRender = expandNode((await renderEditorFileTab(file)).element)
+    const input = findElementsByType(secondRender, 'input')[0]
+    const setInputRef = input.props.ref as (input: HTMLInputElement | null) => void
+    setInputRef({
+      focus: vi.fn(),
+      select: vi.fn(),
+      setSelectionRange: vi.fn(),
+      value: 'renamed.md'
+    } as unknown as HTMLInputElement)
+
+    pressInputKey(input, 'Enter')
+    ;(input.props.onBlur as () => void)()
+    ;(input.props.onBlur as () => void)()
+
+    expect(renameFileOnDiskMock).toHaveBeenCalledTimes(1)
   })
 
   it('disables Rename for diff tabs that do not map to one writable file', async () => {

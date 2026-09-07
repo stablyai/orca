@@ -26,10 +26,6 @@ export const WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT = 'orca-wake-hibernated-agent
 // per-pane ResizeObserver path instead.
 export const SYNC_FIT_PANES_EVENT = 'orca-sync-fit-panes'
 
-export type ToggleTerminalPaneExpandDetail = {
-  tabId: string
-}
-
 export type FocusTerminalPaneDetail = {
   tabId: string
   /** Stable terminal layout leaf UUID. Numeric PaneManager ids are renderer-local
@@ -52,6 +48,7 @@ export type PasteTerminalTextDetail = {
 
 export type SplitTerminalPaneDetail = {
   tabId: string
+  worktreeId?: string
   paneRuntimeId: number
   direction: 'horizontal' | 'vertical'
   command?: string
@@ -69,7 +66,11 @@ export type RequestActiveTerminalPaneSplitDetail = {
 
 export type CloseTerminalPaneDetail = {
   tabId: string
-  paneRuntimeId: number
+  paneRuntimeId?: number
+  leafId?: string
+  preservePty?: boolean
+  retireSurface?: boolean
+  expectedPtyId?: string
 }
 
 export type BackgroundMountTerminalWorktreeDetail = {

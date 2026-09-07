@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
+import {
+  JIRA_PAYLOAD_CHUNK_CHARS,
+  JIRA_PAYLOAD_MAX_CHARS
+} from '../../../../shared/jira-payload-stream'
+import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import {
   OptionalFiniteNumber,
   OptionalPlainString,
@@ -52,7 +56,8 @@ const CreateIssue = z.object({
   issueTypeId: requiredString('Issue type is required'),
   title: requiredString('Title is required'),
   description: OptionalPlainString,
-  customFields: z.record(z.string(), z.unknown()).optional()
+  customFields: z.record(z.string(), z.unknown()).optional(),
+  userFieldKeys: z.array(z.string()).optional()
 })
 
 const IssueUpdate = z.object({
@@ -90,12 +95,31 @@ const AssignableUsers = z.object({
   siteId: OptionalString
 })
 
+const UserSearch = z.object({
+  query: OptionalPlainString,
+  siteId: OptionalString
+})
+
 const ProjectStatusOrder = z.object({
   projectKey: requiredString('Project key is required'),
   siteId: OptionalString
 })
 
-export const JIRA_METHODS: RpcMethod[] = [
+/** Emits a Jira result over RPC, normalizing it to the shape clients decode. */
+function emitJiraPayload(value: unknown, emit: (result: unknown) => void): void {
+  const payload = JSON.stringify(value)
+  if (payload.length > JIRA_PAYLOAD_MAX_CHARS) {
+    throw new Error('Jira payload exceeded the transfer limit.')
+  }
+  // Why: remote runtime WebSocket messages are capped at 1 MiB; chunking keeps
+  // authenticated inline images usable over SSH without raising that safety cap.
+  for (let offset = 0; offset < payload.length; offset += JIRA_PAYLOAD_CHUNK_CHARS) {
+    emit({ type: 'chunk', content: payload.slice(offset, offset + JIRA_PAYLOAD_CHUNK_CHARS) })
+  }
+  emit({ type: 'end' })
+}
+
+export const JIRA_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'jira.connect',
     params: Connect,
@@ -123,6 +147,11 @@ export const JIRA_METHODS: RpcMethod[] = [
     handler: async (_params, { runtime }) => runtime.jiraStatus()
   }),
   defineMethod({
+    name: 'jira.readStatus',
+    params: null,
+    handler: async (_params, { runtime }) => runtime.jiraReadStatus()
+  }),
+  defineMethod({
     name: 'jira.testConnection',
     params: SiteSelection,
     handler: async (params, { runtime }) => runtime.jiraTestConnection(params?.siteId)
@@ -130,8 +159,8 @@ export const JIRA_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'jira.searchIssues',
     params: SearchIssues,
-    handler: async (params, { runtime }) =>
-      runtime.jiraSearchIssues(params.jql, params.limit, params.siteId)
+    handler: async (params, { runtime, signal }) =>
+      runtime.jiraSearchIssues(params.jql, params.limit, params.siteId, signal)
   }),
   defineMethod({
     name: 'jira.listIssues',
@@ -145,6 +174,23 @@ export const JIRA_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.jiraGetIssue(params.key.trim(), params.siteId)
   }),
   defineMethod({
+    name: 'jira.lookupIssueSummary',
+    params: IssueKey,
+    handler: async (params, { runtime, signal }) => {
+      if (!params.siteId) {
+        throw new Error('Site ID is required')
+      }
+      return runtime.jiraLookupIssueSummary(params.key.trim(), params.siteId, signal)
+    }
+  }),
+  defineStreamingMethod({
+    name: 'jira.getIssueStream',
+    params: IssueKey,
+    handler: async (params, { runtime }, emit) => {
+      emitJiraPayload(await runtime.jiraGetIssue(params.key.trim(), params.siteId), emit)
+    }
+  }),
+  defineMethod({
     name: 'jira.createIssue',
     params: CreateIssue,
     handler: async (params, { runtime }) =>
@@ -154,7 +200,8 @@ export const JIRA_METHODS: RpcMethod[] = [
         issueTypeId: params.issueTypeId.trim(),
         title: params.title.trim(),
         description: params.description?.trim() || undefined,
-        customFields: params.customFields
+        customFields: params.customFields,
+        userFieldKeys: params.userFieldKeys
       })
   }),
   defineMethod({
@@ -174,6 +221,13 @@ export const JIRA_METHODS: RpcMethod[] = [
     params: IssueKey,
     handler: async (params, { runtime }) =>
       runtime.jiraIssueComments(params.key.trim(), params.siteId)
+  }),
+  defineStreamingMethod({
+    name: 'jira.issueCommentsStream',
+    params: IssueKey,
+    handler: async (params, { runtime }, emit) => {
+      emitJiraPayload(await runtime.jiraIssueComments(params.key.trim(), params.siteId), emit)
+    }
   }),
   defineMethod({
     name: 'jira.listProjects',
@@ -206,6 +260,11 @@ export const JIRA_METHODS: RpcMethod[] = [
     params: AssignableUsers,
     handler: async (params, { runtime }) =>
       runtime.jiraListAssignableUsers(params.key.trim(), params.query, params.siteId)
+  }),
+  defineMethod({
+    name: 'jira.searchUsers',
+    params: UserSearch,
+    handler: async (params, { runtime }) => runtime.jiraSearchUsers(params.query, params.siteId)
   }),
   defineMethod({
     name: 'jira.listTransitions',

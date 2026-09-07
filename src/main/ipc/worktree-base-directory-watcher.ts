@@ -1,151 +1,55 @@
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import { notifyWorktreeGitStatusMetadataChanged, notifyWorktreesChanged } from './worktree-remote'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   createWorktreeHeadIdentityRefreshState,
-  refreshWorktreeHeadIdentities,
-  type WorktreeHeadIdentityRefreshState
+  disposeWorktreeHeadIdentityRefreshState,
+  refreshWorktreeHeadIdentities
 } from './worktree-head-identity-refresh'
 import {
-  collectLocalWorktreeBaseChanges,
-  collectRemoteWorktreeBaseChanges,
-  type WorktreeBaseCollectedChanges
-} from './worktree-base-directory-change-collector'
+  clearPendingWorktreeBaseNotifications,
+  supportsWorktreeHeadIdentityRefresh
+} from './worktree-base-directory-notifications'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
+import { EMPTY_HEAD_IDENTITY_SCOPE } from './worktree-head-identity-scope'
 import {
   buildWorktreeBaseDirectoryWatchTargets,
   clearWorktreeBaseDirectoryWatchTargetWarnings
 } from './worktree-base-directory-watch-targets'
-import { startWorktreeBaseDirectoryPoller } from './worktree-base-directory-poller'
+import {
+  createWorktreePollerWindowVisibility,
+  startWorktreeBaseDirectoryPoller
+} from './worktree-base-directory-poller'
+import {
+  applyActiveGitStatusRefBinding,
+  clearActiveGitStatusRefBinding,
+  updateActiveGitStatusRefBinding,
+  type GitStatusRefBindingRequest
+} from './worktree-git-status-ref-watch'
+import { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
+import {
+  handleLocalWatchEvents,
+  handleRemoteWatchEvents,
+  handleWatchOverflow,
+  type ActiveWatch
+} from './worktree-base-directory-watch-events'
 
-type ActiveWatch = WorktreeBaseWatchTarget & {
-  mainWindow: BrowserWindow
-  subscription: { unsubscribe: () => Promise<void> }
-  notifyTimer: ReturnType<typeof setTimeout> | null
-  pendingStructureRepoIds: Set<string>
-  pendingGitStatusRepoIds: Set<string>
-  pendingHeadIdentityRepoIds: Set<string>
-  headIdentityRefresh: WorktreeHeadIdentityRefreshState
-  disposed: boolean
-}
-
-const WATCH_DEBOUNCE_MS = 250
 const activeWatches = new Map<string, ActiveWatch>()
 let syncGeneration = 0
 let scheduledSync: ReturnType<typeof setTimeout> | null = null
 let latestSyncContext: { mainWindow: BrowserWindow; store: Store } | null = null
-
-function clearPendingRepoIds(watch: ActiveWatch): void {
-  watch.pendingStructureRepoIds.clear()
-  watch.pendingGitStatusRepoIds.clear()
-  watch.pendingHeadIdentityRepoIds.clear()
-}
-
-type PendingNotificationInput = Partial<Omit<WorktreeBaseCollectedChanges, 'overflow'>>
-
-function scheduleNotification(watch: ActiveWatch, changes: PendingNotificationInput): void {
-  if (watch.disposed || watch.mainWindow.isDestroyed()) {
-    clearPendingRepoIds(watch)
-    return
-  }
-  for (const repoId of changes.structureRepoIds ?? []) {
-    watch.pendingStructureRepoIds.add(repoId)
-  }
-  for (const repoId of changes.gitStatusRepoIds ?? []) {
-    watch.pendingGitStatusRepoIds.add(repoId)
-  }
-  for (const repoId of changes.headIdentityRepoIds ?? []) {
-    watch.pendingHeadIdentityRepoIds.add(repoId)
-  }
-  if (watch.notifyTimer) {
-    clearTimeout(watch.notifyTimer)
-  }
-  watch.notifyTimer = setTimeout(() => {
-    watch.notifyTimer = null
-    if (watch.disposed || watch.mainWindow.isDestroyed()) {
-      clearPendingRepoIds(watch)
-      return
-    }
-    const pendingStructure = [...watch.pendingStructureRepoIds]
-    const hasHeadIdentity = watch.pendingHeadIdentityRepoIds.size > 0
-    // Source Control refreshes on both index churn and head moves; structural
-    // repos already refresh via the authoritative listing, so drop them here.
-    const sourceControlRepoIds = new Set(
-      [...watch.pendingGitStatusRepoIds, ...watch.pendingHeadIdentityRepoIds].filter(
-        (repoId) => !watch.pendingStructureRepoIds.has(repoId)
-      )
-    )
-    // Structural ticks refresh silently (emit=false): the authoritative listing
-    // already reported them, so this only re-baselines ahead of later head diffs.
-    const emitHeadIdentities = pendingStructure.length === 0
-    clearPendingRepoIds(watch)
-    for (const repoId of pendingStructure) {
-      notifyWorktreesChanged(watch.mainWindow, repoId)
-    }
-    for (const repoId of sourceControlRepoIds) {
-      notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId)
-    }
-    // Only re-read head identities for true head triggers: an index rewrite
-    // cannot move HEAD, so status-only bursts skip the linked-worktree scan.
-    if (supportsHeadIdentityRefresh(watch) && (pendingStructure.length > 0 || hasHeadIdentity)) {
-      void refreshWorktreeHeadIdentities(watch, watch.headIdentityRefresh, emitHeadIdentities)
-    }
-  }, WATCH_DEBOUNCE_MS)
-}
-
-// Why: SSH common dirs would need per-signal network reads to diff heads;
-// remote background freshness stays on the structural path for now.
-function supportsHeadIdentityRefresh(watch: ActiveWatch): boolean {
-  return watch.kind === 'git-common' && !watch.connectionId
-}
-
-function hasCollectedChanges(changes: WorktreeBaseCollectedChanges): boolean {
-  return [changes.structureRepoIds, changes.gitStatusRepoIds, changes.headIdentityRepoIds].some(
-    (ids) => ids.length > 0
-  )
-}
-
-function handleLocalWatchEvents(
-  watch: ActiveWatch,
-  error: Error | null,
-  events: { type: 'create' | 'update' | 'delete'; path: string }[]
-): void {
-  if (watch.disposed || watch.mainWindow.isDestroyed()) {
-    return
-  }
-  if (error) {
-    console.warn(`[worktree-base-watcher] watcher failed for ${watch.path}:`, error)
-    scheduleNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
-    return
-  }
-  const changes = collectLocalWorktreeBaseChanges(watch, events)
-  if (hasCollectedChanges(changes)) {
-    scheduleNotification(watch, changes)
-  }
-}
-
-function handleRemoteWatchEvents(
-  watch: ActiveWatch,
-  events: Parameters<typeof collectRemoteWorktreeBaseChanges>[1]
-): void {
-  if (watch.disposed || watch.mainWindow.isDestroyed()) {
-    return
-  }
-  const changes = collectRemoteWorktreeBaseChanges(watch, events)
-  if (changes.overflow) {
-    scheduleNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
-    return
-  }
-  if (hasCollectedChanges(changes)) {
-    scheduleNotification(watch, changes)
-  }
+export function setWorktreeGitStatusRefWatch(
+  args: GitStatusRefBindingRequest,
+  resolveUpstreamRef: (signal: AbortSignal) => Promise<string | undefined>
+): Promise<void> {
+  return updateActiveGitStatusRefBinding(args, () => activeWatches.values(), resolveUpstreamRef)
 }
 
 function createActiveWatch(
   target: WorktreeBaseWatchTarget,
   mainWindow: BrowserWindow,
-  subscription: ActiveWatch['subscription']
+  subscription: ActiveWatch['subscription'],
+  gitStatusRefPaths: Set<string>
 ): ActiveWatch {
   return {
     ...target,
@@ -155,7 +59,10 @@ function createActiveWatch(
     pendingStructureRepoIds: new Set(),
     pendingGitStatusRepoIds: new Set(),
     pendingHeadIdentityRepoIds: new Set(),
+    pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
     headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
+    gitStatusRefPaths,
+    watcherFailureRefresh: new WorktreeWatcherFailureRefreshCooldown(),
     disposed: false
   }
 }
@@ -165,6 +72,8 @@ async function subscribeTarget(
   mainWindow: BrowserWindow
 ): Promise<ActiveWatch> {
   let activeWatch: ActiveWatch | null = null
+  const gitStatusRefPaths = new Set<string>()
+  applyActiveGitStatusRefBinding({ ...target, gitStatusRefPaths })
   if (target.connectionId) {
     const provider = getSshFilesystemProvider(target.connectionId)
     if (!provider) {
@@ -175,11 +84,14 @@ async function subscribeTarget(
       if (!currentWatch || currentWatch.disposed) {
         return
       }
-      handleRemoteWatchEvents(currentWatch, events)
+      handleRemoteWatchEvents(currentWatch, events, () => activeWatches.values())
     })
-    activeWatch = createActiveWatch(target, mainWindow, {
-      unsubscribe: async () => unwatch()
-    })
+    activeWatch = createActiveWatch(
+      target,
+      mainWindow,
+      { unsubscribe: async () => unwatch() },
+      gitStatusRefPaths
+    )
     return activeWatch
   }
 
@@ -192,14 +104,31 @@ async function subscribeTarget(
     () => (activeWatches.get(target.key) ?? activeWatch)?.repos ?? target.repos,
     (events) => {
       const currentWatch = activeWatches.get(target.key) ?? activeWatch
-      if (!currentWatch || currentWatch.disposed) {
-        return
+      if (currentWatch && !currentWatch.disposed) {
+        handleLocalWatchEvents(currentWatch, null, events, () => activeWatches.values())
       }
-      handleLocalWatchEvents(currentWatch, null, events)
+    },
+    {
+      visibility: createWorktreePollerWindowVisibility(
+        () => (activeWatches.get(target.key) ?? activeWatch)?.mainWindow ?? null
+      ),
+      getGitStatusRefPaths: () => [...gitStatusRefPaths],
+      onWatchError: (error) => {
+        const currentWatch = activeWatches.get(target.key) ?? activeWatch
+        if (currentWatch && !currentWatch.disposed) {
+          handleLocalWatchEvents(currentWatch, error, [], () => activeWatches.values())
+        }
+      },
+      onOverflow: () => {
+        const currentWatch = activeWatches.get(target.key) ?? activeWatch
+        if (currentWatch) {
+          handleWatchOverflow(currentWatch, () => activeWatches.values())
+        }
+      }
     }
   )
-  activeWatch = createActiveWatch(target, mainWindow, subscription)
-  if (supportsHeadIdentityRefresh(activeWatch)) {
+  activeWatch = createActiveWatch(target, mainWindow, subscription, gitStatusRefPaths)
+  if (supportsWorktreeHeadIdentityRefresh(activeWatch)) {
     // Baseline eagerly so the first status-only signal — possibly hours after
     // subscribe — diffs against subscribe-time heads instead of silently
     // re-baselining past an external commit.
@@ -217,6 +146,7 @@ async function replaceWatch(
   if (previous) {
     previous.repos = target.repos
     previous.mainWindow = mainWindow
+    applyActiveGitStatusRefBinding(previous)
     return
   }
   try {
@@ -228,6 +158,7 @@ async function replaceWatch(
       })
       return
     }
+    applyActiveGitStatusRefBinding(activeWatch)
     activeWatches.set(target.key, activeWatch)
   } catch (error) {
     console.warn(`[worktree-base-watcher] failed to watch ${target.path}:`, error)
@@ -241,10 +172,9 @@ async function removeWatch(key: string): Promise<void> {
   }
   activeWatches.delete(key)
   watch.disposed = true
-  if (watch.notifyTimer) {
-    clearTimeout(watch.notifyTimer)
-  }
-  clearPendingRepoIds(watch)
+  clearTimeout(watch.notifyTimer ?? undefined)
+  disposeWorktreeHeadIdentityRefreshState(watch.headIdentityRefresh)
+  clearPendingWorktreeBaseNotifications(watch)
   await watch.subscription.unsubscribe().catch((error) => {
     console.warn(`[worktree-base-watcher] failed to unwatch ${watch.path}:`, error)
   })
@@ -323,6 +253,7 @@ export function scheduleCurrentWorktreeBaseDirectoryWatcherSync(): void {
 export async function disposeWorktreeBaseDirectoryWatchers(): Promise<void> {
   syncGeneration++
   latestSyncContext = null
+  clearActiveGitStatusRefBinding()
   if (scheduledSync) {
     clearTimeout(scheduledSync)
     scheduledSync = null

@@ -126,7 +126,7 @@ test.describe('Tab Rename (Inline)', () => {
     expect(originalTitle.length).toBeGreaterThan(0)
 
     await tabLocatorByTitle(orcaPage, originalTitle).click({ button: 'right' })
-    await orcaPage.getByRole('menuitem', { name: 'Change Title', exact: true }).click()
+    await orcaPage.getByRole('menuitem', { name: /^Change Title(?:\s|$)/ }).click()
 
     const renameInput = orcaPage.getByRole('textbox', {
       name: `Rename tab ${originalTitle}`,
@@ -306,6 +306,56 @@ test.describe('Tab Rename (Inline)', () => {
       .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
       .toBe('Committed By Right Click')
     await expect(renameInput).toBeHidden()
+  })
+
+  test('terminal title updates do not resize neighboring tabs', async ({ orcaPage }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const tabIds = await orcaPage.evaluate((targetWorktreeId) => {
+      const state = window.__store!.getState()
+      const existing = state.tabsByWorktree[targetWorktreeId] ?? []
+      for (let index = existing.length; index < 3; index += 1) {
+        state.createTab(targetWorktreeId, undefined, undefined, { activate: false })
+      }
+      const ids = (window.__store!.getState().tabsByWorktree[targetWorktreeId] ?? [])
+        .slice(0, 3)
+        .map((tab) => tab.id)
+      ids.forEach((id, index) => state.setTabCustomTitle(id, `Tab ${index + 1}`))
+      return ids
+    }, worktreeId)
+
+    const tabs = tabIds.map((id) =>
+      orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${id}"]`)
+    )
+    await expect(tabs[2]!).toBeVisible()
+    const before = await Promise.all(
+      tabs.map((tab) => tab.evaluate((element) => element.getBoundingClientRect().width))
+    )
+    // Why: at the 88px shrink floor widths are stable for the wrong reason, and being above it is
+    // also what proves the definite tab width applied — so this fails first on a regression.
+    expect(
+      Math.min(...before),
+      'tabs must be above the 88px shrink floor for the stability check to mean anything'
+    ).toBeGreaterThan(88)
+
+    await orcaPage.evaluate(
+      ({ tabId }) => {
+        window
+          .__store!.getState()
+          .setTabCustomTitle(
+            tabId,
+            'Continuously changing generated terminal title that must remain constrained'
+          )
+      },
+      { tabId: tabIds[0] }
+    )
+    await expect(tabs[0]!).toContainText('Continuously changing generated terminal title')
+    const after = await Promise.all(
+      tabs.map((tab) => tab.evaluate((element) => element.getBoundingClientRect().width))
+    )
+
+    after.forEach((width, index) => expect(Math.abs(width - before[index]!)).toBeLessThanOrEqual(1))
+    await tabs[2]!.click()
+    await expect(tabs[2]!).toHaveAttribute('data-active', 'true')
   })
 
   test('rename input stays at a usable width when many tabs are open', async ({ orcaPage }) => {

@@ -31,16 +31,33 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { showOnboardingFromRenderer } from '../onboarding/show-onboarding-event'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
-import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import type * as SidebarFeedbackDialogModule from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
+
+// Why lazy: the feedback form is only reachable from this menu's own item, so it does not
+// belong on the renderer boot graph. Shared with the menu-open warm below so both hit the
+// same module-map entry.
+const loadSidebarFeedbackDialog = (): Promise<typeof SidebarFeedbackDialogModule> =>
+  import('./SidebarFeedbackDialog')
+
+const SidebarFeedbackDialog = lazyWithRetry(
+  () => loadSidebarFeedbackDialog().then((module) => ({ default: module.SidebarFeedbackDialog })),
+  { reloadKey: 'sidebar-feedback-dialog' }
+)
 
 const DOCS_URL = 'https://www.onorca.dev/docs'
 const CHANGELOG_URL = 'https://onorca.dev/changelog'
 const GITHUB_URL = 'https://github.com/stablyai/orca'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
 const X_URL = 'https://x.com/orca_build'
-const NO_UPDATE_CHECK_MODIFIERS = { ctrlKey: false, metaKey: false, shiftKey: false }
+const NO_UPDATE_CHECK_MODIFIERS = {
+  altKey: false,
+  ctrlKey: false,
+  metaKey: false,
+  shiftKey: false
+}
 
 function openExternalUrl(url: string): void {
   void window.api.shell.openUrl(url)
@@ -90,7 +107,8 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const settingsShortcut = useShortcutKeyDetails('app.settings')
   const [menuOpen, setMenuOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
-  const [showAdminOptions, setShowAdminOptions] = useState(false)
+  // Why sticky: the dialog animates itself closed off `open`, so unmounting on close cuts that short.
+  const [feedbackDialogMounted, setFeedbackDialogMounted] = useState(false)
   const [isRestartingOrca, setIsRestartingOrca] = useState(false)
   const lastShowOnboardingAtRef = React.useRef(0)
   const updateCheckModifiersRef = React.useRef(NO_UPDATE_CHECK_MODIFIERS)
@@ -103,15 +121,16 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const handleMenuOpenChange = (open: boolean): void => {
     setMenuOpen(open)
     updateCheckModifiersRef.current = NO_UPDATE_CHECK_MODIFIERS
-    if (!open) {
-      setShowAdminOptions(false)
+    if (open) {
+      // Warm on the precursor: reading the menu and clicking Send Feedback takes hundreds of ms,
+      // so the chunk is already in the module map by the time the item is selected.
+      void loadSidebarFeedbackDialog().catch(() => {})
     }
   }
 
-  const revealAdminOptions = (altKey: boolean): void => {
-    // Why: onboarding replay and restart stay off the default Help menu; holding
-    // Option/Alt before opening is an intentional power-user affordance.
-    setShowAdminOptions(altKey)
+  const handleOpenFeedback = (): void => {
+    setFeedbackDialogMounted(true)
+    setFeedbackOpen(true)
   }
 
   const handleShowOnboarding = (): void => {
@@ -154,6 +173,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
 
   const handleCheckForUpdatesPointerDown = (event: React.PointerEvent): void => {
     updateCheckModifiersRef.current = {
+      altKey: event.altKey,
       ctrlKey: event.ctrlKey,
       metaKey: event.metaKey,
       shiftKey: event.shiftKey
@@ -215,8 +235,6 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
                     'Help'
                   )}
                   className="text-muted-foreground"
-                  onPointerDown={(event) => revealAdminOptions(event.altKey)}
-                  onClick={(event) => revealAdminOptions(event.altKey)}
                 >
                   <CircleHelp className="size-3.5" />
                 </Button>
@@ -235,7 +253,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>
+            <DropdownMenuItem onSelect={handleOpenFeedback}>
               <MessageSquareText className="size-3.5" />
               {translate(
                 'auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7',
@@ -262,19 +280,17 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
                 />
               </DropdownMenuItem>
             ) : null}
-            {showAdminOptions ? (
-              <DropdownMenuItem
-                className="whitespace-nowrap"
-                onClick={handleShowOnboarding}
-                onSelect={handleShowOnboarding}
-              >
-                <School className="size-3.5" />
-                {translate(
-                  'auto.components.sidebar.SidebarSettingsHelpMenu.b7e4d2a19c',
-                  'Onboarding'
-                )}
-              </DropdownMenuItem>
-            ) : null}
+            <DropdownMenuItem
+              className="whitespace-nowrap"
+              onClick={handleShowOnboarding}
+              onSelect={handleShowOnboarding}
+            >
+              <School className="size-3.5" />
+              {translate(
+                'auto.components.sidebar.SidebarSettingsHelpMenu.b7e4d2a19c',
+                'Onboarding'
+              )}
+            </DropdownMenuItem>
             <ExternalMenuItem
               label={translate(
                 'auto.components.sidebar.SidebarSettingsHelpMenu.cdc87f897e',
@@ -327,22 +343,22 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
                 'Check for Updates'
               )}
             </DropdownMenuItem>
-            {showAdminOptions ? (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={handleRestartOrca} disabled={isRestartingOrca}>
-                  <RotateCw className="size-3.5" />
-                  {translate(
-                    'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1',
-                    'Restart Orca'
-                  )}
-                </DropdownMenuItem>
-              </>
-            ) : null}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={handleRestartOrca} disabled={isRestartingOrca}>
+              <RotateCw className="size-3.5" />
+              {translate(
+                'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1',
+                'Restart Orca'
+              )}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <SidebarFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      {feedbackDialogMounted ? (
+        <React.Suspense fallback={null}>
+          <SidebarFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+        </React.Suspense>
+      ) : null}
     </>
   )
 }

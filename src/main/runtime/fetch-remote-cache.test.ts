@@ -66,7 +66,7 @@ function fullRemoteFetchOptions(cwd: string): { cwd: string; timeout: number } {
   return { cwd, timeout: 60_000 }
 }
 
-function mockFetchResults(results: (Promise<unknown> | unknown)[]): void {
+function mockFetchResults(results: unknown[]): void {
   let fetchIndex = 0
   gitExecFileAsyncMock.mockImplementation((argv: string[]) => {
     if (argv[0] === 'rev-parse') {
@@ -133,9 +133,11 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     const first = runtime.fetchRemoteWithCache('/repo/c', 'origin')
     const second = runtime.fetchRemoteWithCache('/repo/c', 'origin')
 
-    // Allow both callers to register before we resolve.
-    await Promise.resolve()
-    await Promise.resolve()
+    // Allow both callers to register before we resolve. Each canonicalizes the
+    // repo key first, so the dispatch lands several microtasks in.
+    for (let tick = 0; tick < 8; tick += 1) {
+      await Promise.resolve()
+    }
     expect(fetchCallCount()).toBe(1)
 
     resolveFetch()
@@ -173,6 +175,27 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     expect(caches.canonicalFetchKeyCache.has('/repo/cache-0::origin')).toBe(false)
     expect(caches.fetchLastCompletedAt.has('/repo/cache-0::origin')).toBe(false)
   })
+
+  it.each([
+    'main',
+    'a'.repeat(40),
+    'refs/remotes/main',
+    '',
+    'origin/',
+    '/main',
+    'refs/remotes/origin/',
+    'refs/remotes//main'
+  ])(
+    'does not launch Git for a base without both remote and branch components: %s',
+    async (base) => {
+      const runtime = new OrcaRuntimeService(null)
+      await expect(runtime.resolveRemoteTrackingBase('/repo/e', base)).resolves.toBeNull()
+      await expect(
+        runtime.resolveRemoteTrackingBase('/repo/e', base, { wslDistro: 'Ubuntu' })
+      ).resolves.toBeNull()
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    }
+  )
 
   it('resolves remote-tracking bases with longest configured remote matching', async () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: 'foo\nfoo/bar\norigin\n', stderr: '' })

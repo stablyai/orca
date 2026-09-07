@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeDisabledTuiAgents, pickTuiAgent } from './tui-agent-selection'
+import {
+  haveSameDisabledTuiAgents,
+  normalizeDisabledTuiAgents,
+  pickTuiAgent
+} from './tui-agent-selection'
 
 describe('pickTuiAgent', () => {
   it('uses an installed preferred agent', () => {
@@ -28,5 +32,13 @@ describe('normalizeDisabledTuiAgents', () => {
       'codex',
       'claude'
     ])
+  })
+})
+
+describe('haveSameDisabledTuiAgents', () => {
+  it('compares the normalized disabled-agent sets', () => {
+    expect(haveSameDisabledTuiAgents(['codex', 'claude'], ['claude', 'codex'])).toBe(true)
+    expect(haveSameDisabledTuiAgents(['codex', 'unknown'], ['codex'])).toBe(true)
+    expect(haveSameDisabledTuiAgents(['codex'], ['claude'])).toBe(false)
   })
 })

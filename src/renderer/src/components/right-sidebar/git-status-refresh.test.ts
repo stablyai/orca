@@ -5,7 +5,7 @@ import {
   refreshGitStatusForWorktreeStrict,
   type GitStatusRefreshDeps
 } from './git-status-refresh'
-import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
 
 function makeDeps(): GitStatusRefreshDeps {
   return {
@@ -63,7 +63,8 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(gitStatus).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: 'ssh-1'
+      connectionId: 'ssh-1',
+      admissionTier: 'status'
     })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-1', status)
     expect(deps.updateWorktreeGitIdentity).toHaveBeenCalledWith('wt-1', {
@@ -150,7 +151,8 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(gitStatus).toHaveBeenCalledWith({
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      admissionTier: 'status'
     })
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-3', status)
   })
@@ -178,11 +180,13 @@ describe('refreshGitStatusForWorktree', () => {
 
     expect(gitStatus).toHaveBeenNthCalledWith(1, {
       worktreePath: '/repo',
-      connectionId: undefined
+      connectionId: undefined,
+      admissionTier: 'status'
     })
     expect(gitStatus).toHaveBeenNthCalledWith(2, {
       worktreePath: '/repo',
       connectionId: undefined,
+      admissionTier: 'interactive',
       bypassEffectiveUpstreamNegativeCache: true
     })
   })
@@ -311,17 +315,40 @@ describe('refreshGitStatusForWorktree', () => {
     }
     vi.stubGlobal('window', { api: { git: { status: vi.fn().mockResolvedValue(status) } } })
     const deps = makeDeps()
+    const onStatusAccepted = vi.fn()
 
     await refreshGitStatusForWorktree({
       worktreeId: 'wt-stale',
       worktreePath: '/repo',
       deps,
-      request: { shouldApply: () => false }
+      request: { shouldApply: () => false, onStatusAccepted }
     })
 
     expect(deps.setGitStatus).not.toHaveBeenCalled()
     expect(deps.updateWorktreeGitIdentity).not.toHaveBeenCalled()
     expect(deps.fetchUpstreamStatus).not.toHaveBeenCalled()
+    expect(onStatusAccepted).not.toHaveBeenCalled()
+  })
+
+  it('publishes upstream watch identity only after accepting the status result', async () => {
+    const status: GitStatusResult = {
+      entries: [],
+      conflictOperation: 'unknown',
+      upstreamStatus: { hasUpstream: true, upstreamName: 'origin/feature', ahead: 0, behind: 0 }
+    }
+    vi.stubGlobal('window', { api: { git: { status: vi.fn().mockResolvedValue(status) } } })
+    const deps = makeDeps()
+    const onStatusAccepted = vi.fn()
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-current',
+      worktreePath: '/repo',
+      deps,
+      request: { shouldApply: () => true, onStatusAccepted }
+    })
+
+    expect(onStatusAccepted).toHaveBeenCalledOnce()
+    expect(onStatusAccepted).toHaveBeenCalledWith(status)
   })
 
   it('does not let an older automatic explicit upstream fetch overwrite a strict result', async () => {

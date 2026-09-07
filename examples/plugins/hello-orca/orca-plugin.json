@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 1,
+  "id": "hello-orca",
+  "publisher": "orca-samples",
+  "name": "Hello Orca",
+  "version": "1.0.0",
+  "description": "Sample plugin combining a sandboxed panel, a worker command, and event subscriptions.",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "panels": [{ "id": "hello", "title": "Hello Orca", "icon": "plug", "entry": "panel.html" }],
+    "commands": [{ "id": "hello-ping", "title": "Hello: Ping" }],
+    "events": [{ "on": "worktree.created" }, { "on": "agent.status.changed" }]
+  },
+  "capabilities": [
+    { "kind": "workspace:read" },
+    { "kind": "terminal:send" },
+    { "kind": "notifications:show" },
+    { "kind": "storage" },
+    { "kind": "events:subscribe" }
+  ]
+}

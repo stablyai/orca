@@ -1,9 +1,8 @@
 import { execFile } from 'node:child_process'
 import dgram from 'node:dgram'
-import { access } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import path from 'node:path'
 import { ipcMain, shell, systemPreferences } from 'electron'
+import { getMacosFullDiskAccessStatus } from '../macos-full-disk-access-status'
+import { testLocalNetworkConnection } from './local-network-connection-test'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionRequestResult,
@@ -18,6 +17,8 @@ const PRIVACY_PANE_URLS: Partial<Record<DeveloperPermissionId, string>> = {
   accessibility: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
   'full-disk-access': 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
   automation: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Automation',
+  'local-network':
+    'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension?Privacy_LocalNetwork',
   bluetooth: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth'
 }
 
@@ -45,21 +46,6 @@ function getMediaStatus(mediaType: 'microphone' | 'camera' | 'screen'): Develope
   }
   try {
     return systemPreferences.getMediaAccessStatus(mediaType)
-  } catch {
-    return 'unknown'
-  }
-}
-
-async function getFullDiskAccessStatus(): Promise<DeveloperPermissionStatus> {
-  const unsupported = unsupportedOffMac()
-  if (unsupported) {
-    return unsupported
-  }
-  try {
-    // Why: Safari bookmarks are TCC-protected, so read access is a practical
-    // Full Disk Access signal without touching user project contents.
-    await access(path.join(homedir(), 'Library', 'Safari', 'Bookmarks.plist'))
-    return 'granted'
   } catch {
     return 'unknown'
   }
@@ -165,7 +151,7 @@ async function getPermissionState(id: DeveloperPermissionId): Promise<DeveloperP
     case 'accessibility':
       return { id, status: getAccessibilityStatus() }
     case 'full-disk-access':
-      return { id, status: await getFullDiskAccessStatus() }
+      return { id, status: await getMacosFullDiskAccessStatus() }
     case 'automation':
     case 'local-network':
       return { id, status: unsupportedOffMac() ?? 'unknown' }
@@ -251,5 +237,11 @@ export function registerDeveloperPermissionHandlers(): void {
     async (_event, args: { id: DeveloperPermissionId }): Promise<void> => {
       await openPrivacyPane(args.id)
     }
+  )
+
+  ipcMain.handle('developerPermissions:testLocalNetworkConnection', async (_event, args: unknown) =>
+    testLocalNetworkConnection(
+      args && typeof args === 'object' ? (args as { host?: unknown; port?: unknown }) : {}
+    )
   )
 }

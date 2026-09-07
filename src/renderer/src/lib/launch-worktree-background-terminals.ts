@@ -9,15 +9,17 @@ import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { buildSetupRunnerCommand } from '../../../shared/setup-runner-command'
+import {
+  buildSetupRunnerCommand,
+  getSetupRunnerCommandPlatformForPath
+} from '../../../shared/setup-runner-command'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type {
-  TerminalLayoutSnapshot,
-  Worktree,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../shared/types'
+} from '../../../shared/worktree/launch-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 type BackgroundPane = {
   leafId: string
@@ -111,20 +113,28 @@ function persistExitedPaneOutput(tabId: string, leafId: string, output: string):
   })
 }
 
-function registerBackgroundPaneBuffer(tabId: string, leafId: string, ptyId: string): void {
+// Why the incarnation: a relay-recycled id can hold the previous owner's exit, and draining that
+// into this handler tears the pane down seconds after it launched.
+function registerBackgroundPaneBuffer(tabId: string, leafId: string, pane: SpawnedPane): void {
   let eagerBuffer: EagerPtyHandle | null = null
-  eagerBuffer = registerEagerPtyBuffer(ptyId, (exitPtyId) => {
+  const onExit = (exitPtyId: string): void => {
     persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
     useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
-  })
+  }
+  eagerBuffer = registerEagerPtyBuffer(pane.ptyId, onExit, pane.incarnationId)
 }
 
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {
+  // Why: background setup tabs can launch later, so they must reuse the same shell chosen when the runner was written.
   return buildSetupRunnerCommand(
     setup.runnerScriptPath,
-    isWindowsAbsolutePathLike(setup.runnerScriptPath) ? 'windows' : 'posix'
+    getSetupRunnerCommandPlatformForPath(setup.runnerScriptPath, 'posix'),
+    setup.shell
   )
 }
+
+/** The id a background pane got, plus which lifetime of it this spawn owns. */
+type SpawnedPane = { ptyId: string; incarnationId?: string }
 
 async function spawnPane(args: {
   worktree: Worktree
@@ -133,7 +143,7 @@ async function spawnPane(args: {
   leafId: string
   command?: string
   env?: Record<string, string>
-}): Promise<string> {
+}): Promise<SpawnedPane> {
   const result = await window.api.pty.spawn({
     cols: 120,
     rows: 40,
@@ -145,7 +155,10 @@ async function spawnPane(args: {
     tabId: args.tabId,
     leafId: args.leafId
   })
-  return result.id
+  return {
+    ptyId: result.id,
+    ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+  }
 }
 
 async function createBackgroundTab(args: {
@@ -167,9 +180,9 @@ async function createBackgroundTab(args: {
 
   const leafId = createBrowserUuid()
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
-  let ptyId: string
+  let pane: SpawnedPane
   try {
-    ptyId = await spawnPane({
+    pane = await spawnPane({
       worktree: args.worktree,
       connectionId: args.connectionId,
       tabId: tab.id,
@@ -183,17 +196,17 @@ async function createBackgroundTab(args: {
   }
   if (
     await retireUnownedTerminal({
-      tabId: tab.id,
-      ptyId,
+      owner: { tabId: tab.id },
+      ptyId: pane.ptyId,
       runtimeTarget: { kind: 'local' }
     })
   ) {
     throw new Error('The terminal tab was closed before its session finished starting.')
   }
-  store.updateTabPtyId(tab.id, ptyId)
-  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
-  registerBackgroundPaneBuffer(tab.id, leafId, ptyId)
-  return { tabId: tab.id, primary: { leafId, ptyId } }
+  store.updateTabPtyId(tab.id, pane.ptyId)
+  store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, pane.ptyId))
+  registerBackgroundPaneBuffer(tab.id, leafId, pane)
+  return { tabId: tab.id, primary: { leafId, ptyId: pane.ptyId } }
 }
 
 async function addSetupSplit(args: {
@@ -205,7 +218,7 @@ async function addSetupSplit(args: {
 }): Promise<void> {
   const store = useAppStore.getState()
   const setupLeafId = createBrowserUuid()
-  const setupPtyId = await spawnPane({
+  const setupPane = await spawnPane({
     worktree: args.worktree,
     connectionId: args.connectionId,
     tabId: args.tab.tabId,
@@ -215,24 +228,24 @@ async function addSetupSplit(args: {
   })
   if (
     await retireUnownedTerminal({
-      tabId: args.tab.tabId,
-      ptyId: setupPtyId,
+      owner: { tabId: args.tab.tabId },
+      ptyId: setupPane.ptyId,
       runtimeTarget: { kind: 'local' }
     })
   ) {
     return
   }
-  store.updateTabPtyId(args.tab.tabId, setupPtyId)
+  store.updateTabPtyId(args.tab.tabId, setupPane.ptyId)
   store.setTabLayout(
     args.tab.tabId,
     buildSplitLayout(
       args.tab.primary,
-      { leafId: setupLeafId, ptyId: setupPtyId },
+      { leafId: setupLeafId, ptyId: setupPane.ptyId },
       args.direction,
       getSetupTabTitle()
     )
   )
-  registerBackgroundPaneBuffer(args.tab.tabId, setupLeafId, setupPtyId)
+  registerBackgroundPaneBuffer(args.tab.tabId, setupLeafId, setupPane)
 }
 
 function getDefaultTabLaunches(

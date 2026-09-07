@@ -1,4 +1,4 @@
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -53,7 +53,11 @@ export class MimoCodeHookService {
   buildPtyEnv(_ptyId: string, existingMimocodeHome?: string): Record<string, string> {
     // Why: MiMo currently uses a shared home; per-source subdirs can come
     // later if concurrent MiMo panes need isolated runtime state.
-    const home = join(app.getPath('userData'), MIMOCODE_HOOKS_DIR, MIMOCODE_SHARED_HOME)
+    const home = join(
+      getAppEnvironment().getPath('userData'),
+      MIMOCODE_HOOKS_DIR,
+      MIMOCODE_SHARED_HOME
+    )
     try {
       for (const sub of ['config', 'data', 'cache', 'state'] as const) {
         mkdirSync(join(home, sub), { recursive: true })
@@ -68,7 +72,7 @@ export class MimoCodeHookService {
       mkdirSync(pluginsDir, { recursive: true })
       writeFileSync(
         join(pluginsDir, ORCA_MIMOCODE_PLUGIN_FILE),
-        getOpenCodeFamilyPluginSource('/hook/mimo-code')
+        getOpenCodeFamilyPluginSource('/hook/mimo-code', { emitSessionStart: false })
       )
     } catch {
       return existingMimocodeHome ? { MIMOCODE_HOME: existingMimocodeHome } : {}

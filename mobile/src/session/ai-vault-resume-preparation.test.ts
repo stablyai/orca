@@ -2,12 +2,15 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import {
   buildMobileAiVaultResumeLaunch,
-  prepareMobileAiVaultSessionResume,
-  resumeAiVaultSessionInTerminal,
-  RESUME_RPC_TIMEOUT_MS
+  resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
+import {
+  prepareMobileAiVaultSessionResume,
+  RESUME_RPC_TIMEOUT_MS
+} from './ai-vault-resume-preparation'
 
 const LEGACY_CODEX_HOME = '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
+const PER_ACCOUNT_HOME = '/Users/ada/Library/Application Support/orca/codex-accounts/a/home'
 
 function legacySession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   return {
@@ -121,15 +124,61 @@ describe('prepareMobileAiVaultSessionResume', () => {
     { agent: 'codex' as const, codexHome: '/Users/ada/.config/codex' },
     {
       agent: 'codex' as const,
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-accounts/a/home'
+      codexHome: PER_ACCOUNT_HOME,
+      executionHostId: 'ssh:server-1' as AiVaultSession['executionHostId']
     },
     { agent: 'codex' as const, codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex' }
-  ])('does not prepare non-legacy session $agent at $codexHome', async (overrides) => {
+  ])('does not prepare unrepinnable session $agent at $codexHome', async (overrides) => {
     const current = legacySession(overrides)
     const sendRequest = vi.fn()
 
     await expect(prepareMobileAiVaultSessionResume({ sendRequest }, current)).resolves.toBe(current)
     expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('repins a per-account session to the home the host substitutes', async () => {
+    const substituteHome = '/Users/ada/Library/Application Support/orca/codex-accounts/b/home'
+    const current = legacySession({ codexHome: PER_ACCOUNT_HOME })
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { useRealCodexHome: false, substituteCodexHome: substituteHome }
+    })
+
+    const prepared = await prepareMobileAiVaultSessionResume({ sendRequest }, current)
+    const launch = buildMobileAiVaultResumeLaunch({ session: prepared, hostPlatform: 'darwin' })
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'aiVault.prepareSessionResume',
+      {
+        agent: 'codex',
+        filePath: current.filePath,
+        codexHome: PER_ACCOUNT_HOME,
+        executionHostId: 'local'
+      },
+      { timeoutMs: RESUME_RPC_TIMEOUT_MS }
+    )
+    expect(prepared.codexHome).toBe(substituteHome)
+    expect(launch.command).toContain(`CODEX_HOME='${substituteHome}'`)
+  })
+
+  it('keeps a per-account session home when an older host sends no repin', async () => {
+    const current = legacySession({ codexHome: PER_ACCOUNT_HOME })
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { useRealCodexHome: false }
+    })
+
+    await expect(prepareMobileAiVaultSessionResume({ sendRequest }, current)).resolves.toBe(current)
+  })
+
+  it('keeps a per-account session usable when the host cannot prepare at all', async () => {
+    const current = legacySession({ codexHome: PER_ACCOUNT_HOME })
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: false,
+      error: { code: 'method_not_found', message: 'Unknown method' }
+    })
+
+    await expect(prepareMobileAiVaultSessionResume({ sendRequest }, current)).resolves.toBe(current)
   })
 
   it.each([

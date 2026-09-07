@@ -1,5 +1,6 @@
 import {
   MessageSquare,
+  PanelLeftClose,
   PanelRightClose,
   Pin,
   PinOff,
@@ -16,11 +17,12 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
+import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const TAB_COLORS = [
   {
@@ -94,23 +96,27 @@ type SortableTabContextMenuProps = {
   point: { x: number; y: number }
   tabCount: number
   hasTabsToRight: boolean
+  hasTabsToLeft: boolean
   isPinned: boolean
   onOpenChange: (open: boolean) => void
   onActivate: (tabId: string) => void
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
+  onCloseToLeft: (tabId: string) => void
   onRenameOpen: () => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
-  /** True when this tab is an agent terminal that can switch to the native chat
-   *  view; gates the "Switch view" menu item. */
+  /** True when this tab is an agent terminal that can switch between the terminal
+   *  and native chat views; gates the "Switch view" menu item. Structured
+   *  sessions never qualify — they have no terminal underneath. */
   canToggleViewMode?: boolean
   /** True when the tab is currently showing the native chat view (drives the
    *  item's label/icon between "chat" and "terminal"). */
   isChatView?: boolean
   /** Toggle the tab between terminal and native chat view. */
   onToggleViewMode?: () => void
+  canSplitTerminal?: boolean
 }
 
 export function SortableTabContextMenu({
@@ -122,18 +128,21 @@ export function SortableTabContextMenu({
   point,
   tabCount,
   hasTabsToRight,
+  hasTabsToLeft,
   isPinned,
   onOpenChange,
   onActivate,
   onClose,
   onCloseOthers,
   onCloseToRight,
+  onCloseToLeft,
   onRenameOpen,
   onSetTabColor,
   onTogglePin,
   canToggleViewMode = false,
   isChatView = false,
-  onToggleViewMode
+  onToggleViewMode,
+  canSplitTerminal = true
 }: SortableTabContextMenuProps): React.JSX.Element {
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -152,7 +161,7 @@ export function SortableTabContextMenu({
           style={{ left: point.x, top: point.y }}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" sideOffset={0} align="start">
+      <DropdownMenuContent className={TAB_CONTEXT_MENU_CONTENT_CLASS} sideOffset={0} align="start">
         <TerminalTabSplitMenuSection
           unifiedTabId={unifiedTabId}
           groupId={groupId}
@@ -161,6 +170,7 @@ export function SortableTabContextMenu({
           onActivate={onActivate}
           splitRightShortcut={splitRightShortcut}
           splitDownShortcut={splitDownShortcut}
+          showTerminalSplit={canSplitTerminal}
         />
         {canToggleViewMode && onToggleViewMode ? (
           <>
@@ -209,6 +219,13 @@ export function SortableTabContextMenu({
           {translate(
             'auto.components.tab.bar.SortableTabContextMenu.c1ee099c7e',
             'Close Tabs To The Right'
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onCloseToLeft(tab.id)} disabled={!hasTabsToLeft}>
+          <PanelLeftClose className="size-3.5" />
+          {translate(
+            'components.tab.bar.SortableTabContextMenu.closeTabsToLeft',
+            'Close Tabs To The Left'
           )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />

@@ -142,7 +142,7 @@ export function getWarpThemeDirectories(): string[] {
 export function warpThemeSourceLabelForDirectory(directoryPath: string): string {
   const parts = directoryPath.split(/[\\/]+/).filter(Boolean)
   const themesIndex = parts.findLastIndex((part) => part.toLowerCase() === 'themes')
-  if (themesIndex < 0) {
+  if (themesIndex === -1) {
     return parts.at(-1) || 'Warp themes'
   }
 

@@ -68,6 +68,21 @@ describe('runtime AI Vault session scanner', () => {
     )
   })
 
+  it('surfaces project scope truncation from the runtime transport bound', async () => {
+    const scopePaths = Array.from({ length: 80 }, (_, index) => `/srv/repo-${index}`)
+
+    const scanResult = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {
+      scopePaths
+    })
+
+    expect(scanResult.issues).toContainEqual(
+      expect.objectContaining({
+        kind: 'scope',
+        message: expect.stringContaining('first 64 project paths')
+      })
+    )
+  })
+
   it('stamps sessions and issues returned for a different execution host', async () => {
     mocks.callRuntimeEnvironment.mockResolvedValueOnce({
       ok: true,
@@ -133,6 +148,28 @@ describe('runtime AI Vault session scanner', () => {
       'aiVault.prepareSessionResume',
       args
     )
+  })
+
+  it('keeps a repinned account home instead of stripping it', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        useRealCodexHome: false,
+        substituteCodexHome: '/data/orca/codex-accounts/account-2/home'
+      }
+    })
+
+    await expect(
+      prepareRuntimeAiVaultSessionResume('/user-data', 'env-1', {
+        agent: 'codex',
+        filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+        codexHome: '/managed',
+        executionHostId: 'runtime:env-1'
+      })
+    ).resolves.toEqual({
+      useRealCodexHome: false,
+      substituteCodexHome: '/data/orca/codex-accounts/account-2/home'
+    })
   })
 
   it('fails retryably when runtime preparation returns an invalid result', async () => {

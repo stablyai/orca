@@ -1,11 +1,14 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type {
-  SshConnectionState,
-  SshConnectionStatus,
-  SshTarget
-} from '../../../../shared/ssh-types'
+import type { SshConnectionState, SshTargetSummary } from '../../../../shared/ssh-types'
+import { sanitizeSshTargetGeneration } from '../../../../shared/ssh-target-generation'
 import { sshConnectionStatesEqual, sshTargetLabelsEqual } from './ssh-target-cleanup'
+export {
+  selectRuntimeAwareSshError,
+  selectRuntimeAwareSshStatus,
+  selectRuntimeAwareSshTargetLabel,
+  selectRuntimeAwareSshTargetRemoved
+} from './runtime-environment-ssh-selectors'
 
 /**
  * SSH state of one remote Orca server's own SSH targets, mirrored on this
@@ -16,6 +19,11 @@ import { sshConnectionStatesEqual, sshTargetLabelsEqual } from './ssh-target-cle
 export type RuntimeEnvironmentSshBucket = {
   connectionStates: Map<string, SshConnectionState>
   targetLabels: Map<string, string>
+  /** Durable SSH *registration* generation per target, for automation owner
+   * fencing. Absent for targets an older server omitted it for — never
+   * defaulted, because a guessed generation would fence against the wrong
+   * registration. Cleared with the rest of the bucket when state goes stale. */
+  targetGenerations: Map<string, number>
   removedTargetLabels: Map<string, string>
   /** Mirrors the local `sshTargetsHydrated` positive-evidence rule: absence
    * from `targetLabels` only counts as target removal once a target list
@@ -34,15 +42,18 @@ export type RuntimeEnvironmentSshSlice = {
   setEnvironmentSshConnectionState: (
     environmentId: string,
     targetId: string,
-    state: SshConnectionState
+    state: SshConnectionState,
+    generation?: number
   ) => void
   setEnvironmentSshTargetsMetadata: (
     environmentId: string,
-    targets: Pick<SshTarget, 'id' | 'label'>[]
+    targets: SshTargetSummary[],
+    generation?: number
   ) => void
   setEnvironmentRemovedSshTargetLabels: (
     environmentId: string,
-    labels: Record<string, string>
+    labels: Record<string, string>,
+    generation?: number
   ) => void
   /** Transport to the environment dropped: its mirrored SSH state can no
    * longer be trusted (it may hold a pre-drop "connected"). Downgrades the
@@ -57,8 +68,69 @@ export type RuntimeEnvironmentSshSlice = {
 const EMPTY_BUCKET: RuntimeEnvironmentSshBucket = {
   connectionStates: new Map(),
   targetLabels: new Map(),
+  targetGenerations: new Map(),
   removedTargetLabels: new Map(),
   targetsHydrated: false
+}
+
+function collectTargetGenerations(targets: SshTargetSummary[]): Map<string, number> {
+  const generations = new Map<string, number>()
+  for (const target of targets) {
+    const generation = sanitizeSshTargetGeneration(target.generation)
+    if (generation !== undefined) {
+      generations.set(target.id, generation)
+    }
+  }
+  return generations
+}
+
+function targetGenerationsEqual(current: Map<string, number>, next: Map<string, number>): boolean {
+  return (
+    current.size === next.size &&
+    [...next].every(([targetId, generation]) => current.get(targetId) === generation)
+  )
+}
+
+const stateGenerationByEnvironment = new Map<string, number>()
+const targetConnectionGenerationByEnvironment = new Map<string, number>()
+
+function targetGenerationKey(environmentId: string, targetId: string): string {
+  return `${environmentId}\0${targetId}`
+}
+
+export function getEnvironmentSshTargetConnectionGeneration(
+  environmentId: string,
+  targetId: string
+): number {
+  return (
+    targetConnectionGenerationByEnvironment.get(targetGenerationKey(environmentId, targetId)) ?? 0
+  )
+}
+
+function advanceEnvironmentSshTargetConnectionGeneration(
+  environmentId: string,
+  targetId: string
+): void {
+  const key = targetGenerationKey(environmentId, targetId)
+  targetConnectionGenerationByEnvironment.set(
+    key,
+    getEnvironmentSshTargetConnectionGeneration(environmentId, targetId) + 1
+  )
+}
+
+export function getEnvironmentSshStateGeneration(environmentId: string): number {
+  return stateGenerationByEnvironment.get(environmentId) ?? 0
+}
+
+function advanceEnvironmentSshStateGeneration(environmentId: string): void {
+  stateGenerationByEnvironment.set(
+    environmentId,
+    getEnvironmentSshStateGeneration(environmentId) + 1
+  )
+}
+
+function generationIsCurrent(environmentId: string, generation: number | undefined): boolean {
+  return generation === undefined || generation === getEnvironmentSshStateGeneration(environmentId)
 }
 
 function getBucket(
@@ -93,36 +165,66 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
 > = (set) => ({
   sshStateByEnvironment: new Map(),
 
-  setEnvironmentSshConnectionState: (environmentId, targetId, state) =>
+  setEnvironmentSshConnectionState: (environmentId, targetId, state, generation) =>
     set((s) => {
+      if (!generationIsCurrent(environmentId, generation)) {
+        return s
+      }
       const bucket = getBucket(s.sshStateByEnvironment, environmentId)
       if (sshConnectionStatesEqual(bucket.connectionStates.get(targetId), state)) {
         return s
       }
+      advanceEnvironmentSshTargetConnectionGeneration(environmentId, targetId)
       const connectionStates = new Map(bucket.connectionStates)
       connectionStates.set(targetId, state)
       return withBucket(s, environmentId, { ...bucket, connectionStates })
     }),
 
-  setEnvironmentSshTargetsMetadata: (environmentId, targets) =>
+  setEnvironmentSshTargetsMetadata: (environmentId, targets, generation) =>
     set((s) => {
+      if (!generationIsCurrent(environmentId, generation)) {
+        return s
+      }
       const bucket = getBucket(s.sshStateByEnvironment, environmentId)
-      if (sshTargetLabelsEqual(bucket.targetLabels, targets)) {
+      const targetIds = new Set(targets.map((target) => target.id))
+      const priorTargetIds = new Set([
+        ...bucket.targetLabels.keys(),
+        ...bucket.connectionStates.keys()
+      ])
+      for (const targetId of priorTargetIds) {
+        if (!targetIds.has(targetId)) {
+          // Why: remove/re-add under the same target id must invalidate mutations captured for the removed SSH session.
+          advanceEnvironmentSshTargetConnectionGeneration(environmentId, targetId)
+        }
+      }
+      const connectionStates = new Map(
+        Array.from(bucket.connectionStates).filter(([targetId]) => targetIds.has(targetId))
+      )
+      const targetGenerations = collectTargetGenerations(targets)
+      if (
+        sshTargetLabelsEqual(bucket.targetLabels, targets) &&
+        targetGenerationsEqual(bucket.targetGenerations, targetGenerations)
+      ) {
         // Why: an unchanged (even empty) list is still a successful load — the
         // hydration flag must flip on the first fetch of an empty target set.
         return bucket.targetsHydrated
           ? s
-          : withBucket(s, environmentId, { ...bucket, targetsHydrated: true })
+          : withBucket(s, environmentId, { ...bucket, connectionStates, targetsHydrated: true })
       }
       return withBucket(s, environmentId, {
         ...bucket,
+        connectionStates,
         targetLabels: new Map(targets.map((target) => [target.id, target.label])),
+        targetGenerations,
         targetsHydrated: true
       })
     }),
 
-  setEnvironmentRemovedSshTargetLabels: (environmentId, labels) =>
+  setEnvironmentRemovedSshTargetLabels: (environmentId, labels, generation) =>
     set((s) => {
+      if (!generationIsCurrent(environmentId, generation)) {
+        return s
+      }
       const bucket = getBucket(s.sshStateByEnvironment, environmentId)
       if (removedLabelsEqual(bucket.removedTargetLabels, labels)) {
         return s
@@ -135,21 +237,30 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
 
   markEnvironmentSshStateStale: (environmentId) =>
     set((s) => {
+      advanceEnvironmentSshStateGeneration(environmentId)
       const bucket = s.sshStateByEnvironment.get(environmentId)
-      if (!bucket || (!bucket.targetsHydrated && bucket.connectionStates.size === 0)) {
+      if (
+        !bucket ||
+        (!bucket.targetsHydrated &&
+          bucket.connectionStates.size === 0 &&
+          bucket.targetGenerations.size === 0)
+      ) {
         return s
       }
       // Labels are kept so a re-hydrating overlay can still show a friendly
       // host name; hydration=false alone forces reads back to "unknown".
+      // Generations are dropped: fencing must never run on unverified state.
       return withBucket(s, environmentId, {
         ...bucket,
         connectionStates: new Map(),
+        targetGenerations: new Map(),
         targetsHydrated: false
       })
     }),
 
   removeEnvironmentSshState: (environmentId) =>
     set((s) => {
+      advanceEnvironmentSshStateGeneration(environmentId)
       if (!s.sshStateByEnvironment.has(environmentId)) {
         return s
       }
@@ -165,6 +276,7 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
       const next = new Map(s.sshStateByEnvironment)
       for (const id of next.keys()) {
         if (!keep.has(id)) {
+          advanceEnvironmentSshStateGeneration(id)
           next.delete(id)
           changed = true
         }
@@ -172,92 +284,3 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
       return changed ? { sshStateByEnvironment: next } : s
     })
 })
-
-type RuntimeAwareSshReadState = Pick<
-  AppState,
-  | 'sshConnectionStates'
-  | 'sshTargetLabels'
-  | 'removedSshTargetLabels'
-  | 'sshTargetsHydrated'
-  | 'sshStateByEnvironment'
-> &
-  Partial<Pick<AppState, 'runtimeStatusByEnvironmentId'>>
-
-function isEnvironmentReachable(state: RuntimeAwareSshReadState, environmentId: string): boolean {
-  return Boolean(state.runtimeStatusByEnvironmentId?.get(environmentId)?.status)
-}
-
-/**
- * Reconnect-overlay status for an SSH target owned by `environmentId` (a
- * remote Orca server) or by this machine (`environmentId === null`).
- *
- * Returns null when the state is unknown — environment unreachable or its
- * bucket not hydrated — so callers show nothing rather than another machine's
- * stale state. The runtime environment's own disconnected UI outranks any SSH
- * overlay in that case.
- */
-export function selectRuntimeAwareSshStatus(
-  state: RuntimeAwareSshReadState,
-  environmentId: string | null,
-  targetId: string
-): SshConnectionStatus | null {
-  if (environmentId === null) {
-    return state.sshConnectionStates.get(targetId)?.status ?? 'disconnected'
-  }
-  if (!isEnvironmentReachable(state, environmentId)) {
-    return null
-  }
-  const bucket = state.sshStateByEnvironment.get(environmentId)
-  if (!bucket?.targetsHydrated) {
-    return null
-  }
-  return bucket.connectionStates.get(targetId)?.status ?? 'disconnected'
-}
-
-export function selectRuntimeAwareSshTargetLabel(
-  state: RuntimeAwareSshReadState,
-  environmentId: string | null,
-  targetId: string
-): string {
-  if (environmentId === null) {
-    return (
-      state.sshTargetLabels.get(targetId) ??
-      // Fall back to the removed target's last known label (ghost host) before
-      // the raw id, so a removed host shows its name instead of ssh-<ts>-<rand>.
-      state.removedSshTargetLabels.get(targetId) ??
-      targetId
-    )
-  }
-  const bucket = state.sshStateByEnvironment.get(environmentId)
-  return bucket?.targetLabels.get(targetId) ?? bucket?.removedTargetLabels.get(targetId) ?? targetId
-}
-
-/**
- * True only on positive evidence that the target was removed on its owning
- * host: a removal tombstone, or a hydrated target list that lacks the id.
- * An unreachable environment or un-hydrated bucket never reports removal, so
- * destructive "remove workspace" UI cannot be offered out of ignorance.
- */
-export function selectRuntimeAwareSshTargetRemoved(
-  state: RuntimeAwareSshReadState,
-  environmentId: string | null,
-  targetId: string
-): boolean {
-  if (environmentId === null) {
-    return (
-      state.removedSshTargetLabels.has(targetId) ||
-      (state.sshTargetsHydrated && !state.sshTargetLabels.has(targetId))
-    )
-  }
-  if (!isEnvironmentReachable(state, environmentId)) {
-    return false
-  }
-  const bucket = state.sshStateByEnvironment.get(environmentId)
-  if (!bucket) {
-    return false
-  }
-  return (
-    bucket.removedTargetLabels.has(targetId) ||
-    (bucket.targetsHydrated && !bucket.targetLabels.has(targetId))
-  )
-}

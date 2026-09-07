@@ -20,8 +20,10 @@ describe('workspace cleanup late settlement tracking', () => {
       reconcileBeforeBatchResult
     )
 
+    // The compact copy keeps the host facts a late failure needs to name its row.
     expect(tracker.candidate).toEqual({
       worktreeId: candidate.worktreeId,
+      connectionId: candidate.connectionId,
       displayName: candidate.displayName
     })
     expect(tracker.candidate).not.toBe(candidate)
@@ -32,12 +34,18 @@ describe('workspace cleanup late settlement tracking', () => {
 
     expect(reconcileBeforeBatchResult).not.toHaveBeenCalled()
     expect(reportAfterBatchResult).toHaveBeenCalledWith(
-      { worktreeId: candidate.worktreeId, displayName: candidate.displayName },
+      {
+        worktreeId: candidate.worktreeId,
+        connectionId: candidate.connectionId,
+        displayName: candidate.displayName
+      },
       {
         removedIds: [],
+        removedIdentities: [],
         failures: [
           {
             worktreeId: candidate.worktreeId,
+            executionHostId: 'local',
             displayName: candidate.displayName,
             message: 'remote removal failed'
           }

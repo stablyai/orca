@@ -11,6 +11,7 @@ export const AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES = 16 * 1024
 export type AiVaultSessionDragPayload = {
   agent: AiVaultAgent
   sessionId: string
+  structuredSession?: { sessionId: string; workspaceId: string }
   title: string
   command: string
   // Why: drop targets must know where the session file lives (host vs local
@@ -18,6 +19,10 @@ export type AiVaultSessionDragPayload = {
   sessionFilePath?: string
   sessionExecutionHostId?: ExecutionHostId
   codexHome?: string | null
+  // Why: a per-account repin at drop time rebuilds the startup from the session
+  // cwd. Explicit null means the session genuinely has no cwd (rebuild without a
+  // cd prefix); an ABSENT key means an older serializer built the payload.
+  sessionCwd?: string | null
   // Why: drag/drop resume must preserve planned env mutations/default args, not just the command.
   env?: Record<string, string>
   envToDelete?: string[]
@@ -45,6 +50,16 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function isStructuredSession(
+  value: unknown
+): value is NonNullable<AiVaultSessionDragPayload['structuredSession']> {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const structured = value as Record<string, unknown>
+  return isNonEmptyString(structured.sessionId) && isNonEmptyString(structured.workspaceId)
+}
+
 function isStringRecord(value: unknown): value is Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
@@ -68,7 +83,8 @@ function isLaunchConfig(value: unknown): value is SleepingAgentLaunchConfig {
   return (
     (config.agentCommand === undefined || typeof config.agentCommand === 'string') &&
     typeof config.agentArgs === 'string' &&
-    isStringRecord(config.agentEnv)
+    isStringRecord(config.agentEnv) &&
+    (config.ompResumeFilePath === undefined || isNonEmptyString(config.ompResumeFilePath))
   )
 }
 
@@ -82,6 +98,7 @@ function isSerializedPayload(value: unknown): value is SerializedAiVaultSessionD
     payload.version === 1 &&
     isAiVaultAgent(payload.agent) &&
     isNonEmptyString(payload.sessionId) &&
+    (payload.structuredSession === undefined || isStructuredSession(payload.structuredSession)) &&
     isNonEmptyString(payload.title) &&
     isNonEmptyString(payload.command) &&
     (payload.sessionFilePath === undefined || isNonEmptyString(payload.sessionFilePath)) &&
@@ -90,6 +107,9 @@ function isSerializedPayload(value: unknown): value is SerializedAiVaultSessionD
     (payload.codexHome === undefined ||
       payload.codexHome === null ||
       isNonEmptyString(payload.codexHome)) &&
+    (payload.sessionCwd === undefined ||
+      payload.sessionCwd === null ||
+      isNonEmptyString(payload.sessionCwd)) &&
     (payload.env === undefined || isStringRecord(payload.env)) &&
     (payload.envToDelete === undefined || isEnvDeletionList(payload.envToDelete)) &&
     (payload.launchConfig === undefined || isLaunchConfig(payload.launchConfig)) &&
@@ -157,11 +177,13 @@ export function readAiVaultSessionDragData(
     const {
       agent,
       sessionId,
+      structuredSession,
       title,
       command,
       sessionFilePath,
       sessionExecutionHostId,
       codexHome,
+      sessionCwd,
       env,
       envToDelete,
       launchConfig,
@@ -170,11 +192,13 @@ export function readAiVaultSessionDragData(
     return {
       agent,
       sessionId,
+      ...(structuredSession ? { structuredSession } : {}),
       title,
       command,
       ...(sessionFilePath ? { sessionFilePath } : {}),
       ...(sessionExecutionHostId ? { sessionExecutionHostId } : {}),
       ...(codexHome !== undefined ? { codexHome } : {}),
+      ...(sessionCwd !== undefined ? { sessionCwd } : {}),
       ...(env ? { env } : {}),
       ...(envToDelete ? { envToDelete } : {}),
       ...(launchConfig ? { launchConfig } : {}),

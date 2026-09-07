@@ -1,14 +1,16 @@
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_FRENCH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM,
+  isPluginUiLanguage,
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es', 'fr'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -34,7 +36,10 @@ export function normalizeSupportedUiLocale(locale: string | undefined): Supporte
 export function resolveUiLocale(
   language: UiLanguage,
   systemLocale: string | undefined = DEFAULT_UI_LOCALE
-): SupportedUiLocale {
+): string {
+  if (isPluginUiLanguage(language)) {
+    return language
+  }
   if (language === UI_LANGUAGE_ENGLISH) {
     return DEFAULT_UI_LOCALE
   }
@@ -50,6 +55,9 @@ export function resolveUiLocale(
   if (language === UI_LANGUAGE_SPANISH) {
     return 'es'
   }
+  if (language === UI_LANGUAGE_FRENCH) {
+    return 'fr'
+  }
   return normalizeSupportedUiLocale(systemLocale)
 }
 
@@ -60,7 +68,7 @@ export function getRendererSystemLocale(): string {
   return DEFAULT_UI_LOCALE
 }
 
-export function resolveRendererUiLocale(language: UiLanguage): SupportedUiLocale {
+export function resolveRendererUiLocale(language: UiLanguage): string {
   return resolveUiLocale(
     language,
     language === UI_LANGUAGE_SYSTEM ? getRendererSystemLocale() : DEFAULT_UI_LOCALE

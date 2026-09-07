@@ -7,18 +7,20 @@ import { colors } from '../theme/mobile-theme'
 import { useHostClient } from '../transport/client-context'
 import type { RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
-  prepareMobileAiVaultSessionResume,
   createMobileAiVaultResumeMutationRegistry,
-  readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal,
-  RESUME_RPC_TIMEOUT_MS,
   type MobileAiVaultResumeSettings
 } from '../session/ai-vault-resume-launch'
+import {
+  prepareMobileAiVaultSessionResume,
+  RESUME_RPC_TIMEOUT_MS
+} from '../session/ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { AiVaultScope, AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -34,6 +36,7 @@ import {
 } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
+import { useNow } from '../hooks/use-now'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
@@ -59,6 +62,7 @@ export function MobileAgentSessionHistoryPanel({
   const [query, setQuery] = useState('')
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
+  const now = useNow(30_000)
   const resumeLaunchInFlightRef = useRef(false)
   const resumeMutationRegistryRef = useRef(
     createMobileAiVaultResumeMutationRegistry(createMobileAiVaultResumeMutationId)
@@ -123,9 +127,9 @@ export function MobileAgentSessionHistoryPanel({
         scope,
         scopeFilterPaths,
         activeWorktreePath,
-        now: Date.now()
+        now
       }),
-    [sessions, query, scope, scopeFilterPaths, activeWorktreePath]
+    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now]
   )
 
   const hostPlatform = useMemo(

@@ -95,6 +95,14 @@ describe('terminal history log codec', () => {
     expect(decodeTerminalHistoryLog(orphanRecord)).toBeNull()
   })
 
+  it('rejects a clear frame with a payload', () => {
+    const log = buildLog(1, [{ seq: 1, records: [{ kind: 'clear' }] }])
+    const clearFrameOffset = log.length - 5
+    log.writeUInt32LE(1, clearFrameOffset + 1)
+
+    expect(decodeTerminalHistoryLog(Buffer.concat([log, Buffer.from('x')]))).toBeNull()
+  })
+
   it('decodes an empty log (header only)', () => {
     const log = decodeTerminalHistoryLog(encodeLogHeader(4))
     expect(log).toEqual({ generation: 4, batches: [], truncatedTail: false })

@@ -70,6 +70,24 @@ async function roundTripStyles(source: string): Promise<Terminal> {
   return replay(addon.serialize())
 }
 
+describe('out-of-range SGR state serialization', () => {
+  it('emits only the live pen state for a row beyond the normal buffer', async () => {
+    const { terminal, addon } = createTerminal()
+    await write(terminal, '\x1b[31;44;1m')
+
+    // This deliberately pins unsupported SerializeAddon behavior used by
+    // terminal-frame-restore-sequences under Orca's vendored addon patch.
+    const outOfRangeRow = terminal.buffer.normal.length
+    expect(
+      addon.serialize({
+        range: { start: outOfRangeRow, end: outOfRangeRow },
+        excludeAltBuffer: true,
+        excludeModes: true
+      })
+    ).toBe('\x1b[31;44;1m')
+  })
+})
+
 describe('SGR intensity round-trip (BUG B, addon patch)', () => {
   it('restores bold set immediately after dim is cleared (minimized repro)', async () => {
     const restored = await roundTripStyles('\x1b[2mA\x1b[22m\x1b[1mB')

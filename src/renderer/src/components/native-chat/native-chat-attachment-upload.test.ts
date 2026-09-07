@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 const mocks = vi.hoisted(() => ({
   toastLoading: vi.fn(() => 'toast-1'),
@@ -25,6 +25,7 @@ vi.mock('@/i18n/i18n', () => ({
 
 import {
   resolveNativeChatAttachmentOwner,
+  resolveNativeChatAttachmentOwnerForWorktree,
   uploadNativeChatAttachmentPaths
 } from './native-chat-attachment-upload'
 
@@ -50,6 +51,7 @@ function state(overrides: Partial<AppState> = {}): AppState {
     projectGroups: [],
     repos: [{ id: 'repo', connectionId: null }],
     settings: { activeRuntimeEnvironmentId: null },
+    sshConnectionStates: new Map(),
     tabsByWorktree: {
       'wt-1': [terminalTab()]
     },
@@ -65,13 +67,45 @@ describe('resolveNativeChatAttachmentOwner', () => {
     expect(resolveNativeChatAttachmentOwner(state(), 'tab-1')).toEqual({ kind: 'local' })
   })
 
+  it('resolves a structured tab owner directly from its worktree', () => {
+    expect(resolveNativeChatAttachmentOwnerForWorktree(state(), 'wt-1')).toEqual({
+      kind: 'local'
+    })
+  })
+
+  it('resolves a structured SSH owner directly from its worktree', () => {
+    expect(
+      resolveNativeChatAttachmentOwnerForWorktree(
+        state({
+          repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
+          sshConnectionStates: new Map([['conn-1', { connectionGeneration: 4 } as never]])
+        }),
+        'wt-1'
+      )
+    ).toMatchObject({
+      kind: 'ssh',
+      connectionId: 'conn-1',
+      worktreePath: '/repo/worktree'
+    })
+  })
+
   it('resolves an SSH repo worktree to ssh with the worktree path', () => {
     expect(
       resolveNativeChatAttachmentOwner(
-        state({ repos: [{ id: 'repo', connectionId: 'conn-1' }] as never }),
+        state({
+          repos: [{ id: 'repo', connectionId: 'conn-1' }] as never,
+          sshConnectionStates: new Map([['conn-1', { connectionGeneration: 4 } as never]])
+        }),
         'tab-1'
       )
-    ).toEqual({ kind: 'ssh', connectionId: 'conn-1', worktreePath: '/repo/worktree' })
+    ).toEqual({
+      kind: 'ssh',
+      connectionId: 'conn-1',
+      worktreePath: '/repo/worktree',
+      expectedExecutionHostId: 'ssh:conn-1',
+      expectedSshTargetId: 'conn-1',
+      expectedSshConnectionGeneration: 4
+    })
   })
 
   it('resolves a runtime-owned repo to runtime', () => {
@@ -122,7 +156,14 @@ describe('resolveNativeChatAttachmentOwner', () => {
 })
 
 describe('uploadNativeChatAttachmentPaths', () => {
-  const owner = { connectionId: 'conn-1', worktreePath: '/remote/worktree' }
+  const owner = {
+    kind: 'ssh' as const,
+    connectionId: 'conn-1',
+    worktreePath: '/remote/worktree',
+    expectedExecutionHostId: 'ssh:conn-1' as const,
+    expectedSshTargetId: 'conn-1',
+    expectedSshConnectionGeneration: 4
+  }
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -143,7 +184,10 @@ describe('uploadNativeChatAttachmentPaths', () => {
     expect(mocks.resolveDroppedPathsForAgent).toHaveBeenCalledWith({
       paths: ['/local/a.txt'],
       worktreePath: '/remote/worktree',
-      connectionId: 'conn-1'
+      connectionId: 'conn-1',
+      expectedExecutionHostId: 'ssh:conn-1',
+      expectedSshTargetId: 'conn-1',
+      expectedSshConnectionGeneration: 4
     })
     expect(mocks.toastLoading).toHaveBeenCalledTimes(1)
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')

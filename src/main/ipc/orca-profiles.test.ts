@@ -30,8 +30,7 @@ vi.mock('electron', () => ({
   app: {
     exit: appExitMock,
     quit: appQuitMock,
-    relaunch: appRelaunchMock,
-    getPath: () => '/tmp/orca-user-data'
+    relaunch: appRelaunchMock
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
@@ -55,12 +54,12 @@ vi.mock('../orca-profiles/profile-index-store', () => ({
   setActiveOrcaProfile: setActiveOrcaProfileMock
 }))
 
-function makeStoreMock(flush = vi.fn()): {
-  flush: typeof flush
+function makeStoreMock(flushPendingOrThrowAsync = vi.fn()): {
+  flushPendingOrThrowAsync: typeof flushPendingOrThrowAsync
   freezeWrites: ReturnType<typeof vi.fn>
   getSettings: () => Record<string, never>
 } {
-  return { flush, freezeWrites: vi.fn(), getSettings: () => ({}) }
+  return { flushPendingOrThrowAsync, freezeWrites: vi.fn(), getSettings: () => ({}) }
 }
 
 vi.mock('../orca-profiles/profile-project-transfer', () => ({
@@ -68,9 +67,13 @@ vi.mock('../orca-profiles/profile-project-transfer', () => ({
 }))
 
 import { registerOrcaProfileHandlers } from './orca-profiles'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 describe('registerOrcaProfileHandlers', () => {
   beforeEach(() => {
+    // Why the port and per-test: userData resolves through AppEnvironment now, and
+    // the global setup's beforeEach reinstates its own fake before this runs.
+    installFakeAppEnvironment({ getPath: () => '/tmp/orca-user-data' })
     vi.useFakeTimers()
     handlers.clear()
     appExitMock.mockReset()
@@ -162,6 +165,7 @@ describe('registerOrcaProfileHandlers', () => {
     expect(flush.mock.invocationCallOrder[0]).toBeLessThan(
       setActiveOrcaProfileMock.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     )
+    expect(flush).toHaveBeenCalledBefore(onBeforeRelaunch)
     expect(appRelaunchMock).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(150)
@@ -190,6 +194,27 @@ describe('registerOrcaProfileHandlers', () => {
 
     expect(setActiveOrcaProfileMock).not.toHaveBeenCalled()
     expect(appRelaunchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not switch profiles when persistence cannot reach quiescence', async () => {
+    const flush = vi.fn(() => new Promise<void>(() => {}))
+    const onBeforeRelaunch = vi.fn()
+    getOrcaProfileListStateMock.mockReturnValue({
+      activeProfileId: 'local-default',
+      profiles: []
+    })
+    registerOrcaProfileHandlers(makeStoreMock(flush) as never, { onBeforeRelaunch })
+
+    const switchProfile = Promise.resolve(
+      handlers.get('orcaProfiles:switch')?.(null, { profileId: 'local-work' })
+    )
+    const rejection = expect(switchProfile).rejects.toThrow('orca_profile_persistence_timeout')
+    await vi.advanceTimersByTimeAsync(20_000)
+    await rejection
+
+    expect(setActiveOrcaProfileMock).not.toHaveBeenCalled()
+    expect(appRelaunchMock).not.toHaveBeenCalled()
+    expect(onBeforeRelaunch).not.toHaveBeenCalled()
   })
 
   it('does not relaunch when switching to the active profile', async () => {

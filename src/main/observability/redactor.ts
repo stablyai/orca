@@ -39,7 +39,11 @@ const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
 const URL_USERINFO = /(https?:\/\/)([^/@\s]+)@/g
 
 // Per-line .env shape. `m` anchors `^` in multi-line strings; `\S.*` redacts the whole value (so `FOO=Bearer <jwt>` can't leak its tail), leading `\S` skips empty `FOO=`.
-const ENV_LINE = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/gm
+const ENV_LINE = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/my
+// Exact `\s*` for the non-ASCII whitespace runs the inline scan hands off (NBSP, BOM, U+2028\u2026).
+const WHITESPACE_RUN = /\s*/y
+// The terminator set `.` and `^`/m use; scanned with `indexOf` so no-match lines never enter the regex engine.
+const LINE_TERMINATORS = ['\n', '\r', '\u2028', '\u2029'] as const
 
 // Attribute keys dropped regardless of value. Matched case-insensitively since HTTP headers vary in case.
 const CLIENT_ATTR_BLOCKLIST = new Set([
@@ -110,9 +114,77 @@ export function redactString(input: string): string {
   out = out.replace(URL_USERINFO, '$1[redacted]@')
 
   // Rule 4 — .env-shape line: keep key, redact value. Last so rule 1 wins over a coincidentally .env-shaped substring.
-  out = out.replace(ENV_LINE, (_match, key) => `${String(key)}=[redacted:env-value]`)
+  out = redactEnvironmentLines(out)
 
   return out
+}
+
+/** Index of the first non-`\s` code unit at or after `index`, or `input.length`. ASCII is the spec-fixed set; anything else defers to the engine. */
+function skipWhitespace(input: string, index: number): number {
+  const length = input.length
+  while (index < length) {
+    const code = input.charCodeAt(index)
+    if (code === 0x20 || (code >= 0x09 && code <= 0x0d)) {
+      index++
+    } else if (code < 0x80) {
+      return index
+    } else {
+      WHITESPACE_RUN.lastIndex = index
+      WHITESPACE_RUN.test(input)
+      if (WHITESPACE_RUN.lastIndex === index) {
+        return index
+      }
+      index = WHITESPACE_RUN.lastIndex
+    }
+  }
+  return index
+}
+
+function redactEnvironmentLines(input: string): string {
+  const parts: string[] = []
+  let copiedThrough = 0
+  let start = 0
+  // Each terminator kind is searched at most once per occurrence; -2 marks "not searched yet", -1 "none remain".
+  const nextTerminator = [-2, -2, -2, -2]
+  while (start < input.length) {
+    const content = skipWhitespace(input, start)
+    if (content === input.length) {
+      break
+    }
+    // Only a `[A-Z_]` first content char can match; failed starts within the leading whitespace all see the same key.
+    const code = input.charCodeAt(content)
+    if ((code >= 0x41 && code <= 0x5a) || code === 0x5f) {
+      ENV_LINE.lastIndex = start
+      const match = ENV_LINE.exec(input)
+      if (match) {
+        parts.push(input.slice(copiedThrough, start), `${match[1]}=[redacted:env-value]`)
+        copiedThrough = ENV_LINE.lastIndex
+        // `.*` stops at end of input or a line terminator, so the next line starts one past it.
+        start = copiedThrough + 1
+        continue
+      }
+    }
+    let terminator = -1
+    for (let kind = 0; kind < LINE_TERMINATORS.length; kind++) {
+      let next = nextTerminator[kind]!
+      if (next !== -1 && next < content) {
+        next = input.indexOf(LINE_TERMINATORS[kind]!, content)
+        nextTerminator[kind] = next
+      }
+      if (next !== -1 && (terminator === -1 || next < terminator)) {
+        terminator = next
+      }
+    }
+    if (terminator === -1) {
+      break
+    }
+    start = terminator + 1
+  }
+  if (parts.length === 0) {
+    return input
+  }
+  parts.push(input.slice(copiedThrough))
+  return parts.join('')
 }
 
 /**
@@ -123,7 +195,7 @@ export function redactString(input: string): string {
 export function redactValue(
   value: unknown,
   mode: RedactorMode = 'client',
-  seen: WeakSet<object> = new WeakSet()
+  seen = new WeakSet<object>()
 ): unknown {
   if (value === null || value === undefined) {
     return value
@@ -233,15 +305,4 @@ export function redactSpan(span: RedactableSpan, mode: RedactorMode = 'client'):
     events: redactedEvents,
     exit
   }
-}
-
-// Test-only introspection: lets tests verify the rule set without re-deriving it.
-
-export const _internalsForTests = {
-  PROVIDER_PATTERNS,
-  CLIENT_ATTR_BLOCKLIST,
-  SERVER_ATTR_BLOCKLIST_EXTRA,
-  LABELED_KV,
-  URL_USERINFO,
-  ENV_LINE
 }

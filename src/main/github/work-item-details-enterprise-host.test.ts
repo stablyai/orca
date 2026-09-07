@@ -137,7 +137,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
     const details = await getWorkItemDetails('/remote/repo', 7, 'issue', 'ssh-1')
 
     expect(details?.body).toBe('Enterprise issue body')
-    expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'issue', 'ssh-1')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'issue', 'ssh-1', {}, undefined)
     expect(getWorkItemByOwnerRepoMock).not.toHaveBeenCalled()
     expect(getEnterpriseGitHubRepoSlugMock).toHaveBeenCalledTimes(1)
     expect(repositoryRateLimitGuardMock).toHaveBeenCalledWith(enterpriseRepository, 'graphql', {
@@ -156,7 +156,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
 
     await expect(getWorkItemDetails('/remote/repo', 7, 'issue', 'ssh-1')).resolves.toBeNull()
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'issue', 'ssh-1')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'issue', 'ssh-1', {}, undefined)
     expect(getWorkItemByOwnerRepoMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
@@ -247,7 +247,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
         viewerViewedState: 'VIEWED'
       }
     ])
-    expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'pr', 'ssh-1')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'pr', 'ssh-1', {}, undefined)
     expect(getWorkItemByOwnerRepoMock).not.toHaveBeenCalled()
     expect(getPRCommentsMock).toHaveBeenCalledWith(
       '/remote/repo',
@@ -280,7 +280,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
 
     await expect(getWorkItemDetails('/remote/repo', 7, 'pr', 'ssh-1')).resolves.toBeNull()
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'pr', 'ssh-1')
+    expect(getWorkItemMock).toHaveBeenCalledWith('/remote/repo', 7, 'pr', 'ssh-1', {}, undefined)
     expect(getWorkItemByOwnerRepoMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })

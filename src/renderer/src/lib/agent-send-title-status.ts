@@ -1,4 +1,5 @@
 import type { AgentStatus } from './agent-status'
+import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 
 const EXPLICIT_IDLE_SEND_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
@@ -24,6 +25,9 @@ export function detectAgentSendTitleStatus(title: string | null | undefined): Ag
 function isExplicitIdleSendTitle(title: string): boolean {
   return (
     EXPLICIT_IDLE_SEND_TITLE_RE.test(title) ||
+    // Why: this title-level filter exposes hookless OpenCode targets; the runtime
+    // still requires launch or foreground-process evidence before writing.
+    isOpenCodeNativeTitle(title) ||
     title.startsWith(CLAUDE_IDLE_PREFIX) ||
     title.startsWith('* ') ||
     title.includes(GEMINI_IDLE_PREFIX) ||

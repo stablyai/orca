@@ -1,7 +1,12 @@
 import type { AppState } from '@/store/types'
-import { getIndexedRepoMap, getIndexedWorktreeMap } from '@/store/worktree-repo-index'
+import {
+  findIndexedRepoOwnerForHost,
+  resolveIndexedRepoOwner,
+  resolveIndexedWorktreeOwner
+} from './worktree-runtime-owner-index'
+import { resolveWorktreeExecutionHost } from '../../../shared/worktree-execution-host-resolution'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   isPathInsideOrEqual,
@@ -60,10 +65,25 @@ export function getConnectionIdFromState(
   }
   // Why: owner resolution runs from retained Zustand selectors, so unrelated
   // store writes must not flatten every worktree or scan every repository.
-  const worktree = getIndexedWorktreeMap(state.worktreesByRepo).get(worktreeId)
+  const worktreeResolution = resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  if (worktreeResolution.kind === 'ambiguous') {
+    // Why (#17799): rows that disagree about the owner cannot name a connection.
+    // `undefined` is this module's documented "cannot determine the host" answer;
+    // collapsing it to `null` would authorize a local read of a remote path.
+    return undefined
+  }
+  const worktree = worktreeResolution.kind === 'resolved' ? worktreeResolution.owner : undefined
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = getIndexedRepoMap(state.repos).get(repoId)
-  return repo ? (repo.connectionId ?? null) : undefined
+  // Why (#17799, #11163): one rule, shared with main's launch scope. The renderer's contribution is
+  // only the memoized index — unrelated store writes must not rescan every repository.
+  const resolution = resolveWorktreeExecutionHost(
+    {
+      byId: (id) => resolveIndexedRepoOwner(state.repos, id),
+      byHost: (id, hostId) => findIndexedRepoOwnerForHost(state.repos, id, hostId)
+    },
+    { repoId, hostId: worktree?.hostId ?? null }
+  )
+  return resolution.kind === 'resolved' ? resolution.connectionId : undefined
 }
 
 export function getConnectionIdForFileFromState(

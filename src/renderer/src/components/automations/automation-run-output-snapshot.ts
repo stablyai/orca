@@ -1,16 +1,12 @@
-/* eslint-disable no-control-regex -- terminal snapshots normalize ANSI/control output. */
 import type { AutomationRunOutputSnapshot } from '../../../../shared/automations-types'
+import {
+  stripAnsiEscapeSequences,
+  TERMINAL_CONTROL_CHARACTER_PATTERN
+} from '../../../../shared/ansi-escape-sequences'
+import { copyUtf16SuffixToOwnedString } from '../../../../shared/owned-utf16-suffix'
 
 const MAX_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
-
-// Why: Codex/Claude TUIs emit OSC title/progress frames in hidden automation
-// PTYs; saved run output should keep command text, not terminal metadata.
-const OSC_SEQUENCE_PATTERN = /(?:\u001b\]|\u009d)[\s\S]*?(?:\u0007|\u001b\\|\u009c)/g
-const STRING_SEQUENCE_PATTERN =
-  /(?:\u001b[P_^X]|\u0090|\u0098|\u009e|\u009f)[\s\S]*?(?:\u001b\\|\u009c)/g
-const CSI_SEQUENCE_PATTERN = /(?:\u001b\[|\u009b)[0-?]*[ -/]*[@-~]/g
-const ESCAPE_SEQUENCE_PATTERN = /\u001b[ -/]*[0-~]/g
-const CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g
+const OUTPUT_SNAPSHOT_COMPACTION_HEAD_THRESHOLD = 64
 
 export type AutomationRunOutputSnapshotBuffer = {
   append: (chunk: string) => void
@@ -43,18 +39,15 @@ export function selectAutomationRunOutputSnapshot(
 }
 
 function stripTerminalControls(value: string): string {
-  return value
-    .replace(OSC_SEQUENCE_PATTERN, '')
-    .replace(STRING_SEQUENCE_PATTERN, '')
-    .replace(CSI_SEQUENCE_PATTERN, '')
-    .replace(ESCAPE_SEQUENCE_PATTERN, '')
+  return stripAnsiEscapeSequences(value)
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
-    .replace(CONTROL_PATTERN, '')
+    .replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
 }
 
 export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSnapshotBuffer {
   const chunks: string[] = []
+  let firstChunkIndex = 0
   let totalChars = 0
   let truncated = false
 
@@ -66,19 +59,31 @@ export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSn
       chunks.push(chunk)
       totalChars += chunk.length
       let overflowChars = totalChars - MAX_OUTPUT_SNAPSHOT_CHARS
-      while (overflowChars > 0 && chunks.length > 0) {
-        const firstChunk = chunks[0]
+      while (overflowChars > 0 && firstChunkIndex < chunks.length) {
+        const firstChunk = chunks[firstChunkIndex]
         if (firstChunk.length <= overflowChars) {
-          chunks.shift()
+          chunks[firstChunkIndex] = ''
+          firstChunkIndex += 1
           totalChars -= firstChunk.length
           overflowChars -= firstChunk.length
           truncated = true
           continue
         }
-        chunks[0] = firstChunk.slice(overflowChars)
+        chunks[firstChunkIndex] =
+          firstChunk.length > MAX_OUTPUT_SNAPSHOT_CHARS
+            ? copyUtf16SuffixToOwnedString(firstChunk, firstChunk.length - overflowChars)
+            : firstChunk.slice(overflowChars)
         totalChars -= overflowChars
         truncated = true
         overflowChars = 0
+      }
+      // Why: amortize front removal while bounding dead backing-array slots.
+      if (
+        firstChunkIndex >= OUTPUT_SNAPSHOT_COMPACTION_HEAD_THRESHOLD &&
+        firstChunkIndex * 2 >= chunks.length
+      ) {
+        chunks.splice(0, firstChunkIndex)
+        firstChunkIndex = 0
       }
     },
     snapshot() {

@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { NestedRepoScanResult, ProjectGroupImportResult, Repo } from '../../../../shared/types'
+import type {
+  NestedRepoScanResult,
+  ProjectGroupImportResult
+} from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
@@ -111,7 +115,8 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
 
   it('keeps runtime folder opens on the runtime that produced the scan', async () => {
     const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
-      activeRuntimeEnvironmentId: 'env-1'
+      activeRuntimeEnvironmentId: 'env-1',
+      nestedRuntimeEnvironmentId: 'env-1'
     })
 
     await handleOpenNestedRootFolder()
@@ -119,6 +124,46 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
     expect(mocks.state.addNonGitFolder).toHaveBeenCalledWith('/workspace/platform', {
       runtimeEnvironmentId: 'env-1'
     })
+  })
+
+  it('names the folder project after the edited group name', async () => {
+    const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
+      nestedGroupName: '  inf-오케스트레이터  '
+    })
+
+    await handleOpenNestedRootFolder()
+
+    expect(mocks.state.addNonGitFolder).toHaveBeenCalledWith('/workspace/platform', {
+      runtimeEnvironmentId: null,
+      displayName: 'inf-오케스트레이터'
+    })
+  })
+
+  it('leaves host basename naming alone when the group name is untouched', async () => {
+    const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
+      nestedGroupName: '  platform  '
+    })
+
+    await handleOpenNestedRootFolder()
+
+    expect(mocks.state.addNonGitFolder).toHaveBeenCalledWith('/workspace/platform', {
+      runtimeEnvironmentId: null
+    })
+  })
+
+  it('carries the edited group name into the SSH folder confirmation', async () => {
+    const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
+      nestedConnectionId: 'ssh-builder',
+      nestedRuntimeKind: 'ssh',
+      nestedGroupName: 'inf-오케스트레이터'
+    })
+
+    await handleOpenNestedRootFolder()
+
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'confirm-non-git-folder',
+      expect.objectContaining({ displayName: 'inf-오케스트레이터' })
+    )
   })
 
   it('tracks the open-as-folder recovery action with zero selection', async () => {
@@ -152,5 +197,53 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
       folderPath: '/workspace/platform',
       connectionId: 'ssh-builder'
     })
+  })
+
+  it('keeps SSH import and completion pinned when repo hydration is missing', async () => {
+    const importedRepo: Repo = {
+      ...folderRepo,
+      id: 'ssh-app',
+      path: scan.repos[0].path,
+      kind: 'git',
+      connectionId: 'ssh-builder'
+    }
+    const importNestedRepos = vi.fn().mockResolvedValue({
+      projects: [
+        { path: importedRepo.path, projectId: importedRepo.id, status: 'imported' as const }
+      ],
+      importedCount: 1,
+      alreadyKnownCount: 0,
+      failedCount: 0
+    })
+    const fetchWorktrees = vi.fn()
+    const onGitRepoReady = vi.fn()
+    mocks.state.repos = []
+    const { handleImportNestedRepos } = useTestAddRepoNestedImportFlow({
+      activeRuntimeEnvironmentId: null,
+      nestedConnectionId: 'ssh-builder',
+      nestedRuntimeEnvironmentId: null,
+      nestedRuntimeKind: 'ssh',
+      nestedSelectedPaths: new Set([importedRepo.path]),
+      importNestedRepos,
+      fetchWorktrees,
+      onGitRepoReady
+    })
+
+    await handleImportNestedRepos('group')
+
+    expect(importNestedRepos).toHaveBeenCalledWith({
+      parentPath: scan.selectedPath,
+      groupName: 'platform',
+      projectPaths: [importedRepo.path],
+      connectionId: 'ssh-builder',
+      scanId: 'scan-1',
+      runtimeEnvironmentId: null,
+      mode: 'group'
+    })
+    expect(fetchWorktrees).toHaveBeenCalledWith(importedRepo.id, {
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-builder'
+    })
+    expect(onGitRepoReady).not.toHaveBeenCalled()
   })
 })

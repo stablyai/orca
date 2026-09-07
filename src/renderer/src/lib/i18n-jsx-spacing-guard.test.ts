@@ -34,17 +34,17 @@ const CASES: GuardCase[] = [
     label: 'Found a setup command in source'
   },
   {
-    file: 'components/settings/RepositoryHooksSection.tsx',
+    file: 'components/settings/RepositoryHooksYamlStatus.tsx',
     afterFallback: 'Example',
     label: 'Example orca.yaml template'
   },
   {
-    file: 'components/settings/RepositoryHooksSection.tsx',
+    file: 'components/settings/RepositoryHookScriptSetting.tsx',
     afterFallback: 'Edit',
     label: 'Edit orca.yaml'
   },
   {
-    file: 'components/settings/RepositoryHooksSection.tsx',
+    file: 'components/settings/RepositoryHookPolicySettings.tsx',
     afterFallback: 'When both',
     label: 'When both orca.yaml'
   },
@@ -57,11 +57,6 @@ const CASES: GuardCase[] = [
     file: 'components/settings/GitPane.tsx',
     afterFallback: 'such as',
     label: 'such as main'
-  },
-  {
-    file: 'components/settings/RuntimeEnvironmentsPane.tsx',
-    afterFallback: 'Run',
-    label: 'Run orca serve'
   },
   {
     file: 'components/settings/AutoRenameBranchFromWorkSetting.tsx',

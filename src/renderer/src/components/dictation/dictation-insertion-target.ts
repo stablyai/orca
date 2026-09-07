@@ -1,8 +1,9 @@
+import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
   TEXT_CONTROL_PASTE_MAX_BYTES,
-  getTextControlPasteByteLength,
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
@@ -107,11 +108,7 @@ async function insertTextIntoContentEditableTarget(
     if (!isContentEditableDictationTargetCurrent(element)) {
       return
     }
-    const nextIndex = getNextDictationChunkBoundary(
-      text,
-      textIndex,
-      TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES
-    )
+    const nextIndex = getUtf8ChunkEndIndex(text, textIndex, TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES)
     if (
       !insertContentEditableDictationChunk(element, editorElement, text.slice(textIndex, nextIndex))
     ) {
@@ -160,27 +157,4 @@ function insertContentEditableDictationChunk(
 
 function isContentEditableDictationTargetCurrent(element: HTMLElement): boolean {
   return element.isConnected && element.contains(element.ownerDocument.activeElement)
-}
-
-function getNextDictationChunkBoundary(text: string, startIndex: number, maxBytes: number): number {
-  let byteLength = 0
-  let index = startIndex
-
-  while (index < text.length) {
-    const codePoint = text.codePointAt(index) ?? 0
-    const codeUnitLength = codePoint > 0xffff ? 2 : 1
-    const nextByteLength = getTextControlPasteByteLength(text.slice(index, index + codeUnitLength))
-
-    if (byteLength > 0 && byteLength + nextByteLength > maxBytes) {
-      break
-    }
-    byteLength += nextByteLength
-    index += codeUnitLength
-  }
-
-  return index
-}
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
 }

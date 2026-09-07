@@ -10,6 +10,8 @@ body:
       value: |
         Use this form for Orca bugs. Include enough detail for someone else to reproduce the issue.
 
+        Please write your issue in English.
+
   - type: dropdown
     id: os
     attributes:
