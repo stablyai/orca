@@ -94,6 +94,54 @@ describe('serve update artifact capture', () => {
     expect(result).toEqual({ ok: false, reason: 'not-regular' })
   })
 
+  it('rejects a symlinked pending directory that resolves outside the cache', async () => {
+    const { captureServeUpdateAppImage } = await import('./serve-update-artifact-capture')
+    const evilRoot = path.join(tempRoot, 'evil')
+    await fsp.mkdir(evilRoot, { recursive: true })
+    const artifactPath = path.join(evilRoot, 'orca-1.4.198.AppImage')
+    await fsp.writeFile(artifactPath, FILE_CONTENT)
+    // Same-uid attacker swaps the pending directory for a symlink at the real
+    // cache location: realpath must walk through it and reject the escape.
+    const realPending = path.join(tempRoot, 'cache', 'orca-updater', 'pending')
+    await fsp.rm(realPending, { recursive: true })
+    await fsp.symlink(evilRoot, realPending)
+    const result = await captureServeUpdateAppImage({
+      version: '1.4.198',
+      downloadedFile: artifactPath,
+      files: [{ url: 'orca-1.4.198.AppImage', sha512: SHA512 }]
+    })
+    expect(result).toEqual({ ok: false, reason: 'not-regular' })
+  })
+
+  it('rejects a URL-safe base64 digest', async () => {
+    const { captureServeUpdateAppImage } = await import('./serve-update-artifact-capture')
+    const artifactPath = path.join(downloadDir, 'orca-1.4.198.AppImage')
+    await fsp.writeFile(artifactPath, FILE_CONTENT)
+    const urlSafe = SHA512.replaceAll('+', '-').replaceAll('/', '_')
+    const result = await captureServeUpdateAppImage({
+      version: '1.4.198',
+      downloadedFile: artifactPath,
+      files: [{ url: 'orca-1.4.198.AppImage', sha512: urlSafe }]
+    })
+    // Buffer.from would silently decode the URL-safe form; only the round-trip
+    // check catches it, and an unrecognized encoding must fail closed.
+    expect(result).toEqual({ ok: false, reason: 'missing-metadata' })
+  })
+
+  it('rejects a traversal path into the pending directory name', async () => {
+    const { captureServeUpdateAppImage } = await import('./serve-update-artifact-capture')
+    const outside = path.join(tempRoot, 'pending')
+    await fsp.mkdir(outside, { recursive: true })
+    const artifactPath = path.join(outside, 'orca-1.4.198.AppImage')
+    await fsp.writeFile(artifactPath, FILE_CONTENT)
+    const result = await captureServeUpdateAppImage({
+      version: '1.4.198',
+      downloadedFile: artifactPath,
+      files: [{ url: 'orca-1.4.198.AppImage', sha512: SHA512 }]
+    })
+    expect(result).toEqual({ ok: false, reason: 'not-regular' })
+  })
+
   it('rejects an ambiguous digest pairing', async () => {
     const { captureServeUpdateAppImage } = await import('./serve-update-artifact-capture')
     const artifactPath = path.join(downloadDir, 'orca-1.4.198.AppImage')
