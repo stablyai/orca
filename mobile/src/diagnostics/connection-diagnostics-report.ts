@@ -8,7 +8,6 @@ import { normalizeHostAppVersion } from '../transport/host-app-version-store'
 import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
 import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'
-import { summarizeConnectionLogTimings } from './connection-log-timing-summary'
 
 const MAX_EVENT_LINE_BYTES = 2 * 1024
 const EVENT_TRUNCATION_MARKER = ' … [truncated]'
@@ -60,7 +59,6 @@ export function buildConnectionDiagnosticsReport(args: {
       ? 'Last connected: never this session'
       : `Last connected: ${new Date(args.lastConnectedAt).toISOString()} (${formatAgo(now - args.lastConnectedAt)} ago)`
   )
-  lines.push(...summarizeConnectionLogTimings(entries))
   lines.push('')
   lines.push(`Likely cause: ${diagnosis.likelyCause}`)
   lines.push(`Next step: ${diagnosis.nextStep}`)

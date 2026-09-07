@@ -1,4 +1,3 @@
-import { elapsedMs, monotonicNowMs } from './monotonic-clock'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionState } from './types'
 
@@ -13,19 +12,16 @@ type ConnectionStateOptions = {
   initialListener?: (state: ConnectionState) => void
   getReconnectAttempt: () => number
   isClosed: () => boolean
-  onStateDwell?: (previous: ConnectionState, next: ConnectionState, dweltMs: number) => void
-  now?: () => number
 }
 
 export class RpcClientConnectionState {
   private state: ConnectionState = 'disconnected'
   private lastConnectedAt: number | null = null
-  private stateEnteredAt: number
+  private stateEnteredAt = Date.now()
   private readonly listeners = new Set<(state: ConnectionState) => void>()
   private readonly waiters: ConnectWaiter[] = []
 
   constructor(private readonly options: ConnectionStateOptions) {
-    this.stateEnteredAt = this.now()
     if (options.initialListener) {
       this.listeners.add(options.initialListener)
     }
@@ -44,14 +40,9 @@ export class RpcClientConnectionState {
       return
     }
     const previous = this.state
-    const dweltMs = elapsedMs(this.stateEnteredAt, this.now())
+    const dweltMs = Date.now() - this.stateEnteredAt
     this.state = next
-    this.stateEnteredAt = this.now()
-    try {
-      this.options.onStateDwell?.(previous, next, dweltMs)
-    } catch {
-      // Diagnostics only; a broken log sink must not abort the state publish.
-    }
+    this.stateEnteredAt = Date.now()
     console.log('[net] state', {
       from: previous,
       to: next,
@@ -110,10 +101,6 @@ export class RpcClientConnectionState {
   addListener(listener: (state: ConnectionState) => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
-  }
-
-  private now(): number {
-    return (this.options.now ?? monotonicNowMs)()
   }
 
   private resolveWaiters(): void {

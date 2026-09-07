@@ -1,5 +1,3 @@
-import { elapsedMs, monotonicNowMs } from './monotonic-clock'
-
 // Where a relay dial is waiting, so a bound can tell "the cell never answered the
 // upgrade" from "the cell took the dial and is slow" — the two look identical from
 // ConnectionState, which stays 'connecting' until relay-hello arrives.
@@ -13,23 +11,6 @@ export type RelayDialStage =
   | 'handshaking'
   // E2EE authenticated; waiting on the desktop's resume confirmation.
   | 'confirming'
-
-// Exhaustive by construction: adding a stage to the union breaks this table, so a
-// persisted-log validator can never silently start accepting an unknown stage.
-export const RELAY_DIAL_STAGE_NAMES: Record<RelayDialStage, true> = {
-  opening: true,
-  'awaiting-hello': true,
-  handshaking: true,
-  confirming: true
-}
-
-// How long a dial spent in one stage. `complete` is false when the dial left the
-// stage by dying in it, so a report can name the stage that never finished.
-export type RelayDialStageTiming = {
-  stage: RelayDialStage
-  ms: number
-  complete: boolean
-}
 
 export type RelayDialStageSource = {
   getDialStage(): RelayDialStage
@@ -46,13 +27,7 @@ export function relayDialStageSource(session: object): RelayDialStageSource | nu
 
 export class RelayDialStageTracker implements RelayDialStageSource {
   private stage: RelayDialStage = 'opening'
-  private stageEnteredAt: number
-  private settled = false
   private readonly listeners = new Set<(stage: RelayDialStage) => void>()
-
-  constructor(private readonly now: () => number = monotonicNowMs) {
-    this.stageEnteredAt = now()
-  }
 
   getDialStage(): RelayDialStage {
     return this.stage
@@ -63,34 +38,14 @@ export class RelayDialStageTracker implements RelayDialStageSource {
     return () => this.listeners.delete(listener)
   }
 
-  /** Returns the timing of the stage just left, or null when nothing was timed. */
-  advance(stage: RelayDialStage): RelayDialStageTiming | null {
+  advance(stage: RelayDialStage): void {
     if (this.stage === stage) {
-      return null
+      return
     }
-    const now = this.now()
-    const timing = this.settled ? null : this.closeStage(true, now)
     this.stage = stage
-    this.stageEnteredAt = now
     for (const listener of this.listeners) {
       listener(stage)
     }
-    return timing
-  }
-
-  // Close the stage the dial is sitting in: `true` once it reached the runtime,
-  // `false` when it died there. Idempotent, so a failure on an already-connected
-  // session cannot re-time the last dial stage.
-  settle(complete: boolean): RelayDialStageTiming | null {
-    if (this.settled) {
-      return null
-    }
-    this.settled = true
-    return this.closeStage(complete, this.now())
-  }
-
-  private closeStage(complete: boolean, now: number): RelayDialStageTiming {
-    return { stage: this.stage, ms: elapsedMs(this.stageEnteredAt, now), complete }
   }
 }
 

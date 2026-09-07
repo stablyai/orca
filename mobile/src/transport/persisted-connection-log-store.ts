@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { createConnectionLogStore } from './connection-log-buffer'
-import { RELAY_DIAL_STAGE_NAMES } from './relay-dial-stage'
-import { CONNECTION_STATE_NAMES, type ConnectionLogEntry, type ConnectionLogTiming } from './types'
+import type { ConnectionLogEntry } from './types'
 
 const STORAGE_PREFIX = 'orca.mobile.connection-log.v1.'
 const clientSessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
@@ -73,30 +72,6 @@ function isConnectionLogEntry(value: unknown): value is ConnectionLogEntry {
       entry.level === 'warn' ||
       entry.level === 'error') &&
     typeof entry.message === 'string' &&
-    (entry.detail === undefined || typeof entry.detail === 'string') &&
-    (entry.timing === undefined || isConnectionLogTiming(entry.timing))
-  )
-}
-
-// Why: the report echoes the phase name and formats the duration directly, so a
-// corrupted stored timing must not reach it. The name is checked against the closed
-// enum for its kind, not just "is a string", and the duration must be one a producer
-// could have written — `elapsedMs` clamps at 0, so a negative is corruption.
-function isConnectionLogTiming(value: unknown): value is ConnectionLogTiming {
-  if (!value || typeof value !== 'object') {
-    return false
-  }
-  const timing = value as Partial<ConnectionLogTiming>
-  if (timing.kind !== 'relay-dial-stage' && timing.kind !== 'connection-state') {
-    return false
-  }
-  const names = timing.kind === 'relay-dial-stage' ? RELAY_DIAL_STAGE_NAMES : CONNECTION_STATE_NAMES
-  return (
-    typeof timing.name === 'string' &&
-    Object.hasOwn(names, timing.name) &&
-    typeof timing.ms === 'number' &&
-    Number.isFinite(timing.ms) &&
-    timing.ms >= 0 &&
-    typeof timing.complete === 'boolean'
+    (entry.detail === undefined || typeof entry.detail === 'string')
   )
 }

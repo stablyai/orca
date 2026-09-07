@@ -174,22 +174,6 @@ describe('mobile relay RPC session liveness', () => {
     )
   })
 
-  it('still terminates a dead relay when the log sink throws on the timeout line', async () => {
-    const onLog = vi.fn<ConnectionLogSink>(() => {
-      throw new Error('sink exploded')
-    })
-    const session = await authenticateSession(onLog)
-
-    session.notifyForeground('focus')
-    await vi.advanceTimersByTimeAsync(4_000)
-    await vi.advanceTimersByTimeAsync(4_000)
-
-    // The line was attempted and threw; the session still came down.
-    expect(onLog).toHaveBeenCalledWith(expect.objectContaining({ code: 'liveness-timeout' }))
-    expect(session.getState()).toBe('disconnected')
-    expect(fakes.close).toHaveBeenCalledOnce()
-  })
-
   it('disconnects after two fair foreground misses', async () => {
     const onLog = vi.fn<ConnectionLogSink>()
     const session = await authenticateSession(onLog)

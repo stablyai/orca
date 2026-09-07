@@ -67,9 +67,7 @@ describe('mobile rpc-client connection logs', () => {
       onLog: (entry) => logs.push(entry)
     })
 
-    expect(logs).toContainEqual(
-      expect.objectContaining({ message: 'Opening WebSocket', detail: 'desktop.example:7443' })
-    )
+    expect(logs[0]?.detail).toBe('desktop.example:7443')
     expect(JSON.stringify(logs)).not.toContain('password')
     client.close()
   })
