@@ -77,6 +77,7 @@ export function useSourceControlActionDispatch({
           void runCreatePrIntent()
           return
         case 'push':
+        case 'push_no_verify':
         case 'force_push':
         case 'pull':
         case 'fast_forward':

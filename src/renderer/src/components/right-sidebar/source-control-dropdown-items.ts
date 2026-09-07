@@ -14,8 +14,18 @@ import { buildHostedReviewDropdownItems } from './source-control-dropdown-review
 export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntry[] {
   const ctx = deriveDropdownActionContext(inputs)
   const { commit, commitPush, commitSync } = buildCommitDropdownItems(ctx)
-  const { push, forcePush, pull, fastForward, sync, rebase, fetch, publish, publishNoVerify } =
-    buildRemoteDropdownItems(ctx)
+  const {
+    push,
+    pushNoVerify,
+    forcePush,
+    pull,
+    fastForward,
+    sync,
+    rebase,
+    fetch,
+    publish,
+    publishNoVerify
+  } = buildRemoteDropdownItems(ctx)
   const { createPR, pushCreatePR } = buildHostedReviewDropdownItems(ctx)
   const { conflictOperation, isPullRequestOperationActive, globalBusy } = ctx
 
@@ -25,6 +35,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     commitSync,
     { kind: 'separator', id: 'before-remote' },
     push,
+    pushNoVerify,
     forcePush,
     createPR,
     pushCreatePR,

@@ -12807,6 +12807,14 @@
                         "title": "Publish this branch to origin without running pre-push hooks"
                       }
                     }
+                  },
+                  "push": {
+                    "no": {
+                      "verify": {
+                        "label": "Push (Skip Hooks)",
+                        "title": "Push this branch without running pre-push hooks"
+                      }
+                    }
                   }
                 }
               },

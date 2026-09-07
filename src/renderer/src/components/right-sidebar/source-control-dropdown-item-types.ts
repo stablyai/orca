@@ -19,6 +19,7 @@ export type DropdownActionKind =
   | 'create_pr'
   | 'push_create_pr'
   | 'push'
+  | 'push_no_verify'
   | 'force_push'
   | 'pull'
   | 'fast_forward'
