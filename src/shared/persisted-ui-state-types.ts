@@ -8,6 +8,7 @@ import type { StatusBarUsageMode } from './status-bar-usage-mode'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
 import type { CustomPet } from './pet-types'
 import type {
+  ActivityGroupBy,
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
@@ -15,6 +16,7 @@ import type {
   RightSidebarTab,
   StatusBarItem,
   TaskResumeState,
+  ThreadReadFilter,
   TopLevelView,
   VisibleWorkspaceHostIds,
   WorkspaceHostOrder,
@@ -81,6 +83,10 @@ export type PersistedUIState = {
   agentsShowChildAgents?: boolean
   /** Agents-view compact thread rows. Absent means on. */
   agentsCompactMode?: boolean
+  /** Agents-view unread-only thread filter. Absent means 'all'. */
+  agentsReadFilter?: ThreadReadFilter
+  /** Agents-view thread grouping. Absent means 'status'. */
+  agentsGroupBy?: ActivityGroupBy
   collapsedGroups: string[]
   uiZoomLevel: number
   editorFontZoomLevel: number

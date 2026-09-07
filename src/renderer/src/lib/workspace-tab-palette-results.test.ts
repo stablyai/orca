@@ -4,6 +4,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { buildPaletteTabDocument } from './palette-match/tab-document'
 import { searchWorkspaceTabs } from './workspace-tab-palette-results'
 import type { SearchableWorkspaceTab } from './workspace-tab-palette-search'
+import { createPaletteSearchContext } from './palette-match/palette-ranking'
 
 const REPO_NAME = 'octo/rocket'
 const WORKTREE_NAME = 'Aurora Workspace'
@@ -52,15 +53,21 @@ function makeEntry({
   contentType = 'terminal',
   createdAt = 0,
   worktree = makeWorktree(),
-  agentLastActivityAt
+  agentLastActivityAt,
+  agentSnippet,
+  title = id,
+  secondaryText = ''
 }: {
   id?: string
   contentType?: 'terminal' | 'editor'
   createdAt?: number
   worktree?: Worktree
   agentLastActivityAt?: number
+  agentSnippet?: string
+  title?: string
+  secondaryText?: string
 } = {}): SearchableWorkspaceTab {
-  const title = id
+  const secondarySearchTexts = secondaryText ? [secondaryText] : []
   return {
     tab: makeTab(id, contentType, createdAt) as SearchableWorkspaceTab['tab'],
     worktree,
@@ -70,26 +77,26 @@ function makeEntry({
     tabSortIndex: 0,
     occupantAgent: null,
     title,
-    secondaryText: '',
+    secondaryText,
     titleSearchText: title,
-    secondarySearchTexts: [],
+    secondarySearchTexts,
     document: buildPaletteTabDocument({
       id,
       title,
-      secondaryTexts: [],
+      secondaryTexts: secondarySearchTexts,
       worktreeName: WORKTREE_NAME,
       branch: BRANCH_NAME,
       repoName: REPO_NAME
     }),
     agentMetadata:
-      agentLastActivityAt === undefined
+      agentLastActivityAt === undefined && !agentSnippet
         ? []
         : [
             {
               paneKey: `${id}-pane`,
               textParts: [],
-              snippetCandidates: [],
-              lastActivityAt: agentLastActivityAt
+              snippetCandidates: agentSnippet ? [agentSnippet] : [],
+              lastActivityAt: agentLastActivityAt ?? 0
             }
           ],
     isCurrentTab: false,
@@ -98,19 +105,19 @@ function makeEntry({
 }
 
 describe('searchWorkspaceTabs lastActiveAt', () => {
-  it('is null when neither agent activity nor worktree activity is known', () => {
+  it('uses tab creation when no later activity is known', () => {
     const [result] = searchWorkspaceTabs([makeEntry({ createdAt: 4000 })], '')
-    expect(result.lastActiveAt).toBeNull()
+    expect(result.lastActiveAt).toBe(4000)
   })
 
-  it('falls back to worktree PTY activity for editor tabs with no agent metadata', () => {
+  it('does not borrow worktree PTY activity for editor tabs', () => {
     const entry = makeEntry({
       contentType: 'editor',
       createdAt: 1000,
       worktree: makeWorktree({ lastActivityAt: 5000 })
     })
     const [result] = searchWorkspaceTabs([entry], '')
-    expect(result.lastActiveAt).toBe(5000)
+    expect(result.lastActiveAt).toBe(1000)
   })
 
   it('prefers agent activity over worktree activity when agent activity is newer', () => {
@@ -175,9 +182,88 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
 
     expect(result.lastActiveAt).toBe(8000)
   })
+
+  it('keeps valid creation when other activity signals are invalid', () => {
+    const entry = makeEntry({ createdAt: 4_000, agentLastActivityAt: Number.POSITIVE_INFINITY })
+    entry.tab.lastFocusedAt = Number.NaN
+
+    const [result] = searchWorkspaceTabs([entry], '', {
+      context: createPaletteSearchContext(10_000)
+    })
+
+    expect(result.lastActiveAt).toBe(4_000)
+  })
+
+  it('uses the same future-clamped timestamp for rank activity and row display', () => {
+    const [result] = searchWorkspaceTabs([makeEntry({ createdAt: 20_000 })], 'tab', {
+      context: createPaletteSearchContext(10_000)
+    })
+
+    expect(result.activity).toEqual({ ageBucket: 0, timestamp: 10_000 })
+    expect(result.lastActiveAt).toBe(10_000)
+  })
 })
 
 describe('searchWorkspaceTabs ranking', () => {
+  it.each(['atl', 'atlas'])('keeps the Atlas reference fixture order for %s', (query) => {
+    const now = 100 * 24 * 60 * 60 * 1000
+    const age = (milliseconds: number): number => now - milliseconds
+    const entries = [
+      makeEntry({
+        id: 'old-prefix-2d',
+        title: 'atlas-follow-up-draft-2026-09-01.md',
+        createdAt: age(2 * 24 * 60 * 60 * 1000)
+      }),
+      makeEntry({
+        id: 'old-prefix-3d',
+        title: 'atlas-meeting-todo.md',
+        createdAt: age(3 * 24 * 60 * 60 * 1000)
+      }),
+      makeEntry({
+        id: 'recent-title',
+        title: 'Clarify Atlas action items',
+        createdAt: age(30_000)
+      }),
+      makeEntry({
+        id: 'recent-path',
+        title: 'questions-and-answers.md',
+        secondaryText: 'notes/atlas/questions.md',
+        createdAt: age(30 * 60 * 1000)
+      }),
+      makeEntry({
+        id: 'older-path',
+        title: 'worklog.md',
+        secondaryText: 'notes/atlas/worklog.md',
+        createdAt: age(9 * 60 * 60 * 1000)
+      }),
+      makeEntry({
+        id: 'older-title',
+        title: 'Advance Atlas security review',
+        createdAt: age(19 * 60 * 60 * 1000)
+      }),
+      makeEntry({
+        id: 'snippet',
+        title: 'Agent conversation',
+        agentSnippet: 'Discuss atlas rollout',
+        createdAt: age(47 * 60 * 60 * 1000)
+      })
+    ]
+
+    const results = searchWorkspaceTabs(entries, query, {
+      context: createPaletteSearchContext(now)
+    })
+
+    expect(results.map((result) => result.tabId)).toEqual([
+      'recent-title',
+      'older-title',
+      'old-prefix-2d',
+      'old-prefix-3d',
+      'recent-path',
+      'older-path',
+      'snippet'
+    ])
+  })
+
   it('ranks a multi-token direct-plus-container hit above a container-only whole-query hit', () => {
     const directEntry = makeEntry({ id: 'direct-tab' })
     const containerEntry = makeEntry({ id: 'container-tab' })
@@ -201,7 +287,34 @@ describe('searchWorkspaceTabs ranking', () => {
     const results = searchWorkspaceTabs([containerEntry, directEntry], 'auth aurora')
 
     expect(results.map((result) => result.tabId)).toEqual(['direct-tab', 'container-tab'])
+    expect(results.map((result) => result.rank?.coverage)).toEqual([2, 2])
     expect(results.map((result) => result.rank?.containerOnlyTokenCount)).toEqual([1, 2])
+  })
+
+  it('ranks one recovered token above an otherwise-equal all-recovered match', () => {
+    const oneRecovery = makeEntry({ id: 'one-recovery' })
+    const twoRecoveries = makeEntry({ id: 'two-recoveries' })
+    oneRecovery.document = buildPaletteTabDocument({
+      id: 'one-recovery',
+      title: 'alphx bravo',
+      secondaryTexts: [],
+      worktreeName: 'workspace',
+      branch: 'main',
+      repoName: 'repo'
+    })
+    twoRecoveries.document = buildPaletteTabDocument({
+      id: 'two-recoveries',
+      title: 'alphx bravx',
+      secondaryTexts: [],
+      worktreeName: 'workspace',
+      branch: 'main',
+      repoName: 'repo'
+    })
+
+    const results = searchWorkspaceTabs([twoRecoveries, oneRecovery], 'alpha bravo')
+
+    expect(results.map((result) => result.tabId)).toEqual(['one-recovery', 'two-recoveries'])
+    expect(results.map((result) => result.rank?.recoveryTokenCount)).toEqual([1, 2])
   })
 
   it('ranks direct tab title matches ahead of container-only worktree matches', () => {
@@ -228,9 +341,9 @@ describe('searchWorkspaceTabs ranking', () => {
     const results = searchWorkspaceTabs([containerEntry, directEntry], '4360')
     expect(results).toHaveLength(2)
     expect(results[0].tabId).toBe('README-4360')
-    expect(results[0].rank?.containerOnlyTokenCount).toBe(0)
+    expect(results[0].rank?.coverage).toBe(0)
     expect(results[1].tabId).toBe('unrelated-file')
-    expect(results[1].rank?.containerOnlyTokenCount).toBe(1)
+    expect(results[1].rank?.coverage).toBe(2)
   })
 
   it('breaks tie between two container-matching tabs using lastActiveAt recency', () => {

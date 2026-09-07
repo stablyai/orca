@@ -1,5 +1,10 @@
-import type { Page } from '@playwright/test'
+import path from 'node:path'
+import { readFileSync } from 'node:fs'
+import type { ElectronApplication } from '@playwright/test'
 import { test, expect } from './helpers/orca-app'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import { sshRemotePtyLeaseAllowsReattach, type SshRemotePtyLease } from '../../src/shared/ssh-types'
+import { toRelaySshPtyId } from '../../src/shared/ssh-pty-id'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -14,13 +19,18 @@ import {
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
-import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
+import {
+  connectDockerSshRelayTarget,
+  recoverDockerSshRelayAfterFault
+} from './helpers/docker-ssh-relay-connection'
 import {
   clearDockerSshRelayFaults,
   dropDockerSshRelayTransport,
   killDockerSshRelayDaemon,
   withStalledDockerSshRelayTarget
 } from './helpers/docker-ssh-relay-faults'
+
+import { attachSshRecoveryInputObservation } from './helpers/ssh-recovery-input-observation'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 
@@ -42,11 +52,57 @@ const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
  * with only the first cannot tell a resume from a silent cold start
  * (docs/reference/ssh-execution-boundary.md).
  */
-async function readSshStatus(orcaPage: Page, targetId: string) {
-  return orcaPage.evaluate(
-    (targetId) => window.__store?.getState().sshConnectionStates.get(targetId)?.status ?? null,
-    targetId
+/**
+ * Every lease `reattachKnownPtys` would feed to `pty.attach` on the next connect, read from the
+ * durable store rather than from the renderer — leases are main-owned and never published.
+ *
+ * Goes through the shipped `sshRemotePtyLeaseAllowsReattach` predicate so the measurement cannot
+ * drift from the fan-out it exists to bound.
+ */
+function readSshLeases(userDataDir: string, targetId: string): SshRemotePtyLease[] {
+  const dataPath = path.join(
+    userDataDir,
+    'profiles',
+    DEFAULT_LOCAL_ORCA_PROFILE_ID,
+    'orca-data.json'
   )
+  const parsed = JSON.parse(readFileSync(dataPath, 'utf8')) as {
+    sshRemotePtyLeases?: SshRemotePtyLease[]
+  }
+  return (parsed.sshRemotePtyLeases ?? []).filter((lease) => lease.targetId === targetId)
+}
+
+function readReattachablePtyIds(userDataDir: string, targetId: string): string[] {
+  return readSshLeases(userDataDir, targetId)
+    .filter(sshRemotePtyLeaseAllowsReattach)
+    .map((lease) => lease.ptyId)
+    .sort()
+}
+
+/**
+ * Everything a cardinality failure needs to be diagnosable from the report alone.
+ *
+ * Worth keeping rather than reducing to a count: when this first failed, the count said only "2",
+ * and it was the per-row fields that ruled out the obvious causes — the rows agreed on worktree,
+ * tab and leaf, so the pane identity was never the problem.
+ */
+function describeSshLeases(userDataDir: string, targetId: string): string {
+  return JSON.stringify(
+    readSshLeases(userDataDir, targetId).map((lease) => ({
+      ptyId: lease.ptyId,
+      state: lease.state,
+      worktreeId: lease.worktreeId,
+      leafId: lease.leafId,
+      tabId: lease.tabId,
+      supersededBy: lease.supersededBy,
+      relayIdRecycled: lease.relayIdRecycled,
+      reattachable: sshRemotePtyLeaseAllowsReattach(lease)
+    }))
+  )
+}
+
+function readUserDataDir(electronApp: ElectronApplication): Promise<string> {
+  return electronApp.evaluate(({ app }) => app.getPath('userData'))
 }
 
 /**
@@ -65,7 +121,9 @@ test.describe('SSH transport drop recovery', () => {
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target, {
+        relayGracePeriodSeconds: 0
+      })
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -77,20 +135,12 @@ test.describe('SSH transport drop recovery', () => {
       await execInTerminal(orcaPage, ptyId, `printf 'DROP_MARKER_%s\\n' ${markerSuffix}`)
       await waitForTerminalOutput(orcaPage, marker, 30_000)
 
-      const dropped = dropDockerSshRelayTransport(target)
-      expect(dropped, 'no live SSH connection was found to drop').toBeGreaterThan(0)
-
-      // Nothing below calls ssh.connect(). Recovery has to come from the client's own ladder,
-      // which is the behaviour users depend on and the thing a scripted reconnect never exercised.
-      await expect
-        .poll(() => readSshStatus(orcaPage, remote.targetId), {
-          timeout: 120_000,
-          message: 'SSH target never returned to connected after the transport was dropped'
-        })
-        .toBe('connected')
+      await recoverDockerSshRelayAfterFault(orcaPage, remote.targetId, () => {
+        expect(dropDockerSshRelayTransport(target!)).toBeGreaterThan(0)
+      })
 
       await waitForActiveTerminalManager(orcaPage, 60_000)
-      await waitForActivePanePtyId(orcaPage, 60_000)
+      expect(await waitForActivePanePtyId(orcaPage, 60_000)).toBe(ptyId)
 
       // The pane must still show what it had. A blank pane here is the reported bug.
       await waitForTerminalOutput(orcaPage, marker, 60_000)
@@ -113,11 +163,10 @@ test.describe('SSH transport drop recovery', () => {
     }
   })
 
-  // Fixme: fails in CI on its first real run — the pane keeps its PTY and repaints, but a command
-  // run after the flood produces no output within the poll budget. Same shape as #18018 (deaf pane
-  // after a stalled host resumes), and not caused by this spec. Tracked there; the three verdict
-  // assertions around it stay enforced.
-  test.fixme('stays bounded when a disconnected shell floods its pty', async ({ orcaPage }, testInfo) => {
+  // #18018: local authority-aware recovery still loses the flooded pane's relay channel.
+  test.fixme('stays bounded when a disconnected shell floods its pty', async ({
+    orcaPage
+  }, testInfo) => {
     test.slow()
     // Timeouts here are deliberately generous: this guards memory, not latency. A 48MB flood plus a
     // reconnect lands near 60s wall-clock end to end, so a 60s bind timeout was marginal and made
@@ -136,7 +185,9 @@ test.describe('SSH transport drop recovery', () => {
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target, {
+        relayGracePeriodSeconds: 0
+      })
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 240_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 240_000)
@@ -155,18 +206,12 @@ test.describe('SSH transport drop recovery', () => {
       await execInTerminal(
         orcaPage,
         ptyId,
-        `yes "$(printf 'ORCA_%s' FLOOD_LINE)" | head -c 48000000; echo FLOODED`
+        `yes "$(printf 'ORCA_%s' FLOOD_LINE)" | head -c 48000000; printf 'FLOO%s\\n' DED`
       )
       await waitForTerminalOutput(orcaPage, 'ORCA_FLOOD_LINE', 30_000, 20_000)
-      const dropped = dropDockerSshRelayTransport(target)
-      expect(dropped).toBeGreaterThan(0)
-
-      await expect
-        .poll(() => readSshStatus(orcaPage, remote.targetId), {
-          timeout: 120_000,
-          message: 'SSH target never returned to connected'
-        })
-        .toBe('connected')
+      await recoverDockerSshRelayAfterFault(orcaPage, remote.targetId, () => {
+        expect(dropDockerSshRelayTransport(target!)).toBeGreaterThan(0)
+      })
       await waitForActiveTerminalManager(orcaPage, 240_000)
 
       // Why a generous ceiling: this is an OOM guard, not a memory budget. Unbounded retention of
@@ -176,6 +221,9 @@ test.describe('SSH transport drop recovery', () => {
         afterRssKb - baselineRssKb,
         `relay grew ${afterRssKb - baselineRssKb}KB after 48MB of undeliverable output`
       ).toBeLessThan(200_000)
+
+      // Wait for the finite producer to finish before sending a shell command behind it.
+      await waitForTerminalOutput(orcaPage, 'FLOODED', 120_000, 20_000)
 
       // And the session must still be usable, not merely alive.
       const markerSuffix = Date.now()
@@ -214,7 +262,9 @@ test.describe('SSH transport drop recovery', () => {
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target, {
+        relayGracePeriodSeconds: 0
+      })
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -224,15 +274,9 @@ test.describe('SSH transport drop recovery', () => {
       await execInTerminal(orcaPage, ptyId, `printf 'KILL_MARKER_%s\\n' ${markerSuffix}`)
       await waitForTerminalOutput(orcaPage, marker, 30_000)
 
-      const killed = killDockerSshRelayDaemon(target)
-      expect(killed, 'no relay process was found to kill').toBeGreaterThan(0)
-
-      await expect
-        .poll(() => readSshStatus(orcaPage, remote.targetId), {
-          timeout: 120_000,
-          message: 'SSH target never returned to connected after the relay was killed'
-        })
-        .toBe('connected')
+      await recoverDockerSshRelayAfterFault(orcaPage, remote.targetId, () => {
+        expect(killDockerSshRelayDaemon(target!)).toBeGreaterThan(0)
+      })
       await waitForActiveTerminalManager(orcaPage, 60_000)
 
       // The verdict, expressed as the only thing a user can observe: the pane is now backed by a
@@ -262,6 +306,93 @@ test.describe('SSH transport drop recovery', () => {
   })
 
   /**
+   * The cardinality half of the same fault, which the verdict test above cannot see: it asserts the
+   * pane is re-backed, not what the pane's PREVIOUS shells left behind in the store.
+   *
+   * A pane re-leases under a new relay pty id on every relay restart, and nothing else retires the
+   * predecessor. When supersession fails, each generation leaves one more `expired`-but-unsuperseded
+   * lease that `reattachKnownPtys` still asks about — one extra `pty.attach` round trip on every
+   * later connect, forever, growing linearly with reconnect count. Measured as leases rather than
+   * as latency because latency hides the growth until it is already large.
+   *
+   * The reattachable set must stay at exactly one per pane. It must not go to zero either: a lease
+   * wrongly superseded is a running remote shell the pane can no longer find, which is the worse
+   * failure (docs/reference/ssh-execution-boundary.md).
+   */
+  test('keeps one reattachable lease per pane across repeated relay restarts', async ({
+    orcaPage,
+    electronApp
+  }, testInfo) => {
+    test.slow()
+    let target: DockerSshRelayTarget | null = null
+    try {
+      target = startDockerSshRelayTarget(testInfo)
+      enableDockerSshRelayTargetShellTitle(target)
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target, {
+        relayGracePeriodSeconds: 0
+      })
+      await ensureTerminalVisible(orcaPage, 45_000)
+      await waitForActiveTerminalManager(orcaPage, 60_000)
+      await waitForActivePanePtyId(orcaPage, 60_000)
+
+      const userDataDir = await readUserDataDir(electronApp)
+      const generations: string[][] = []
+
+      for (let generation = 1; generation <= 5; generation++) {
+        const previousPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+        await recoverDockerSshRelayAfterFault(orcaPage, remote.targetId, () => {
+          expect(
+            killDockerSshRelayDaemon(target!),
+            'no relay process was found to kill'
+          ).toBeGreaterThan(0)
+        })
+        await waitForActiveTerminalManager(orcaPage, 120_000)
+        // Transport status can still be connected while the pane retains its old binding.
+        await expect
+          .poll(() => waitForActivePanePtyId(orcaPage, 60_000).catch(() => previousPtyId), {
+            timeout: 120_000,
+            message: `pane kept its old PTY binding after relay kill ${generation}`
+          })
+          .not.toBe(previousPtyId)
+        const ptyId = await waitForActivePanePtyId(orcaPage, 120_000)
+        const markerSuffix = `${generation}_${Date.now()}`
+        const marker = `LEASE_GEN_${markerSuffix}`
+        await execInTerminal(orcaPage, ptyId, `printf 'LEASE_GEN_%s\\n' ${markerSuffix}`)
+        await waitForTerminalOutput(orcaPage, marker, 60_000)
+
+        try {
+          await expect
+            .poll(() => readReattachablePtyIds(userDataDir, remote.targetId), {
+              timeout: 60_000
+            })
+            .toEqual([toRelaySshPtyId(remote.targetId, ptyId)])
+        } catch (error) {
+          // Preserve lease ownership diagnostics before the user-data directory is removed.
+          throw new Error(
+            `reattachable leases never settled at the active PTY ${ptyId} in generation ${generation}; leases: ${describeSshLeases(userDataDir, remote.targetId)}`,
+            { cause: error }
+          )
+        }
+        generations.push(readReattachablePtyIds(userDataDir, remote.targetId))
+      }
+
+      // Stated as the whole sequence so a regression reports the growth, not just its endpoint —
+      // the reported shape was 2, 3, 4, 5, 6 across five restarts.
+      expect(
+        generations.map((ptyIds) => ptyIds.length),
+        `reattachable lease count per generation: ${JSON.stringify(generations)}`
+      ).toEqual([1, 1, 1, 1, 1])
+    } finally {
+      if (target) {
+        clearDockerSshRelayFaults(target)
+        cleanupDockerSshRelayTarget(target)
+      }
+    }
+  })
+
+  /**
    * The third fault shape: silence with the socket still established. `docker pause` freezes the
    * container, so nothing is closed or reset — the client simply stops hearing from a host that is
    * perfectly healthy. This is the one that pins "loss of contact is never evidence": the verdict
@@ -276,7 +407,7 @@ test.describe('SSH transport drop recovery', () => {
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      await connectDockerSshRelayTarget(orcaPage, target)
+      await connectDockerSshRelayTarget(orcaPage, target, { relayGracePeriodSeconds: 0 })
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -304,38 +435,64 @@ test.describe('SSH transport drop recovery', () => {
     }
   })
 
-  /**
-   * Known broken on main, kept as the reproduction. The verdict test above passes: after a 30s
-   * freeze the pane keeps its PTY and repaints its scrollback. What does not come back is the
-   * shell — a command run afterwards produces no output within 60s, so the pane is live-looking and
-   * deaf. Measured twice at `waitForTerminalOutput(STALL_AFTER_…)`, and it reproduces unchanged
-   * with the reattach-token/delivery-ownership fix applied, so that is not the cause.
-   *
-   * Split out rather than folded into the test above so the `unverifiable` verdict stays enforced
-   * in CI instead of being masked by this failure.
-   */
-  test.fixme('accepts input again after a frozen host resumes', async ({ orcaPage }, testInfo) => {
+  // #18018: wait for the recovered authority before input; a retained manager can still be disconnected.
+  test('accepts input again after a frozen host resumes', async ({ orcaPage }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+    let observationTarget: { targetId: string; ptyId: string } | undefined
     try {
       target = startDockerSshRelayTarget(testInfo)
       enableDockerSshRelayTargetShellTitle(target)
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
-      await connectDockerSshRelayTarget(orcaPage, target)
+      const remote = await connectDockerSshRelayTarget(orcaPage, target, {
+        relayGracePeriodSeconds: 0
+      })
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
 
-      await withStalledDockerSshRelayTarget(target, async () => {
-        await orcaPage.waitForTimeout(30_000)
+      observationTarget = { targetId: remote.targetId, ptyId }
+      const beforeSuffix = Date.now()
+      await execInTerminal(orcaPage, ptyId, `printf 'STALL_BEFORE_%s\\n' ${beforeSuffix}`)
+      await waitForTerminalOutput(orcaPage, `STALL_BEFORE_${beforeSuffix}`, 60_000)
+      await attachSshRecoveryInputObservation(
+        orcaPage,
+        testInfo,
+        remote.targetId,
+        ptyId,
+        'before-freeze'
+      )
+
+      await recoverDockerSshRelayAfterFault(orcaPage, remote.targetId, async () => {
+        await withStalledDockerSshRelayTarget(target!, async () => {
+          await orcaPage.waitForTimeout(30_000)
+        })
       })
       await waitForActiveTerminalManager(orcaPage, 60_000)
 
       const afterSuffix = Date.now()
       const afterMarker = `STALL_AFTER_${afterSuffix}`
       await execInTerminal(orcaPage, ptyId, `printf 'STALL_AFTER_%s\\n' ${afterSuffix}`)
+      await attachSshRecoveryInputObservation(
+        orcaPage,
+        testInfo,
+        remote.targetId,
+        ptyId,
+        'after-write'
+      )
       await waitForTerminalOutput(orcaPage, afterMarker, 60_000)
+    } catch (error) {
+      if (observationTarget) {
+        await attachSshRecoveryInputObservation(
+          orcaPage,
+          testInfo,
+          observationTarget.targetId,
+          observationTarget.ptyId,
+          'failure-before-cleanup'
+        ).catch(() => undefined)
+      }
+      throw error
     } finally {
       if (target) {
         clearDockerSshRelayFaults(target)

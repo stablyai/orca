@@ -1,10 +1,10 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
+import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
-  getProcessTableSnapshot,
-  type ProcessTableRow
-} from '../../shared/process-table-snapshot'
+  getProcessTableSnapshot
+} from '../../shared/process-table-snapshot-reader'
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import {
   resolveWindowsAgentForegroundProcessWithAvailability,
@@ -18,6 +18,7 @@ export type { AgentForegroundResolutionOptions } from './windows-agent-foregroun
 export {
   resolveAgentForegroundProcessesBatch,
   resolveAgentForegroundProcessesFromIndex,
+  resolveRemoteForegroundEvidence,
   toForegroundProcessEvidence,
   type BatchedForegroundProcessOptions,
   type BatchedForegroundProcessRequest,

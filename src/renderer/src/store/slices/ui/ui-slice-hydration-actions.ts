@@ -21,6 +21,10 @@ import {
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
 import {
+  normalizeActivityGroupBy,
+  normalizeThreadReadFilter
+} from '../../../../../shared/agents-view-thread-filters'
+import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceStatuses
@@ -182,6 +186,8 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           ),
           agentsShowChildAgents: ui.agentsShowChildAgents === true,
           agentsCompactMode: ui.agentsCompactMode !== false,
+          agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
+          agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),
           collapsedGroups: new Set(ui.collapsedGroups ?? []),
           uiZoomLevel: ui.uiZoomLevel ?? 0,
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,

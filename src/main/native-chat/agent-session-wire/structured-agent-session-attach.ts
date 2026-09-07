@@ -5,7 +5,6 @@
 // the record store's compare-and-swap, which also owns the idempotency row, so
 // a retried attach replays instead of reserving a second owner.
 
-import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentSessionJournalIdentity,
   AgentSessionProviderHandle
@@ -32,6 +31,7 @@ import {
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -51,9 +51,11 @@ export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
-  agent: AgentType
+  agent: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
   runtimeKind: AgentSessionOwnerRuntimeKind
+  /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
+  options?: Readonly<Record<string, string>>
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
 }
@@ -70,7 +72,10 @@ export type AgentSessionAttachAuthority = {
 
 /** The fields that define WHICH session this call would attach to. Deliberately
  *  excludes the spawn token and the probe: those differ between a first attempt
- *  and its retry, and a retry must replay rather than conflict. */
+ *  and its retry, and a retry must replay rather than conflict. `options` is
+ *  excluded for the same reason — it is the session's initial state, not its
+ *  identity, and the host re-resolves it from settings the user may have changed
+ *  between an unknown-outcome attempt and its retry. */
 export function attachFingerprintFields(params: AgentSessionAttachParams): Record<string, unknown> {
   return {
     location: params.location,
@@ -162,9 +167,18 @@ export async function attachJournal(input: {
     fence,
     historyFilePath
   })
-  return {
-    ...opened,
-    unconfirmedClientMessageIds: await opened.journal.markPendingSubmissionsUnknown(fence)
+  try {
+    // That await is a WRITE. A failure in it leaves the journal with no caller
+    // holding a reference to close it.
+    return {
+      ...opened,
+      unconfirmedClientMessageIds: await opened.journal.markPendingSubmissionsUnknown(fence)
+    }
+  } catch (error) {
+    // A rejected close leaves the handle open, so the journal is retained for a
+    // later retry rather than dropped along with the only reference to it.
+    await agentSessionJournalCloseRetries.closeOrRetain(opened.journal)
+    throw error
   }
 }
 
@@ -182,6 +196,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.options ? { options: params.options } : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     runtimeKind: params.runtimeKind,

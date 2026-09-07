@@ -493,6 +493,37 @@ describe('WorkspacePortScanner', () => {
     expect(useAppStore.getState().workspacePortScansByKey['environment:env-3:all']).toBeUndefined()
   })
 
+  // Why: a manual publish (the ports popover) can resolve after the host-set
+  // change already pruned its key, re-adding it. Per-key writes never delete, so
+  // that removed host would otherwise hold its ports and a permanent
+  // unavailable notice until the next host-set change.
+  it('drops a stale host re-added after pruning on the next poll', async () => {
+    await act(async () => {
+      root?.render(<WorkspacePortScanner />)
+      await flushPromises()
+    })
+
+    const staleKey = 'environment:env-removed:all'
+    act(() => {
+      const state = useAppStore.getState()
+      state.replaceWorkspacePortScans(
+        {
+          ...state.workspacePortScansByKey,
+          [staleKey]: { ...emptyScan, unavailableReason: 'gone' }
+        },
+        state.workspacePortScan
+      )
+    })
+    expect(useAppStore.getState().workspacePortScansByKey[staleKey]).toBeDefined()
+
+    await act(async () => {
+      vi.advanceTimersByTime(30_000)
+      await flushPromises()
+    })
+
+    expect(useAppStore.getState().workspacePortScansByKey[staleKey]).toBeUndefined()
+  })
+
   it('clears ports immediately when the final worktree is removed', async () => {
     runtimeEnvironmentCall.mockImplementation(({ method }) => {
       if (method === 'workspacePorts.scan') {

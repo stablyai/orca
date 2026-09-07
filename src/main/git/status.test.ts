@@ -77,6 +77,13 @@ describe('getStatus', () => {
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
   })
 
+  /** `access` targets outside the git dir — i.e. working-tree probes, not conflict-marker reads. */
+  function conflictFileProbes(): string[] {
+    return accessMock.mock.calls
+      .map(([target]) => String(target).replaceAll('\\', '/'))
+      .filter((target) => !target.includes('/.git/'))
+  }
+
   it('parses unmerged porcelain v2 entries into unresolved conflict rows', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     accessMock.mockImplementation(async (target: string) => {
@@ -104,11 +111,12 @@ describe('getStatus', () => {
     ])
   })
 
-  it('maps deleted conflicts to deleted when the working tree file is absent', async () => {
+  // The 7th field of a `u` record is the working-tree mode; `000000` is how Git reports an absent path.
+  it('maps deleted conflicts to deleted from the porcelain working-tree mode', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
-        'u UD N... 100644 100644 000000 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/deleted.ts\n'
+        'u UD N... 100644 100644 000000 000000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/deleted.ts\n'
     })
 
     const result = await getStatus('/repo')
@@ -120,10 +128,12 @@ describe('getStatus', () => {
       conflictKind: 'deleted_by_them',
       conflictStatus: 'unresolved'
     })
+    expect(conflictFileProbes()).toEqual([])
   })
 
-  it('falls back to modified when the working-tree probe fails for a non-absence reason', async () => {
+  it('never re-probes the working tree for a conflict row, whatever the filesystem would say', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    // Every probe fails ENOENT (beforeEach) or EIO — neither may reach the row's status.
     accessMock.mockRejectedValue(Object.assign(new Error('EIO'), { code: 'EIO' }))
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
@@ -134,19 +144,14 @@ describe('getStatus', () => {
 
     expect(result.entries[0]?.status).toBe('modified')
     expect(result.entries[0]?.conflictKind).toBe('added_by_us')
+    expect(conflictFileProbes()).toEqual([])
   })
 
   // Why both cases normalize separators: git reports the worktree in the WSL guest namespace, and
   // the assertion is about which path is probed, not which separator this host's `path` emits.
-  it('probes the conflict working tree through the distro spelling on Windows', async () => {
+  it('resolves a WSL conflict row without crossing the 9p share', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     readFileMock.mockResolvedValue('gitdir: /home/me/repo/.git/worktrees/feature\n')
-    accessMock.mockImplementation(async (target: string) => {
-      if (String(target).endsWith('new.ts')) {
-        return undefined
-      }
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-    })
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         'u DU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/new.ts\n'
@@ -156,10 +161,12 @@ describe('getStatus', () => {
       const result = await getStatus('/home/me/repo/feature', { wslDistro: 'Ubuntu' })
 
       const probed = accessMock.mock.calls.map(([target]) => String(target).replaceAll('\\', '/'))
-      expect(probed).toContain('//wsl.localhost/Ubuntu/home/me/repo/feature/src/new.ts')
+      // No `\\wsl.localhost` round trip per conflict row: the porcelain `mW` field already answered.
+      expect(probed).not.toContain('//wsl.localhost/Ubuntu/home/me/repo/feature/src/new.ts')
+      expect(conflictFileProbes()).toEqual([])
       expect(result.entries[0]?.status).toBe('modified')
       expect(result.entries[0]?.conflictKind).toBe('deleted_by_us')
-      // The conflict-marker probes travel the same way.
+      // The conflict-marker probes still travel through the distro spelling.
       expect(
         probed.filter((target) =>
           target.startsWith('//wsl.localhost/Ubuntu/home/me/repo/.git/worktrees/feature/')

@@ -71,6 +71,12 @@ export function PRFilesCombinedDiffViewer({
     [diffEntrySignature]
   )
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
+  // Why: an inline arrow here re-keys every mounted row's comment decorator on every render.
+  const getCommentableLineNumbers = useCallback(
+    (section: DiffSection): readonly number[] | undefined =>
+      fileByPath.get(section.path)?.reviewCommentLineNumbers,
+    [fileByPath]
+  )
   const inlineReviewComments = useMemo(
     () => buildInlineReviewComments(comments, repoId, prNumber),
     [comments, prNumber, repoId]
@@ -358,9 +364,7 @@ export function PRFilesCombinedDiffViewer({
                     onAddLineComment={handleAddLineComment}
                     addLineCommentLabel="Comment"
                     addLineCommentPlaceholder="Add a review comment"
-                    getCommentableLineNumbers={(current) =>
-                      fileByPath.get(current.path)?.reviewCommentLineNumbers
-                    }
+                    getCommentableLineNumbers={getCommentableLineNumbers}
                     setSectionHeights={setSectionHeights}
                     setSections={setSections}
                     modifiedEditorsRef={modifiedEditorsRef}

@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { MiniMaxIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
+import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
 
 const MINIMAX_CONSOLE_URL = 'https://platform.minimax.io/console/usage'
 
@@ -265,10 +266,10 @@ export function renderMiniMaxAccountsSection(model: AccountsPaneSectionModel): R
           <Label>
             {translate('auto.components.settings.AccountsPane.bf160bb6c0', 'Group ID override')}
           </Label>
-          <Input
+          <DebouncedSettingsTextInput
             type="text"
             value={settings.minimaxGroupId}
-            onChange={(e) => updateSettings({ minimaxGroupId: e.target.value })}
+            commit={(minimaxGroupId) => updateSettings({ minimaxGroupId })}
             placeholder={translate(
               'auto.components.settings.AccountsPane.0747d6391a',
               'Use group ID from cookie'
@@ -290,10 +291,10 @@ export function renderMiniMaxAccountsSection(model: AccountsPaneSectionModel): R
           <Label>
             {translate('auto.components.settings.AccountsPane.4ff2af7524', 'Usage model names')}
           </Label>
-          <Input
+          <DebouncedSettingsTextInput
             type="text"
             value={settings.minimaxUsageModels}
-            onChange={(e) => updateSettings({ minimaxUsageModels: e.target.value })}
+            commit={(minimaxUsageModels) => updateSettings({ minimaxUsageModels })}
             placeholder={translate('auto.components.settings.AccountsPane.3c92b0d31c', 'general')}
             spellCheck={false}
             className="text-xs"

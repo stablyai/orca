@@ -15,9 +15,10 @@ import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
   id, run_id, task_id, contract_version, launch_token_hash,
   assignee_handle, assignee_pane_key, process_incarnation,
+  creator_dispatch_id, creator_handle, creator_pane_key,
   status, failure_count, depth, dispatched_at
 )
-SELECT ?, run_id, id, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
+SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
 FROM tasks
 WHERE id = ? AND status = 'ready'
   AND NOT EXISTS (
@@ -43,8 +44,9 @@ WHERE id = ? AND status = 'ready'
   )`
 
 const STARTING_DISPATCH_CONTEXT_SQL = `INSERT INTO dispatch_contexts (
-   id, run_id, task_id, contract_version, launch_token_hash, depth, status, dispatched_at
- ) VALUES (?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`
+   id, run_id, task_id, contract_version, launch_token_hash, retry_of_dispatch_id,
+   creator_dispatch_id, creator_handle, creator_pane_key, depth, status, dispatched_at
+ ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'))`
 
 const REMOTE_DISPATCH_ATTACHMENT_SQL = `INSERT INTO remote_dispatch_attachments (
    dispatch_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch, depth
@@ -69,6 +71,9 @@ export function claimDispatchContextRow(
     assigneeHandle: string
     assigneePaneKey: string | null
     processIncarnation: string | null
+    creatorDispatchId?: string | null
+    creatorHandle?: string | null
+    creatorPaneKey?: string | null
     priorFailures: number
     depth: number
     taskId: string
@@ -85,6 +90,9 @@ export function claimDispatchContextRow(
       params.assigneeHandle,
       params.assigneePaneKey,
       params.processIncarnation,
+      params.creatorDispatchId ?? null,
+      params.creatorHandle ?? null,
+      params.creatorPaneKey ?? null,
       params.priorFailures,
       params.depth,
       params.taskId,
@@ -106,6 +114,10 @@ export function insertStartingDispatchContextRow(
     contractVersion: number
     launchTokenHash: string | null
     depth: number
+    retryOfDispatchId?: string | null
+    creatorDispatchId?: string | null
+    creatorHandle?: string | null
+    creatorPaneKey?: string | null
   }
 ): void {
   assertStampedDepth(params.depth)
@@ -115,6 +127,10 @@ export function insertStartingDispatchContextRow(
     params.taskId,
     params.contractVersion,
     params.launchTokenHash,
+    params.retryOfDispatchId ?? null,
+    params.creatorDispatchId ?? null,
+    params.creatorHandle ?? null,
+    params.creatorPaneKey ?? null,
     params.depth
   )
 }

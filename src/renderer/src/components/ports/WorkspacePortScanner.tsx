@@ -4,10 +4,11 @@ import { getHasAnyWorktreesFromState } from '@/store/selectors'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import {
   mergeWorkspacePortScans,
-  runtimeTargetForExecutionHostId,
+  WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY,
   scanWorkspacePortsForTarget,
   workspacePortScanKeyForTarget
 } from '@/lib/workspace-port-actions'
+import { runtimeTargetForExecutionHostId } from '@/runtime/runtime-client-target'
 import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import {
   reconcileTransientPortScanFailures,
@@ -41,7 +42,6 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
   const setWorkspacePortScanProjection = useAppStore((s) => s.setWorkspacePortScanProjection)
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
-  const setWorkspacePortScanForKey = useAppStore((s) => s.setWorkspacePortScanForKey)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const inFlightRef = useRef<Promise<void> | null>(null)
   const generationRef = useRef(0)
@@ -124,40 +124,40 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
             const activeTargetKeys = new Set(
               allTargets.map((target) => workspacePortScanKeyForTarget(target))
             )
+            const publishedScans = useAppStore.getState().workspacePortScansByKey
             const reconciled = reconcileTransientPortScanFailures(
               results,
-              useAppStore.getState().workspacePortScansByKey,
+              publishedScans,
               portScanDebounceRef.current,
               WORKSPACE_PORT_SCAN_FAILURE_THRESHOLD,
               activeTargetKeys
             )
             const scansByKey = Object.fromEntries(
-              Object.entries(useAppStore.getState().workspacePortScansByKey).filter(([key]) =>
-                activeTargetKeys.has(key)
-              )
+              Object.entries(publishedScans).filter(([key]) => activeTargetKeys.has(key))
             )
-            let sourceChanged = false
+            // Why: a manual publish that lands after a host is pruned re-adds its key,
+            // and per-key writes never delete. Dropping the inactive keys here is what
+            // stops a removed host from holding a permanent unavailable notice.
+            let sourceChanged =
+              Object.keys(scansByKey).length !== Object.keys(publishedScans).length
             for (const { key, result } of reconciled) {
               sourceChanged ||= scansByKey[key] !== result
               scansByKey[key] = result
-              setWorkspacePortScanForKey(key, result)
             }
             const activeScan = scansByKey[scanKey]
             const merged = mergeWorkspacePortScans(scansByKey)
             const projectionKey =
               allTargets.length > 1
-                ? 'all-hosts:all'
+                ? WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY
                 : activeScan
                   ? scanKey
                   : workspacePortScanKeyForTarget(allTargets[0])
             if (sourceChanged || useAppStore.getState().workspacePortScan?.key !== projectionKey) {
-              setWorkspacePortScanProjection(
-                merged
-                  ? {
-                      key: projectionKey,
-                      result: merged
-                    }
-                  : null
+              // Why: one store update for the whole poll — a large host set must not
+              // fan out a notification to every subscriber per host.
+              replaceWorkspacePortScans(
+                sourceChanged ? scansByKey : publishedScans,
+                merged ? { key: projectionKey, result: merged } : null
               )
             }
           }
@@ -177,8 +177,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
       hasWorktrees,
       scanKey,
       setWorkspacePortScan,
-      setWorkspacePortScanProjection,
-      setWorkspacePortScanForKey,
+      replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing
     ]
   )
@@ -215,7 +214,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         : Object.fromEntries(retainedEntries)
     const retainedProjection = mergeWorkspacePortScans(retainedScans)
     const retainedProjectionKey =
-      targetKeys.size > 1 ? 'all-hosts:all' : Object.keys(retainedScans)[0]
+      targetKeys.size > 1 ? WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY : Object.keys(retainedScans)[0]
     // Why: unchanged hosts stay visible while the replacement RPC runs; removed
     // hosts and the old synthetic aggregate are excluded immediately.
     const nextProjection =

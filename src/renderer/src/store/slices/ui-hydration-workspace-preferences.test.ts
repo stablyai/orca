@@ -551,6 +551,27 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().agentsFilterRepoIds).toEqual([])
     expect(store.getState().agentsShowChildAgents).toBe(false)
     expect(store.getState().agentsCompactMode).toBe(true)
+    expect(store.getState().agentsReadFilter).toBe('all')
+    expect(store.getState().agentsGroupBy).toBe('status')
+  })
+
+  it('restores the persisted agents read filter and grouping, rejecting unknown values', () => {
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ agentsReadFilter: 'unread', agentsGroupBy: 'project' }))
+    expect(store.getState().agentsReadFilter).toBe('unread')
+    expect(store.getState().agentsGroupBy).toBe('project')
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentsReadFilter: 'bogus' as unknown as PersistedUIState['agentsReadFilter'],
+        agentsGroupBy: 'bogus' as unknown as PersistedUIState['agentsGroupBy']
+      })
+    )
+    expect(store.getState().agentsReadFilter).toBe('all')
+    expect(store.getState().agentsGroupBy).toBe('status')
   })
 
   it('sanitizes malformed agents repo filters before the repo catalog loads', () => {

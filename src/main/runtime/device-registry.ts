@@ -5,7 +5,11 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
+import {
+  hardenExistingSecureFile,
+  isUnreadableError,
+  writeSecureJsonFile
+} from '../../shared/secure-file'
 import type { DeviceScope } from '../../shared/runtime-types'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import type { RelayDeviceBinding } from './relay/relay-revoke-outbox'
@@ -59,6 +63,8 @@ const LAST_SEEN_FLUSH_DELAY_MS = 250
 export class DeviceRegistry {
   private readonly registryPath: string
   private devices: DeviceEntry[] = []
+  /** Set when the registry exists but could not be read, which makes `devices` a lie to save from. */
+  private registryUnreadable = false
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
 
   constructor(userDataPath: string) {
@@ -322,12 +328,21 @@ export class DeviceRegistry {
         pairingReach: device.pairingReach === 'this-computer' ? 'this-computer' : 'network',
         ...(device.pairingTransport === 'tailcat' ? { pairingTransport: 'tailcat' as const } : {})
       }))
-    } catch {
+      this.registryUnreadable = false
+    } catch (error) {
+      // "Cannot read" is not "is empty". Saving an empty list over a registry we were merely
+      // denied would erase every paired device's bearer token, and the write would succeed.
+      this.registryUnreadable = isUnreadableError(error)
       this.devices = []
     }
   }
 
   private save(devices: DeviceEntry[]): void {
+    if (this.registryUnreadable) {
+      throw new Error(
+        `Cannot read the device registry at ${this.registryPath}: the read failed. Refusing to overwrite it, which would revoke every paired device.`
+      )
+    }
     writeSecureJsonFile(this.registryPath, devices)
     // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
     this.cancelPendingLastSeenFlush()

@@ -14,6 +14,8 @@ describe('pairing-local UI fields', () => {
       'agentsFilterRepoIds',
       'agentsShowChildAgents',
       'agentsCompactMode',
+      'agentsReadFilter',
+      'agentsGroupBy',
       'activityClearedAtByPaneKey',
       'manuallyUnreadTurnsByPaneKey'
     ])

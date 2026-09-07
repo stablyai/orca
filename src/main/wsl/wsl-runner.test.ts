@@ -236,7 +236,10 @@ describe('guest cwd', () => {
   it('cds inside the guest rather than passing a Windows cwd to wsl.exe', async () => {
     seedWslGuestEnvironmentForTests(undefined, ENVIRONMENT)
     await runWslProcess({ loginPath: 'preferred', program: '/usr/bin/git', cwd: '/home/u/repo' })
-    expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).toBeUndefined()
+    // The contract is that the GUEST path never becomes wsl.exe's Windows cwd,
+    // not that there is no cwd: inheriting one is its own bug (#16463).
+    expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).not.toBe('/home/u/repo')
+    expect(runProcessMock.mock.calls.at(-1)?.[0].cwd).toEqual(expect.any(String))
     expect(lastArgv()).toContain('/home/u/repo')
     expect(lastArgv()).toContain('sh')
   })

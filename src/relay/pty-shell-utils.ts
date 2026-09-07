@@ -9,12 +9,9 @@ import {
   recognizeAgentProcess
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
-import {
-  getProcessTableSnapshot,
-  type ProcessTableIndex,
-  type ProcessTableRow
-} from '../shared/process-table-snapshot'
-import { getProcessTableIndex } from '../shared/process-table-index'
+import { getProcessTableIndex, type ProcessTableIndex } from '../shared/process-table-index'
+import { PS_MAX_BUFFER_BYTES, type ProcessTableRow } from '../shared/process-table-snapshot'
+import { getProcessTableSnapshot } from '../shared/process-table-snapshot-reader'
 import { selectForegroundProcessCandidate } from '../shared/foreground-process-selection'
 import {
   resolveOuterWrapperForegroundProcess,
@@ -169,21 +166,6 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
   return fallbackCwd
 }
 
-/**
- * Check whether a process has child processes (via pgrep).
- */
-export async function processHasChildren(pid: number): Promise<boolean> {
-  try {
-    const { stdout } = await execFile('pgrep', ['-P', String(pid)], {
-      encoding: 'utf-8',
-      timeout: 3000
-    })
-    return stdout.trim().length > 0
-  } catch {
-    return false
-  }
-}
-
 // Why: signal 0 probes existence without delivering a signal. Only ESRCH ("no
 // such process") proves the pid is gone; EPERM means it exists but is
 // unsignalable, so treat every non-ESRCH outcome as alive. Kept conservative so
@@ -319,7 +301,8 @@ export async function getForegroundProcessName(
   try {
     const { stdout } = await execFile('ps', ['-o', 'comm=', '-p', String(pid)], {
       encoding: 'utf-8',
-      timeout: 3000
+      timeout: 3000,
+      maxBuffer: PS_MAX_BUFFER_BYTES
     })
     return stdout.trim() || null
   } catch {

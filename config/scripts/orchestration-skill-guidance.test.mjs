@@ -1,32 +1,58 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = resolve(import.meta.dirname, '../..')
-// Why: orchestration now ships a hybrid discovery stub, so its version-sensitive command
-// guidance lives in the authoritative guide source — assert that content there. The
-// installable stub projection is checked separately below.
 const guidePath = join(projectDir, 'skill-guides', 'orchestration.md')
+const referenceRoot = join(projectDir, 'skill-guides', 'orchestration', 'references')
 const stubPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
 
-function readSkill() {
+function readKernel() {
   return readFileSync(guidePath, 'utf8')
 }
 
-function getSection(markdown, heading) {
-  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = markdown.match(
-    new RegExp(`## ${escapedHeading}\\r?\\n([\\s\\S]*?)(?=\\r?\\n## |$)`)
-  )
-
-  expect(match).not.toBeNull()
-
-  return match?.[1] ?? ''
+function readReference(name) {
+  return readFileSync(join(referenceRoot, name), 'utf8')
 }
 
-describe('orchestration skill guidance', () => {
+function frontmatter(text) {
+  return /^---\n[\s\S]*?\n---\n/u.exec(text)?.[0]
+}
+
+function squash(text) {
+  return text.replace(/\s+/gu, ' ').trim()
+}
+
+// Routing lives in the frontmatter description alone; the body must not satisfy these.
+function readDescription() {
+  return squash(frontmatter(readKernel()))
+}
+
+describe('orchestration skill routing', () => {
+  it('keeps the verbatim routing triggers a model matches the skill on', () => {
+    const description = readDescription()
+
+    for (const trigger of [
+      'threaded messages',
+      'worker_done/escalation waits',
+      'decision gates',
+      'decomposing work across agents',
+      '"hand off"',
+      '"handoff"',
+      '"handover"',
+      '"give this to another agent"',
+      '"another worktree"',
+      'lightweight terminal prompts',
+      'shell commands',
+      'Orca worktree management',
+      'reading or waiting on terminals'
+    ]) {
+      expect(description).toContain(trigger)
+    }
+  })
+
   it('keeps external browser routing at the OS/page boundary', () => {
-    const description = readFileSync(guidePath, 'utf8').replace(/\s+/gu, ' ')
+    const description = readDescription()
 
     expect(description).toContain(
       "Use Computer Use for external browser windows, webviews, Orca app UI, or desktop UI outside Orca's embedded browser only when the task requires OS/window-level control such as focus, menus, dialogs, coordinates, or screenshots."
@@ -35,383 +61,444 @@ describe('orchestration skill guidance', () => {
       "`orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages."
     )
   })
+})
 
-  it('requires Orca runtime state before claiming a worker was orchestrated', () => {
-    const skill = readSkill()
-    const toolBoundary = getSection(skill, 'Tool Boundary')
+describe('orchestration kernel', () => {
+  it('keeps the always-loaded guide compact and ordered around the normal protocol', () => {
+    const kernel = readKernel()
+    const headings = [
+      '## Outcome',
+      '## Classify the role',
+      '## Authority and safety floor',
+      '## Worker obligations',
+      '## Canonical supervised loop',
+      '## Task-spec contract',
+      '## Completion accounting',
+      '## Conditional references'
+    ]
 
-    expect(toolBoundary).toContain('must create or bind a Run')
-    expect(toolBoundary).toContain('create the Task with `orca orchestration task-create`')
-    expect(toolBoundary).toContain('preferred `orca orchestration worker-start` composition')
-    expect(toolBoundary).toContain('low-level `orca orchestration dispatch --inject` path')
-    expect(toolBoundary).not.toContain('or `orca orchestration run`')
-    expect(skill).toContain(
-      '`coordinator-start`, `coordinator-stop`, `run`, and `run-stop` are retired scheduler commands'
-    )
-    expect(toolBoundary).toContain(
-      'Do not substitute non-Orca subagent tools, generic agent-spawn APIs, or chat-only parallel worker features'
-    )
-    expect(toolBoundary).toContain('do not create Orca task/dispatch provenance')
-    expect(toolBoundary).toContain('injected lifecycle preambles')
-    expect(toolBoundary).toContain('`worker_done` authority')
-    expect(toolBoundary).toContain('decision gates')
-    expect(toolBoundary).toContain('orca orchestration task-list --json')
-    expect(toolBoundary).toContain('orca orchestration dispatch-show --task <task_id> --json')
-    expect(toolBoundary).toContain(
-      'do not retroactively describe the external worker as orchestrated'
-    )
-  })
-
-  it('teaches attested adoption without reviving the retired scheduler', () => {
-    const skill = readSkill()
-    const migration = getSection(skill, 'Contract Migration')
-
-    expect(migration).toContain(
-      'adopts a live pre-update orchestration assignment into an ordinary Run'
-    )
-    expect(migration).toContain(
-      'preserves the existing agent process, PTY/session, terminal handle, tab/leaf/pane, worktree or folder workspace, Task, and Dispatch'
-    )
-    expect(migration).toContain('never restarts or replaces the worker')
-    expect(migration).toContain('The retired scheduler is not revived')
-    expect(migration).toContain('[LEGACY COMPATIBILITY]')
-    expect(migration).toContain('[LEGACY READ-ONLY]')
-    expect(migration).toContain(
-      'Loss of lifecycle authority does not invalidate the existing assignment, process, or filesystem work.'
-    )
-    expect(migration).toContain(
-      'It must not spawn, write, signal, stop, switch, focus, split, or inject a terminal.'
-    )
-    expect(migration).not.toContain('task-list --run run_legacy_local')
-    expect(migration).toContain('run_legacy_local is an empty audit tombstone')
-    expect(migration).toContain('Recovered orchestration work from a contract update')
-    expect(migration).toContain('run-show --id <adopted_run_id>')
-    expect(migration).toContain('task-list --run <adopted_run_id>')
-    expect(migration).toContain('Legacy inspection remains available without consuming mail')
-    expect(migration).toContain('run-use --id <adopted_run_id> --takeover-legacy')
-    expect(migration).toContain('Takeover fences only the old coordinator')
-    expect(migration).toContain('Live legacy workers keep their original Tasks, Dispatches')
-    expect(migration).toContain(
-      'keep the original worker as the only editor until it reaches a stable handoff point'
-    )
-    expect(migration).toContain('a conflict-free placement for any remaining work')
-  })
-
-  it('treats long-running worker waits as liveness checkpoints, not failures', () => {
-    const skill = readSkill()
-
-    expect(skill).toContain('Treat a `check --wait` timeout or `{count:0}` as a checkpoint')
-    expect(skill).toContain('Do not stop, close, kill, or restart a worker')
-    expect(skill).toContain('keep waiting instead of retrying the task')
-    expect(skill).not.toContain(
-      'If `check --wait` times out with no `worker_done` or `escalation`, fall back to `terminal wait --for tui-idle`, then `terminal read`.'
-    )
-  })
-
-  it('keeps full handoffs out of dispatch lifecycle and off the active branch base', () => {
-    const skill = readSkill()
-    const fullHandoffs = getSection(skill, 'Full Handoffs')
-
-    expect(skill).toContain('Full handoff means ownership transfer, not supervised dispatch.')
-    expect(fullHandoffs).toContain(
-      'Do not run `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs.'
-    )
-    expect(fullHandoffs).toContain(
-      '`task-create` is also forbidden because it records coordinator-owned tracking state'
-    )
-    expect(fullHandoffs).toContain('Do not create a `taskId`/`dispatchId`')
-    expect(fullHandoffs).toContain(
-      'read the worker terminal after prompt delivery except to avoid losing the initial prompt'
-    )
-    expect(skill).toContain(
-      '`--no-parent` only controls Orca lineage; it does not choose the Git base.'
-    )
-    expect(skill).toContain(
-      'never base it on the current feature branch unless the user explicitly asks'
-    )
-    expect(skill).toContain(
-      'orca worktree create --name <task-name> --no-parent --agent codex --prompt'
-    )
-    expect(fullHandoffs).toContain(
-      'Before creating a new worktree from an active feature branch, decide and state whether the desired Orca lineage is child or top-level'
-    )
-    expect(fullHandoffs).toContain(
-      'Use child worktree lineage only when the new work is conceptually stacked under or dependent on the active worktree'
-    )
-    expect(fullHandoffs).toContain(
-      'For independent repo-wide fixes, standalone feature work, or unrelated follow-up tasks, create a top-level worktree with `--no-parent`'
-    )
-    expect(fullHandoffs).toContain('If the work should start from the repo default base')
-    expect(fullHandoffs).toContain('omit `--base-branch`')
-  })
-
-  it('classifies handoff wording as ownership transfer unless supervision is explicit', () => {
-    const skill = readSkill()
-    const fullHandoffs = getSection(skill, 'Full Handoffs')
-
-    for (const phrase of [
-      'hand off',
-      'handoff',
-      'handover',
-      'give this to another agent',
-      'give this to another worktree',
-      'another agent',
-      'another worktree'
-    ]) {
-      expect(fullHandoffs).toContain(phrase)
+    // Why: 202 is the budget after the anti-loop nextAction rule; the kernel is always in context.
+    expect(kernel.split('\n').length).toBeLessThanOrEqual(202)
+    for (let index = 1; index < headings.length; index += 1) {
+      expect(kernel.indexOf(headings[index])).toBeGreaterThan(kernel.indexOf(headings[index - 1]))
     }
+    expect(kernel).not.toContain('## Contract Migration')
+    expect(kernel).not.toContain('## Full Handoffs')
+    expect(kernel).not.toContain('## Worker Terminals')
+  })
 
-    for (const supervisionPhrase of [
-      'supervise',
-      'monitor',
-      'wait for worker_done',
-      'wait for results',
-      'track completion',
-      'DAG',
-      'decision gate',
-      'ask/reply'
+  it('classifies coordinator, dispatched worker, handoff, compatibility, and ordinary roles', () => {
+    const kernel = readKernel()
+
+    expect(kernel).toContain('explicitly asks to supervise, monitor, wait for results')
+    expect(kernel).toContain('live injected preamble with Task and Dispatch IDs')
+    expect(kernel).toContain('Handoff owner')
+    expect(kernel).toContain('create no Run, Task, or Dispatch and do not monitor completion')
+    expect(kernel).toContain('Compatibility operator')
+    expect(kernel).toContain('Ordinary terminal agent')
+    expect(kernel).toContain('Model or effort selection does not make a handoff supervised')
+    expect(squash(kernel)).toContain('Never substitute a non-Orca subagent tool')
+  })
+
+  it('makes Dispatch identity, remote uncertainty, folders, and mixed versions a safety floor', () => {
+    const kernel = readKernel()
+
+    expect(kernel).toContain('A Dispatch is one authoritative Task attempt')
+    expect(kernel).toContain('Lifecycle authority comes from the active Dispatch')
+    expect(kernel).toContain('execution host owns')
+    expect(squash(kernel)).toContain('`live` / `unverifiable` / `exited`')
+    expect(kernel).toContain('contact loss is not process death')
+    expect(kernel).toContain('Folder workspaces are valid')
+    expect(squash(kernel)).toContain('Treat unknown optional fields as absent')
+    expect(kernel).toContain('new stream operation requires advertised capability')
+    expect(kernel).toContain('Never fall back to local execution')
+  })
+
+  it('puts exactly-once worker completion and post-completion idle before coordinator mechanics', () => {
+    const kernel = readKernel()
+
+    expect(kernel.indexOf('## Worker obligations')).toBeLessThan(
+      kernel.indexOf('## Canonical supervised loop')
+    )
+    expect(kernel).toContain('The injected preamble is authoritative')
+    expect(kernel).toContain('Send `worker_done` exactly once')
+    expect(kernel).toContain('three-sentence executive summary')
+    expect(kernel).toContain('`--outcome succeeded` or `--outcome failed`')
+    // Why: the runnable worker_done command is the preamble's; its flag spellings are pinned
+    // on worker-contract.md by 'keeps heartbeat and worker_done recipes bound to the injected
+    // capability', so the kernel carries the obligations as prose and no third copy.
+    expect(kernel).not.toContain('--type worker_done')
+    expect(kernel).toContain('After `worker_done`, end the dispatched turn and idle')
+    expect(kernel).toContain('Do not reuse the settled lifecycle IDs')
+  })
+
+  it('teaches worker-start as the only normal-path launch and starts the wave before waiting', () => {
+    const kernel = readKernel()
+    const firstStart = kernel.indexOf('worker-start --spec "<worker A task>"')
+    const secondStart = kernel.indexOf('worker-start --spec "<worker B task>"')
+    const firstWait = kernel.indexOf('check --wait')
+
+    expect(firstStart).toBeGreaterThan(kernel.indexOf('run-create'))
+    expect(secondStart).toBeGreaterThan(firstStart)
+    expect(firstWait).toBeGreaterThan(secondStart)
+    expect(squash(kernel)).toContain('start the full independent wave before waiting')
+    expect(kernel).toContain('`worker-start` is the normal path')
+    expect(squash(kernel)).toContain(
+      "If `worker-start` exits non-zero, do not relaunch. Read the receipt's `failedStage` and `residualResources`"
+    )
+    expect(kernel).toContain('operator-created process unsupervised')
+    expect(kernel).not.toMatch(/^ORCA terminal create/mu)
+  })
+
+  it('makes worker-start --spec the default and keeps task-create for planned fan-out', () => {
+    const kernel = squash(readKernel())
+
+    expect(kernel).toContain('`worker-start --spec` creates the Task and its attempt in one call')
+    expect(kernel).toContain('Use `task-create` plus `worker-start --task <task_id>`')
+  })
+
+  it('gives the supervised loop an exit condition for a live terminal with a dead agent', () => {
+    const kernel = squash(readKernel())
+
+    expect(kernel).toContain("`worker-list`'s `projection.liveness` is the fleet verdict")
+    expect(kernel).toContain("`worker-show`'s `observation.status` is PTY liveness only")
+    expect(kernel).toContain('After three consecutive empty waits')
+    expect(kernel).toContain('`ORCA orchestration worker-list --include-remote --json`')
+    expect(kernel).toContain('defaults to the bound Run; `--run <run_id>` overrides')
+    expect(kernel).toContain(
+      '`projection.attention` categories, `projection.attention.requiresAction`, and literal `projection.nextAction` argv'
+    )
+    expect(kernel).toContain(
+      'An `inspect` `nextAction` on a `live` row with `attention.requiresAction` false is informational, not a command to re-run: keep waiting with `check --wait`'
+    )
+    expect(kernel).toContain('choose `worker-stop` or `worker-abandon`')
+  })
+
+  it('lets only positive evidence of exit end a wait', () => {
+    const kernel = squash(readKernel())
+
+    expect(kernel).toContain('Leave the wait only on positive proof the agent stopped')
+    expect(kernel).toContain('`exited` liveness')
+    expect(kernel).toContain("the worker's own observation of process exit")
+    expect(kernel).toContain('transcript whose final agent turn sent no `worker_done`')
+    expect(kernel).toContain(
+      '`unverifiable` is absence, including when `worker-show` reports `agentWait` null. Absence never authorizes stop, abandon, retry, or release'
+    )
+  })
+
+  it('names --terminal, never --from, as the check caller flag', () => {
+    const kernel = squash(readKernel())
+
+    expect(kernel).toContain('`check` names its caller with `--terminal <handle>`, never `--from`')
+    expect(kernel).not.toContain('check --from')
+  })
+
+  it('makes a dispatched worker read coordinator follow-ups on a cadence', () => {
+    const kernel = squash(readKernel())
+
+    expect(kernel).toContain('Read coordinator follow-ups at each natural checkpoint')
+    expect(kernel).toContain('once more immediately before `worker_done`')
+    expect(kernel).toContain('`ORCA orchestration check --terminal <your_handle> --json`')
+  })
+
+  it('requires full Delivery processing and settled-terminal accounting before ack', () => {
+    const kernel = readKernel()
+
+    expect(squash(kernel)).toContain(
+      'oldest FIFO Delivery and replays that batch until acknowledged'
+    )
+    expect(squash(kernel)).toContain('Process every message')
+    expect(squash(kernel)).toContain("decide each settled terminal's next owner before the ack")
+    expect(squash(kernel)).toContain('reused, explicitly retained, or released')
+    expect(squash(kernel)).toContain(
+      'the turn ends only when the report to that user names, per Task, its outcome, the evidence behind it, and any unresolved blocker'
+    )
+    expect(kernel).toContain('worker-release --dispatch <dispatch_id>')
+    expect(kernel).toContain('check --ack <delivery_id> --wait')
+    expect(squash(kernel)).toContain(
+      '`worker-list --run <run_id> --terminal-state reclaimable --json`'
+    )
+    expect(squash(kernel)).toContain('do not follow it with `task-update --status completed`')
+  })
+
+  it('treats long waits and release uncertainty as safe checkpoints', () => {
+    const kernel = readKernel()
+
+    // Why: e92d7812d91 and c78f40fdd0b protect one rule; `## Outcome` states it once and each
+    // gate cites it, so these pin the condition rather than a per-gate list of non-proofs.
+    expect(squash(kernel)).toContain(
+      'Only positive proof of exit authorizes stop, abandon, or retry, and only an accepted settlement authorizes release. Every other observation, absence included, is a checkpoint'
+    )
+    expect(squash(kernel)).toContain('A timeout or empty result is a checkpoint, not a failure')
+    expect(squash(kernel)).toContain('Do not stop, retry, release, or launch a duplicate editor')
+    expect(squash(kernel)).toContain('without the positive proof `## Outcome` requires')
+    expect(squash(kernel)).toContain(
+      'Only an accepted settlement authorizes it; no other observation does'
+    )
+    expect(kernel).toContain('never substitute `terminal close`')
+  })
+
+  it('defines self-contained task specs and honest send attention semantics', () => {
+    const kernel = readKernel()
+
+    for (const field of [
+      '**Target:**',
+      '**Change:**',
+      '**Constraints:**',
+      '**Ownership:**',
+      '**Observable acceptance:**'
     ]) {
-      expect(fullHandoffs).toContain(supervisionPhrase)
+      expect(kernel).toContain(field)
     }
+    expect(kernel).toContain('successful `orchestration send` proves durable enqueue')
+    expect(kernel).toContain('best-effort attention only')
+    expect(squash(kernel)).toContain('does not prove the recipient read or accepted it')
+  })
+})
+
+describe('owned orchestration references', () => {
+  it('routes every conditional read to exactly one shipped reference', () => {
+    const kernel = readKernel()
+    const routed = [...kernel.matchAll(/`references\/([^`]+\.md)`/gu)].map((match) => match[1])
+    const shipped = readdirSync(referenceRoot)
+      .filter((name) => name.endsWith('.md'))
+      .sort()
+
+    const tableRoutes = [...kernel.matchAll(/^\|.*`references\/([^`]+\.md)`.*\|$/gmu)].map(
+      (match) => match[1]
+    )
+
+    expect([...new Set(routed)].sort()).toEqual(shipped)
+    // Why the table and not every mention: prose may cite a reference the gate table already routes.
+    expect(tableRoutes.sort()).toEqual(shipped)
+    expect(kernel).toContain('ORCA skills get orchestration --full')
+    // Why: the selector is the cheap path, so the kernel must teach it first and keep
+    // `--full` only as the fallback for a CLI build that predates it.
+    expect(squash(kernel)).toContain(
+      'run `ORCA skills get orchestration --reference references/<file>.md`'
+    )
+    expect(squash(kernel)).toContain(
+      'If the CLI rejects `--reference`, run `ORCA skills get orchestration --full`'
+    )
+    expect(squash(kernel)).toContain('If an older CLI rejects `--full`')
   })
 
-  it('documents custom model and effort handoffs without completion monitoring', () => {
-    const skill = readSkill()
-    const fullHandoffs = getSection(skill, 'Full Handoffs')
+  it('owns expanded waves, launch preferences, reuse, and review boundaries', () => {
+    const reference = readReference('coordinator-loop.md')
 
-    expect(fullHandoffs).toContain('Custom Codex model/effort handoff')
-    expect(fullHandoffs).toContain(
-      'does not accept Codex-specific `--model` or `-c model_reasoning_effort=...` arguments'
-    )
-    expect(fullHandoffs).toContain('codex --model gpt-5.5 -c model_reasoning_effort="xhigh"')
-    expect(fullHandoffs).toContain(
-      'Wait only for `tui-idle` when needed to avoid losing the prompt.'
-    )
-    expect(fullHandoffs).toContain('Do not monitor task completion.')
-  })
-
-  it('clarifies sidebar lineage for same-worktree orchestrated workers', () => {
-    const skill = readSkill()
-    const workerTerminals = getSection(skill, 'Worker Terminals')
-
-    expect(workerTerminals).toContain(
-      'Sidebar lineage and orchestration lifecycle are related but not identical.'
-    )
-    expect(workerTerminals).toContain(
-      'A same-worktree worker may appear as a peer under that worktree in the sidebar'
-    )
-    expect(workerTerminals).toContain('while remaining a child dispatch in orchestration state')
-    expect(workerTerminals).toContain(
-      'only an actual child worktree creates visible parent/child worktree lineage'
-    )
-    expect(workerTerminals).toContain(
-      'Create a new worktree only when the user explicitly requests one or a concrete checkout or filesystem conflict makes sharing unsafe or impossible'
-    )
-    expect(workerTerminals).toContain(
-      'Independent tasks, parallel execution, convenience, or a preference for separate checkouts are not isolation requirements.'
-    )
-    expect(workerTerminals).toContain(
-      'When a new worktree is allowed, use child lineage for isolated work that is stacked under or dependent on the active worktree'
-    )
-    expect(workerTerminals).toContain('use `--no-parent` when it is not stacked')
-  })
-
-  it('keeps review-only completions and named next-owner fixes in their lanes', () => {
-    const skill = readSkill()
-
-    expect(skill).toContain(
-      'A review-only `worker_done` reports findings; it does not authorize coordinator file edits.'
-    )
-    expect(skill).toContain('unless the user explicitly asked the coordinator to own fixes')
-    expect(skill).toContain('dispatch or hand off fixes')
-    expect(skill).toContain(
-      "If the user's plan names a next owner agent " +
-        '(for example, "then use opencode to create a PR")'
-    )
-    expect(skill).toContain('post-review corrections and PR prep belong to that named owner')
-    expect(skill).toContain('the named owner edits files and creates the PR')
-  })
-
-  it('keeps post-completion workers idle without subordinating the user', () => {
-    const skill = readSkill()
-    const agentGuidance = getSection(skill, 'Agent Guidance')
-
-    expect(agentGuidance).toContain('After sending `worker_done`, end that dispatched turn')
-    expect(agentGuidance).toContain('idle at the agent prompt')
-    expect(agentGuidance).toContain('Do not autonomously start more work, poll')
-    expect(agentGuidance).toContain('A direct user instruction takes precedence')
-    expect(agentGuidance).toContain('follow it without coordinator approval or a fresh Dispatch')
-    expect(agentGuidance).toContain('never refuse it because of worker/coordinator roles')
-    expect(agentGuidance).toContain("do not reuse the settled Dispatch's lifecycle IDs")
-    expect(agentGuidance).toContain(
-      'A coordinator-supervised follow-up still arrives with a fresh preamble + TASK block'
-    )
-    expect(skill).not.toContain('post-completion polling messages')
-    expect(skill).not.toContain('every 2 minutes')
-  })
-
-  it('makes settled worker terminal release an explicit coordinator step', () => {
-    const skill = readSkill()
-    const workerLoop = getSection(skill, 'Preferred Supervised Worker Loop')
-    const agentGuidance = getSection(skill, 'Agent Guidance')
-    const nextAction = getSection(skill, 'Next Action')
-
-    expect(workerLoop).toContain(
-      '# Process every message. For each accepted worker_done that is not immediately reused:\n' +
-        'orca orchestration worker-release --dispatch <dispatch_id> --json'
-    )
-    expect(workerLoop).toContain(
-      'Acknowledge only after every message and required release decision is handled'
-    )
-    expect(workerLoop).toContain(
-      'read the `worker.agent_terminal_handle` field of `worker-show --dispatch <dispatch_id> --json`'
-    )
-    expect(workerLoop).toContain(
-      'orca orchestration worker-start --task <next_task_id> --terminal <handle> --json` so Orca ' +
-        'transfers cleanup ownership to the new Dispatch'
-    )
-    expect(workerLoop).toContain(
-      'Run `worker-release` after both succeeded and failed `worker_done` reports unless the user ' +
-        'explicitly asked to keep that worker live.'
-    )
-    expect(workerLoop).toContain('Release is post-completion cleanup, not cancellation')
-    expect(workerLoop).toContain('orca orchestration worker-retain --dispatch <dispatch_id> --json')
-    expect(workerLoop).toContain(
-      'the same Dispatch can be passed to `worker-release`, which clears the requested retention'
-    )
-    expect(agentGuidance).toContain(
-      'Coordinators must account for every settled worker terminal before waiting again or ending ' +
-        'the turn'
-    )
-    expect(agentGuidance).toContain('released workers remain readable through `worker-read`')
-    expect(nextAction).toContain(
-      'After every accepted `worker_done`, either transfer the exact terminal to an immediate ' +
-        'follow-up Dispatch or run `worker-release` before the next wait.'
+    expect(reference).toContain('task-list --ready --brief --json')
+    expect(reference).toContain('`--effort` requires `--model`')
+    expect(reference).toContain('neither option combines with `--terminal`')
+    expect(reference).toContain('`launch.requested` with `launch.effective`')
+    expect(reference).toContain('worker-start --task <next_task_id> --terminal')
+    expect(reference).toContain('A review-only `worker_done` authorizes synthesis')
+    expect(squash(reference)).toContain(
+      'post-review fixes and PR preparation remain with that owner'
     )
   })
 
-  it('documents per-invocation model and effort for supervised workers', () => {
-    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+  it('owns worker heartbeat, ask resume, escalation, failure, and idle', () => {
+    const reference = readReference('worker-contract.md')
 
-    expect(workerLoop).toContain('opaque provider model id with `--model`')
-    expect(workerLoop).toContain('`--effort` requires `--model`')
-    expect(workerLoop).toContain('neither option can combine with `--terminal`')
-    expect(workerLoop).toContain('--agent claude --model opus --effort high --json')
-    expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
+    expect(reference).toContain('--type heartbeat')
+    expect(reference).toContain('--task-id <task_id> --dispatch-id <dispatch_id>')
+    expect(reference).toContain('--phase "<investigating|implementing|reviewing|waiting>"')
+    expect(reference).toContain('--resume <message_id>')
+    expect(reference).toContain('do not create a duplicate question')
+    expect(reference).toContain('--type escalation')
+    expect(reference).toContain('Send exactly one terminal report')
+    expect(reference).toContain('Use `--outcome failed`')
+    expect(reference).toContain('After `worker_done`, end the dispatched turn and idle')
+    expect(squash(reference)).toContain(
+      'ORCA orchestration check --terminal <worker_handle> --json'
+    )
+    expect(squash(reference)).toContain('once more immediately before `worker_done`')
+    expect(squash(reference)).toContain(
+      '`check` names its caller with `--terminal`, never `--from`'
+    )
+    expect(squash(reference)).toContain('If `check` returns `consumer_fenced`')
+    expect(squash(reference)).toContain('An empty `check` never means you were replaced')
   })
 
-  it('never authorizes release from idle, timeout, or worker-side triggers', () => {
-    const skill = readSkill()
-    const workerLoop = getSection(skill, 'Preferred Supervised Worker Loop')
-    const agentGuidance = getSection(skill, 'Agent Guidance')
+  it('keeps heartbeat and worker_done recipes bound to the injected capability', () => {
+    const reference = readReference('worker-contract.md')
+    const recipes = [...reference.matchAll(/```text\n([\s\S]*?)```/gu)].map((match) => match[1])
+    const heartbeat = recipes.find((recipe) => recipe.includes('--type heartbeat'))
+    const workerDone = recipes.find((recipe) => recipe.includes('--type worker_done'))
 
-    // The prohibition sentence is the guard the negative patterns below rely on.
-    expect(workerLoop).toContain(
-      'Do not release a worker because of a timeout, TUI idle state, heartbeat, status, question, ' +
-        'escalation, or rejected/stale `worker_done`.'
-    )
-    expect(workerLoop).toContain(
-      'do not substitute `terminal close`; follow the exact recovery action in the receipt'
-    )
-    expect(skill).not.toMatch(
-      /release[^.]*\bon (?:a |the )?(?:tui-?idle|idle|timeout|heartbeat|question|escalation)\b/iu
-    )
-    expect(skill).not.toMatch(
-      /\b(?:after|on|upon) (?:a |the )?(?:tui-?idle|idle state|timeout|heartbeat)\b[^.]*\brelease/iu
-    )
-    expect(agentGuidance).toContain(
-      'Do not autonomously start more work, poll, or attempt to close the terminal yourself'
-    )
-    expect(agentGuidance).not.toMatch(/worker-release[^.]*\byourself\b/iu)
+    for (const recipe of [heartbeat, workerDone]) {
+      expect(recipe).toContain('--from <worker_handle>')
+      expect(recipe).toContain('--dispatch-capability <capability>')
+      expect(recipe).toContain('--task-id <task_id> --dispatch-id <dispatch_id>')
+    }
+    expect(workerDone).not.toContain('--files-modified')
+    expect(workerDone).not.toContain('--report-path')
+    expect(squash(reference)).toContain('only when applicable, using actual paths')
+    expect(reference).toContain('Do not send documentation placeholders as metadata')
   })
 
-  it('documents @grok in the Messaging group address list', () => {
-    const skill = readSkill()
-    const messaging = getSection(skill, 'Messaging')
+  it('owns local, folder, worktree, SSH, WSL, remote, and mixed-version placement', () => {
+    const reference = readReference('placement-and-remote.md')
 
-    expect(messaging).toContain('`@grok`')
+    expect(reference).toContain('--worktree current --agent codex')
+    expect(squash(reference)).toContain(
+      'A worktree selector needs the full `<repo-id>::<path>` value Orca returned, passed as `id:<newFullWorktreeId>`; a bare repo id is not a worktree id'
+    )
+    expect(reference).toContain('--worktree new-child')
+    expect(reference).toContain('--worktree new-top-level')
+    expect(reference).toContain('Folder workspaces are first-class')
+    expect(reference).toContain('Remote `current` and `new-child` are invalid')
+    expect(squash(reference)).toContain("`--on` selects only the worker's execution server")
+    expect(squash(reference)).toContain(
+      'route every follow-up, read, stop, and cleanup by Dispatch ID'
+    )
+    expect(reference).toContain('`live`, `unverifiable`, or `exited`')
+    expect(squash(reference)).toContain('unknown stream opcodes can be silently dropped')
+    expect(reference).toContain('printed `orca-ide`')
+    expect(squash(reference)).toContain(
+      'ORCA project setup-existing-folder --project <project_id> --host <host_id> --path <abs_path> --kind folder --json'
+    )
+    expect(squash(reference)).toContain('and rejects a plain directory')
+    expect(reference).toContain(
+      'ORCA orchestration worker-list --run <run_id> --include-remote --json'
+    )
+    expect(squash(reference)).toContain(
+      'enumerate remote workers with `--include-remote` or every one of them reads `unverifiable`'
+    )
   })
 
-  it('documents @cursor in the Messaging group address list', () => {
-    const skill = readSkill()
-    const messaging = getSection(skill, 'Messaging')
+  it('owns FIFO mail, Dispatch addresses, groups, questions, and gates', () => {
+    const reference = readReference('messaging-and-gates.md')
 
-    expect(messaging).toContain('`@cursor`')
+    expect(reference).toContain('oldest FIFO Delivery')
+    expect(squash(reference)).toContain('Process every row')
+    expect(squash(reference)).toContain(
+      'A Delivery therefore always carries the whole FIFO batch whatever its types, and a `check` without `--wait` hands that batch over unfiltered'
+    )
+    expect(reference).toContain('send --to dispatch:<dispatch_id>')
+    for (const group of ['@all', '@grok', '@cursor', '@worktree:<id>']) {
+      expect(reference).toContain(group)
+    }
+    expect(reference).toContain('Dispatch lifecycle messages never target groups')
+    expect(reference).toContain('gate-create --task <task_id>')
+    expect(reference).toContain("Do not create a gate merely to answer a worker's `ask`")
+    expect(reference).toContain('successful `send` proves durable enqueue')
+    expect(squash(reference)).toContain('Wake and nudge are best-effort attention only')
+    expect(squash(reference)).toContain(
+      '`check` names its caller with `--terminal <handle>` and is the only verb that rejects `--from`'
+    )
   })
 
-  it('keeps agent-first launch, handle recovery, and inbox injection distinct', () => {
-    const skill = readSkill()
-    const messaging = getSection(skill, 'Messaging')
-    const workerTerminals = getSection(skill, 'Worker Terminals')
-    const agentFirstExample = workerTerminals.match(
-      /```bash\norca worktree create --name <task-name> --agent codex --setup run --json\n[\s\S]*?```/
-    )?.[0]
+  it('owns positive-evidence retry, unknown outcomes, retain/release, and no terminal close', () => {
+    const reference = readReference('recovery-and-cleanup.md')
 
-    expect(workerTerminals).toContain('For an allowed new worktree, use agent-first:')
-    expect(workerTerminals).toContain('fallback shell + agent pair')
-    expect(workerTerminals).toContain(
-      'repo setup and default-terminal settings may add intentional tabs or splits'
+    expect(squash(reference)).toContain('| `ready` or active | Keep waiting')
+    expect(squash(reference)).toContain('| `outcome_unknown` | Inspect')
+    expect(squash(reference)).toContain('| Remote contact lost | Preserve `unverifiable`')
+    expect(reference).toContain('--retry-of <dispatch_id>')
+    expect(squash(reference)).toContain('Placement is never silently inherited')
+    expect(reference).toContain('worker-abandon --dispatch')
+    expect(reference).toContain('worker-retain --dispatch')
+    expect(reference).toContain('worker-release --dispatch')
+    expect(squash(reference)).toContain('`release_pending` or `release_unknown`')
+    expect(squash(reference)).toContain('Never substitute `terminal close`')
+  })
+
+  it('owns the lost-response question and the request-show verdicts', () => {
+    const reference = squash(readReference('recovery-and-cleanup.md'))
+
+    expect(reference).toContain('request-show --request <request_id> --json')
+    expect(reference).toContain('--retry-request <request_id>')
+    expect(reference).toContain('`completed` means the mutation already took effect')
+    expect(reference).toContain('`pending` means the original mutation is still running')
+    expect(reference).toContain('that is not proof nothing happened')
+    expect(reference).toContain('terminal send --wait-submit <seconds>')
+  })
+
+  it('names worker-list as the enumerating command and the agent-liveness authority', () => {
+    const reference = squash(readReference('recovery-and-cleanup.md'))
+
+    expect(reference).toContain('ORCA orchestration worker-list --run <run_id> --json')
+    expect(reference).toContain("`worker-show`'s `observation.status` is PTY liveness only")
+    expect(reference).toContain(
+      '`projection.attention.categories`, `projection.attention.requiresAction`'
     )
-    expect(workerTerminals).toContain('without configured default tabs')
-    expect(workerTerminals).toContain(
-      'only after `terminal list` or `terminal show` confirms it is an unused shell'
+    expect(reference).toContain('`projection.nextAction` argv')
+    expect(reference).toContain('the fleet verdict decides')
+    expect(reference).toContain(
+      'ORCA orchestration worker-list --run <run_id> --include-remote --json'
     )
-    expect(workerTerminals).not.toContain('bare create opens a default shell')
-    expect(workerTerminals).not.toContain('ends with **one** agent tab')
-    expect(agentFirstExample).toBeDefined()
-    expect(agentFirstExample).not.toContain('orca terminal list')
-    expect(agentFirstExample).toContain('agentTerminalHandle')
-    expect(agentFirstExample).toContain('startupTerminal.handle')
-    expect(messaging).toContain('Prefer `agentTerminalHandle` from the create response')
-    expect(messaging).toContain('Continue with the replacement handle only')
-    expect(messaging).toContain('never writes to terminal input or remotely wakes another terminal')
-    expect(messaging).toContain('Use `orchestration dispatch --inject` to deliver a tracked task')
+    expect(reference).toContain('reads `unverifiable` until you enumerate with `--include-remote`')
+    expect(reference).toContain('follow `page.nextCursor` with `--cursor <value>`')
+  })
+
+  it('requires positive evidence of exit before stop, abandon, retry, or release', () => {
+    const reference = squash(readReference('recovery-and-cleanup.md'))
+
+    expect(reference).toContain('Leave the wait only on positive proof the agent stopped')
+    expect(reference).toContain('`unverifiable` is always absence')
+    expect(reference).toContain('Absence never authorizes stop, abandon, retry, or release')
+    expect(reference).toContain(
+      '| `unverifiable` liveness | Keep waiting or inspect; never stop, abandon, retry, or release |'
+    )
+  })
+
+  it('owns the custom topology exception without claiming process ownership', () => {
+    const reference = readReference('low-level-topology.md')
+
+    expect(reference).toContain('only when `worker-start` cannot express')
+    expect(reference).toContain('terminal create --worktree active')
+    expect(reference).toContain('dispatch --task <task_id> --to <handle> --inject')
+    expect(reference).toContain('operator-created process unsupervised')
+    expect(squash(reference)).toContain('creates no supervised worker resource row')
+    expect(reference).toContain('Use `worker-start --terminal <handle>`')
+    expect(squash(reference)).toContain('never use it for an ownership handoff')
+  })
+
+  it('owns legacy labels, read-only degradation, exact recovery, and takeover', () => {
+    const reference = readReference('legacy-contract-migration.md')
+
+    expect(reference).toContain('[LEGACY COMPATIBILITY]')
+    expect(reference).toContain('[LEGACY RECOVERY REPLAY — MAY HAVE BEEN SEEN]')
+    expect(reference).toContain('[LEGACY READ-ONLY]')
+    expect(squash(reference)).toContain(
+      'degrade to read-only inspection and never fall back to local execution'
+    )
+    expect(squash(reference)).toContain(
+      'must not spawn, write, signal, stop, switch, focus, split, or inject'
+    )
+    expect(reference).toContain('launcher status `75`')
+    expect(reference).toContain('run_legacy_local')
+    expect(reference).toContain('Recovered orchestration work from a contract update')
+    expect(reference).toContain('run-use --id <adopted_run_id> --takeover-legacy')
+    expect(reference).toContain(
+      'Never take over while the original coordinator is actively coordinating'
+    )
   })
 })
 
 describe('orchestration install stub', () => {
-  it('points at the version-matched guide and preserves the safe resolver', () => {
+  it('preserves the safe version-matched resolver and bounded old-binary fallback', () => {
     const stub = readFileSync(stubPath, 'utf8')
 
     expect(stub).toContain('discovery stub')
     expect(stub).toContain('ORCA skills get orchestration')
-    // The safe CLI-resolution contract must survive in the stub, never a bare `orca`.
     expect(stub).toContain('ORCA_CLI_COMMAND')
     expect(stub).toContain('orca-dev')
     expect(stub).toContain('orca-ide')
     expect(stub).toContain('GNOME Orca screen reader')
+    expect(squash(stub)).toContain('explicitly reports that `skills get` is an unknown command')
+    expect(stub).toContain('do not invent commands')
     expect(stub).not.toMatch(/^orca /mu)
   })
 
-  it('does not tell agents to mutate orchestration state before loading the guide', () => {
-    const preGuide = readFileSync(stubPath, 'utf8').split('## Load the full guide')[0]
-
-    expect(preGuide).not.toContain('orca orchestration task-create')
-    expect(preGuide).not.toContain('orca orchestration dispatch')
-  })
-
-  it('gives older binaries a bounded fallback instead of a dead end', () => {
-    const stub = readFileSync(stubPath, 'utf8').replace(/\s+/gu, ' ')
-
-    expect(stub).toContain('explicitly reports that `skills get` is an unknown command')
-    expect(stub).toContain('do not invent commands')
-    expect(stub).toContain('ask the user rather than guessing')
-  })
-
-  it('drops the changing command reference from the installable file', () => {
+  it('performs no orchestration mutation before loading the guide', () => {
     const stub = readFileSync(stubPath, 'utf8')
+    const preGuide = stub.split('## Load the full guide')[0]
 
-    // Version-sensitive command detail lives in the binary-served guide now, not here.
-    expect(stub).not.toContain('check --wait')
-    expect(stub).not.toContain('dispatch-show')
-    expect(stub.length).toBeLessThan(readFileSync(guidePath, 'utf8').length)
-  })
-
-  it('keeps the routing frontmatter identical to the guide', () => {
-    const frontmatter = (text) => /^---\n[\s\S]*?\n---\n/u.exec(text)[0]
-
-    expect(frontmatter(readFileSync(stubPath, 'utf8'))).toBe(
-      frontmatter(readFileSync(guidePath, 'utf8'))
-    )
+    expect(preGuide).not.toContain('orchestration task-create')
+    expect(preGuide).not.toContain('orchestration dispatch')
+    expect(frontmatter(stub)).toBe(frontmatter(readKernel()))
+    expect(stub.length).toBeLessThan(readKernel().length)
   })
 })

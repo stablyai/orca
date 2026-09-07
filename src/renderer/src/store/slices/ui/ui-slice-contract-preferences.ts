@@ -1,9 +1,11 @@
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import type {
+  ActivityGroupBy,
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   StatusBarItem,
+  ThreadReadFilter,
   WorktreeCardMode,
   WorktreeCardProperty,
   WorkspaceHostOrder,
@@ -71,6 +73,10 @@ export type UISlicePreferences = {
   setAgentsShowChildAgents: (v: boolean) => void
   agentsCompactMode: boolean
   setAgentsCompactMode: (v: boolean) => void
+  agentsReadFilter: ThreadReadFilter
+  setAgentsReadFilter: (v: ThreadReadFilter) => void
+  agentsGroupBy: ActivityGroupBy
+  setAgentsGroupBy: (v: ActivityGroupBy) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]

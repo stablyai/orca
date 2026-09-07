@@ -19,7 +19,8 @@ import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
+import { getRepoHostedReviewExecutionHostId } from '../source-control/hosted-review-execution-host'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -42,7 +43,9 @@ function assertRegisteredRepoForBranch(args: HostedReviewForBranchArgs, store: S
     return assertRegisteredRepo(args.repoPath, store, args.repoId)
   }
   const matches = store.getRepos().filter((candidate) => {
-    const samePath = candidate.connectionId
+    // Which host holds the files, not which this client may dial: a remote path is POSIX and
+    // `resolve()` would rewrite it, and a row can name its SSH owner in either spelling.
+    const samePath = getRepoSshConnectionId(candidate)
       ? normalizeRemoteHostedReviewPath(candidate.path) ===
         normalizeRemoteHostedReviewPath(args.repoPath)
       : resolve(candidate.path) === resolve(args.repoPath)
@@ -66,7 +69,7 @@ async function resolveHostedReviewWorktreePath(
   if (!worktreePath) {
     return repo.path
   }
-  if (repo.connectionId) {
+  if (getRepoSshConnectionId(repo)) {
     const remoteWorktreePath = normalizeRemoteHostedReviewPath(worktreePath)
     const repoWorktrees = await listRepoWorktreeGraph(repo)
     if (
@@ -109,7 +112,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     }
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
-      connectionId: repo.connectionId,
+      executionHostId: getRepoHostedReviewExecutionHostId(repo),
       branch: args.branch,
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
@@ -141,7 +144,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       return getHostedReviewCreationEligibility({
         ...args,
         repoPath: worktreePath,
-        connectionId: repo.connectionId ?? null,
+        executionHostId: getRepoHostedReviewExecutionHostId(repo),
         localGitExecOptions: { ...localGitOptions, admissionTier: 'interactive' as const }
       })
     }
@@ -158,7 +161,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     // Remote creation never materializes them, and `repo.path` is a path on the
     // remote host — reading it locally would resolve an unrelated `orca.yaml`.
     // Not dead code: SSH ignores these, so this only prevents that read and a poisoned cache entry.
-    const sharedLinkPaths = repo.connectionId ? [] : getWorktreeSharedLinkPaths(repo)
+    const sharedLinkPaths = getRepoSshConnectionId(repo) ? [] : getWorktreeSharedLinkPaths(repo)
     const executionOptions =
       Object.keys(localGitOptions).length > 0 || sharedLinkPaths.length > 0
         ? {
@@ -177,9 +180,10 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       draft: args.draft,
       ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
     }
+    const executionHostId = getRepoHostedReviewExecutionHostId(repo)
     const result = executionOptions
-      ? await createHostedReview(worktreePath, input, repo.connectionId ?? null, executionOptions)
-      : await createHostedReview(worktreePath, input, repo.connectionId ?? null)
+      ? await createHostedReview(worktreePath, input, executionHostId, executionOptions)
+      : await createHostedReview(worktreePath, input, executionHostId)
     if (result.ok && !stats.hasCountedPR(result.url)) {
       stats.record({
         type: 'pr_created',
@@ -200,7 +204,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
         ...getLocalProjectWorktreeGitOptions(store, repo),
         admissionTier: 'interactive' as const
       }
-      const sharedLinkPaths = repo.connectionId ? [] : getWorktreeSharedLinkPaths(repo)
+      const sharedLinkPaths = getRepoSshConnectionId(repo) ? [] : getWorktreeSharedLinkPaths(repo)
       const executionOptions = {
         ...(Object.keys(localGitOptions).length > 0
           ? { localGitExecOptions: localGitOptions }
@@ -219,7 +223,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       const result = await createStackedHostedReview(
         worktreePath,
         input,
-        repo.connectionId ?? null,
+        getRepoHostedReviewExecutionHostId(repo),
         executionOptions
       )
       if (result.ok && !stats.hasCountedPR(result.url)) {

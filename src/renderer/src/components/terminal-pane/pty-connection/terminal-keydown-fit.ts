@@ -13,6 +13,7 @@ import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
 import { isAgentProcessInspectionCostly } from '../agent-process-inspection-cost'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
+import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -175,6 +176,9 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     paneKey: session.cacheKey,
     statusLane: 'pty',
     getPtyId: () => session.transport.getPtyId(),
+    isRemotePtyId: (ptyId) =>
+      Boolean(isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)),
+    getExpectedIncarnationId: () => session.remotePtyIncarnationId ?? null,
     getSettings: () => useAppStore.getState().settings,
     inspectProcess: inspectRuntimeTerminalProcess,
     dispatchHookLifecycle: (payload) =>
@@ -227,8 +231,17 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
       session.scheduleAgentTaskCompleteNotification(title, {
         agentStatusSnapshot: meta.agentStatus
       }),
-    shouldPollProcessCadence: () =>
-      isAgentTaskCompleteTrackingEnabled() && session.deps.isVisibleRef.current,
+    shouldPollProcessCadence: () => {
+      const ptyId = session.transport.getPtyId()
+      if (ptyId && (isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId))) {
+        return false
+      }
+      return isAgentTaskCompleteTrackingEnabled() && session.deps.isVisibleRef.current
+    },
+    shouldPollNoEvidenceProcessCadence: () => {
+      const ptyId = session.transport.getPtyId()
+      return !(ptyId && (isRemoteExecutionHostPtyId(ptyId) || isRemoteRuntimePtyId(ptyId)))
+    },
     isProcessInspectionCostly: () =>
       isAgentProcessInspectionCostly(navigator.userAgent, session.transport.getPtyId()),
     isLive: () => {

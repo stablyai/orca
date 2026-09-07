@@ -13,6 +13,7 @@ import {
 import {
   getSshRemotePtyLeases as getSshRemotePtyLeasesOperation,
   markSshRemotePtyLease as markSshRemotePtyLeaseOperation,
+  type MarkSshRemotePtyLeaseOptions,
   markSshRemotePtyLeases as markSshRemotePtyLeasesOperation,
   markSshRemotePtyLeasesAsync as markSshRemotePtyLeasesAsyncOperation,
   markSshRemotePtyLeasesAttachedAsync as markSshRemotePtyLeasesAttachedAsyncOperation,
@@ -22,6 +23,10 @@ import {
   type SshPtyLeaseOperations,
   upsertSshRemotePtyLease as upsertSshRemotePtyLeaseOperation
 } from '../leasing-ssh-ptys/ssh-pty-lease-operations'
+import {
+  reconcileSshRemotePtyLeasesForTarget as reconcileSshRemotePtyLeasesForTargetOperation,
+  supersedeSshRemotePtyLeasesForBoundPane as supersedeSshRemotePtyLeasesForBoundPaneOperation
+} from '../leasing-ssh-ptys/ssh-pty-pane-supersession'
 import {
   getSshPtyConsumerRecovery as getSshPtyConsumerRecoveryOperation,
   removeSshPtyConsumerRecovery as removeSshPtyConsumerRecoveryOperation,
@@ -94,6 +99,28 @@ export class SshLeaseRecoveryOperations {
     upsertSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), lease)
   }
 
+  /**
+   * Re-run pane supersession from the binding rather than from an arriving lease. Spawn commits
+   * call this after their binding write so it does not matter whether the lease or the binding
+   * landed first; see `supersedeSshRemotePtyLeasesForBoundPane`.
+   */
+  supersedeSshRemotePtyLeasesForBoundPane(targetId: string, leafId: string): void {
+    supersedeSshRemotePtyLeasesForBoundPaneOperation(
+      getSshPtyLeaseOperations(this),
+      targetId,
+      leafId
+    )
+  }
+
+  /**
+   * Re-derive one reattachable lease per pane from each pane's current binding. Called on the
+   * connect path immediately before the reattach set is read; see
+   * `reconcileSshRemotePtyLeasesForTarget`.
+   */
+  reconcileSshRemotePtyLeasesForTarget(targetId: string): void {
+    reconcileSshRemotePtyLeasesForTargetOperation(getSshPtyLeaseOperations(this), targetId)
+  }
+
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
     markSshRemotePtyLeasesOperation(getSshPtyLeaseOperations(this), targetId, state)
   }
@@ -120,8 +147,13 @@ export class SshLeaseRecoveryOperations {
     )
   }
 
-  markSshRemotePtyLease(targetId: string, ptyId: string, state: SshRemotePtyLease['state']): void {
-    markSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), targetId, ptyId, state)
+  markSshRemotePtyLease(
+    targetId: string,
+    ptyId: string,
+    state: SshRemotePtyLease['state'],
+    options?: MarkSshRemotePtyLeaseOptions
+  ): void {
+    markSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), targetId, ptyId, state, options)
   }
 
   removeSshRemotePtyLease(targetId: string, ptyId: string): void {

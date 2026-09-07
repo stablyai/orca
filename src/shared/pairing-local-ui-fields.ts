@@ -17,6 +17,8 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'agentsFilterRepoIds',
   'agentsShowChildAgents',
   'agentsCompactMode',
+  'agentsReadFilter',
+  'agentsGroupBy',
   'activityClearedAtByPaneKey',
   'manuallyUnreadTurnsByPaneKey'
 ] as const satisfies readonly (keyof PersistedUIState)[]

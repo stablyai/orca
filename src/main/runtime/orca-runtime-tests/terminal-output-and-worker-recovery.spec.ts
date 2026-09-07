@@ -1,3 +1,4 @@
+import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
@@ -105,6 +106,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       getForegroundProcess: async () => null
     })
@@ -141,6 +143,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       getForegroundProcess: async () => null
     })
@@ -194,6 +197,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       // Why: the remote relay reads the deeper `pi` child of the omp process tree.
       getForegroundProcess: async () => 'pi'
@@ -244,6 +248,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       getForegroundProcess: async () => null
     })
@@ -273,6 +278,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       spawn,
       write: () => true,
+      writeWithSettlement: settledWriteStub(() => true),
       kill: () => true,
       getForegroundProcess: async () => null
     })
@@ -482,6 +488,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -522,6 +529,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -569,6 +577,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -611,6 +620,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -645,6 +655,7 @@ describe('OrcaRuntimeService', () => {
       setInMemoryOrchestrationMessages(runtime, db)
       runtime.setPtyController({
         write,
+        writeWithSettlement: settledWriteStub(write),
         kill: vi.fn(),
         getForegroundProcess: async () => null
       })
@@ -660,7 +671,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(500)
 
       const firstInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('orca orchestration check')
+        (c) => typeof c[1] === 'string' && c[1].includes('orchestration check')
       ).length
       expect(firstInjections).toBe(1)
 
@@ -669,7 +680,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(500)
 
       const totalInjections = write.mock.calls.filter(
-        (c) => typeof c[1] === 'string' && c[1].includes('orca orchestration check')
+        (c) => typeof c[1] === 'string' && c[1].includes('orchestration check')
       ).length
       expect(totalInjections).toBe(1)
       db.close()

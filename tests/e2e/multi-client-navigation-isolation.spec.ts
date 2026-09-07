@@ -1,3 +1,4 @@
+import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -343,10 +344,7 @@ test('routes Add Project folder browsing through the paired host', async ({
   const offer = await createPairingOffer(orcaPage)
   const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
   try {
-    await client
-      .getByRole('button', { name: /Add Project/i })
-      .first()
-      .click()
+    await openSidebarProjectDialog(client)
     const addDialog = client.getByRole('dialog', { name: /Add a project/i })
     await expect(addDialog).toBeVisible()
     await expect(addDialog).not.toContainText('Local Mac')

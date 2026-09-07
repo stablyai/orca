@@ -335,6 +335,89 @@ describe('empty host inventory settling the session mirror', () => {
     expect(hasHostSessionMirrorHydrated(environmentId, WORKTREE)).toBe(true)
   })
 
+  // #18595, the reporter's shape: the answering host holds a mirrored row for a peer runtime, so
+  // that peer is named in `omittedHostIds` for every listing it will ever give. Reading the
+  // disclosure list as the gate made this probe permanently `unverifiable`, the mirror never
+  // hydrated, and every remote pane parked forever.
+  it('settles on a peer runtime it disclosed but never owed coverage for', async () => {
+    const result = await probeHostLiveTerminals(
+      'env-peer-disclosed',
+      vi.fn(async () => ({
+        id: 'peer-disclosed',
+        ok: true as const,
+        result: {
+          terminals: [],
+          totalCount: 0,
+          truncated: false,
+          hostScope: { hostIds: ['local'], omittedHostIds: ['runtime:env-peer'] }
+        },
+        _meta: { runtimeId: 'runtime' }
+      }))
+    )
+
+    expect(result).toBe('none')
+  })
+
+  it('reports a live terminal through a peer-runtime disclosure', async () => {
+    const result = await probeHostLiveTerminals(
+      'env-peer-live',
+      vi.fn(async () => ({
+        id: 'peer-live',
+        ok: true as const,
+        result: {
+          terminals: [{ handle: 'terminal-1' }],
+          totalCount: 1,
+          truncated: false,
+          hostScope: { hostIds: ['local'], omittedHostIds: ['runtime:env-peer'] }
+        },
+        _meta: { runtimeId: 'runtime' }
+      }))
+    )
+
+    expect(result).toBe('live')
+  })
+
+  it('stays unverifiable for an SSH host the answering runtime did owe coverage for', async () => {
+    const result = await probeHostLiveTerminals(
+      'env-ssh-gap',
+      vi.fn(async () => ({
+        id: 'ssh-gap',
+        ok: true as const,
+        result: {
+          terminals: [],
+          totalCount: 0,
+          truncated: false,
+          hostScope: { hostIds: ['local'], omittedHostIds: ['ssh:box-1'] }
+        },
+        _meta: { runtimeId: 'runtime' }
+      }))
+    )
+
+    expect(result).toBe('unverifiable')
+  })
+
+  // A worktree-scoped listing whose target is a runtime host covers nothing and names `local`
+  // among its omissions. `local` is what keeps this unverifiable — the point is that the
+  // runtime-only rule does not rescue a listing that answered for nothing.
+  it('stays unverifiable when the listing covered no host at all', async () => {
+    const result = await probeHostLiveTerminals(
+      'env-covered-nothing',
+      vi.fn(async () => ({
+        id: 'covered-nothing',
+        ok: true as const,
+        result: {
+          terminals: [],
+          totalCount: 0,
+          truncated: false,
+          hostScope: { hostIds: [], omittedHostIds: ['local', 'runtime:env-peer'] }
+        },
+        _meta: { runtimeId: 'runtime' }
+      }))
+    )
+
+    expect(result).toBe('unverifiable')
+  })
+
   it('rejects a present malformed host scope as unverifiable', async () => {
     const result = await probeHostLiveTerminals(
       'env-malformed-scope',

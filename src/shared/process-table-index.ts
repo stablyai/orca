@@ -1,3 +1,5 @@
+import type { ProcessTableRow } from './process-table-snapshot'
+
 /**
  * Correlation indexes over a process-table capture, generic over the row shape so the POSIX
  * `ps` snapshot and the Windows process table share one pass instead of parallel ones.
@@ -19,6 +21,9 @@ export type ProcessTableIndexOf<Row extends ProcessIdentityRow> = {
   childrenByPpid: ReadonlyMap<number, readonly Row[]>
   stats?: ProcessTableIndexStats
 }
+
+/** POSIX process-table index shape used by foreground-process resolvers. */
+export type ProcessTableIndex = ProcessTableIndexOf<ProcessTableRow>
 
 /**
  * Build the correlation indexes in one linear pass over a capture. Only the

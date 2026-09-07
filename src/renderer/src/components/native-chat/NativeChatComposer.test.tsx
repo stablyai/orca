@@ -6,7 +6,6 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
-import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
 
@@ -27,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
     attachDisabled?: boolean
     sendButtonDisabled?: boolean
+    autocomplete?: { mode: string; items?: { kind: string; name: string }[] }
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'unknown',
   confirmationObserver: null as {
@@ -89,10 +89,6 @@ vi.mock('./native-chat-runtime-image-send', () => ({
 vi.mock('./claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: (...args: unknown[]) =>
     mocks.createClaudeModelSwitchConfirmationObserver(...args)
-}))
-vi.mock('../../../../shared/native-chat-agent-profiles', async (importOriginal) => ({
-  ...(await importOriginal<typeof nativeChatAgentProfiles>()),
-  getVerifiedNativeChatCommands: () => []
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
@@ -306,6 +302,43 @@ describe('NativeChatComposer', () => {
     expect(send).toHaveBeenCalledWith('hello', [])
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
     expect(mocks.setDraft).toHaveBeenCalledWith('')
+  })
+
+  // The structured slash menu must offer the running agent's own catalog. Offering
+  // another agent's tokens sends them past the command guard as literal prompt text.
+  it.each([
+    ['claude', 'compact', 'vim'],
+    ['codex', 'vim', 'help']
+  ] as const)('offers %s its own structured slash commands', (agent, offered, withheld) => {
+    mocks.draft = '/'
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey={`tab-1:structured-${agent}`}
+        targetPtyId={null}
+        agent={agent}
+        structuredTransport={{
+          send: vi.fn(() => true),
+          dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
+          optionsSurface: {
+            getSnapshot: () => [],
+            setOption: vi.fn(),
+            invokeAction: vi.fn(),
+            subscribe: () => () => {}
+          },
+          optionSnapshot: [],
+          onError: vi.fn(),
+          runtime: 'local'
+        }}
+      />
+    )
+
+    const names = (mocks.fieldProps?.autocomplete?.items ?? [])
+      .filter((item) => item.kind === 'command')
+      .map((item) => item.name)
+    expect(names).toContain(offered)
+    expect(names).toContain('effort')
+    expect(names).not.toContain(withheld)
   })
 
   it('sends structured image attachments through the durable transport', async () => {

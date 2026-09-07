@@ -616,7 +616,11 @@ describe('SshRelaySession data delivery', () => {
       outputFlowControl: { requestedWindowSu: 256 * 1024 }
     })
     expect(deployAndLaunchRelay).toHaveBeenCalledWith(mockConn, undefined, undefined, 'target-1')
-    expect(notifyWithSettlementMock).toHaveBeenCalledWith('pty.ackData', batch, settled)
+    // The ACK publisher consumes the two-valued projection of the write settlement.
+    const [method, published] = notifyWithSettlementMock.mock.calls[0]!
+    notifyWithSettlementMock.mock.calls[0]![2]({ outcome: 'accepted' })
+    expect([method, published]).toEqual(['pty.ackData', batch])
+    expect(settled).toHaveBeenCalledWith({ ok: true })
   })
 
   it('offers V1 through reconnect negotiation', async () => {

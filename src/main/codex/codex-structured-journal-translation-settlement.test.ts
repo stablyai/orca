@@ -212,7 +212,7 @@ describe('codex journal translation', () => {
     expect(translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))).toEqual({
       accepted: true
     })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 4, backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -225,7 +225,7 @@ describe('codex journal translation', () => {
       expect.objectContaining({ kind: 'tool-call', state: 'running' }),
       expect.objectContaining({ kind: 'tool-call', state: 'failed' })
     ])
-    expect(publishes).toHaveLength(1)
+    expect(publishes).toHaveLength(2)
   })
 
   it('admits terminal session settlement publication across the hard watermark', async () => {
@@ -257,7 +257,7 @@ describe('codex journal translation', () => {
         acquisitionGeneration: 'generation-1'
       })
     ).toEqual({ accepted: true })
-    expect(deferred.state()).toMatchObject({ queuedOperations: 4, backpressured: true })
+    expect(deferred.state()).toMatchObject({ queuedOperations: 5, backpressured: true })
 
     deferred.bind(deferredTarget(bodies, publishes))
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
@@ -277,7 +277,7 @@ describe('codex journal translation', () => {
       }),
       { kind: 'status', text: 'Provider exited: lost child' }
     ])
-    expect(publishes).toHaveLength(1)
+    expect(publishes).toHaveLength(2)
   })
 
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {
@@ -652,7 +652,7 @@ describe('codex journal translation', () => {
 
     translator.handle(TURN_STARTED)
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-0', text: 'one' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-0', text: 'one' } })
     )
     translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
     translator.handle(
@@ -662,7 +662,7 @@ describe('codex journal translation', () => {
     )
     translator.handle(notification('turn/started', { turn: { id: 'turn-2' } }))
     translator.handle(
-      notification('item/completed', { item: { type: 'userMessage', id: 'item-2', text: 'two' } })
+      notification('item/completed', { item: { type: 'agentMessage', id: 'item-2', text: 'two' } })
     )
 
     expect(tap.rows.map((row) => row.key)).toEqual([
@@ -679,7 +679,7 @@ describe('codex journal translation', () => {
     translator.handle(
       notification('item/completed', {
         turnId: 'turn-9',
-        item: { type: 'userMessage', id: 'item-0', text: 'late' }
+        item: { type: 'agentMessage', id: 'item-0', text: 'late' }
       })
     )
 

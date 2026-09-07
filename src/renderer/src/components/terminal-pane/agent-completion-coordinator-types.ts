@@ -25,10 +25,14 @@ export type AgentCompletionCoordinatorOptions = {
   paneKey: string
   statusLane?: 'hook' | 'pty'
   getPtyId: () => string | null
+  /** Remote authorities are event-triggered only; no periodic process polls. */
+  isRemotePtyId?: (ptyId: string) => boolean
+  getExpectedIncarnationId?: () => string | null
   getSettings: () => Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
   inspectProcess: (
     settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-    ptyId: string
+    ptyId: string,
+    options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
   dispatchCompletion: (title: string, meta?: AgentCompletionDispatchMeta) => void
   dispatchAttention?: (title: string, meta: AgentAttentionDispatchMeta) => void

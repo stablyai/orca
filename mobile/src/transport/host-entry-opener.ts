@@ -12,6 +12,7 @@ import type { ConnectionState, HostProfile } from './types'
 
 export type HostClientStoreEntry = {
   client: RpcClient
+  clientId: string
   state: ConnectionState
   refCount: number
   unsubState: () => void
@@ -130,6 +131,7 @@ export async function openHostClientEntry(
       }) ?? (() => {})
     const entry: HostClientStoreEntry = {
       client,
+      clientId: host.deviceToken,
       state: client.getState(),
       refCount: state.pendingAcquisitions.get(hostId) ?? 0,
       unsubState,

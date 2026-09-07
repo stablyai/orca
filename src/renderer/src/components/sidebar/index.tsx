@@ -11,7 +11,6 @@ import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
-import type { ActivityGroupBy, ThreadReadFilter } from '@/components/activity/activity-thread-types'
 import { ActivityThreadCollapseContext } from '@/components/activity/activity-thread-collapse-context'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
@@ -59,8 +58,10 @@ function Sidebar({
   const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
-  const [agentReadFilter, setAgentReadFilter] = React.useState<ThreadReadFilter>('all')
-  const [agentGroupBy, setAgentGroupBy] = React.useState<ActivityGroupBy>('status')
+  const agentReadFilter = useAppStore((s) => s.agentsReadFilter)
+  const setAgentReadFilter = useAppStore((s) => s.setAgentsReadFilter)
+  const agentGroupBy = useAppStore((s) => s.agentsGroupBy)
+  const setAgentGroupBy = useAppStore((s) => s.setAgentsGroupBy)
   const [agentQuery, setAgentQuery] = React.useState('')
   const [agentOptionsTarget, setAgentOptionsTarget] = React.useState<HTMLDivElement | null>(null)
   const agentsScrollTopRef = React.useRef(0)

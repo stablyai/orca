@@ -4,7 +4,11 @@ import type { ManagedPaneInternal } from './pane-manager-types'
 import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
 import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
 import { schedulePaneRevealPresent } from './pane-reveal-repaint'
-import { attachWebgl, resetTerminalWebglSuggestion } from './pane-webgl-renderer'
+import {
+  attachWebgl,
+  primeTerminalWebglAddon,
+  resetTerminalWebglSuggestion
+} from './pane-webgl-renderer'
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 
 function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
@@ -61,7 +65,8 @@ function fireContextLoss(pane: ManagedPaneInternal): void {
 }
 
 describe('terminal WebGL context recovery', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    await primeTerminalWebglAddon()
     resetTerminalWebglSuggestion()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {

@@ -2,19 +2,14 @@ import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, spawnMock, killSpawnedCommandTreeMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
+const { spawnMock, processKillMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
-  killSpawnedCommandTreeMock: vi.fn().mockResolvedValue(undefined)
+  processKillMock: vi.fn()
 }))
 
 vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal()),
-  execFile: execFileMock,
   spawn: spawnMock
-}))
-vi.mock('./spawned-command-tree-kill', () => ({
-  killSpawnedCommandTree: killSpawnedCommandTreeMock
 }))
 
 import { ghExecFileAsync } from './gh-exec-file'
@@ -29,66 +24,87 @@ function mockChild(pid = 4321): ChildProcess {
   return child as unknown as ChildProcess
 }
 
+function settleChild(child: ChildProcess, stdout: string): void {
+  child.stdout?.emit('data', Buffer.from(stdout))
+  child.emit('exit', 0, null)
+  child.emit('close', 0, null)
+}
+
 /**
  * The contract the star check depends on after #18234: a `gh` that never exits
- * is killed at the deadline, tree and all, rather than running forever.
+ * is killed at the deadline, and the kill reaches the whole chain. On the
+ * reporter's box `gh` was a shell wrapper calling `mise x gh`, so signalling
+ * only the direct child left the rest of the chain running under init.
  */
 describe('gh exec deadline', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    execFileMock.mockReset()
     spawnMock.mockReset()
-    killSpawnedCommandTreeMock.mockClear()
+    processKillMock.mockReset()
+    vi.spyOn(process, 'kill').mockImplementation(processKillMock as unknown as typeof process.kill)
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
-  it('kills the process tree and rejects when gh never exits', async () => {
-    const child = mockChild()
-    // Why never invoking the callback: this is exactly the stuck child from
-    // #18234 — spawned, spinning, and never reporting an exit.
-    execFileMock.mockReturnValue(child)
+  it.runIf(process.platform !== 'win32')(
+    'signals the whole process group, not just the child, when gh never exits',
+    async () => {
+      const child = mockChild()
+      // Why never emitting exit: this is exactly the stuck child from #18234 —
+      // spawned, spinning, and never reporting an exit.
+      spawnMock.mockReturnValue(child)
 
-    const pending = ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], {
-      timeout: 15_000
-    })
-    const rejection = expect(pending).rejects.toThrow('timed out')
-    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledOnce())
+      const pending = ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], {
+        timeout: 15_000
+      })
+      const rejection = expect(pending).rejects.toThrow('timed out')
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
 
-    // Not yet: the deadline has not elapsed.
-    expect(killSpawnedCommandTreeMock).not.toHaveBeenCalled()
+      // The child must be its own group leader, or the signal below would go to
+      // whatever group it inherited — Orca's own.
+      expect(spawnMock.mock.calls[0][2].detached).toBe(true)
+      expect(processKillMock).not.toHaveBeenCalled()
 
-    await vi.advanceTimersByTimeAsync(15_000)
-    await rejection
+      await vi.advanceTimersByTimeAsync(15_000)
+      await vi.advanceTimersByTimeAsync(15_000)
+      await rejection
 
-    expect(killSpawnedCommandTreeMock).toHaveBeenCalledWith(child)
-  })
+      expect(processKillMock).toHaveBeenCalledWith(-4321, undefined)
+    }
+  )
 
   it('spawns with hidden console and captured stdio, never an inherited or shell stdio', async () => {
     const child = mockChild()
-    execFileMock.mockImplementation(
-      (
-        _command: string,
-        _args: string[],
-        _options: unknown,
-        callback: (error: Error | null, stdout: string, stderr: string) => void
-      ) => {
-        callback(null, 'HTTP/2.0 204 No Content\r\n', '')
-        return child
-      }
-    )
+    spawnMock.mockImplementation(() => {
+      queueMicrotask(() => settleChild(child, 'HTTP/2.0 204 No Content\r\n'))
+      return child
+    })
 
-    await ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], { timeout: 15_000 })
+    const result = await ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], {
+      timeout: 15_000
+    })
 
-    const [command, args, options] = execFileMock.mock.calls[0]
+    expect(result.stdout).toContain('204 No Content')
+    const [command, args, options] = spawnMock.mock.calls[0]
     expect(command).toBe('gh')
     expect(args).toEqual(['api', '--include', 'user/starred/stablyai/orca'])
-    // `execFile` captures stdout/stderr over pipes and never inherits Orca's;
-    // `shell` is never set, and the console stays hidden on Windows.
     expect(options.windowsHide).toBe(true)
-    expect(options.stdio).toBeUndefined()
-    expect(options.shell).toBeUndefined()
+    expect(options.stdio).toEqual(['pipe', 'pipe', 'pipe'])
+    expect(options.shell).toBe(false)
+  })
+
+  it('fails rather than returning a clipped answer when gh overruns maxBuffer', async () => {
+    const child = mockChild()
+    spawnMock.mockImplementation(() => {
+      queueMicrotask(() => settleChild(child, '['.padEnd(64, 'x')))
+      return child
+    })
+
+    await expect(
+      ghExecFileAsync(['api', 'repos/stablyai/orca/issues'], { timeout: 15_000, maxBuffer: 8 })
+    ).rejects.toThrow('more than 8 bytes')
   })
 })

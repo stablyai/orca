@@ -92,6 +92,8 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
 }
 
 export type AgentStatusTiming = {
+  /** Ordered authoritative sources may correct a prior publication clock. */
+  allowOlderTimestamp?: boolean
   updatedAt?: number
   /** Observation clock for staleness; see `AgentStatusEntry.evidenceObservedAt`. */
   evidenceObservedAt?: number

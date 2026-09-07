@@ -285,7 +285,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     })
 
     codex.connections[0].handlers.onNotification?.('item/completed', {
-      item: { type: 'userMessage', id: 'message-1', text: 'hello' }
+      item: { type: 'agentMessage', id: 'message-1', text: 'hello' }
     })
 
     await vi.waitFor(() => {

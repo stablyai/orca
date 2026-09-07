@@ -49,6 +49,8 @@ describe('client UI RPC pairing-local field seams', () => {
     agentsFilterRepoIds: ['repo-a'],
     agentsShowChildAgents: true,
     agentsCompactMode: false,
+    agentsReadFilter: 'unread',
+    agentsGroupBy: 'project',
     activityClearedAtByPaneKey: { 'tab-1:leaf-1': 123 },
     manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
   }

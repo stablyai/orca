@@ -40,15 +40,30 @@ export function buildRuntimeMobileAgentStatusProjection(
     return cached.projection
   }
 
+  const nextEntries = Object.entries(agentStatusByPaneKey)
+  // Same key set, same entry objects: the sorted join would be character-identical to the cached
+  // string, so skip the O(N log N) sort and the O(bytes) join. Equal sizes plus every next key
+  // present in the cache proves the key sets match; a removal fails the size check and an addition
+  // fails the lookup. The cached Map is exactly what a rebuild would produce, so reuse it too.
+  if (
+    cached != null &&
+    nextEntries.length === cached.entries.size &&
+    nextEntries.every(([paneKey, entry]) => cached.entries.get(paneKey)?.entry === entry)
+  ) {
+    graphState.cachedAgentStatusProjection = {
+      ...cached,
+      source: agentStatusByPaneKey
+    }
+    return cached.projection
+  }
+
   // A status ping replaces one entry and re-spreads the map; reuse every other entry.
   const entries = new Map<string, AgentStatusProjectionCacheEntry>()
   const parts: string[] = []
   // Code-unit order, not `localeCompare`: this projection is only ever compared with `===`, so it
   // must be deterministic, not locale-correct — and an ICU collator per comparison is ~4.5k calls
   // per ping at the 500-entry cap.
-  for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0
-  )) {
+  for (const [paneKey, entry] of nextEntries.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     const previous = cached?.entries.get(paneKey)
     const entryCache =
       previous?.entry === entry
