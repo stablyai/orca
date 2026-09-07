@@ -140,6 +140,7 @@ export function buildRows(
     renderedNaturalAnchorRepoIds,
     importedWorktreesByRepo,
     groupBy !== 'repo',
+    hostLabelById,
     result,
     lineageById,
     worktreeMap,

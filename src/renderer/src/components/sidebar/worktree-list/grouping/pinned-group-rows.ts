@@ -4,6 +4,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { PINNED_GROUP_KEY, PINNED_GROUP_META } from './group-keys'
+import { getMixedWorktreeHostContextLabels } from './host-labels'
 import { appendWorktreeRows, buildImportedWorktreesCardRow } from './row-builders'
 import type { NoticeHostContext } from './host-labels'
 import type { ImportedWorktreesCardCandidate, Row } from './row-types'
@@ -22,6 +23,7 @@ export function emitPinnedGroup(
   renderedNaturalAnchorRepoIds: ReadonlySet<string>,
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>,
   allowImportedFallback: boolean,
+  hostLabelById: ReadonlyMap<string, string> | undefined,
   result: Row[],
   lineageById: Record<string, WorktreeLineage>,
   worktreeMap: Map<string, Worktree>,
@@ -76,11 +78,20 @@ export function emitPinnedGroup(
   }
 
   const firstItemIndex = result.length
+  // Why: pinned rows sit under a generic header, so mixed-host sections need
+  // per-row host context.
+  const pinnedHostLabels = getMixedWorktreeHostContextLabels(
+    pinnedSectionWorktrees,
+    repoMap,
+    hostLabelById,
+    defaultHostId
+  )
   appendWorktreeRows(result, pinnedSectionWorktrees, repoMap, lineageById, worktreeMap, {
     nestLineage,
     collapsedGroups,
     groupDepth: 0,
     sectionKey: PINNED_GROUP_KEY,
+    hostContextLabelByWorktreeIdentity: pinnedHostLabels,
     cyclicLineageIds
   })
   if (!allowImportedFallback) {

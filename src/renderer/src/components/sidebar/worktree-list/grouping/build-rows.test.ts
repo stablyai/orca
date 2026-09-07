@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './build-rows'
 import { ALL_GROUP_META, getPRGroupKey, PINNED_GROUP_KEY } from './group-keys'
+import type { Row } from './row-types'
 import { getGroupKeyForWorktree } from './worktree-group-keys'
 import {
   REPO_HEADER_ACTION_BUTTON_CLASS,
@@ -11,6 +12,7 @@ import {
 import { repo, worktree, repoMap } from '../../worktree-list-groups-test-fixtures'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 
 function readWorktreeListSource(): string {
   return readFileSync(fileURLToPath(new URL('../../WorktreeList.tsx', import.meta.url)), 'utf8')
@@ -160,6 +162,52 @@ describe('buildRows with pinned worktrees', () => {
     expect(pinnedHeader.type === 'header' ? pinnedHeader.hostWorktreeCounts : undefined).toEqual(
       new Map([['runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3', 1]])
     )
+  })
+
+  it('labels pinned rows when the pinned section mixes hosts', () => {
+    const runtimeHostId = 'runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3' as const
+    const runtimePinned = {
+      ...pinned,
+      id: 'wt-runtime-pinned',
+      hostId: runtimeHostId
+    }
+    const rows = buildRows(
+      'none',
+      [pinned, runtimePinned],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([
+        [pinned.id, pinned],
+        [runtimePinned.id, runtimePinned]
+      ]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      new Map(),
+      [],
+      undefined,
+      [],
+      new Map([
+        [LOCAL_EXECUTION_HOST_ID, 'Local'],
+        [runtimeHostId, 'Builder']
+      ])
+    )
+    const pinnedRows = rows.filter(
+      (row): row is Extract<Row, { type: 'item' }> =>
+        row.type === 'item' && row.sectionKey === PINNED_GROUP_KEY
+    )
+
+    expect(pinnedRows.map((row) => [row.worktree.id, row.hostContextLabel])).toEqual([
+      ['wt-pinned', 'Local'],
+      ['wt-runtime-pinned', 'Builder']
+    ])
   })
 
   it('groups all worktrees under All in groupBy none', () => {
