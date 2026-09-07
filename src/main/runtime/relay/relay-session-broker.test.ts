@@ -127,6 +127,13 @@ describe('RelaySessionBroker lifecycle ownership', () => {
 
     expect(onStatus.mock.calls).toContainEqual(['connecting', undefined])
     expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://relay.example.test')
+
+    // Why: the pool publishes offline while it still holds the assignment it is
+    // about to rotate; forwarding that cell leaves the UI naming a dead one.
+    fakes.controls[0]!.options.onClose(1006)
+    expect(onStatus.mock.calls).toContainEqual(['offline', undefined])
+    expect(onStatus.mock.calls).toContainEqual(['draining', 'https://relay.example.test'])
+
     broker.closeNow()
     expect(onStatus).toHaveBeenLastCalledWith('offline')
   })
