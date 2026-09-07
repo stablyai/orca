@@ -12,7 +12,8 @@ const itWithBash = hasBash ? it : it.skip
 function runInteractiveBashRcfile(
   rcfile: string,
   homeDir: string,
-  input = 'true\nfalse\nexit 0\n'
+  input = 'true\nfalse\nexit 0\n',
+  env: NodeJS.ProcessEnv = {}
 ): string {
   const result = spawnSync(
     'bash',
@@ -22,6 +23,7 @@ function runInteractiveBashRcfile(
       encoding: 'utf8',
       env: {
         ...process.env,
+        ...env,
         HOME: homeDir,
         TERM: process.env.TERM || 'xterm'
       },
@@ -329,7 +331,8 @@ describe('getRelayShellLaunchConfig', () => {
     const output = runInteractiveBashRcfile(
       config.args[1] as string,
       homeDir,
-      'case "$PATH" in "$ORCA_REMOTE_CLI_BIN_DIR":*) echo PATH_FRONT_OK ;; *) echo PATH_FRONT_BAD ;; esac\nexit 0\n'
+      'case "$PATH" in "$ORCA_REMOTE_CLI_BIN_DIR":*) echo PATH_FRONT_OK ;; *) echo PATH_FRONT_BAD ;; esac\nexit 0\n',
+      { ...config.env, ORCA_REMOTE_CLI_BIN_DIR: relayBinDir }
     )
 
     expect(output).toContain('PATH_FRONT_OK')
