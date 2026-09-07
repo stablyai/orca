@@ -175,11 +175,18 @@ export class MobileEndpointSupervisor {
     }
     this.unsubscribeState = this.logical.onStateChange((state) => {
       if (state === 'connected') {
+        this.lostRace.noteDirectRestored()
         if (this.logical.getActivePath() !== 'relay') {
           void this.credentialRefresh.run(this.relayReconnect.resetForDirectConnection())
         }
         this.directProbe.schedule()
-      } else if (!this.backgroundGrace.isForeground()) {
+        return
+      }
+      // Why: the path that won the last race is gone, so the window it earned
+      // must not be served out — a blip that became an outage would otherwise
+      // strand the user for the whole window with nothing else scheduled.
+      this.lostRace.clampForLostDirect()
+      if (!this.backgroundGrace.isForeground()) {
         this.backgroundGrace.handleStateFailure()
       } else {
         // Why: the direct client enters reconnecting after its first failed
@@ -317,7 +324,10 @@ export class MobileEndpointSupervisor {
         this.logical.setRecoveryPath(null)
         // Why: direct won the race or the supervisor went inactive — not a
         // failure; booking backoff would delay the next genuine recovery.
-        if (this.isActive() && this.logical.getState() === 'connected') {
+        // Why: only an unforced race can be blip-driven. A forced replacement
+        // that stands down is a lease rotation or a network change reconsidered,
+        // not a LAN that flapped, so it must not grow the streak.
+        if (!forceReplacement && this.isActive() && this.logical.getState() === 'connected') {
           this.lostRace.record()
         }
         return

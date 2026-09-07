@@ -32,6 +32,21 @@ function holdRelayCutover(logical: FakeLogicalClient): () => void {
   return release
 }
 
+// One full lost race: the relay dial starts, direct returns mid-cutover and wins.
+async function loseOneRace(
+  logical: FakeLogicalClient,
+  openRelay: ReturnType<typeof vi.fn>
+): Promise<void> {
+  const before = openRelay.mock.calls.length
+  const release = holdRelayCutover(logical)
+  logical.publishState('reconnecting')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(openRelay.mock.calls.length).toBe(before + 1)
+  logical.publishState('connected')
+  release()
+  await vi.advanceTimersByTimeAsync(0)
+}
+
 function relaySessionsFrom(openRelay: ReturnType<typeof vi.fn>): FakeRelaySession[] {
   return openRelay.mock.results.map((result) => result.value as FakeRelaySession)
 }
@@ -247,6 +262,37 @@ describe('mobile endpoint reconnect race', () => {
     // The window lapses against a live direct path, so it still opens nothing.
     await vi.advanceTimersByTimeAsync(10_000)
     expect(openRelay).toHaveBeenCalledOnce()
+    supervisor.stop()
+  })
+
+  it('races at once when the LAN dies inside a damper window grown to the cap', async () => {
+    const logical = new FakeLogicalClient('connecting', 'lan')
+    const openRelay = vi.fn(() => new FakeRelaySession('connecting'))
+    const deps = dependencies({ openRelay, openDirect: unreachableDirect() })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    const release = holdRelayCutover(logical)
+    const starting = supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    logical.publishState('connected')
+    release()
+    await starting
+
+    // Four more losses, each once its window has run: 2s, 4s, 8s, 16s, then the
+    // fifth earns the 30s cap.
+    for (const window of [2_000, 4_000, 8_000, 16_000]) {
+      await vi.advanceTimersByTimeAsync(window)
+      await loseOneRace(logical, openRelay)
+    }
+    expect(openRelay).toHaveBeenCalledTimes(5)
+
+    // This time direct does not come back. Waiting out the window a blip earned
+    // would strand the phone offline for 30s with nothing else scheduled.
+    logical.publishState('reconnecting')
+    await vi.advanceTimersByTimeAsync(249)
+    expect(openRelay).toHaveBeenCalledTimes(5)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(openRelay.mock.calls.length).toBeGreaterThan(5)
     supervisor.stop()
   })
 
