@@ -39,10 +39,11 @@ export type MiniMaxUsageResponse = {
 const MINIMAX_UNAUTHENTICATED_STATUS_CODE = 1004
 
 function makeMiniMaxExpiredCredentialError(fetchResult: MiniMaxFetchResponse): ProviderRateLimits {
-  const credentialLabel = fetchResult.transport === 'api-key' ? 'API key' : 'session cookie'
+  const usesApiKey = fetchResult.transport === 'api-key'
   return makeMiniMaxError(
-    `MiniMax ${credentialLabel} expired. Replace it in Settings.`,
-    'stale-token'
+    `MiniMax ${usesApiKey ? 'API key' : 'session cookie'} expired. Replace it in Settings.`,
+    'stale-token',
+    usesApiKey ? 'api-key' : 'session-cookie'
   )
 }
 
