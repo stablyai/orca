@@ -31,6 +31,7 @@ import {
   type ClipboardFileDeps,
   type ClipboardFileResult
 } from './clipboard-file-copy'
+import { readClipboardFilePaths, type ClipboardFilePathsDeps } from './clipboard-file-paths-read'
 import {
   cleanupExpiredRemoteClipboardFiles,
   scheduleLegacyRemoteClipboardFileCleanup,
@@ -86,6 +87,7 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeSelectionText')
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
+  ipcMain.removeHandler('clipboard:readFilePaths')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
   ipcMain.removeHandler('clipboard:readImageThumbnail')
 
@@ -137,6 +139,12 @@ export function registerClipboardHandlers(store: Store): void {
       return saveClipboardImageBufferForTarget(image.toPNG(), args)
     }
   )
+  // Why: a file copied in Finder/Explorer reaches the text flavor as its
+  // display name only, so pasting it into a terminal needs the file flavors.
+  ipcMain.handle('clipboard:readFilePaths', (event): string[] => {
+    assertTrustedClipboardSender(event)
+    return readClipboardFilePaths(makeClipboardFilePathsDeps())
+  })
   // Why: copy the actual file to the OS clipboard so pasting in Finder/Explorer
   // drops the file itself, not its path as text.
   ipcMain.handle(
@@ -249,6 +257,14 @@ function makeClipboardFileDeps(
     resolveFilePath,
     writeBuffer: (format, buffer) => clipboard.writeBuffer(format, buffer),
     runCommand
+  }
+}
+
+function makeClipboardFilePathsDeps(): ClipboardFilePathsDeps {
+  return {
+    platform: process.platform,
+    read: (format) => clipboard.read(format),
+    readBuffer: (format) => clipboard.readBuffer(format)
   }
 }
 
