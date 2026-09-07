@@ -8,14 +8,17 @@ import {
   getResultPath,
   parseServeUpdateHelperMarker,
   parseServeUpdateResult,
+  SERVE_UPDATE_SPOOL_SCHEMA_VERSION,
   type ServeUpdateHelperMarker,
   type ServeUpdateRequest,
-  type ServeUpdateResult,
   type ServeUpdateVerdict
 } from '../shared/serve-update-spool'
 
 export const DEFAULT_SERVE_UPDATE_SPOOL_DIR = '/var/lib/orca-server-update'
 export const DEFAULT_SERVE_UPDATE_UNIT_NAME = 'orca-serve.service'
+export const DEFAULT_SERVE_UPDATE_APPIMAGE_PATH = '/opt/orca/orca-linux.AppImage'
+export const DEFAULT_SERVE_UPDATE_VERSION_RECORD_PATH = '/opt/orca/VERSION'
+export const DEFAULT_SERVE_UPDATE_SERVICE_USER = 'orca'
 
 function resolveSpoolDir(): string {
   return process.env.ORCA_SERVE_UPDATE_SPOOL_DIR ?? DEFAULT_SERVE_UPDATE_SPOOL_DIR
@@ -55,7 +58,7 @@ export function writeUpdateRequest(
   clearServeUpdateCensusContinuation()
   const written = writeJsonFile(
     getRequestPath(resolveSpoolDir()),
-    { schemaVersion: 2, attemptId, ...request },
+    { schemaVersion: SERVE_UPDATE_SPOOL_SCHEMA_VERSION, attemptId, ...request },
     0o640
   )
   if (written) {
@@ -84,16 +87,6 @@ export function clearUpdateRequest(): void {
     unlinkSync(getRequestPath(resolveSpoolDir()))
   } catch {
     // A missing request file is the converged state.
-  }
-}
-
-export function readUpdateResult(): ServeUpdateResult | null {
-  try {
-    return parseServeUpdateResult(
-      JSON.parse(readFileSync(getResultPath(resolveSpoolDir()), 'utf8'))
-    )
-  } catch {
-    return null
   }
 }
 

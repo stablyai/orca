@@ -10,6 +10,13 @@ import {
   SERVE_UPDATE_HELPER_INSTALL_PATH,
   SERVE_UPDATE_SUDOERS_PATH
 } from '../../main/cli/serve-update-helper-installer'
+import {
+  DEFAULT_SERVE_UPDATE_APPIMAGE_PATH,
+  DEFAULT_SERVE_UPDATE_SERVICE_USER,
+  DEFAULT_SERVE_UPDATE_SPOOL_DIR,
+  DEFAULT_SERVE_UPDATE_UNIT_NAME,
+  DEFAULT_SERVE_UPDATE_VERSION_RECORD_PATH
+} from '../../main/serve-update-spool'
 
 function envRecord(): Record<string, string> {
   // Why: the `orca` launcher runs Orca's Electron binary as Node, so this CLI
@@ -140,11 +147,11 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       }
       return value
     }
-    const spoolDir = option('spool-dir', '/var/lib/orca-server-update')
-    const unitName = option('unit', 'orca-serve.service')
-    const appImageTargetPath = option('appimage', '/opt/orca/orca-linux.AppImage')
-    const versionRecordPath = option('version-record', '/opt/orca/VERSION')
-    const serviceUser = option('service-user', 'orca')
+    const spoolDir = option('spool-dir', DEFAULT_SERVE_UPDATE_SPOOL_DIR)
+    const unitName = option('unit', DEFAULT_SERVE_UPDATE_UNIT_NAME)
+    const appImageTargetPath = option('appimage', DEFAULT_SERVE_UPDATE_APPIMAGE_PATH)
+    const versionRecordPath = option('version-record', DEFAULT_SERVE_UPDATE_VERSION_RECORD_PATH)
+    const serviceUser = option('service-user', DEFAULT_SERVE_UPDATE_SERVICE_USER)
     const outPath = flags.get('out')
     const script = buildServeUpdateHelperInstallScript({
       spoolDir,

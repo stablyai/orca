@@ -228,6 +228,9 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
         this.resetQuitForUpdateState()
         return
       }
+    } else {
+      // Diagnostics: an unarmed fence passes silently; distinguish it from a passed one.
+      recordUpdaterLifecycle('headless_serve_update_census_unarmed', {}, { level: 'warn' })
     }
     // Why before quit: the helper needs the unit stop to look like a supervised exit, and
     // pre-quit cleanup (auth preservation) must still run while this process is alive.
