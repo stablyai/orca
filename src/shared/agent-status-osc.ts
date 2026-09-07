@@ -3,9 +3,26 @@ import { parseAgentStatusPayload } from './agent-status-types'
 
 const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 
+/** Return a suffix that can only be the beginning of an OSC 9999 marker. */
+function findAgentStatusPrefixCarry(data: string): string {
+  const lastChar = data.charCodeAt(data.length - 1)
+  if (lastChar !== 0x1b && lastChar !== 0x5d && lastChar !== 0x39 && lastChar !== 0x3b) {
+    return ''
+  }
+  const maxCarryLength = Math.min(data.length, OSC_AGENT_STATUS_PREFIX.length - 1)
+  for (let length = maxCarryLength; length > 0; length -= 1) {
+    const suffix = data.slice(data.length - length)
+    if (OSC_AGENT_STATUS_PREFIX.startsWith(suffix)) {
+      return suffix
+    }
+  }
+  return ''
+}
+
 export type ProcessedAgentStatusChunk = {
   cleanData: string
   payloads: ParsedAgentStatusPayload[]
+  lastPayloadCleanOffset: number | null
 }
 
 function findAgentStatusTerminator(
@@ -36,10 +53,27 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
   let pending = ''
 
   return (data: string): ProcessedAgentStatusChunk => {
+    // Ordinary terminal output is by far the common case. Keep it on the
+    // identity path unless the chunk ends with a split OSC marker; this avoids
+    // rebuilding a clean-data string for every PTY frame.
+    if (pending.length === 0 && !data.includes(OSC_AGENT_STATUS_PREFIX)) {
+      const carry = findAgentStatusPrefixCarry(data)
+      if (carry.length === 0) {
+        return { cleanData: data, payloads: [], lastPayloadCleanOffset: null }
+      }
+      pending = carry
+      return {
+        cleanData: data.slice(0, data.length - carry.length),
+        payloads: [],
+        lastPayloadCleanOffset: null
+      }
+    }
+
     const combined = pending + data
     pending = ''
 
     const payloads: ParsedAgentStatusPayload[] = []
+    let lastPayloadCleanOffset: number | null = null
     let cleanData = ''
     let cursor = 0
 
@@ -47,17 +81,10 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
       const start = combined.indexOf(OSC_AGENT_STATUS_PREFIX, cursor)
       if (start === -1) {
         const tail = combined.slice(cursor)
-        const prefixLen = OSC_AGENT_STATUS_PREFIX.length
-        let partialPrefixLen = 0
-        for (let k = Math.min(prefixLen - 1, tail.length); k > 0; k--) {
-          if (tail.endsWith(OSC_AGENT_STATUS_PREFIX.slice(0, k))) {
-            partialPrefixLen = k
-            break
-          }
-        }
-        if (partialPrefixLen > 0) {
-          cleanData += tail.slice(0, tail.length - partialPrefixLen)
-          pending = tail.slice(tail.length - partialPrefixLen)
+        const carry = findAgentStatusPrefixCarry(tail)
+        if (carry.length > 0) {
+          cleanData += tail.slice(0, tail.length - carry.length)
+          pending = carry
         } else {
           cleanData += tail
         }
@@ -77,10 +104,11 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
       const parsed = parseAgentStatusPayload(combined.slice(payloadStart, terminator.index))
       if (parsed) {
         payloads.push(parsed)
+        lastPayloadCleanOffset = cleanData.length
       }
       cursor = terminator.index + terminator.length
     }
 
-    return { cleanData, payloads }
+    return { cleanData, payloads, lastPayloadCleanOffset }
   }
 }

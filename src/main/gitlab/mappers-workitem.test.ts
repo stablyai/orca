@@ -52,6 +52,18 @@ describe('mapMRToWorkItem', () => {
     expect(item.isCrossRepository).toBe(true)
   })
 
+  it('maps GitLab mergeability when the MR payload includes merge status', () => {
+    expect(
+      mapMRToWorkItem(
+        { iid: 1, title: 't', state: 'opened', detailed_merge_status: 'mergeable' },
+        'g/p'
+      ).mergeable
+    ).toBe('MERGEABLE')
+    expect(
+      mapMRToWorkItem({ iid: 2, title: 't', state: 'opened', has_conflicts: true }, 'g/p').mergeable
+    ).toBe('CONFLICTING')
+  })
+
   it('does not flag cross-repository when project ids are absent', () => {
     const item = mapMRToWorkItem({ iid: 1, title: 't', state: 'opened' }, 'g/p')
     expect(item.isCrossRepository).toBe(false)

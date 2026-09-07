@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { DiffComment } from '../../../shared/types'
+import type { DiffComment } from '../../../shared/diff-comment-types'
 import {
   copyMarkdownReviewNotesForAgent,
   type MarkdownReviewNoteClipboardWriter

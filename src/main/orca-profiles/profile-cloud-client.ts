@@ -6,6 +6,7 @@ import type {
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
+import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 type ExchangeCodeArgs = {
   code: string
@@ -158,21 +159,40 @@ function normalizeSessionResponse(value: unknown): OrcaCloudSessionExchangeRespo
 
 const CLOUD_REQUEST_TIMEOUT_MS = 30_000
 
-async function postJson<T>(url: string, body: unknown, accessToken?: string): Promise<T> {
+// Why: refresh tokens rotate, so an aborted refresh is ambiguous — the server
+// may have rotated ours before the reply was lost, and the only recovery is a
+// replay the server reads as reuse. One long attempt beats a short attempt plus
+// a replayed retry.
+const CLOUD_REFRESH_TIMEOUT_MS = 60_000
+
+type PostJsonOptions = {
+  accessToken?: string
+  timeoutMs?: number
+}
+
+// Only a status line proves the server rejected the request without consuming
+// what was in it. Everything else — an abort, a dropped socket, a 200 we could
+// not parse — leaves a rotating credential possibly already spent.
+export function isAmbiguousCloudRequestFailure(error: unknown): boolean {
+  return !(error instanceof OrcaCloudRequestError)
+}
+
+async function postJson<T>(url: string, body: unknown, options?: PostJsonOptions): Promise<T> {
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {})
+      ...(options?.accessToken ? { authorization: `Bearer ${options.accessToken}` } : {})
     },
     body: JSON.stringify(body),
     // Why: these are fixed first-party token endpoints; following a redirect
     // would re-send refresh tokens/code verifiers to another origin, and a
     // stalled server must not hang the renderer's awaited IPC call forever.
     redirect: 'error',
-    signal: AbortSignal.timeout(CLOUD_REQUEST_TIMEOUT_MS)
+    signal: AbortSignal.timeout(options?.timeoutMs ?? CLOUD_REQUEST_TIMEOUT_MS)
   })
   if (!response.ok) {
+    await cancelUnreadResponseBody(response)
     throw new OrcaCloudRequestError(response.status)
   }
   return (await response.json()) as T
@@ -202,7 +222,7 @@ export async function refreshOrcaCloudCapabilities(
     cloud?: unknown
     organizations?: unknown
     capabilities: unknown
-  }>(config.capabilitiesEndpoint, {}, session.accessToken)
+  }>(config.capabilitiesEndpoint, {}, { accessToken: session.accessToken })
   return {
     cloud: response.cloud === undefined ? undefined : normalizeCloudSummary(response.cloud),
     organizations: normalizeOrganizations(response.organizations),
@@ -215,9 +235,11 @@ export async function refreshOrcaCloudSession(
   session: OrcaCloudSession
 ): Promise<OrcaCloudSessionExchangeResponse> {
   return normalizeSessionResponse(
-    await postJson(config.refreshEndpoint, {
-      refreshToken: session.refreshToken
-    })
+    await postJson(
+      config.refreshEndpoint,
+      { refreshToken: session.refreshToken },
+      { timeoutMs: CLOUD_REFRESH_TIMEOUT_MS }
+    )
   )
 }
 
@@ -233,7 +255,7 @@ export async function createOrcaCloudProfile(
         orgId: args.orgId,
         name: args.name
       },
-      session.accessToken
+      { accessToken: session.accessToken }
     )
   )
 }
@@ -247,7 +269,7 @@ export async function selectOrcaCloudOrg(
     cloud: unknown
     organizations?: unknown
     capabilities: unknown
-  }>(config.orgEndpoint, { orgId }, session.accessToken)
+  }>(config.orgEndpoint, { orgId }, { accessToken: session.accessToken })
   return {
     cloud: normalizeCloudSummary(response.cloud),
     organizations: normalizeOrganizations(response.organizations),
@@ -259,5 +281,9 @@ export async function revokeOrcaCloudSession(
   config: OrcaCloudAuthConfig,
   session: OrcaCloudSession
 ): Promise<void> {
-  await postJson(config.logoutEndpoint, { refreshToken: session.refreshToken }, session.accessToken)
+  await postJson(
+    config.logoutEndpoint,
+    { refreshToken: session.refreshToken },
+    { accessToken: session.accessToken }
+  )
 }

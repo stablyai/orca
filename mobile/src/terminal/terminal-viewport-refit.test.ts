@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '../transport/types'
+import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 import {
   isTerminalUpdateViewportApplied,
   isTerminalUpdateViewportUpdated,
@@ -13,10 +14,10 @@ import {
 } from './terminal-viewport-refit-state'
 
 const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
-const sessionSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
-  'utf8'
-)
+const sessionSource = [
+  readMobileSessionRouteSource('../session/use-mobile-session-keyboard-state.ts'),
+  readMobileSessionRouteSource('../session/MobileSessionActiveContent.tsx')
+].join('\n')
 
 describe('terminal viewport refit', () => {
   it('refits when the window dimensions change (fold/unfold, rotation)', () => {
@@ -133,6 +134,18 @@ describe('terminal viewport refit', () => {
     expect(timerBody).toContain('if (heightOriginatedRefitRef.current)')
     expect(timerBody).toContain("type: 'refit-committed'")
     expect(timerBody).toContain('if (!decision.shouldRefit)')
+  })
+
+  it('suppresses refits while native chat covers the active terminal', () => {
+    // Why: native chat renders the transcript, not the grid — a refit there would
+    // reflow the desktop PTY to phone dims the user never sees.
+    const timerStart = hookSource.indexOf('refitTimerRef.current = setTimeout(')
+    const coveredCheck = hookSource.indexOf('if (nativeChatCoveredRef.current)', timerStart)
+    const measureIndex = hookSource.indexOf('measureFitDimensions', timerStart)
+    expect(timerStart).toBeGreaterThanOrEqual(0)
+    expect(coveredCheck).toBeGreaterThan(timerStart)
+    expect(measureIndex).toBeGreaterThan(coveredCheck)
+    expect(sessionSource).toContain('nativeChatCoveredRef: showNativeChatRef')
   })
 
   it('is wired into the session screen', () => {
@@ -301,6 +314,7 @@ describe('terminal viewport refit', () => {
       expectedHandle: 'term-1',
       currentRef: expectedRef,
       expectedRef,
+      nativeChatCovered: false,
       disposed: false,
       runSeq: 2,
       currentRunSeq: 2
@@ -313,5 +327,8 @@ describe('terminal viewport refit', () => {
     ).toBe(false)
     expect(isTerminalViewportRefitTargetCurrent({ ...current, currentRunSeq: 3 })).toBe(false)
     expect(isTerminalViewportRefitTargetCurrent({ ...current, disposed: true })).toBe(false)
+    expect(isTerminalViewportRefitTargetCurrent({ ...current, nativeChatCovered: true })).toBe(
+      false
+    )
   })
 })

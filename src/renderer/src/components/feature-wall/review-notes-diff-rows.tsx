@@ -85,7 +85,7 @@ export function ReviewDiffRows(): JSX.Element {
                   {translate(
                     'auto.components.feature.wall.review.notes.diff.rows.f621c734f8',
                     'Note · line'
-                  )}
+                  )}{' '}
                   <span data-slot-line>?</span>
                 </div>
                 <div className="ravs-note-body" data-slot-body />

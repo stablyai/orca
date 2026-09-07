@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { appendRecentPtyPathCandidates } from './orca-runtime'
+import { appendRecentPtyPathCandidates } from './terminal-output-path-candidates'
 
 function fullCandidateHistory(): string[] {
   return Array.from(

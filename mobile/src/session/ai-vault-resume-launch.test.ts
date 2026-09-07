@@ -1,15 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
-  readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
-  resumeAiVaultSessionInTerminal,
-  RESUME_RPC_TIMEOUT_MS
+  resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   return {
@@ -120,6 +121,69 @@ describe('buildMobileAiVaultResumeCommand', () => {
 })
 
 describe('buildMobileAiVaultResumeLaunch', () => {
+  it('routes Kimi through the resumable-agent startup plan', () => {
+    // Why: kimi joining RESUMABLE_TUI_AGENTS moves it off the plain command fallback, so the
+    // cd prefix Kimi needs (sessions are work-dir-scoped) must survive the new branch.
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'kimi',
+        sessionId: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
+      }),
+      hostPlatform: 'darwin'
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && kimi '--yolo' '--session' 'session_431324d7-2165-42f0-9ecd-9f93437b3201'",
+      launchConfig: { agentCommand: "kimi '--yolo'" },
+      launchAgent: 'kimi'
+    })
+  })
+
+  it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'omp',
+        sessionId: 'omp-custom-1',
+        filePath: '/custom/omp-sessions/project/session.jsonl'
+      }),
+      hostPlatform: 'linux',
+      settings: {
+        agentDefaultArgs: { omp: '--model custom' },
+        agentDefaultEnv: { omp: { OMP_PROFILE: 'custom' } }
+      }
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && omp '--model' 'custom' --resume '/custom/omp-sessions/project/session.jsonl'",
+      env: { OMP_PROFILE: 'custom' },
+      launchConfig: {
+        agentCommand: "omp '--model' 'custom'",
+        agentArgs: '--model custom',
+        agentEnv: { OMP_PROFILE: 'custom' },
+        ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
+      },
+      launchAgent: 'omp'
+    })
+
+    const coldLaunch = buildAgentResumeStartupPlan({
+      agent: 'omp',
+      providerSession: { key: 'session_id', id: 'omp-custom-1' },
+      cmdOverrides: {},
+      agentArgs: launch.launchConfig?.agentArgs,
+      agentEnv: launch.launchConfig?.agentEnv,
+      agentCommand: launch.launchConfig?.agentCommand,
+      ompResumeFilePath: launch.launchConfig?.ompResumeFilePath,
+      platform: 'linux'
+    })
+    expect(coldLaunch).toMatchObject({
+      launchCommand:
+        "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
+      env: { OMP_PROFILE: 'custom' }
+    })
+  })
+
   it('uses shared TUI startup planning for default args, env, and launch config', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({
@@ -144,6 +208,36 @@ describe('buildMobileAiVaultResumeLaunch', () => {
       agentArgs: '--model opus',
       agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
     })
+    // Only bare real-home Codex resumes request env deletion.
+    expect(launch.envToDelete).toBeUndefined()
+  })
+
+  it('deletes inherited Codex homes when resuming a real-home session like desktop', () => {
+    // Regression: a user agentDefaultEnv CODEX_HOME (or a stale daemon-
+    // inherited home) must not reroute a bare real-home resume typed into the
+    // created pane; desktop already strips the pair at pane spawn.
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({ agent: 'codex', sessionId: 'codex-1', codexHome: null }),
+      hostPlatform: 'darwin',
+      settings: {
+        agentDefaultEnv: { codex: { CODEX_HOME: '/Users/ada/.codex-pinned' } }
+      }
+    })
+    expect(launch.command).not.toContain('CODEX_HOME=')
+    expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
+  })
+
+  it('keeps managed-home Codex resumes free of env deletion', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'codex',
+        sessionId: 'codex-1',
+        codexHome: '/Users/ada/.orca/codex-runtime-home/home'
+      }),
+      hostPlatform: 'darwin'
+    })
+    expect(launch.command).toContain("CODEX_HOME='/Users/ada/.orca/codex-runtime-home/home'")
+    expect(launch.envToDelete).toBeUndefined()
   })
 })
 
@@ -161,13 +255,17 @@ describe('resumeAiVaultSessionInTerminal', () => {
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', {
         command: 'claude --resume abc',
         env: { ANTHROPIC_BASE_URL: 'http://localhost:3000' },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         launchConfig: {
           agentCommand: 'claude',
           agentArgs: '',
           agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
         },
         launchAgent: 'claude',
-        clientMutationId: 'resume-1'
+        clientMutationId: 'resume-1',
+        activate: false,
+        select: true,
+        navigation: 'caller'
       })
     ).resolves.toMatchObject({ id: 'tab-1', terminal: 'pty-1' })
     expect(sendRequest).toHaveBeenNthCalledWith(
@@ -176,13 +274,17 @@ describe('resumeAiVaultSessionInTerminal', () => {
       {
         worktree: 'id:worktree-1',
         env: { ANTHROPIC_BASE_URL: 'http://localhost:3000' },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         launchConfig: {
           agentCommand: 'claude',
           agentArgs: '',
           agentEnv: { ANTHROPIC_BASE_URL: 'http://localhost:3000' }
         },
         launchAgent: 'claude',
-        clientMutationId: 'resume-1'
+        clientMutationId: 'resume-1',
+        activate: false,
+        select: true,
+        navigation: 'caller'
       },
       // Why: a socket drop mid-resume must reject within the request timeout
       // instead of parking on the reconnect waiter with the spinner pinned.

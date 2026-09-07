@@ -56,6 +56,12 @@ export function GrokAccountsSection(): React.JSX.Element {
   // monthly included usage instead of hiding the usage row entirely.
   const usageIsWeekly = Boolean(grokUsage?.weekly)
   const usageWindow = grokUsage?.weekly ?? grokUsage?.monthly ?? null
+  // Why: hiding the row entirely left signed-in users with no explanation when
+  // Grok reports no percentage — never let unknown usage read as healthy (#15740).
+  const unavailableReason =
+    signedIn && !usageWindow && grokUsage?.status === 'unavailable'
+      ? (grokUsage.error ?? null)
+      : null
 
   return (
     <section id="accounts-grok" className="space-y-4 scroll-mt-6">
@@ -109,12 +115,12 @@ export function GrokAccountsSection(): React.JSX.Element {
               <p className="text-xs text-muted-foreground">
                 {tokenFresh
                   ? translate(
-                      'auto.components.settings.GrokAccountsSection.c3d4e5f6a7',
-                      'Signed in. Orca only reads that file on disk — run grok login again if usage fails.'
+                      'auto.components.settings.GrokAccountsSection.b36fa2c908',
+                      'Signed in. Orca reads the Grok CLI session stored on disk.'
                     )
                   : translate(
-                      'auto.components.settings.GrokAccountsSection.d4e5f6a7b8',
-                      'Session expired — run grok login in a terminal to refresh.'
+                      'auto.components.settings.GrokAccountsSection.f08c41de73',
+                      'Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed.'
                     )}
               </p>
             </>
@@ -197,6 +203,17 @@ export function GrokAccountsSection(): React.JSX.Element {
               </span>
             ) : null}
           </div>
+        </SearchableSetting>
+      ) : unavailableReason ? (
+        <SearchableSetting
+          title={translate('auto.components.settings.GrokAccountsSection.0bb18642b7', 'Usage')}
+          description={translate(
+            'auto.components.settings.GrokAccountsSection.a8f4139350',
+            'Grok reported no usage percentage for this account.'
+          )}
+          keywords={['grok', 'xai', 'usage', 'credits', 'oauth']}
+        >
+          <p className="text-xs text-muted-foreground">{unavailableReason}</p>
         </SearchableSetting>
       ) : null}
     </section>

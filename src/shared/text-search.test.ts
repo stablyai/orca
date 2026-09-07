@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -12,10 +12,10 @@ import {
   ingestGitGrepLine,
   ingestRgJsonLine,
   MAX_LINE_CONTENT_LENGTH,
-  normalizeRelativePath,
-  splitSearchGlobPatterns,
-  toGitGlobPathspec
+  SEARCH_JSON_STRUCTURE_LIMITS
 } from './text-search'
+import { splitSearchGlobPatterns, toGitGlobPathspec } from './text-search-glob-patterns'
+import { normalizeRelativePath } from './text-search-paths'
 
 describe('normalizeRelativePath', () => {
   it('collapses mixed separators and strips leading slashes', () => {
@@ -115,6 +115,22 @@ describe('ingestRgJsonLine', () => {
     const verdict = ingestRgJsonLine('not json', '/root', acc, 100)
     expect(verdict).toBe('continue')
     expect(acc.totalMatches).toBe(0)
+  })
+
+  it('rejects excessive nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const acc = createAccumulator()
+    try {
+      const amplified = `${'['.repeat(SEARCH_JSON_STRUCTURE_LIMITS.nestingDepth + 1)}0${']'.repeat(
+        SEARCH_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+      )}`
+
+      expect(ingestRgJsonLine(amplified, '/root', acc, 100)).toBe('continue')
+      expect(parseSpy).not.toHaveBeenCalled()
+      expect(acc.totalMatches).toBe(0)
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 
   it('creates a navigable fallback match when rg omits submatch ranges', () => {

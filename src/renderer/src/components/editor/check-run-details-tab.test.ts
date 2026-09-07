@@ -38,6 +38,18 @@ describe('check-run-details-tab', () => {
     ).toBe('url:https://github.com/acme/widgets/actions/runs/1')
   })
 
+  it('keys GitLab jobs by job id so same-named stages do not share one tab', () => {
+    const base = { status: 'completed', conclusion: 'failure', url: null } as const
+
+    expect(getCheckRunTabIdentity({ ...base, name: 'test: unit', gitlabJobId: 42 })).toBe(
+      'gitlab-job:42'
+    )
+    // Why: GitLab reuses `stage: name` across pipeline runs, so the name alone collides.
+    expect(
+      buildCheckRunDetailsTabId('wt-1', { ...base, name: 'test: unit', gitlabJobId: 42 })
+    ).not.toBe(buildCheckRunDetailsTabId('wt-1', { ...base, name: 'test: unit', gitlabJobId: 43 }))
+  })
+
   it('uses the check name for the tab label', () => {
     expect(
       getCheckRunDetailsTabLabel({

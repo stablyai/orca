@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { win32 as pathWin32 } from 'node:path'
+import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type CodexWslRuntimeHookTarget = {
@@ -13,6 +13,11 @@ export type CodexWslRuntimeHookInstallPlan = {
   scriptPath: string
   commandScriptPath: string
   trustConfigPath: string
+  /** Distro that executes Codex for this runtime home (RPC trust grants run
+   *  codex inside it). */
+  wslDistro: string
+  /** Canonical Linux-side runtime home — CODEX_HOME for in-distro codex runs. */
+  linuxRuntimeHome: string
 }
 
 export type WslCanonicalPathSettlement =
@@ -80,7 +85,7 @@ function scheduleWslLinuxPathCanonicalization(
     ? [
         '-d',
         distro,
-        '--',
+        '--exec',
         'sh',
         '-c',
         `resolved=$(wslpath -a -u "$1") || exit; if [ ! -d "$resolved" ]; then printf '%s\\n' '${WSL_PATH_MISSING_OUTPUT}'; exit 0; fi; readlink -f -- "$resolved"`,
@@ -90,7 +95,7 @@ function scheduleWslLinuxPathCanonicalization(
     : [
         '-d',
         distro,
-        '--',
+        '--exec',
         'sh',
         '-c',
         `if [ ! -d "$1" ]; then printf '%s\\n' '${WSL_PATH_MISSING_OUTPUT}'; exit 0; fi; readlink -f -- "$1"`,
@@ -183,8 +188,10 @@ export function createCodexWslRuntimeHookInstallPlan(
     configPath: pathWin32.join(runtimeHomePath, 'hooks.json'),
     tomlPath: pathWin32.join(runtimeHomePath, 'config.toml'),
     scriptPath: pathWin32.join(runtimeHomePath, '.orca', 'agent-hooks', 'codex-hook.sh'),
-    commandScriptPath: `${linuxRuntimeHome}/.orca/agent-hooks/codex-hook.sh`,
-    trustConfigPath: `${linuxRuntimeHome}/hooks.json`
+    commandScriptPath: pathPosix.join(linuxRuntimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
+    trustConfigPath: pathPosix.join(linuxRuntimeHome, 'hooks.json'),
+    wslDistro: distro,
+    linuxRuntimeHome
   }
 }
 

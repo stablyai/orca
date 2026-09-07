@@ -8,7 +8,7 @@ export type AndroidAdbDeviceState =
   | 'bootloader'
   | 'recovery'
   | 'no permissions'
-  | string
+  | (string & {})
 
 export type AndroidAdbDevice = {
   serial: string

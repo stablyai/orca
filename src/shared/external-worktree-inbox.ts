@@ -1,9 +1,11 @@
 import { normalizeRuntimePathForComparison } from './cross-platform-path'
-import type { DetectedWorktree, DetectedWorktreeListResult, Repo } from './types'
+import type { WorktreeVisibilityDefaults } from './global-settings-types'
+import type { Repo } from './repo-types'
+import type { DetectedWorktree, DetectedWorktreeListResult } from './worktree/types'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from './worktree-ownership'
+} from './external-worktree-visibility'
 
 export function normalizeExternalWorktreeInboxPath(path: string): string {
   return normalizeRuntimePathForComparison(path)
@@ -39,8 +41,55 @@ export function getHiddenExternalWorktrees(
     return []
   }
   return detected.worktrees.filter(
+    (worktree) => !worktree.visible && isUserFacingExternalWorktree(worktree)
+  )
+}
+
+export function getVisibleExternalWorktrees(
+  detected: DetectedWorktreeListResult | undefined
+): DetectedWorktree[] {
+  if (detected?.authoritative !== true) {
+    return []
+  }
+  return detected.worktrees.filter(
+    (worktree) => worktree.visible && isUserFacingExternalWorktree(worktree)
+  )
+}
+
+function isUserFacingExternalWorktree(worktree: DetectedWorktree): boolean {
+  // Why: agent plumbing stays outside the discovery inbox even when its separate visibility policy shows it.
+  return (
+    !worktree.selectedCheckout &&
+    worktree.ownership !== 'orca-managed' &&
+    worktree.ownership !== 'agent-scratch'
+  )
+}
+
+// Why: per-path recovery remains available while either repo visibility policy is off.
+function isImportableExternalWorktree(worktree: DetectedWorktree): boolean {
+  return !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
+}
+
+export function getHiddenImportableExternalWorktrees(
+  detected: DetectedWorktreeListResult | undefined
+): DetectedWorktree[] {
+  if (detected?.authoritative !== true) {
+    return []
+  }
+  return detected.worktrees.filter(
+    (worktree) => !worktree.visible && isImportableExternalWorktree(worktree)
+  )
+}
+
+export function getVisibleNonOrcaWorktrees(
+  detected: DetectedWorktreeListResult | undefined
+): DetectedWorktree[] {
+  if (detected?.authoritative !== true) {
+    return []
+  }
+  return detected.worktrees.filter(
     (worktree) =>
-      !worktree.visible && !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
+      worktree.visible && !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
   )
 }
 
@@ -56,7 +105,10 @@ export function hasCompletedInitialExternalWorktreeImportPrompt(
   return typeof repo.externalWorktreeVisibilityPromptDismissedAt === 'number'
 }
 
-export function shouldOfferNewExternalWorktreeInbox(repo: Repo): boolean {
+export function shouldOfferNewExternalWorktreeInbox(
+  repo: Repo,
+  defaults?: WorktreeVisibilityDefaults
+): boolean {
   if (isExternalWorktreeDiscoverySuppressed(repo)) {
     return false
   }
@@ -64,16 +116,20 @@ export function shouldOfferNewExternalWorktreeInbox(repo: Repo): boolean {
     return false
   }
   return (
-    effectiveExternalWorktreeVisibility(repo, isLegacyRepoForExternalWorktreeVisibility(repo)) ===
-    'hide'
+    effectiveExternalWorktreeVisibility(
+      repo,
+      isLegacyRepoForExternalWorktreeVisibility(repo),
+      defaults
+    ) === 'hide'
   )
 }
 
 export function getNewExternalWorktreeInboxWorktrees(
   detected: DetectedWorktreeListResult | undefined,
-  repo: Repo
+  repo: Repo,
+  defaults?: WorktreeVisibilityDefaults
 ): DetectedWorktree[] {
-  if (!shouldOfferNewExternalWorktreeInbox(repo)) {
+  if (!shouldOfferNewExternalWorktreeInbox(repo, defaults)) {
     return []
   }
   const baseline = new Set(

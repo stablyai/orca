@@ -145,6 +145,12 @@ describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
       shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyC', metaKey: true }), noSel)
     ).toBe(false)
   })
+
+  it('leaves ordinary Shift+Space available to the terminal', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: ' ', code: 'Space', shiftKey: true }), noSel)
+    ).toBe(false)
+  })
 })
 
 describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {

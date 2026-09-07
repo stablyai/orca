@@ -1,9 +1,13 @@
 import { z } from 'zod'
-import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
-import type { AgentType } from '../../../../shared/native-chat-types'
-import { readNativeChatTranscriptCached } from '../../../native-chat/transcript-read-cache'
-import { subscribeNativeChatTranscript } from '../../../native-chat/transcript-watch'
+import type { NativeChatMessage, AgentType } from '../../../../shared/native-chat-types'
+import {
+  readNativeChatTranscriptTail,
+  subscribeNativeChatTranscript,
+  type NativeChatTranscriptSubscription,
+  type SubscribeNativeChatTranscriptArgs
+} from '../../../native-chat/transcript-watch'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 
 // Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
 // desktop reaches the readers via Electron IPC; mobile/web clients reach the
@@ -39,7 +43,12 @@ const NativeChatSession = z.object({
   // Authoritative transcript path from the agent hook (providerSession), used to
   // locate the file directly when the session id no longer names it (recent
   // Claude Code). Optional for back-compat with older clients.
-  transcriptPath: z.string().min(1).optional()
+  transcriptPath: z.string().min(1).optional(),
+  // A pending snapshot is not authoritative transcript history. Only clients
+  // that advertise this semantic may receive one; legacy clients treat it as a
+  // settled empty read and can overwrite retention / unblock launch drafts.
+  capabilities: z.object({ transcriptPending: z.literal(1).optional() }).optional(),
+  beforeOffset: z.number().int().nonnegative().optional()
 })
 
 const NativeChatUnsubscribe = z.object({
@@ -55,32 +64,22 @@ const NativeChatUnsubscribe = z.object({
 // older history as the user scrolls back.
 const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
 const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
-// Why: a single tool result (a big file read, a long diff) can be hundreds of KB.
-// The mobile view only previews block bodies, so truncate them on the wire to
-// keep the payload small; the marker tells the user content was clipped.
-const MOBILE_BLOCK_CHAR_CAP = 4000
-const TRUNCATION_MARKER = '\n… (truncated)'
 
-function clip(text: string): string {
-  return text.length > MOBILE_BLOCK_CHAR_CAP
-    ? text.slice(0, MOBILE_BLOCK_CHAR_CAP) + TRUNCATION_MARKER
-    : text
+function sanitizeMessage(
+  message: NativeChatMessage,
+  clientKind: RpcContext['clientKind']
+): NativeChatMessage {
+  return {
+    ...message,
+    blocks: message.blocks.map((block) => sanitizeNativeChatRpcBlock(block, clientKind))
+  }
 }
 
-function clipBlock(block: NativeChatBlock): NativeChatBlock {
-  if (block.type === 'text') {
-    return block.text.length > MOBILE_BLOCK_CHAR_CAP ? { ...block, text: clip(block.text) } : block
-  }
-  if (block.type === 'tool-result') {
-    return block.output.length > MOBILE_BLOCK_CHAR_CAP
-      ? { ...block, output: clip(block.output) }
-      : block
-  }
-  return block
-}
-
-function sanitizeMessage(message: NativeChatMessage): NativeChatMessage {
-  return { ...message, blocks: message.blocks.map(clipBlock) }
+function sanitizeAppendForClient(
+  messages: readonly NativeChatMessage[],
+  clientKind: RpcContext['clientKind']
+): NativeChatMessage[] {
+  return messages.map((message) => sanitizeMessage(message, clientKind))
 }
 
 /** Window a transcript to its most recent `limit` messages so a long session
@@ -95,45 +94,56 @@ function windowTranscript(
   return messages.length > window ? messages.slice(-window) : messages.slice()
 }
 
-/** Apply the windowed slice plus, for `mobile` clients only, oversized-block
- *  char truncation. Web/desktop (`runtime`, or undefined for in-process callers)
- *  are full-class surfaces and pass block bodies through untruncated — matching
- *  the desktop IPC path, which never clips. */
+/** Apply the windowed slice and keep inline image bytes off every RPC transport.
+ *  Mobile clients additionally receive bounded text and tool bodies; runtime
+ *  clients keep those bodies intact. */
 function windowForClient(
   messages: readonly NativeChatMessage[],
   clientKind: RpcContext['clientKind'],
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
 ): NativeChatMessage[] {
   const windowed = windowTranscript(messages, limit)
-  return clientKind === 'mobile' ? windowed.map(sanitizeMessage) : windowed
+  return windowed.map((message) => sanitizeMessage(message, clientKind))
 }
 
 export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'nativeChat.readSession',
     params: NativeChatSession,
-    handler: async (params, { clientKind }) => {
-      const result = await readNativeChatTranscriptCached(
-        params.agent,
-        params.sessionId,
-        params.transcriptPath
+    handler: async (params, { clientKind, signal }) => {
+      const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const result = await readNativeChatTranscriptTail(
+        {
+          agent: params.agent,
+          sessionId: params.sessionId,
+          transcriptPath: params.transcriptPath,
+          limit,
+          beforeOffset: params.beforeOffset
+        },
+        signal
       )
-      // Window to the conversation tail (all clients); clip blocks for mobile only.
       return 'messages' in result
-        ? { messages: windowForClient(result.messages, clientKind, params.limit) }
+        ? {
+            messages: windowForClient(result.messages, clientKind, limit),
+            hasMore: result.hasMore,
+            beforeOffset: result.beforeOffset,
+            ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
+          }
         : result
     }
   }),
   defineStreamingMethod({
     name: 'nativeChat.subscribe',
     params: NativeChatSession,
-    handler: async (params, { runtime, connectionId, clientKind }, emit) => {
+    handler: async (params, { runtime, connectionId, clientKind, signal }, emit) => {
+      if (signal?.aborted) {
+        return
+      }
       let closed = false
       let unsubscribe = (): void => {}
-      // Why: the subscriber seeds its read offset at 0, so the first drain emits
-      // the whole transcript and later drains emit only appended turns. The first
-      // batch is windowed to the tail (a full transcript would freeze mobile);
-      // later incremental batches are smaller than the window so they pass through.
+      const setupController = new AbortController()
+      // Why: the first drain is a bounded tail snapshot; later drains emit only
+      // appended turns. This avoids parsing or shipping full long transcripts.
       // Clients merge by message id, so the initial windowed batch doubles as the
       // snapshot. Keyed by the client-supplied subscriptionId when present so
       // registration and unsubscribe derive from the same token; otherwise by
@@ -141,33 +151,102 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       // unsubscribe (no wire break).
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
-      runtime.registerSubscriptionCleanup(
-        subscriptionId,
-        () => {
-          closed = true
-          unsubscribe()
-          emit({ type: 'end' })
-        },
-        connectionId
-      )
+      const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const cleanup = (): void => {
+        if (closed) {
+          return
+        }
+        closed = true
+        signal?.removeEventListener('abort', handleAbort)
+        setupController.abort()
+        unsubscribe()
+        emit({ type: 'end' })
+      }
+      function handleAbort(): void {
+        runtime.cleanupSubscription(subscriptionId)
+      }
+      signal?.addEventListener('abort', handleAbort, { once: true })
+      runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+      if (signal?.aborted) {
+        runtime.cleanupSubscription(subscriptionId)
+        return
+      }
       if (closed) {
         return
       }
-      const subscription = await subscribeNativeChatTranscript({
+      const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
-        onAppend: (messages) => {
+        initialLimit: limit,
+        onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
             return
           }
-          emit({ type: 'appended', messages: windowForClient(messages, clientKind) })
+          // Forward an initial-drain error so a watching client's first frame carries it
+          // instead of stranding the view at 'loading' when the read keeps throwing.
+          emit({
+            type: 'snapshot',
+            messages: windowForClient(messages, clientKind, limit),
+            hasMore,
+            beforeOffset,
+            ...(error ? { error } : {}),
+            ...(lifecycle ? { lifecycle } : {})
+          })
+        },
+        ...(params.capabilities?.transcriptPending === 1
+          ? {
+              onTranscriptPending: () => {
+                if (!closed) {
+                  emit({ type: 'snapshot', messages: [], hasMore: false, pending: true })
+                }
+              }
+            }
+          : {}),
+        onReplace: (messages, hasMore, beforeOffset, lifecycle) => {
+          if (closed) {
+            return
+          }
+          emit({
+            type: 'replacement',
+            messages: windowForClient(messages, clientKind, limit),
+            hasMore,
+            beforeOffset,
+            ...(lifecycle ? { lifecycle } : {})
+          })
+        },
+        onAppend: (messages, lifecycle) => {
+          if (closed) {
+            return
+          }
+          emit({
+            type: 'appended',
+            messages: sanitizeAppendForClient(messages, clientKind),
+            ...(lifecycle ? { lifecycle } : {})
+          })
         }
-      })
+      }
+      let subscription: NativeChatTranscriptSubscription
+      try {
+        subscription = await subscribeNativeChatTranscript(subscribeArgs, setupController.signal)
+      } catch (error) {
+        if (closed || setupController.signal.aborted) {
+          return
+        }
+        throw error
+      }
       // The connection may have closed while the file was being resolved.
       if (closed) {
         subscription.unsubscribe()
         return
+      }
+      if (!subscription.watching) {
+        emit({
+          type: 'snapshot',
+          messages: [],
+          hasMore: false,
+          error: 'Transcript unavailable'
+        })
       }
       unsubscribe = subscription.unsubscribe
     }

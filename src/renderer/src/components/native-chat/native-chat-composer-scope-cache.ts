@@ -1,5 +1,5 @@
 // Shared LRU bound for the native-chat composer's per-scope caches (draft text
-// and image attachments), both keyed by `targetPtyId ?? terminalTabId`. The
+// and image attachments), both keyed by stable pane identity. The
 // caches exist so an in-progress message survives the composer unmounting on a
 // TUI/GUI toggle, but a scope key for a permanently-removed pane is never
 // revisited, so without a bound its unsent entry would linger for the renderer's

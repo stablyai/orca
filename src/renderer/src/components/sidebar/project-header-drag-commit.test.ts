@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -51,6 +51,42 @@ describe('commitProjectHeaderDragDrop', () => {
     })
 
     expect(onCommitRepoOrder).toHaveBeenCalledWith(['c', 'a', 'b'])
+  })
+
+  it('moves a merged paired-host header upward as one stable block', () => {
+    const onCommitRepoOrder = vi.fn()
+    const repos = [makeRepo('b'), makeRepo('same'), makeRepo('c')]
+    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+
+    commitProjectHeaderDragDrop({
+      session: makeSession('same', ['b', 'same', 'c']),
+      sidebarDropIndex: 0,
+      orderedRepoIds: ['b', 'same', 'c', 'same'],
+      repoById,
+      usesProjectGroupOrdering: false,
+      onCommitRepoOrder,
+      onCommitProjectGroupOrder: vi.fn()
+    })
+
+    expect(onCommitRepoOrder).toHaveBeenCalledWith(['same', 'same', 'b', 'c'])
+  })
+
+  it('does not reorder host occurrences when a merged header stays in place', () => {
+    const onCommitRepoOrder = vi.fn()
+    const repos = [makeRepo('b'), makeRepo('same'), makeRepo('c')]
+    const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+
+    commitProjectHeaderDragDrop({
+      session: makeSession('same', ['b', 'same', 'c']),
+      sidebarDropIndex: 2,
+      orderedRepoIds: ['b', 'same', 'c', 'same'],
+      repoById,
+      usesProjectGroupOrdering: false,
+      onCommitRepoOrder,
+      onCommitProjectGroupOrder: vi.fn()
+    })
+
+    expect(onCommitRepoOrder).not.toHaveBeenCalled()
   })
 
   it('commits projectGroupOrder when project groups are present', () => {

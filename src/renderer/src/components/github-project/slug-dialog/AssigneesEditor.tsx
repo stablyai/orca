@@ -2,12 +2,13 @@ import React, { useMemo, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import type { GlobalSettings } from '../../../../../shared/types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 export function AssigneesEditor({
   owner,
   repo,
+  host,
   selected,
   disabled,
   sourceSettings,
@@ -15,6 +16,7 @@ export function AssigneesEditor({
 }: {
   owner: string
   repo: string
+  host?: string
   selected: string[]
   disabled?: boolean
   sourceSettings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
@@ -29,7 +31,8 @@ export function AssigneesEditor({
     open ? owner : null,
     open ? repo : null,
     seedKey ? seedKey.split(',') : [],
-    sourceSettings
+    sourceSettings,
+    host
   )
   return (
     <Popover open={open} onOpenChange={(o) => !disabled && setOpen(o)}>

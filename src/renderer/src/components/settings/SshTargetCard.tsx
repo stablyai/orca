@@ -284,6 +284,8 @@ export function SshTargetCard({
   return (
     <div
       ref={handleCardRef}
+      data-ssh-target-card=""
+      data-ssh-target-label={target.label}
       className="flex items-center gap-3 rounded-lg border border-border/50 bg-card/40 px-4 py-3"
     >
       <Server className="size-4 shrink-0 text-muted-foreground" />
@@ -299,8 +301,10 @@ export function SshTargetCard({
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
           {` \u2022 ${terminalPersistence}`}
         </p>
+        {/* Why not truncate: host key failures put the remedy (`ssh-keygen -R <host>`) at the end,
+            and a one-line clamp with no tooltip made it unreachable even on hover. */}
         {state?.error ? (
-          <p className="mt-0.5 truncate text-xs text-red-400">{state.error}</p>
+          <p className="mt-0.5 text-xs text-red-400 [overflow-wrap:anywhere]">{state.error}</p>
         ) : null}
       </div>
 

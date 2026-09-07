@@ -1,5 +1,9 @@
 import { useAppStore } from '@/store'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import {
+  _resetTerminalInputQuarantineForTests,
+  armTerminalInputQuarantine
+} from './terminal-input-quarantine'
 
 // Why this module exists: a terminal pane can die renderer-side while its PTY
 // stays alive — a wedged xterm WriteBuffer (issue #2836), a disposed xterm
@@ -16,8 +20,20 @@ export type TerminalPaneRecoveryReason =
   | 'write-stalled'
   | 'replay-wedged'
   | 'input-undeliverable'
+  // The paired runtime that owns the PTY refused this write and said so on the
+  // wire. Distinct from 'input-undeliverable' because it skips the liveness
+  // probe: main's registry holds no entry for a `remote:` id, so `pty:hasPty`
+  // routes it to the local provider and answers a fabricated "dead". The
+  // rejection frame is the evidence instead — it came from the process that
+  // owns the PTY, over a connection that is by construction still up.
+  | 'input-rejected-by-host'
+  | 'reattach-unverifiable'
   // A restore was requested for a certified-dead pipeline (reveal path).
   | 'restore-blocked'
+  // A spawn resolved without a PTY id, so the pane is mounted with no transport
+  // binding. pty:data for the old id then lands in the pre-handler buffer, which
+  // ACKs it — main's delivery health stays green while the pane shows nothing.
+  | 'spawn-left-pane-unbound'
 
 type RecoveryRequest = {
   tabId: string
@@ -32,8 +48,16 @@ type RecoveryRequest = {
   /** Remote panes (runtime mirrors, app-SSH) must prove the PTY alive before
    *  an input-undeliverable remount: pty:hasPty answers null for ids the local
    *  registry doesn't own, and treating null as "proceed" would let a
-   *  disconnected remote pane churn reconnects on every cooldown window. */
+   *  disconnected remote pane churn reconnects on every cooldown window. That
+   *  churn needs a *disconnected* pane, which is why 'input-rejected-by-host'
+   *  is exempt: its evidence arrives over a live connection. */
   requireAuthoritativeLiveness?: boolean
+  /** The provider rejected the write because its endpoint stopped accepting
+   *  writes, so re-attach MAY land on a *fresh* shell (a respawn; a transient
+   *  socket drop reconnects to the same sessions). Only this path can mangle the
+   *  in-flight line, and only it may quarantine input — a recovery that always
+   *  keeps the same live shell would have a legitimate command eaten. */
+  endpointReplaced?: boolean
 }
 
 // Why a cap exists: recovery must never loop. If the remounted pane wedges
@@ -63,6 +87,15 @@ type RecoveryBudget =
   | { allowed: true }
   | { allowed: false; declinedBy: 'window-cap'; retryInMs: number }
   | { allowed: false; declinedBy: 'cooldown'; retryInMs: number }
+
+function shouldScheduleRecoveryRetry(request: RecoveryRequest, budget: RecoveryBudget): boolean {
+  return (
+    !budget.allowed &&
+    (budget.declinedBy === 'cooldown'
+      ? request.terminalRecoveryGeneration !== undefined
+      : request.reason !== 'reattach-unverifiable')
+  )
+}
 
 function recoveryBudget(tabId: string, now: number): RecoveryBudget {
   const timestamps = recoveryTimestampsByTabId.get(tabId) ?? []
@@ -105,6 +138,12 @@ export function registerTerminalPaneRecoveryInstance(tabId: string): {
       const pendingRetry = pendingRetryByTabId.get(tabId)
       pendingRetry?.requestsByInstanceId.delete(id)
       if (pendingRetry?.requestsByInstanceId.size === 0) {
+        cancelPendingRecoveryRetry(tabId)
+      }
+      const getTab = useAppStore.getState().getTab
+      if (getTab && !getTab(tabId)) {
+        recoveryTimestampsByTabId.delete(tabId)
+        recoveryGenerationByTabId.delete(tabId)
         cancelPendingRecoveryRetry(tabId)
       }
     }
@@ -173,22 +212,29 @@ function cancelPendingRecoveryRetry(tabId: string): void {
  *
  * For 'input-undeliverable' the PTY is liveness-checked first: a dead PTY is
  * the dead-session reconcile's job (it tears down and reports "Process
- * exited"), and remounting there would race it.
+ * exited"), and remounting there would race it. 'input-rejected-by-host' skips
+ * that probe — see the reason's declaration. Nothing here destroys a session
+ * either way: a remount rebuilds the renderer over the PTY it already had.
  */
 export async function requestTerminalPaneRecovery(request: RecoveryRequest): Promise<boolean> {
   if (!isCurrentTerminalRecoveryRequest(request)) {
     return false
   }
+  // A terminal-backed tab is intentionally hidden while native chat owns the
+  // provider. Late xterm callbacks from that hidden surface must not remount
+  // the tab and race the handoff's owner transition.
+  if (useAppStore.getState().getTab?.(request.tabId)?.viewMode === 'chat') {
+    return false
+  }
   const budget = recoveryBudget(request.tabId, Date.now())
   if (!budget.allowed) {
-    if (
-      budget.declinedBy === 'window-cap' ||
-      (budget.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
-    ) {
+    if (shouldScheduleRecoveryRetry(request, budget)) {
       scheduleRecoveryRetry(request, budget.retryInMs)
     }
     return false
   }
+  // 'input-rejected-by-host' is deliberately absent: no local probe can speak
+  // for the id it carries, and its evidence already came from the PTY's owner.
   if (request.reason === 'input-undeliverable') {
     if (!request.ptyId) {
       return false
@@ -216,10 +262,7 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     }
     const recheck = recoveryBudget(request.tabId, Date.now())
     if (!recheck.allowed) {
-      if (
-        recheck.declinedBy === 'window-cap' ||
-        (recheck.declinedBy === 'cooldown' && request.terminalRecoveryGeneration !== undefined)
-      ) {
+      if (shouldScheduleRecoveryRetry(request, recheck)) {
         scheduleRecoveryRetry(request, recheck.retryInMs)
       }
       return false
@@ -261,7 +304,15 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   // A remount replaces every pane xterm in the tab; a previously scheduled
   // retry would only re-remount the fresh, healthy panes.
   cancelPendingRecoveryRetry(request.tabId)
-  console.error(
+  if (request.endpointReplaced) {
+    // Why here and not at request time: arming before the remount is certain
+    // would suppress input on a pane that never recovered.
+    armTerminalInputQuarantine(request.tabId)
+  }
+  // warn, not error: this is the recovery succeeding, and the breadcrumb below is
+  // what diagnostics actually read. STA-2373 made this path routine (every daemon
+  // death remounts each live pane), so error level just floods the logs.
+  console.warn(
     `[terminal] recovering pane tab ${request.tabId} — ${request.reason} with a live PTY (${request.ptyId ?? 'unbound'}); remounting to rebuild the renderer`
   )
   recordRendererCrashBreadcrumb('terminal_pane_recovery_remount', {
@@ -280,4 +331,5 @@ export function _resetTerminalPaneRecoveryForTests(): void {
     clearTimeout(pendingRetry.timer)
   }
   pendingRetryByTabId.clear()
+  _resetTerminalInputQuarantineForTests()
 }

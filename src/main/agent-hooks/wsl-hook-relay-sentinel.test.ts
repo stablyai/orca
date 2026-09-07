@@ -16,14 +16,35 @@ type FakeChild = ChildProcessWithoutNullStreams & { kill: ReturnType<typeof vi.f
 
 function fakeChild(): FakeChild {
   const child = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter
+    stdout: EventEmitter & {
+      pause: ReturnType<typeof vi.fn>
+      resume: ReturnType<typeof vi.fn>
+    }
     stderr: EventEmitter
-    stdin: { write: ReturnType<typeof vi.fn> }
+    stdin: EventEmitter & {
+      write: ReturnType<typeof vi.fn>
+      destroyed: boolean
+      writable: boolean
+    }
     kill: ReturnType<typeof vi.fn>
   }
-  child.stdout = new EventEmitter()
+  child.stdout = Object.assign(new EventEmitter(), {
+    pause: vi.fn(),
+    resume: vi.fn()
+  })
   child.stderr = new EventEmitter()
-  child.stdin = { write: vi.fn(() => true) }
+  const stdin = new EventEmitter() as EventEmitter & {
+    write: ReturnType<typeof vi.fn>
+    destroyed: boolean
+    writable: boolean
+  }
+  stdin.write = vi.fn((_data, onWritten?: (error?: Error | null) => void) => {
+    onWritten?.(null)
+    return true
+  })
+  stdin.destroyed = false
+  stdin.writable = true
+  child.stdin = stdin
   child.kill = vi.fn()
   return child as unknown as FakeChild
 }
@@ -62,6 +83,10 @@ describe('waitForWslRelaySentinel', () => {
     const transport = await promise
     expect(typeof transport.write).toBe('function')
     expect(typeof transport.onData).toBe('function')
+    transport.pauseReads?.()
+    transport.resumeReads?.()
+    expect(child.stdout.pause).toHaveBeenCalledOnce()
+    expect(child.stdout.resume).toHaveBeenCalledOnce()
   })
 
   it('resolves past leading garbage and hands trailing bytes to onData', async () => {
@@ -148,5 +173,38 @@ describe('waitForWslRelaySentinel', () => {
     expect(err.startup?.stderr).toBe('E_FAIL')
     expect(err.message).toContain('E_FAIL')
     expect(err.message).not.toContain(String.fromCharCode(0))
+  })
+
+  it('forwards write(false), callback settlement, and drain from WSL stdin', async () => {
+    const child = fakeChild()
+    const callback = vi.fn()
+    const drain = vi.fn()
+    const writeMock = child.stdin.write as ReturnType<typeof vi.fn>
+    writeMock.mockImplementation((_data, onWritten) => {
+      onWritten?.(null)
+      return false
+    })
+    const promise = waitForWslRelaySentinel(child)
+    emitStdout(child, RELAY_SENTINEL)
+    const transport = await promise
+
+    transport.onDrain?.(drain)
+    expect(transport.write(Buffer.from('frame'), callback)).toBe(false)
+    expect(callback).toHaveBeenCalledWith({ ok: true })
+    child.stdin.emit('drain')
+    expect(drain).toHaveBeenCalledOnce()
+    expect(transport.supportsWriteSettlement).toBe(true)
+  })
+
+  it('swallows async stdin EPIPE after the guest dies so it is not uncaught', async () => {
+    const child = fakeChild()
+    const promise = waitForWslRelaySentinel(child)
+    emitStdout(child, RELAY_SENTINEL)
+    await promise
+    // Real pipes emit EPIPE on the stream after a failed write; without a
+    // listener Node surfaces that as an unhandled exception (CI flake).
+    expect(() => {
+      child.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+    }).not.toThrow()
   })
 })

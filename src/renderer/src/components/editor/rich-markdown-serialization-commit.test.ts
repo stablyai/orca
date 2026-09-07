@@ -78,6 +78,33 @@ describe('commitRichMarkdownSerialization (shared disk-bound serialize chokepoin
     expect(didSerialize).toBe(false)
     expect(markdown).toBe('safe')
   })
+
+  it('preserves source EOL and advances refs when reconciliation throws', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = refs('# 이전\r\n\r\n_강조_\r\n', '# 이전\n\n*강조*')
+    const editor = fakeEditor(() => '# 변경\n\n*강조*')
+    const throwingRoundTrip = vi.fn(() => {
+      throw new Error('round-trip failed')
+    })
+
+    try {
+      const { markdown, didSerialize } = commitRichMarkdownSerialization(
+        editor,
+        r,
+        throwingRoundTrip
+      )
+
+      expect(markdown).toBe('# 변경\r\n\r\n*강조*')
+      expect(didSerialize).toBe(true)
+      expect(r.originalSourceRef.current).toBe(markdown)
+      expect(r.baseCanonicalRef.current).toBe('# 변경\n\n*강조*')
+      expect(r.lastCommittedMarkdownRef.current).toBe(markdown)
+      expect(throwingRoundTrip).toHaveBeenCalledTimes(1)
+      expect(consoleError).toHaveBeenCalledTimes(1)
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
 })
 
 describe('handleRichMarkdownSaveShortcut (Cmd/Ctrl+S persistence site)', () => {

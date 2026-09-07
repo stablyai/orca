@@ -1,7 +1,7 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { DocLinkMenuState } from './rich-markdown-commands'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import {
   createRichMarkdownEditorConfig,
@@ -73,6 +73,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     markdownSourceLineOffsetRef: ref(0),
     flushPendingSerialization: vi.fn(),
     openSearchRef: ref(vi.fn()),
+    openAnnotationPopoverRef: ref(vi.fn()),
     syncAnnotationTarget: vi.fn(),
     clearAnnotationTarget: vi.fn(),
     scrollRichMarkdownReviewNoteCardIntoView: vi.fn(),
@@ -87,6 +88,10 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
 }
 
 describe('createRichMarkdownEditorConfig', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('disables browser spellcheck when the rich Markdown setting is off', () => {
     const config = createRichMarkdownEditorConfig(
       createConfigParams({ richMarkdownSpellcheckEnabled: false })
@@ -99,5 +104,23 @@ describe('createRichMarkdownEditorConfig', () => {
     const config = createRichMarkdownEditorConfig(createConfigParams())
 
     expect(getSpellcheckAttribute(config)).toBe('true')
+  })
+
+  it('flushes pending serialization when the rich editor blurs', () => {
+    const setMarkdownEditorFocused = vi.fn()
+    vi.stubGlobal('window', {
+      api: { ui: { setMarkdownEditorFocused } }
+    })
+    const flushPendingSerialization = vi.fn()
+    const clearAnnotationTarget = vi.fn()
+    const config = createRichMarkdownEditorConfig(
+      createConfigParams({ clearAnnotationTarget, flushPendingSerialization })
+    )
+
+    config.onBlur?.({} as never)
+
+    expect(setMarkdownEditorFocused).toHaveBeenCalledWith(false)
+    expect(clearAnnotationTarget).toHaveBeenCalledOnce()
+    expect(flushPendingSerialization).toHaveBeenCalledOnce()
   })
 })

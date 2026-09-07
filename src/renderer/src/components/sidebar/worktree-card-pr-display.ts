@@ -1,10 +1,12 @@
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 
 type LinkedReviewMetadataProvider = Exclude<HostedReviewInfo['provider'], 'unsupported'>
 
 export function isCachedMergedBranchPRCurrentForWorktree(
-  cachedPR: PRInfo | null | undefined,
+  cachedPR: PRInfo | HostedReviewInfo | null | undefined,
   worktree: Pick<Worktree, 'head'>
 ): boolean {
   return (
@@ -40,6 +42,9 @@ export type WorktreeCardPrDisplay =
 
 type WorktreeCardPrDisplayOptions = {
   reviewHintKey?: string
+  /** GitHub PR number proven by a branch-scoped lookup. */
+  branchLookupGitHubPRNumber?: number | null
+  suppressedGitHubPR?: number | null
 }
 
 function getLinkedReviewNumber(
@@ -91,6 +96,21 @@ export function getWorktreeCardPrDisplay(
     linkedAzureDevOpsPR,
     linkedGiteaPR
   }
+  const hasLinkedReview =
+    linkedPR !== null ||
+    linkedGitLabMR !== null ||
+    linkedBitbucketPR !== null ||
+    linkedAzureDevOpsPR !== null ||
+    linkedGiteaPR !== null
+  if (
+    review?.provider === 'github' &&
+    isGitHubPRSuppressed(
+      { linkedPR, suppressedGitHubPR: options.suppressedGitHubPR ?? null },
+      review.number
+    )
+  ) {
+    return null
+  }
   if (review) {
     if (review.provider === 'unsupported') {
       return review
@@ -98,6 +118,15 @@ export function getWorktreeCardPrDisplay(
     const linkedReviewNumber = getLinkedReviewNumber(review.provider, links)
     if (linkedReviewNumber === null) {
       if (review.provider !== 'github' && review.provider !== 'gitlab') {
+        return review
+      }
+      // Why: GitHub refreshes retain a linked-style request hint; trust only the separately recorded branch-lookup provenance.
+      if (
+        !hasLinkedReview &&
+        review.provider === 'github' &&
+        options.branchLookupGitHubPRNumber != null &&
+        options.branchLookupGitHubPRNumber === review.number
+      ) {
         return review
       }
       // Why: GitHub/GitLab linked lookups can outlive the worktree metadata

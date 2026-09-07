@@ -1,0 +1,19 @@
+# Files that resolve a CLI through resolveCliCommand/resolveCodexCommand/
+# resolveClaudeCommand and spawn it, but deliberately do NOT pair the CLI with
+# its sibling `node` runtime.
+#
+# This list only shrinks. Adding an entry means arguing why a resolved CLI may
+# run under an unrelated node — which for a Node CLI with a native dependency is
+# a NODE_MODULE_VERSION crash (stablyai/orca#10932).
+
+# Launches the user's GUI editor, not a Node CLI. The resolved binary is a
+# desktop app whose own launcher picks its runtime; prepending a node directory
+# would only perturb the editor's inherited PATH.
+src/main/external-editor-launch.ts
+
+# Resolves codex, but never launches it here: the only exec is a `wsl.exe`
+# identity probe for the binary stamp, and the actual codex launch is built as a
+# CodexAppServerInvocation whose cliPath is paired centrally in
+# codex-app-server-session.ts. Delete this entry if this file ever execs the
+# resolved CLI itself.
+src/main/codex/codex-trust-grant-host.ts

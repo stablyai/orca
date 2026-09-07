@@ -1,11 +1,12 @@
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
-import { dirname, normalizeRelativePath } from '@/lib/path'
+import { dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
-import type { GitFileStatus } from '../../../../shared/types'
-import { FileExplorerRow, InlineInputRow, type InlineInput } from './FileExplorerRow'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
+import { FileExplorerRow } from './FileExplorerRow'
+import { InlineInputRow, type InlineInput } from './file-explorer-inline-input-row'
 import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
-import type { DirCache, TreeNode } from './file-explorer-types'
+import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
@@ -21,13 +22,15 @@ type FileExplorerVirtualRowsProps = {
   ignoredByRelativePath: Set<string>
   expanded: Set<string>
   canCollapseFolderSubtree?: boolean
-  dirCache: Record<string, DirCache>
+  loadingDirPaths: ReadonlySet<string>
   selectedPaths: Set<string>
   activeFileId: string | null
   flashingPath: string | null
   deleteShortcutLabel: string
   connectionId?: string | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
+  supportsFolderDownload?: boolean
+  canOpenInOrcaBrowser?: (filePath: string) => boolean
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
   onViewFile: (node: TreeNode) => void
@@ -66,13 +69,15 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     ignoredByRelativePath,
     expanded,
     canCollapseFolderSubtree = true,
-    dirCache,
+    loadingDirPaths,
     selectedPaths,
     activeFileId,
     flashingPath,
     deleteShortcutLabel,
     connectionId,
     runtimeDownloadContext,
+    supportsFolderDownload = false,
+    canOpenInOrcaBrowser = () => false,
     onClick,
     onDoubleClick,
     onViewFile,
@@ -138,7 +143,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         }
 
         const n = node!
-        const normalizedRelativePath = normalizeRelativePath(n.relativePath)
+        // Why: relativePath is normalized at construction (fileExplorerEntriesToTreeNodes), so re-normalizing per row per render only paid 2 regexes for a byte-identical string.
+        const normalizedRelativePath = n.relativePath
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
@@ -166,7 +172,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             <FileExplorerRow
               node={n}
               isExpanded={expanded.has(n.path)}
-              isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
+              isLoading={n.isDirectory && loadingDirPaths.has(n.path)}
               isSelected={selectedPaths.has(n.path) || activeFileId === n.path}
               selectedPaths={selectedPaths}
               isFlashing={flashingPath === n.path}
@@ -176,6 +182,8 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               deleteShortcutLabel={deleteShortcutLabel}
               connectionId={connectionId}
               runtimeDownloadContext={runtimeDownloadContext}
+              supportsFolderDownload={supportsFolderDownload}
+              canOpenInOrcaBrowser={canOpenInOrcaBrowser(n.path)}
               canCollapseFolderSubtree={canCollapseFolderSubtree}
               targetDir={n.isDirectory ? n.path : dirname(n.path)}
               targetDepth={n.isDirectory ? n.depth + 1 : n.depth}

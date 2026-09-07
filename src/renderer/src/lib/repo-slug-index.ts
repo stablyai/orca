@@ -15,27 +15,60 @@
 // process (`repoSlug` reads `.git/config`).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../shared/types'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { settingsForRepoOwner, slugByRepoId, slugCacheKey, type SlugIndex } from './repo-slug-cache'
+import {
+  deleteRepoSlugCacheKey,
+  nextRepoSlugFailureRetryDelay,
+  readRepoSlugCache,
+  rememberRepoSlug,
+  repoUpstreamIdentityKey,
+  settingsForRepoOwner,
+  slugByRepoId,
+  slugCacheKey,
+  type RepoSlugMatches,
+  type SlugIndex
+} from './repo-slug-cache'
+import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'
 
-/** Drop a repo's cached slug result. Call when a repo is removed or its
- *  remote URL is known to have changed (e.g. after `git remote set-url`),
- *  so the next index build re-resolves rather than serving a stale entry. */
-export function clearRepoSlugCacheEntry(repoId: string): void {
-  for (const key of slugByRepoId.keys()) {
-    if (key.endsWith(`:${repoId}`)) {
-      slugByRepoId.delete(key)
-    }
-  }
+const slugResolutionInFlight = new Map<string, Promise<string | null>>()
+
+// Why: an invalidation (repo removed, remote changed) can land while a
+// resolution is in-flight — before it ever wrote to `slugByRepoId`. Deleting
+// the in-flight promise doesn't stop its pending `rememberRepoSlug` write, so a
+// stale slug would repopulate the cache after invalidation. Bump the key's
+// generation on every invalidation and commit a result only if the generation
+// it started with is still current.
+const slugResolutionGeneration = new Map<string, number>()
+
+function invalidateSlugResolution(cacheKey: string): void {
+  slugResolutionInFlight.delete(cacheKey)
+  slugResolutionGeneration.set(cacheKey, (slugResolutionGeneration.get(cacheKey) ?? 0) + 1)
 }
 
-/** Clear the entire slug cache. Useful for tests or full repo-list resets. */
-export function clearRepoSlugCache(): void {
-  slugByRepoId.clear()
+// Why: clear after remove/remote-change so the next index build re-resolves.
+export function clearRepoSlugCacheEntry(repoId: string): void {
+  const suffix = `:${repoId}`
+  // Why: an in-flight-only resolution has no `slugByRepoId` entry yet, so it
+  // must be invalidated via the in-flight map too or its late write survives.
+  const keys = new Set<string>()
+  for (const key of slugByRepoId.keys()) {
+    if (key.endsWith(suffix)) {
+      keys.add(key)
+    }
+  }
+  for (const key of slugResolutionInFlight.keys()) {
+    if (key.endsWith(suffix)) {
+      keys.add(key)
+    }
+  }
+  for (const key of keys) {
+    deleteRepoSlugCacheKey(key)
+    invalidateSlugResolution(key)
+  }
 }
 
 async function resolveRepoSlug(
@@ -43,39 +76,60 @@ async function resolveRepoSlug(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): Promise<string | null> {
   const cacheKey = slugCacheKey(repo.id, settings)
-  if (slugByRepoId.has(cacheKey)) {
-    return slugByRepoId.get(cacheKey) ?? null
+  const cached = readRepoSlugCache(cacheKey)
+  if (cached.hit) {
+    return cached.value
   }
-  try {
-    const target = getActiveRuntimeTarget(settings)
-    const result =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<{ owner: string; repo: string } | null>(
-            target,
-            'github.repoSlug',
-            { repo: repo.id },
-            { timeoutMs: 30_000 }
-          )
-        : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
-    if (!result) {
-      slugByRepoId.set(cacheKey, null)
-      return null
+  const inFlight = slugResolutionInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+  const generation = slugResolutionGeneration.get(cacheKey) ?? 0
+  const resolution = (async () => {
+    // Why: only write the resolved value if this key wasn't invalidated
+    // mid-flight; otherwise a stale slug would repopulate the cache.
+    const commit = (value: string | null): string | null => {
+      if ((slugResolutionGeneration.get(cacheKey) ?? 0) === generation) {
+        rememberRepoSlug(cacheKey, value)
+      }
+      return value
     }
-    const slug = `${result.owner}/${result.repo}`.toLowerCase()
-    slugByRepoId.set(cacheKey, slug)
-    return slug
-  } catch {
-    // Why: treat any IPC failure as "not resolvable" rather than propagating —
-    // design doc §Row actions: "If gh:repoSlug fails for a repo, exclude it".
-    slugByRepoId.set(cacheKey, null)
-    return null
+    try {
+      const target = getActiveRuntimeTarget(settings)
+      const result =
+        target.kind === 'environment'
+          ? await callRuntimeRpc<{ owner: string; repo: string; host?: string } | null>(
+              target,
+              'github.repoSlug',
+              { repo: repo.id },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
+      if (!result) {
+        return commit(null)
+      }
+      const slug = githubRepoIdentityKey(result)
+      return commit(slug)
+    } catch {
+      // Why: GHES classification depends on auth that may change outside Orca;
+      // retry negative results after a bounded quiet period instead of forever.
+      return commit(null)
+    }
+  })()
+  slugResolutionInFlight.set(cacheKey, resolution)
+  try {
+    return await resolution
+  } finally {
+    if (slugResolutionInFlight.get(cacheKey) === resolution) {
+      slugResolutionInFlight.delete(cacheKey)
+    }
   }
 }
 
 async function buildIndex(
-  repos: Repo[],
+  repos: readonly Repo[],
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): Promise<SlugIndex> {
+): Promise<{ index: SlugIndex; upstreamIndex: SlugIndex; retryDelayMs: number | null }> {
   // Why: evict cached entries for repos that no longer exist in state so
   // the cache cannot grow unbounded across long sessions where users add
   // and remove repos. Without this, every removed repo's id (and its
@@ -83,10 +137,12 @@ async function buildIndex(
   const liveKeys = new Set(repos.map((r) => slugCacheKey(r.id, settingsForRepoOwner(r, settings))))
   for (const key of slugByRepoId.keys()) {
     if (!liveKeys.has(key)) {
-      slugByRepoId.delete(key)
+      deleteRepoSlugCacheKey(key)
+      invalidateSlugResolution(key)
     }
   }
   const next: SlugIndex = new Map()
+  const upstreamNext: SlugIndex = new Map()
   const results = await Promise.all(
     repos.map(async (r) => ({
       repo: r,
@@ -99,12 +155,26 @@ async function buildIndex(
     if (slug) {
       next.set(slug, [...(next.get(slug) ?? []), repo])
     }
+    // Why: a Project card references the upstream repo, but a contributor's
+    // clone has their personal fork as `origin`, so the origin-only index
+    // dropped every row (#12647). `repo.upstream` is already resolved when the
+    // repo is added, so this costs no extra IPC.
+    const upstreamKey = repoUpstreamIdentityKey(repo, slug)
+    if (upstreamKey && upstreamKey !== slug) {
+      upstreamNext.set(upstreamKey, [...(upstreamNext.get(upstreamKey) ?? []), repo])
+    }
   }
-  return next
+  return {
+    index: next,
+    upstreamIndex: upstreamNext,
+    retryDelayMs: nextRepoSlugFailureRetryDelay(liveKeys)
+  }
 }
 
 export type RepoSlugIndexState = {
-  lookupSlug: (slug: string | null | undefined) => Repo[]
+  /** Best available matches: origin when anything owns the slug, else forks. */
+  lookupSlug: (slug: string | null | undefined, host?: string) => Repo[]
+  lookupSlugMatches: (slug: string | null | undefined, host?: string) => RepoSlugMatches
   ready: boolean
 }
 
@@ -115,7 +185,13 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const [index, setIndex] = useState<SlugIndex>(() => new Map())
+  const [upstreamIndex, setUpstreamIndex] = useState<SlugIndex>(() => new Map())
   const [ready, setReady] = useState(false)
+  const [retryGeneration, setRetryGeneration] = useState(0)
+  // Why: schedule retry in a dedicated effect so setTimeout cleanup is owned
+  // synchronously (react-doctor effect-needs-cleanup); async .then assignment
+  // was not statically owned by the buildIndex effect cleanup.
+  const [retryDelayMs, setRetryDelayMs] = useState<number | null>(null)
   // Why: track the current repos snapshot so the effect can ignore stale
   // resolutions when repos change mid-flight.
   const generationRef = useRef(0)
@@ -123,25 +199,53 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
   useEffect(() => {
     const gen = ++generationRef.current
     setReady(false)
-    void buildIndex(repos, settings).then((next) => {
-      if (gen !== generationRef.current) {
-        return
-      }
-      setIndex(next)
-      setReady(true)
-    })
-  }, [repos, settings])
-
-  return useMemo(
-    () => ({
-      lookupSlug: (slug: string | null | undefined): Repo[] => {
-        if (!slug) {
-          return []
+    setRetryDelayMs(null)
+    void buildIndex(repos, settings).then(
+      ({ index: next, upstreamIndex: nextUpstream, retryDelayMs: nextRetryDelayMs }) => {
+        if (gen !== generationRef.current) {
+          return
         }
-        return index.get(slug.toLowerCase()) ?? []
+        setIndex(next)
+        setUpstreamIndex(nextUpstream)
+        setReady(true)
+        setRetryDelayMs(nextRetryDelayMs)
+      }
+    )
+    return () => {
+      generationRef.current += 1
+    }
+  }, [repos, retryGeneration, settings])
+
+  useEffect(() => {
+    if (retryDelayMs === null) {
+      return
+    }
+    const retryTimer = setTimeout(() => setRetryGeneration((value) => value + 1), retryDelayMs)
+    return () => {
+      clearTimeout(retryTimer)
+    }
+  }, [retryDelayMs])
+
+  return useMemo(() => {
+    const lookupSlugMatches = (slug: string | null | undefined, host?: string): RepoSlugMatches => {
+      const [owner, repo] = slug?.split('/') ?? []
+      if (!owner || !repo) {
+        return { origin: [], upstream: [] }
+      }
+      const key = githubRepoIdentityKey({ owner, repo, host })
+      return { origin: index.get(key) ?? [], upstream: upstreamIndex.get(key) ?? [] }
+    }
+    return {
+      lookupSlugMatches,
+      // Why: origin wins — when the upstream repo itself is open, a row must
+      // resolve to that clone rather than becoming ambiguous with someone's
+      // fork of it. Callers that also filter by selection use
+      // `lookupSlugMatches` so an unselected clone cannot hide a selected fork.
+      lookupSlug: (slug: string | null | undefined, host?: string): Repo[] => {
+        const { origin, upstream } = lookupSlugMatches(slug, host)
+        return origin.length > 0 ? origin : upstream
       },
       ready
-    }),
-    [index, ready]
-  )
+    }
+  }, [index, upstreamIndex, ready])
 }

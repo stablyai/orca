@@ -93,11 +93,6 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
   vi.resetModules()
   vi.doMock('electron', () => ({
     net: { fetch: netFetchMock },
-    safeStorage: {
-      isEncryptionAvailable: () => options.encryptionAvailable ?? false,
-      encryptString: (value: string) => Buffer.from(value),
-      decryptString: options.decryptString ?? ((value: Buffer) => value.toString('utf-8'))
-    },
     session: {
       defaultSession: {
         closeAllConnections: closeAllConnectionsMock,
@@ -106,12 +101,34 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
       }
     }
   }))
+  // Why here and not in beforeEach: vi.resetModules() above gives the http-client module
+  // a fresh singleton, so the port must be installed on that instance. The electron net
+  // mock alone is inert now that Jira fetches through the port.
+  const { setMainHttpClient } = await import('../network/http-client')
+  setMainHttpClient({
+    fetch: (url, init) => netFetchMock(url, init),
+    proxySession: () => ({ resolveProxy: resolveProxyMock, setProxy: setProxyMock }) as never
+  })
+  const { setSecretStore } = await import('../../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => options.encryptionAvailable ?? false,
+    encryptString: (value) => Buffer.from(value),
+    decryptString: options.decryptString ?? ((value) => value.toString('utf-8')),
+    describeProtectionGap: () => null
+  })
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }
   })
 
-  return import('./client')
+  // One import call per reset so the split modules share a single graph (and
+  // thus one copy of the request queue / credential caches) per test.
+  const [client, queue, api] = await Promise.all([
+    import('./client'),
+    import('./request-queue'),
+    import('./authenticated-request')
+  ])
+  return { ...client, ...queue, ...api }
 }
 
 beforeEach(() => {
@@ -199,6 +216,57 @@ describe('Jira client credential storage', () => {
     expect(netFetchMock.mock.calls[0]?.[1]?.method).toBe('POST')
     expect(userAgent).toBe('Orca')
     expect(userAgent).not.toMatch(/Mozilla|Chrome|Safari|AppleWebKit/i)
+  })
+
+  it('removes cancelled queued reads so the request pool recovers', async () => {
+    const jira = await loadClientModule()
+    await Promise.all([jira.acquire(), jira.acquire(), jira.acquire(), jira.acquire()])
+    const controller = new AbortController()
+    const queued = jira.acquire(controller.signal)
+
+    controller.abort()
+
+    await expect(queued).rejects.toMatchObject({ name: 'AbortError' })
+    jira.release()
+    await expect(jira.acquire()).resolves.toBeUndefined()
+    jira.release()
+    jira.release()
+    jira.release()
+    jira.release()
+  })
+
+  it('downloads same-origin attachment URLs without forwarding auth cross-origin', async () => {
+    const jira = await loadClientModule({ encryptionAvailable: true })
+    const client = {
+      site: {
+        id: 'site-alpha',
+        siteUrl: 'https://example.atlassian.net',
+        email: 'ada@example.com',
+        displayName: 'Ada',
+        accountId: 'account-alpha'
+      },
+      authorization: 'Basic token-alpha'
+    }
+    netFetchMock.mockResolvedValueOnce(
+      new Response(Uint8Array.from([1, 2, 3]), {
+        status: 200,
+        headers: { 'Content-Type': 'image/png' }
+      })
+    )
+
+    await expect(
+      jira.jiraRequestBinary(
+        client,
+        'https://example.atlassian.net/rest/api/3/attachment/content/1?redirect=false'
+      )
+    ).resolves.toMatchObject({ contentType: 'image/png' })
+    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Authorization')).toBe('Basic token-alpha')
+
+    await expect(
+      jira.jiraRequestBinary(client, 'https://files.example.com/attachment.png')
+    ).rejects.toThrow('configured site origin')
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not pass encrypted safeStorage bytes to Jira when encryption is unavailable', async () => {

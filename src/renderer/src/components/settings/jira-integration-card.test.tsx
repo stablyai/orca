@@ -99,6 +99,7 @@ describe('JiraIntegrationCard account scope', () => {
 
     const rendered = await renderCard()
 
+    expect(rendered.querySelector('[data-settings-section="integrations-jira"]')).not.toBeNull()
     expect(rendered.textContent).toContain('Account scope: Remote server: runtime-1')
     expect(rendered.textContent).toContain('Acme Jira')
     expect(rendered.textContent).toContain('https://acme.atlassian.net · jira@example.test')

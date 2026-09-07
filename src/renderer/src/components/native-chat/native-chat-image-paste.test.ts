@@ -1,38 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getAgentImageHandling,
-  isNativeChatPastedImagePath,
-  resolveImagePaste
-} from './native-chat-image-paste'
+import { getAgentImageHandling, isNativeChatPastedImagePath } from './native-chat-image-paste'
 
 describe('image paste agent map', () => {
-  it('known image-capable agent attaches the temp file path', () => {
+  it('vision-capable TUIs take image attachments', () => {
     expect(getAgentImageHandling('claude')).toBe('attachment')
-    const result = resolveImagePaste('claude', '/tmp/orca-img-123.png')
-    expect(result).toEqual({ kind: 'attach', path: '/tmp/orca-img-123.png' })
-  })
-
-  it('codex also attaches image paths', () => {
-    expect(resolveImagePaste('codex', '/tmp/x.png')).toEqual({
-      kind: 'attach',
-      path: '/tmp/x.png'
-    })
-  })
-
-  it('grok attaches image paths like other vision-capable TUIs', () => {
+    expect(getAgentImageHandling('codex')).toBe('attachment')
     expect(getAgentImageHandling('grok')).toBe('attachment')
-    expect(resolveImagePaste('grok', '/tmp/orca-paste-1.png')).toEqual({
-      kind: 'attach',
-      path: '/tmp/orca-paste-1.png'
-    })
   })
 
   it('unknown/custom agent is unsupported', () => {
     expect(getAgentImageHandling('some-custom-agent')).toBe('unsupported')
-    expect(resolveImagePaste('some-custom-agent', '/tmp/x.png')).toEqual({
-      kind: 'unsupported',
-      agent: 'some-custom-agent'
-    })
   })
 })
 

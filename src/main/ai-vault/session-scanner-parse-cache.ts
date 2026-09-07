@@ -1,25 +1,24 @@
-import { createReadStream } from 'node:fs'
-import { open } from 'node:fs/promises'
+import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
 import { createMessageGraphSessionResumeState } from './session-scanner-graph-parsers'
 import { createClaudeSessionResumeState } from './session-scanner-primary-parsers'
 import { createGeminiJsonlSessionResumeState } from './session-scanner-gemini-parsers'
-import {
-  createCopilotSessionResumeState,
-  createCursorSessionResumeState
-} from './session-scanner-secondary-parsers'
+import { createCopilotSessionResumeState } from './session-scanner-copilot-parser'
+import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
+import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
+import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
 const MAX_CACHE_ENTRIES = 4096
-
 const NEWLINE_BYTE = 0x0a
-const CARRIAGE_RETURN_BYTE = 0x0d
 
 type ResumePoint = {
   state: ResumableSessionParseState
@@ -59,7 +58,8 @@ function resumableStateFactoryFor(
       return () => createDroidSessionResumeState(candidate.file)
     case 'openclaw':
     case 'pi':
-    case 'omp': {
+    case 'omp':
+    case 'prime-agent': {
       const agent = candidate.agent
       return () => createMessageGraphSessionResumeState(agent, candidate.file)
     }
@@ -67,9 +67,12 @@ function resumableStateFactoryFor(
       return candidate.file.path.endsWith('.jsonl')
         ? () => createGeminiJsonlSessionResumeState(candidate.file)
         : null
+    case 'antigravity':
+      return () => createAntigravitySessionResumeState(candidate.file)
     case 'devin':
     case 'grok':
     case 'hermes':
+    case 'cline':
     case 'kimi':
     case 'opencode':
     case 'rovo':
@@ -81,17 +84,73 @@ export type SessionParseStats = {
   reused: number
   incremental: number
   fullParses: number
+  // Transcripts the parser already excluded (Codex workers), re-listed after a
+  // write and dismissed without reading. Counted apart from `incremental` so a
+  // scan span still shows how much work the early stop actually removed.
+  earlyStopped: number
   bytesRead: number
 }
 
 export function createSessionParseStats(): SessionParseStats {
-  return { reused: 0, incremental: 0, fullParses: 0, bytesRead: 0 }
+  return { reused: 0, incremental: 0, fullParses: 0, earlyStopped: 0, bytesRead: 0 }
 }
 
 const cache = new Map<string, SessionParseCacheEntry>()
 
 export function resetSessionParseCacheForTests(): void {
   cache.clear()
+}
+
+// Drops one entry after its file is deleted. Cleanliness, not correctness:
+// discovery walks disk first, so a trashed file is never rediscovered anyway.
+export function invalidateSessionParseCacheEntry(path: string): void {
+  cache.delete(path)
+}
+
+// Persisted subset of a cache entry: the non-serializable `resume` parser
+// state is dropped (see session-parse-cache-persistence.ts).
+export type PersistedSessionParseCacheEntry = Omit<SessionParseCacheEntry, 'resume'>
+
+export function snapshotSessionParseCacheForPersistence(): [
+  string,
+  PersistedSessionParseCacheEntry
+][] {
+  return [...cache].map(([path, entry]): [string, PersistedSessionParseCacheEntry] => [
+    path,
+    {
+      mtimeMs: entry.mtimeMs,
+      sizeBytes: entry.sizeBytes,
+      platform: entry.platform,
+      session: entry.session
+    }
+  ])
+}
+
+// Seeded entries carry `resume: null`: after a restart an unchanged file is a
+// cache hit; a file that changed while the app was closed pays one full
+// (not incremental) re-parse.
+export function seedSessionParseCache(
+  entries: Iterable<[string, PersistedSessionParseCacheEntry]>
+): void {
+  const list = [...entries]
+  // Snapshot order is oldest→newest (LRU); an over-cap list keeps the newest
+  // tail rather than seeding the oldest entries and dropping the tail.
+  for (const [path, entry] of list.slice(Math.max(0, list.length - MAX_CACHE_ENTRIES))) {
+    if (cache.size >= MAX_CACHE_ENTRIES) {
+      return
+    }
+    // In-process entries are always fresher than persisted ones; never clobber.
+    if (cache.has(path)) {
+      continue
+    }
+    cache.set(path, {
+      mtimeMs: entry.mtimeMs,
+      sizeBytes: entry.sizeBytes,
+      platform: entry.platform,
+      session: entry.session,
+      resume: null
+    })
+  }
 }
 
 function storeEntry(path: string, entry: SessionParseCacheEntry): void {
@@ -132,14 +191,28 @@ export async function parseAgentSessionFileCached(
       stats.reused++
     }
     // A zero-turn transcript usually never changes again, but its sibling
-    // subagents/ dir can gain files after the parent's last write (a
-    // still-running subagent finishing). The mtime+size key can't see that,
-    // so refresh the cheap directory count on reuse.
-    if (entry.session && candidate.agent === 'claude' && entry.session.messageCount === 0) {
-      const subagentTranscriptCount = await countSubagentTranscripts(file.path)
-      if (subagentTranscriptCount !== entry.session.subagentTranscriptCount) {
+    // subagent dir (Claude `<session>/subagents/`, OMP's same-named artifact
+    // dir) can gain files after the parent's last write (a still-running
+    // subagent finishing). The mtime+size key can't see that, so refresh the
+    // cheap directory count on reuse.
+    if (entry.session && entry.session.messageCount === 0) {
+      const subagentTranscriptCount =
+        candidate.agent === 'claude'
+          ? await countSubagentTranscripts(file.path)
+          : candidate.agent === 'omp'
+            ? await countOmpSubagentTranscripts(file.path)
+            : null
+      if (
+        subagentTranscriptCount !== null &&
+        subagentTranscriptCount !== entry.session.subagentTranscriptCount
+      ) {
         entry.session = { ...entry.session, subagentTranscriptCount }
       }
+    }
+    // Codex titles come from session_index.jsonl, which mtime+size can't see.
+    // Remote counterpart: remote-session-scanner.ts's reusedCodexTitleRefresh.
+    if (entry.session && candidate.agent === 'codex') {
+      entry.session = await refreshCachedCodexTitle(candidate, entry.session)
     }
     storeEntry(file.path, entry)
     return entry.session
@@ -193,8 +266,13 @@ async function parseResumableCandidate(args: {
   // or the next resume would double-count the lines applied before the error.
   const state = canResume ? resume.state.clone() : args.stateFactory()
   const startOffset = canResume ? resume.byteOffset : 0
+  // Mirrors the reader's entry guard so a dismissed transcript is not reported
+  // as an incremental parse that read nothing.
+  const stoppedBeforeRead = state.shouldStop?.() === true
   if (args.stats) {
-    if (canResume) {
+    if (stoppedBeforeRead) {
+      args.stats.earlyStopped++
+    } else if (canResume) {
       args.stats.incremental++
     } else {
       args.stats.fullParses++
@@ -204,7 +282,11 @@ async function parseResumableCandidate(args: {
   const readResult = await consumeCompleteJsonlLines({
     path: file.path,
     start: startOffset,
-    onLine: (line) => state.consumeLine(line)
+    onLine: (line) => state.consumeLine(line),
+    // Bound: the optional hooks are declared as methods, so a parser written
+    // with method syntax must not lose `this` on the way into the reader.
+    onLineBytes: state.consumeLineBytes?.bind(state),
+    shouldStop: state.shouldStop?.bind(state)
   })
   if (args.stats) {
     args.stats.bytesRead += readResult.bytesRead
@@ -237,56 +319,6 @@ async function parseResumableCandidate(args: {
 // agent transcripts are append-only so that trade is accepted (worst case is
 // a stale vault row until the file is next truncated or the app restarts).
 async function endsWithNewlineAt(path: string, offset: number): Promise<boolean> {
-  const handle = await open(path, 'r')
-  try {
-    const { bytesRead, buffer } = await handle.read(Buffer.alloc(1), 0, 1, offset - 1)
-    return bytesRead === 1 && buffer[0] === NEWLINE_BYTE
-  } finally {
-    await handle.close()
-  }
-}
-
-type JsonlReadResult = {
-  consumedThrough: number
-  trailingPartialLine: string | null
-  bytesRead: number
-}
-
-// Byte-accurate replacement for readline: offsets must count bytes (not
-// UTF-8-decoded characters) so a resumed read starts exactly where the last
-// complete line ended.
-async function consumeCompleteJsonlLines(args: {
-  path: string
-  start: number
-  onLine: (line: string) => void
-}): Promise<JsonlReadResult> {
-  let consumedThrough = args.start
-  let bytesRead = 0
-  let remainder: Buffer | null = null
-
-  const stream = createReadStream(args.path, { start: args.start })
-  for await (const chunk of stream as AsyncIterable<Buffer>) {
-    bytesRead += chunk.length
-    const data = remainder ? Buffer.concat([remainder, chunk]) : chunk
-    let lineStart = 0
-    let newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
-    while (newlineIndex !== -1) {
-      let lineEnd = newlineIndex
-      if (lineEnd > lineStart && data[lineEnd - 1] === CARRIAGE_RETURN_BYTE) {
-        lineEnd--
-      }
-      args.onLine(data.toString('utf-8', lineStart, lineEnd))
-      lineStart = newlineIndex + 1
-      newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
-    }
-    consumedThrough += lineStart
-    // Copy the tail so retaining it doesn't pin the whole chunk buffer.
-    remainder = lineStart < data.length ? Buffer.from(data.subarray(lineStart)) : null
-  }
-
-  return {
-    consumedThrough,
-    trailingPartialLine: remainder && remainder.length > 0 ? remainder.toString('utf-8') : null,
-    bytesRead
-  }
+  const slice = await readTranscriptSlice(path, offset - 1, 1, 'scan')
+  return slice.length === 1 && slice[0] === NEWLINE_BYTE
 }

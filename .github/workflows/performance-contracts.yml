@@ -1,0 +1,63 @@
+name: Performance contracts
+
+on:
+  schedule:
+    - cron: '15 9 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/performance-contracts.yml'
+      - 'config/vitest.performance.config.ts'
+      - 'config/oxlint-performance-audit.json'
+      - 'config/oxlint-plugins/*performance.mjs'
+      - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
+      - 'config/scripts/*-plugin.test.mjs'
+      # Keep in sync with the contract list in config/vitest.performance.config.ts;
+      # without these a rename lands green and only breaks the next nightly.
+      - 'src/main/sqlite/sync-database.test.ts'
+      - 'src/main/runtime/orchestration/db/row-column-lists.test.ts'
+      - 'src/relay/fs-path-metadata-symlink-concurrency.test.ts'
+      - 'src/renderer/src/components/editor/rich-markdown-list-tokenizers.test.ts'
+      - 'src/renderer/src/components/editor/rich-markdown-lowlight-cache.test.ts'
+      - 'src/renderer/src/components/terminal-pane/agent-completion-coordinator-queued-inspection-disposal.test.ts'
+      - 'src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-queue-retention.test.ts'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-contracts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Run operation-count and retention contracts
+        run: pnpm test:perf:contracts --reporter=default --reporter=json --outputFile=performance-contracts.json
+      # Source-only scan: identical on every OS, so run it once.
+      - name: Audit production performance patterns
+        if: always() && matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: pnpm --silent audit:perf > performance-audit.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: performance-contracts-${{ matrix.os }}
+          path: performance-contracts.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.os == 'ubuntu-latest'
+        with:
+          name: performance-audit
+          path: performance-audit.json
+          if-no-files-found: error

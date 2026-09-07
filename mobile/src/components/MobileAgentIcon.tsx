@@ -1,7 +1,7 @@
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { ImageSourcePropType } from 'react-native'
 import { Terminal } from 'lucide-react-native'
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import Svg, { Defs, G, LinearGradient, Path, Stop } from 'react-native-svg'
 import { colors } from '../theme/mobile-theme'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
@@ -32,7 +32,7 @@ function OmpIcon({ size = 16 }: { size?: number }) {
       <Defs>
         <LinearGradient id="ompMarkGradient" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#ed4abf" />
-          <Stop offset=".5" stopColor="#9b4dff" />
+          <Stop offset="0.5" stopColor="#9b4dff" />
           <Stop offset="1" stopColor="#5ad8e6" />
         </LinearGradient>
       </Defs>

@@ -3,6 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readNativeChatTranscript } from './transcript-reader'
+import {
+  nativeChatLineDecoderForAgent,
+  readNativeChatTranscriptTail,
+  readNativeChatTranscriptTailFile
+} from './transcript-tail-reader'
 
 let tempRoots: string[] = []
 
@@ -24,6 +29,20 @@ async function writeFixture(prefix: string, records: unknown[]): Promise<string>
 }
 
 describe('readNativeChatTranscript (claude)', () => {
+  it('decodes OpenClaude with the Claude transcript format', async () => {
+    const filePath = await writeFixture('orca-native-chat-openclaude-', [
+      {
+        type: 'assistant',
+        uuid: 'openclaude-assistant',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] }
+      }
+    ])
+
+    await expect(
+      readNativeChatTranscript('openclaude', 'session', { filePath })
+    ).resolves.toMatchObject({ messages: [{ id: 'openclaude-assistant' }] })
+  })
+
   it('returns ordered user/assistant/tool messages with no 5-message cap', async () => {
     const records: unknown[] = []
     // 4 user/assistant turns = 8 messages, well past the AI-Vault preview cap.
@@ -278,5 +297,39 @@ describe('readNativeChatTranscript (errors)', () => {
     if ('error' in result) {
       expect(result.notFound).toBe(true)
     }
+  })
+})
+
+describe('readNativeChatTranscriptTailFile', () => {
+  it('keeps a missing tail retry-worthy for the live-session seed', async () => {
+    const result = await readNativeChatTranscriptTail({
+      agent: 'claude',
+      sessionId: 'sess',
+      filePath: join(tmpdir(), 'orca-native-chat-tail-does-not-exist.jsonl'),
+      limit: 40
+    })
+
+    expect(result).toMatchObject({ notFound: true })
+  })
+
+  it('windows to nothing for a non-positive limit instead of the whole tail', async () => {
+    const decode = nativeChatLineDecoderForAgent('claude')!
+    const filePath = await writeFixture('orca-native-chat-tail-limit-', [
+      {
+        type: 'assistant',
+        uuid: 'a-1',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'one' }] }
+      },
+      {
+        type: 'assistant',
+        uuid: 'a-2',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'two' }] }
+      }
+    ])
+
+    const result = await readNativeChatTranscriptTailFile(filePath, 0, decode, true)
+
+    expect(result.messages).toEqual([])
+    expect(result.hasMore).toBe(false)
   })
 })

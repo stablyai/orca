@@ -2,88 +2,14 @@ import { describe, expect, it } from 'vitest'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source-control-ai'
-import type {
-  RepoSourceControlAiOverrides,
-  SourceControlAiSettings
-} from '../../../../shared/source-control-ai-types'
+import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import {
   SOURCE_CONTROL_ACTION_IDS,
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
-import {
-  createRepoAiDraftState,
-  dropRepoLegacyInstructionForAction,
-  resolveRepoAiDraftState
-} from './RepositorySourceControlAiSection'
+import { dropRepoLegacyInstructionForAction } from './repository-source-control-ai-draft'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
 import { RepositorySourceControlAiEnablement } from './RepositorySourceControlAiEnablement'
-
-describe('RepositorySourceControlAiSection draft state', () => {
-  it('refreshes clean drafts when persisted repo overrides change', () => {
-    const state = createRepoAiDraftState('repo-1', {
-      instructionsByOperation: {
-        commitMessage: 'old'
-      }
-    })
-    const persisted: RepoSourceControlAiOverrides = {
-      instructionsByOperation: {
-        commitMessage: 'new'
-      }
-    }
-
-    expect(resolveRepoAiDraftState(state, 'repo-1', persisted)).toEqual({
-      repoId: 'repo-1',
-      value: persisted,
-      baseSerialized: JSON.stringify(normalizeRepoSourceControlAiOverrides(persisted))
-    })
-  })
-
-  it('preserves dirty drafts across external repo override changes', () => {
-    const state = createRepoAiDraftState('repo-1', {
-      instructionsByOperation: {
-        commitMessage: 'old'
-      }
-    })
-    state.value = {
-      instructionsByOperation: {
-        commitMessage: 'local edit'
-      }
-    }
-
-    const persisted: RepoSourceControlAiOverrides = {
-      instructionsByOperation: {
-        commitMessage: 'external edit'
-      }
-    }
-
-    expect(resolveRepoAiDraftState(state, 'repo-1', persisted)).toBe(state)
-  })
-
-  it('resets the draft when the selected repo changes', () => {
-    const state = createRepoAiDraftState('repo-1', {
-      prCreationDefaults: {
-        draft: true
-      }
-    })
-    state.value = {
-      prCreationDefaults: {
-        draft: false
-      }
-    }
-
-    const persisted: RepoSourceControlAiOverrides = {
-      prCreationDefaults: {
-        useTemplate: true
-      }
-    }
-
-    expect(resolveRepoAiDraftState(state, 'repo-2', persisted)).toEqual({
-      repoId: 'repo-2',
-      value: persisted,
-      baseSerialized: JSON.stringify(normalizeRepoSourceControlAiOverrides(persisted))
-    })
-  })
-})
 
 describe('RepositorySourceControlAiEnablement', () => {
   it('describes repo enablement as Source Control AI action visibility', () => {
@@ -130,7 +56,7 @@ describe('RepositorySourceControlAiActionRows', () => {
         },
         source,
         defaultTuiAgent: 'codex',
-        isSaving: false,
+        savingActionIds: {},
         actionDirtyById,
         onActionModeChange: () => {},
         onActionAgentChange: () => {},

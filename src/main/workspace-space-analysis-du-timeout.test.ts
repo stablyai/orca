@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeProcess from 'node:process'
-import type { Repo } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
 import type { Store } from './persistence'
 
 const { execFileMock, listRepoWorktreesMock } = vi.hoisted(() => ({
@@ -113,5 +113,55 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
       worktrees: [expect.objectContaining({ status: 'ok', path: repoPath })]
     })
     expect(killMock).toHaveBeenCalled()
+  })
+
+  it('runs one local du traversal at a time across repos', async () => {
+    const repoPaths = [join(tempDir!, 'repo-one'), join(tempDir!, 'repo-two')]
+    await Promise.all(repoPaths.map((repoPath) => mkdir(repoPath, { recursive: true })))
+    const repos: Repo[] = repoPaths.map((repoPath, index) => ({
+      id: `repo-${index}`,
+      path: repoPath,
+      displayName: `repo-${index}`,
+      badgeColor: '#000',
+      addedAt: 0
+    }))
+    listRepoWorktreesMock.mockImplementation(async (repo: Repo) => [
+      {
+        path: repo.path,
+        head: 'a',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    const completions: (() => void)[] = []
+    let active = 0
+    let peak = 0
+    execFileMock.mockImplementation(
+      (
+        _file: string,
+        args: string[],
+        _options: unknown,
+        callback: (error: Error | null, stdout: string) => void
+      ) => {
+        const rootPath = args.at(-1)!
+        active += 1
+        peak = Math.max(peak, active)
+        completions.push(() => {
+          active -= 1
+          callback(null, `1\t${rootPath}\n`)
+        })
+        return { kill: vi.fn() }
+      }
+    )
+
+    const scan = analyzeWorkspaceSpace(createStore(repos))
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(1))
+    completions.shift()?.()
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(2))
+    completions.shift()?.()
+
+    await expect(scan).resolves.toMatchObject({ scannedWorktreeCount: 2 })
+    expect(peak).toBe(1)
   })
 })

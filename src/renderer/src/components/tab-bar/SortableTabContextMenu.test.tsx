@@ -55,9 +55,11 @@ vi.mock('lucide-react', () => ({
   ArrowRight: () => null,
   ArrowUp: () => null,
   Columns2: () => null,
+  Copy: () => null,
   ListX: () => null,
   MessageSquare: () => null,
   PanelBottomClose: () => null,
+  PanelLeftClose: () => null,
   PanelRightClose: () => null,
   Pencil: () => null,
   Pin: () => null,
@@ -69,6 +71,8 @@ vi.mock('lucide-react', () => ({
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
@@ -110,12 +114,14 @@ function renderMenu(overrides: Partial<ComponentProps<typeof SortableTabContextM
         point={{ x: 0, y: 0 }}
         tabCount={2}
         hasTabsToRight
+        hasTabsToLeft
         isPinned={false}
         onOpenChange={vi.fn()}
         onActivate={onActivate}
         onClose={vi.fn()}
         onCloseOthers={vi.fn()}
         onCloseToRight={vi.fn()}
+        onCloseToLeft={vi.fn()}
         onRenameOpen={vi.fn()}
         onSetTabColor={vi.fn()}
         onTogglePin={vi.fn()}
@@ -204,6 +210,13 @@ describe('requestActiveTerminalPaneSplit', () => {
 })
 
 describe('SortableTabContextMenu', () => {
+  it('does not expose a native/terminal view switch', () => {
+    const { container } = renderMenu()
+
+    expect(container.textContent).not.toContain('Switch to terminal view')
+    expect(container.textContent).not.toContain('Switch to chat view')
+  })
+
   it('dispatches split requests and activates inactive terminal tabs first', () => {
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
     const { container, onActivate } = renderMenu({ isActive: false })
@@ -235,6 +248,36 @@ describe('SortableTabContextMenu', () => {
       groupId: 'group-1',
       splitDirection: 'right'
     })
+  })
+
+  it('hides terminal-only split actions for structured chat tabs', () => {
+    const { container } = renderMenu({ canSplitTerminal: false })
+
+    expect(container.textContent).toContain('Move Tab to Split')
+    expect(container.textContent).not.toContain('Split terminal')
+  })
+
+  it('routes the directional close actions to their handlers with the tab id', () => {
+    const onCloseOthers = vi.fn()
+    const onCloseToRight = vi.fn()
+    const onCloseToLeft = vi.fn()
+    const { container } = renderMenu({ onCloseOthers, onCloseToRight, onCloseToLeft })
+
+    act(() => getButton(container, 'Close Others').click())
+    expect(onCloseOthers).toHaveBeenCalledWith('term-1')
+
+    act(() => getButton(container, 'Close Tabs To The Right').click())
+    expect(onCloseToRight).toHaveBeenCalledWith('term-1')
+
+    act(() => getButton(container, 'Close Tabs To The Left').click())
+    expect(onCloseToLeft).toHaveBeenCalledWith('term-1')
+  })
+
+  it('disables directional closes when no tabs exist on that side', () => {
+    const { container } = renderMenu({ hasTabsToLeft: false, hasTabsToRight: false })
+
+    expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
+    expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)
   })
 
   it('hides move-tab split actions for a single-tab group', () => {

@@ -12,7 +12,7 @@ vi.mock('electron', () => ({
   nativeImage: { createFromBitmap: createFromBitmapMock }
 }))
 
-import { composeTrayAttentionIcon } from './tray-attention-icon'
+import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
 
 type FakeImage = {
   getSize: () => { width: number; height: number }
@@ -84,5 +84,61 @@ describe('composeTrayAttentionIcon', () => {
     expect(sumX / amberCount).toBeGreaterThan(width / 2) // centroid sits right of center
     expect(sumY / amberCount).toBeLessThan(height / 2) // centroid sits above center
     expect(paintedInBottomLeft).toBe(0) // the opposite corner is never touched
+  })
+})
+
+describe('tintTrayTemplateForAttention', () => {
+  it('preserves alpha while selecting literal black pixels for a light menu bar', () => {
+    createFromBitmapMock.mockClear()
+    const bitmap = Buffer.from([0x22, 0x33, 0x44, 0x80, 0xaa, 0xbb, 0xcc, 0x00])
+    const base = {
+      getSize: () => ({ width: 2, height: 1 }),
+      toBitmap: () => bitmap
+    }
+
+    tintTrayTemplateForAttention(base as never, false)
+
+    expect(createFromBitmapMock.mock.calls[0][0]).toEqual(
+      Buffer.from([0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00])
+    )
+  })
+
+  it('selects literal white pixels for a dark menu bar', () => {
+    createFromBitmapMock.mockClear()
+    const base = {
+      getSize: () => ({ width: 1, height: 1 }),
+      toBitmap: () => Buffer.from([0x00, 0x00, 0x00, 0xff])
+    }
+
+    tintTrayTemplateForAttention(base as never, true)
+
+    expect(createFromBitmapMock.mock.calls[0][0]).toEqual(Buffer.from([0xff, 0xff, 0xff, 0xff]))
+  })
+
+  it('keeps white edge pixels premultiplied-valid at partial alpha', () => {
+    createFromBitmapMock.mockClear()
+    const base = {
+      getSize: () => ({ width: 1, height: 1 }),
+      toBitmap: () => Buffer.from([0x00, 0x00, 0x00, 0x80])
+    }
+
+    tintTrayTemplateForAttention(base as never, true)
+
+    // Why: the bitmap is premultiplied — white at 50% coverage is 0x80, not 0xff.
+    expect(createFromBitmapMock.mock.calls[0][0]).toEqual(Buffer.from([0x80, 0x80, 0x80, 0x80]))
+  })
+
+  it('reads and sizes the requested scale factor', () => {
+    createFromBitmapMock.mockClear()
+    const toBitmap = vi.fn(() => Buffer.from([0x00, 0x00, 0x00, 0xff]))
+    const base = {
+      getSize: () => ({ width: 1, height: 1 }),
+      toBitmap
+    }
+
+    tintTrayTemplateForAttention(base as never, true, 2)
+
+    expect(toBitmap).toHaveBeenCalledWith({ scaleFactor: 2 })
+    expect(createFromBitmapMock.mock.calls[0][1]).toEqual({ width: 2, height: 2 })
   })
 })

@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import type { TerminalLayoutSnapshot } from '../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 
 function resolveActiveLeafId(
@@ -14,14 +15,10 @@ function resolveActiveLeafId(
 }
 
 /**
- * Pure helper used by the hook below — exported so the regression test for
- * the codex-row-stays-bold race (docs/codex-agent-row-bold-stuck.md) can
- * exercise the decision against a real test store without needing a DOM.
+ * Returns paneKeys to ack for the active tab/leaf; exported for the
+ * codex-row-bold regression test (docs/codex-agent-row-bold-stuck.md).
  *
- * Returns the list of paneKeys that should be acked given the active tab and
- * exact active leaf. Split tabs can host multiple agent panes, so equality on
- * `${tabId}:${leafId}` is required; tab-prefix matching would mark siblings
- * read without ever displaying them.
+ * Why: split tabs host multiple agent panes, so match exact `${tabId}:${leafId}` — a tab-prefix match would ack undisplayed siblings.
  */
 export function computeAutoAckTargets(
   state: {
@@ -40,9 +37,7 @@ export function computeAutoAckTargets(
   const liveEntry = state.agentStatusByPaneKey[targetKey]
   if (liveEntry) {
     const ackAt = state.acknowledgedAgentsByPaneKey[targetKey] ?? 0
-    // Why: use stateStartedAt (not updatedAt) so tool/prompt pings within the
-    // same state don't re-trigger ack work — keeping the comparison aligned
-    // with WorktreeCardAgents' is-unvisited rule.
+    // Why: compare stateStartedAt (not updatedAt) so same-state pings don't re-trigger ack, matching WorktreeCardAgents' is-unvisited rule.
     if (ackAt < liveEntry.stateStartedAt) {
       targets.push(targetKey)
     }
@@ -72,6 +67,20 @@ export function computeViewedAgentCompletionPaneKey(
   return state.unreadAgentCompletionPanes[targetKey] ? targetKey : null
 }
 
+function getAgentTurnTimestamp(
+  state: {
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>
+    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+  },
+  paneKey: string
+): number | null {
+  return (
+    state.agentStatusByPaneKey[paneKey]?.stateStartedAt ??
+    state.retainedAgentsByPaneKey[paneKey]?.entry.stateStartedAt ??
+    null
+  )
+}
+
 export function shouldClearViewedAgentWorktreeUnread(
   state: {
     tabsByWorktree: Record<string, { id: string }[]>
@@ -93,8 +102,7 @@ export function shouldClearViewedAgentWorktreeUnread(
     return true
   }
 
-  // Why: worktree unread is coarse. Do not clear it for the visible pane if a
-  // hidden tab/pane in the same worktree still owns unread agent attention.
+  // Why: worktree unread is coarse — don't clear for the visible pane if a hidden tab/pane in the same worktree still owns unread attention.
   for (const paneKey of Object.keys(state.unreadAgentCompletionPanes)) {
     if (args.paneKeysToClear.has(paneKey)) {
       continue
@@ -112,6 +120,35 @@ export function shouldClearViewedAgentWorktreeUnread(
   }
 
   return true
+}
+
+/**
+ * Manual mark-unread protections that no longer apply: the user moved to another pane, or the
+ * agent took a new turn. Exported for the startup-race test.
+ */
+export function computeLapsedManualUnreadProtections(
+  state: {
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>
+    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+    manuallyUnreadTurnsByPaneKey: Record<string, number>
+  },
+  activePaneKeys: ReadonlySet<string>
+): string[] {
+  const lapsed: string[] = []
+  for (const [paneKey, turnTimestamp] of Object.entries(state.manuallyUnreadTurnsByPaneKey)) {
+    if (!activePaneKeys.has(paneKey)) {
+      lapsed.push(paneKey)
+      continue
+    }
+    const currentTurn = getAgentTurnTimestamp(state, paneKey)
+    // Why keep on null: persisted UI hydrates before the status snapshot lands, so an active
+    // pane with no row yet is "not known", not "moved on"; wiping it would lose the mark-unread
+    // the user made before relaunch.
+    if (currentTurn !== null && currentTurn !== turnTimestamp) {
+      lapsed.push(paneKey)
+    }
+  }
+  return lapsed
 }
 
 type ViewedAgentAttentionActions = {
@@ -143,8 +180,7 @@ export function acknowledgeViewedAgentAttention(
     state.acknowledgeAgents(args.paneKeys)
   }
   if (args.activeWorktreeId) {
-    // Why: focus-return auto-ack means the selected agent is now visible;
-    // clear the Dock-driving worktree unread state without requiring a click.
+    // Why: the selected agent is now visible, so clear the Dock-driving worktree unread without a click.
     state.clearWorktreeUnread(args.activeWorktreeId)
   }
   state.clearTerminalTabUnread(args.activeTabId)
@@ -153,70 +189,69 @@ export function acknowledgeViewedAgentAttention(
   }
 }
 
-// Why: an agent row counts as "already seen" when the user is actually looking
-// at the tab it lives on. Without this effect, ack only fires via an explicit
-// click in the dashboard — which misses the common case where the user is
-// already on the terminal tab when the agent finishes or blocks. That leaves
-// the dashboard bolded and Dock badge raised for an event the user literally
-// just watched happen.
-//
-// The effect subscribes directly to the store (not via React selectors) so it
-// sees every state change with no re-render amplification up the component
-// tree. A reference-equality guard inside the callback bails out immediately
-// when none of the seven slices we care about (activeView, activeTabId,
-// agentStatusByPaneKey, retainedAgentsByPaneKey, acknowledgedAgentsByPaneKey,
-// terminalLayoutsByTabId, unreadAgentCompletionPanes)
-// have changed — so the Object.entries walk only runs for updates
-// that could legitimately affect the ack decision.
-//
-// It acks whenever:
-//   - activeView is 'terminal' (the user isn't on Settings/Tasks), AND
-//   - activeTabId identifies a live tab, AND
-//   - at least one agentStatusByPaneKey entry OR retainedAgentsByPaneKey
-//     entry matches the active tab+leaf AND its ackAt < stateStartedAt, OR
-//     the active pane has unread agent-completion attention.
-//
-// Why both maps: the inline-agents list renders the union of live + retained
-// rows (see useWorktreeAgentRows), so the ack scan must too. Without the
-// retained walk, a `done` row whose live entry was torn down by the
-// title-revert path (see pty-connection.ts:onAgentExited) migrates to the
-// retained map carrying a fresh `done.stateStartedAt` and never gets
-// auto-acked — leaving the inline row bold forever even while the user
-// stares at the terminal. Codex hits this race reliably because its TUI
-// reverts to a shell title within milliseconds of `Stop`.
-//
-// The ack ALSO requires the OS window to be visible and focused
-// (document.visibilityState === 'visible' && document.hasFocus()) —
-// otherwise a transition that arrives while the user is away would silently
-// clear the bold-until-viewed signal for an event they never saw. A
-// visibilitychange / focus listener re-runs the scan when the user returns
-// so any transitions that failed the gate while away get acked the moment
-// focus actually comes back.
-//
-// We ack ALL matching panes in one call (a tab can host split panes, each
-// with its own paneKey), then clear the active unread surfaces. Returning focus
-// to a visible agent counts as viewing it, without requiring a click/keystroke.
-export function useAutoAckViewedAgent(): void {
+export type AutoAckTabTarget = { tabId: string; worktreeId: string | null }
+
+/**
+ * Tabs whose visible pane counts as "seen" right now, each paired with the worktree that owns it.
+ *
+ * Why the floating workspace is gated on panel visibility rather than `activeView`: the panel is an
+ * overlay that sits above every view and stays mounted while closed, and its active tab never
+ * becomes the global `activeTabId` — so neither the view nor the tab id can stand in for "on screen".
+ */
+export function resolveAutoAckTabTargets(
+  state: {
+    activeView: string
+    activeTabId: string | null
+    activeWorktreeId: string | null
+    activeTabIdByWorktree: Record<string, string | null>
+  },
+  options: { floatingPanelVisible: boolean }
+): AutoAckTabTarget[] {
+  const targets: AutoAckTabTarget[] = []
+  if (state.activeView === 'terminal' && state.activeTabId) {
+    targets.push({ tabId: state.activeTabId, worktreeId: state.activeWorktreeId })
+  }
+  if (options.floatingPanelVisible) {
+    const floatingTabId = state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
+    // Why first-wins on a tab-id collision: tab ids can be claimed by two worktrees
+    // (see active-tab-owner-worktree), and acking under the wrong one strands its unread dot.
+    if (floatingTabId && !targets.some((target) => target.tabId === floatingTabId)) {
+      targets.push({ tabId: floatingTabId, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+    }
+  }
+  return targets
+}
+
+// Auto-ack an agent row as "seen" when the user is already on its tab, so the dashboard/Dock don't stay bold for an event they watched happen.
+// Scans live + retained maps: Codex's title-revert (pty-connection.ts:onAgentExited) migrates `done` rows to retained mid-race — see docs/codex-agent-row-bold-stuck.md.
+export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
+  // Why a ref: the scan loop is mounted once, but panel visibility is React-local state that never
+  // reaches the store, and re-subscribing on every open/close would drop the accumulated diff refs.
+  const floatingPanelVisibleRef = useRef(floatingPanelVisible)
+  const rescanRef = useRef<(() => void) | null>(null)
+
   useEffect(() => {
-    // Why: the root zustand store is created with plain `create()` (no
-    // subscribeWithSelector middleware), so subscribe has no selector form.
-    // Track the slice references we actually depend on and early-return on
-    // unrelated updates — terminal output, tab state, settings, etc. would
-    // otherwise invoke the scan on every store change. Initialize to
-    // `undefined` so the first call always runs at least once.
+    // Why: the store uses plain create() (no subscribeWithSelector), so manually track the slices we depend on to skip unrelated updates.
+    // Init to undefined so the first maybeAck() (on mount) always passes the ref guard and scans.
     let lastActiveView: unknown = undefined
     let lastActiveTabId: unknown = undefined
+    let lastFloatingWorkspaceActiveTabId: unknown = undefined
     let lastAgentStatus: unknown = undefined
     let lastRetained: unknown = undefined
     let lastAcknowledged: unknown = undefined
     let lastLayouts: unknown = undefined
     let lastUnreadAgentCompletionPanes: unknown = undefined
 
-    const maybeAck = (): void => {
+    // `force` re-scans after a signal the store never sees: panel open/closed is React-local state.
+    const maybeAck = (options?: { force?: boolean }): void => {
       const s = useAppStore.getState()
+      const floatingWorkspaceActiveTabId =
+        s.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
       if (
+        !options?.force &&
         s.activeView === lastActiveView &&
         s.activeTabId === lastActiveTabId &&
+        floatingWorkspaceActiveTabId === lastFloatingWorkspaceActiveTabId &&
         s.agentStatusByPaneKey === lastAgentStatus &&
         s.retainedAgentsByPaneKey === lastRetained &&
         s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
@@ -226,15 +261,7 @@ export function useAutoAckViewedAgent(): void {
         return
       }
 
-      if (s.activeView !== 'terminal') {
-        return
-      }
-      // Why: the auto-ack represents "the user saw this row" — but tab-active is
-      // only a proxy. If the OS window is hidden, minimized, or another app has
-      // focus, the user is demonstrably not looking at the inline agents list
-      // even with the terminal tab set. Without this gate, an agent finishing
-      // while the user is away silently clears the bold-until-viewed signal and
-      // the user returns to a card with no indication anything transitioned.
+      // Why: tab-active only proxies "seen"; gate on window visible+focused so away-time transitions don't silently clear the bold signal.
       if (typeof document !== 'undefined') {
         if (document.visibilityState !== 'visible') {
           return
@@ -243,66 +270,96 @@ export function useAutoAckViewedAgent(): void {
           return
         }
       }
-      const activeTabId = s.activeTabId
-      if (!activeTabId) {
+      const targets = resolveAutoAckTabTargets(s, {
+        floatingPanelVisible: floatingPanelVisibleRef.current
+      })
+      // Why no protection reset here: zero targets just means nothing is on screen
+      // (Settings, browser, an overlay) — a transient view switch must not lapse an
+      // explicit mark-unread the user just made.
+      if (targets.length === 0) {
         return
       }
-      const activeLeafId = resolveActiveLeafId(s, activeTabId)
-      // Why: advance the refs ONLY after all gates have passed — if the
-      // visibility gate (window hidden/unfocused or no activeTabId) caused an
-      // early return, leave the refs stale so the next call (e.g. triggered by
-      // the focus listener on return) sees a diff and actually runs the scan.
-      // Updating refs before the gates would consume the diff silently and
-      // leave the user returning to cards whose bold-until-viewed rows stay
-      // bold until some unrelated store change happens to bump the refs.
+      // Why: advance refs only after gates pass, else the diff is consumed and a gated-out transition never re-acks when focus returns.
       lastActiveView = s.activeView
       lastActiveTabId = s.activeTabId
+      lastFloatingWorkspaceActiveTabId = floatingWorkspaceActiveTabId
       lastAgentStatus = s.agentStatusByPaneKey
       lastRetained = s.retainedAgentsByPaneKey
       lastAcknowledged = s.acknowledgedAgentsByPaneKey
       lastLayouts = s.terminalLayoutsByTabId
       lastUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
-      const toAck = computeAutoAckTargets(s, activeTabId, activeLeafId)
-      const activePaneKey = computeViewedAgentCompletionPaneKey(s, activeTabId, activeLeafId)
-      if (toAck.length > 0 || activePaneKey) {
-        const paneKeysToClear = new Set(toAck)
-        if (activePaneKey) {
-          paneKeysToClear.add(activePaneKey)
+
+      const activePaneKeys = new Set<string>()
+      for (const target of targets) {
+        const activeLeafId = resolveActiveLeafId(s, target.tabId)
+        if (activeLeafId) {
+          activePaneKeys.add(makePaneKey(target.tabId, activeLeafId))
         }
-        acknowledgeViewedAgentAttention(s, {
-          activeWorktreeId: shouldClearViewedAgentWorktreeUnread(s, {
-            activeWorktreeId: s.activeWorktreeId,
-            activeTabId,
-            paneKeysToClear
+      }
+      // Protection lapses when the user moves on to another pane or the agent takes a new
+      // turn; a still-active pane with an unchanged turn keeps its explicit mark-unread.
+      const lapsedProtections = computeLapsedManualUnreadProtections(s, activePaneKeys)
+      if (lapsedProtections.length > 0) {
+        s.clearManuallyUnreadTurns(lapsedProtections)
+      }
+
+      for (const target of targets) {
+        // Why re-read: acking target[0] writes to the store, which re-enters this scan synchronously
+        // and may already have handled target[1]; `s` is a pre-write snapshot that would re-ack it.
+        const current = useAppStore.getState()
+        const tabId = target.tabId
+        const activeLeafId = resolveActiveLeafId(current, tabId)
+        const toAck = computeAutoAckTargets(current, tabId, activeLeafId).filter(
+          (paneKey) =>
+            current.manuallyUnreadTurnsByPaneKey[paneKey] !==
+            getAgentTurnTimestamp(current, paneKey)
+        )
+        const activePaneKey = computeViewedAgentCompletionPaneKey(current, tabId, activeLeafId)
+        if (toAck.length > 0 || activePaneKey) {
+          const paneKeysToClear = new Set(toAck)
+          if (activePaneKey) {
+            paneKeysToClear.add(activePaneKey)
+          }
+          const worktreeId = target.worktreeId
+          acknowledgeViewedAgentAttention(current, {
+            activeWorktreeId: shouldClearViewedAgentWorktreeUnread(current, {
+              activeWorktreeId: worktreeId,
+              activeTabId: tabId,
+              paneKeysToClear
+            })
+              ? worktreeId
+              : null,
+            activeTabId: tabId,
+            paneKeys: toAck,
+            activePaneKey
           })
-            ? s.activeWorktreeId
-            : null,
-          activeTabId,
-          paneKeys: toAck,
-          activePaneKey
-        })
+        }
       }
     }
-    // Why: run once on mount to catch the case where the app restores to a
-    // session whose current state already has agents on the visible tab.
+    rescanRef.current = (): void => maybeAck({ force: true })
+    // Why: run once on mount to catch a restored session that already has agents on the visible tab.
     maybeAck()
-    // Why: store.subscribe fires on every state change. The reference-
-    // equality guard above bails out immediately for the common case
-    // (terminal output, timers, etc.) so the Object.entries walk only runs
-    // when one of the five slices we read has actually changed.
-    const unsubscribe = useAppStore.subscribe(maybeAck)
-    // Why: focus/visibility don't flow through the zustand store, so a
-    // late-arriving transition that failed the gate above never re-evaluates
-    // when focus returns. Subscribe to the two DOM events so the ack scan
-    // reruns the moment the user is actually back on the window.
+    // Subscribe to all store changes; the ref-equality guard above skips unrelated updates.
+    const unsubscribe = useAppStore.subscribe(() => maybeAck())
+    // Why: focus/visibility don't flow through zustand, so re-run the scan on these DOM events when focus returns.
     const onVisibility = (): void => maybeAck()
     const onFocus = (): void => maybeAck()
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onFocus)
     return () => {
+      rescanRef.current = null
       unsubscribe()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('focus', onFocus)
     }
   }, [])
+
+  // Why forced: opening the panel puts an already-active floating tab on screen without any store
+  // write, so the equality guard would skip the scan that clears its attention dot.
+  useEffect(() => {
+    floatingPanelVisibleRef.current = floatingPanelVisible
+    if (floatingPanelVisible) {
+      rescanRef.current?.()
+    }
+  }, [floatingPanelVisible])
 }

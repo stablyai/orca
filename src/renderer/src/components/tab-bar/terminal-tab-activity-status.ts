@@ -5,7 +5,7 @@ import {
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 
 // Why: a terminal tab is a container of panes, exactly like a worktree card is
 // a container of tabs. Reuse the WorktreeCard status vocabulary and resolver so
@@ -19,8 +19,12 @@ export type TerminalTabActivityStatus = WorktreeStatus
 type TerminalTabActivityFlags = {
   hasPermission: boolean
   hasLiveWorking: boolean
+  hasLiveMonitoring: boolean
+  hasInterrupted: boolean
   hasLiveDone: boolean
   paneIds: Set<string>
+  /** Panes whose row went stale; suppress generated permission labels only. */
+  stalePaneIds: Set<string>
 }
 
 type FlagsCache = {
@@ -56,37 +60,64 @@ function getTerminalTabActivityFlags(
   const now = Date.now()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey ?? {})) {
     const identity = parseAgentStatusPaneKey(entry.paneKey || paneKey)
+    if (!identity) {
+      continue
+    }
+    if (entry.restoredUnconfirmed) {
+      const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
+      flags.paneIds.add(identity.paneId)
+      continue
+    }
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
-    if (!identity || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
+      getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
+        identity.paneId
+      )
       continue
     }
 
-    let flags = flagsByTabId.get(identity.tabId)
-    if (!flags) {
-      flags = {
-        hasPermission: false,
-        hasLiveWorking: false,
-        hasLiveDone: false,
-        paneIds: new Set()
-      }
-      flagsByTabId.set(identity.tabId, flags)
-    }
+    const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
     if (entry.state === 'blocked' || entry.state === 'waiting') {
       flags.hasPermission = true
     } else if (entry.state === 'working') {
-      flags.hasLiveWorking = true
+      if (entry.workingMode === 'monitoring') {
+        flags.hasLiveMonitoring = true
+      } else {
+        flags.hasLiveWorking = true
+      }
+    } else if (entry.interrupted === true) {
+      // Interrupted is encoded as done, so it must be checked first.
+      flags.hasInterrupted = true
     } else if (entry.state === 'done') {
-      // Why: an interrupted `done` still reads as completed here, matching the
-      // WorktreeCard dot (resolveWorktreeStatus has no interrupted state); only
-      // the smart-sort ordering treats interrupts as idle.
       flags.hasLiveDone = true
     }
   }
 
   flagsCache = { agentStatusByPaneKey, agentStatusEpoch, flagsByTabId }
   return flagsByTabId
+}
+
+function getOrCreateTerminalTabActivityFlags(
+  flagsByTabId: Map<string, TerminalTabActivityFlags>,
+  tabId: string
+): TerminalTabActivityFlags {
+  let flags = flagsByTabId.get(tabId)
+  if (!flags) {
+    flags = {
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveMonitoring: false,
+      hasInterrupted: false,
+      hasLiveDone: false,
+      paneIds: new Set(),
+      stalePaneIds: new Set()
+    }
+    flagsByTabId.set(tabId, flags)
+  }
+  return flags
 }
 
 // Why: mirror the sidebar summary's parse — live entries on restored/imported
@@ -104,7 +135,10 @@ function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: stri
 const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 
 type TerminalTabActivityInput = {
-  tab: Pick<TerminalTab, 'id' | 'title'>
+  // Why: launchAgent is read, not just carried — the status gate needs it to attribute a
+  // bare spinner title to an agent (#9040). Narrowing it away here compiles (it is optional)
+  // but silently drops the tab-bar dot back to the pre-#9040 behavior.
+  tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>
   // Why: the store bumps this at the 30m stale boundary without replacing the
   // pane-status map; it is the flag cache's invalidation key (see above).
@@ -135,9 +169,12 @@ export function resolveTerminalTabActivityStatus({
     ptyIdsByTabId: ptyIdsByTabId ?? {},
     runtimePaneTitlesByTabId: runtimePaneTitlesByTabId ?? {},
     agentStatusPaneIdsByTabId: { [tab.id]: flags?.paneIds ?? EMPTY_PANE_IDS },
+    stalePaneIdsByTabId: { [tab.id]: flags?.stalePaneIds ?? EMPTY_PANE_IDS },
     terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
+    hasLiveMonitoring: flags?.hasLiveMonitoring ?? false,
+    hasInterrupted: flags?.hasInterrupted ?? false,
     hasLiveDone: flags?.hasLiveDone ?? false,
     // Why: retained/orchestration promotions are worktree-aggregate concerns;
     // a tab reflects its own live panes and title only.
@@ -147,28 +184,129 @@ export function resolveTerminalTabActivityStatus({
 
 /** True while the tab shows a live in-turn signal (spinner or needs-input). */
 export function isTerminalTabActivityLive(status: TerminalTabActivityStatus): boolean {
-  return status === 'working' || status === 'permission'
+  return status === 'working' || status === 'monitoring' || status === 'permission'
+}
+
+/**
+ * Glyph-bearing attention states for a terminal tab (tab bar + Cmd+J recent chats).
+ * Quiet active/inactive map to null so identity icons stay clean.
+ */
+export type TerminalTabAttentionBadge =
+  | 'working'
+  | 'monitoring'
+  | 'permission'
+  | 'interrupted'
+  | 'unread'
+  | 'done'
+
+/**
+ * Single priority ladder shared by the tab strip and Cmd+J recent rows:
+ * in-turn (working / permission) → unread bell → freshly done check.
+ */
+export function resolveTerminalTabAttentionBadge({
+  status,
+  hasUnread
+}: {
+  status: WorktreeStatus | null | undefined
+  hasUnread: boolean
+}): TerminalTabAttentionBadge | null {
+  if (status === 'working') {
+    return 'working'
+  }
+  if (status === 'permission') {
+    return 'permission'
+  }
+  if (status === 'monitoring') {
+    return 'monitoring'
+  }
+  if (hasUnread) {
+    return 'unread'
+  }
+  if (status === 'done') {
+    return 'done'
+  }
+  if (status === 'interrupted') {
+    return 'interrupted'
+  }
+  return null
+}
+
+/** Map a container activity status onto AgentStateDot's vocabulary (no unread — that's a bell). */
+export function terminalTabActivityToAgentDotState(
+  status: TerminalTabActivityStatus
+): 'working' | 'monitoring' | 'permission' | 'interrupted' | 'done' | null {
+  switch (status) {
+    case 'working':
+    case 'monitoring':
+    case 'permission':
+    case 'interrupted':
+    case 'done':
+      return status
+    case 'active':
+    case 'inactive':
+      return null
+  }
+}
+
+/** Bell or unacked agent completion — same sources the tab strip and floating launcher use. */
+export function terminalTabHasUnreadActivity({
+  terminalTabId,
+  unreadTerminalTabs,
+  unreadAgentCompletionPanes
+}: {
+  terminalTabId: string
+  unreadTerminalTabs: Record<string, boolean | undefined>
+  unreadAgentCompletionPanes: Record<string, boolean | undefined>
+}): boolean {
+  return (
+    unreadTerminalTabs[terminalTabId] === true ||
+    hasUnreadAgentCompletionForTerminalTab(unreadAgentCompletionPanes, terminalTabId)
+  )
+}
+
+// Why: production writes replace this map; WeakMap supports retained snapshots without pinning them.
+let unreadAgentCompletionTabIdsBySnapshot = new WeakMap<
+  Record<string, boolean | undefined>,
+  ReadonlySet<string>
+>()
+
+function getUnreadAgentCompletionTabIds(
+  unreadAgentCompletionPanes: Record<string, boolean | undefined>
+): ReadonlySet<string> {
+  const cached = unreadAgentCompletionTabIdsBySnapshot.get(unreadAgentCompletionPanes)
+  if (cached) {
+    return cached
+  }
+
+  // Why: every mounted tab runs this selector per store write; index each immutable marker snapshot once.
+  const tabIds = new Set<string>()
+  for (const paneKey of Object.keys(unreadAgentCompletionPanes)) {
+    if (!unreadAgentCompletionPanes[paneKey]) {
+      continue
+    }
+    const separatorIndex = paneKey.indexOf(':')
+    tabIds.add(separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex))
+  }
+  unreadAgentCompletionTabIdsBySnapshot.set(unreadAgentCompletionPanes, tabIds)
+  return tabIds
 }
 
 /** Match pane-level unread completion markers to their owning terminal tab. */
 export function hasUnreadAgentCompletionForTerminalTab(
-  unreadAgentCompletionPanes: Record<string, true> | undefined,
+  unreadAgentCompletionPanes: Record<string, boolean | undefined> | undefined,
   tabId: string
 ): boolean {
-  for (const paneKey of Object.keys(unreadAgentCompletionPanes ?? {})) {
-    // paneKey is `${tabId}:${leafId}` and tab ids never contain ":", so the
-    // prefix up to the first ":" is the owning tab id (see
-    // selectFloatingWorkspaceHasUnread). Prefix-match to keep legacy keys.
-    const separatorIndex = paneKey.indexOf(':')
-    const owningTabId = separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
-    if (owningTabId === tabId) {
-      return true
-    }
-  }
-  return false
+  return unreadAgentCompletionPanes
+    ? getUnreadAgentCompletionTabIds(unreadAgentCompletionPanes).has(tabId)
+    : false
 }
 
 /** Test-only: clear the memoized per-tab flag cache between cases. */
 export function resetTerminalTabActivityFlagsCacheForTest(): void {
   flagsCache = null
+}
+
+/** Test-only: clear the unread marker snapshot index between cases. */
+export function resetUnreadAgentCompletionTabIdsCacheForTest(): void {
+  unreadAgentCompletionTabIdsBySnapshot = new WeakMap()
 }

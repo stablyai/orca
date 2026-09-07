@@ -3,9 +3,17 @@ import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
 } from '../../src/shared/protocol-version'
+import {
+  applyTerminalQuickCommandMutation,
+  type TerminalQuickCommandMutation
+} from '../../src/shared/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../src/shared/terminal-quick-command-types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
 import { handleMockGitRequest } from './mock-server-git-state'
-import { FAKE_SCROLLBACK, STREAMING_CHUNKS } from './mock-server-terminal-fixtures'
+import { handleMockAccountRequest } from './mock-server-account-rpc'
+import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
+import { handleMockSessionTabsRequest } from './mock-server-session-tabs-fixture'
+import { handleMockTerminalRequest } from './mock-server-terminal-stream'
 import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
 
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
@@ -15,20 +23,24 @@ const MOCK_RPC_DELAY_MS = readScenarioNumber('MOCK_RPC_DELAY_MS', 0)
 const FAKE_REPOS = createMockRepos(MOCK_REPO_COUNT)
 let fakeWorktrees = createMockWorktrees(FAKE_REPOS, MOCK_WORKTREE_COUNT)
 
-const FAKE_TERMINALS = [
+// Mutable quick-command list so the mobile Quick Commands sheet can add/edit/
+// delete against the mock the same way it does a paired desktop.
+let fakeQuickCommands: TerminalQuickCommand[] = [
   {
-    handle: 'term-1',
-    worktreeId: fakeWorktrees[0]?.worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca',
-    title: 'Claude — auth refactor',
-    isActive: true,
-    hasRunningProcess: true
+    id: 'qc-codex-review',
+    label: 'codex review',
+    action: 'agent-prompt',
+    agent: 'codex',
+    prompt: 'please review this diff for correctness and edge cases.',
+    scope: { type: 'global' }
   },
   {
-    handle: 'term-2',
-    worktreeId: fakeWorktrees[0]?.worktreeId ?? 'repo-1::/tmp/orca-mobile-repro/orca',
-    title: 'zsh',
-    isActive: false,
-    hasRunningProcess: false
+    id: 'qc-dev-server',
+    label: 'dev server',
+    action: 'terminal-command',
+    command: 'pnpm dev',
+    appendEnter: true,
+    scope: { type: 'global' }
   }
 ]
 
@@ -47,6 +59,8 @@ export type RpcResponse = {
   streaming?: true
   _meta: { runtimeId: string }
 }
+
+export type RpcRespond = (response: RpcResponse, shouldSend?: () => boolean) => void
 
 export const mockScenarioSummary = {
   repoCount: FAKE_REPOS.length,
@@ -83,24 +97,41 @@ function repoSelectorToId(repoSelector: unknown): string | null {
   return repoSelector.startsWith('id:') ? repoSelector.slice(3) : repoSelector
 }
 
+function terminalListWorktreeId(worktreeSelector: unknown): string | undefined {
+  if (typeof worktreeSelector === 'string' && worktreeSelector.length > 0) {
+    return worktreeSelector.startsWith('id:') ? worktreeSelector.slice(3) : worktreeSelector
+  }
+  return fakeWorktrees.find((worktree) => worktree.isActive)?.worktreeId
+}
+
 export function handleRequest(
   request: RpcRequest,
   send: (response: RpcResponse) => void,
   ws: WebSocket
 ): void {
-  const respond = (response: RpcResponse) => {
+  const respond: RpcRespond = (response, shouldSend) => {
+    const deliver = () => {
+      if (shouldSend?.() !== false) {
+        send(response)
+      }
+    }
     const delay = responseDelayFor(request.method)
     if (delay > 0) {
-      setTimeout(() => send(response), delay)
+      setTimeout(deliver, delay)
       return
     }
-    send(response)
+    deliver()
   }
 
-  if (handleMockGitRequest(request, respond, success)) {
-    return
-  }
-  if (handleMockFilePreviewRequest(request, respond, success, error)) {
+  // Each returns false for methods it does not own; first owner wins.
+  if (
+    handleMockGitRequest(request, respond, success) ||
+    handleMockFilePreviewRequest(request, respond, success, error) ||
+    handleMockAccountRequest(request, respond, success, error) ||
+    handleMockNativeChatRequest(request, respond, success, error, ws) ||
+    handleMockSessionTabsRequest(request, respond, success, terminalListWorktreeId) ||
+    handleMockTerminalRequest(request, respond, success, ws, terminalListWorktreeId)
+  ) {
     return
   }
 
@@ -111,6 +142,7 @@ export function handleRequest(
           runtimeId: 'mock-runtime',
           protocolVersion: DESKTOP_PROTOCOL_VERSION,
           minCompatibleMobileVersion: MIN_COMPATIBLE_MOBILE_VERSION,
+          capabilities: ['accounts.codex-reset-credit.v1'],
           graphStatus: 'ready',
           windowCount: 1,
           tabCount: 2,
@@ -144,6 +176,19 @@ export function handleRequest(
         })
       )
       break
+
+    case 'settings.getTerminalQuickCommands':
+      respond(success(request.id, { terminalQuickCommands: fakeQuickCommands }))
+      break
+
+    case 'settings.updateTerminalQuickCommands': {
+      const updates = (request.params ?? {}) as { mutation?: TerminalQuickCommandMutation }
+      if (updates.mutation) {
+        fakeQuickCommands = applyTerminalQuickCommandMutation(fakeQuickCommands, updates.mutation)
+      }
+      respond(success(request.id, { terminalQuickCommands: fakeQuickCommands }))
+      break
+    }
 
     case 'ui.get':
       respond(
@@ -237,42 +282,6 @@ export function handleRequest(
       respond(success(request.id, { ok: true }))
       break
     }
-
-    case 'terminal.list':
-      respond(
-        success(request.id, {
-          terminals: FAKE_TERMINALS,
-          totalCount: FAKE_TERMINALS.length,
-          truncated: false
-        })
-      )
-      break
-
-    case 'terminal.subscribe': {
-      respond(success(request.id, { type: 'scrollback', lines: FAKE_SCROLLBACK, truncated: false }))
-
-      let chunkIndex = 0
-      const interval = setInterval(() => {
-        if (chunkIndex >= STREAMING_CHUNKS.length || ws.readyState !== ws.OPEN) {
-          clearInterval(interval)
-          if (ws.readyState === ws.OPEN) {
-            respond(success(request.id, { type: 'end' }))
-          }
-          return
-        }
-        respond(success(request.id, { type: 'data', chunk: STREAMING_CHUNKS[chunkIndex] }, true))
-        chunkIndex++
-      }, 500)
-      break
-    }
-
-    case 'terminal.send':
-      respond(success(request.id, { send: { handle: 'term-1', ok: true } }))
-      break
-
-    case 'terminal.unsubscribe':
-      respond(success(request.id, { unsubscribed: true }))
-      break
 
     case 'files.open':
     case 'files.openDiff':

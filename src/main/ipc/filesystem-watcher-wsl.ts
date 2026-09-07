@@ -13,28 +13,25 @@ import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
 import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
-}
-
-type DebouncedBatch = {
-  events: WatcherEvent[]
-  overflowed: boolean
-  timer: ReturnType<typeof setTimeout> | null
-  firstEventAt: number
 }
 
 export type WatchedRoot = {
   subscription: WatcherSubscription
   listeners: Map<number, WebContents>
   batch: DebouncedBatch
-  rootPath?: string
+  // Why: the real on-disk path. Never substitute the watcher's rootKey — that is
+  // a comparison key (case/Unicode folded) and would reach the renderer as a path.
+  rootPath: string
 }
 
 export type WslWatcherDeps = {
   ignoreDirs: string[]
-  scheduleBatchFlush: (rootKey: string, root: WatchedRoot) => void
+  scheduleBatchFlush: (root: WatchedRoot) => void
   watchedRoots: Map<string, WatchedRoot>
 }
 
@@ -169,7 +166,7 @@ export async function createWslWatcher(
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+    batch: createDebouncedBatch(),
     rootPath: worktreePath
   }
 
@@ -192,11 +189,14 @@ export async function createWslWatcher(
     }
     stopped = true
     markOverflowWithoutUncStat(root)
-    deps.scheduleBatchFlush(rootKey, root)
+    deps.scheduleBatchFlush(root)
     deps.watchedRoots.delete(rootKey)
   }
 
   function ingestFrame(frame: string): void {
+    if (root.batch.cancelled) {
+      return
+    }
     const nextSnapshot = parseSnapshotFrame(frame, distro)
     if (!prevSnapshot) {
       prevSnapshot = nextSnapshot
@@ -208,7 +208,7 @@ export async function createWslWatcher(
 
     if (events.length > 0) {
       queueWatcherEvents(root.batch, events)
-      deps.scheduleBatchFlush(rootKey, root)
+      deps.scheduleBatchFlush(root)
     }
   }
 
@@ -227,7 +227,7 @@ export async function createWslWatcher(
         if (streamBuffer.length > MAX_STREAM_BUFFER_CHARS) {
           streamBuffer = ''
           markOverflowWithoutUncStat(root)
-          deps.scheduleBatchFlush(rootKey, root)
+          deps.scheduleBatchFlush(root)
         }
         return
       }
@@ -243,9 +243,13 @@ export async function createWslWatcher(
     throw new WatcherChildCapacityError()
   }
   try {
-    child = spawn('wsl.exe', ['-d', distro, '--', 'sh', '-s', '--', linuxPath], {
+    child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s', '--', linuxPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      // Why explicit (#16463): the watched directory rides in argv, and an
+      // inherited cwd is a worktree that can be deleted -- after which every
+      // watcher start fails `spawn wsl.exe ENOENT`.
+      cwd: resolveWslInteropSpawnCwd()
     })
   } catch (error) {
     releaseChildReservation()

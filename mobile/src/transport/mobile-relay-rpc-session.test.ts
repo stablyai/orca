@@ -1,15 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
 } from '../../../src/shared/browser-screencast-protocol'
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 const fakes = vi.hoisted(() => ({
   linkOptions: null as null | {
     endpoint: { cellUrl: string; relayHostId: string }
     credential: string
     expectedCredentialKind: string
+    onOpen(): void
     onHello(value: unknown): void
     onAuthenticated(): void
     onText(value: string): void
@@ -53,7 +55,7 @@ function openSession() {
   })
 }
 
-async function authenticateSession() {
+async function confirmResume() {
   const session = openSession()
   fakes.linkOptions!.onHello({
     type: 'relay-hello',
@@ -91,9 +93,39 @@ async function authenticateSession() {
       _meta: { runtimeId: 'runtime-1' }
     })
   )
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+  const capabilityRequest = JSON.parse(fakes.sendText.mock.calls[1]![0] as string) as {
+    id: string
+    method: string
+    deviceToken: string
+    params: { clientCapabilities?: string[] }
+  }
+  return { session, confirmationRequest: request, capabilityRequest }
+}
+
+async function authenticateSession(capabilitySupported = true) {
+  const { session, confirmationRequest, capabilityRequest } = await confirmResume()
+  expect(session.getState()).toBe('handshaking')
+  fakes.linkOptions!.onText(
+    JSON.stringify(
+      capabilitySupported
+        ? {
+            id: capabilityRequest.id,
+            ok: true,
+            result: capabilityRequest.params,
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        : {
+            id: capabilityRequest.id,
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          }
+    )
+  )
   await vi.waitFor(() => expect(session.getState()).toBe('connected'))
   fakes.sendText.mockClear()
-  return { session, confirmationRequest: request }
+  return { session, confirmationRequest, capabilityRequest }
 }
 
 describe('mobile relay RPC session', () => {
@@ -102,9 +134,40 @@ describe('mobile relay RPC session', () => {
     fakes.linkOptions = null
     fakes.sendText.mockReturnValue(true)
   })
+  afterEach(() => vi.useRealTimers())
+
+  it('releases stream listeners on failure even when close follows it', async () => {
+    const { session } = await authenticateSession()
+    const listener = vi.fn()
+    session.subscribe('runtime.clientEvents.subscribe', {}, listener)
+    await Promise.resolve()
+    const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as { id: string }
+    fakes.linkOptions!.onText(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        streaming: true,
+        result: { type: 'ready', subscriptionId: 'server-events' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    expect(listener).toHaveBeenCalledTimes(1)
+    fakes.linkOptions!.onError(new Error('relay lost'))
+    session.close()
+    fakes.linkOptions!.onText(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        streaming: true,
+        result: { type: 'event' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
 
   it('requires exact resume observations and confirms by request ID before becoming connected', async () => {
-    const { session, confirmationRequest } = await authenticateSession()
+    const { session, confirmationRequest, capabilityRequest } = await authenticateSession()
 
     expect(fakes.linkOptions).toMatchObject({
       endpoint: relay,
@@ -118,7 +181,59 @@ describe('mobile relay RPC session', () => {
     })
     expect(confirmationRequest.params).not.toHaveProperty('relayDeviceId')
     expect(confirmationRequest.params).not.toHaveProperty('acceptedCredentialVersion')
-    expect(session.getLeaseExpiresAt()).toEqual(expect.any(Number))
+    expect(capabilityRequest).toMatchObject({
+      method: 'runtime.clientCapabilities.update',
+      params: {
+        clientCapabilities: expect.arrayContaining(['agent-session.structured.v1'])
+      },
+      deviceToken: 'device-token'
+    })
+    expect(session.getAttachDeadlineAt()).toEqual(expect.any(Number))
+  })
+
+  it('connects when an older runtime rejects capability negotiation', async () => {
+    const { session } = await authenticateSession(false)
+
+    expect(session.getState()).toBe('connected')
+    expect(session.getFailure()).toBeNull()
+  })
+
+  it('connects when the relay never answers capability negotiation', async () => {
+    const { session } = await confirmResume()
+
+    // Why: the advisory's own deadline used to fail confirmResume, so a link too slow to
+    // answer within the request timeout never published 'connected' — it just redialled.
+    await vi.waitFor(() => expect(session.getState()).toBe('connected'), { timeout: 5_000 })
+    expect(session.getFailure()).toBeNull()
+  })
+
+  // Why: ConnectionState stays 'connecting' until relay-hello, so the migration bound
+  // needs a separate signal to tell "cell never answered the upgrade" from "cell took
+  // relay-auth and is still resolving the assignment".
+  it('reports the dial stage as the link opens, receives hello, and authenticates', async () => {
+    const session = openSession()
+    const stages: string[] = []
+    session.onDialStageChange((stage) => stages.push(stage))
+    expect(session.getDialStage()).toBe('opening')
+
+    fakes.linkOptions!.onOpen()
+    expect(session.getDialStage()).toBe('awaiting-hello')
+    expect(session.getState()).toBe('connecting')
+    fakes.linkOptions!.onHello({
+      type: 'relay-hello',
+      ok: true,
+      credentialKind: 'resume',
+      leaseExpiresAt: Date.now() + 10_000,
+      acceptedCredentialVersion: 3,
+      acceptedAs: 'current',
+      resumeExpiresAt: Date.now() + 300_000
+    })
+    expect(session.getDialStage()).toBe('handshaking')
+    fakes.linkOptions!.onAuthenticated()
+    expect(session.getDialStage()).toBe('confirming')
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+    expect(stages).toEqual(['awaiting-hello', 'handshaking', 'confirming'])
+    session.close()
   })
 
   it('rejects a mismatched outer credential version and closes the physical link', () => {
@@ -202,6 +317,39 @@ describe('mobile relay RPC session', () => {
     fakes.linkOptions!.onError(new Error('relay transport error'))
 
     await expect(pending).rejects.toThrow('relay transport error')
+    // The frame reached the wire, so the failure must read as delivery-unknown.
+    await expect(pending.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
     expect(session.getState()).toBe('disconnected')
+  })
+
+  it('marks in-flight requests delivery-unknown when the session closes', async () => {
+    const { session } = await authenticateSession()
+    const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+    session.close()
+
+    await expect(pending).rejects.toThrow('Client closed')
+    await expect(pending.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
+  })
+
+  it('marks a relay RPC timeout delivery-unknown', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+      const outcome = pending.catch((error: unknown) => ({
+        message: (error as Error).message,
+        unknown: isRpcDeliveryUnknown(error)
+      }))
+      // Let sendRequest pass its connected-check microtask and register the timer.
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(outcome).resolves.toEqual({
+        message: 'relay RPC timed out: terminal.send',
+        unknown: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

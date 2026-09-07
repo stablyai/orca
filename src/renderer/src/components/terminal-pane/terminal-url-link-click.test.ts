@@ -134,14 +134,17 @@ function makeTerminal(options?: {
   }
 }
 
-function mouseEventForRow(row: number, options: { altKey?: boolean } = {}): MouseEvent {
+function mouseEventForRow(
+  row: number,
+  options: { altKey?: boolean; plain?: boolean } = {}
+): MouseEvent {
   let defaultPrevented = false
   return {
     button: 0,
-    metaKey: true,
+    metaKey: !options.plain,
     ctrlKey: false,
     altKey: options.altKey ?? false,
-    shiftKey: true,
+    shiftKey: !options.plain,
     get defaultPrevented() {
       return defaultPrevented
     },
@@ -379,6 +382,44 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     expect(openUrlMock).toHaveBeenCalledWith('http://example.com/')
   })
 
+  it('does not glue the next logical line onto a URL that ends mid-row (#8832)', () => {
+    const { terminal, registrations } = makeTerminal({
+      cols: 80,
+      urlRows: ['Repo: https://github.com/stablyai/orca/', 'Description: 123'],
+      softWrapped: false
+    })
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+
+    const fallback = registrations.find(
+      ([name, _listener, options]) => name === 'mouseup' && options === undefined
+    )?.[1]
+    fallback!(mouseEventForRow(0))
+
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith('https://github.com/stablyai/orca/')
+    disposable.dispose()
+  })
+
+  it('still joins a URL hard-wrapped at the row edge without native wrap metadata', () => {
+    const cols = 40
+    const url = 'https://example.com/very/long/path/segments/that/continue/more'
+    const { terminal, registrations } = makeTerminal({
+      cols,
+      urlRows: [url.slice(0, cols), url.slice(cols)],
+      softWrapped: false
+    })
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+
+    const fallback = registrations.find(
+      ([name, _listener, options]) => name === 'mouseup' && options === undefined
+    )?.[1]
+    fallback!(mouseEventForRow(0))
+
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(url)
+    disposable.dispose()
+  })
+
   it('does not suppress a modifier-click when the buffer position is not an HTTP link', () => {
     const { terminal, registrations } = makeTerminal({ urlRows: ['not-a-link'] })
     const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
@@ -388,6 +429,24 @@ describe('hard-wrapped terminal HTTP clicks', () => {
 
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
     disposable.dispose()
+  })
+
+  it('temporarily suppresses PTY mouse reporting for a primed OSC link', () => {
+    const { terminal, registrations } = makeTerminal({ urlRows: ['OSC label'] })
+    const terminalWithLinkifier = terminal as unknown as {
+      _core: { linkifier: { _currentLink: unknown } }
+    }
+    terminalWithLinkifier._core = {
+      linkifier: { _currentLink: { link: 'https://example.com/osc' } }
+    }
+    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
+    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+
+    mouseDown!(mouseEventForRow(0))
+
+    expect(terminal.options.mouseEventsRequireAlt).toBe(true)
+    disposable.dispose()
+    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
   })
 
   it('leaves Alt-modified link gestures to the child TUI', () => {
@@ -424,6 +483,54 @@ describe('hard-wrapped terminal HTTP clicks', () => {
     mouseUp!(mouseEventForRow(0))
     await Promise.resolve()
     expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    disposable.dispose()
+  })
+
+  it('owns a plain HTTP link click without opening until an action is chosen', () => {
+    const request = vi.fn()
+    const { terminal, registrations } = makeTerminal()
+    const disposable = installHttpLinkClickFallback(terminal, {
+      worktreeId: 'wt-1',
+      getLinkActionContext: () => ({
+        paneId: 1,
+        pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+        claimPtyMouse: vi.fn(() => true),
+        request,
+        focusTerminal: vi.fn()
+      })
+    })
+    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+    const mouseUp = registrations.find(
+      ([name, _listener, options]) => name === 'mouseup' && options === undefined
+    )?.[1]
+    const event = mouseEventForRow(0, { plain: true })
+
+    mouseDown!(event)
+    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    mouseUp!(event)
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ kind: 'url' }))
+    expect(openUrlMock).not.toHaveBeenCalled()
+    disposable.dispose()
+  })
+
+  it('does not suppress a plain HTTP link when action popovers are disabled', () => {
+    const { terminal, registrations } = makeTerminal()
+    const disposable = installHttpLinkClickFallback(terminal, {
+      worktreeId: 'wt-1',
+      getLinkActionContext: () => null
+    })
+    const mouseDown = registrations.find(([name]) => name === 'mousedown')?.[1]
+    const mouseUp = registrations.find(
+      ([name, _listener, options]) => name === 'mouseup' && options === undefined
+    )?.[1]
+    const event = mouseEventForRow(0, { plain: true })
+
+    mouseDown!(event)
+    mouseUp!(event)
+
+    expect(terminal.options.mouseEventsRequireAlt).toBe(false)
+    expect(openUrlMock).not.toHaveBeenCalled()
     disposable.dispose()
   })
 })

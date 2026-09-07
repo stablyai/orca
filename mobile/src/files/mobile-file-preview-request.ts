@@ -116,6 +116,9 @@ export async function saveMobileTerminalArtifactPreview(
   content: string,
   options: TerminalArtifactSaveOptions = {}
 ): Promise<MobileFilePreviewResult | { status: 'saved' }> {
+  if (source.readOnly) {
+    return previewError('This file is read-only')
+  }
   let writeSource = source
   if (typeof options.baseContent === 'string') {
     const verified = await verifyTerminalArtifactBaseContent(

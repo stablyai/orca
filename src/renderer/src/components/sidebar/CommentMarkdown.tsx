@@ -13,6 +13,7 @@ import {
   isTrustedCompactImageSrc,
   type CommentMarkdownLinkClickHandler
 } from './comment-markdown-element-renderers'
+import { remarkNativeChatFileLinks } from './comment-markdown-native-chat-file-links'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
@@ -185,6 +186,8 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   githubRepo?: GitHubRepoReference | null
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
+  linkifyFilePaths?: boolean
+  expandImages?: boolean
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -199,6 +202,8 @@ const CommentMarkdown = React.memo(
       githubRepo,
       onLinkClick,
       allowFileUriLinks = false,
+      linkifyFilePaths = false,
+      expandImages = false,
       ...rest
     },
     ref
@@ -207,16 +212,20 @@ const CommentMarkdown = React.memo(
       if (!onLinkClick) {
         return variant === 'document'
           ? documentCommentMarkdownComponents
-          : compactCommentMarkdownComponents
+          : expandImages
+            ? createCompactCommentMarkdownComponents(undefined, true)
+            : compactCommentMarkdownComponents
       }
       return variant === 'document'
         ? createDocumentCommentMarkdownComponents(onLinkClick)
-        : createCompactCommentMarkdownComponents(onLinkClick)
-    }, [variant, onLinkClick])
-    const activeRemarkPlugins = React.useMemo(
-      () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
-      [githubRepo]
-    )
+        : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
+    }, [expandImages, variant, onLinkClick])
+    const activeRemarkPlugins = React.useMemo(() => {
+      const plugins = linkifyFilePaths
+        ? [...remarkPlugins, remarkNativeChatFileLinks]
+        : remarkPlugins
+      return githubRepo ? [...plugins, remarkGitHubReferences(githubRepo)] : plugins
+    }, [githubRepo, linkifyFilePaths])
 
     return (
       <div

@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { refreshTerminalImeInputContext } from './terminal-ime-input-context-refresh'
+import {
+  isTerminalImeInputContextRefreshing,
+  refreshTerminalImeInputContext
+} from './terminal-ime-input-context-refresh'
 
 describe('refreshTerminalImeInputContext', () => {
   beforeEach(() => {
@@ -38,6 +41,23 @@ describe('refreshTerminalImeInputContext', () => {
     expect(document.activeElement).toBe(helper)
   })
 
+  it('marks only the synchronous refresh blur so focus ownership can stay latched', () => {
+    const helper = appendHelper()
+    let refreshingDuringBlur = false
+    helper.addEventListener('blur', (event) => {
+      refreshingDuringBlur = isTerminalImeInputContextRefreshing(event.target)
+    })
+    helper.focus()
+
+    refreshTerminalImeInputContext(helper, {
+      isMac: true,
+      scheduleRefocus: vi.fn()
+    })
+
+    expect(refreshingDuringBlur).toBe(true)
+    expect(isTerminalImeInputContextRefreshing(helper)).toBe(false)
+  })
+
   it('does not steal focus if another element grabbed it before the refocus frame', () => {
     const helper = appendHelper()
     const outside = document.createElement('input')
@@ -58,6 +78,47 @@ describe('refreshTerminalImeInputContext', () => {
     }
     expect(focus).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(outside)
+  })
+
+  it('reports when a newer focus owner wins the refocus guard', () => {
+    const helper = appendHelper()
+    const outside = document.createElement('input')
+    document.body.appendChild(outside)
+    const onRefocusSkipped = vi.fn()
+    const scheduled: (() => void)[] = []
+    helper.focus()
+
+    refreshTerminalImeInputContext(helper, {
+      isMac: true,
+      onRefocusSkipped,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+
+    outside.focus()
+    for (const run of scheduled) {
+      run()
+    }
+    expect(onRefocusSkipped).toHaveBeenCalledWith(outside)
+  })
+
+  it('reports when a connected helper cannot accept the scheduled focus', () => {
+    const helper = appendHelper()
+    const onRefocusSkipped = vi.fn()
+    const scheduled: (() => void)[] = []
+    helper.focus()
+
+    refreshTerminalImeInputContext(helper, {
+      isMac: true,
+      onRefocusSkipped,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    vi.spyOn(helper, 'focus').mockImplementation(() => undefined)
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(document.activeElement).toBe(document.body)
+    expect(onRefocusSkipped).toHaveBeenCalledWith(document.body)
   })
 
   it('skips non-macOS platforms', () => {

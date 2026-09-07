@@ -1,4 +1,4 @@
-import type { Project } from '../../../shared/types'
+import type { Project } from '../../../shared/project-types'
 
 export function getProjectHostCloneUrl(project: Project | null | undefined): string | null {
   const identity = project?.providerIdentity
@@ -10,5 +10,26 @@ export function getProjectHostCloneUrl(project: Project | null | undefined): str
   if (!owner || !repo) {
     return null
   }
-  return `https://github.com/${owner}/${repo}.git`
+  const requestedHost = identity.host?.trim() || 'github.com'
+  if (/[\\/@?#]/.test(requestedHost)) {
+    return null
+  }
+  let host: string
+  try {
+    const parsed = new URL(`https://${requestedHost}`)
+    if (
+      parsed.protocol !== 'https:' ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== '/' ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return null
+    }
+    host = parsed.host
+  } catch {
+    return null
+  }
+  return `https://${host}/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}.git`
 }

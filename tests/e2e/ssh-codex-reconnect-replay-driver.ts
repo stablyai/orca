@@ -1,5 +1,6 @@
+import { installSshReplayReplyProbe, readSshReplayReplies } from './ssh-codex-replay-reply-probe'
 import { execFileSync } from 'node:child_process'
-import type { Page } from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect } from './helpers/orca-app'
 import {
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
@@ -29,7 +30,7 @@ export async function connectDockerRemote(
   page: Page,
   target: DockerSshRelayTarget
 ): Promise<ConnectedDockerRemote> {
-  return await page.evaluate(
+  const remote = await page.evaluate(
     async ({ target, remotePath }) => {
       const store = window.__store
       if (!store) {
@@ -70,22 +71,44 @@ export async function connectDockerRemote(
         }
         await store.getState().fetchRepos()
         await store.getState().fetchWorktrees(result.repo.id)
-        const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? [])[0]
-        if (!worktree) {
-          throw new Error(`No remote worktree found for ${result.repo.path}`)
-        }
-        store.getState().setActiveWorktree(worktree.id)
-        if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
-          store.getState().createTab(worktree.id)
-        }
-        store.getState().setActiveTabType('terminal')
-        return { targetId: createdTarget.id, worktreeId: worktree.id }
+        return { targetId: createdTarget.id, repoId: result.repo.id, repoPath: result.repo.path }
       } finally {
         credentialUnsub()
       }
     },
     { target, remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH }
   )
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (repoId) => {
+          const store = window.__store
+          if (!store) {
+            return 0
+          }
+          await store.getState().fetchWorktrees(repoId)
+          return store.getState().worktreesByRepo[repoId]?.length ?? 0
+        }, remote.repoId),
+      { timeout: 30_000, message: `No remote worktree found for ${remote.repoPath}` }
+    )
+    .toBeGreaterThan(0)
+
+  const worktreeId = await page.evaluate((repoId) => {
+    const store = window.__store
+    const worktree = store?.getState().worktreesByRepo[repoId]?.[0]
+    if (!store || !worktree) {
+      throw new Error(`Remote worktree disappeared for repo ${repoId}`)
+    }
+    store.getState().setActiveWorktree(worktree.id)
+    if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
+      store.getState().createTab(worktree.id)
+    }
+    store.getState().setActiveTabType('terminal')
+    return worktree.id
+  }, remote.repoId)
+
+  return { targetId: remote.targetId, worktreeId }
 }
 
 export async function switchToNonRemoteWorktree(
@@ -113,8 +136,13 @@ export async function switchToNonRemoteWorktree(
   return otherWorktreeId
 }
 
-export async function installPtyReplayProbe(page: Page): Promise<void> {
-  await page.evaluate(() => {
+export async function installPtyReplayProbe(
+  page: Page,
+  app: ElectronApplication,
+  ptyId: string
+): Promise<void> {
+  await installSshReplayReplyProbe(app, ptyId)
+  await page.evaluate((expectedPtyId) => {
     const api = window.api?.pty
     if (!api || typeof api.onReplay !== 'function') {
       throw new Error('PTY replay API unavailable')
@@ -128,6 +156,9 @@ export async function installPtyReplayProbe(page: Page): Promise<void> {
     holder.__orcaSshCodexReplayProbe?.dispose()
     const payloads: { id: string; length: number; preview: string }[] = []
     const dispose = api.onReplay(({ id, data }) => {
+      if (id !== expectedPtyId) {
+        return
+      }
       payloads.push({
         id,
         length: data.length,
@@ -135,7 +166,7 @@ export async function installPtyReplayProbe(page: Page): Promise<void> {
       })
     })
     holder.__orcaSshCodexReplayProbe = { payloads, dispose }
-  })
+  }, ptyId)
 }
 
 export async function waitForDockerRemoteReconnected(page: Page, targetId: string): Promise<void> {
@@ -160,8 +191,12 @@ export async function waitForDockerRemoteReconnected(page: Page, targetId: strin
     .toBe(true)
 }
 
-export async function readReplayProbeSnapshot(page: Page): Promise<Record<string, unknown>> {
-  return page.evaluate(() => {
+export async function readReplayProbeSnapshot(
+  page: Page,
+  app: ElectronApplication
+): Promise<Record<string, unknown>> {
+  const replies = await readSshReplayReplies(app)
+  return page.evaluate((replies) => {
     const probe = (
       window as unknown as {
         __orcaSshCodexReplayProbe?: {
@@ -170,10 +205,10 @@ export async function readReplayProbeSnapshot(page: Page): Promise<Record<string
       }
     ).__orcaSshCodexReplayProbe
     return {
-      replayCount: probe?.payloads.length ?? 0,
-      replayPayloads: probe?.payloads.slice(-8) ?? []
+      replayCount: (probe?.payloads.length ?? 0) + replies.length,
+      replayPayloads: [...(probe?.payloads ?? []), ...replies].slice(-8)
     }
-  })
+  }, replies)
 }
 
 export async function readDuplicateStatusRows(page: Page): Promise<string[]> {

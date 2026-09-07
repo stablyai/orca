@@ -1,9 +1,9 @@
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type {
   CreateSparseCheckoutRequest,
-  GitPushTarget,
-  SetupDecision,
-  TuiAgent
-} from '../../../src/shared/types'
+  SetupDecision
+} from '../../../src/shared/worktree/create-types'
+import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import { getWorkspaceSourceName } from '../../../src/shared/new-workspace/workspace-source'
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
@@ -57,6 +57,22 @@ export type WorkspaceCreateTaskItem =
 
 export type WorkspaceCreateParams = Record<string, unknown>
 
+/**
+ * `worktree.create` fields for launching the picked agent in a fresh session.
+ *
+ * Why: send the agent id so the host resolves launch args (permission flags)
+ * and host-shell quoting, matching the "+" new-tab and CLI paths.
+ */
+export function agentLaunchCreateFields(agentId: TuiAgent | undefined): {
+  startupAgent?: TuiAgent
+  createdWithAgent?: TuiAgent
+} {
+  if (!agentId) {
+    return {}
+  }
+  return { startupAgent: agentId, createdWithAgent: agentId }
+}
+
 export function buildTaskWorkspaceCreateParams(args: {
   item: WorkspaceCreateTaskItem
   targetRepoId: string
@@ -92,8 +108,7 @@ export function buildTaskWorkspaceCreateParams(args: {
   const comment = note?.trim()
   const selectedBaseBranch = baseBranch || hostedStartPoint?.baseBranch
   const selectedPushTarget = pushTarget ?? hostedStartPoint?.pushTarget
-  // Why: desktop only sends displayName while the name is still auto-derived; a
-  // user-edited name suppresses it so the runtime keeps the user's chosen name.
+  // Preserve provenance so the host can distinguish an intentional label from a generated title.
   const sourceName =
     item.provider === 'linear'
       ? getWorkspaceSourceName({
@@ -105,7 +120,11 @@ export function buildTaskWorkspaceCreateParams(args: {
           linearIdentifier: item.source.identifier
         })
       : getWorkspaceSourceName({ provider: item.provider, ...item.source })
-  const displayName = nameIsAutoManaged ? { displayName: sourceName.displayName } : {}
+  const displayName = nameIsAutoManaged
+    ? { displayName: sourceName.displayName, displayNameKind: 'generated' as const }
+    : workspaceName?.trim()
+      ? { displayName: workspaceName, displayNameKind: 'user' as const }
+      : {}
   const common = {
     setupDecision,
     activate: true,

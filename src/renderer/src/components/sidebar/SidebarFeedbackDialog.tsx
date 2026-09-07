@@ -13,8 +13,16 @@ import {
 } from '@/components/ui/dialog'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
-import type { GitHubViewer } from '../../../../shared/types'
+import type { GitHubViewer } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
+import {
+  extractImageFilesFromDataTransfer,
+  hasAttachableFeedbackImage
+} from '@/lib/feedback-image-attachments'
+import { stripClientEnvironmentFooter } from '../../../../shared/client-environment-info'
+import { SidebarFeedbackImageAttachments } from './SidebarFeedbackImageAttachments'
+import { useSidebarFeedbackEnvironmentPrefill } from './use-sidebar-feedback-environment-prefill'
+import { useSidebarFeedbackImages } from './use-sidebar-feedback-images'
 
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
@@ -59,6 +67,26 @@ export function SidebarFeedbackDialog({
   const [submitAnonymously, setSubmitAnonymously] = useState(false)
   const mountedRef = useMountedRef()
   const feedbackTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const {
+    images,
+    pendingImageReadCount,
+    isDragActive,
+    contentRef,
+    dragHandlers,
+    handleAddFiles,
+    handleRemoveImage,
+    clearImages,
+    hasPendingImageReads,
+    getReservedImageSlots
+  } = useSidebarFeedbackImages({ open, isSubmitting, mountedRef })
+
+  useSidebarFeedbackEnvironmentPrefill({
+    open,
+    feedback,
+    setFeedback,
+    textareaRef: feedbackTextareaRef,
+    mountedRef
+  })
 
   React.useEffect(() => {
     if (!open) {
@@ -92,8 +120,12 @@ export function SidebarFeedbackDialog({
   }, [open])
 
   const handleSubmit = async (): Promise<void> => {
+    if (isSubmitting || hasPendingImageReads()) {
+      return
+    }
     const trimmed = feedback.trim()
-    if (!trimmed) {
+    const userText = stripClientEnvironmentFooter(feedback).trim()
+    if (!trimmed || !userText) {
       toast.warning(
         translate(
           'auto.components.sidebar.SidebarFeedbackDialog.a2fd890d9e',
@@ -115,7 +147,11 @@ export function SidebarFeedbackDialog({
         feedback: trimmed,
         submitAnonymously,
         githubLogin: identity.githubLogin,
-        githubEmail: identity.githubEmail
+        githubEmail: identity.githubEmail,
+        images: images.map((image) => ({
+          contentType: image.contentType,
+          data: image.data
+        }))
       })
 
       if (!result.ok) {
@@ -123,14 +159,26 @@ export function SidebarFeedbackDialog({
       }
 
       if (mountedRef.current) {
-        toast.success(
-          translate(
-            'auto.components.sidebar.SidebarFeedbackDialog.7a46c228b8',
-            'Thanks for the feedback.'
+        // Why: the text reached us but the screenshots did not, so say that
+        // plainly instead of a blanket success the user would misread.
+        if (result.imagesDelivered === false) {
+          toast.warning(
+            translate(
+              'auto.components.sidebar.SidebarFeedbackDialog.imagesNotDelivered',
+              'Feedback sent, but image delivery could not be confirmed.'
+            )
           )
-        )
+        } else {
+          toast.success(
+            translate(
+              'auto.components.sidebar.SidebarFeedbackDialog.7a46c228b8',
+              'Thanks for the feedback.'
+            )
+          )
+        }
         setFeedback('')
         setSubmitAnonymously(false)
+        clearImages()
         onOpenChange(false)
       }
     } catch (err) {
@@ -153,11 +201,30 @@ export function SidebarFeedbackDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-lg"
+        ref={contentRef}
+        className="max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-lg"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           feedbackTextareaRef.current?.focus()
         }}
+        // Why: paste is bound on the dialog rather than the textarea so a
+        // screenshot lands whether or not the caret is in the message box.
+        onPaste={(event) => {
+          const pasted = extractImageFilesFromDataTransfer(event.clipboardData)
+          if (pasted.length === 0) {
+            return
+          }
+          // Why: consume the paste only when something is actually attachable.
+          // An unsupported image still routes through for its rejection toast,
+          // but preventing default there would silently eat co-pasted text.
+          if (hasAttachableFeedbackImage(pasted, getReservedImageSlots())) {
+            event.preventDefault()
+          }
+          handleAddFiles(pasted)
+        }}
+        // Why: dragenter/leave fire per nested child; the hook counts depth so
+        // the highlight only clears once the pointer leaves the dialog.
+        {...dragHandlers}
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
@@ -237,6 +304,14 @@ export function SidebarFeedbackDialog({
           className="min-h-32 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
 
+        <SidebarFeedbackImageAttachments
+          images={images}
+          disabled={isSubmitting}
+          isDragActive={isDragActive}
+          onAddFiles={handleAddFiles}
+          onRemove={handleRemoveImage}
+        />
+
         <div className="min-h-9 rounded-md border border-border/70 bg-muted/30 px-3 py-2">
           {viewer ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -283,7 +358,14 @@ export function SidebarFeedbackDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             {translate('auto.components.sidebar.SidebarFeedbackDialog.8bf619e4cf', 'Cancel')}
           </Button>
-          <Button onClick={() => void handleSubmit()} disabled={isSubmitting || !feedback.trim()}>
+          <Button
+            onClick={() => void handleSubmit()}
+            disabled={
+              isSubmitting ||
+              pendingImageReadCount > 0 ||
+              stripClientEnvironmentFooter(feedback).trim() === ''
+            }
+          >
             {isSubmitting
               ? translate('auto.components.sidebar.SidebarFeedbackDialog.69969ba364', 'Sending…')
               : translate('auto.components.sidebar.SidebarFeedbackDialog.f2e42e1307', 'Send')}

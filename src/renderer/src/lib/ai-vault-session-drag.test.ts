@@ -49,11 +49,18 @@ describe('Session History session drag data', () => {
       title: 'Fix terminal split',
       command: "cd '/repo' && claude --resume session-1",
       sessionFilePath: '/Users/ada/.claude/projects/-repo/session-1.jsonl',
+      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home',
+      sessionCwd: '/repo',
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       launchConfig: {
         agentCommand: 'claude --dangerously-skip-permissions',
         agentArgs: '--dangerously-skip-permissions',
         agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
+      },
+      realHomeStartup: {
+        command: "cd '/repo' && claude --resume session-1",
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
       }
     }
 
@@ -62,6 +69,45 @@ describe('Session History session drag data', () => {
     expect(transfer.effectAllowed).toBe('copy')
     expect(hasAiVaultSessionDragData(transfer)).toBe(true)
     expect(readAiVaultSessionDragData(transfer)).toEqual(payload)
+  })
+
+  it('preserves an explicit null sessionCwd across the serialized round-trip', () => {
+    const transfer = createTransfer()
+    const payload: AiVaultSessionDragPayload = {
+      agent: 'codex',
+      sessionId: 'session-3',
+      title: 'Session without a recorded cwd',
+      command: 'codex resume session-3',
+      sessionFilePath: '/tmp/orca/codex-accounts/a/home/sessions/2026/07/20/rollout-x.jsonl',
+      codexHome: '/tmp/orca/codex-accounts/a/home',
+      sessionCwd: null
+    }
+
+    writeAiVaultSessionDragData(transfer, payload)
+
+    const read = readAiVaultSessionDragData(transfer)
+    expect(read).toEqual(payload)
+    // Explicit null (no cwd) must stay distinguishable from an absent key (old serializer).
+    expect(read && 'sessionCwd' in read).toBe(true)
+  })
+
+  it('keeps sessionCwd absent when an older serializer omitted it', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'codex',
+        sessionId: 'session-4',
+        title: 'Old-window payload',
+        command: 'codex resume session-4'
+      })
+    )
+
+    const read = readAiVaultSessionDragData(transfer)
+    expect(read).not.toBeNull()
+    expect(read && 'sessionCwd' in read).toBe(false)
   })
 
   it('rejects blank session file paths', () => {
@@ -104,6 +150,24 @@ describe('Session History session drag data', () => {
         title: 'Malformed env',
         command: 'claude --resume session-1',
         env: ['ANTHROPIC_BASE_URL=https://claude.example.test']
+      })
+    )
+
+    expect(readAiVaultSessionDragData(transfer)).toBeNull()
+  })
+
+  it('rejects malformed env deletion lists', () => {
+    const transfer = createTransfer()
+    transfer.setData(
+      AI_VAULT_SESSION_DRAG_TYPE,
+      JSON.stringify({
+        kind: 'ai-vault-session',
+        version: 1,
+        agent: 'codex',
+        sessionId: 'session-1',
+        title: 'Malformed env deletion',
+        command: 'codex resume session-1',
+        envToDelete: ['CODEX_HOME', '']
       })
     )
 

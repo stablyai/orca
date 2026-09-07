@@ -2,7 +2,7 @@ import {
   collectCompactWorkspaceWords,
   foldWorkspaceNameWhitespaceToHyphen
 } from './workspace-name-text-scanner'
-import { formatIdentifierFirst } from './work-item-reference'
+import { escapeRegex } from './string-utils'
 
 function normalizeApostrophes(input: string): string {
   return input.replace(/[‘’]/g, "'")
@@ -136,10 +136,6 @@ function compactWords(input: string, maxWords = 4): string {
   return words.map(titleCaseWord).join(' ')
 }
 
-function escapeRegExp(input: string): string {
-  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
 function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): string {
   const identifier = item.linearIdentifier ?? item.jiraIdentifier
   let withoutPrefix = title
@@ -153,7 +149,7 @@ function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): str
   }
   if (identifier) {
     withoutPrefix = withoutPrefix
-      .replace(new RegExp(`^${escapeRegExp(identifier)}\\s*[:-]?\\s*`, 'i'), '')
+      .replace(new RegExp(`^${escapeRegex(identifier)}\\s*[:-]?\\s*`, 'i'), '')
       .trim()
   }
   return compactWords(withoutPrefix || title, 3)
@@ -182,7 +178,7 @@ export function getLinkedWorkItemWorkspaceName(
   let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
   if (identifier) {
     subject = subject
-      .replace(new RegExp(`^${escapeRegExp(identifier)}\\s*[:-]?\\s*`, 'i'), '')
+      .replace(new RegExp(`^${escapeRegex(identifier)}\\s*[:-]?\\s*`, 'i'), '')
       .trim()
   }
   const displayName = [identifier, subject].filter(Boolean).join(' ') || workItemIdentity(item)
@@ -215,10 +211,7 @@ export function getWorkspaceIntentName(args: {
     const action = detectIntentAction(sourceText) ?? defaultActionForWorkItem(item)
     const identity = workItemIdentity(item)
     if (action) {
-      // Identifier-first so the sidebar leads with the searchable token
-      // (`PR 1033 - Review`); the shared formatIdentifierFirst keeps first-create,
-      // auto-rename, and tab-title names on one format.
-      displayName = formatIdentifierFirst(identity, action)
+      displayName = `${action} ${identity}`
     } else {
       const subject = compactWorkItemTitle(item.title, item)
       displayName = [identity, subject].filter(Boolean).join(' ')

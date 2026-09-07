@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { isDotfileRelativePath } from './file-explorer-entries'
 import type { DirCache, TreeNode } from './file-explorer-types'
@@ -109,6 +109,43 @@ export function createVisibleFileExplorerRowProjection(
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
+function relativePathListsEqual(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) {
+    return false
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false
+    }
+  }
+  return true
+}
+
+/**
+ * Holds the array identity while its contents are unchanged.
+ *
+ * Why: a tree refresh commits dirCache once per read wave, and every commit
+ * rebuilds this list. Each new identity would re-issue the uncancellable git
+ * check-ignore over the whole visible tree — the remote round trips the wave cap
+ * exists to bound.
+ */
+function useContentStableRelativePaths(relativePaths: string[], enabled: boolean): string[] {
+  // Why: filters need fresh identities per keystroke and must not evict the tree signature.
+  const prevRef = useRef<string[] | null>(null)
+  const prev = prevRef.current
+  // Why publish `stable`, not `relativePaths`: the ref must hold what this hook actually
+  // returned. Publishing the input instead leaves the ref one commit behind, so a wave of
+  // content-equal arrays flips identity on every render — the churn this hook exists to stop.
+  const stable =
+    enabled && prev && relativePathListsEqual(prev, relativePaths) ? prev : relativePaths
+  // Why write-in-effect: render must stay pure (react-doctor); the first commit of a new
+  // list loses stability, never staleness.
+  useEffect(() => {
+    prevRef.current = stable
+  }, [stable])
+  return stable
+}
+
 export function useFileExplorerVisibleRowProjection(
   activeWorktreeId: string | null,
   worktreePath: string | null,
@@ -128,7 +165,7 @@ export function useFileExplorerVisibleRowProjection(
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const showGitIgnoredFiles = settings?.showGitIgnoredFiles ?? true
-  const relativePaths = useMemo(
+  const rebuiltRelativePaths = useMemo(
     () =>
       activeRepoSupportsGit
         ? nameFilter
@@ -140,6 +177,9 @@ export function useFileExplorerVisibleRowProjection(
         : EMPTY_RELATIVE_PATHS,
     [activeRepoSupportsGit, dirCache, expanded, nameFilter, showDotfiles, worktreePath]
   )
+  // Why: the name-filter list is debounced per keystroke, so it must keep a fresh
+  // identity; only the dirCache-derived list needs stability across wave commits.
+  const relativePaths = useContentStableRelativePaths(rebuiltRelativePaths, !nameFilter)
   const canLoadIgnoredPaths =
     activeRepoSupportsGit &&
     Boolean(activeWorktreeId) &&

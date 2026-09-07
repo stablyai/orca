@@ -1,6 +1,7 @@
 import type React from 'react'
 
-import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import type { FeatureInteractionId } from '../../../../shared/feature-interaction-catalog'
 import { SearchableSetting } from './SearchableSetting'
 import { AppearanceAdvancedDisclosure } from './AppearanceAdvancedDisclosure'
@@ -22,6 +23,7 @@ import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percenta
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
+  getShowPinnedWorktreesInGroupsEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { translate } from '@/i18n/i18n'
@@ -201,8 +203,6 @@ export function AppearanceWindowSidebarSection({
                   title={translate('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
                 />
                 <div className="ml-4 divide-y divide-border/40">
-                  {/* Why: this setting lives with the sidebar layout controls; Settings only
-                  names that ownership so we do not create a second stateful control. */}
                   <SearchableSetting
                     title={workspaceCardLayoutEntry.title}
                     description={workspaceCardLayoutEntry.description}
@@ -305,6 +305,33 @@ export function AppearanceWindowSidebarSection({
                       checked={settings.showMobileButton !== false}
                       onChange={() =>
                         updateSettings({ showMobileButton: !(settings.showMobileButton !== false) })
+                      }
+                    />
+                  </SearchableSetting>
+
+                  <SearchableSetting
+                    title={getShowPinnedWorktreesInGroupsEntry().title}
+                    description={getShowPinnedWorktreesInGroupsEntry().description}
+                    keywords={getShowPinnedWorktreesInGroupsEntry().keywords}
+                  >
+                    <SettingsSwitchRow
+                      label={translate(
+                        'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.title',
+                        'Also show pinned worktrees in their original lists'
+                      )}
+                      // Why: pinned worktrees show only in Pinned by default; this opt-in
+                      // keeps them in Pinned and also re-lists them in their natural groups.
+                      description={translate(
+                        'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.description',
+                        'Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR.'
+                      )}
+                      checked={settings.showPinnedWorktreesInGroups === true}
+                      onChange={() =>
+                        updateSettings({
+                          showPinnedWorktreesInGroups: !(
+                            settings.showPinnedWorktreesInGroups === true
+                          )
+                        })
                       }
                     />
                   </SearchableSetting>

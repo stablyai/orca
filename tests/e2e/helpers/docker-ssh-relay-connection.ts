@@ -1,6 +1,8 @@
-import type { Page } from '@stablyai/playwright-test'
+import { connectSshTestTarget } from './ssh-test-target-connection'
+import { expect, type Page } from '@stablyai/playwright-test'
 
 import {
+  DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH,
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
   type DockerSshRelayTarget
 } from './docker-ssh-relay-target'
@@ -13,6 +15,15 @@ export type ConnectedDockerSshRelayTarget = {
 
 type DockerSshRelayConnectionOptions = {
   relayGracePeriodSeconds?: number
+  remotePath?: string
+  viaProxyJump?: boolean
+  /**
+   * Seed a terminal tab when the worktree has none. Default true.
+   *
+   * Why it is optional: a spec asking whether the PRODUCT adds a tab cannot tell this helper's
+   * tab from the one under test, so it must be able to leave the worktree empty.
+   */
+  seedInitialTab?: boolean
 }
 
 export async function connectDockerSshRelayTarget(
@@ -20,69 +31,26 @@ export async function connectDockerSshRelayTarget(
   target: DockerSshRelayTarget,
   options: DockerSshRelayConnectionOptions = {}
 ): Promise<ConnectedDockerSshRelayTarget> {
-  return page.evaluate(
-    async ({ target, remotePath, relayGracePeriodSeconds }) => {
-      const store = window.__store
-      if (!store) {
-        throw new Error('Store unavailable')
-      }
-      const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
-        void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
-      })
-      try {
-        const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
-          target: {
-            label: `Docker SSH Relay E2E ${Date.now()}`,
-            host: '127.0.0.1',
-            port: target.port,
-            username: 'root',
-            identityFile: target.identityFile,
-            identitiesOnly: true,
-            relayGracePeriodSeconds
-          }
-        })
-        store.getState().recordSshRepoReadoptions(repoReadoptions)
-        const state = await window.api.ssh.connect({ targetId: createdTarget.id })
-        if (!state || state.status !== 'connected') {
-          throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
-        }
-        store.getState().setSshConnectionState(createdTarget.id, state)
-        const labels = new Map(store.getState().sshTargetLabels)
-        labels.set(createdTarget.id, createdTarget.label)
-        store.getState().setSshTargetLabels(labels)
-
-        const result = await window.api.repos.addRemote({
-          connectionId: createdTarget.id,
-          remotePath,
-          displayName: 'Docker SSH Relay E2E'
-        })
-        if ('error' in result) {
-          throw new Error(result.error)
-        }
-        await store.getState().fetchRepos()
-        await store.getState().fetchWorktrees(result.repo.id)
-        const worktree = (store.getState().worktreesByRepo[result.repo.id] ?? [])[0]
-        if (!worktree) {
-          throw new Error(`No remote worktree found for ${result.repo.path}`)
-        }
-        store.getState().setActiveWorktree(worktree.id)
-        if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
-          store.getState().createTab(worktree.id)
-        }
-        store.getState().setActiveTabType('terminal')
-        return {
-          targetId: createdTarget.id,
-          repoId: result.repo.id,
-          worktreeId: worktree.id
-        }
-      } finally {
-        credentialUnsub()
-      }
+  const viaProxyJump = options.viaProxyJump ?? false
+  return connectSshTestTarget(
+    page,
+    {
+      label: `${viaProxyJump ? 'Docker SSH ProxyJump' : 'Docker SSH Relay'} E2E ${Date.now()}`,
+      ...(viaProxyJump ? { configHost: 'orca-e2e-destination' } : {}),
+      host: target.host,
+      port: viaProxyJump ? 22 : target.port,
+      username: 'root',
+      identityFile: target.identityFile,
+      identitiesOnly: true,
+      ...(viaProxyJump ? { jumpHost: 'orca-e2e-jump' } : {}),
+      relayGracePeriodSeconds: options.relayGracePeriodSeconds ?? 1
     },
     {
-      target,
-      remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
-      relayGracePeriodSeconds: options.relayGracePeriodSeconds ?? 1
+      remotePath:
+        options.remotePath ??
+        (viaProxyJump ? DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH : DOCKER_SSH_RELAY_REMOTE_REPO_PATH),
+      displayName: viaProxyJump ? 'Docker SSH ProxyJump E2E' : 'Docker SSH Relay E2E',
+      seedInitialTab: options.seedInitialTab
     }
   )
 }
@@ -90,6 +58,12 @@ export async function connectDockerSshRelayTarget(
 export async function disconnectDockerSshRelayTarget(page: Page, targetId: string): Promise<void> {
   await page.evaluate(async (targetId) => {
     await window.api.ssh.disconnect({ targetId })
+  }, targetId)
+}
+
+export async function resetDockerSshRelayTarget(page: Page, targetId: string): Promise<void> {
+  await page.evaluate(async (targetId) => {
+    await window.api.ssh.resetRelay({ targetId })
   }, targetId)
 }
 
@@ -126,4 +100,34 @@ export async function reconnectDisconnectedDockerSshRelayTarget(
   targetId: string
 ): Promise<void> {
   return performDockerSshRelayReconnect(page, targetId, false)
+}
+
+export async function recoverDockerSshRelayAfterFault(
+  page: Page,
+  targetId: string,
+  injectFault: () => void | Promise<void>
+): Promise<void> {
+  const readAuthority = () =>
+    page.evaluate((id) => window.__store?.getState().sshConnectionStates.get(id), targetId)
+  const before = await readAuthority()
+  expect(before).toMatchObject({
+    status: 'connected',
+    providerEpoch: expect.any(String),
+    connectionGeneration: expect.any(Number)
+  })
+  await injectFault()
+  // The pre-fault connected publication can remain visible until the next IPC event.
+  await expect
+    .poll(
+      async () => {
+        const after = await readAuthority()
+        return (
+          after?.status === 'connected' &&
+          (after.providerEpoch !== before?.providerEpoch ||
+            after.connectionGeneration !== before?.connectionGeneration)
+        )
+      },
+      { timeout: 120_000, message: 'SSH authority did not recover after the injected fault' }
+    )
+    .toBe(true)
 }

@@ -208,8 +208,8 @@ export function SectionMenu({
   return (
     <div className="py-1 text-xs">
       <div className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {translate('auto.components.github.PRFilterSections.8177eda37e', 'Filter')}
-        {subject}
+        {translate('auto.components.github.PRFilterSections.8177eda37e', 'Filter')}{' '}
+        <span>{subject}</span>
       </div>
       {rows.map((row) => (
         <button

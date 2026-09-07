@@ -79,6 +79,54 @@ export function installMonacoDiffChangeNavigationShortcut(
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
+export function installEditorAddReviewNoteShortcut(
+  target: HTMLElement,
+  onAddReviewNote: () => boolean
+): () => void {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (!editorShortcutMatches('editor.addReviewNote', event)) {
+      return
+    }
+    // Why: ignore OS key-repeat so a held chord cannot thrash open/remount.
+    // Open drafts are consumed by installOpenDraftAddReviewNoteGuard instead.
+    if (event.repeat) {
+      return
+    }
+    // Why: only consume the chord when a composer actually opens; on files
+    // where review notes can never apply the key must stay available to
+    // whatever else the user bound it to.
+    if (onAddReviewNote()) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+  }
+
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
+/**
+ * While a review-note/diff-comment draft composer is mounted, consume the
+ * bindable add-review-note chord (including OS key-repeat) so a second press
+ * cannot remount the composer or leak into other handlers (product B).
+ *
+ * Scoped to the composer's own subtree (which contains the focused textarea)
+ * rather than `window` so a draft open in one editor pane never swallows the
+ * chord typed into a different pane or surface.
+ */
+export function installOpenDraftAddReviewNoteGuard(target: HTMLElement): () => void {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (!editorShortcutMatches('editor.addReviewNote', event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
 type MonacoFindShortcutEditor = {
   getAction: (id: string) => { run: () => void | Promise<void> } | null
   getContainerDomNode: () => HTMLElement

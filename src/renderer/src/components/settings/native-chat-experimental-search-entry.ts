@@ -4,10 +4,7 @@ import { translateSearchKeyword } from './settings-search-keywords'
 
 export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
   return {
-    title: translate(
-      'auto.components.settings.experimental.search.nativeChat.title',
-      'Native chat'
-    ),
+    title: translate('auto.components.settings.experimental.search.nativeChat.title', 'Chat UI'),
     description: translate(
       'auto.components.settings.experimental.search.nativeChat.description',
       'Preview the desktop chat surface for supported agent terminal sessions.'
@@ -34,8 +31,16 @@ export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
         'codex'
       ),
       ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.openclaude',
+        'openclaude'
+      ),
+      ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.grok',
         'grok'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.omp',
+        'omp'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.terminal',

@@ -1,25 +1,8 @@
-// NDJSON sink with size-based file rotation. Spans are serialized one per
-// line to a primary file, and when that file's byte budget is exceeded the
-// sink rolls it forward (`main.trace.ndjson` → `main.trace.ndjson.1` →
-// `main.trace.ndjson.2` → … → `main.trace.ndjson.N`, oldest deleted).
-//
-// Defaults match the local-first trace sink design: 10 MB × 10 files. 100 MB
-// is the worst-case footprint on a user's disk, keeping the sizing bounded
-// without adding a network dependency.
-//
-// Two design constraints worth calling out:
-//
-//   1. Synchronous writes by default. The error-tracking lane has to be
-//      durable on crash — if the renderer or main process is about to die,
-//      a buffered async flush is exactly what we don't want. We use the
-//      `appendFileSync` path (cheap on modern fs at this volume) and
-//      explicitly do a final `flush()` on shutdown.
-//
-//   2. Buffered batches with a flush threshold. Batches of up to
-//      `FLUSH_BUFFER_THRESHOLD` lines are coalesced into one syscall to
-//      keep the per-span cost low; a periodic interval flushes the partial
-//      batch every `batchWindowMs` so a sparse-trace session still ends up
-//      on disk. Both knobs are configurable for tests.
+// NDJSON trace sink with size-based rotation (`main.trace.ndjson` → `.1` → … → `.N`, oldest deleted).
+// Defaults 10 MB × 10 files bound the on-disk footprint at ~100 MB with no network dependency.
+// Writes are synchronous so the error-tracking lane survives a crash — an async buffered flush is
+// exactly what we don't want when main/renderer is about to die. Lines batch into one syscall, with
+// a periodic `batchWindowMs` flush so sparse-trace sessions still land on disk.
 
 import {
   chmodSync,
@@ -84,19 +67,13 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
   const batchWindowMs = opts.batchWindowMs ?? DEFAULT_BATCH_WINDOW_MS
   const flushThreshold = opts.flushBufferThreshold ?? DEFAULT_FLUSH_BUFFER_THRESHOLD
 
-  // Local traces can contain paths and crash context; keep them readable only
-  // by the current user even on systems with permissive default umasks.
+  // Traces hold paths and crash context; lock to current-user regardless of umask.
   const traceDirectory = dirname(filePath)
   mkdirSync(traceDirectory, { recursive: true, mode: PRIVATE_DIRECTORY_MODE })
   chmodPathIfPresent(traceDirectory, PRIVATE_DIRECTORY_MODE)
   tightenTraceFamilyPermissions(filePath, maxFiles)
 
-  // The sink owns one open fd. The fd is recreated on rotation; the rotation
-  // routine closes the old fd, renames the file, and opens a fresh one. We
-  // use the fd directly (rather than `appendFileSync(filePath, ...)`) so
-  // rotation is a clean swap and so we can rely on `fstatSync` for the
-  // current-file size — `statSync(filePath)` would race against another
-  // process truncating the file under us.
+  // Hold the fd directly (not `appendFileSync`) so fstatSync sizing can't race another process truncating the file.
   let fd: number = openAppend(filePath)
   let currentBytes: number = safeFstatSize(fd)
 
@@ -118,23 +95,19 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     try {
       return fstatSync(handle).size
     } catch {
-      // Fresh-open or fd-out-of-band — start from zero. The next write will
-      // size correctly via `currentBytes += chunk.length`.
+      // fstat failed (fresh-open / out-of-band fd); start at 0 — the next write re-sizes.
       return 0
     }
   }
 
   function rotate(): void {
-    // Close the active fd before renaming. Some filesystems (notably CIFS)
-    // refuse to rename an open file; we close, rename, then reopen.
+    // Close fd before rename: some filesystems (notably CIFS) refuse to rename an open file.
     try {
       closeSync(fd)
     } catch {
       /* swallow — best-effort */
     }
-    // Cascade rename: `.N-1` → `.N`, `.N-2` → `.N-1`, …, base → `.1`.
-    // Walking from highest index down ensures we never overwrite a file we
-    // are about to rotate.
+    // Cascade base → `.1` → … → `.N`, walking highest index down so we never overwrite a file we still need.
     for (let i = maxFiles - 1; i >= 1; i--) {
       const src = i === 1 ? filePath : `${filePath}.${i - 1}`
       const dst = `${filePath}.${i}`
@@ -143,9 +116,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       }
       try {
         if (existsSync(dst)) {
-          // The destination shouldn't exist after a clean rotation, but if
-          // we're recovering from a crashed prior session, drop stale
-          // intermediate files rather than failing the rename.
+          // Stale dst left by a crashed prior session; drop it rather than fail the rename.
           unlinkSync(dst)
         }
         renameSync(src, dst)
@@ -176,8 +147,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
         writeSync(fd, chunk)
         currentBytes += chunkBytes
       } catch {
-        // Reopen and retry once. If the second write also fails, drop this
-        // chunk — the error-tracking lane must never crash main.
+        // Reopen + retry once; if that also fails, drop the chunk — telemetry must never crash main.
         try {
           // Best-effort close of the prior fd to prevent fd-leak on transient errors.
           try {
@@ -203,17 +173,13 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     for (const line of lines) {
       const lineBytes = Buffer.byteLength(line, 'utf8')
       if (lineBytes > maxBytes) {
-        // A single pathological span should not violate the documented
-        // maxFiles × maxBytes disk envelope. Drop only that record, not the
-        // rest of the buffered batch.
+        // Oversized single span would blow the maxFiles × maxBytes envelope; drop just this record.
         continue
       }
       if (pendingChunkBytes > 0 && currentBytes + pendingChunkBytes + lineBytes > maxBytes) {
         flushPendingChunk()
       }
-      // Rotation point: if writing this line would exceed the cap and we
-      // already have something in the file, rotate first. Empty-file rotations
-      // are skipped (would just produce zero-byte `.N` files on a new install).
+      // Skip empty-file rotations (currentBytes > 0) so a new install never produces zero-byte `.N` files.
       if (currentBytes > 0 && currentBytes + lineBytes > maxBytes) {
         rotate()
       }
@@ -231,9 +197,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       timer = null
       flushBuffer()
     }, batchWindowMs)
-    // Don't keep the event loop alive purely for the flush timer — quitting
-    // is the path that already triggers a final synchronous flush via
-    // `close()`, and the periodic flush is a "while running" optimization.
+    // unref so the flush timer can't keep the process alive; close() does the final flush on quit.
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -249,9 +213,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       try {
         line = `${JSON.stringify(record)}\n`
       } catch {
-        // Circular reference / non-serializable. The redactor handles cycles
-        // for us; a stray here means the caller pushed something pre-redact.
-        // Drop rather than crash — the local file is best-effort.
+        // Redactor handles cycles upstream; a throw here means pre-redact data slipped in — drop rather than crash (best-effort).
         return
       }
       buffer.push(line)
@@ -287,8 +249,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
   }
 }
 
-/** Total byte usage across the rotated file family. Used by `bundle.ts` to
- *  size the read buffer and by the Privacy pane to display a footprint hint. */
+/** Total byte usage across the rotated file family (read-buffer sizing + Privacy footprint hint). */
 export function getRotatedFamilySize(
   filePath: string,
   maxFiles: number = DEFAULT_MAX_FILES
@@ -307,8 +268,7 @@ export function getRotatedFamilySize(
   return total
 }
 
-/** List rotated files in age order (newest → oldest) for `bundle.ts` to
- *  iterate when collecting the last N minutes of traces. */
+/** Rotated files in age order (newest → oldest) for `bundle.ts` trace collection. */
 export function listRotatedFiles(filePath: string, maxFiles: number = DEFAULT_MAX_FILES): string[] {
   const out: string[] = []
   for (let i = 0; i < maxFiles; i++) {

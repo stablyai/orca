@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 
 const { handlers, listeners, subscribeTranscript } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
@@ -30,6 +31,7 @@ import {
 
 type TestSubscription = {
   unsubscribe: ReturnType<typeof vi.fn>
+  watching: boolean
 }
 
 type DeferredSubscription = {
@@ -69,7 +71,7 @@ function deferredSubscription(): DeferredSubscription {
   return {
     promise,
     reject: rejectPromise,
-    resolve: () => resolvePromise({ unsubscribe }),
+    resolve: () => resolvePromise({ unsubscribe, watching: true }),
     unsubscribe
   }
 }
@@ -106,6 +108,32 @@ function subscribe(sender: SenderHarness['sender'], subscriptionId: string): voi
   listener({ sender }, { subscriptionId, agent: 'claude', sessionId: `session-${subscriptionId}` })
 }
 
+type InitialSnapshotCallback = (
+  messages: unknown[],
+  hasMore: boolean,
+  beforeOffset: number,
+  error?: string,
+  lifecycle?: NativeChatTurnLifecycle
+) => void
+
+// The onInitialSnapshot callback the handler passed into the Nth subscribeTranscript
+// call; transcript-watch fires it during setup, so tests invoke it directly.
+function initialSnapshot(callIndex: number): InitialSnapshotCallback {
+  const call = subscribeTranscript.mock.calls[callIndex]
+  if (!call) {
+    throw new Error('subscribeTranscript was not called')
+  }
+  return (call[0] as { onInitialSnapshot: InitialSnapshotCallback }).onInitialSnapshot
+}
+
+function setupSignal(callIndex: number): AbortSignal {
+  const signal = subscribeTranscript.mock.calls[callIndex]?.[1]
+  if (!(signal instanceof AbortSignal)) {
+    throw new Error('subscribe setup signal was not provided')
+  }
+  return signal
+}
+
 function unsubscribe(sender: SenderHarness['sender'], subscriptionId: string): void {
   const listener = listeners.get('nativeChat:unsubscribe')
   if (!listener) {
@@ -131,8 +159,10 @@ describe('nativeChat subscribe lifecycle', () => {
     const renderer = createSender(1)
 
     subscribe(renderer.sender, 'unmount')
+    expect(setupSignal(0).aborted).toBe(false)
     expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(1)
     unsubscribe(renderer.sender, 'unmount')
+    expect(setupSignal(0).aborted).toBe(true)
     expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(0)
     unsubscribe(renderer.sender, 'unmount')
     expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(0)
@@ -151,7 +181,9 @@ describe('nativeChat subscribe lifecycle', () => {
     const renderer = createSender(2)
 
     subscribe(renderer.sender, 'destroy')
+    expect(setupSignal(0).aborted).toBe(false)
     renderer.destroy()
+    expect(setupSignal(0).aborted).toBe(true)
     expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(0)
     expect(_getNativeChatSenderCleanupCountForTest()).toBe(0)
 
@@ -166,7 +198,10 @@ describe('nativeChat subscribe lifecycle', () => {
     const renderer = createSender(3)
 
     subscribe(renderer.sender, 'same-id')
+    const olderSignal = setupSignal(0)
     subscribe(renderer.sender, 'same-id')
+    expect(olderSignal.aborted).toBe(true)
+    expect(setupSignal(1).aborted).toBe(false)
     expect(_getNativeChatPendingSubscriptionCountForTest()).toBe(1)
 
     newer.resolve()
@@ -224,5 +259,64 @@ describe('nativeChat subscribe lifecycle', () => {
     replacementRenderer.destroy()
     expect(replacementPending.unsubscribe).toHaveBeenCalledOnce()
     expect(_getNativeChatSenderCleanupCountForTest()).toBe(0)
+  })
+
+  it('forwards an initial-drain error onto the snapshot frame', () => {
+    const pending = deferredSubscription()
+    subscribeTranscript.mockReturnValueOnce(pending.promise)
+    const renderer = createSender(5)
+
+    subscribe(renderer.sender, 'drain-error')
+    // transcript-watch delivers the drain error synchronously via onInitialSnapshot;
+    // invoke the captured callback to exercise the handler's forwarding closure.
+    initialSnapshot(0)([], false, 0, 'Transcript unavailable')
+
+    expect(renderer.sender.send).toHaveBeenCalledWith('nativeChat:appended', {
+      subscriptionId: 'drain-error',
+      frame: {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'Transcript unavailable'
+      }
+    })
+  })
+
+  it('omits error from the snapshot frame on a clean initial drain', () => {
+    const pending = deferredSubscription()
+    subscribeTranscript.mockReturnValueOnce(pending.promise)
+    const renderer = createSender(6)
+
+    subscribe(renderer.sender, 'drain-clean')
+    initialSnapshot(0)([], false, 0)
+
+    expect(renderer.sender.send).toHaveBeenCalledWith('nativeChat:appended', {
+      subscriptionId: 'drain-clean',
+      frame: {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false
+      }
+    })
+  })
+
+  it('forwards replayable lifecycle on the initial snapshot', () => {
+    const pending = deferredSubscription()
+    subscribeTranscript.mockReturnValueOnce(pending.promise)
+    const renderer = createSender(7)
+    const lifecycle = { state: 'completed', turnId: 'turn-1', timestamp: 42 } as const
+
+    subscribe(renderer.sender, 'lifecycle')
+    initialSnapshot(0)([], false, 0, undefined, lifecycle)
+
+    expect(renderer.sender.send).toHaveBeenCalledWith('nativeChat:appended', {
+      subscriptionId: 'lifecycle',
+      frame: {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        lifecycle
+      }
+    })
   })
 })

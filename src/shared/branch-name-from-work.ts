@@ -1,10 +1,9 @@
 import { MARINE_CREATURES } from './marine-creatures'
 
-// Why: the work-derived branch name stays short on purpose — long, sentence-like
-// branches read worse than the creature name they replace. Two-to-four words is
-// the sweet spot the feature targets.
+// Why: post-generation sanitization still bounds the leaf so a long model dump
+// cannot become an unreadable branch. The *prompt* stays general — users can
+// override naming style via Source Control AI instructions / templates.
 export const MAX_BRANCH_NAME_WORDS = 4
-const MIN_BRANCH_NAME_WORDS = 2
 
 const CREATURE_NAMES_LOWER = new Set(MARINE_CREATURES.map((name) => name.toLowerCase()))
 
@@ -46,16 +45,15 @@ export function sanitizeBranchSlug(raw: string, maxWords = MAX_BRANCH_NAME_WORDS
 }
 
 /**
- * Drop a leading prefix segment the generation model prepended despite the
- * "no prefixes" instruction — e.g. with a `tmchow/` branch prefix the model
- * emits `tmchow/worktree-spinner`, which `sanitizeBranchSlug` folds to
- * `tmchow-worktree-spinner`. Left alone, that leaks the prefix into both the
- * branch leaf (yielding a doubled `tmchow/tmchow-...`) and the humanized
- * display name. Strips only when the leading segment matches the *configured*
- * prefix, so a work-derived name that merely starts with a real word survives.
- * Prefix-only output (the model echoed just `tmchow`) yields an empty slug so
- * the caller skips the rename — otherwise it would double-prefix to
- * `tmchow/tmchow`.
+ * Drop a leading prefix segment the generation model sometimes prepends (e.g.
+ * with a `tmchow/` branch prefix it emits `tmchow/worktree-spinner`, which
+ * `sanitizeBranchSlug` folds to `tmchow-worktree-spinner`). Left alone, that
+ * leaks the prefix into both the branch leaf (yielding a doubled
+ * `tmchow/tmchow-...`) and the humanized display name. Strips only when the
+ * leading segment matches the *configured* prefix, so a work-derived name that
+ * merely starts with a real word survives. Prefix-only output (the model
+ * echoed just `tmchow`) yields an empty slug so the caller skips the rename —
+ * otherwise it would double-prefix to `tmchow/tmchow`.
  */
 export function stripConfiguredBranchPrefix(
   slug: string,
@@ -100,30 +98,33 @@ export type BranchNameWorkContext = {
 }
 
 /**
- * Build the text-generation prompt that asks the configured agent to summarize
- * the work into a branch name. Kept in shared so the prompt is identical across
- * local and SSH generation targets.
+ * Build the text-generation prompt that asks the configured agent to name the
+ * work. Kept in shared so the prompt is identical across local and SSH targets.
+ *
+ * Why: the shipped default stays general. Naming style is left open so users
+ * who override via Source Control AI instructions / the branch-name command
+ * template are not fighting a rigid built-in rule list. Git-safety (kebab,
+ * length) is enforced after generation by sanitizeBranchSlug.
  */
 export function buildBranchNamePrompt(context: BranchNameWorkContext, customPrompt = ''): string {
-  const sections = [
-    'Generate a git branch name that summarizes the coding task described below.',
-    'Rules:',
-    `- Use between ${MIN_BRANCH_NAME_WORDS} and ${MAX_BRANCH_NAME_WORDS} words.`,
-    '- Lowercase kebab-case only (words joined by single hyphens).',
-    '- No slashes, no prefixes, no quotes, no trailing punctuation.',
-    '- Describe the work itself, not the agent or the repository.',
-    '- Output ONLY the branch name on a single line, nothing else.',
-    '',
-    'User request:',
-    context.firstPrompt.trim()
-  ]
+  const sections: string[] = []
+  const prompt = customPrompt.trim()
+  // Why: when the user supplies naming guidance, lead with it so their
+  // override owns style rather than sitting under a prescriptive default.
+  if (prompt) {
+    sections.push(prompt, '')
+  }
+  sections.push(
+    prompt
+      ? 'Generate a git branch name that summarizes the coding task described below.'
+      : 'Generate a short git branch name that summarizes the coding task described below.',
+    'Output ONLY the branch name on a single line, nothing else.',
+    ''
+  )
+  sections.push('User request:', context.firstPrompt.trim())
   const assistant = context.assistantMessage?.trim()
   if (assistant) {
     sections.push('', "Agent's initial response:", assistant)
-  }
-  const prompt = customPrompt.trim()
-  if (prompt) {
-    sections.push('', 'Additional user prompt:', prompt)
   }
   return sections.join('\n')
 }

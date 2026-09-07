@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
-import type { WorkspaceSessionState } from './types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from './terminal-scrollback-limits'
 import { getUtf8ByteLength } from './utf8-byte-limits'
 import {

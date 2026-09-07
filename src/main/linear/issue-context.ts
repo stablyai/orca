@@ -3,9 +3,9 @@ import type {
   LinearIssueChildNode,
   LinearIssueContextResult,
   LinearIssueRequest
-} from '../../shared/linear-agent-access'
-import { extractLinearInlineMedia } from '../../shared/linear-inline-media'
-import { parseLinearIssueInput } from '../../shared/linear-links'
+} from '../../shared/linear/agent-access'
+import { extractLinearInlineMedia } from '../../shared/linear/inline-media'
+import { parseLinearIssueInput } from '../../shared/linear/links'
 import {
   resolveIssue,
   searchLinearIssuesForAgents,

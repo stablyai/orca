@@ -1,4 +1,8 @@
-import type { NestedRepoScanResult, ProjectGroup, ProjectGroupImportMode } from '../../shared/types'
+import type {
+  NestedRepoScanResult,
+  ProjectGroup,
+  ProjectGroupImportMode
+} from '../../shared/project-group-types'
 import {
   getRuntimePathBasename,
   isPathInsideOrEqual,

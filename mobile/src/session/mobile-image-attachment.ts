@@ -1,9 +1,11 @@
 import type { RpcClient } from '../transport/rpc-client'
+import { separateImagePasteFromFollowingText } from '../../../src/shared/image-paste-following-text'
 import {
   buildMobileImagePastePayload,
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
+import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 
 export type AttachMobileImageDeps = {
   readonly client: Pick<RpcClient, 'sendRequest'>
@@ -46,15 +48,18 @@ export async function attachMobileImageToTerminal(
   })
   // Why: a generated image path is terminal image injection, so it's always
   // bracketed (matching desktop paste) regardless of terminal mode.
-  const payload = buildMobileImagePastePayload(imagePath)
+  // Always separated: attach-then-type is the whole interaction here, so the user's
+  // next keystroke would otherwise glue onto the path (`…pngadd`). Unlike native
+  // chat there is no batch to look ahead in, and a trailing space is inert.
+  const payload = separateImagePasteFromFollowingText(buildMobileImagePastePayload(imagePath), true)
   if (beforeTerminalSend && !(await beforeTerminalSend(terminal))) {
     return false
   }
-  await client.sendRequest('terminal.send', {
+  const response = await client.sendRequest('terminal.send', {
     terminal,
     text: payload,
     enter: false,
     ...(deviceToken ? { client: { id: deviceToken, type: 'mobile' as const } } : {})
   })
-  return true
+  return isTerminalSendRpcAccepted(response)
 }

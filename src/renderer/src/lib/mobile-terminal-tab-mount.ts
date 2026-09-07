@@ -1,6 +1,8 @@
-import type { AppState } from '@/store/types'
 import type { BackgroundMountTerminalWorktreeDetail } from '@/constants/terminal'
-import { resolveTerminalTabIdForPtyId } from './terminal-tab-for-pty-id'
+import {
+  resolveTerminalTabIdForPtyId,
+  type TerminalTabPtyOwnershipState
+} from './terminal-tab-for-pty-id'
 
 export type MobileTerminalTabMountRequest = {
   worktreeId: string
@@ -9,12 +11,12 @@ export type MobileTerminalTabMountRequest = {
 }
 
 type MobileTerminalTabMountOptions = {
-  isTabMounted?: (tabId: string) => boolean
+  isTabMounted?: (tabId: string, worktreeId?: string) => boolean
 }
 
 /** Why: exact-tab planning prevents a stale ptyId from mounting every saved xterm (#8597). */
 export function planMobileTerminalTabMount(
-  state: Pick<AppState, 'tabsByWorktree' | 'terminalLayoutsByTabId'>,
+  state: TerminalTabPtyOwnershipState,
   request: MobileTerminalTabMountRequest,
   options: MobileTerminalTabMountOptions = {}
 ): BackgroundMountTerminalWorktreeDetail | null {
@@ -35,7 +37,7 @@ export function planMobileTerminalTabMount(
       : null
   // Why: replaying the background-mount event for a live pane restarts its
   // three-second hidden measurement window on every mobile reconnect.
-  return tabId && !options.isTabMounted?.(tabId)
+  return tabId && !options.isTabMounted?.(tabId, request.worktreeId)
     ? { worktreeId: request.worktreeId, tabIds: [tabId] }
     : null
 }

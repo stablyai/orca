@@ -1,12 +1,24 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
 import {
   isRepoWorktreeId,
   ownerKeyBelongsToRepo,
   removeRepoWorktreeRecord
 } from './profile-project-worktree-identity'
+
+function mergeTerminalTopologyRevisions(
+  base: Record<string, number> | undefined,
+  incoming: Record<string, number> | undefined
+): Record<string, number> {
+  const merged = { ...base }
+  for (const [worktreeId, revision] of Object.entries(incoming ?? {})) {
+    merged[worktreeId] = Math.max(merged[worktreeId] ?? 0, revision)
+  }
+  return merged
+}
 
 export function mergeHostWorkspaceSessions(
   existing: Partial<Record<ExecutionHostId, WorkspaceSessionState>> | undefined,
@@ -74,6 +86,18 @@ export function mergeWorkspaceSessions(
       ...base.defaultTerminalTabsAppliedByWorktreeId,
       ...incoming.defaultTerminalTabsAppliedByWorktreeId
     },
+    terminalPtyIncarnationsByPaneKey: {
+      ...base.terminalPtyIncarnationsByPaneKey,
+      ...incoming.terminalPtyIncarnationsByPaneKey
+    },
+    terminalTopologyRevisionByRepoId: mergeTerminalTopologyRevisions(
+      base.terminalTopologyRevisionByRepoId,
+      incoming.terminalTopologyRevisionByRepoId
+    ),
+    terminalSurfaceTombstonesByPaneKey: {
+      ...base.terminalSurfaceTombstonesByPaneKey,
+      ...incoming.terminalSurfaceTombstonesByPaneKey
+    },
     activeWorktreeIdsOnShutdown: [
       ...(base.activeWorktreeIdsOnShutdown ?? []),
       ...(incoming.activeWorktreeIdsOnShutdown ?? [])
@@ -111,8 +135,6 @@ export function removeRepoFromWorkspaceSession(
   for (const tabId of removedTerminalTabIds) {
     delete next.terminalLayoutsByTabId[tabId]
   }
-  next.openFilesByWorktree = removeRepoWorktreeRecord(next.openFilesByWorktree, repoId)
-  next.activeFileIdByWorktree = removeRepoWorktreeRecord(next.activeFileIdByWorktree, repoId)
   const removedBrowserWorkspaceIds = new Set<string>()
   for (const [ownerKey, workspaces] of Object.entries(next.browserTabsByWorktree ?? {})) {
     if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
@@ -126,21 +148,26 @@ export function removeRepoFromWorkspaceSession(
       delete next.browserPagesByWorkspace[workspaceId]
     }
   }
-  next.activeBrowserTabIdByWorktree = removeRepoWorktreeRecord(
-    next.activeBrowserTabIdByWorktree,
-    repoId
-  )
-  next.activeTabTypeByWorktree = removeRepoWorktreeRecord(next.activeTabTypeByWorktree, repoId)
-  next.activeTabIdByWorktree = removeRepoWorktreeRecord(next.activeTabIdByWorktree, repoId)
-  next.unifiedTabs = removeRepoWorktreeRecord(next.unifiedTabs, repoId)
-  next.tabGroups = removeRepoWorktreeRecord(next.tabGroups, repoId)
-  next.tabGroupLayouts = removeRepoWorktreeRecord(next.tabGroupLayouts, repoId)
-  next.activeGroupIdByWorktree = removeRepoWorktreeRecord(next.activeGroupIdByWorktree, repoId)
-  next.lastVisitedAtByWorktreeId = removeRepoWorktreeRecord(next.lastVisitedAtByWorktreeId, repoId)
-  next.defaultTerminalTabsAppliedByWorktreeId = removeRepoWorktreeRecord(
-    next.defaultTerminalTabsAppliedByWorktreeId,
-    repoId
-  )
+  // Driven by the census so a field cannot be added to the session type and forgotten here.
+  for (const field of SESSION_FIELDS_PRUNED_BY_OWNER_KEY) {
+    const record = next[field] as Record<string, unknown> | undefined
+    ;(next as Record<string, unknown>)[field] = removeRepoWorktreeRecord(record, repoId)
+  }
+  if (next.terminalSurfaceTombstonesByPaneKey) {
+    next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
+        ([, tombstone]) => !ownerKeyBelongsToRepo(tombstone.worktreeId, repoId)
+      )
+    )
+  }
+  if (next.terminalPtyIncarnationsByPaneKey) {
+    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator < 1 || !removedTerminalTabIds.has(paneKey.slice(0, separator))
+      })
+    )
+  }
   if (next.activeWorktreeId && isRepoWorktreeId(repoId, next.activeWorktreeId)) {
     next.activeWorktreeId = null
   }

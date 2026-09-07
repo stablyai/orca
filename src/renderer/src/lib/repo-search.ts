@@ -1,4 +1,4 @@
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 
 // Display-name matches must always outrank path-only matches. This offset is
@@ -38,7 +38,7 @@ function matchScore(repo: Repo, query: string): number | null {
   return null
 }
 
-export function searchRepos(repos: Repo[], rawQuery: string): Repo[] {
+export function searchRepos(repos: readonly Repo[], rawQuery: string): readonly Repo[] {
   if (isRepoSearchQueryTooLarge(rawQuery)) {
     return []
   }

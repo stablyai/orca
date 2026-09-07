@@ -17,11 +17,27 @@ export type RichMarkdownContextMenuCommand =
   | 'task-list'
   | 'image'
   | 'divider'
+  | 'insert-row-above'
+  | 'insert-row-below'
+  | 'delete-row'
+  | 'insert-column-left'
+  | 'insert-column-right'
+  | 'delete-column'
+  | 'delete-table'
 
 export type RichMarkdownContextMenuCommandPayload = {
   command: RichMarkdownContextMenuCommand
+  tableTargetId?: string
+  x: number
+  y: number
+}
+
+export type RichMarkdownContextMenuTableTarget = {
+  cellType: 'body' | 'header'
+  targetId: string
   x: number
   y: number
 }
 
 export const richMarkdownContextMenuCommandChannel = 'rich-markdown:context-command'
+export const richMarkdownContextMenuTargetChannel = 'rich-markdown:context-target'

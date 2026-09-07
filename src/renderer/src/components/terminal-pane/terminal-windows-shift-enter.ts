@@ -1,5 +1,6 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 export type WindowsShiftEnterEncoding = 'alt-enter' | 'csi-u'
@@ -22,22 +23,39 @@ export function resolveWindowsShiftEnterEncoding(
   if (signals.foreground?.shellForeground) {
     return 'alt-enter'
   }
-  // Why: an entry marks a newer command/process generation. Until fresh
-  // confirmation trusts it, stale launch ownership must not route input.
-  // Launch metadata is only an expectation used to start confirmation; it is
-  // never byte-routing authority because warm/stale daemon state can outlive
-  // the process that originally launched the agent.
-  const agent = signals.foreground?.routingTrusted === true ? signals.foreground.agent : null
+  // Why: a pending confirmation retains the last allowlisted byte capability;
+  // CSI-u is inert in a shell, while Esc+CR can submit in Pi.
+  const agent =
+    signals.foreground?.routingTrusted === true ||
+    signals.foreground?.routingConfirmationPending === true
+      ? signals.foreground.agent
+      : null
   return agent ? (TUI_AGENT_CONFIG[agent].windowsShiftEnterEncoding ?? 'alt-enter') : 'alt-enter'
 }
 
 /** Resolves only pane-keyed evidence so a split sibling cannot inherit tab ownership. */
 export function resolveWindowsShiftEnterEncodingForPane(
   state: WindowsShiftEnterPaneState,
-  paneKey: string
+  paneKey: string,
+  terminalTitle?: string
 ): WindowsShiftEnterEncoding {
-  return resolveWindowsShiftEnterEncoding({
+  const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+  const encoding = resolveWindowsShiftEnterEncoding({
     foreground: state.paneForegroundAgentByPaneKey[paneKey],
     launchAgentType: state.agentLaunchConfigByPaneKey[paneKey]?.identity.agentType
   })
+  if (
+    encoding === 'csi-u' ||
+    !terminalTitle ||
+    foreground?.routingTrusted === true ||
+    foreground?.routingRevoked === true ||
+    foreground?.shellForeground === true
+  ) {
+    return encoding
+  }
+  // Why: strict pane-local titles recover Pi/Droid through process-scan gaps without overriding process or shell proof.
+  const titleAgent = resolveCommittedTitleAgentType(terminalTitle)
+  return titleAgent
+    ? (TUI_AGENT_CONFIG[titleAgent].windowsShiftEnterEncoding ?? 'alt-enter')
+    : 'alt-enter'
 }

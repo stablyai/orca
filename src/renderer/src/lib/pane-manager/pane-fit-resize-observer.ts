@@ -74,13 +74,11 @@ function flushStableFitCallbacks(pane: StableFitPane): void {
   }
 }
 
-function finishStableFit(pane: StableFitPane, shouldFit: boolean): void {
+function finishStableFit(pane: StableFitPane): void {
   setPendingObservedFitRafId(pane, null)
-  if (shouldFit) {
-    safeFitAndThen(pane, 'stable-pane-fit', () => flushStableFitCallbacks(pane))
-    return
-  }
-  flushStableFitCallbacks(pane)
+  // Why: an equal grid still proves a restored pane is measurable, so it must
+  // release reattach continuations that were parked while the tab was hidden.
+  safeFitAndThen(pane, 'stable-pane-fit', () => flushStableFitCallbacks(pane))
 }
 
 export function requestStablePaneFit(pane: StableFitPane, onSettled?: () => void): void {
@@ -113,23 +111,23 @@ export function requestStablePaneFit(pane: StableFitPane, onSettled?: () => void
         frameCount += 1
 
         if (!next) {
-          finishStableFit(pane, true)
+          finishStableFit(pane)
           return
         }
 
         if (terminalDimensionsEqual(pane, next)) {
-          finishStableFit(pane, false)
+          finishStableFit(pane)
           return
         }
 
         if (dimensionsEqual(previous, next)) {
-          finishStableFit(pane, true)
+          finishStableFit(pane)
           return
         }
 
         previous = next
         if (frameCount >= MAX_STABILITY_FRAMES) {
-          finishStableFit(pane, true)
+          finishStableFit(pane)
           return
         }
 

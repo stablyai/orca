@@ -19,7 +19,3 @@ export function runWorktreeChangeInvalidators(repoId: string): void {
     }
   }
 }
-
-export function __resetWorktreeChangeInvalidatorsForTests(): void {
-  worktreeChangeInvalidators.clear()
-}

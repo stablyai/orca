@@ -149,8 +149,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    // Why: bgRaised lifts the field off bgBase/bgPanel so search is an obvious
-    // control, matching TextInputModal / MobilePrBasePicker input shells.
+    // Keep search visually distinct from surrounding panels.
     backgroundColor: colors.bgRaised,
     borderWidth: 1,
     borderColor: colors.borderSubtle,

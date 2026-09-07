@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import type { PRCheckDetail, PRComment, PRInfo } from '../../../src/shared/types'
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
+import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
 
@@ -52,14 +54,37 @@ describe('buildMobilePrChipSummary', () => {
     expect(summary.stateLabel).toBe('Draft')
   })
 
-  it('rolls up passed checks as passed/total', () => {
+  // Why: a skipped job is a deliberate "not applicable" — desktop and the tasks grid call this 3/3.
+  it('rolls up passed checks as passed/total, counting skipped as passed', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr(), [check('success'), check('success'), check('skipped')])
     )
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
-    expect(summary.rollup).toEqual({ kind: 'passed', text: '2/3', token: 'statusGreen' })
+    expect(summary.rollup).toEqual({ kind: 'passed', text: '3/3', token: 'statusGreen' })
+  })
+
+  it('treats a merge-blocking action_required gate as failing, not passing', () => {
+    const summary = buildMobilePrChipSummary(
+      ready(pr(), [check('success'), check('action_required')])
+    )
+    if (summary.kind !== 'ready') {
+      throw new Error('expected ready')
+    }
+    expect(summary.rollup).toEqual({ kind: 'failing', text: '1 failing', token: 'statusRed' })
+  })
+
+  it('distinguishes checks that resolved to nothing actionable from having no checks', () => {
+    const summary = buildMobilePrChipSummary(ready(pr(), [check('neutral')]))
+    if (summary.kind !== 'ready') {
+      throw new Error('expected ready')
+    }
+    expect(summary.rollup).toEqual({
+      kind: 'none',
+      text: 'Unresolved checks',
+      token: 'textSecondary'
+    })
   })
 
   it('prefers failing over running and passing', () => {

@@ -1,5 +1,5 @@
 import { useAppStore } from '../../store'
-import type { StatusBarItem } from '../../../../shared/types'
+import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 
 /** Subscribes to detected-agent state and returns the toggles filtered to

@@ -85,7 +85,7 @@ describe('worktree removal purges per-file editor + git-huge state (leak regress
     const store = createTestStore()
     seedEditorState(store)
 
-    const result = await store.getState().removeWorktree(WT)
+    const result = await store.getState().removeWorktree({ id: WT, executionHostId: null })
     expect(result).toEqual({ ok: true })
 
     const s = store.getState()

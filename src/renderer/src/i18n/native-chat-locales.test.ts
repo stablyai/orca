@@ -4,12 +4,30 @@ import es from './locales/es.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
 import zh from './locales/zh.json'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
 
 const localizedCatalogs = { es, ja, ko, zh }
 const englishSetting = en.auto.components.settings.ExperimentalPane.nativeChat
 const englishSearch = en.auto.components.settings.experimental.search.nativeChat
+const englishComposer = en.components['native-chat'].composer
+const localizedEffortValues = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
+
+const codexEffortValues = new Set(
+  [
+    ...CODEX_SESSION_OPTION_CATALOG.models.flatMap((model) => model.options),
+    ...(CODEX_SESSION_OPTION_CATALOG.unknownModelOptions ?? [])
+  ].flatMap((option) =>
+    option.id === 'effort' && option.kind.type === 'select'
+      ? option.kind.choices.map((choice) => choice.value)
+      : []
+  )
+)
 
 describe('native chat locale copy', () => {
+  it('covers every Codex effort choice', () => {
+    expect([...codexEffortValues].sort()).toEqual([...localizedEffortValues].sort())
+  })
+
   it.each(Object.entries(localizedCatalogs))(
     '%s keeps provider-neutral copy localized',
     (_code, catalog) => {
@@ -25,6 +43,30 @@ describe('native chat locale copy', () => {
         expect(localized).not.toBe(english)
       }
       expect(search.grok).toBe('grok')
+      const composer = catalog.components['native-chat'].composer
+      for (const key of [
+        'model',
+        'effort',
+        'fastMode',
+        'thinking',
+        'options',
+        'sessionOptions',
+        'chooseInAgentPicker',
+        'toggleOption',
+        'valueUnknown',
+        'sentNotConfirmed'
+      ] as const) {
+        expect(composer[key].trim()).not.toBe('')
+        expect(composer[key]).not.toBe(englishComposer[key])
+      }
+      for (const key of ['fast', ...localizedEffortValues] as const) {
+        expect(composer.optionValue[key].trim()).not.toBe('')
+        expect(composer.optionValue[key]).not.toBe(englishComposer.optionValue[key])
+      }
+      // Why: On/Off loanwords are valid translations; only require non-empty.
+      for (const key of ['on', 'off'] as const) {
+        expect(composer.optionValue[key].trim()).not.toBe('')
+      }
     }
   )
 })

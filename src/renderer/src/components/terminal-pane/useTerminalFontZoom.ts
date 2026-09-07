@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { overridePendingPaneMetricOptions } from '@/lib/pane-manager/pane-metric-options-deferral'
 import { getPaneOwnedActiveHelperTextarea } from './regular-terminal-focus-ownership'
 
 type FontZoomDeps = {
@@ -57,6 +58,10 @@ export function useTerminalFontZoom({
       }
 
       pane.terminal.options.fontSize = nextSize
+      // Why: safeFit flushes parked metric options, which would otherwise
+      // overwrite this zoom with the font size captured while the pane was
+      // unmeasurable. Fold the new size in; other parked keys still apply.
+      overridePendingPaneMetricOptions(pane, { fontSize: nextSize })
       safeFit(pane)
 
       const percent = Math.round((nextSize / globalSize) * 100)

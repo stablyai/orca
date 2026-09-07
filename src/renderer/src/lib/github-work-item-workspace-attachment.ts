@@ -1,5 +1,5 @@
-import type { GitHubWorkItem, Worktree } from '../../../shared/types'
-import { basename } from './path'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 type GitHubWorkItemType = GitHubWorkItem['type']
 
@@ -38,35 +38,4 @@ export function findGithubIssueWorkspaceAttachment(
   issueNumber: number
 ): Worktree | null {
   return findGithubWorkItemWorkspaceAttachment(worktrees, repoId, 'issue', issueNumber)
-}
-
-export function getGithubWorkItemWorkspaceAttachmentLabel(worktree: Worktree): string {
-  const displayName = worktree.displayName.trim()
-  if (displayName) {
-    return displayName
-  }
-
-  const branch = getBranchLabel(worktree.branch)
-  if (branch) {
-    return branch
-  }
-
-  return basename(worktree.path) || worktree.path
-}
-
-export function getGithubPrWorkspaceAttachmentLabel(worktree: Worktree): string {
-  return getGithubWorkItemWorkspaceAttachmentLabel(worktree)
-}
-
-function getBranchLabel(branch: string | null | undefined): string | null {
-  const trimmed = branch?.trim()
-  if (!trimmed) {
-    return null
-  }
-
-  if (trimmed.startsWith('refs/heads/')) {
-    return trimmed.slice('refs/heads/'.length)
-  }
-
-  return trimmed
 }

@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
-import type { SettingsSearchEntry } from './settings-search'
+import { matchesSettingsSearch, type SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 
 export type ShortcutFilter = 'all' | 'modified' | 'unassigned' | 'conflicts'
@@ -58,6 +58,17 @@ export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEnt
     ),
     keywords: [...row.item.searchKeywords]
   }
+}
+
+// Why: a sidebar query can select this pane by title alone while matching zero
+// rows; that would blank the list, so zero-row queries keep every row visible.
+export function buildShortcutGlobalSearchMatcher(
+  rows: readonly ShortcutRowModel[],
+  searchQuery: string
+): (row: ShortcutRowModel) => boolean {
+  const rowMatches = (row: ShortcutRowModel): boolean =>
+    matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row))
+  return rows.some(rowMatches) ? rowMatches : () => true
 }
 
 export function matchesShortcutFilter(row: ShortcutRowModel, filter: ShortcutFilter): boolean {

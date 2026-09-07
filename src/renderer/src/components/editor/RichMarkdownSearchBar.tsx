@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 
 type RichMarkdownSearchBarProps = {
@@ -111,6 +112,12 @@ export function RichMarkdownSearchBar({
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
               onKeyDown={(event) => {
+                // Why: mid-composition Enter only confirms the candidate and Escape
+                // only cancels it, so navigating matches or closing the bar here acts
+                // on a keystroke that was aimed at the IME.
+                if (isImeCompositionKeyDown(event)) {
+                  return
+                }
                 if (event.key === 'Enter' && event.shiftKey) {
                   event.preventDefault()
                   onMoveToMatch(-1)
@@ -247,6 +254,12 @@ export function RichMarkdownSearchBar({
                 value={replaceQuery}
                 onChange={(event) => onReplaceQueryChange(event.target.value)}
                 onKeyDown={(event) => {
+                  // Why: replacing on the Enter that only confirms a candidate mutates
+                  // the document from a keystroke the user aimed at the IME; Escape
+                  // during composition belongs to the IME's cancel, not to the bar.
+                  if (isImeCompositionKeyDown(event)) {
+                    return
+                  }
                   if (event.key === 'Enter') {
                     event.preventDefault()
                     onReplaceCurrent()

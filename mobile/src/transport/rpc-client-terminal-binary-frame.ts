@@ -16,7 +16,6 @@ type StreamingListener = (result: unknown) => void
 type TerminalBinaryFrameOptions = {
   terminalSnapshots: Map<number, TerminalSnapshotState>
   getListener: (streamId: number) => StreamingListener | undefined
-  recordValidatedInboundTraffic: () => void
 }
 
 export function handleTerminalBinaryFrame(
@@ -29,11 +28,9 @@ export function handleTerminalBinaryFrame(
   }
   const listener = options.getListener(frame.streamId)
   if (!listener) {
-    options.recordValidatedInboundTraffic()
     return
   }
   if (frame.opcode === TerminalStreamOpcode.Output) {
-    options.recordValidatedInboundTraffic()
     listener({
       type: 'data',
       streamId: frame.streamId,
@@ -46,7 +43,6 @@ export function handleTerminalBinaryFrame(
     if (!meta) {
       return
     }
-    options.recordValidatedInboundTraffic()
     options.terminalSnapshots.set(frame.streamId, {
       streamId: frame.streamId,
       meta,
@@ -55,7 +51,6 @@ export function handleTerminalBinaryFrame(
     return
   }
   if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
-    options.recordValidatedInboundTraffic()
     const snapshot = options.terminalSnapshots.get(frame.streamId)
     if (!snapshot) {
       return
@@ -64,7 +59,6 @@ export function handleTerminalBinaryFrame(
     return
   }
   if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
-    options.recordValidatedInboundTraffic()
     const snapshot = options.terminalSnapshots.get(frame.streamId)
     if (!snapshot) {
       return
@@ -84,7 +78,6 @@ export function handleTerminalBinaryFrame(
     if (!meta) {
       return
     }
-    options.recordValidatedInboundTraffic()
     listener({
       ...meta,
       type: 'resized',
@@ -97,7 +90,6 @@ export function handleTerminalBinaryFrame(
     if (!meta) {
       return
     }
-    options.recordValidatedInboundTraffic()
     listener({
       ...meta,
       type: 'metadata',
@@ -106,7 +98,6 @@ export function handleTerminalBinaryFrame(
     return
   }
   if (frame.opcode === TerminalStreamOpcode.Error) {
-    options.recordValidatedInboundTraffic()
     listener({
       type: 'error',
       streamId: frame.streamId,

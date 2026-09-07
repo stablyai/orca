@@ -182,6 +182,23 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expect(existsSync(join(getRuntimeCodexHomePath(), 'history.jsonl'))).toBe(false)
   })
 
+  it('mirrors resources into an explicit per-account home without mutating ~/.codex', () => {
+    mkdirSync(join(getSystemCodexHomePath(), 'skills', 'review'), { recursive: true })
+    writeFileSync(join(getSystemCodexHomePath(), 'skills', 'review', 'SKILL.md'), 'skill\n')
+    const perAccountHome = join(userDataDir, 'codex-accounts', 'account-1', 'home')
+    mkdirSync(perAccountHome, { recursive: true })
+
+    syncSystemCodexResourcesIntoManagedHome(perAccountHome)
+
+    const perAccountSkillsPath = join(perAccountHome, 'skills')
+    expect(readFileSync(join(perAccountSkillsPath, 'review', 'SKILL.md'), 'utf-8')).toBe('skill\n')
+    expectSymbolicLinkTargetIfLinked(perAccountSkillsPath, join(getSystemCodexHomePath(), 'skills'))
+    // The shared runtime mirror is untouched by an explicit per-account sync.
+    expect(existsSync(join(getRuntimeCodexHomePath(), 'skills'))).toBe(false)
+    // ~/.codex gains nothing — resources are only read from it, never written back.
+    expect(existsSync(join(getSystemCodexHomePath(), 'codex-accounts'))).toBe(false)
+  })
+
   it('does not replace an existing runtime-owned resource entry', () => {
     mkdirSync(join(getSystemCodexHomePath(), 'skills'), { recursive: true })
     mkdirSync(join(getRuntimeCodexHomePath(), 'skills'), { recursive: true })

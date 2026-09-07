@@ -21,7 +21,9 @@ const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
 const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
-type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'>
+type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {
+  modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
+}
 
 type TerminalMouseWheelMultiplierOptions = {
   getTuiMouseWheelMultiplier?: () => number | undefined
@@ -117,11 +119,23 @@ export function shouldMultiplyTerminalMouseWheel(
   return true
 }
 
-function drainTerminalTuiWheelReports(state: TerminalTuiMouseWheelReplayState): void {
+function drainTerminalTuiWheelReports(
+  state: TerminalTuiMouseWheelReplayState,
+  terminal: TerminalWheelTarget
+): void {
   const target = state.pendingTarget
   const event = state.pendingEvent
   if (!target || !event || state.pendingReports <= 0) {
     state.drainScheduled = false
+    return
+  }
+
+  if (terminal.modes.mouseTrackingMode === 'none') {
+    state.pendingReports = 0
+    state.drainScheduled = false
+    state.pendingDirection = 0
+    state.pendingEvent = null
+    state.pendingTarget = null
     return
   }
 
@@ -138,6 +152,7 @@ function drainTerminalTuiWheelReports(state: TerminalTuiMouseWheelReplayState): 
 
 function queueTerminalTuiWheelReports(
   state: TerminalTuiMouseWheelReplayState,
+  terminal: TerminalWheelTarget,
   target: EventTarget,
   event: WheelEvent,
   reportCount: number
@@ -164,7 +179,7 @@ function queueTerminalTuiWheelReports(
   // Why: dispatch after xterm returns from the original wheel handler, but do
   // not frame-cap reports; fullscreen TUIs need the full wheel distance.
   queueMicrotask(() => {
-    drainTerminalTuiWheelReports(state)
+    drainTerminalTuiWheelReports(state, terminal)
   })
 }
 
@@ -174,7 +189,10 @@ export function attachTerminalMouseWheelMultiplier(
 ): void {
   const replayState = createTerminalTuiMouseWheelReplayState()
   terminal.attachCustomWheelEventHandler((event) => {
-    if (!shouldMultiplyTerminalMouseWheel(event, terminal.element)) {
+    if (
+      terminal.modes.mouseTrackingMode === 'none' ||
+      !shouldMultiplyTerminalMouseWheel(event, terminal.element)
+    ) {
       return true
     }
 
@@ -195,7 +213,7 @@ export function attachTerminalMouseWheelMultiplier(
         rows: terminal.rows
       }
     )
-    queueTerminalTuiWheelReports(replayState, target, event, reportCount)
+    queueTerminalTuiWheelReports(replayState, terminal, target, event, reportCount)
 
     return false
   })

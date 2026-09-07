@@ -1,4 +1,4 @@
-import type { editor } from 'monaco-editor'
+import type { editor, ISelection } from 'monaco-editor'
 
 // Why: 20 entries covers a typical working set of open/recently-viewed files.
 // Eviction only means losing a scroll position (user sees top of file), not a
@@ -37,8 +37,14 @@ export function setWithLRU<K, V>(
 export const scrollTopCache = new Map<string, number>()
 
 // Why: Same rationale as scrollTopCache — module-scoped avoids Zustand
-// re-renders on every cursor move.
-export const cursorPositionCache = new Map<string, { lineNumber: number; column: number }>()
+// re-renders on every cursor or selection change.
+export const editorSelectionCache = new Map<string, readonly ISelection[]>()
+
+// Why: PDFs store a pdf.js location in PDF user space, not a scrollTop — page
+// layout is rebuilt at a scale that depends on container width, so a pixel
+// offset restores to the wrong place at a different zoom or pane width.
+export type PdfViewPosition = { pageNumber: number; top: number; left: number }
+export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 
 // Why: Diff editors need more than a numeric scroll offset to restore the same
 // working context. Monaco's diff view state also carries cursor/selection state

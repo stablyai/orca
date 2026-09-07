@@ -141,12 +141,35 @@ export class MobileTerminalDiagnostics {
     })
   }
 
-  streamResubscribing(handle: string, seq: number, dims: { cols: number; rows: number }): void {
+  streamResubscribing(
+    handle: string,
+    seq: number,
+    dims: { cols: number; rows: number },
+    attempt: number,
+    delayMs: number
+  ): void {
     logMobileTerminalDiagnostic('stream-resubscribe-for-viewport', {
       handle: shortenMobileTerminalDiagnosticId(handle),
       seq,
       cols: dims.cols,
-      rows: dims.rows
+      rows: dims.rows,
+      attempt,
+      delayMs
+    })
+  }
+
+  streamResubscribeHeld(handle: string, seq: number): void {
+    logMobileTerminalDiagnostic('stream-resubscribe-held-absent-dims', {
+      handle: shortenMobileTerminalDiagnosticId(handle),
+      seq
+    })
+  }
+
+  streamResubscribeExhausted(handle: string, seq: number, attempts: number): void {
+    logMobileTerminalDiagnostic('stream-resubscribe-exhausted', {
+      handle: shortenMobileTerminalDiagnosticId(handle),
+      seq,
+      attempts
     })
   }
 

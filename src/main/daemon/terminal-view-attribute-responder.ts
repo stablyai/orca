@@ -1,6 +1,6 @@
 /**
- * Phase 5 slice 2 (docs/reference/terminal-query-authority.md §View-attribute
- * bridge): OSC 4/10/11/12 and DSR ?996n responder handlers for the runtime
+ * Phase 5 slice 2 (View-attribute bridge): OSC 4/10/11/12 and DSR ?996n
+ * responder handlers for the runtime
  * headless emulator. The headless xterm core has no theme service, so these
  * handlers compute replies from the renderer's pushed attribute snapshot,
  * with per-PTY OSC SET mutations layered on top — mirroring exactly what the
@@ -57,7 +57,7 @@ function isValidColorIndex(value: number): boolean {
 function relativeLuminance([r, g, b]: TerminalViewRgb): number {
   const linear = (channel: number): number => {
     const c = channel / 255
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
   }
   return linear(r) * 0.2126 + linear(g) * 0.7152 + linear(b) * 0.0722
 }

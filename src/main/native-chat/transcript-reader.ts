@@ -1,16 +1,26 @@
-import { createReadStream } from 'node:fs'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
+import { openTranscriptReadStream } from './wsl-transcript-fs-access'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
-  decodeGrokTranscriptLine
+  decodeGrokTranscriptLine,
+  decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 
 export type ReadTranscriptResult =
-  | { messages: NativeChatMessage[] }
+  | {
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+    }
   // notFound marks a retry-worthy miss (transcript not flushed to disk yet,
   // #8401) as opposed to a real parse/IO error callers surface immediately.
   | { error: string; notFound?: true }
@@ -32,21 +42,32 @@ export async function readNativeChatTranscript(
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
-  const filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  let filePath: string | null
+  try {
+    filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  } catch (err) {
+    // Why: gate refusal is transient unavailability with retry guidance —
+    // `notFound` would settle callers into a false "missing" state.
+    return { error: wslTranscriptFsRefusal(err).message }
+  }
   if (!filePath) {
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
   try {
-    if (agent === 'claude') {
+    const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+    if (transcriptAgent === 'claude') {
       return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
     }
-    if (agent === 'codex') {
+    if (transcriptAgent === 'codex') {
       return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
     }
-    if (agent === 'grok') {
+    if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
     }
-    return { error: `Unsupported agent for native chat transcript: ${agent}` }
+    if (transcriptAgent === 'omp') {
+      return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
+    }
+    return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
     // Why: ENOENT after a successful resolve is the same first-flush/rotation
     // race as an unresolved path — keep it retry-worthy (#8401).
@@ -61,7 +82,7 @@ async function readTranscript(
   filePath: string,
   decode: (line: string, fallbackId: string) => NativeChatMessage | null
 ): Promise<NativeChatMessage[]> {
-  const stream = createReadStream(filePath, { encoding: 'utf-8' })
+  const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
   const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
   return messages
 }

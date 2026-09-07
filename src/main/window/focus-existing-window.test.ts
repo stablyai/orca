@@ -1,5 +1,5 @@
 import type { App, BrowserWindow } from 'electron'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { focusExistingMainWindow } from './focus-existing-window'
 
 type FakeWindowOptions = {
@@ -63,7 +63,14 @@ function makeTimer(): {
       return callbacks.length
     },
     run: (ms) => {
-      for (const entry of callbacks.filter((entry) => entry.ms === ms)) {
+      // Why: splice out matching entries before invoking — real timers fire
+      // once, and a retry callback here can schedule a fresh same-ms entry
+      // that a later run() call must not confuse with one already fired.
+      const due = callbacks.filter((entry) => entry.ms === ms)
+      for (const entry of due) {
+        callbacks.splice(callbacks.indexOf(entry), 1)
+      }
+      for (const entry of due) {
         entry.callback()
       }
     },
@@ -71,7 +78,38 @@ function makeTimer(): {
   }
 }
 
+// These cases exercise foreground behavior against Electron mocks.
+beforeEach(() => {
+  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', undefined)
+  vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
+  vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
+})
+afterEach(() => vi.unstubAllEnvs())
+
 describe('focusExistingMainWindow', () => {
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'never restores or activates a background window on %s',
+    (platform) => {
+      vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+      vi.stubEnv('ORCA_E2E_FOREGROUND', '1')
+      const app = makeFakeApp()
+      const window = makeFakeWindow({ minimized: true })
+      const timer = makeTimer()
+      focusExistingMainWindow({
+        app,
+        getWindow: () => window,
+        openWindow: vi.fn(),
+        platform,
+        setTimeout: timer.setTimeout
+      })
+      expect(app.focus).not.toHaveBeenCalled()
+      for (const call of Object.values(window.calls)) {
+        expect(call).not.toHaveBeenCalled()
+      }
+      expect(timer.scheduledMs()).toEqual([])
+    }
+  )
+
   it('aggressively foregrounds an existing Windows window on second launch', () => {
     const app = makeFakeApp()
     const window = makeFakeWindow()
@@ -103,19 +141,56 @@ describe('focusExistingMainWindow', () => {
 
   it('restores minimized windows before focusing them', () => {
     const window = makeFakeWindow({ minimized: true })
+    const timer = makeTimer()
 
     focusExistingMainWindow({
       app: makeFakeApp(),
       getWindow: () => window,
       openWindow: vi.fn(),
       platform: 'darwin',
-      setTimeout: makeTimer().setTimeout
+      setTimeout: timer.setTimeout
     })
 
     expect(window.calls.restore).toHaveBeenCalledTimes(1)
     expect(window.calls.show).toHaveBeenCalledTimes(1)
     expect(window.calls.focus).toHaveBeenCalledTimes(1)
     expect(window.calls.moveTop).not.toHaveBeenCalled()
+    expect(timer.scheduledMs()).toEqual([])
+  })
+
+  // The blocking install-DACL repair holds the first window for up to 20s of blank
+  // screen, which is exactly when a user double-clicks the shortcut again. That
+  // second instance must not spawn a renderer onto a tree icacls is rewriting.
+  it('drops a reopen while another path must own the first window', () => {
+    const openWindow = vi.fn()
+
+    const result = focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => null,
+      openWindow,
+      canOpenWindow: () => false
+    })
+
+    expect(result).toBe('pending')
+    expect(openWindow).not.toHaveBeenCalled()
+  })
+
+  it('still focuses a window that already exists while reopening is held', () => {
+    const window = makeFakeWindow()
+    const openWindow = vi.fn()
+
+    const result = focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => window,
+      openWindow,
+      canOpenWindow: () => false,
+      platform: 'darwin',
+      setTimeout: makeTimer().setTimeout
+    })
+
+    expect(result).toBe('focused')
+    expect(openWindow).not.toHaveBeenCalled()
+    expect(window.calls.focus).toHaveBeenCalledTimes(1)
   })
 
   it('waits for normal startup when no window exists before app readiness', () => {
@@ -153,5 +228,138 @@ describe('focusExistingMainWindow', () => {
     expect(openWindow).toHaveBeenCalledTimes(1)
     expect(openedWindow.calls.show).toHaveBeenCalledTimes(1)
     expect(openedWindow.calls.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a transient reopen failure instead of stranding the app windowless', () => {
+    const app = makeFakeApp()
+    const timer = makeTimer()
+    const openedWindow = makeFakeWindow()
+    const warn = vi.fn()
+    let attempts = 0
+    const openWindow = vi.fn(() => {
+      attempts += 1
+      if (attempts < 2) {
+        throw new Error('transient failure')
+      }
+      return openedWindow
+    })
+
+    const result = focusExistingMainWindow({
+      app,
+      getWindow: () => null,
+      openWindow,
+      warn,
+      setTimeout: timer.setTimeout
+    })
+
+    // Why: the first attempt's own return value is synchronous, so a retry
+    // scheduled after the first throw still reports 'pending' immediately.
+    expect(result).toBe('pending')
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(openWindow).toHaveBeenCalledTimes(1)
+
+    timer.run(300)
+    expect(openWindow).toHaveBeenCalledTimes(2)
+    expect(openedWindow.calls.show).toHaveBeenCalledTimes(1)
+    expect(openedWindow.calls.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('adopts a window that appeared during the retry gap instead of opening a duplicate', () => {
+    // Why: openMainWindow is not idempotent — a duplicate open would orphan the
+    // window already on screen. If getWindow() resolves before the retry fires,
+    // the retry must reveal that window and never call openWindow again.
+    const app = makeFakeApp()
+    const timer = makeTimer()
+    const raceWindow = makeFakeWindow()
+    const warn = vi.fn()
+    let liveWindow: BrowserWindow | null = null
+    const openWindow = vi.fn(() => {
+      // First attempt throws, but a concurrent path lands a window before retry.
+      liveWindow = raceWindow
+      throw new Error('transient failure')
+    })
+
+    const result = focusExistingMainWindow({
+      app,
+      getWindow: () => liveWindow,
+      openWindow,
+      warn,
+      setTimeout: timer.setTimeout
+    })
+
+    expect(result).toBe('pending')
+    expect(openWindow).toHaveBeenCalledTimes(1)
+
+    timer.run(300)
+    // Retry adopts the raced-in window; it must not construct a second one.
+    expect(openWindow).toHaveBeenCalledTimes(1)
+    expect(raceWindow.calls.show).toHaveBeenCalledTimes(1)
+    expect(raceWindow.calls.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it('reinforces win32 activation when a window is recovered on the retry path', () => {
+    const app = makeFakeApp()
+    const timer = makeTimer()
+    const openedWindow = makeFakeWindow()
+    const warn = vi.fn()
+    let attempts = 0
+    const openWindow = vi.fn(() => {
+      attempts += 1
+      if (attempts < 2) {
+        throw new Error('transient failure')
+      }
+      return openedWindow
+    })
+
+    focusExistingMainWindow({
+      app,
+      getWindow: () => null,
+      openWindow,
+      warn,
+      platform: 'win32',
+      setTimeout: timer.setTimeout
+    })
+
+    timer.run(300)
+    // Why: the retry callback must run the same win32 reinforcement + focus retry
+    // as the sync success path, not just show/focus.
+    expect(openedWindow.calls.moveTop).toHaveBeenCalledTimes(1)
+    expect(openedWindow.calls.setAlwaysOnTop).toHaveBeenCalledWith(true)
+
+    timer.run(100)
+    expect(app.focus).toHaveBeenCalledTimes(2)
+    expect(openedWindow.calls.focus).toHaveBeenCalledTimes(2)
+
+    timer.run(250)
+    expect(openedWindow.calls.setAlwaysOnTop).toHaveBeenLastCalledWith(false)
+  })
+
+  it('gives up after exhausting reopen retries', () => {
+    const timer = makeTimer()
+    const warn = vi.fn()
+    const openWindow = vi.fn(() => {
+      throw new Error('persistent failure')
+    })
+
+    const result = focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => null,
+      openWindow,
+      warn,
+      setTimeout: timer.setTimeout
+    })
+
+    expect(result).toBe('pending')
+    expect(openWindow).toHaveBeenCalledTimes(1)
+
+    timer.run(300)
+    timer.run(300)
+    // Why: REOPEN_MAX_ATTEMPTS caps total tries at 3 (1 initial + 2 retries);
+    // a further run() call must not schedule or fire a 4th attempt.
+    expect(openWindow).toHaveBeenCalledTimes(3)
+    expect(warn).toHaveBeenCalledTimes(3)
+    timer.run(300)
+    expect(openWindow).toHaveBeenCalledTimes(3)
+    expect(warn).toHaveBeenCalledTimes(3)
   })
 })

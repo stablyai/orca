@@ -1,10 +1,14 @@
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import type { TerminalTab, TuiAgent } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
 import { ShellIcon } from './shell-icons'
-import type { TerminalTabActivityStatus } from './terminal-tab-activity-status'
+import {
+  terminalTabActivityToAgentDotState,
+  type TerminalTabActivityStatus
+} from './terminal-tab-activity-status'
 import { translate } from '@/i18n/i18n'
 
 type TerminalTabLeadingIconProps = {
@@ -19,27 +23,6 @@ type TerminalTabAgentIdentityIconProps = {
   agent: TuiAgent
   isActive: boolean
   className?: string
-}
-
-/**
- * Map the container status to the shared state-dot vocabulary. `active` and
- * `inactive` carry no activity glyph — the tab falls through to its agent or
- * shell identity icon instead. Uses the same WorktreeStatus vocabulary as the
- * sidebar so live states read identically (tabs intentionally omit the card's
- * retained-done promotion, so a stale green check can differ after cleanup).
- */
-function activityDotState(status: TerminalTabActivityStatus): AgentDotState | null {
-  switch (status) {
-    case 'working':
-      return 'working'
-    case 'permission':
-      return 'permission'
-    case 'done':
-      return 'done'
-    case 'active':
-    case 'inactive':
-      return null
-  }
 }
 
 /** Keep the provider glyph treatment identical across every terminal-tab state. */
@@ -83,7 +66,9 @@ export function TerminalTabLeadingIcon({
     )
   }
 
-  const dotState = activityDotState(activityStatus)
+  // Why: shared mapper with Cmd+J recent badges — working/permission/done only; active/inactive
+  // fall through to agent/shell identity.
+  const dotState = terminalTabActivityToAgentDotState(activityStatus)
   if (dotState) {
     return (
       <span

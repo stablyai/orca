@@ -1,6 +1,7 @@
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 
-type SearchableReview = Pick<HostedReviewInfo, 'number' | 'title' | 'provider'>
+// title is intentionally optional: rehydrated review/PR caches can hold entries without one.
+type SearchableReview = Pick<HostedReviewInfo, 'number' | 'provider'> & { title?: string }
 type WorktreePaletteReviewMatch = {
   labelKind: 'pr' | 'mr'
   text: string
@@ -35,13 +36,15 @@ export function matchWorktreePaletteReview(
     }
   }
 
-  const titleIndex = review.title.toLowerCase().indexOf(query)
+  // Null-safe: a cached review may have no title, so fall back to '' (query is non-empty, so it won't match).
+  const title = review.title ?? ''
+  const titleIndex = title.toLowerCase().indexOf(query)
   if (titleIndex === -1) {
     return null
   }
   return {
     labelKind: isMergeRequest ? 'mr' : 'pr',
-    text: review.title,
+    text: title,
     matchRange: { start: titleIndex, end: titleIndex + query.length }
   }
 }

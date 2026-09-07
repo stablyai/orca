@@ -1,8 +1,4 @@
-/* eslint-disable max-lines -- Why: this file contains a multi-line inline
-   JS plugin source emitted into OpenCode's plugins directory as a single
-   file; splitting the plugin source across TS modules would obscure the
-   runtime artifact and scatter tightly coupled string-template logic. */
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { join } from 'node:path'
 import {
   existsSync,
@@ -16,6 +12,15 @@ import {
 } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
+import { getStatusPluginEndpointSource } from './status-plugin-endpoint-source'
+import { getStatusPluginRuntimeStateSource } from './status-plugin-runtime-state-source'
+import { getStatusPluginMessagePreviewSource } from './status-plugin-message-preview-source'
+import { getStatusPluginSessionLineageSource } from './status-plugin-session-lineage-source'
+import { getStatusPluginPostSource } from './status-plugin-post-source'
+import { getStatusPluginDeliverySource } from './status-plugin-delivery-source'
+import { getStatusPluginOwnershipSource } from './status-plugin-ownership-source'
+import { getStatusPluginLifecycleSource } from './status-plugin-lifecycle-source'
+import { getStatusPluginFactorySource } from './status-plugin-factory-source'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
@@ -28,411 +33,52 @@ type OpenCodeOverlayManifest = {
   pluginEntries: string[]
 }
 
-// Why: the id passed in by pty.ts's daemon path is a sessionId shaped like
-// "<worktreeId>@@<uuid>" where worktreeId itself contains "::" and a
-// filesystem path (slashes, colons). Earlier the id was a simple numeric
-// counter, so rejecting anything with "/" or ":" was a safe guard against
-// path traversal. After the daemon-parity refactor (#1148) the sessionId
-// shape changed, and the old regex silently rejected every legitimate id,
-// leaving OPENCODE_CONFIG_DIR unset and the plugin never loading.
-//
-// Keep an input-bounds guard (non-empty, bounded length) for defense in
-// depth, and derive the on-disk directory name via hash so any caller's id —
-// including ones containing path separators — produces a short, stable,
-// filesystem-safe name. Hashing also eliminates path-traversal risk at the
-// source: the directory name is always 32 hex chars, never a prefix/suffix
-// of the caller's input.
-// Why: 1024 is a generous sanity cap — daemon-shaped ids embed a worktree
-// filesystem path plus "@@<uuid>", and this bound prevents pathological inputs
-// from burning CPU in the SHA-256 step. Since the id is hashed anyway, 1024
-// is decoupled from PATH_MAX.
+// Why: session IDs may contain path separators and are hashed downstream; cap pathological input.
 function isUsableId(id: string): boolean {
   return typeof id === 'string' && id.length > 0 && id.length <= 1024
 }
 
 function toSafeDirName(id: string): string {
-  // Why: SHA-256 truncated to 32 hex chars (128 bits) is ample for a
-  // per-session directory name — collisions require ~2^64 concurrent sessions
-  // to become likely, far beyond any real workload. Hex keeps the name
-  // portable across all filesystems (no base64 padding, no `/`).
+  // Why: 32 hex chars (128 bits) makes collisions negligible and stays filesystem-portable (no base64 padding or `/`).
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
 export function getOpenCodePluginSource(): string {
-  return getOpenCodeFamilyPluginSource('/hook/opencode')
+  return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
 }
 
-export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
-  // Why: the plugin runs inside the OpenCode Node process and POSTs to the
-  // unified agent-hooks server shared with Claude/Codex/Gemini. It reads the
-  // same ORCA_PANE_KEY / ORCA_TAB_ID / ORCA_WORKTREE_ID / ORCA_AGENT_HOOK_*
-  // env vars that Orca injects into every PTY, so OpenCode panes flow into
-  // agentStatusByPaneKey via the same IPC path as every other agent. Event
-  // mapping is done plugin-side (SessionBusy / SessionIdle / PermissionRequest)
-  // so the server-side normalizer can keep its one-event-per-case switch shape.
+export function getOpenCodeFamilyPluginSource(
+  hookPathname: string,
+  options: { emitSessionStart: boolean }
+): string {
+  // Why: the plugin posts PTY environment data from OpenCode to the shared hooks server.
   return [
-    '// Why: process-lifetime guard so a recurring parse error on a malformed',
-    "// endpoint file does not spam OpenCode's stderr once per hook post.",
-    '// This guard lives inside the plugin source because the plugin runs in',
-    "// OpenCode's Node process (not Orca's) and has no access to server.ts's",
-    '// equivalent warnedVersions / warnedEnvs Sets.',
-    'let warnedBadEndpoint = false;',
-    '',
-    '// Why: message.part.updated can fire many times per second during a',
-    '// streaming assistant reply, and each post() calls resolveHookCoords()',
-    '// which reads the endpoint file. The file only changes on Orca restart',
-    '// (rare), so a stat+mtime check is substantially cheaper than a full',
-    '// readFileSync+parse on every streamed part. On stat error we fall',
-    '// through to parse so the fail-open behavior is preserved.',
-    'let cachedEndpointKey = "";',
-    'let cachedEndpointValues = null;',
-    '',
-    'function readEndpointFile() {',
-    '  const path = process.env.ORCA_AGENT_HOOK_ENDPOINT;',
-    '  if (!path) return null;',
-    '  try {',
-    '    const fs = require("fs");',
-    '    try {',
-    '      const stat = fs.statSync(path);',
-    '      // Why: cache key combines mtime + size + inode. renameSync (used by',
-    '      // writeEndpointFile on the Orca side) allocates a fresh inode on',
-    '      // POSIX and a new Windows file ID on NTFS, so ino changes on every',
-    '      // legitimate rewrite even when mtimeMs resolution is coarse and size',
-    '      // happens to match.',
-    '      const cacheKey = stat.mtimeMs + ":" + stat.size + ":" + stat.ino;',
-    '      if (cacheKey === cachedEndpointKey && cachedEndpointValues) {',
-    '        return cachedEndpointValues;',
-    '      }',
-    '      const contents = fs.readFileSync(path, "utf8");',
-    '      const out = {};',
-    '      for (const line of contents.split(/\\r?\\n/)) {',
-    '        // Why: Windows endpoint.cmd uses `set KEY=VALUE`; Unix endpoint.env',
-    '        // uses `KEY=VALUE`. Making `set ` optional lets the same parser',
-    '        // handle both without platform detection in the plugin. Allow',
-    '        // digits in the key for forward-compat with future ORCA_AGENT_HOOK_*',
-    '        // names that may contain numerics, and strip a trailing CR so',
-    '        // mixed-EOL files with lone `\\r` do not leak CR into the value.',
-    '        const m = line.match(/^(?:set\\s+)?([A-Z0-9_]+)=(.*)$/);',
-    '        if (m) out[m[1]] = m[2].replace(/\\r$/, "");',
-    '      }',
-    '      cachedEndpointKey = cacheKey;',
-    '      cachedEndpointValues = out;',
-    '      return out;',
-    '    } catch (ioErr) {',
-    '      // Why: any stat or read failure (file yanked mid-read, permission',
-    '      // race, unlink between stat and readFileSync) must invalidate the',
-    '      // cache so a transient failure does not lock in a stale parse for',
-    '      // the remaining process lifetime; rethrow to the outer catch.',
-    '      cachedEndpointKey = "";',
-    '      cachedEndpointValues = null;',
-    '      throw ioErr;',
-    '    }',
-    '  } catch (err) {',
-    '    // Why: warn once per process if the file exists but is unreadable or',
-    '    // malformed — a persistent, silently-swallowed parse error would',
-    '    // otherwise leave the plugin falling back to stale process.env on',
-    '    // every post with no signal. ENOENT / missing env var is the normal',
-    '    // pre-install case; stay silent for it.',
-    '    if (err && err.code !== "ENOENT" && !warnedBadEndpoint) {',
-    '      warnedBadEndpoint = true;',
-    '      console.warn("[orca-hook] failed to parse endpoint file:", err.message);',
-    '    }',
-    '    return null;',
-    '  }',
-    '}',
-    '',
-    'function resolveHookCoords() {',
-    '  // Why: prefer the on-disk endpoint file over process.env because env was',
-    '  // frozen when OpenCode was fork()ed — stale after an Orca restart. The',
-    '  // file is rewritten on every Orca start(), so sourcing it per post lets',
-    '  // a long-running OpenCode session reach the current server. Falls back',
-    '  // to process.env when the file is absent (first-run / pre-endpoint-file / Orca',
-    '  // never started writing the file).',
-    '  const fileEnv = readEndpointFile() || {};',
-    '  return {',
-    '    port: fileEnv.ORCA_AGENT_HOOK_PORT || process.env.ORCA_AGENT_HOOK_PORT,',
-    '    token: fileEnv.ORCA_AGENT_HOOK_TOKEN || process.env.ORCA_AGENT_HOOK_TOKEN,',
-    '    env: fileEnv.ORCA_AGENT_HOOK_ENV || process.env.ORCA_AGENT_HOOK_ENV || "",',
-    '    version: fileEnv.ORCA_AGENT_HOOK_VERSION || process.env.ORCA_AGENT_HOOK_VERSION || "",',
-    '  };',
-    '}',
-    '',
-    'function getStatusType(event) {',
-    '  return event?.properties?.status?.type ?? event?.status?.type ?? null;',
-    '}',
-    '',
-    'let lastStatus = "idle";',
-    'const childSessionById = new Map();',
-    '',
-    '// Why: message.part.updated re-sends the FULL accumulated text of the part',
-    '// after every streamed append, so posting each event forwards O(n^2) bytes',
-    '// per turn through Orca (loopback HTTP -> main JSON parse -> status compare',
-    '// -> IPC -> renderer store update -> React commit). On Windows that flood',
-    '// saturated both event loops and froze the whole UI a few seconds into a',
-    '// streaming reply. The dashboard only needs a bounded preview at a human',
-    '// cadence: cap the text and trailing-edge coalesce assistant parts.',
-    'const MESSAGE_PART_THROTTLE_MS = 250;',
-    'const MESSAGE_PART_MAX_CHARS = 4000;',
-    'let pendingAssistantPart = null;',
-    'let assistantPartFlushTimer = null;',
-    'let lastAssistantPartPostAt = 0;',
-    '',
-    'function capMessagePartText(text) {',
-    '  return text.length > MESSAGE_PART_MAX_CHARS ? text.slice(0, MESSAGE_PART_MAX_CHARS) : text;',
-    '}',
-    '',
-    'async function flushPendingAssistantPart() {',
-    '  if (assistantPartFlushTimer) {',
-    '    clearTimeout(assistantPartFlushTimer);',
-    '    assistantPartFlushTimer = null;',
-    '  }',
-    '  const pending = pendingAssistantPart;',
-    '  pendingAssistantPart = null;',
-    '  if (!pending) return;',
-    '  lastAssistantPartPostAt = Date.now();',
-    '  await post("MessagePart", {',
-    '    role: pending.role,',
-    '    text: capMessagePartText(pending.text),',
-    '    messageID: pending.messageID,',
-    '    sessionID: pending.sessionID,',
-    '  });',
-    '}',
-    '',
-    'function queueAssistantPart(part) {',
-    '  // Why: keep only the latest snapshot — each event already contains the',
-    '  // full accumulated text, so intermediate snapshots are pure waste.',
-    '  pendingAssistantPart = part;',
-    '  const sinceLastPost = Date.now() - lastAssistantPartPostAt;',
-    '  if (sinceLastPost >= MESSAGE_PART_THROTTLE_MS) {',
-    '    void flushPendingAssistantPart();',
-    '    return;',
-    '  }',
-    '  if (!assistantPartFlushTimer) {',
-    '    assistantPartFlushTimer = setTimeout(() => {',
-    '      void flushPendingAssistantPart();',
-    '    }, MESSAGE_PART_THROTTLE_MS - sinceLastPost);',
-    '    if (assistantPartFlushTimer.unref) assistantPartFlushTimer.unref();',
-    '  }',
-    '}',
-    '',
-    '// Why: message.part.updated fires for every Part (text, tool, reasoning)',
-    '// but does not include the message role — that lives on the parent',
-    '// message.updated event. Cache the role per messageID so the plugin can',
-    '// tag a TextPart as user vs assistant when POSTing. Capped at 128 entries',
-    '// so long-running sessions do not grow this map unboundedly.',
-    'const messageRoleById = new Map();',
-    'function rememberMessageRole(messageID, role) {',
-    '  if (!messageID || !role) return;',
-    '  if (messageRoleById.size >= 128) {',
-    '    const first = messageRoleById.keys().next().value;',
-    '    if (first !== undefined) messageRoleById.delete(first);',
-    '  }',
-    '  messageRoleById.set(messageID, role);',
-    '}',
-    '',
-    '// Why: oh-my-opencode style tools spawn child sessions that emit their',
-    '// own session.idle / message events. Those child completions must not',
-    '// flip the root Orca pane to done or overwrite the parent turn preview.',
-    '// Detect child sessions by checking `parentID` via client.session.list(),',
-    '// cache the result per session, and fail closed (assume child) on lookup errors',
-    '// so a transient SDK failure cannot create false "done" transitions.',
-    'async function isChildSession(client, sessionID) {',
-    '  if (!sessionID) return true;',
-    '  if (childSessionById.has(sessionID)) return childSessionById.get(sessionID);',
-    '  if (!client?.session?.list) return true;',
-    '  try {',
-    '    const sessions = await client.session.list();',
-    '    const list = Array.isArray(sessions?.data) ? sessions.data : [];',
-    '    const session = list.find((entry) => entry?.id === sessionID);',
-    '    const isChild = !!session?.parentID;',
-    '    if (childSessionById.size >= 128) {',
-    '      const first = childSessionById.keys().next().value;',
-    '      if (first !== undefined) childSessionById.delete(first);',
-    '    }',
-    '    childSessionById.set(sessionID, isChild);',
-    '    return isChild;',
-    '  } catch {',
-    '    return true;',
-    '  }',
-    '}',
-    '',
-    'async function post(hookEventName, extraProperties) {',
-    '  // Why: resolve coords per post — the endpoint file may have been',
-    '  // rewritten by a newer Orca since the last call. Pane/tab/worktree IDs',
-    '  // stay on process.env because they are per-PTY (stable for the life of',
-    '  // the OpenCode process), not per-Orca-instance.',
-    '  const coords = resolveHookCoords();',
-    '  const paneKey = process.env.ORCA_PANE_KEY;',
-    '  if (!coords.port || !coords.token || !paneKey) return;',
-    `  const url = \`http://127.0.0.1:\${coords.port}${hookPathname}\`;`,
-    '  const body = JSON.stringify({',
-    '    paneKey,',
-    '    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || "",',
-    '    tabId: process.env.ORCA_TAB_ID || "",',
-    '    worktreeId: process.env.ORCA_WORKTREE_ID || "",',
-    '    env: coords.env,',
-    '    version: coords.version,',
-    '    payload: { hook_event_name: hookEventName, ...(extraProperties || {}) },',
-    '  });',
-    '  try {',
-    '    await fetch(url, {',
-    '      method: "POST",',
-    '      headers: {',
-    '        "Content-Type": "application/json",',
-    '        "X-Orca-Agent-Hook-Token": coords.token,',
-    '      },',
-    '      body,',
-    '    });',
-    '  } catch {',
-    '    // Why: OpenCode session events must never fail the agent run just',
-    '    // because Orca is unavailable or the local loopback request failed.',
-    '  }',
-    '}',
-    '',
-    'async function setStatus(next, extraProperties) {',
-    '  // Why: dedupe so a flurry of session.status idle events after a turn',
-    '  // does not spam the dashboard with redundant done transitions.',
-    '  if (lastStatus === next) return;',
-    '  lastStatus = next;',
-    '  const hookEventName = next === "busy" ? "SessionBusy" : "SessionIdle";',
-    '  await post(hookEventName, extraProperties);',
-    '}',
-    '',
-    '// Why: accept the factory argument as an optional opaque parameter instead',
-    '// of destructuring (`async ({ client }) => …`). OpenCode can invoke the',
-    '// plugin factory with undefined during startup, which makes the',
-    '// destructuring form throw synchronously and crash OpenCode with an opaque',
-    '// UnknownError before any event is ever dispatched.',
-    'export const OrcaOpenCodeStatusPlugin = async (_ctx) => {',
-    '  const client = _ctx?.client;',
-    '  return {',
-    '  event: async ({ event }) => {',
-    '    if (!event?.type) return;',
-    '',
-    '    // Why: cache the message role BEFORE the async isChildSession check.',
-    '    // OpenCode fires message.updated (user) and message.part.updated (text)',
-    '    // back-to-back; if we awaited isChildSession first, the part.updated',
-    '    // handler could reach messageRoleById.get(...) while the user message.updated',
-    '    // is still suspended on that await — so the part would see an empty cache',
-    '    // and drop the user prompt. Caching is a cheap Map.set with bounded size,',
-    '    // safe to run even for child sessions (the part POST still filters them).',
-    '    if (event.type === "message.updated") {',
-    '      const info = event.properties && event.properties.info;',
-    '      rememberMessageRole(info && info.id, info && info.role);',
-    '    }',
-    '',
-    '    const sessionID = event.properties?.sessionID;',
-    '    if (sessionID && (await isChildSession(client, sessionID))) {',
-    '      return;',
-    '    }',
-    '',
-    '    if (event.type === "permission.asked") {',
-    '      // Why: permission asks are not a session state transition — emit',
-    '      // without mutating lastStatus so the next SessionBusy/SessionIdle',
-    '      // still fires. The server maps PermissionRequest to `waiting`.',
-    '      await post("PermissionRequest", event.properties || {});',
-    '      return;',
-    '    }',
-    '',
-    '    if (event.type === "question.asked") {',
-    '      // Why: question.asked fires when OpenCode uses an ask-the-user tool',
-    '      // (distinct from permission.asked, which blocks on tool approval).',
-    '      // The agent is idle-but-waiting on a human reply, not running, so we',
-    '      // must flip the pane to the same red "needs attention" state used for',
-    '      // permission requests. Like permission.asked, do not touch lastStatus',
-    '      // so the next SessionBusy/SessionIdle after the user answers still',
-    '      // fires and restores the normal working/done flow.',
-    '      await post("AskUserQuestion", event.properties || {});',
-    '      return;',
-    '    }',
-    '',
-    '    if (event.type === "message.updated") {',
-    '      // Why: role is already cached above the isChildSession await so the',
-    '      // back-to-back message.part.updated for the same messageID is not',
-    '      // racing against this handler. Nothing more to do here — return to',
-    '      // avoid falling through to the part/session handlers below.',
-    '      return;',
-    '    }',
-    '',
-    '    if (event.type === "message.part.updated") {',
-    '      // Why: a TextPart carries the actual user prompt or assistant reply',
-    '      // text. Skip non-text parts (tool, reasoning, file, …) so we only',
-    '      // forward what the dashboard renders. Role came from the earlier',
-    '      // message.updated event; if we never saw one (e.g. plugin loaded',
-    '      // mid-turn) the role is unknown, and mislabeling the part — a user',
-    '      // prompt displayed as the assistant reply, or vice versa — is worse',
-    '      // than silently dropping a single in-flight text chunk. The next',
-    '      // message.updated event will re-seed the role cache, so subsequent',
-    '      // parts in the same session flow normally.',
-    '      const part = event.properties && event.properties.part;',
-    '      if (!part || part.type !== "text" || !part.text) return;',
-    '      const role = messageRoleById.get(part.messageID);',
-    '      if (!role) return;',
-    '      if (role === "user") {',
-    '        // Why: user prompts arrive as a single event, not a stream — post',
-    '        // immediately (still capped) so the throttle slot stays free for',
-    '        // the assistant reply that follows within the same window.',
-    '        await post("MessagePart", { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID });',
-    '        return;',
-    '      }',
-    '      queueAssistantPart({ role, text: part.text, messageID: part.messageID, sessionID });',
-    '      return;',
-    '    }',
-    '',
-    '    if (event.type === "session.idle" || event.type === "session.error") {',
-    '      // Why: flush the coalesced final reply snapshot before the idle',
-    '      // transition so the done-state preview shows the completed message.',
-    '      await flushPendingAssistantPart();',
-    '      await setStatus("idle", { sessionID });',
-    '      return;',
-    '    }',
-    '',
-    '    if (event.type === "session.status") {',
-    '      const statusType = getStatusType(event);',
-    '      if (statusType === "busy" || statusType === "retry") {',
-    '        await setStatus("busy", { sessionID });',
-    '        return;',
-    '      }',
-    '      if (statusType === "idle") {',
-    '        await setStatus("idle", { sessionID });',
-    '      }',
-    '    }',
-    '  },',
-    '  };',
-    '};',
-    ''
+    ...getStatusPluginEndpointSource(),
+    ...getStatusPluginRuntimeStateSource(),
+    ...getStatusPluginMessagePreviewSource(),
+    ...getStatusPluginSessionLineageSource(),
+    ...getStatusPluginPostSource(hookPathname),
+    ...getStatusPluginDeliverySource(),
+    ...getStatusPluginOwnershipSource(),
+    ...getStatusPluginLifecycleSource(),
+    ...getStatusPluginFactorySource(options)
   ].join('\n')
 }
 
-// Why: OpenCode hooks used to run their own loopback HTTP server + IPC
-// channel (pty:opencode-status). That pathway produced a synthetic terminal
-// title but never entered agentStatusByPaneKey, so the unified dashboard
-// never saw OpenCode sessions. The service now only installs the plugin
-// file into OPENCODE_CONFIG_DIR — the plugin POSTs directly to the shared
-// agent-hooks server (/hook/opencode), so OpenCode rides the same status
-// pipeline as Claude/Codex/Gemini.
+// Why: installs the plugin into OPENCODE_CONFIG_DIR so it POSTs to the shared agent-hooks server, unifying OpenCode status with Claude/Codex/Gemini (the old loopback-IPC path never reached agentStatusByPaneKey).
 export class OpenCodeHookService {
   clearPty(_ptyId: string): void {
-    // Why: OpenCode can materialize thousands of plugin runtime files under
-    // OPENCODE_CONFIG_DIR. This teardown runs on Electron's main process hot
-    // path, so recursive deletion here can freeze the whole app on Windows
-    // while Node, antivirus, or indexing still holds file handles.
-    //
-    // Current builds use app/source-scoped config dirs, not PTY-scoped dirs,
-    // so there is no live PTY-owned OpenCode filesystem state to remove.
+    // Why: no-op — config dirs are app/source-scoped now, and recursive delete on the main-process hot path could freeze on Windows.
   }
 
   buildPtyEnv(ptyId: string, existingConfigDir?: string | undefined): Record<string, string> {
     if (!isUsableId(ptyId)) {
-      // Why: defense-in-depth. If the id fails the bounds guard, a user-set
-      // OPENCODE_CONFIG_DIR should still be preserved so OpenCode loads the
-      // user's own config — only the Orca status plugin is forfeited.
+      // Why: on a bad id, still preserve a user-set OPENCODE_CONFIG_DIR; only the Orca status plugin is forfeited.
       return existingConfigDir ? { OPENCODE_CONFIG_DIR: existingConfigDir } : {}
     }
 
     if (!existingConfigDir) {
-      // Why: OpenCode may install plugin dependencies under this root. Sharing
-      // it prevents per-terminal node_modules churn and teardown freezes.
+      // Why: share one config root so OpenCode's plugin deps don't churn node_modules per terminal.
       const configDir = this.writeSharedPluginConfig()
       if (!configDir) {
         return {}
@@ -440,10 +86,7 @@ export class OpenCodeHookService {
       return { OPENCODE_CONFIG_DIR: configDir }
     }
 
-    // Why: do NOT `mkdir -p` the user's typoed path — overriding it with an
-    // Orca-owned dir is the exact config-replacement failure mode documented in
-    // docs/opencode-config-dir-collision.md. Let OpenCode surface the typo on
-    // its own; we only forfeit our status plugin for this pane.
+    // Why: don't mkdir the user's (possibly typoed) path — that's the config-replacement failure mode in docs/opencode-config-dir-collision.md; let OpenCode surface it.
     if (!existsSync(existingConfigDir)) {
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
@@ -455,11 +98,7 @@ export class OpenCodeHookService {
       this.mirrorUserConfig(existingConfigDir, overlayDir)
       this.writePluginIntoOverlay(overlayDir)
     } catch {
-      // Why: overlay creation is best-effort. Symlink-creation can fail on
-      // Windows without developer mode (EPERM), userData can be read-only on
-      // locked-down corporate machines, etc. In every case, preserve the
-      // user's OPENCODE_CONFIG_DIR — a missing status plugin is a vastly
-      // smaller harm than silently dropping the user's auth/models/keymap.
+      // Why: best-effort — symlink creation needs Windows developer mode (else EPERM) and userData may be read-only; preserve the user's config over dropping their auth/models/keymap.
       return { OPENCODE_CONFIG_DIR: existingConfigDir }
     }
 
@@ -467,7 +106,7 @@ export class OpenCodeHookService {
   }
 
   private getOverlayRoot(): string {
-    return join(app.getPath('userData'), OPENCODE_OVERLAY_DIR)
+    return join(getAppEnvironment().getPath('userData'), OPENCODE_OVERLAY_DIR)
   }
 
   private getSourceOverlayDir(sourceConfigDir: string): string {
@@ -475,7 +114,11 @@ export class OpenCodeHookService {
   }
 
   private getSharedConfigDir(): string {
-    return join(app.getPath('userData'), OPENCODE_LEGACY_HOOKS_DIR, OPENCODE_SHARED_CONFIG_DIR)
+    return join(
+      getAppEnvironment().getPath('userData'),
+      OPENCODE_LEGACY_HOOKS_DIR,
+      OPENCODE_SHARED_CONFIG_DIR
+    )
   }
 
   private readOverlayManifest(overlayDir: string): OpenCodeOverlayManifest {
@@ -513,17 +156,10 @@ export class OpenCodeHookService {
     }
   }
 
-  // Why: walks the user's OPENCODE_CONFIG_DIR top-level entries. The
-  // `plugins/` subdirectory gets created as a real directory in the overlay
-  // so Orca can drop a sibling file alongside the user's plugins; everything
-  // else (opencode.json, auth.json, themes/, etc.) is mirrored as a single
-  // top-level entry via symlink/junction so user edits propagate live on
-  // POSIX (and on Windows-with-developer-mode) without copying files.
+  // Why: mirror user config entries as symlinks so edits propagate live; only plugins/ becomes a real overlay dir so Orca can drop a sibling plugin file.
   private mirrorUserConfig(sourceDir: string, overlayDir: string): void {
     const previousManifest = this.readOverlayManifest(overlayDir)
-    // Why: source-scoped overlays persist across terminals. Only remove paths
-    // Orca previously mirrored, so deleted/replaced user config cannot stay
-    // stale while OpenCode-owned runtime dirs such as node_modules survive.
+    // Why: overlays persist across terminals; remove only Orca-mirrored paths so stale user config clears but OpenCode runtime dirs (node_modules) survive.
     this.clearManifestEntries(overlayDir, previousManifest)
 
     const nextManifest: OpenCodeOverlayManifest = { topLevelEntries: [], pluginEntries: [] }
@@ -532,43 +168,25 @@ export class OpenCodeHookService {
       const sourcePath = join(sourceDir, entry.name)
 
       if (entry.name === 'plugins') {
-        // Why: check isSymbolicLink BEFORE isDirectory — a Windows junction
-        // can report both as true on a Dirent, and we must take the symlink
-        // branch so the per-entry mirroring (not a single mirrorEntry call
-        // that would create a symlink at <overlay>/plugins) handles it.
+        // Why: check isSymbolicLink before isDirectory — a Windows junction reports both, and the symlink branch must win.
         const isSymlink = entry.isSymbolicLink()
         let isLinkPointingToDir = false
         if (isSymlink) {
           try {
             isLinkPointingToDir = statSync(sourcePath).isDirectory()
           } catch {
-            // Why: broken symlink (target missing) or permission error — fall
-            // through to the default mirrorEntry path so the dangling link is
-            // mirrored verbatim rather than write-through-resolved.
+            // Why: broken/inaccessible symlink — mirror the dangling link verbatim instead of resolving through it.
             isLinkPointingToDir = false
           }
         }
 
         if ((!isSymlink && entry.isDirectory()) || isLinkPointingToDir) {
-          // Why: when the user's plugins/ is a symlink-to-dir, resolve to the
-          // real target so readdir returns the actual entries and child paths
-          // join against the resolved root. mirrorEntry then creates symlinks
-          // pointing into the resolved real plugins (not back through the
-          // user's link), and <overlay>/plugins itself stays a real dir so
-          // writePluginIntoOverlay can never write through to the user's FS.
+          // Why: resolve a symlinked plugins/ to its real target so <overlay>/plugins stays a real dir and writePluginIntoOverlay can't write through the user's link.
           const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
           const overlayPluginsDir = join(overlayDir, 'plugins')
           mkdirSync(overlayPluginsDir, { recursive: true })
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            // Why: skip a user file with the same filename as Orca's plugin —
-            // mirroring it here would either resolve a same-named target via
-            // symlink (writePluginIntoOverlay then clobbers the user's file
-            // through the link) or collide on Windows with the directory entry
-            // about to be created by writePluginIntoOverlay. Either way the
-            // user's plugin would be lost. Skipping yields the desired
-            // semantics: Orca's status plugin runs and the user's same-named
-            // plugin is shadowed for this PTY only — their source file on disk
-            // is untouched.
+            // Why: skip a user plugin sharing Orca's filename; mirroring it would let writePluginIntoOverlay clobber the user's file.
             if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
               continue
             }
@@ -589,13 +207,7 @@ export class OpenCodeHookService {
     this.writeOverlayManifest(overlayDir, nextManifest)
   }
 
-  // Why: write Orca's status plugin into the overlay's plugins/ dir. The
-  // pre-write unlink is the load-bearing part — POSIX writeFileSync over a
-  // symlink writes through to the link target, so without it a user-owned
-  // plugin with this filename would be clobbered through a mirrored link.
-  // Skipping the same-named user file in mirrorUserConfig already prevents
-  // the link from being created, but the unlink keeps this function safe
-  // even if a stale overlay slips through with the link still in place.
+  // Why: pre-write unlink guards against POSIX writeFileSync writing through a mirrored symlink and clobbering a same-named user plugin.
   private writePluginIntoOverlay(overlayDir: string): void {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
@@ -603,8 +215,7 @@ export class OpenCodeHookService {
     try {
       unlinkSync(pluginPath)
     } catch {
-      // No-op: file may not exist on a fresh overlay. Any persistent failure
-      // (e.g. permissions) will surface on the writeFileSync below.
+      // File may not exist on a fresh overlay; a real failure surfaces on writeFileSync below.
     }
     writeFileSync(pluginPath, getOpenCodePluginSource())
   }
@@ -616,9 +227,7 @@ export class OpenCodeHookService {
       mkdirSync(pluginsDir, { recursive: true })
       writeFileSync(join(pluginsDir, ORCA_OPENCODE_PLUGIN_FILE), getOpenCodePluginSource())
     } catch {
-      // Why: on Windows, userData directories can be locked by antivirus or
-      // indexers (EPERM/EBUSY). Plugin config is non-critical — the PTY should
-      // still spawn without the OpenCode status plugin.
+      // Why: userData can be locked on Windows (EPERM/EBUSY); plugin is non-critical, so spawn without it.
       return null
     }
     return configDir

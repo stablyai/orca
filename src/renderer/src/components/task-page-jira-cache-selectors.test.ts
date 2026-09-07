@@ -3,7 +3,7 @@ import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
-import type { JiraIssue } from '../../../shared/types'
+import type { JiraIssue } from '../../../shared/jira-types'
 import { findTaskPageJiraIssue } from './task-page-jira-cache-selectors'
 
 function jiraSourceContext(environmentId: string): TaskSourceContext {

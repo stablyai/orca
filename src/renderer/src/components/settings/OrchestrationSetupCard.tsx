@@ -7,6 +7,7 @@ import {
   ORCHESTRATION_SKILL_INSTALL_COMMAND,
   ORCHESTRATION_SKILL_UPDATE_COMMAND
 } from '@/lib/orchestration-install-command'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
@@ -55,6 +56,7 @@ export function OrchestrationSetupCard(props: {
       terminalAriaLabel="Orchestration skill install terminal"
       terminalWorktreeId="feature-wall-orchestration-skill-terminal"
       terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+      terminalRuntime={activeSkillRuntime.agentRuntime}
       installed={skill.installed}
       loading={skill.loading}
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
@@ -75,6 +77,9 @@ export function OrchestrationSetupCard(props: {
           : ensureOrcaCliAvailableForAgentSkillTerminal())
       }}
       onRecheck={skill.refresh}
+      freshnessSkillName={
+        activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
+      }
     />
   )
 

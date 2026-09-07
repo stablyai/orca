@@ -4,7 +4,8 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type * as WorkspaceBoardTaskStatusSync from './workspace-board-task-status-sync'
 
@@ -31,7 +32,8 @@ const {
   toastErrorMock,
   toastWarningMock,
   pointerDragState,
-  documentDropState
+  documentDropState,
+  laneAssignStatusState
 } = vi.hoisted(() => ({
   syncWorkspaceBoardTaskStatusesMock: vi.fn(() =>
     Promise.resolve({
@@ -44,7 +46,10 @@ const {
   toastErrorMock: vi.fn(),
   toastWarningMock: vi.fn(),
   pointerDragState: { current: null as PointerDragParams | null },
-  documentDropState: { current: null as DocumentDropCapture | null }
+  documentDropState: { current: null as DocumentDropCapture | null },
+  laneAssignStatusState: {
+    current: null as ((worktreeIds: readonly string[], status: string) => void) | null
+  }
 }))
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -81,7 +86,14 @@ vi.mock('./WorkspaceKanbanDrawerHeader', () => ({
 }))
 
 vi.mock('./WorkspaceKanbanLaneGrid', () => ({
-  default: () => <div data-testid="workspace-board-lanes" />
+  default: ({
+    onAssignWorkspaceStatus
+  }: {
+    onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
+  }) => {
+    laneAssignStatusState.current = onAssignWorkspaceStatus ?? null
+    return <div data-testid="workspace-board-lanes" />
+  }
 }))
 
 vi.mock('./WorkspaceKanbanAreaSelectionOverlay', () => ({
@@ -126,7 +138,6 @@ vi.mock('./use-workspace-kanban-column-resize', () => ({
 
 vi.mock('./use-workspace-kanban-create-worktree', () => ({
   useWorkspaceKanbanCreateWorktree: () => ({
-    canCreateWorktree: true,
     createWorktreeForStatus: vi.fn()
   })
 }))
@@ -255,6 +266,7 @@ beforeEach(() => {
   root = createRoot(container)
   pointerDragState.current = null
   documentDropState.current = null
+  laneAssignStatusState.current = null
   syncWorkspaceBoardTaskStatusesMock.mockClear()
   toastErrorMock.mockClear()
   toastWarningMock.mockClear()
@@ -398,6 +410,44 @@ describe('WorkspaceKanbanDrawer task status sync wiring', () => {
         description: '1 skipped. No matching Linear workflow state for In review.'
       })
     )
+  })
+
+  it('syncs Linear when the board context-menu "Move to Status" assigns a status', () => {
+    const item = worktree()
+    renderDrawer(item)
+
+    act(() => {
+      laneAssignStatusState.current?.([item.id], 'in-review')
+    })
+
+    expect(syncWorkspaceBoardTaskStatusesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeIds: [item.id],
+        targetStatus: { id: 'in-review', label: 'In review' }
+      })
+    )
+  })
+
+  it('does not sync a context-menu status move when the setting is disabled', () => {
+    const item = worktree()
+    renderDrawer(item, false)
+
+    act(() => {
+      laneAssignStatusState.current?.([item.id], 'in-review')
+    })
+
+    expect(syncWorkspaceBoardTaskStatusesMock).not.toHaveBeenCalled()
+  })
+
+  it('does not sync a context-menu status move that keeps the same board status', () => {
+    const item = worktree({ workspaceStatus: 'in-review' })
+    renderDrawer(item)
+
+    act(() => {
+      laneAssignStatusState.current?.([item.id], 'in-review')
+    })
+
+    expect(syncWorkspaceBoardTaskStatusesMock).not.toHaveBeenCalled()
   })
 
   it('shows an error toast when task status sync unexpectedly rejects', async () => {

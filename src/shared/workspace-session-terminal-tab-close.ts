@@ -1,10 +1,5 @@
-import type {
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
-  WorkspaceSessionState,
-  WorkspaceVisibleTabType
-} from './types'
+import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 export type WorkspaceSessionTerminalTabCloseResult = {
   session: WorkspaceSessionState
@@ -156,14 +151,18 @@ function deriveActiveSurface(
 export function closeTerminalTabInWorkspaceSession(
   session: WorkspaceSessionState,
   worktreeId: string,
-  tabId: string
+  tabId: string,
+  options: { force?: boolean } = {}
 ): WorkspaceSessionTerminalTabCloseResult {
   const terminalRow = session.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
   const unifiedTerminalTabs = findUnifiedTerminalTabs(session, worktreeId, tabId)
   if (!terminalRow && unifiedTerminalTabs.length === 0) {
     return { session, ptyIdsToKill: [], closed: false, pinned: false }
   }
-  if (terminalRow?.isPinned || unifiedTerminalTabs.some((tab) => tab.isPinned)) {
+  if (
+    options.force !== true &&
+    (terminalRow?.isPinned || unifiedTerminalTabs.some((tab) => tab.isPinned))
+  ) {
     return { session, ptyIdsToKill: [], closed: false, pinned: true }
   }
 
@@ -265,6 +264,7 @@ export function closeTerminalTabInWorkspaceSession(
     if (!hasSurface) {
       next.activeWorktreeId = null
       next.activeWorkspaceKey = null
+      next.activeWorkspaceExecutionHostId = null
     }
   }
   if ((next.tabsByWorktree[worktreeId]?.length ?? 0) === 0) {

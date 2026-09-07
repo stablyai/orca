@@ -1,0 +1,919 @@
+import { execFile } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { Repo } from '../../shared/repo-types'
+import type {
+  SkillBundleFileIdentity,
+  SkillCurrentBundleEntry,
+  SkillKnownSnapshot
+} from '../../shared/skill-freshness'
+import {
+  inventorySkillFreshness,
+  MAXIMUM_REPOSITORY_SKILL_ROOTS
+} from './skill-freshness-inventory'
+import { describeObservedSkillFile, skillPackageDigest } from './skill-package-identity'
+import { MAXIMUM_PLUGIN_SCAN_ENTRIES } from './skill-plugin-cache-scan'
+import { getSkillFreshnessDisplayStatus } from '../../renderer/src/lib/skill-freshness-display-status'
+
+const temporaryDirectories: string[] = []
+
+const execFileAsync = promisify(execFile)
+
+// Why: hashed with real git, not Orca's tree-sha port — the port validating
+// itself here would prove nothing about matching the updater lock's hash.
+async function gitTreeShaOf(directory: string): Promise<string> {
+  const gitDir = await mkdtemp(join(tmpdir(), 'orca-skill-hash-'))
+  temporaryDirectories.push(gitDir)
+  const env = {
+    ...process.env,
+    GIT_DIR: gitDir,
+    GIT_WORK_TREE: directory,
+    GIT_INDEX_FILE: join(gitDir, 'scratch-index'),
+    GIT_CONFIG_GLOBAL: join(gitDir, 'no-config'),
+    GIT_CONFIG_SYSTEM: join(gitDir, 'no-config')
+  }
+  await execFileAsync('git', ['init', '--quiet'], { env, cwd: directory })
+  await execFileAsync('git', ['add', '-A'], { env, cwd: directory })
+  const { stdout } = await execFileAsync('git', ['write-tree'], { env, cwd: directory })
+  return stdout.trim()
+}
+
+function snapshot(releaseRevision: number, markdown: string): SkillKnownSnapshot {
+  const observed = describeObservedSkillFile('SKILL.md', Buffer.from(markdown), false)
+  const file: SkillBundleFileIdentity = {
+    path: observed.path,
+    size: observed.size,
+    executable: observed.executable,
+    classification: observed.classification,
+    exactSha256: observed.exactSha256,
+    textNormalizedSha256: observed.textNormalizedSha256,
+    identitySha256: observed.identitySha256
+  }
+  return {
+    releaseRevision,
+    packageDigest: skillPackageDigest([file]),
+    gitTreeSha: releaseRevision.toString(16).padStart(40, '0'),
+    files: [file]
+  }
+}
+
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), 'orca-skill-inventory-'))
+  temporaryDirectories.push(root)
+  const homeDir = join(root, 'home')
+  const resourceRoot = join(root, 'resources')
+  const skillResourceRoot = join(resourceRoot, 'skills')
+  await mkdir(skillResourceRoot, { recursive: true })
+
+  const oldMarkdown = '---\nname: orca-cli\ndescription: Old official guide.\n---\n\n# Old\n'
+  const currentMarkdown =
+    '---\nname: orca-cli\ndescription: Current official guide.\n---\n\n# Current\n'
+  const newerMarkdown = '---\nname: orca-cli\ndescription: Newer official guide.\n---\n\n# Newer\n'
+  const snapshots = [
+    snapshot(1, oldMarkdown),
+    snapshot(2, currentMarkdown),
+    snapshot(3, newerMarkdown)
+  ]
+  const current: SkillCurrentBundleEntry = {
+    name: 'orca-cli',
+    sourcePath: 'skills/orca-cli',
+    ...snapshots[1]
+  }
+  await Promise.all([
+    mkdir(join(homeDir, '.agents'), { recursive: true }).then(() =>
+      writeFile(
+        join(homeDir, '.agents', '.skill-lock.json'),
+        `${JSON.stringify({
+          version: 3,
+          skills: {
+            'orca-cli': {
+              skillFolderHash: 'tracked-old-hash',
+              skillPath: 'skills/orca-cli/SKILL.md',
+              source: 'stablyai/orca'
+            }
+          }
+        })}\n`
+      )
+    ),
+    writeFile(
+      join(skillResourceRoot, 'current-manifest.json'),
+      `${JSON.stringify({ schemaVersion: 2, skills: [current] }, null, 2)}\n`
+    ),
+    writeFile(
+      join(skillResourceRoot, 'snapshot-registry.json'),
+      `${JSON.stringify({ schemaVersion: 1, skills: { 'orca-cli': snapshots } }, null, 2)}\n`
+    ),
+    writeFile(
+      join(skillResourceRoot, 'release-mapping.json'),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          releases: [
+            { appVersion: '1.0.0', skills: { 'orca-cli': 1 } },
+            { appVersion: '2.0.0', skills: { 'orca-cli': 2 } },
+            { appVersion: '3.0.0', skills: { 'orca-cli': 3 } }
+          ]
+        },
+        null,
+        2
+      )}\n`
+    )
+  ])
+
+  const writeSkill = async (rootPath: string, markdown: string): Promise<string> => {
+    const directory = join(rootPath, 'orca-cli')
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'SKILL.md'), markdown)
+    return directory
+  }
+  return {
+    root,
+    homeDir,
+    resourceRoot,
+    oldMarkdown,
+    currentMarkdown,
+    newerMarkdown,
+    writeSkill
+  }
+}
+
+async function writeSkillLockHash(homeDir: string, skillFolderHash: string): Promise<void> {
+  await writeFile(
+    join(homeDir, '.agents', '.skill-lock.json'),
+    `${JSON.stringify({
+      version: 3,
+      skills: {
+        'orca-cli': {
+          skillFolderHash,
+          skillPath: 'skills/orca-cli/SKILL.md',
+          source: 'stablyai/orca'
+        }
+      }
+    })}\n`
+  )
+}
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
+  )
+})
+
+describe('read-only skill freshness inventory', () => {
+  it('offers an exact older official name only when all global placements are safe', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.map((entry) => entry.status)).toEqual(['outdated'])
+    expect(inventory.installations[0]?.installedAppVersion).toBe('1.0.0')
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+  })
+
+  it('does not offer an older copied bundle the external updater has never registered (#10791)', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    await rm(join(test.homeDir, '.agents', '.skill-lock.json'))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot,
+      stateHome: null
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'outdated'
+    })
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
+  it('labels newer known and unrecognized bytes honestly without calling them modified', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.newerMarkdown)
+    await test.writeSkill(
+      join(test.homeDir, '.claude', 'skills'),
+      '---\nname: orca-cli\ndescription: User copy.\n---\n'
+    )
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.map((entry) => entry.status)).toEqual([
+      'newer-known',
+      'unrecognized'
+    ])
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
+  it('trusts the updater lock for canonical bytes the bundle has never seen (#11220 scan half)', async () => {
+    // The steady state days after a release: `skills update` installed source-repo
+    // HEAD, wrote its lock, and no shipped bundle knows that revision yet.
+    const test = await fixture()
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(canonical))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    // Why: ahead of the bundle means there is nothing this build can update to.
+    expect(inventory.eligibleUpdateNames).toEqual([])
+    // The user-visible verdict, across both halves of the fix: the row must read
+    // up to date, not amber "may be modified… remove it" over the CLI's own install.
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('reads up to date after the OS drops a sidecar into an untouched install', async () => {
+    const test = await fixture()
+    const directory = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      test.currentMarkdown
+    )
+    // What one Finder visit leaves behind. Sorts before SKILL.md, which is what made the
+    // index-aligned snapshot comparison miss and report the copy as modified.
+    await writeFile(join(directory, '.DS_Store'), Buffer.from([0, 1, 2, 3]))
+    // No lock trust available here: the recorded hash is a different tree, so this proves
+    // the identity fix alone carries it rather than falling through to newer-known.
+    await writeSkillLockHash(test.homeDir, 'a'.repeat(40))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.map((entry) => entry.status)).toEqual(['current'])
+    // The whole point: no amber, and nothing offered to "fix" a copy that is already right.
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
+  it('scopes the lock hash to the current bundle, not every path a revision ever shipped', async () => {
+    // A file revision 1 shipped and the current revision dropped is a stale leftover, not
+    // part of what the updater installed. Scoping to the union of all revisions would drag
+    // it back into the hash on the accident of its name, and the copy the CLI just wrote
+    // would read "may be modified".
+    const test = await fixture()
+    const legacy = describeObservedSkillFile(
+      'references/legacy.md',
+      Buffer.from('dropped after rev 1\n'),
+      false
+    )
+    const registryPath = join(test.resourceRoot, 'skills', 'snapshot-registry.json')
+    const registry = JSON.parse(await readFile(registryPath, 'utf8'))
+    registry.skills['orca-cli'][0].files.push(legacy)
+    await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`)
+
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    // The lock records the source tree — SKILL.md alone, no leftover.
+    const sourceTree = await test.writeSkill(join(test.root, 'source'), upstreamMarkdown)
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(sourceTree))
+    await mkdir(join(canonical, 'references'), { recursive: true })
+    await writeFile(join(canonical, 'references', 'legacy.md'), 'dropped after rev 1\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('trusts the updater lock for upstream bytes beside an agent CLI sidecar (#12694)', async () => {
+    // The reported folder shape after a successful update: `skills update` wrote
+    // source-repo HEAD no bundle knows yet, and Codex's own agents/openai.yaml sits
+    // beside it. The lock records the source tree — SKILL.md alone — so a folder hash
+    // taken over the sidecar too can never match it, and the copy the command just
+    // wrote would be reported as a failed update.
+    const test = await fixture()
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    const sourceTree = await test.writeSkill(join(test.root, 'source'), upstreamMarkdown)
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(sourceTree))
+    await mkdir(join(canonical, 'agents'), { recursive: true })
+    await writeFile(join(canonical, 'agents', 'openai.yaml'), 'display_name: test\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('still trusts the lock when the upstream revision added a file (#11220 guard)', async () => {
+    // The other half of the sidecar fix: scoping the lock hash to official paths alone
+    // would drop a file upstream genuinely shipped, and that file IS in the lock's tree.
+    // A clean install would then read "may be modified" and its update run report failure.
+    const test = await fixture()
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    await mkdir(join(canonical, 'references'), { recursive: true })
+    await writeFile(
+      join(canonical, 'references', 'new.md'),
+      'Shipped upstream, no bundle knows it\n'
+    )
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(canonical))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('still withholds an unwinnable update when a sidecar sits beside the stale copy', async () => {
+    // Recognising the copy is only half the job: the lock already names the revision the
+    // source has, so `skills update` would compare lock to source, see no work and write
+    // nothing. Offering it promises a button that can never finish. A sidecar must not
+    // make the placement unidentifiable and retire that guard.
+    const test = await fixture()
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      test.oldMarkdown
+    )
+    await mkdir(join(canonical, 'agents'), { recursive: true })
+    await writeFile(join(canonical, 'agents', 'openai.yaml'), 'display_name: test\n')
+    // The fixture's synthetic tree sha for revision 2 — the revision on disk is 1.
+    await writeSkillLockHash(test.homeDir, (2).toString(16).padStart(40, '0'))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'outdated',
+      installedReleaseRevision: 1
+    })
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
+  it('still flags canonical bytes that do not match what the lock says was installed', async () => {
+    const test = await fixture()
+    const editedMarkdown = `${test.currentMarkdown}\nLocal edit the updater never wrote.\n`
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), editedMarkdown)
+    const elsewhere = await test.writeSkill(join(test.root, 'elsewhere'), test.newerMarkdown)
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(elsewhere))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'unrecognized'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('needs-attention')
+  })
+
+  it('does not let the lock vouch for a same-name copy outside the placements it wrote', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const independent = await test.writeSkill(
+      join(test.homeDir, '.claude', 'skills'),
+      '---\nname: orca-cli\n---\n\nAnother tool.\n'
+    )
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(independent))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ topology: 'independent-copy', status: 'unrecognized' })
+      ])
+    )
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('needs-attention')
+  })
+
+  it('retains full-file identity without projecting unused metadata', async () => {
+    const test = await fixture()
+    const lateDescription = 'Description beyond the metadata parsing budget.'
+    await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      `${' '.repeat(256 * 1024)}\n${lateDescription}`
+    )
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      status: 'unrecognized'
+    })
+    expect(inventory.installations[0]).not.toHaveProperty('description')
+    expect(inventory.installations[0]?.observedPackageDigest).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it.runIf(process.platform !== 'win32')(
+    'deduplicates a provider alias to the canonical copy',
+    async () => {
+      const test = await fixture()
+      const canonical = await test.writeSkill(
+        join(test.homeDir, '.agents', 'skills'),
+        test.oldMarkdown
+      )
+      const claudeRoot = join(test.homeDir, '.claude', 'skills')
+      await mkdir(claudeRoot, { recursive: true })
+      await symlink(canonical, join(claudeRoot, 'orca-cli'))
+
+      const inventory = await inventorySkillFreshness({
+        currentAppVersion: '2.0.0',
+        homeDir: test.homeDir,
+        repos: [],
+        resourceRoot: test.resourceRoot
+      })
+
+      expect(inventory.installations).toHaveLength(1)
+      expect(inventory.installations[0]?.providers).toEqual(['agent-skills', 'claude'])
+      expect(inventory.installations[0]?.topology).toBe('canonical-copy')
+      expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+    }
+  )
+
+  it.runIf(process.platform !== 'win32')(
+    'deduplicates aliases within an unsupported topology while still updating the canonical copy',
+    async () => {
+      const test = await fixture()
+      await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+      const shared = await test.writeSkill(join(test.root, 'shared'), test.currentMarkdown)
+      const repos = await Promise.all(
+        ['one', 'two'].map(async (id) => {
+          const repoPath = join(test.root, `repo-${id}`)
+          const root = join(repoPath, '.agents', 'skills')
+          await mkdir(root, { recursive: true })
+          await symlink(shared, join(root, 'orca-cli'))
+          return { id, path: repoPath } as unknown as Repo
+        })
+      )
+
+      const inventory = await inventorySkillFreshness({
+        currentAppVersion: '2.0.0',
+        homeDir: test.homeDir,
+        repos,
+        resourceRoot: test.resourceRoot
+      })
+
+      expect(
+        inventory.installations.filter((entry) => entry.topology === 'repo-scope')
+      ).toHaveLength(1)
+      expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+    }
+  )
+
+  it('keeps an unreadable foreign-home placement visible without withholding the update', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    const inaccessiblePath = join(test.homeDir, '.codex', 'skills', 'orca-cli')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot,
+      candidateLstat: async (path) => {
+        if (path === inaccessiblePath) {
+          throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+        }
+        return import('node:fs/promises').then(({ lstat }) => lstat(path))
+      }
+    })
+
+    expect(inventory.installations.map((entry) => entry.status)).toEqual([
+      'outdated',
+      'inaccessible'
+    ])
+    // Why: `--global` never writes another agent's home, so an unreadable copy there
+    // cannot be harmed by the update and must not withhold it from the canonical copy.
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+  })
+
+  it('does not lose an inaccessible known repository placement', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    const repoPath = join(test.root, 'repo')
+    const inaccessiblePath = join(repoPath, '.agents', 'skills', 'orca-cli')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [{ id: 'repo', path: repoPath }] as unknown as Repo[],
+      resourceRoot: test.resourceRoot,
+      candidateLstat: async (path) => {
+        if (path === inaccessiblePath) {
+          throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+        }
+        return import('node:fs/promises').then(({ lstat }) => lstat(path))
+      }
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unresolvedPath: inaccessiblePath,
+          topology: 'repo-scope',
+          status: 'inaccessible'
+        })
+      ])
+    )
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+  })
+
+  it.each([
+    ['repo', 'repo-scope'],
+    ['plugin', 'plugin-cache']
+  ] as const)(
+    'keeps an official %s placement informational without withholding the update',
+    async (kind, topology) => {
+      const test = await fixture()
+      await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+      let repos: Repo[] = []
+      if (kind === 'repo') {
+        const repoPath = join(test.root, 'repo')
+        await test.writeSkill(join(repoPath, '.agents', 'skills'), test.currentMarkdown)
+        repos = [{ id: 'repo', path: repoPath }] as unknown as Repo[]
+      } else {
+        await test.writeSkill(
+          join(test.homeDir, '.codex', 'plugins', 'cache', 'vendor', 'skills'),
+          test.currentMarkdown
+        )
+      }
+
+      const inventory = await inventorySkillFreshness({
+        currentAppVersion: '2.0.0',
+        homeDir: test.homeDir,
+        repos,
+        resourceRoot: test.resourceRoot
+      })
+
+      expect(inventory.installations.some((entry) => entry.topology === topology)).toBe(true)
+      expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+    }
+  )
+
+  it('keeps another ecosystem’s same-name plugin skill unrecognized', async () => {
+    // Why: Codex ships its own `computer-use` plugin. Reported in #10633 — the copy is
+    // not ours, not the user's to delete, and left amber with no action available.
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const pluginRoot = join(
+      test.homeDir,
+      '.codex',
+      'plugins',
+      'cache',
+      'openai-bundled',
+      'orca-cli'
+    )
+    await mkdir(pluginRoot, { recursive: true })
+    await writeFile(join(pluginRoot, 'SKILL.md'), '---\nname: orca-cli\n---\n\nAnother tool.\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unresolvedPath: pluginRoot,
+          topology: 'plugin-cache',
+          status: 'unrecognized'
+        })
+      ])
+    )
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
+  it('reads a plugin-cache copy with untouched official files as current', async () => {
+    // The deliberate posture change behind #12694: an unlisted neighbour is not evidence
+    // of an edit, so the bytes Orca owns decide alone — here and in every scope, not just
+    // the canonical copy the updater writes. The drifted-SKILL.md case above still fails
+    // closed, which is what keeps "unrecognized" meaningful.
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const withSidecarRoot = join(
+      test.homeDir,
+      '.codex',
+      'plugins',
+      'cache',
+      'openai-bundled',
+      'modified',
+      'orca-cli'
+    )
+    await mkdir(withSidecarRoot, { recursive: true })
+    await writeFile(join(withSidecarRoot, 'SKILL.md'), test.currentMarkdown)
+    await writeFile(join(withSidecarRoot, 'README.md'), 'Neighbouring file Orca never shipped\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unresolvedPath: withSidecarRoot,
+          status: 'current'
+        })
+      ])
+    )
+  })
+
+  it.each([
+    ['.claude', 'skills'],
+    ['.agents', 'skills']
+  ])('keeps an unrecognized copy under %s/%s the user’s to review', async (...segments) => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    await test.writeSkill(
+      join(test.homeDir, ...segments),
+      '---\nname: orca-cli\n---\n\nAnother tool.\n'
+    )
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.some((entry) => entry.status === 'unrecognized')).toBe(true)
+  })
+
+  it('does not classify an empty plugin-cache directory as a skill', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const emptyRoot = join(test.homeDir, '.codex', 'plugins', 'cache', 'vendor', 'orca-cli')
+    await mkdir(emptyRoot, { recursive: true })
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.some((entry) => entry.unresolvedPath === emptyRoot)).toBe(false)
+  })
+
+  it('accepts CRLF as the same official text identity', async () => {
+    const test = await fixture()
+    await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      test.oldMarkdown.replaceAll('\n', '\r\n')
+    )
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+    expect(inventory.installations[0]?.status).toBe('outdated')
+  })
+
+  it('classifies exact current bytes as current when a later snapshot reuses them', async () => {
+    const test = await fixture()
+    const resourceRoot = join(test.resourceRoot, 'skills')
+    const registryPath = join(resourceRoot, 'snapshot-registry.json')
+    const registry = JSON.parse(await readFile(registryPath, 'utf8'))
+    registry.skills['orca-cli'].push(snapshot(4, test.currentMarkdown))
+    await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`)
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+
+    // Why: the injected version deliberately differs from every mapping entry
+    // to prove current placements are labeled by the running build, not history.
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.1.0-unreleased',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      status: 'current',
+      installedReleaseRevision: 2,
+      installedAppVersion: '2.1.0-unreleased',
+      currentAppVersion: '2.1.0-unreleased'
+    })
+  })
+
+  it('reports the repository scan limit without withholding the global update', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    const repos = Array.from(
+      { length: MAXIMUM_REPOSITORY_SKILL_ROOTS / 2 + 1 },
+      (_, index) => ({ id: `repo-${index}`, path: join(test.root, `repo-${index}`) }) as Repo
+    )
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos,
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ errorCategory: 'repository-scan-limit', status: 'inaccessible' })
+      ])
+    )
+    // Why: unscanned repositories only ever hold project skills, which the global
+    // command does not touch, so the limit is reported without blocking the update.
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+  })
+
+  it('scans a real-shaped plugin cache completely and leaves eligibility unchanged', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.oldMarkdown)
+    const packageRoot = join(
+      test.homeDir,
+      '.codex',
+      'plugins',
+      'cache',
+      'openai-bundled',
+      'orca-cli',
+      '1.0.0'
+    )
+    await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+    await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills/"}\n')
+    const pluginSkill = await test.writeSkill(join(packageRoot, 'skills'), test.currentMarkdown)
+    await mkdir(join(pluginSkill, 'templates', 'starter', 'examples', 'd1', 'app', 'api'), {
+      recursive: true
+    })
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    // The plugin copy is real and reported at its own path — never at a joined path,
+    // and never at the same-named plugin directory two levels above it.
+    expect(inventory.scanIssues).toEqual([])
+    expect(inventory.installations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ topology: 'plugin-cache', unresolvedPath: pluginSkill })
+      ])
+    )
+    // Why: a plugin-cache copy is not convergent, so it neither grants nor withholds
+    // the update. The outdated canonical copy alone decides, exactly as before.
+    expect(inventory.eligibleUpdateNames).toEqual(['orca-cli'])
+  })
+
+  it('reports incomplete plugin coverage without inventing per-skill installations', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const pluginCache = join(test.homeDir, '.codex', 'plugins', 'cache')
+    await mkdir(join(pluginCache, ...Array.from({ length: 11 }, (_, index) => `level-${index}`)), {
+      recursive: true
+    })
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations).toHaveLength(1)
+    expect(inventory.installations[0]).toMatchObject({
+      name: 'orca-cli',
+      status: 'current',
+      topology: 'canonical-copy'
+    })
+    expect(inventory.installations).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ errorCategory: 'plugin-cache-scan-incomplete' })
+      ])
+    )
+    expect(inventory.scanIssues).toEqual([
+      expect.objectContaining({
+        rootId: 'codex-plugin-cache',
+        sourceLabel: 'Codex plugin cache',
+        reason: 'depth-limit',
+        errorCode: null
+      })
+    ])
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'invents no installations when the plugin cache trips the entry budget (#10918)',
+    async () => {
+      const test = await fixture()
+      await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+      const pluginCache = join(test.homeDir, '.codex', 'plugins', 'cache')
+      await mkdir(pluginCache, { recursive: true })
+      // Why: the production bound, not an injected one — #10918 is the real constant
+      // collapsing the scan to the cache root, and only a real cache proves that path.
+      const entries = Array.from({ length: MAXIMUM_PLUGIN_SCAN_ENTRIES + 1 }, (_, index) =>
+        join(pluginCache, `entry-${index}`)
+      )
+      for (let index = 0; index < entries.length; index += 512) {
+        await Promise.all(entries.slice(index, index + 512).map((path) => writeFile(path, '')))
+      }
+
+      const inventory = await inventorySkillFreshness({
+        currentAppVersion: '2.0.0',
+        homeDir: test.homeDir,
+        repos: [],
+        resourceRoot: test.resourceRoot
+      })
+
+      // Why: assert the bound actually tripped first — if the fixture stopped reaching it,
+      // the placement assertion below would still pass and cover nothing.
+      expect(inventory.scanIssues).toEqual([
+        expect.objectContaining({
+          rootId: 'codex-plugin-cache',
+          path: pluginCache,
+          reason: 'entry-limit',
+          errorCode: null
+        })
+      ])
+      // Why: the truncated root is not evidence of a copy. Fabricating one per manifest name
+      // is what pinned an unclearable "Needs attention" on every card in #10918.
+      expect(inventory.installations).toEqual([
+        expect.objectContaining({ name: 'orca-cli', status: 'current', topology: 'canonical-copy' })
+      ])
+    },
+    90_000
+  )
+})

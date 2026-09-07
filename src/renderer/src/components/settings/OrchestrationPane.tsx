@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { ArrowRightLeft, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { ArrowRightLeft, GitBranch, ListChecks, Workflow, type LucideIcon } from 'lucide-react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal
@@ -26,9 +27,17 @@ import {
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
-import { OrchestrationExampleDialog } from './OrchestrationExamplesDialog'
+import { SkillUsageExamplesSection } from './SkillUsageExamplesSection'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { translate } from '@/i18n/i18n'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { NumberField } from './SettingsFormControls'
+import {
+  getNestedWorkerDepthDescription,
+  getNestedWorkerDepthTitle
+} from './nested-worker-depth-copy'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -38,10 +47,25 @@ const EXAMPLE_ICONS = {
   'child-worktrees': Workflow
 } as const
 
-export function OrchestrationPane(): React.JSX.Element {
+function resolveOrchestrationExampleIcon(example: SkillUsageExample): LucideIcon {
+  return EXAMPLE_ICONS[example.id as keyof typeof EXAMPLE_ICONS] ?? Workflow
+}
+
+type OrchestrationPaneProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+}
+
+export function OrchestrationPane({
+  settings,
+  updateSettings
+}: OrchestrationPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const showOrchestration = matchesSettingsSearch(searchQuery, getOrchestrationPaneSearchEntries())
-  const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null)
+  const showNestedWorkerDepth = !isPairedWebClientWindow()
+  const searchEntries = getOrchestrationPaneSearchEntries({
+    includeNestedWorkerDepth: showNestedWorkerDepth
+  })
+  const showOrchestration = matchesSettingsSearch(searchQuery, searchEntries)
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationInstallCommand = !activeSkillRuntime.installDisabledReason
@@ -62,6 +86,7 @@ export function OrchestrationPane(): React.JSX.Element {
     loading: orchestrationSkillLoading,
     error: orchestrationSkillError,
     skills: discoveredSkills,
+    sources: discoveredSkillSources,
     refresh: refreshOrchestrationSkill
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -82,7 +107,8 @@ export function OrchestrationPane(): React.JSX.Element {
         'auto.components.settings.OrchestrationPane.2aacdb0517',
         'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'
       )}
-      keywords={getOrchestrationPaneSearchEntries()[0].keywords}
+      keywords={searchEntries[0].keywords}
+      forceVisible
       className="space-y-5 py-2"
     >
       <AgentSkillSetupPanel
@@ -100,6 +126,7 @@ export function OrchestrationPane(): React.JSX.Element {
         terminalAriaLabel="Orchestration skill install terminal"
         terminalWorktreeId="settings-orchestration-skill-terminal"
         terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+        terminalRuntime={activeSkillRuntime.agentRuntime}
         installed={orchestrationSkillDetected}
         loading={orchestrationSkillLoading}
         error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
@@ -146,11 +173,28 @@ export function OrchestrationPane(): React.JSX.Element {
           <OrchestrationSkillAgentCoverage
             embedded
             skills={discoveredSkills}
+            sources={discoveredSkillSources}
             loading={orchestrationSkillLoading}
           />
         }
         onRecheck={refreshOrchestrationSkill}
+        freshnessSkillName={
+          activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
+        }
       />
+
+      {showNestedWorkerDepth ? (
+        <NumberField
+          label={getNestedWorkerDepthTitle()}
+          description={getNestedWorkerDepthDescription()}
+          value={resolveNestedWorkerMaxDepth(settings)}
+          min={1}
+          integer
+          onChange={(nestedWorkerMaxDepth) => {
+            void updateSettings({ nestedWorkerMaxDepth })
+          }}
+        />
+      ) : null}
 
       <OrchestrationSkillPromptDialog
         command={orchestrationInstallCommand}
@@ -158,58 +202,19 @@ export function OrchestrationPane(): React.JSX.Element {
         onOpenChange={setSkillPromptOpen}
       />
 
-      <div className="space-y-4 border-t border-border/60 pt-6">
-        <div className="space-y-3">
-          <h3 className="text-sm font-medium text-foreground">
-            {translate('auto.components.settings.OrchestrationPane.ae79504732', 'How to use it')}
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.OrchestrationPane.52e0634e2c',
-              'Ask a coordinator agent to use orchestration for handoffs, worktree handovers, and sequential or parallel child agents.'
-            )}
-          </p>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          {getOrchestrationUsageExamples().map((example) => {
-            const Icon = EXAMPLE_ICONS[example.id as keyof typeof EXAMPLE_ICONS] ?? Workflow
-            return (
-              <button
-                key={example.id}
-                type="button"
-                className="rounded-md border border-border/60 bg-muted/20 px-4 py-3 text-left transition-colors hover:bg-muted/35 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                onClick={() => setSelectedExampleId(example.id)}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-background text-muted-foreground">
-                    <Icon className="size-4" />
-                  </div>
-                  <div className="min-w-0 space-y-1">
-                    <p className="text-sm font-medium text-foreground">{example.title}</p>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      {example.summary}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {getOrchestrationUsageExamples().map((example) => {
-        const Icon = EXAMPLE_ICONS[example.id as keyof typeof EXAMPLE_ICONS] ?? Workflow
-        return (
-          <OrchestrationExampleDialog
-            key={`${example.id}-dialog`}
-            example={example}
-            icon={Icon}
-            open={selectedExampleId === example.id}
-            onOpenChange={(open) => setSelectedExampleId(open ? example.id : null)}
-          />
-        )
-      })}
+      <SkillUsageExamplesSection
+        heading={translate(
+          'auto.components.settings.OrchestrationPane.ae79504732',
+          'How to use it'
+        )}
+        description={translate(
+          'auto.components.settings.OrchestrationPane.52e0634e2c',
+          'Ask a coordinator agent to use orchestration for handoffs, worktree handovers, and sequential or parallel child agents.'
+        )}
+        examples={getOrchestrationUsageExamples()}
+        resolveIcon={resolveOrchestrationExampleIcon}
+        slashCommand={`/${ORCHESTRATION_SKILL_NAME}`}
+      />
     </SearchableSetting>
   )
 }

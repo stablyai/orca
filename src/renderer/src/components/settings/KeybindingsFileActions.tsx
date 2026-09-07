@@ -132,7 +132,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
         )
         return
       }
-      const result = await window.api.shell.openInExternalEditor(filePath, command)
+      const result = await window.api.shell.openInExternalEditor({ path: filePath, command })
       if (!result.ok) {
         toast.error(openFailureMessage(result.reason))
       }

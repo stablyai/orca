@@ -1,10 +1,11 @@
 import { lstat } from 'node:fs/promises'
 import { basename, posix, resolve } from 'node:path'
-import { authorizeExternalPath, isENOENT } from './filesystem-auth'
+import { authorizeExternalPath } from './filesystem-auth'
+import { isENOENT } from './filesystem-path-containment'
 import { getSshConnectionManager } from './ssh'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
-import type { ImportItemResult } from './filesystem-mutations'
+import type { ImportItemResult } from './filesystem-import-result-types'
 import { assertSafeRemotePathSegment, type RemotePathFlavor } from '../ssh/ssh-remote-platform'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import {
@@ -19,7 +20,7 @@ export async function importExternalPathsSsh(
   sourcePaths: string[],
   destDir: string,
   connectionId: string,
-  options?: { ensureDir?: boolean }
+  options?: { ensureDir?: boolean; assertCurrent?: () => void }
 ): Promise<{ results: ImportItemResult[] }> {
   if (sourcePaths.length === 0) {
     return { results: [] }
@@ -45,7 +46,7 @@ export async function importExternalPathsSsh(
     // Why: terminal-drop staging needs `${worktree}/.orca/drops` to exist
     // before the first upload. .orca/ is reserved as Orca-owned remote state;
     // see docs/terminal-drop-ssh.md.
-    await ensureDropStagingDir(provider, destDir)
+    await ensureDropStagingDir(provider, destDir, options.assertCurrent)
   }
 
   const results: ImportItemResult[] = []
@@ -53,6 +54,7 @@ export async function importExternalPathsSsh(
   if (!provider.openFileUploadSession) {
     throw new Error('Remote file upload is unavailable. Reconnect the SSH target and retry.')
   }
+  options?.assertCurrent?.()
   const uploadSession = await provider.openFileUploadSession()
   // Why: filename legality follows the remote filesystem, not the client's OS.
   const remotePathFlavor: RemotePathFlavor = isWindowsAbsolutePathLike(destDir)
@@ -66,7 +68,8 @@ export async function importExternalPathsSsh(
         sourcePath,
         destDir,
         reservedNames,
-        remotePathFlavor
+        remotePathFlavor,
+        options?.assertCurrent
       )
       results.push(result)
       if (result.status === 'imported') {
@@ -89,7 +92,8 @@ async function importOneSourceSsh(
   sourcePath: string,
   destDir: string,
   reservedNames: Set<string>,
-  remotePathFlavor: RemotePathFlavor
+  remotePathFlavor: RemotePathFlavor,
+  assertCurrent?: () => void
 ): Promise<ImportItemResult> {
   const resolvedSource = resolve(sourcePath)
 
@@ -145,11 +149,20 @@ async function importOneSourceSsh(
       return { sourcePath, status: 'skipped', reason: 'symlink' }
     }
 
-    const finalName = await deconflictName(provider, destDir, originalName, reservedNames)
+    // Why: local inspection can outlive a HUB SSH session; revalidate before the first remote write.
+    assertCurrent?.()
+    const finalName = await deconflictName(
+      provider,
+      destDir,
+      originalName,
+      reservedNames,
+      assertCurrent
+    )
     const destPath = `${destDir}/${finalName}`
     const renamed = finalName !== originalName
 
     if (isDir) {
+      assertCurrent?.()
       await provider.createDirNoClobber(destPath)
       createdDestDir = destPath
       await uploadSshImportDirectory(
@@ -158,9 +171,11 @@ async function importOneSourceSsh(
         resolvedSource,
         destPath,
         rootRealPath!,
-        remotePathFlavor
+        remotePathFlavor,
+        assertCurrent
       )
     } else {
+      assertCurrent?.()
       await uploadSession.uploadFile(resolvedSource, destPath, { exclusive: true })
     }
 
@@ -175,7 +190,12 @@ async function importOneSourceSsh(
     if (createdDestDir) {
       // Why: local directory imports roll back partial output; SSH imports
       // should not leave the no-clobber root after a nested upload failure.
-      await provider.deletePath(createdDestDir, true).catch(() => {})
+      try {
+        assertCurrent?.()
+        await provider.deletePath(createdDestDir, true)
+      } catch {
+        // Best effort; a replacement session must never inherit cleanup from the retired owner.
+      }
     }
     return {
       sourcePath,
@@ -189,8 +209,10 @@ async function deconflictName(
   provider: IFilesystemProvider,
   destDir: string,
   originalName: string,
-  reservedNames: Set<string>
+  reservedNames: Set<string>,
+  assertCurrent?: () => void
 ): Promise<string> {
+  assertCurrent?.()
   if (
     !(await remotePathExists(provider, `${destDir}/${originalName}`)) &&
     !reservedNames.has(originalName)
@@ -204,6 +226,7 @@ async function deconflictName(
   const ext = hasMeaningfulExt ? originalName.slice(dotIndex) : ''
 
   let candidate = `${stem} copy${ext}`
+  assertCurrent?.()
   if (
     !(await remotePathExists(provider, `${destDir}/${candidate}`)) &&
     !reservedNames.has(candidate)
@@ -214,6 +237,7 @@ async function deconflictName(
   let counter = 2
   while (counter < 10000) {
     candidate = `${stem} copy ${counter}${ext}`
+    assertCurrent?.()
     if (
       !(await remotePathExists(provider, `${destDir}/${candidate}`)) &&
       !reservedNames.has(candidate)
@@ -228,13 +252,21 @@ async function deconflictName(
   )
 }
 
-async function ensureDropStagingDir(provider: IFilesystemProvider, destDir: string): Promise<void> {
+async function ensureDropStagingDir(
+  provider: IFilesystemProvider,
+  destDir: string,
+  assertCurrent?: () => void
+): Promise<void> {
   const parent = posix.dirname(destDir)
+  assertCurrent?.()
   await provider.createDir(parent)
   const gitignorePath = `${parent}/.gitignore`
+  assertCurrent?.()
   if (!(await remotePathExists(provider, gitignorePath))) {
+    assertCurrent?.()
     await provider.writeFile(gitignorePath, '*\n!.gitignore\n')
   }
+  assertCurrent?.()
   await provider.createDir(destDir)
 }
 

@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import {
   isLockedWorktreeRemovalError,
   type WorktreeForceDeleteReason
-} from '../../../../shared/worktree-removal'
+} from '../../../../shared/worktree/removal'
 
 type DeleteWorktreeFailureToastOptions = {
   error: string

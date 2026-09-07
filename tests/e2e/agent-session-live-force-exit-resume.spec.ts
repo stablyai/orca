@@ -183,33 +183,39 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
 
     const descriptor = await waitForActivePaneHookDescriptor(page)
     const ptyId = await waitForActivePanePtyId(page)
+    const transcriptPath = session.seedCodexResumeRollout(PROVIDER_SESSION_ID, repoPath)
     const marker = `AGENT_LIVE_FORCE_EXIT_${Date.now()}`
     await execInTerminal(page, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(page, marker)
 
     await page.evaluate(
-      ({ paneKey, worktreeId: wtId, providerSessionId }) => {
-        window.__store
-          ?.getState()
-          .setAgentStatus(
-            paneKey,
-            { state: 'working', prompt: 'finish the task', agentType: 'codex' },
-            'Codex',
-            undefined,
-            { worktreeId: wtId },
-            { providerSession: { key: 'session_id', id: providerSessionId } }
-          )
+      ({ paneKey, worktreeId: wtId, providerSessionId, transcriptPath }) => {
+        window.__store?.getState().setAgentStatus(
+          paneKey,
+          { state: 'working', prompt: 'finish the task', agentType: 'codex' },
+          'Codex',
+          undefined,
+          { worktreeId: wtId },
+          {
+            providerSession: {
+              key: 'session_id',
+              id: providerSessionId,
+              transcriptPath
+            }
+          }
+        )
       },
       {
         paneKey: descriptor.paneKey,
         worktreeId: descriptor.worktreeId,
-        providerSessionId: PROVIDER_SESSION_ID
+        providerSessionId: PROVIDER_SESSION_ID,
+        transcriptPath
       }
     )
 
     // Exercise quit capture: origin:'quit' changes the live record, triggering the
     // hydration-gated writer before polling persisted state.
-    await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions())
+    await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions('quit'))
 
     // Why: the record reaches disk via the debounced session writer (150ms) plus
     // the main-process scheduleSave (up to 5s). Under CI event-loop starvation —

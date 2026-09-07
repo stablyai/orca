@@ -1,16 +1,36 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import {
   getAzureDevOpsAuthStatus,
   getAzureDevOpsPullRequestForBranch,
+  getAzureDevOpsPullRequestForBranchOrThrow,
   normalizeAzureDevOpsApiBaseUrl
 } from './client'
+import { _resetAzureDevOpsPreviewApiVersionCache } from './azure-devops-api-request'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
+import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
 const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
+
+/** Serve the remote URL plus the #9171 default-branch resolver probes. */
+function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote') {
+      return { stdout: 'https://dev.azure.com/acme/Project/_git/repo\n', stderr: '' }
+    }
+    if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
+      return { stdout: `${defaultRef}\n`, stderr: '' }
+    }
+    if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
+      return { stdout: 'default-oid\n', stderr: '' }
+    }
+    throw new Error(`unexpected git call: ${args.join(' ')}`)
+  })
+}
 
 const OLD_ENV = process.env
 const OLD_FETCH = globalThis.fetch
@@ -20,6 +40,8 @@ describe('Azure DevOps client', () => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
     gitExecFileAsyncMock.mockReset()
     _resetAzureDevOpsRepoRefCache()
+    _resetAzureDevOpsPreviewApiVersionCache()
+    __resetRepoDefaultBranchCacheForTests()
   })
 
   afterEach(() => {
@@ -43,6 +65,35 @@ describe('Azure DevOps client', () => {
       baseUrl: null,
       tokenConfigured: true
     })
+  })
+
+  it('authenticates against an on-prem Server that requires -preview api-versions (STA-3494)', async () => {
+    process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = 'https://ado.example.com:8443/tfs/MyCollection'
+    const versions: (string | null)[] = []
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      expect(url.pathname).toBe('/tfs/MyCollection/_apis/connectionData')
+      versions.push(url.searchParams.get('api-version'))
+      if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
+        return new Response(
+          JSON.stringify({
+            message: 'The requested version "7.1" of the resource is under preview.',
+            typeKey: 'VssInvalidPreviewVersionException'
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      return Response.json({ authenticatedUser: { providerDisplayName: 'Server User' } })
+    }) as never
+
+    await expect(getAzureDevOpsAuthStatus()).resolves.toEqual({
+      configured: true,
+      authenticated: true,
+      account: 'Server User',
+      baseUrl: 'https://ado.example.com:8443/tfs/MyCollection',
+      tokenConfigured: true
+    })
+    expect(versions).toEqual(['7.1', '7.1-preview'])
   })
 
   it('resolves a PR for a branch through repository, PR, and status REST calls', async () => {
@@ -121,6 +172,37 @@ describe('Azure DevOps client', () => {
     ])
   })
 
+  it('getAzureDevOpsPullRequestForBranchOrThrow surfaces a list failure instead of null (finding 4)', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+        return new Response(
+          JSON.stringify({
+            id: 'repo-guid',
+            webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      // The pull-request list lookup fails (auth/transport).
+      return new Response(JSON.stringify({ message: 'forbidden' }), { status: 403 })
+    }) as never
+
+    // The swallowing variant collapses the failure into a false "no PR".
+    await expect(
+      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
+    ).resolves.toBeNull()
+    _resetAzureDevOpsRepoRefCache()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No pull request found".
+    await expect(
+      getAzureDevOpsPullRequestForBranchOrThrow('/repo', 'refs/heads/feature/azure')
+    ).rejects.toThrow(/Azure DevOps request failed/)
+  })
+
   it('uses the most recent branch PR instead of preferring stale active PRs', async () => {
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
@@ -175,5 +257,148 @@ describe('Azure DevOps client', () => {
       state: 'merged',
       headSha: 'newsha'
     })
+  })
+
+  it('hides a stale completed/abandoned PR whose source branch is the repo default branch (#9171)', async () => {
+    primeGitExecWithDefaultBranch()
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      const response = (body: unknown): Response =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+        return response({ id: 'repo-guid' })
+      }
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
+        return response({
+          value: [
+            {
+              pullRequestId: 30,
+              title: 'Accidental PR from main',
+              status: 'abandoned',
+              creationDate: '2026-05-10T00:00:00Z',
+              closedDate: '2026-05-11T00:00:00Z',
+              lastMergeSourceCommit: { commitId: 'stale-main-oid' }
+            }
+          ]
+        })
+      }
+      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
+    }) as never
+
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
+  })
+
+  it('discards a completed default-branch shadow and refetches the linked PR (#9171)', async () => {
+    primeGitExecWithDefaultBranch()
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      const response = (body: unknown): Response =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+        return response({ id: 'repo-guid' })
+      }
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
+        return response({
+          value: [
+            {
+              pullRequestId: 32,
+              title: 'Completed PR from main',
+              status: 'completed',
+              creationDate: '2026-05-10T00:00:00Z',
+              closedDate: '2026-05-12T00:00:00Z',
+              lastMergeSourceCommit: { commitId: 'shadow-oid' }
+            }
+          ]
+        })
+      }
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/40') {
+        return response({
+          pullRequestId: 40,
+          title: 'Linked PR',
+          status: 'active',
+          creationDate: '2026-05-13T00:00:00Z',
+          mergeStatus: 'succeeded',
+          lastMergeSourceCommit: { commitId: 'linked-oid' }
+        })
+      }
+      if (
+        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/40/statuses'
+      ) {
+        return response({ value: [{ state: 'succeeded' }] })
+      }
+      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
+    }) as never
+
+    await expect(
+      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/main', 40)
+    ).resolves.toMatchObject({ number: 40, state: 'open' })
+  })
+
+  it('keeps an active PR whose source branch is the repo default branch', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      const response = (body: unknown): Response =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
+        return response({ id: 'repo-guid' })
+      }
+      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
+        return response({
+          value: [
+            {
+              pullRequestId: 31,
+              title: 'main → release',
+              status: 'active',
+              creationDate: '2026-05-10T00:00:00Z',
+              mergeStatus: 'succeeded',
+              lastMergeSourceCommit: { commitId: 'main-head-oid' }
+            }
+          ]
+        })
+      }
+      if (
+        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/31/statuses'
+      ) {
+        return response({ value: [{ state: 'succeeded' }] })
+      }
+      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
+    }) as never
+
+    await expect(
+      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/main')
+    ).resolves.toMatchObject({ number: 31, state: 'open' })
+  })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    let cancelledBodies = 0
+    const fetchMock = vi.fn(async () =>
+      cancelTrackingResponse(502, () => {
+        cancelledBodies += 1
+      })
+    )
+    globalThis.fetch = fetchMock as never
+
+    await getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
   })
 })

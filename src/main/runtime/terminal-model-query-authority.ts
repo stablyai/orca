@@ -1,6 +1,6 @@
 /**
  * Phase 5 of the terminal model/view architecture: main-side terminal query
- * authority (docs/reference/terminal-query-authority.md).
+ * authority.
  *
  * The delivery decision is the reply decision: main answers a query iff the
  * hidden-delivery gate dropped the chunk that carried it. This module owns
@@ -8,7 +8,7 @@
  * renderer's native-Windows-ConPTY determination, recorded per PTY at spawn
  * so the runtime emulator can register the DA1 override before byte zero.
  */
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import {
   isHiddenPtyDeliveryGateEnabled,

@@ -1,18 +1,22 @@
 import type {
-  DetectedWorktree,
-  DetectedWorktreeListResult,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+  GlobalSettings,
+  WorktreeVisibilityDefaults
+} from '../../../../shared/global-settings-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../store/worktree-visibility-defaults-by-host'
+import type { Repo } from '../../../../shared/repo-types'
+import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import { getNewExternalWorktreeInboxWorktrees } from '../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { NewExternalWorktreesInboxCandidate } from './worktree-list-groups'
+import type { NewExternalWorktreesInboxCandidate } from './worktree-list/grouping/row-types'
 
 export function buildNewExternalWorktreesInboxCandidates(args: {
   repos: readonly Repo[]
   visibleWorktrees?: readonly Worktree[]
   detectedWorktreesByRepo: Readonly<Record<string, DetectedWorktreeListResult | undefined>>
   filterRepoIds?: readonly string[]
+  settings?: Pick<GlobalSettings, 'worktreeVisibilityDefaults'> | null
+  visibilityDefaultsByHost?: Partial<Record<ExecutionHostId, WorktreeVisibilityDefaults | null>>
 }): Map<string, NewExternalWorktreesInboxCandidate> {
   const visibleRepoIds = args.visibleWorktrees
     ? new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
@@ -31,27 +35,16 @@ export function buildNewExternalWorktreesInboxCandidates(args: {
     }
     const inboxWorktrees = getNewExternalWorktreeInboxWorktrees(
       args.detectedWorktreesByRepo[repo.id],
-      repo
+      repo,
+      getRepoOwnerWorktreeVisibilityDefaults(
+        repo,
+        args.settings,
+        args.visibilityDefaultsByHost ?? {}
+      )
     )
     if (inboxWorktrees.length > 0) {
       candidates.set(repo.id, { repo, inboxWorktrees })
     }
   }
   return candidates
-}
-
-export type NewExternalWorktreeInboxPreview = Pick<
-  DetectedWorktree,
-  'id' | 'displayName' | 'path' | 'branch'
->
-
-export function toNewExternalWorktreeInboxPreview(
-  worktree: DetectedWorktree
-): NewExternalWorktreeInboxPreview {
-  return {
-    id: worktree.id,
-    displayName: worktree.displayName,
-    path: worktree.path,
-    branch: worktree.branch
-  }
 }

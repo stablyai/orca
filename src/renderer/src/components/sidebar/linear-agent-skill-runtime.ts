@@ -1,7 +1,8 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
+import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import type { LocalAgentRuntime } from '../settings/CliSkillRuntimeSetup'
 
 const LOCAL_DISMISS_STORAGE_KEY_PREFIX = 'orca.linearTicketsSkill.setupDismissed'
@@ -92,13 +93,7 @@ export function getLinearPromptTerminalShellOverride(
   settings: LinearAgentSkillPromptSettings | null | undefined,
   runtime: LocalAgentRuntime
 ): string | undefined {
-  if (currentPlatform !== 'win32') {
-    return undefined
-  }
-  if (runtime.runtime === 'wsl') {
-    return 'powershell.exe'
-  }
-  return settings?.terminalWindowsShell?.toLowerCase() === 'wsl.exe' ? 'powershell.exe' : undefined
+  return getProjectAgentSkillTerminalShellOverride(currentPlatform, settings, runtime)
 }
 
 export function getLinearPromptSetupCheckIdentity(args: {

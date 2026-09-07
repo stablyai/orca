@@ -33,28 +33,11 @@ vi.mock('./mobile-file-preview-styles', () => ({
 
 type PreviewProps = Parameters<typeof MobileFileMarkdownPreview>[0]
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 async function renderPreview(props: PreviewProps): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    await act(async () => {
-      renderer = create(createElement(MobileFileMarkdownPreview, props))
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  await act(async () => {
+    renderer = create(createElement(MobileFileMarkdownPreview, props))
+  })
   if (!renderer) {
     throw new Error('MobileFileMarkdownPreview did not render')
   }

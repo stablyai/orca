@@ -1,32 +1,54 @@
 import { detectLanguage } from '@/lib/language-detect'
-import { getConnectionId } from '@/lib/connection-context'
 import { joinPath } from '@/lib/path'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import {
   createRuntimePath,
   statRuntimePath,
   type RuntimeFileOperationArgs
 } from '@/runtime/runtime-file-client'
-import {
-  createWebRuntimeSessionBrowserTab,
-  isWebRuntimeSessionActive
-} from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
+import {
+  buildSearchUrl,
+  DEFAULT_SEARCH_ENGINE,
+  type SearchEngine,
+  type SearchUrlOptions
+} from '../../../../shared/browser-url'
 import type { RuntimeFileListState } from '../quick-open-file-list'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  openWorkspaceBrowserTab,
+  type OpenWorkspaceBrowserTabRequest
+} from '@/lib/workspace-browser-tab-open'
 import {
   classifyTabEntryQuery,
-  type TabEntryActionClassification
+  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  type TabEntryActionClassification,
+  type TabEntryOptionsContext
 } from './tab-create-entry-classifier'
+import { openAbsoluteTabEntryFile } from './tab-create-entry-absolute-file'
+import {
+  getTabEntryAllowAbsolutePaths,
+  getTabEntryFileOperationContext,
+  isTabEntryAbsolutePathAllowed
+} from './tab-create-entry-local-path'
+import type { TabEntryLocalPlatform } from './tab-create-entry-path-validation'
 export {
   classifyTabEntryQuery,
   getTabEntryOptions,
+  isTabEntryAbsolutePathLike,
+  TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE,
+  validateNewTabEntryAbsolutePath,
   validateNewTabEntryRelativePath,
   type TabEntryActionClassification,
   type TabEntryClassification,
-  type TabEntryOption
+  type TabEntryOption,
+  type TabEntryOptionsContext
 } from './tab-create-entry-classifier'
+export {
+  createTabEntryAllowAbsolutePathsSelector,
+  getTabEntryAllowAbsolutePaths,
+  isTabEntryAbsolutePathAllowed
+} from './tab-create-entry-local-path'
 
 export type TabCreateEntryArgs = {
   classification?: TabEntryActionClassification
@@ -37,24 +59,15 @@ export type TabCreateEntryArgs = {
 }
 
 export type TabEntryOperations = {
-  createBrowserTab: (
-    worktreeId: string,
-    url: string,
-    options?: {
-      activate?: boolean
-      browserRuntimeEnvironmentId?: string | null
-      targetGroupId?: string
-      title?: string
-    }
-  ) => BrowserTabState
   createRuntimePath: typeof createRuntimePath
-  createWebRuntimeSessionBrowserTab: typeof createWebRuntimeSessionBrowserTab
-  isWebRuntimeSessionActive: typeof isWebRuntimeSessionActive
+  openWorkspaceBrowserTab: typeof openWorkspaceBrowserTab
   openFile: (
     file: Omit<OpenFile, 'id' | 'isDirty'>,
     options?: { preview?: boolean; targetGroupId?: string }
   ) => void
   statRuntimePath: typeof statRuntimePath
+  authorizeExternalPath: (args: { targetPath: string }) => Promise<void>
+  assertAbsolutePathAllowed: () => void
 }
 
 type OpenTabEntryWithOperationsArgs = {
@@ -64,7 +77,10 @@ type OpenTabEntryWithOperationsArgs = {
   groupId: string
   worktreePath: string
   runtimeContext: RuntimeFileOperationArgs
-  activeRuntimeEnvironmentId: string | null
+  allowAbsolutePaths: boolean
+  localPlatform: TabEntryLocalPlatform
+  searchEngine: SearchEngine
+  searchUrlOptions?: SearchUrlOptions
   classification?: TabEntryActionClassification
   operations: TabEntryOperations
 }
@@ -131,49 +147,78 @@ async function openExistingFile(args: {
   )
 }
 
+type NetworkTabEntryClassification = Extract<
+  TabEntryActionClassification,
+  { kind: 'explicit-url' | 'host-url' | 'search' }
+>
+
+function isNetworkTabEntry(
+  classification: TabEntryActionClassification
+): classification is NetworkTabEntryClassification {
+  return (
+    classification.kind === 'explicit-url' ||
+    classification.kind === 'host-url' ||
+    classification.kind === 'search'
+  )
+}
+
+function getNetworkTabRequest(
+  classification: NetworkTabEntryClassification,
+  { worktreeId, groupId }: Pick<TabCreateEntryArgs, 'worktreeId' | 'groupId'>,
+  searchUrlOptions?: SearchUrlOptions
+): OpenWorkspaceBrowserTabRequest {
+  const target = { workspaceId: worktreeId, targetGroupId: groupId }
+  if (classification.kind === 'search') {
+    return {
+      ...target,
+      url: buildSearchUrl(classification.query, classification.engine, searchUrlOptions),
+      intent: { kind: 'search', engine: classification.engine }
+    }
+  }
+  return { ...target, url: classification.url, intent: { kind: 'url' } }
+}
+
 export async function openTabEntryWithOperations({
-  activeRuntimeEnvironmentId,
+  allowAbsolutePaths,
   classification: selectedClassification,
   fileList,
   groupId,
+  localPlatform,
   operations,
   query,
   runtimeContext,
+  searchEngine,
+  searchUrlOptions,
   worktreeId,
   worktreePath
 }: OpenTabEntryWithOperationsArgs): Promise<void> {
-  const classification = selectedClassification ?? classifyTabEntryQuery(query, fileList)
+  const entryContext: TabEntryOptionsContext = { allowAbsolutePaths, localPlatform, searchEngine }
+  const classification =
+    selectedClassification ?? classifyTabEntryQuery(query, fileList, entryContext)
   if (classification.kind === 'empty' || classification.kind === 'blocked') {
     throw new Error(classification.message)
   }
 
-  if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
-    const runtimeSessionActive = operations.isWebRuntimeSessionActive(activeRuntimeEnvironmentId)
-    if (runtimeSessionActive) {
-      const created = await operations.createWebRuntimeSessionBrowserTab({
-        worktreeId,
-        environmentId: activeRuntimeEnvironmentId,
-        url: classification.url,
-        targetGroupId: groupId
-      })
-      if (created) {
-        return
-      }
-      // Why: headless remote runtimes cannot host browser panes yet; a URL open
-      // should still give the user a usable client-local browser tab.
-      operations.createBrowserTab(worktreeId, classification.url, {
-        activate: true,
-        browserRuntimeEnvironmentId: null,
-        targetGroupId: groupId,
-        title: classification.url
-      })
-    } else {
-      operations.createBrowserTab(worktreeId, classification.url, {
-        activate: true,
-        targetGroupId: groupId,
-        title: classification.url
-      })
+  if (isNetworkTabEntry(classification)) {
+    await operations.openWorkspaceBrowserTab(
+      getNetworkTabRequest(classification, { worktreeId, groupId }, searchUrlOptions)
+    )
+    return
+  }
+
+  if (classification.kind === 'absolute-file') {
+    if (!allowAbsolutePaths) {
+      throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
     }
+    await openAbsoluteTabEntryFile({
+      context: runtimeContext,
+      groupId,
+      operations,
+      filePath: classification.filePath,
+      localPlatform,
+      worktreeId,
+      worktreePath
+    })
     return
   }
 
@@ -215,18 +260,19 @@ export async function openTabEntryWithOperations({
 
 export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
   const state = useAppStore.getState()
+  const searchUrlOptions = { kagiSessionLink: state.browserKagiSessionLink }
+  if (args.classification && isNetworkTabEntry(args.classification)) {
+    await openWorkspaceBrowserTab(getNetworkTabRequest(args.classification, args, searchUrlOptions))
+    return
+  }
+  const searchEngine = state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
   const worktree = state.getKnownWorktreeById(args.worktreeId)
   if (!worktree) {
     throw new Error('No active worktree.')
   }
-  const runtimeContext: RuntimeFileOperationArgs = {
-    settings: {
-      activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
-    },
-    worktreeId: args.worktreeId,
-    worktreePath: worktree.path,
-    connectionId: getConnectionId(args.worktreeId) ?? undefined
-  }
+  const runtimeContext = getTabEntryFileOperationContext(state, args.worktreeId, worktree.path)
+  const allowAbsolutePaths = isTabEntryAbsolutePathAllowed(runtimeContext)
+  const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
   await openTabEntryWithOperations({
     query: args.query,
     fileList: args.fileList,
@@ -234,15 +280,22 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     groupId: args.groupId,
     worktreePath: worktree.path,
     runtimeContext,
-    activeRuntimeEnvironmentId: runtimeContext.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
+    allowAbsolutePaths,
+    localPlatform,
+    searchEngine,
+    searchUrlOptions,
     classification: args.classification,
     operations: {
-      createBrowserTab: state.createBrowserTab,
       createRuntimePath,
-      createWebRuntimeSessionBrowserTab,
-      isWebRuntimeSessionActive,
+      openWorkspaceBrowserTab,
       openFile: state.openFile,
-      statRuntimePath
+      statRuntimePath,
+      authorizeExternalPath: window.api.fs.authorizeExternalPath,
+      assertAbsolutePathAllowed: () => {
+        if (!getTabEntryAllowAbsolutePaths(useAppStore.getState(), args.worktreeId)) {
+          throw new Error(TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE)
+        }
+      }
     }
   })
 }

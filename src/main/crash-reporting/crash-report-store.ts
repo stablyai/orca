@@ -96,12 +96,39 @@ export class CrashReportStore {
         createdAt: new Date().toISOString(),
         status: 'pending',
         details: sanitizeCrashReportDetails(input.details),
-        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)
+        breadcrumbs: sanitizeCrashReportBreadcrumbs(input.breadcrumbs)?.map(
+          ({ origin: _origin, ...breadcrumb }) => breadcrumb
+        )
       }
       return {
         reports: [report, ...reports].slice(0, MAX_REPORTS),
         result: report
       }
+    })
+  }
+
+  /**
+   * Merges late-arriving details into an existing report. Crashpad finishes
+   * writing the minidump after the process-gone event that created the record,
+   * so the signature can only be folded in afterwards.
+   */
+  async attachDetails(
+    id: string,
+    extraDetails: Record<string, unknown>
+  ): Promise<CrashReportRecord | null> {
+    return this.withWrite(async (reports) => {
+      let result: CrashReportRecord | null = null
+      const nextReports = reports.map((report) => {
+        if (report.id !== id) {
+          return report
+        }
+        result = {
+          ...report,
+          details: { ...report.details, ...sanitizeCrashReportDetails(extraDetails) }
+        }
+        return result
+      })
+      return { reports: nextReports, result }
     })
   }
 

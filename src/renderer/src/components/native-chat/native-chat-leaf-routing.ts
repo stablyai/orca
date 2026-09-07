@@ -1,8 +1,8 @@
 import type {
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
-  TuiAgent
-} from '../../../../shared/types'
+  TerminalPaneLayoutNode
+} from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 function layoutNodeContainsLeaf(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
   if (!node) {
@@ -44,6 +44,22 @@ export function isNativeChatTabWideFallbackSafe(
   return !layout.activeLeafId || layout.activeLeafId === layout.root.leafId
 }
 
+/** Whether tab-wide launch evidence (agent hint, launch draft) describes this
+ *  leaf: it must still be the tab's sole pane and the one the evidence bound to. */
+export function nativeChatLeafOwnsTabWideEvidence(args: {
+  ownerLeafId: string | null
+  leafId: string | null
+  leafIds: readonly string[]
+}): boolean {
+  const { ownerLeafId, leafId, leafIds } = args
+  if (!ownerLeafId || !leafId) {
+    return false
+  }
+  // Why: the evidence belongs to the tab's original pane. Once a split exists,
+  // it says nothing about any particular sibling.
+  return leafIds.length === 1 && leafIds[0] === leafId && ownerLeafId === leafId
+}
+
 export function nativeChatLaunchAgentForLeaf(args: {
   launchAgent?: TuiAgent | null
   launchAgentLeafId: string | null
@@ -51,12 +67,14 @@ export function nativeChatLaunchAgentForLeaf(args: {
   leafIds: readonly string[]
 }): TuiAgent | null {
   const { launchAgent, launchAgentLeafId, leafId, leafIds } = args
-  if (!launchAgent || !launchAgentLeafId || !leafId) {
+  if (!launchAgent) {
     return null
   }
-  // Why: launchAgent belongs to the tab's original pane. Once a split exists,
-  // it is not evidence that an agent is running in any particular sibling.
-  return leafIds.length === 1 && leafIds[0] === leafId && launchAgentLeafId === leafId
+  return nativeChatLeafOwnsTabWideEvidence({
+    ownerLeafId: launchAgentLeafId,
+    leafId,
+    leafIds
+  })
     ? launchAgent
     : null
 }
@@ -71,24 +89,35 @@ export function resolveNativeChatLeafRoute(args: {
   chatLeafId: string | null
   activeLeafId: string | null
   chatLeafStillMounted: boolean
-  chatLeafIsEligible: boolean
   activeLeafIsEligible: boolean
+  chatLeafHasConfirmedAgentExit?: boolean
+  structuredSessionId?: string | null
 }): NativeChatLeafRoute {
+  const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit && !args.structuredSessionId
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
   }
-  if (args.chatLeafId && args.chatLeafStillMounted && args.chatLeafIsEligible) {
+  if (args.structuredSessionId) {
+    return {
+      chatLeafId: args.chatLeafId ?? args.activeLeafId,
+      exitChat: false
+    }
+  }
+  if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
+    // Why: agent/title evidence can disappear while local, SSH, or runtime
+    // transports reconnect. A mounted owning pane is not a terminal lifecycle
+    // event, so keep its chat surface until the pane itself is removed.
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
   // Manager hydration can briefly have no active pane; preserve the requested
   // mode until a concrete leaf exists instead of toggling it off during mount.
-  if (!args.activeLeafId) {
+  if (!args.activeLeafId && !confirmedAgentExit) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
-  if (args.activeLeafIsEligible) {
+  if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
   }
-  // Why: closing or invalidating the chat-owning leaf must not move its composer
-  // onto a plain-shell sibling. Return the tab to terminal mode instead.
+  // Why: removing the owning leaf or confirming its agent exited must not leave
+  // the composer targeting a plain shell. Return the tab to terminal mode.
   return { chatLeafId: null, exitChat: true }
 }

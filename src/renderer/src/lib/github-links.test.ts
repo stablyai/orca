@@ -19,6 +19,12 @@ describe('buildGitHubRepoUrl', () => {
       'https://github.com/stably%20ai/orca%2Ftools'
     )
   })
+
+  it('links hosted slugs to their GitHub Enterprise server', () => {
+    expect(buildGitHubRepoUrl({ owner: 'team', repo: 'orca', host: 'github.acme-corp.com' })).toBe(
+      'https://github.acme-corp.com/team/orca'
+    )
+  })
 })
 
 describe('parseGitHubIssueOrPRNumber', () => {
@@ -66,7 +72,7 @@ describe('parseGitHubIssueOrPRNumber', () => {
 describe('parseGitHubIssueOrPRLink', () => {
   it('parses slug, number, and type for direct item URLs', () => {
     expect(parseGitHubIssueOrPRLink('https://github.com/stablyai/orca/pull/123')).toEqual({
-      slug: { owner: 'stablyai', repo: 'orca' },
+      slug: { owner: 'stablyai', repo: 'orca', host: 'github.com' },
       number: 123,
       type: 'pr'
     })
@@ -74,18 +80,18 @@ describe('parseGitHubIssueOrPRLink', () => {
     expect(
       parseGitHubIssueOrPRLink('https://github.my-company.net/MyOrg/my_repo/pull/395')
     ).toEqual({
-      slug: { owner: 'MyOrg', repo: 'my_repo' },
+      slug: { owner: 'MyOrg', repo: 'my_repo', host: 'github.my-company.net' },
       number: 395,
       type: 'pr'
     })
 
     expect(parseGitHubIssueOrPRLink('https://git.corp.com/MyOrg/my_repo/pull/395')).toEqual({
-      slug: { owner: 'MyOrg', repo: 'my_repo' },
+      slug: { owner: 'MyOrg', repo: 'my_repo', host: 'git.corp.com' },
       number: 395,
       type: 'pr'
     })
     expect(parseGitHubIssueOrPRLink('https://github.com/stablyai/orca/issues/923')).toEqual({
-      slug: { owner: 'stablyai', repo: 'orca' },
+      slug: { owner: 'stablyai', repo: 'orca', host: 'github.com' },
       number: 923,
       type: 'issue'
     })
@@ -93,12 +99,12 @@ describe('parseGitHubIssueOrPRLink', () => {
 
   it('derives item type from the route segment when trailing segments are present', () => {
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/1965/changes')).toEqual({
-      slug: { owner: 'o', repo: 'r' },
+      slug: { owner: 'o', repo: 'r', host: 'github.com' },
       number: 1965,
       type: 'pr'
     })
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/923/comments')).toEqual({
-      slug: { owner: 'o', repo: 'r' },
+      slug: { owner: 'o', repo: 'r', host: 'github.com' },
       number: 923,
       type: 'issue'
     })
@@ -107,13 +113,13 @@ describe('parseGitHubIssueOrPRLink', () => {
   it('accepts query, fragment, and repeated trailing slashes', () => {
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/pull/1965/files?plain=1#diff')).toEqual(
       {
-        slug: { owner: 'o', repo: 'r' },
+        slug: { owner: 'o', repo: 'r', host: 'github.com' },
         number: 1965,
         type: 'pr'
       }
     )
     expect(parseGitHubIssueOrPRLink('https://github.com/o/r/issues/923/comments///')).toEqual({
-      slug: { owner: 'o', repo: 'r' },
+      slug: { owner: 'o', repo: 'r', host: 'github.com' },
       number: 923,
       type: 'issue'
     })
@@ -135,7 +141,7 @@ describe('normalizeGitHubLinkQuery', () => {
       query: 'https://github.com/stablyai/orca/issues/923',
       directNumber: 923,
       directLink: {
-        slug: { owner: 'stablyai', repo: 'orca' },
+        slug: { owner: 'stablyai', repo: 'orca', host: 'github.com' },
         number: 923,
         type: 'issue'
       }
@@ -147,7 +153,7 @@ describe('normalizeGitHubLinkQuery', () => {
       query: 'https://github.com/stablyai/orca/pull/6934',
       directNumber: 6934,
       directLink: {
-        slug: { owner: 'stablyai', repo: 'orca' },
+        slug: { owner: 'stablyai', repo: 'orca', host: 'github.com' },
         number: 6934,
         type: 'pr'
       }
@@ -159,7 +165,7 @@ describe('normalizeGitHubLinkQuery', () => {
       query: 'HTTPS://github.com/stablyai/orca/pull/6934',
       directNumber: 6934,
       directLink: {
-        slug: { owner: 'stablyai', repo: 'orca' },
+        slug: { owner: 'stablyai', repo: 'orca', host: 'github.com' },
         number: 6934,
         type: 'pr'
       }

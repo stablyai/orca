@@ -3,6 +3,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostKind,
   type ExecutionHostScope
@@ -10,9 +11,9 @@ import {
 import type { ExecutionHostHealth } from '../../../../shared/execution-host-registry'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
-import { PINNED_GROUP_KEY } from './worktree-list-groups'
-import type { Row } from './worktree-list-groups'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Row } from './worktree-list/grouping/row-types'
+import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
 
 export type HostHeaderRow = {
   type: 'host-header'
@@ -54,23 +55,10 @@ function getRepoHostId(
   return defaultHostId
 }
 
-function getSshHostId(connectionId: string): ExecutionHostId {
-  return `ssh:${encodeURIComponent(connectionId)}` as ExecutionHostId
-}
-
-function getFolderWorkspaceHostId(
-  folderWorkspace: Pick<FolderWorkspace, 'connectionId'>,
-  projectGroup: Pick<ProjectGroup, 'connectionId'>,
-  defaultHostId: ExecutionHostId
-): ExecutionHostId {
-  const connectionId = folderWorkspace.connectionId ?? projectGroup.connectionId
-  return connectionId ? getSshHostId(connectionId) : defaultHostId
-}
-
 function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId | null {
   switch (row.type) {
     case 'item':
-      return getRepoHostId(row.repo, defaultHostId)
+      return getWorktreeExecutionHostId(row.worktree, row.repo, defaultHostId)
     case 'pending-creation':
     case 'imported-worktrees-card':
     case 'new-external-worktrees-inbox':
@@ -93,25 +81,37 @@ function getFallbackHost(hostId: ExecutionHostId): HostSectionOption {
   }
 }
 
-function countWorktreeRows(rows: readonly Row[]): number {
+function countWorkspaceRows(rows: readonly Row[]): number {
   // Why: a collapsed repo group contributes a header row but no item rows;
   // fall back to the header's own count so the host badge doesn't read 0
   // while a visibly populated project sits right under it.
   let count = 0
   const seenWorktreeIds = new Set<string>()
-  let pendingHeaderCount: number | null = null
-  let pendingHeaderHadItems = false
+  let pendingHeader: Extract<Row, { type: 'header' }> | null = null
+  let pendingHeaderHadWorkspaces = false
   const flushHeader = (): void => {
-    if (pendingHeaderCount !== null && !pendingHeaderHadItems) {
-      count += pendingHeaderCount
+    if (pendingHeader && !pendingHeaderHadWorkspaces) {
+      if (pendingHeader.worktreeIds) {
+        const headerWorktreeIds = new Set(pendingHeader.worktreeIds)
+        for (const worktreeId of pendingHeader.worktreeIds) {
+          if (!seenWorktreeIds.has(worktreeId)) {
+            count += 1
+            seenWorktreeIds.add(worktreeId)
+          }
+        }
+        // Folder workspaces contribute to the header count but have no worktree id.
+        count += Math.max(0, pendingHeader.count - headerWorktreeIds.size)
+      } else {
+        count += pendingHeader.count
+      }
     }
-    pendingHeaderCount = null
-    pendingHeaderHadItems = false
+    pendingHeader = null
+    pendingHeaderHadWorkspaces = false
   }
   for (const row of rows) {
     if (row.type === 'header') {
       flushHeader()
-      pendingHeaderCount = row.key === PINNED_GROUP_KEY ? null : row.count
+      pendingHeader = row
       continue
     }
     if (row.type === 'item') {
@@ -119,11 +119,48 @@ function countWorktreeRows(rows: readonly Row[]): number {
         count += 1
         seenWorktreeIds.add(row.worktree.id)
       }
-      pendingHeaderHadItems = pendingHeaderCount !== null
+      pendingHeaderHadWorkspaces = pendingHeader !== null
+      continue
+    }
+    if (row.type === 'folder-workspace') {
+      count += 1
+      pendingHeaderHadWorkspaces = pendingHeader !== null
     }
   }
   flushHeader()
   return count
+}
+
+function localizePendingRowsForHost(
+  rows: readonly Extract<Row, { type: 'header' }>[],
+  hostId: ExecutionHostId
+): Extract<Row, { type: 'header' }>[] {
+  const localized: Extract<Row, { type: 'header' }>[] = []
+  for (const row of rows) {
+    if (!row.hostWorktreeCounts) {
+      localized.push(row)
+      continue
+    }
+    const count = row.hostWorktreeCounts.get(hostId)
+    if (count !== undefined && count > 0) {
+      localized.push({
+        ...row,
+        count,
+        hostId,
+        worktreeIds: row.hostWorktreeIds?.get(hostId) ?? row.worktreeIds
+      })
+    }
+  }
+  return localized
+}
+
+function getPendingRowsKey(rows: readonly Extract<Row, { type: 'header' }>[]): string {
+  return rows
+    .map(
+      (pendingRow) =>
+        `${pendingRow.key}:${pendingRow.count}:${pendingRow.worktreeIds?.join(',') ?? ''}`
+    )
+    .join('\0')
 }
 
 export function addHostSectionRows(args: {
@@ -161,18 +198,48 @@ export function addHostSectionRows(args: {
   let pendingRows: Extract<Row, { type: 'header' }>[] = []
   let pendingRowsWereUsed = false
   const pendingRowsKeyByHostId = new Map<ExecutionHostId, string>()
+  const flushUnusedPendingRows = (): void => {
+    if (pendingRows.length === 0 || pendingRowsWereUsed) {
+      return
+    }
+    const hostScopedRow = pendingRows.some((row) => row.hostWorktreeCounts)
+    if (!hostScopedRow) {
+      globalRows.push(...pendingRows)
+      return
+    }
+    for (const row of pendingRows) {
+      for (const [hostId, count] of row.hostWorktreeCounts ?? []) {
+        if (count <= 0) {
+          continue
+        }
+        const hostRows = rowsByHostId.get(hostId) ?? []
+        const hostIds = row.hostWorktreeIds?.get(hostId)
+        hostRows.push({
+          ...row,
+          count,
+          hostId,
+          worktreeIds: hostIds ?? row.worktreeIds
+        })
+        rowsByHostId.set(hostId, hostRows)
+      }
+    }
+  }
 
   for (const row of args.rows) {
     const rowHostId = getRowHostId(row, args.defaultHostId)
     if (rowHostId) {
       const hostRows = rowsByHostId.get(rowHostId) ?? []
       if (pendingRows.length > 0) {
-        const pendingRowsKey = pendingRows.map((pendingRow) => pendingRow.key).join('\0')
-        if (pendingRowsKeyByHostId.get(rowHostId) !== pendingRowsKey) {
-          hostRows.push(...pendingRows)
+        const localizedPendingRows = localizePendingRowsForHost(pendingRows, rowHostId)
+        const pendingRowsKey = getPendingRowsKey(localizedPendingRows)
+        if (
+          localizedPendingRows.length > 0 &&
+          pendingRowsKeyByHostId.get(rowHostId) !== pendingRowsKey
+        ) {
+          hostRows.push(...localizedPendingRows)
           pendingRowsKeyByHostId.set(rowHostId, pendingRowsKey)
         }
-        pendingRowsWereUsed = true
+        pendingRowsWereUsed = pendingRowsWereUsed || localizedPendingRows.length > 0
       }
       hostRows.push(row)
       rowsByHostId.set(rowHostId, hostRows)
@@ -181,6 +248,7 @@ export function addHostSectionRows(args: {
     // Why: status/"All" headers describe the rows that follow. Buffer them
     // for every host-owned run so host remains above the existing grouping.
     if (row.type === 'header') {
+      flushUnusedPendingRows()
       pendingRows = [row]
       pendingRowsWereUsed = false
     } else {
@@ -188,9 +256,7 @@ export function addHostSectionRows(args: {
     }
   }
 
-  if (pendingRows.length > 0 && !pendingRowsWereUsed) {
-    globalRows.push(...pendingRows)
-  }
+  flushUnusedPendingRows()
 
   const hostOrder: ExecutionHostId[] = []
   for (const host of args.hostOptions) {
@@ -231,7 +297,7 @@ export function addHostSectionRows(args: {
       compatibility: host.compatibility,
       connectionStatus: host.connectionStatus,
       collapsed,
-      count: countWorktreeRows(hostRows)
+      count: countWorkspaceRows(hostRows)
     })
     if (!collapsed) {
       result.push(...hostRows)

@@ -4,6 +4,7 @@ export type ComposerCreateGateInput = {
   creating: boolean
   shouldWaitForSetupCheck: boolean
   shouldWaitForIssueAutomationCheck: boolean
+  sourceIntentBlocksCreate?: boolean
   requiresExplicitSetupChoice: boolean
   hasSetupDecision: boolean
   selectedRepoRequiresConnection: boolean
@@ -13,6 +14,7 @@ export type ComposerCreateGateInput = {
 function hasBlockingCreateState(input: ComposerCreateGateInput): boolean {
   return (
     !input.workspaceSeedName ||
+    input.sourceIntentBlocksCreate === true ||
     input.creating ||
     input.selectedRepoRequiresConnection ||
     (input.requiresExplicitSetupChoice && !input.hasSetupDecision) ||
@@ -29,8 +31,7 @@ export function getFullComposerCreateDisabled(input: ComposerCreateGateInput): b
 }
 
 export function getQuickComposerCreateDisabled(input: ComposerCreateGateInput): boolean {
-  // Why: Cmd/Ctrl+N quick create can resolve setup hooks inside the submit
-  // handler, and it never runs issue-command automation. Keeping those
+  // Why: quick create resolves setup hooks and optional issue automation inside submit. Keeping those
   // background probes out of the disabled gate makes the primary action usable
   // as soon as the form has enough local state to submit.
   return hasBlockingCreateState(input)

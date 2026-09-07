@@ -2,7 +2,9 @@ import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { alternateScreenFixtureScript } from './alternate-screen-fixture-script'
 import { test, expect } from './helpers/orca-app'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -17,6 +19,8 @@ import {
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy, waitForTabParked } from './helpers/terminal-hidden-parking'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
+import { TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS } from '../../src/renderer/src/components/terminal-pane/terminal-park-verdict-flip-telemetry'
 
 // Why: the parking wiring registers this handle (dev/exposeStore builds only)
 // so tests can detect that hidden-view parking is compiled in and which delay
@@ -39,6 +43,7 @@ test.use({
 
 const PARKED_FRAME_SCRIPT_DELAY_MS = 750
 const PARKED_FRAME_COUNT = 25
+const PARK_VERDICT_BURST_SETTLE_MS = TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS * 4
 
 function parkedTuiFrame(runId: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
@@ -70,7 +75,7 @@ function writeParkedFrameScript(scriptPath: string, runId: string): void {
   mkdirSync(path.dirname(scriptPath), { recursive: true })
   writeFileSync(
     scriptPath,
-    `setTimeout(() => process.stdout.write(${JSON.stringify(frames.join(''))}), ${PARKED_FRAME_SCRIPT_DELAY_MS})\n`
+    alternateScreenFixtureScript(frames.join(''), PARKED_FRAME_SCRIPT_DELAY_MS)
   )
 }
 
@@ -100,12 +105,7 @@ function cycleReferenceFrame(runId: string): string {
 
 function writeCycleReferenceScript(scriptPath: string, runId: string): void {
   mkdirSync(path.dirname(scriptPath), { recursive: true })
-  // Paint the frame once, then hold the process open so the alt-screen TUI
-  // stays on screen (and the parkable PTY session stays alive) across cycles.
-  writeFileSync(
-    scriptPath,
-    `process.stdout.write(${JSON.stringify(cycleReferenceFrame(runId))}); setInterval(() => {}, 1000)\n`
-  )
+  writeFileSync(scriptPath, alternateScreenFixtureScript(cycleReferenceFrame(runId)))
 }
 
 // Why: serialize() re-emits the buffer with cursor-restore trailer sequences
@@ -332,11 +332,25 @@ test.describe('Terminal hidden view parking', () => {
       expect(content).toContain('█')
       expect(content).not.toContain('Orca skipped hidden terminal output')
 
+      // Why: the fixture TUI still owns the PTY foreground after the reveal, so
+      // interrupt it and wait for the shell to take input back before probing.
+      await sendToTerminal(orcaPage, tabAPtyId, '\x03')
+      // Why rethrow: the readiness failure reads as a dead shell, but the only new
+      // dependency here is Ctrl-C reaching the foreground TUI (ConPTY translates it).
+      await waitForPtyShellEcho(orcaPage, tabAPtyId, 15_000).catch((error: unknown) => {
+        throw new Error(
+          `Ctrl-C did not hand the PTY back from the fixture TUI: ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
+
       // Why: the typed marker only appears joined in command *output*, so this
       // proves the revealed terminal accepts input end-to-end, not just echo.
       const typedMarker = `PARKED_TYPED_OK_${runId}`
       const typedProbeScript = `console.log('PARKED_TYPED_OK_' + '${runId}')`
-      await sendToTerminal(orcaPage, tabAPtyId, `node -e ${JSON.stringify(typedProbeScript)}\r`)
+      // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+      await runNodeScriptInTerminal(orcaPage, tabAPtyId, typedProbeScript, {
+        prefix: 'orca-parked-typed-probe'
+      })
       await expect
         .poll(() => getTerminalContent(orcaPage, 12_000), {
           timeout: 10_000,
@@ -374,7 +388,10 @@ test.describe('Terminal hidden view parking', () => {
     // before the store assertion lands.
     const payload = `\x1b]0;${parkedTitle}\x07\x07${marker}\n`
     const sideEffectScript = `process.stdout.write(${JSON.stringify(payload)}); setTimeout(() => process.exit(0), 30000)`
-    await sendToTerminal(orcaPage, tabAPtyId, `node -e ${JSON.stringify(sideEffectScript)}\r`)
+    // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+    await runNodeScriptInTerminal(orcaPage, tabAPtyId, sideEffectScript, {
+      prefix: 'orca-parked-side-effect'
+    })
 
     await expect
       .poll(() => getTerminalTabTitle(orcaPage, worktreeId, tabAId), {
@@ -524,6 +541,9 @@ test.describe('Terminal hidden view parking', () => {
       const CYCLES = 25
       const mismatches: string[] = []
       for (let cycle = 1; cycle < CYCLES; cycle++) {
+        // Why: each cycle intentionally flips this tab's rendered verdict twice.
+        // Let the production anti-churn burst window lapse before the next one.
+        await orcaPage.waitForTimeout(PARK_VERDICT_BURST_SETTLE_MS)
         const rows = await runOneParkRevealCycle(cycle)
         if (JSON.stringify(rows) !== JSON.stringify(referenceRows)) {
           mismatches.push(

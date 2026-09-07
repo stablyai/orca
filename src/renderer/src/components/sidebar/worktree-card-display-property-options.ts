@@ -1,4 +1,4 @@
-import type { WorktreeCardProperty } from '../../../../shared/types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 
 export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
@@ -17,6 +17,15 @@ export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
       return translate(
         'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ca4d3c522e',
         'Linear issue'
+      )
+    }
+  },
+  {
+    id: 'jira-issue',
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.jiraIssue',
+        'Jira issue'
       )
     }
   },
