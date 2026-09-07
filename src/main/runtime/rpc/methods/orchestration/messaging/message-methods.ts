@@ -218,7 +218,8 @@ export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
         runId: run.id,
         legacyReadOnly: run.legacy === 1,
         tasks: params.brief ? abbreviateOrchestrationTasks(tasks) : tasks,
-        count: tasks.length
+        count: tasks.length,
+        ...(params.worktree ? { worktreeFilterApplied: params.worktree } : {})
       }
     }
   }),

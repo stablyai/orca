@@ -181,6 +181,36 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
   })
 
+  it('clears the previous branch when worker authority moves to another worktree', () => {
+    const d = createDb()
+    const task = d.createTask({
+      spec: 'worker',
+      worktreeId: 'repo::worktree',
+      branch: 'feature/work'
+    })
+    const started = d.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: { topology: 'current', agent: 'codex' }
+    })
+
+    d.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'tab_worker:leaf_worker',
+      processIncarnation: 'runtime:pty:1',
+      worktreeId: 'repo::other',
+      setupState: 'not_applicable',
+      effects: []
+    })
+
+    expect(d.getTask(task.id)).toMatchObject({
+      worktree_id: 'repo::other',
+      branch: null
+    })
+  })
+
   it('commits worker-start mutation acceptance with the starting Dispatch', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'atomic acceptance' })

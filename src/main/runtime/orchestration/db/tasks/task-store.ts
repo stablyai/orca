@@ -170,6 +170,10 @@ export function updateTaskProvenance(
   const updates: string[] = []
   const params: (string | null)[] = []
   if ('worktreeId' in provenance) {
+    if (!('branch' in provenance)) {
+      updates.push('branch = CASE WHEN worktree_id IS ? THEN branch ELSE NULL END')
+      params.push(provenance.worktreeId ?? null)
+    }
     updates.push('worktree_id = ?')
     params.push(provenance.worktreeId ?? null)
   }
