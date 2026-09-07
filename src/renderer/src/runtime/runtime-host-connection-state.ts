@@ -98,8 +98,10 @@ export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): 
   )
 }
 
-// Why: only this verdict earns the destructive glyph. 'checking' and 'reconnecting' are
-// unverifiable, not down, per docs/reference/ssh-execution-boundary.md.
+/**
+ * Only this verdict earns the destructive glyph. 'checking' and 'reconnecting' are
+ * unverifiable, not down, per docs/reference/ssh-execution-boundary.md.
+ */
 export function isDisconnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
   return state === 'disconnected'
 }

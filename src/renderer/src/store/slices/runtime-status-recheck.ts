@@ -101,10 +101,14 @@ export function clearRuntimeStatusRechecksForTests(): void {
   cancelRuntimeStatusRechecks([...rechecks.keys()])
 }
 
+/**
+ * Whether this recorded verdict is one the ladder must keep re-asking.
+ *
+ * Null qualifies because a host recorded unreachable is excluded from the client-event
+ * subscription set (that set is gated on a truthy status), so no reconnect signal can
+ * ever clear it and one failed boot probe otherwise outlives the outage. #16516
+ */
 function shouldRecheck(status: RuntimeStatus | null): boolean {
-  // Why null: a host recorded unreachable is excluded from the client-event subscription
-  // set (that set is gated on a truthy status), so no reconnect signal can ever clear it
-  // and one failed boot probe otherwise outlives the outage for the whole session. #16516
   if (status === null) {
     return true
   }
