@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { SentryConnectDialog } from '@/components/sentry-connect-dialog'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
@@ -11,6 +13,49 @@ type ConnectStepProps = {
   onToggleVisible: () => void
   connected: boolean
   checking: boolean
+}
+
+export function SentrySetupSteps(
+  props: ConnectStepProps & {
+    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  }
+): React.JSX.Element {
+  const [dialogOpen, setDialogOpen] = useState(false)
+  return (
+    <>
+      <ol className="divide-y divide-border/50">
+        <TaskSourceStepRow
+          index={1}
+          state={getConnectStepState(props)}
+          title={translate("auto.components.settings.TaskSourceSimpleSetup.baaebad650", "Connect Sentry")}
+          description={translate("auto.components.settings.TaskSourceSimpleSetup.709d36f8c7", "Add Sentry Cloud or a self-hosted instance with an auth token.")}
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant={props.connected ? 'outline' : 'default'}
+              onClick={() => setDialogOpen(true)}
+            >
+              {props.connected ? translate("auto.components.settings.TaskSourceSimpleSetup.d64c6c6162", "Manage access") : translate("auto.components.settings.TaskSourceSimpleSetup.37f0453bd2", "Add Sentry access")}
+            </Button>
+          }
+        />
+        <TaskSourceShowInTasksStep
+          index={2}
+          providerLabel="Sentry"
+          visible={props.visible}
+          canHide={props.canHide}
+          onToggleVisible={props.onToggleVisible}
+        />
+      </ol>
+      <SentryConnectDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        settings={props.settings}
+        onConnected={() => window.dispatchEvent(new Event('sentry-connection-changed'))}
+      />
+    </>
+  )
 }
 
 function getConnectStepState(props: ConnectStepProps): 'in-progress' | 'done' | 'pending' {

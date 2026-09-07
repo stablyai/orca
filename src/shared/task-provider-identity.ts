@@ -29,11 +29,19 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type SentryTaskProviderIdentity = {
+  provider: 'sentry'
+  baseUrl?: string | null
+  organizationSlug?: string | null
+  projectSlug?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | SentryTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -79,6 +87,13 @@ export function normalizeTaskProviderIdentity(
         siteUrl: normalizeNonEmptyString(raw.siteUrl),
         projectKey: normalizeNonEmptyString(raw.projectKey)
       }
+    case 'sentry':
+      return {
+        provider,
+        baseUrl: normalizeNonEmptyString(raw.baseUrl),
+        organizationSlug: normalizeNonEmptyString(raw.organizationSlug),
+        projectSlug: normalizeNonEmptyString(raw.projectSlug)
+      }
   }
 }
 
@@ -112,6 +127,10 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       )
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
+    case 'sentry':
+      return ['baseUrl', 'organizationSlug', 'projectSlug'].every((key) =>
+        isNullableOptionalString(raw[key])
+      )
   }
 }
 
@@ -119,7 +138,8 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  jira: ['siteId', 'siteUrl', 'projectKey'],
+  sentry: ['baseUrl', 'organizationSlug', 'projectSlug']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -157,6 +177,10 @@ export function taskProviderIdentityCachePart(
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'sentry':
+      return [identity.baseUrl, identity.organizationSlug, identity.projectSlug]
+        .filter(Boolean)
+        .join('/')
   }
 }
 
