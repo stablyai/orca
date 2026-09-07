@@ -69,9 +69,12 @@ export function dialRelay({
     let settled = false
     // Cleared on both outcomes: an uncleared 30 s timer keeps Node alive long after the last dial.
     const dialTimer = setTimeout(() => fail(new Error('dial timeout 30s')), DIAL_TIMEOUT_MS)
-    const clearPending = () => {
+    // Settle, not just clear: an in-flight rpc() whose timer is dropped without a resolution
+    // would await forever, which is exactly the hang the rpc timeout exists to prevent.
+    const settlePending = (code) => {
       for (const waiter of pending.values()) {
         clearTimeout(waiter.timer)
+        waiter.res({ ok: false, error: { code } })
       }
       pending.clear()
     }
@@ -81,7 +84,7 @@ export function dialRelay({
       }
       settled = true
       clearTimeout(dialTimer)
-      clearPending()
+      settlePending('dial-failed')
       try {
         ws.terminate()
       } catch {
@@ -107,7 +110,7 @@ export function dialRelay({
       })
     handle.close = () => {
       clearTimeout(dialTimer)
-      clearPending()
+      settlePending('closed')
       ws.terminate()
     }
     handle.socket = ws
@@ -189,11 +192,7 @@ export function dialRelay({
         return
       }
       clearTimeout(dialTimer)
-      for (const waiter of pending.values()) {
-        clearTimeout(waiter.timer)
-        waiter.res({ ok: false, error: { code: 'closed' } })
-      }
-      pending.clear()
+      settlePending('closed')
     })
     ws.on('error', (err) => fail(err))
   })

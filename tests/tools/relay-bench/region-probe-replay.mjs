@@ -117,6 +117,11 @@ async function main() {
     process.exitCode = 1
     return
   }
+  if (!Array.isArray(catalog?.regions) || catalog.regions.length === 0) {
+    console.error(`director ${director}/v1/regions returned no regions`)
+    process.exitCode = 1
+    return
+  }
   for (let round = 0; round < rounds; round++) {
     console.log(
       JSON.stringify(await Promise.all(catalog.regions.map((entry) => sampleRegion(entry))))
