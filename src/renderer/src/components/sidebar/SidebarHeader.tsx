@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { SidebarHeaderActions } from './sidebar-header-actions'
 import { applySidebarActivityToggle } from './sidebar-activity-toggle'
 import { Button } from '@/components/ui/button'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
@@ -25,7 +25,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const groupBy = useAppStore((s) => s.groupBy)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const activityShortcut = useShortcutLabel('sidebar.activity.toggle')
+  const activityShortcut = useOptionalShortcutLabel('sidebar.activity.toggle')
   const agentsViewActive = sidebarBody === 'agents'
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(

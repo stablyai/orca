@@ -10,7 +10,8 @@ import SidebarHeader from './SidebarHeader'
 const mocks = vi.hoisted(() => ({
   openWorkspaceCreationComposerWithTourHandoff: vi.fn(),
   popoverContentProps: { current: null as Record<string, unknown> | null },
-  toast: vi.fn()
+  toast: vi.fn(),
+  activityShortcut: '⌘⇧Y' as string | null
 }))
 
 type MockState = {
@@ -57,7 +58,9 @@ vi.mock('./workspace-options-menu-items', () => ({
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
-  useShortcutLabel: (actionId: string) => (actionId === 'sidebar.activity.toggle' ? '⌘⇧Y' : '⌘N')
+  useShortcutLabel: () => '⌘N',
+  useOptionalShortcutLabel: (actionId: string) =>
+    actionId === 'sidebar.activity.toggle' ? mocks.activityShortcut : '⌘N'
 }))
 
 vi.mock('@/components/ui/tooltip', () => ({
@@ -99,6 +102,7 @@ function newWorkspaceButton(): HTMLButtonElement {
 beforeEach(() => {
   mocks.openWorkspaceCreationComposerWithTourHandoff.mockClear()
   mocks.toast.mockClear()
+  mocks.activityShortcut = '⌘⇧Y'
   mockState = {
     repos: [],
     groupBy: 'repo',
@@ -169,6 +173,17 @@ describe('SidebarHeader', () => {
     expect(mockState.setSidebarOpen).toHaveBeenCalledWith(true)
     expect(mockState.setSidebarBody).toHaveBeenCalledWith('agents')
     expect(container.textContent).toContain('View activity (⌘⇧Y)')
+  })
+
+  it('omits the chord from the activity tooltip when the action is unbound', () => {
+    mocks.activityShortcut = null
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+
+    expect(container.textContent).toContain('View activity')
+    expect(container.textContent).not.toContain('Unassigned')
+    expect(container.textContent).not.toContain('View activity (')
   })
 
   it('shows the Agents introduction only for migrated users and never offers a hide action', () => {
