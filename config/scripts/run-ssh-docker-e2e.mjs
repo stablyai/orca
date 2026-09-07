@@ -28,11 +28,6 @@ if (runtime.status !== 0) {
 // sets it, so a spec in no runner runs nowhere. The gate contract proves every flag-reading
 // spec is claimed here, by the watcher-isolation or parking runner, or by a listed exclusion.
 //
-// Deliberately absent, and therefore still covered by no CI trigger:
-//   ssh-docker-relay-perf.spec.ts — wall-clock latency thresholds; flaky budgets here would
-//     cost the lane its credibility. NOTE: a runner script test:e2e:ssh-docker-perf exists in
-//     package.json but NO workflow invokes it, so this spec currently runs in no CI lane at
-//     all. Recorded as a real gap, not as coverage living somewhere else.
 // The bulk-open frame probe runs headed: headless Linux compositing schedules idle RAFs
 // roughly 1s apart, so it cannot measure foreground interaction against the same budget.
 //
@@ -67,6 +62,7 @@ const result = spawnSync(
     'tests/e2e/ssh-docker-half-open-link.spec.ts',
     'tests/e2e/ssh-docker-quick-open-large-listing.spec.ts',
     'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+    'tests/e2e/ssh-docker-relay-perf.spec.ts',
     'tests/e2e/ssh-docker-relay-stall-credential.spec.ts',
     'tests/e2e/ssh-docker-resource-accumulation.spec.ts',
     'tests/e2e/ssh-docker-transport-drop-recovery.spec.ts',

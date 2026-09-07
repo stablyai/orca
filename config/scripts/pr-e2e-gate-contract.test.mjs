@@ -168,6 +168,7 @@ describe('PR E2E gate contract', () => {
     expect(changedRun.env.TEST_FILES_JSON).toBe('${{ inputs.test_files }}')
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
+    expect(changedRun.run).toContain('. != "tests/e2e/ssh-docker-relay-perf.spec.ts"')
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts"')
     expect(changedRun.run).toContain('if [ "${#TEST_FILES[@]}" -eq 0 ]')
     expect(changedRun.run).toContain('grep -l \'@headful\' "${TEST_FILES[@]}"')
@@ -376,11 +377,7 @@ describe('PR E2E gate contract', () => {
     // that no runner names runs nowhere and still reports green — the silent skip this file
     // exists to prevent. Asserting reachability rather than a literal keeps that true when
     // the lanes move.
-    // The remaining exemption needs performance validation before routine CI, recorded in
-    // run-ssh-docker-e2e.mjs so the gap stays legible rather than looking like coverage.
-    const unreachableSpecs = new Set(['tests/e2e/ssh-docker-relay-perf.spec.ts'])
-    // Why comments are stripped: the runner documents the exempt spec by name in a
-    // prose comment. A substring scan over raw text would count any spec merely *discussed* in a
+    // Why comments are stripped: a substring scan would count any spec merely discussed in a
     // runner as claimed by it -- the silent skip this assertion exists to catch, re-entering
     // through the documentation.
     const stripComments = (text) =>
@@ -403,26 +400,12 @@ describe('PR E2E gate contract', () => {
     expect(dockerGatedSpecs.length).toBeGreaterThan(0)
 
     const unclaimed = dockerGatedSpecs.filter(
-      (spec) => !unreachableSpecs.has(spec) && !laneRunners.some((runner) => runner.includes(spec))
+      (spec) => !laneRunners.some((runner) => runner.includes(spec))
     )
     expect(
       unclaimed,
       `Docker-gated specs claimed by no lane runner: ${unclaimed.join(', ')}`
     ).toEqual([])
-
-    // Why: an exemption that outlives its spec would quietly excuse a real gap.
-    for (const spec of unreachableSpecs) {
-      expect(dockerGatedSpecs, spec).toContain(spec)
-      // Why also assert absence from every runner: `unreachableSpecs` short-circuits the
-      // unclaimed check above, so a spec could be documented as exempt while a runner still
-      // invokes it -- an exemption that reads as coverage removal but changes nothing, and a
-      // lane that stays red for a reason the file says it excluded.
-      for (const runner of laneRunners) {
-        expect(runner.includes(spec), `${spec} is exempt but still invoked by a lane runner`).toBe(
-          false
-        )
-      }
-    }
 
     const laneStep = e2eWorkflow.jobs['ssh-docker-watcher-isolation'].steps.find(
       (step) => step.name === 'Run remaining Docker SSH E2E'

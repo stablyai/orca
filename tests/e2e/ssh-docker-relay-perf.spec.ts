@@ -1,3 +1,4 @@
+import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -32,6 +33,13 @@ type TypingMeasurement = {
   worstLatencyMs: number
 }
 
+type SshRelayLoad = {
+  stopped: boolean
+  fileReads: number[]
+  gitRefreshes: number
+  errors: string[]
+}
+
 type SshPtyAckGateSnapshot = {
   gatedPtyCount: number
   heldAckCount: number
@@ -63,14 +71,16 @@ function remoteTypingLoadScript(runId: string): string {
     'let seq = 0',
     'let frame = 0',
     'let bg = null',
+    "let lastAck = ''",
     `process.stdout.write('REMOTE_TUI_READY_${runId}\\n')`,
-    "setTimeout(() => { bg = setInterval(() => { frame += 1; process.stdout.write('BG_' + frame + '_' + 'x'.repeat(4096) + '\\n') }, 8) }, 500)",
+    "setTimeout(() => { bg = setInterval(() => { frame += 1; process.stdout.write('BG_' + frame + '_' + 'x'.repeat(4096) + '\\n' + lastAck + '\\n') }, 8) }, 500)",
     "process.stdin.on('data', (chunk) => {",
     '  if (chunk.includes(String.fromCharCode(3))) { if (bg) clearInterval(bg); process.exit(0) }',
     '  for (const char of chunk) {',
     "    if (char === '\\r' || char === '\\n') continue",
     '    seq += 1',
-    `    process.stdout.write('\\x1b[20;2HREMOTE_KEY_${runId}_' + seq + '_' + char + '\\n')`,
+    `    lastAck = 'REMOTE_KEY_${runId}_' + seq + '_' + char`,
+    "    process.stdout.write('\\x1b[20;2H' + lastAck + '\\n')",
     '  }',
     '})'
   ].join(';')
@@ -298,23 +308,41 @@ test.describe('Docker SSH relay perf', () => {
       // refreshes, mirroring file preview + source-control churn while typing.
       await orcaPage.evaluate(
         ({ targetId, files, repoPath }) => {
-          const state = { stopped: false, reads: 0, errors: [] as string[] }
+          const state: SshRelayLoad = {
+            stopped: false,
+            fileReads: files.map(() => 0),
+            gitRefreshes: 0,
+            errors: []
+          }
           ;(window as unknown as { __sshRelayLoad: typeof state }).__sshRelayLoad = state
-          const loop = async (run: () => Promise<unknown>): Promise<void> => {
+          const loop = async (
+            run: () => Promise<unknown>,
+            completed: () => void
+          ): Promise<void> => {
             while (!state.stopped) {
               try {
                 await run()
-                state.reads += 1
+                completed()
               } catch (err) {
                 state.errors.push(String(err))
                 await new Promise((r) => setTimeout(r, 100))
               }
             }
           }
-          for (const filePath of files) {
-            void loop(() => window.api.fs.readFile({ filePath, connectionId: targetId }))
-          }
-          void loop(() => window.api.git.status({ worktreePath: repoPath, connectionId: targetId }))
+          files.forEach((filePath, index) => {
+            void loop(
+              () => window.api.fs.readFile({ filePath, connectionId: targetId }),
+              () => {
+                state.fileReads[index] += 1
+              }
+            )
+          })
+          void loop(
+            () => window.api.git.status({ worktreePath: repoPath, connectionId: targetId }),
+            () => {
+              state.gitRefreshes += 1
+            }
+          )
         },
         {
           targetId: remote.targetId,
@@ -322,24 +350,39 @@ test.describe('Docker SSH relay perf', () => {
           repoPath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH
         }
       )
-      // Let the bulk load ramp before measuring.
-      await orcaPage.waitForTimeout(1_000)
+      await expect
+        .poll(
+          async () =>
+            orcaPage.evaluate(() => {
+              const load = (window as unknown as { __sshRelayLoad: SshRelayLoad }).__sshRelayLoad
+              if (load.errors.length > 0) {
+                throw new Error(load.errors.join('\n'))
+              }
+              return load.fileReads.every((reads) => reads > 0) && load.gitRefreshes > 0
+            }),
+          { message: 'Both file streams and Git refreshes must engage before measuring latency' }
+        )
+        .toBe(true)
 
       const measurement = await measureRemoteTyping(orcaPage, ptyId, runId)
       const load = await orcaPage.evaluate(() => {
         const state = (
           window as unknown as {
-            __sshRelayLoad: { stopped: boolean; reads: number; errors: string[] }
+            __sshRelayLoad: SshRelayLoad
           }
         ).__sshRelayLoad
         state.stopped = true
-        return { reads: state.reads, errors: state.errors.slice(0, 3) }
+        return {
+          fileReads: state.fileReads,
+          gitRefreshes: state.gitRefreshes,
+          errors: state.errors.slice(0, 3)
+        }
       })
 
       const summary =
         `median=${measurement.medianLatencyMs.toFixed(1)}ms ` +
         `worst=${measurement.worstLatencyMs.toFixed(1)}ms ` +
-        `bulkReads=${load.reads} ` +
+        `fileReads=${load.fileReads.join(',')} gitRefreshes=${load.gitRefreshes} ` +
         `samples=${measurement.latencies.map((value) => value.toFixed(1)).join(',')}`
       console.log(`[docker-ssh-relay-perf:busy] ${summary}`)
       testInfo.annotations.push({
@@ -350,11 +393,22 @@ test.describe('Docker SSH relay perf', () => {
       // The load must actually have been streaming and error-free, otherwise
       // the latency numbers prove nothing.
       expect(load.errors).toEqual([])
-      expect(load.reads).toBeGreaterThan(0)
+      for (const reads of load.fileReads) {
+        expect(reads).toBeGreaterThan(0)
+      }
+      expect(load.gitRefreshes).toBeGreaterThan(0)
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
       await stopRemoteLoad(orcaPage, ptyId)
     } finally {
+      await orcaPage
+        .evaluate(() => {
+          const load = (window as unknown as { __sshRelayLoad?: SshRelayLoad }).__sshRelayLoad
+          if (load) {
+            load.stopped = true
+          }
+        })
+        .catch(() => undefined)
       cleanupDockerSshRelayTarget(target)
     }
   })
