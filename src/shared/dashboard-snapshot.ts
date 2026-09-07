@@ -168,6 +168,10 @@ export type DashboardCardTerminalInput = {
   forceBracketedMultilineTextPaste?: true
   /** Newline encoding for Windows TUIs that consume console input records. */
   windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
+  /** SSH connection executing the pty: a pasted clipboard image must be written there, not on the client. */
+  connectionId?: string | null
+  /** Remote runtime environment executing the pty, for the same reason. */
+  runtimeEnvironmentId?: string | null
   /** Trusted query-only consumer accepts Ctrl+Enter CSI-u without active flags. */
   ctrlEnterCsiU: boolean
   /** False withholds the kitty (CSI-u) advertisement, as ConPTY panes do. */

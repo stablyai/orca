@@ -220,6 +220,37 @@ describe('resolveDashboardCardTerminalInput', () => {
     })
   })
 
+  it('omits host ids for a local pane so an image paste stays on the client', () => {
+    const profile = resolveDashboardCardTerminalInput(stateWith(), MAC_ARGS)
+    expect(profile).not.toHaveProperty('connectionId')
+    expect(profile).not.toHaveProperty('runtimeEnvironmentId')
+  })
+
+  it('relays the SSH connection so an image paste lands on the pty host', () => {
+    const state = stateWith({
+      repos: [{ id: 'repo-1', connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }]
+    } as unknown as Partial<DashboardCardTerminalInputState>)
+    expect(resolveDashboardCardTerminalInput(state, MAC_ARGS).connectionId).toBe('conn-1')
+  })
+
+  it("relays the live SSH PTY's connection over the worktree owner", () => {
+    const profile = resolveDashboardCardTerminalInput(stateWith(), {
+      ...MAC_ARGS,
+      ptyId: 'ssh:conn-live@@pty-1'
+    })
+    expect(profile.connectionId).toBe('conn-live')
+    expect(profile).not.toHaveProperty('runtimeEnvironmentId')
+  })
+
+  it("relays the live runtime PTY's environment and no SSH connection", () => {
+    const profile = resolveDashboardCardTerminalInput(stateWith(), {
+      ...MAC_ARGS,
+      ptyId: 'remote:env-live@@pty-1'
+    })
+    expect(profile.runtimeEnvironmentId).toBe('env-live')
+    expect(profile).not.toHaveProperty('connectionId')
+  })
+
   it('does not enumerate unrelated store slices per card', () => {
     const state = stateWith() as Partial<DashboardCardTerminalInputState> & {
       unrelatedSlice?: unknown
