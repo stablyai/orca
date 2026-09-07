@@ -79,4 +79,47 @@ describe('serve update helper installer', () => {
       })
     expect(build).toThrow('invalid service user name')
   })
+
+  it('encodes quotes and backslashes in unitName so helper.json still parses', () => {
+    const hostileUnitName = 'orca"\\serve.service'
+    const script = buildServeUpdateHelperInstallScript({
+      spoolDir: '/var/lib/orca-server-update',
+      unitName: hostileUnitName,
+      appImageTargetPath: '/opt/orca/orca-linux.AppImage',
+      versionRecordPath: '/opt/orca/VERSION',
+      serviceUser: 'orca'
+    })
+    const line = script.split('\n').find((l) => l.includes('helperVersion') && l.includes('printf'))
+    expect(line).toBeDefined()
+    // Execute the exact printf the install script would run and parse what it writes.
+    const command = line!.slice(0, line!.indexOf('>')).trim()
+    const output = execSync(command).toString()
+    expect(JSON.parse(output)).toEqual({ helperVersion: 1, unitName: hostileUnitName })
+  })
+
+  it('refuses any input field that carries a newline', () => {
+    // The helper is embedded in a heredoc: a newline in a flag value could
+    // terminate it early and execute trailing text as root at install time.
+    const build = () =>
+      buildServeUpdateHelperInstallScript({
+        spoolDir: '/var/lib/orca-server-update',
+        unitName: 'orca-serve.service\nrm -rf /',
+        appImageTargetPath: '/opt/orca/orca-linux.AppImage',
+        versionRecordPath: '/opt/orca/VERSION',
+        serviceUser: 'orca'
+      })
+    expect(build).toThrow('must not contain newlines')
+  })
+
+  it('refuses a carriage return in the app image target path', () => {
+    const build = () =>
+      buildServeUpdateHelperInstallScript({
+        spoolDir: '/var/lib/orca-server-update',
+        unitName: 'orca-serve.service',
+        appImageTargetPath: '/opt/orca/orca\r-linux.AppImage',
+        versionRecordPath: '/opt/orca/VERSION',
+        serviceUser: 'orca'
+      })
+    expect(build).toThrow('must not contain newlines')
+  })
 })
