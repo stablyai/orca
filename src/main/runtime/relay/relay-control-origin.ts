@@ -8,6 +8,7 @@ import type {
   RelayDrainMessage,
   RelayHostHelloAckMessage
 } from './relay-control-protocol'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { RelayIdentity } from './relay-session-broker-contract'
 import type { RelayAssignment } from './relay-http-client'
 
@@ -144,7 +145,7 @@ export class RelayControlOrigin {
     }
   }
 
-  async close(): Promise<void> {
+  async close(hostCloseReason?: RelayHostCloseReason): Promise<void> {
     if (this.closed) {
       return
     }
@@ -154,7 +155,7 @@ export class RelayControlOrigin {
     }
     this.retiredControlTimers.clear()
     for (const control of this.controls) {
-      control.closeNow()
+      control.closeNow(hostCloseReason)
     }
     this.controls.clear()
     this.activeControl = null
@@ -166,8 +167,8 @@ export class RelayControlOrigin {
     }
   }
 
-  closeNow(): void {
-    void this.close()
+  closeNow(hostCloseReason?: RelayHostCloseReason): void {
+    void this.close(hostCloseReason)
   }
 
   private async openControl(overrides?: {

@@ -1,4 +1,6 @@
-export type TabCycleType = 'terminal' | 'editor' | 'browser' | 'simulator'
+import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+
+export type TabCycleType = WorkspaceVisibleTabType
 
 export type TypeCyclableTab = {
   type: TabCycleType

@@ -17,6 +17,7 @@ import {
 } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { RichMarkdownSpellcheckSetting } from './RichMarkdownSpellcheckSetting'
+import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorTextDirectionSetting } from './EditorTextDirectionSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
@@ -234,6 +235,7 @@ export function GeneralEditorSettingsSection({
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
 
       <EditorTextDirectionSetting settings={settings} updateSettings={updateSettings} />
+      <DiffShowWhitespaceSetting settings={settings} updateSettings={updateSettings} />
 
       <SearchableSetting
         title={translate(

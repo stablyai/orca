@@ -5,9 +5,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
 import { shouldOverlayBrowserAddressBar } from './browser-address-bar-expansion'
 import { saveBrowserAddressBarEditSession } from './browser-address-bar-edit-session'
+import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismissal'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 
@@ -16,6 +18,8 @@ type BrowserAddressBarProps = {
   onChange: (value: string) => void
   onSubmit: () => void
   onNavigate: (url: string) => void
+  /** Selecting a previewed-document suggestion; without it those rows fall back to onNavigate. */
+  onOpenWorkspaceDoc?: (docLocation: BrowserPageDocLocation) => void
   inputRef: React.RefObject<HTMLInputElement | null>
   dismissSuggestionsRef?: React.MutableRefObject<(() => void) | null>
   /**
@@ -32,6 +36,7 @@ export default function BrowserAddressBar({
   onChange,
   onSubmit,
   onNavigate,
+  onOpenWorkspaceDoc,
   inputRef,
   dismissSuggestionsRef,
   editSession,
@@ -44,9 +49,11 @@ export default function BrowserAddressBar({
   // but suggestions must keep matching the original typed query.
   const autocompleteQuery = prePreviewValueRef.current ?? value
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
+  const workspaceDocHistory = useAppStore((s) => s.workspaceDocHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const closingRef = useRef(false)
+  const initialMouseDownRef = useRef(false)
   const openedAtRef = useRef(0)
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
@@ -149,11 +156,18 @@ export default function BrowserAddressBar({
     () =>
       buildBrowserAddressBarSuggestions({
         browserUrlHistory,
+        workspaceDocHistory,
         kagiSessionLink: browserKagiSessionLink,
         searchEngine,
         value: autocompleteQuery
       }),
-    [browserUrlHistory, autocompleteQuery, searchEngine, browserKagiSessionLink]
+    [
+      browserUrlHistory,
+      workspaceDocHistory,
+      autocompleteQuery,
+      searchEngine,
+      browserKagiSessionLink
+    ]
   )
 
   const clearSuggestionPreview = useCallback((): void => {
@@ -228,12 +242,15 @@ export default function BrowserAddressBar({
       window.clearTimeout(blurCloseTimerRef.current)
       blurCloseTimerRef.current = null
     }
-    inputRef.current?.select()
+    if (!initialMouseDownRef.current) {
+      inputRef.current?.select()
+    }
     openedAtRef.current = Date.now()
     setOpen(true)
   }, [inputRef])
 
   const handleBlur = useCallback(() => {
+    initialMouseDownRef.current = false
     // Why: delay close so that clicking a suggestion item registers before
     // the popover unmounts. Without this, onSelect never fires because the
     // mousedown on PopoverContent triggers input blur first.
@@ -263,7 +280,16 @@ export default function BrowserAddressBar({
       closingRef.current = true
       setOpen(false)
       clearSuggestionPreview()
-      onNavigate(url)
+      // Why looked up by row: a workspace-doc suggestion opens on a fresh grant instead of
+      // navigating; its url is the document's path, so even the fallback routes via detection.
+      const docLocation = suggestions.find(
+        (suggestion) => suggestion.url === url && suggestion.docLocation
+      )?.docLocation
+      if (docLocation && onOpenWorkspaceDoc) {
+        onOpenWorkspaceDoc(docLocation)
+      } else {
+        onNavigate(url)
+      }
       if (closingResetTimerRef.current !== null) {
         window.clearTimeout(closingResetTimerRef.current)
       }
@@ -272,7 +298,7 @@ export default function BrowserAddressBar({
         closingRef.current = false
       }, 100)
     },
-    [clearSuggestionPreview, onNavigate]
+    [clearSuggestionPreview, onNavigate, onOpenWorkspaceDoc, suggestions]
   )
 
   const handleKeyDown = useCallback(
@@ -338,46 +364,7 @@ export default function BrowserAddressBar({
     ]
   )
 
-  // Why: Electron <webview> guests run in a separate process, so clicking the
-  // page never dispatches pointerdown on the renderer document and Radix cannot
-  // detect an outside dismiss. Window blur and focus moves into the guest (the
-  // host <webview> tag) close the dropdown the same way BrowserImportHintButton
-  // does for its popover.
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    const handleWindowBlur = (): void => {
-      dismissSuggestions()
-    }
-
-    const handleFocusIn = (event: FocusEvent): void => {
-      const target = event.target
-      if (!(target instanceof HTMLElement) || target.tagName !== 'WEBVIEW') {
-        return
-      }
-      dismissSuggestions()
-    }
-
-    const handleEscape = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') {
-        return
-      }
-      dismissSuggestions()
-      event.preventDefault()
-      event.stopImmediatePropagation()
-    }
-
-    window.addEventListener('blur', handleWindowBlur)
-    document.addEventListener('focusin', handleFocusIn, true)
-    window.addEventListener('keydown', handleEscape, true)
-    return () => {
-      window.removeEventListener('blur', handleWindowBlur)
-      document.removeEventListener('focusin', handleFocusIn, true)
-      window.removeEventListener('keydown', handleEscape, true)
-    }
-  }, [dismissSuggestions, inputRef, open])
+  useBrowserAddressBarDismissal(open, dismissSuggestions)
 
   useEffect(() => {
     if (!dismissSuggestionsRef) {
@@ -393,7 +380,9 @@ export default function BrowserAddressBar({
     // Why: min-w-11 keeps the leading globe a real hit target once the toolbar
     // squeezes the bar away — without it neighbouring buttons overlap the only
     // affordance for reopening the URL field.
-    <div ref={slotRef} className="flex min-w-11 flex-1 items-center">
+    // Why stretch: the toolbar row pins the address slot's height, and the bar must fill it rather
+    // than size itself — otherwise it and the document chip drift apart again.
+    <div ref={slotRef} className="flex min-w-11 flex-1 items-stretch">
       <Popover
         modal={false}
         open={open}
@@ -439,6 +428,18 @@ export default function BrowserAddressBar({
               ref={inputRef}
               value={value}
               onFocus={handleFocus}
+              onMouseDown={(event) => {
+                initialMouseDownRef.current =
+                  event.button === 0 && document.activeElement !== event.currentTarget
+              }}
+              onClick={(event) => {
+                const input = event.currentTarget
+                // Preserve native drag selection; only expand a collapsed initial click.
+                if (initialMouseDownRef.current && input.selectionStart === input.selectionEnd) {
+                  input.select()
+                }
+                initialMouseDownRef.current = false
+              }}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               data-orca-browser-address-bar="true"

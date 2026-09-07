@@ -18,6 +18,7 @@ import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-t
 import { RemoteBrowserPagePane } from '../stream-remote/remote-browser-page-pane'
 import { ClientHostedBrowserPagePane } from '../ClientHostedBrowserPagePane'
 import { BrowserPagePane } from './browser-page-pane'
+import { WorkspaceDocPagePane } from '../workspace-doc/workspace-doc-page-pane'
 import { SshRoutedBrowserPageGate } from './ssh-routed-browser-page-gate'
 
 export default function BrowserPane({
@@ -156,26 +157,34 @@ export default function BrowserPane({
         >
           {(routedPartition) => (
             <div className="relative flex min-h-0 flex-1">
-              {renderedBrowserPages.map((page) => (
-                <BrowserPagePane
-                  key={page.id}
-                  browserTab={page}
-                  workspaceId={browserTab.id}
-                  worktreeId={browserTab.worktreeId}
-                  sessionProfileId={browserTab.sessionProfileId ?? null}
-                  sessionPartition={routedPartition ?? browserTab.sessionPartition ?? null}
-                  isActive={isActive && page.id === activeBrowserPage?.id}
-                  chromeShortcutScope={
-                    page.id === activeBrowserPage?.id ? resolvedChromeShortcutScope : 'inactive'
-                  }
-                  isAutomationVisible={automationVisiblePageIds.has(page.id)}
-                  isMobileDriven={mobileDrivenPageIds.has(page.id)}
-                  isRemotelyViewed={remotelyViewedPageIds.has(page.id)}
-                  inputLocked={activeBrowserDriver.kind === 'mobile'}
-                  onUpdatePageState={updateBrowserPageState}
-                  onSetUrl={setBrowserPageUrl}
-                />
-              ))}
+              {renderedBrowserPages.map((page) =>
+                page.docLocation ? (
+                  <WorkspaceDocPagePane
+                    key={page.id}
+                    page={page}
+                    isActive={isActive && page.id === activeBrowserPage?.id}
+                  />
+                ) : (
+                  <BrowserPagePane
+                    key={page.id}
+                    browserTab={page}
+                    workspaceId={browserTab.id}
+                    worktreeId={browserTab.worktreeId}
+                    sessionProfileId={browserTab.sessionProfileId ?? null}
+                    sessionPartition={routedPartition ?? browserTab.sessionPartition ?? null}
+                    isActive={isActive && page.id === activeBrowserPage?.id}
+                    chromeShortcutScope={
+                      page.id === activeBrowserPage?.id ? resolvedChromeShortcutScope : 'inactive'
+                    }
+                    isAutomationVisible={automationVisiblePageIds.has(page.id)}
+                    isMobileDriven={mobileDrivenPageIds.has(page.id)}
+                    isRemotelyViewed={remotelyViewedPageIds.has(page.id)}
+                    inputLocked={activeBrowserDriver.kind === 'mobile'}
+                    onUpdatePageState={updateBrowserPageState}
+                    onSetUrl={setBrowserPageUrl}
+                  />
+                )
+              )}
               <BrowserMobileDriverOverlay
                 driver={activeBrowserDriver}
                 onTakeBack={reclaimActiveBrowserForDesktop}

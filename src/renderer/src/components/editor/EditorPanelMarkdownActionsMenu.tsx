@@ -15,6 +15,8 @@ type EditorPanelMarkdownActionsMenuProps = {
   isDiffSurface: boolean
   /** Diff-only wrap preference; ignored for normal file tabs. */
   diffWordWrap: boolean
+  /** Diff-only whitespace preference; ignored for normal file tabs. */
+  diffShowWhitespace: boolean
   /** File editor wrap preference (`settings.editorWordWrap`). */
   editorWordWrap: boolean
   /** Whether the resolved direction for this file is RTL. */
@@ -26,6 +28,7 @@ type EditorPanelMarkdownActionsMenuProps = {
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
   onToggleDiffWordWrap: () => void
+  onToggleDiffWhitespace: () => void
   onToggleEditorWordWrap: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
@@ -35,6 +38,7 @@ export function EditorPanelMarkdownActionsMenu({
   isMarkdown,
   isDiffSurface,
   diffWordWrap,
+  diffShowWhitespace,
   editorWordWrap,
   textDirectionRtl,
   onToggleTextDirection,
@@ -43,6 +47,7 @@ export function EditorPanelMarkdownActionsMenu({
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
   onToggleDiffWordWrap,
+  onToggleDiffWhitespace,
   onToggleEditorWordWrap,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
@@ -86,6 +91,17 @@ export function EditorPanelMarkdownActionsMenu({
             {translate(
               'auto.components.editor.EditorPanelMarkdownActionsMenu.86c8a19192',
               'Right-to-Left'
+            )}
+          </DropdownMenuCheckboxItem>
+        ) : null}
+        {isDiffSurface ? (
+          <DropdownMenuCheckboxItem
+            checked={diffShowWhitespace}
+            onCheckedChange={onToggleDiffWhitespace}
+          >
+            {translate(
+              'auto.components.editor.EditorPanelMarkdownActionsMenu.4dedd55efa',
+              'Show Whitespace'
             )}
           </DropdownMenuCheckboxItem>
         ) : null}

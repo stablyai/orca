@@ -34,12 +34,27 @@ test('automation detail keeps short prompts readable and reveals a very long pro
         enabled: false,
         missedRunGraceMinutes: 720
       }
-      await window.api.automations.create({
+      const createAutomation = async (input: typeof base & { name: string; prompt: string }) => {
+        const response = await window.api.runtime.call({
+          method: 'automation.create',
+          params: {
+            ...input,
+            // Runtime RPC resolves the project selector and stores the resulting
+            // host/workspace context; the removed preload CRUD method did this
+            // implicitly for old E2E fixtures.
+            repo: `id:${input.projectId}`
+          }
+        })
+        if (!response.ok) {
+          throw new Error(`${response.error.code}: ${response.error.message}`)
+        }
+      }
+      await createAutomation({
         ...base,
         name: shortName,
         prompt: 'Synthetic short prompt.'
       })
-      await window.api.automations.create({
+      await createAutomation({
         ...base,
         name: longName,
         prompt: [
@@ -56,7 +71,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
           endMarker
         ].join('\n')
       })
-      await window.api.automations.create({
+      await createAutomation({
         ...base,
         name: resizeName,
         prompt: resizePrompt

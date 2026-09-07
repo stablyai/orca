@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   addPaletteFilterValues,
+  buildPaletteFilterFromSidebarScope,
   buildPaletteFilterPredicate,
   clearPaletteFilterField,
   EMPTY_PALETTE_FILTER,
   getPaletteFilterSelectionCount,
   isPaletteFilterActive,
-  PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD,
-  reconcilePaletteFilter,
   togglePaletteFilterValue,
   type PaletteFilterState
 } from './palette-filter'
@@ -27,30 +27,35 @@ const option = (id: string, count = 1) => ({
 // r1 + r2 are two repos behind one project row; r3 is a standalone repo row.
 const model: PaletteFilterModel = {
   hosts: [option('local'), option('ssh:builder'), option('runtime:env-1')],
-  projects: [option('project:p1'), option('repo:r3')],
+  repositories: [option('r1'), option('r2'), option('r3')],
   repoIdsByProjectKey: new Map([
     ['project:p1', ['r1', 'r2']],
     ['repo:r3', ['r3']]
   ]),
-  hostIdByRepoId: new Map<string, ExecutionHostId>([
-    ['r1', 'local'],
-    ['r2', 'ssh:builder'],
-    ['r3', 'runtime:env-1']
+  hostIdsByRepoId: new Map<string, ReadonlySet<ExecutionHostId>>([
+    ['r1', new Set(['local'])],
+    ['r2', new Set(['ssh:builder'])],
+    ['r3', new Set(['runtime:env-1'])]
+  ]),
+  repoById: new Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>>([
+    ['r1', {}],
+    ['r2', { connectionId: 'builder' }],
+    ['r3', { executionHostId: 'runtime:env-1' }]
   ]),
   defaultHostId: LOCAL_EXECUTION_HOST_ID
 }
 
-const filterOf = (hostIds: string[], projectKeys: string[]): PaletteFilterState => ({
+const filterOf = (hostIds: string[], repoIds: string[]): PaletteFilterState => ({
   hostIds,
-  projectKeys
+  repoIds
 })
 
 describe('palette filter state', () => {
   it('reports activity and selection count across both fields', () => {
     expect(isPaletteFilterActive(EMPTY_PALETTE_FILTER)).toBe(false)
     expect(getPaletteFilterSelectionCount(EMPTY_PALETTE_FILTER)).toBe(0)
-    expect(isPaletteFilterActive(filterOf([], ['project:p1']))).toBe(true)
-    expect(getPaletteFilterSelectionCount(filterOf(['local'], ['project:p1']))).toBe(2)
+    expect(isPaletteFilterActive(filterOf([], ['r1']))).toBe(true)
+    expect(getPaletteFilterSelectionCount(filterOf(['local'], ['r1']))).toBe(2)
   })
 
   it('toggles values on and off, keeping each field sorted', () => {
@@ -58,7 +63,7 @@ describe('palette filter state', () => {
     const withBothHosts = togglePaletteFilterValue(withHost, 'host', 'local')
 
     expect(withBothHosts.hostIds).toEqual(['local', 'ssh:builder'])
-    expect(withBothHosts.projectKeys).toEqual([])
+    expect(withBothHosts.repoIds).toEqual([])
     expect(togglePaletteFilterValue(withBothHosts, 'host', 'local').hostIds).toEqual([
       'ssh:builder'
     ])
@@ -67,70 +72,31 @@ describe('palette filter state', () => {
   it('keeps the two fields independent', () => {
     const filter = togglePaletteFilterValue(
       togglePaletteFilterValue(EMPTY_PALETTE_FILTER, 'host', 'local'),
-      'project',
-      'project:p1'
+      'repository',
+      'r1'
     )
 
-    expect(clearPaletteFilterField(filter, 'project')).toEqual(filterOf(['local'], []))
-    expect(clearPaletteFilterField(filter, 'host')).toEqual(filterOf([], ['project:p1']))
+    expect(clearPaletteFilterField(filter, 'repository')).toEqual(filterOf(['local'], []))
+    expect(clearPaletteFilterField(filter, 'host')).toEqual(filterOf([], ['r1']))
   })
 
-  it('refuses selections past the per-field cap', () => {
-    const saturated = filterOf(
-      Array.from({ length: PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD }, (_, i) => `ssh:host-${i}`),
-      []
-    )
+  it('bulk-adds every matching id without duplicating', () => {
+    const withOne = addPaletteFilterValues(EMPTY_PALETTE_FILTER, 'repository', ['r1', 'r3', 'r1'])
+    expect(withOne.repoIds).toEqual(['r1', 'r3'])
 
-    const next = togglePaletteFilterValue(saturated, 'host', 'ssh:one-too-many')
-
-    expect(next.hostIds).toHaveLength(PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD)
-    expect(next.hostIds).not.toContain('ssh:one-too-many')
-    // Deselecting still works at the cap, so the user is never stuck.
-    expect(togglePaletteFilterValue(saturated, 'host', 'ssh:host-0').hostIds).toHaveLength(
-      PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD - 1
-    )
+    const manyIds = Array.from({ length: 501 }, (_, index) => `repo-${index}`)
+    expect(
+      addPaletteFilterValues(EMPTY_PALETTE_FILTER, 'repository', manyIds).repoIds
+    ).toHaveLength(501)
   })
 
-  it('bulk-adds matching ids up to the per-field cap without duplicating', () => {
-    const withOne = addPaletteFilterValues(EMPTY_PALETTE_FILTER, 'project', [
-      'project:p1',
-      'repo:r3',
-      'project:p1'
-    ])
-    expect(withOne.projectKeys).toEqual(['project:p1', 'repo:r3'])
+  it('preserves state identity when bulk-add and clear are no-ops', () => {
+    const filter = filterOf(['local'], ['r1'])
+    const repoOnly = filterOf([], ['r1'])
 
-    const nearCap = filterOf(
-      Array.from(
-        { length: PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD - 1 },
-        (_, i) => `ssh:host-${i}`
-      ),
-      []
-    )
-    const filled = addPaletteFilterValues(nearCap, 'host', ['ssh:a', 'ssh:b'])
-    expect(filled.hostIds).toHaveLength(PALETTE_FILTER_MAX_SELECTIONS_PER_FIELD)
-    expect(filled.hostIds).toContain('ssh:a')
-    expect(filled.hostIds).not.toContain('ssh:b')
-  })
-})
-
-describe('reconcilePaletteFilter', () => {
-  it('returns the same reference when every selection still exists', () => {
-    const filter = filterOf(['local'], ['project:p1'])
-
-    expect(reconcilePaletteFilter(filter, model)).toBe(filter)
-    expect(reconcilePaletteFilter(EMPTY_PALETTE_FILTER, model)).toBe(EMPTY_PALETTE_FILTER)
-  })
-
-  it('drops selections whose host or project disappeared', () => {
-    const filter = filterOf(['local', 'ssh:deleted'], ['project:p1', 'repo:removed'])
-
-    expect(reconcilePaletteFilter(filter, model)).toEqual(filterOf(['local'], ['project:p1']))
-  })
-
-  it('empties a filter whose every selection is gone', () => {
-    const reconciled = reconcilePaletteFilter(filterOf(['ssh:deleted'], []), model)
-
-    expect(isPaletteFilterActive(reconciled)).toBe(false)
+    expect(addPaletteFilterValues(filter, 'repository', ['r1'])).toBe(filter)
+    expect(clearPaletteFilterField(filter, 'host')).not.toBe(filter)
+    expect(clearPaletteFilterField(repoOnly, 'host')).toBe(repoOnly)
   })
 })
 
@@ -155,11 +121,11 @@ describe('buildPaletteFilterPredicate', () => {
     expect(local?.matchesWorktree({ repoId: 'never-seen' })).toBe(true)
   })
 
-  it('matches every repo behind a multi-repo project row', () => {
-    const predicate = buildPaletteFilterPredicate(filterOf([], ['project:p1']), model)
+  it('keeps repository filtering exact within a multi-repo project row', () => {
+    const predicate = buildPaletteFilterPredicate(filterOf([], ['r1']), model)
 
     expect(predicate?.matchesWorktree({ repoId: 'r1' })).toBe(true)
-    expect(predicate?.matchesWorktree({ repoId: 'r2' })).toBe(true)
+    expect(predicate?.matchesWorktree({ repoId: 'r2' })).toBe(false)
     expect(predicate?.matchesWorktree({ repoId: 'r3' })).toBe(false)
     expect(predicate?.matchesProjectRowKey('project:p1')).toBe(true)
     expect(predicate?.matchesProjectRowKey('repo:r3')).toBe(false)
@@ -179,21 +145,38 @@ describe('buildPaletteFilterPredicate', () => {
   })
 
   it('ORs within a field and ANDs across fields', () => {
-    const ored = buildPaletteFilterPredicate(filterOf([], ['project:p1', 'repo:r3']), model)
+    const ored = buildPaletteFilterPredicate(filterOf([], ['r1', 'r3']), model)
     expect(ored?.matchesWorktree({ repoId: 'r1' })).toBe(true)
     expect(ored?.matchesWorktree({ repoId: 'r3' })).toBe(true)
 
-    // Project p1 spans local (r1) and ssh:builder (r2); adding the host axis
-    // narrows to the intersection rather than widening the result set.
-    const anded = buildPaletteFilterPredicate(filterOf(['local'], ['project:p1']), model)
+    const anded = buildPaletteFilterPredicate(filterOf(['local'], ['r1', 'r2']), model)
     expect(anded?.matchesWorktree({ repoId: 'r1' })).toBe(true)
     expect(anded?.matchesWorktree({ repoId: 'r2' })).toBe(false)
     expect(anded?.matchesProjectRowKey('project:p1')).toBe(true)
     expect(anded?.matchesProjectRowKey('repo:r3')).toBe(false)
+
+    const disjoint = buildPaletteFilterPredicate(filterOf(['local'], ['r2']), model)
+    expect(disjoint?.matchesProjectRowKey('project:p1')).toBe(false)
   })
 
-  it('never matches a stale project key that resolves to no repos', () => {
-    const predicate = buildPaletteFilterPredicate(filterOf([], ['project:gone']), model)
+  it('matches every host that owns a shared repository ID', () => {
+    const sharedRepoModel: PaletteFilterModel = {
+      ...model,
+      repositories: [option('shared')],
+      repoIdsByProjectKey: new Map([['repo:shared', ['shared']]]),
+      hostIdsByRepoId: new Map([['shared', new Set(['local', 'ssh:builder'])]])
+    }
+
+    expect(
+      buildPaletteFilterPredicate(
+        filterOf(['ssh:builder'], ['shared']),
+        sharedRepoModel
+      )?.matchesProjectRowKey('repo:shared')
+    ).toBe(true)
+  })
+
+  it('never matches a stale repository id', () => {
+    const predicate = buildPaletteFilterPredicate(filterOf([], ['repo:gone']), model)
 
     expect(predicate?.matchesWorktree({ repoId: 'r1' })).toBe(false)
     expect(predicate?.matchesProjectRowKey('project:p1')).toBe(false)
@@ -204,11 +187,68 @@ describe('buildPaletteFilterPredicate', () => {
     expect(hostOnly?.matchesGroupHostId('ssh:builder')).toBe(true)
     expect(hostOnly?.matchesGroupHostId('local')).toBe(false)
 
-    // A group header belongs to no project, so any project selection excludes it.
-    const withProject = buildPaletteFilterPredicate(
-      filterOf(['ssh:builder'], ['project:p1']),
-      model
-    )
+    // A group header belongs to no repository, so any repository selection excludes it.
+    const withProject = buildPaletteFilterPredicate(filterOf(['ssh:builder'], ['r2']), model)
     expect(withProject?.matchesGroupHostId('ssh:builder')).toBe(false)
+  })
+})
+
+describe('buildPaletteFilterFromSidebarScope', () => {
+  const allHosts = { workspaceHostScope: 'all', visibleWorkspaceHostIds: null } as const
+
+  it('opens unfiltered when the sidebar shows every host and project', () => {
+    expect(buildPaletteFilterFromSidebarScope({ ...allHosts, filterRepoIds: [] })).toBe(
+      EMPTY_PALETTE_FILTER
+    )
+  })
+
+  it('seeds the host chips from the sidebar host scope', () => {
+    expect(
+      buildPaletteFilterFromSidebarScope({
+        workspaceHostScope: 'ssh:builder',
+        visibleWorkspaceHostIds: null,
+        filterRepoIds: []
+      })
+    ).toEqual(filterOf(['ssh:builder'], []))
+    expect(
+      buildPaletteFilterFromSidebarScope({
+        workspaceHostScope: 'all',
+        visibleWorkspaceHostIds: ['runtime:env-1', 'local'],
+        filterRepoIds: []
+      })
+    ).toEqual(filterOf(['local', 'runtime:env-1'], []))
+  })
+
+  it('preserves sidebar repository picks exactly', () => {
+    expect(buildPaletteFilterFromSidebarScope({ ...allHosts, filterRepoIds: ['r2'] })).toEqual(
+      filterOf([], ['r2'])
+    )
+
+    const predicate = buildPaletteFilterPredicate(filterOf([], ['r2']), model)
+    expect(predicate?.matchesWorktree({ repoId: 'r1' })).toBe(false)
+    expect(predicate?.matchesWorktree({ repoId: 'r2' })).toBe(true)
+  })
+
+  it('preserves explicit selections even when they currently cover every known option', () => {
+    expect(
+      buildPaletteFilterFromSidebarScope({
+        workspaceHostScope: 'all',
+        visibleWorkspaceHostIds: ['local', 'ssh:builder', 'runtime:env-1'],
+        filterRepoIds: ['r1', 'r2', 'r3']
+      })
+    ).toEqual(filterOf(['local', 'runtime:env-1', 'ssh:builder'], ['r1', 'r2', 'r3']))
+  })
+
+  it('preserves empty or stale scopes instead of widening to a global search', () => {
+    const filter = buildPaletteFilterFromSidebarScope({
+      workspaceHostScope: 'ssh:gone',
+      visibleWorkspaceHostIds: null,
+      filterRepoIds: ['r-gone']
+    })
+
+    expect(filter).toEqual(filterOf(['ssh:gone'], ['r-gone']))
+    expect(buildPaletteFilterPredicate(filter, model)?.matchesWorktree({ repoId: 'r1' })).toBe(
+      false
+    )
   })
 })

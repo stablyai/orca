@@ -101,7 +101,9 @@ export function buildWindowsCmdShimCommandLine(program: string, args: readonly s
   // does not survive a line break. Encoding one anyway truncates the argument
   // and can leave the remainder to be interpreted as a further command. Agent
   // prompts are the motivating input here and can contain newlines, so this
-  // has to fail loudly rather than silently mangle.
+  // has to fail loudly rather than silently mangle. Recognised npm/pnpm shims
+  // no longer reach this line at all — windows-cmd-shim-resolution.ts spawns
+  // their target directly, where a newline is just another character.
   for (const value of [program, ...args]) {
     if (/[\r\n]/.test(value)) {
       throw new Error('cmd.exe cannot receive an argument containing a line break')

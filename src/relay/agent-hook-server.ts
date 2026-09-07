@@ -2,7 +2,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
+import {
+  ORCA_HOOK_PROTOCOL_VERSION,
+  ORCA_HOOK_RAW_JSON_TRANSPORT
+} from '../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -15,6 +18,7 @@ import {
 } from '../shared/agent-hook-listener/endpoint-publication'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
 import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
@@ -37,10 +41,12 @@ import {
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { buildRelayHookEnvelope, hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
+import {
+  evictCachedPanesOverCap,
+  selectReplayableCachedPanes
+} from './agent-hook-cached-pane-status'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
-
-const MAX_CACHED_PANES = 256
 
 export type RelayHookServerOptions = {
   /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
@@ -52,6 +58,13 @@ export type RelayHookServerOptions = {
   /** Preferred bind port. WSL relay passes the Windows listener's port so env-sourced client coords stay truthful; falls back to :0 if occupied. Defaults to :0. */
   preferredPort?: number
   forward: RelayHookForward
+  /**
+   * True when the host has been told this pane's tab is gone and no PTY has re-bound the paneKey.
+   * Posts from such a pane come from a process the user already closed, so they describe no surface
+   * any client owns. Defaults to "never retired", which is the pre-existing behaviour — a listener
+   * with no PTY handler behind it (the WSL relay) keeps forwarding everything.
+   */
+  isPaneSurfaceRetired?: (paneKey: string) => boolean
 }
 
 export type RelayHookServerStartOptions = {
@@ -77,6 +90,7 @@ export class RelayAgentHookServer {
     { source: AgentHookSource; env?: string; version?: string }
   >()
   private forward: RelayHookForward
+  private isPaneSurfaceRetired: (paneKey: string) => boolean
   private fixedToken: string | undefined
   private preferredPort: number
   private portFallbackApplied = false
@@ -89,6 +103,7 @@ export class RelayAgentHookServer {
     this.fixedToken = options.token
     this.preferredPort = options.preferredPort ?? 0
     this.forward = options.forward
+    this.isPaneSurfaceRetired = options.isPaneSurfaceRetired ?? (() => false)
     this.retryScheduler = new AgentHookResultRetryScheduler({
       state: this.state,
       env: this.env,
@@ -174,7 +189,8 @@ export class RelayAgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     return this.endpointFileWritten
   }
@@ -193,19 +209,18 @@ export class RelayAgentHookServer {
   /** Request-driven replay: re-forwards each cached paneKey payload as a fresh notification. Forwards are
    *  issued before the request handler returns, so the response trails all replayed notifications. */
   replayCachedPayloadsForPanes(): number {
-    let count = 0
-    for (const [paneKey, event] of this.state.lastStatusByPaneKey.entries()) {
-      const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
-      // Why: invariant — status-cache keys always have meta; if it drifted, skip rather than guess a source that mis-tags downstream.
-      if (!meta) {
-        continue
-      }
+    const replayable = selectReplayableCachedPanes({
+      cachedByPaneKey: this.state.lastStatusByPaneKey,
+      metaByPaneKey: this.lastEnvelopeMetaByPaneKey,
+      isPaneSurfaceRetired: this.isPaneSurfaceRetired,
+      dropPane: (paneKey) => this.clearPaneState(paneKey)
+    })
+    for (const { event, meta } of replayable) {
       this.forward(
         buildRelayHookEnvelope(event, meta.source, meta.env, meta.version, { isReplay: true })
       )
-      count++
     }
-    return count
+    return replayable.length
   }
 
   /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
@@ -252,7 +267,6 @@ export class RelayAgentHookServer {
       req.destroy()
     })
     try {
-      const body = await readRequestBody(req)
       const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
       const source = resolveHookSource(pathname)
       if (!source) {
@@ -260,16 +274,18 @@ export class RelayAgentHookServer {
         res.end()
         return
       }
-      const event = normalizeHookPayload(this.state, source, body, this.env, {
+      const body = await readRequestBody(req)
+      const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
+      const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
         deferCompactOwnershipToClient: true
       })
       if (event) {
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
-        const env = hookBodyEnv(body)
-        const version = hookBodyVersion(body)
+        const env = hookBodyEnv(hookBody)
+        const version = hookBodyVersion(hookBody)
         this.applyEvent(event, source, env, version)
-        this.retryScheduler.scheduleAssistantMessageRetry(source, body, event, env, version)
-        this.retryScheduler.scheduleCodexSubagentPoll(source, body, event, env, version)
+        this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
+        this.retryScheduler.scheduleCodexSubagentPoll(source, hookBody, event, env, version)
       }
       res.writeHead(204)
       res.end()
@@ -295,6 +311,14 @@ export class RelayAgentHookServer {
     version?: string,
     options: { isReplay?: boolean } = {}
   ): void {
+    // Why: this post came from a process still running inside a pane whose tab the user closed.
+    // Caching or forwarding it makes every connected client advertise a live, resumable agent pane
+    // that no tab owns — the advertisement that ends up auto-typing a second `--resume` onto a
+    // transcript the orphan is still writing (#12447). Drop the stale cache with it.
+    if (this.isPaneSurfaceRetired(event.paneKey)) {
+      this.clearPaneState(event.paneKey)
+      return
+    }
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.retryScheduler.clearAssistantMessageRetry(event.paneKey)
     }
@@ -307,13 +331,7 @@ export class RelayAgentHookServer {
     this.state.lastStatusByPaneKey.set(event.paneKey, cachedEvent)
     this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
-    while (this.state.lastStatusByPaneKey.size > MAX_CACHED_PANES) {
-      const oldest = this.state.lastStatusByPaneKey.keys().next().value
-      if (oldest === undefined) {
-        break
-      }
-      this.clearPaneState(oldest)
-    }
+    evictCachedPanesOverCap(this.state.lastStatusByPaneKey, (key) => this.clearPaneState(key))
     this.forward(buildRelayHookEnvelope(event, source, env, version, options))
   }
 

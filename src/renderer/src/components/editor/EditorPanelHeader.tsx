@@ -102,6 +102,7 @@ export function EditorPanelHeader({
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
+  const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
   // Why: undefined/true mean wrap on; only explicit false turns wrap off (#9974).
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
   const editorTextDirection = useAppStore((s) => s.settings?.editorTextDirection)
@@ -357,6 +358,7 @@ export function EditorPanelHeader({
         isMarkdown={isMarkdown}
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
+        diffShowWhitespace={diffShowWhitespace}
         editorWordWrap={editorWordWrap}
         textDirectionRtl={resolvedTextDirection === 'rtl'}
         onToggleTextDirection={canToggleTextDirection ? toggleTextDirection : undefined}
@@ -365,6 +367,9 @@ export function EditorPanelHeader({
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
         onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
+        onToggleDiffWhitespace={() =>
+          void updateSettings({ diffShowWhitespace: !diffShowWhitespace })
+        }
         onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}

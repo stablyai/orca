@@ -8,6 +8,7 @@ import { OrchestrationError } from '../orchestration-error'
 import { isEquivalentPaneKey } from './pane-key-match'
 import type { OrchestrationDb } from './orchestration-db'
 import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../types'
+import { potentiallyLiveRemoteAttachmentSql } from './federation/remote-attachment-liveness'
 
 /**
  * Who is creating a dispatch row, for nesting-depth purposes.
@@ -27,6 +28,29 @@ export type DispatchCreator =
       processIncarnation?: string
     }
 
+/** Creator identity to persist on a new row, so depth can later tell delegation from bookkeeping. */
+export function recordedCreatorIdentity(creator: DispatchCreator): {
+  creatorHandle: string | null
+  creatorPaneKey: string | null
+} {
+  if (creator.kind === 'system') {
+    return { creatorHandle: null, creatorPaneKey: null }
+  }
+  return { creatorHandle: creator.handle, creatorPaneKey: creator.paneKey ?? null }
+}
+
+/**
+ * A row whose creator is its own assignee: a coordinator recording context against its own
+ * terminal. Nothing was delegated, so it is not a nesting parent. Rows written before v37 record
+ * no creator and keep counting, which is the pre-v37 answer and fails closed.
+ */
+function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
+  if (row.creator_pane_key && row.assignee_pane_key) {
+    return isEquivalentPaneKey(row.creator_pane_key, row.assignee_pane_key)
+  }
+  return row.creator_handle != null && row.creator_handle === row.assignee_handle
+}
+
 /**
  * Attachment states in which the worker may still be running.
  *
@@ -35,14 +59,6 @@ export type DispatchCreator =
  * never evidence of process death — see docs/reference/ssh-execution-boundary.md.
  * An `unverifiable` worker must still count as a nesting parent.
  */
-const POTENTIALLY_LIVE_ATTACHMENT_STATES = [
-  'starting',
-  'ready',
-  'start_unknown',
-  'stopping',
-  'stop_unknown'
-] as const
-
 export class AmbiguousDispatchParentError extends Error {
   constructor(message: string) {
     super(message)
@@ -71,7 +87,7 @@ export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCrea
   const local = this.findActiveDispatchForAssignee(creator.handle, creator.paneKey) as
     | DispatchContextRow
     | undefined
-  if (local) {
+  if (local && !isSelfCreatedDispatch(local)) {
     depths.push(local.depth)
   }
 
@@ -80,6 +96,27 @@ export function resolveCreatorDepth(this: OrchestrationDb, creator: DispatchCrea
   }
 
   return depths.length > 0 ? Math.max(...depths) : ROOT_DISPATCH_DEPTH
+}
+
+/**
+ * Proven creator Attempt identity; null when system-owned, absent, or ambiguous.
+ * Throws when multiple live remote attachments match the same terminal identity.
+ */
+export function resolveCreatorDispatchId(
+  this: OrchestrationDb,
+  creator: DispatchCreator
+): string | null {
+  if (creator.kind === 'system') {
+    return null
+  }
+  const own = this.findActiveDispatchForAssignee(creator.handle, creator.paneKey)
+  // Why: a self-dispatch is not a parent Attempt, so it must not be stamped as the child's creator.
+  const local = own && !isSelfCreatedDispatch(own) ? own : undefined
+  const remote = findPotentiallyLiveAttachmentsForCreator.call(this, creator)
+  if ((local ? 1 : 0) + remote.length !== 1) {
+    return null
+  }
+  return local?.id ?? remote[0]?.dispatch_id ?? null
 }
 
 /**
@@ -97,18 +134,14 @@ function findPotentiallyLiveAttachmentsForCreator(
   if (!creator.paneKey || !creator.processIncarnation) {
     return []
   }
-  const placeholders = POTENTIALLY_LIVE_ATTACHMENT_STATES.map(() => '?').join(', ')
   const rows = this.db
     .prepare(
       `SELECT * FROM remote_dispatch_attachments
        WHERE process_incarnation = ?
          AND pane_key IS NOT NULL
-         AND state IN (${placeholders})`
+         AND ${potentiallyLiveRemoteAttachmentSql()}`
     )
-    .all(
-      creator.processIncarnation,
-      ...POTENTIALLY_LIVE_ATTACHMENT_STATES
-    ) as RemoteDispatchAttachmentRow[]
+    .all(creator.processIncarnation) as RemoteDispatchAttachmentRow[]
 
   const matches = rows.filter(
     (row) => row.pane_key !== null && isEquivalentPaneKey(row.pane_key, creator.paneKey as string)
@@ -148,9 +181,14 @@ export function resolveChildDispatchDepth(
 
 export type DispatchDepthMethods = {
   resolveCreatorDepth: typeof resolveCreatorDepth
+  resolveCreatorDispatchId: typeof resolveCreatorDispatchId
   resolveChildDispatchDepth: typeof resolveChildDispatchDepth
 }
 
 export function attachDispatchDepth(ctor: { prototype: object }): void {
-  Object.assign(ctor.prototype, { resolveCreatorDepth, resolveChildDispatchDepth })
+  Object.assign(ctor.prototype, {
+    resolveCreatorDepth,
+    resolveCreatorDispatchId,
+    resolveChildDispatchDepth
+  })
 }

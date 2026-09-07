@@ -29,6 +29,8 @@ export type BuildPtyHostEnvOptions = {
   agentStatusHooksEnabled: boolean
   codexStatusHooksEnabled?: boolean
   networkProxySettings?: NetworkProxySettings
+  /** Headless paired runtimes hand browser launches to the client-hosted Orca browser. */
+  routeBrowserOpensToClient?: boolean
   /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
   deferGitConfigGuardToDaemon?: boolean
 }

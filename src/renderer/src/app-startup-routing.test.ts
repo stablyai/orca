@@ -19,6 +19,20 @@ const SESSION_PERSISTENCE_PATH = 'src/renderer/src/app-shell/use-app-session-per
 const PERSISTED_UI_WRITER_PATH = 'src/renderer/src/app-shell/use-persisted-ui-writer.ts'
 
 describe('renderer startup runtime routing', () => {
+  it('routes packaged terminal restore through the daemon adoption gate', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/use-terminal-watcher-effects.ts'),
+      'utf8'
+    )
+    const gateStart = source.indexOf('const startupActivationGateWorktreeIdsRef')
+    const gateEnd = source.indexOf('const startupResumeWorktreeIdsRef', gateStart)
+    const gateEffect = source.slice(gateStart, gateEnd)
+
+    expect(gateStart).toBeGreaterThanOrEqual(0)
+    expect(gateEffect).toContain('void gateWorktreeAgentActivation(activeWorktreeId)')
+    expect(gateEffect).not.toContain('resumeSleepingAgentSessionsForWorktree')
+  })
+
   it('hydrates persisted UI before local catalog and worktree hydration', () => {
     const source = readSource(STARTUP_HYDRATION_PATH)
     const startupBlockStart = source.indexOf('void (async () => {')
@@ -54,8 +68,11 @@ describe('renderer startup runtime routing', () => {
     const hydrationWorktreesIndex = source.indexOf(
       "timeRendererStartupStep('fetch-hydration-worktrees'"
     )
-    const servicesIndex = source.indexOf(
-      "timeRendererStartupStep('first-window-services-await'",
+    // Why this barrier: worktree hydration can spawn host Git, so it must sit behind the
+    // shell-PATH + managed-WSL fence. On packaged Windows the window opens before
+    // shellPathReady resolves, so this really is the fence, not a formality.
+    const gitEnvironmentBarrierIndex = source.indexOf(
+      "timeRendererStartupStep('git-environment-barrier-await'",
       sessionIndex
     )
     const fullWorktreesIndex = source.indexOf('await actions.fetchAllWorktrees()')
@@ -75,8 +92,11 @@ describe('renderer startup runtime routing', () => {
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
     expect(localReposIndex).toBeLessThan(sessionIndex)
-    expect(sessionIndex).toBeLessThan(servicesIndex)
-    expect(servicesIndex).toBeLessThan(hydrationWorktreesIndex)
+    expect(sessionIndex).toBeLessThan(gitEnvironmentBarrierIndex)
+    expect(gitEnvironmentBarrierIndex).toBeLessThan(hydrationWorktreesIndex)
+    expect(source.slice(gitEnvironmentBarrierIndex, hydrationWorktreesIndex)).toContain(
+      'window.api.app.awaitGitEnvironmentStartupBarrier()'
+    )
     const hydrationWorktreeBlock = source.slice(
       hydrationWorktreesIndex,
       source.indexOf('await keybindingsPromise')
@@ -166,7 +186,13 @@ describe('renderer startup runtime routing', () => {
 
   it('waits for first-window startup services before terminal reconnect', () => {
     const source = readSource(STARTUP_HYDRATION_PATH)
-    const servicesIndex = source.indexOf("timeRendererStartupStep('first-window-services-await'")
+    // Why this step: `app:prepareTerminalStartupRestoration` awaits
+    // firstWindowStartupServicesReady + managedWslCliStartupBarrierReady in main before it
+    // does anything else, so it is the renderer-side position of that fence.
+    // `desktop-startup-ordering.test.ts` pins the main-side await itself.
+    const servicesIndex = source.indexOf(
+      "timeRendererStartupStep('prepare-terminal-startup-restoration'"
+    )
     const preReconnectRecoveryIndex = source.indexOf(
       "timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect'"
     )
@@ -179,6 +205,9 @@ describe('renderer startup runtime routing', () => {
     )
 
     expect(servicesIndex).toBeGreaterThanOrEqual(0)
+    expect(source.slice(servicesIndex)).toContain(
+      'window.api.app.prepareTerminalStartupRestoration()'
+    )
     expect(preReconnectRecoveryIndex).toBeGreaterThan(servicesIndex)
     expect(capabilityRefreshIndex).toBeGreaterThan(preReconnectRecoveryIndex)
     expect(reconnectIndex).toBeGreaterThan(capabilityRefreshIndex)
@@ -212,7 +241,9 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('keeps the persisted Automations view from starting its own bootstrap worktree scan', () => {
-    const source = readSource('src/renderer/src/components/automations/AutomationsPage.tsx')
+    const source = readSource(
+      'src/renderer/src/components/automations/use-automations-page-refresh.ts'
+    )
     const fullRefreshStart = source.indexOf('const mountedBeforeStartupWorktreeRefreshRef')
     const fullRefreshEffect = source.slice(
       fullRefreshStart,
@@ -292,7 +323,8 @@ describe('renderer startup runtime routing', () => {
 
     expect(source).toContain("import('../components/dictation/DictationController').then")
     expect(source).not.toContain("from '../components/dictation/DictationController'")
-    expect(source).toContain("settings?.voice?.enabled === true || dictationState !== 'idle'")
+    expect(source).toContain('useAppStore(selectAppRootSurfaceVoiceEnabled)')
+    expect(source).toContain("voiceEnabled || dictationState !== 'idle'")
     expect(source).toContain('shouldMountDictationController ?')
   })
 
@@ -323,6 +355,56 @@ describe('renderer startup runtime routing', () => {
 
     expect(capabilityIndex).toBeGreaterThanOrEqual(0)
     expect(reconnectIndex).toBeGreaterThan(capabilityIndex)
+  })
+
+  it('skips startup structured tab projection while the host setting is off', () => {
+    const source = readSource(STARTUP_HYDRATION_PATH)
+    const projectIndex = source.indexOf("timeRendererStartupStep('project-structured-session-tabs'")
+
+    expect(projectIndex).toBeGreaterThanOrEqual(0)
+    expect(source.slice(projectIndex - 180, projectIndex)).toContain(
+      'settings?.experimentalStructuredNativeChat === true'
+    )
+  })
+
+  it('orders packaged restoration before adoption, projection, and default creation', () => {
+    // Why this file: the startup sequence moved out of App.tsx into the hydration hook;
+    // the ordering it asserts is unchanged, only the module that now spells it out.
+    const appSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/app-shell/use-app-startup-hydration.ts'),
+      'utf8'
+    )
+    const terminalSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/use-terminal-watcher-effects.ts'),
+      'utf8'
+    )
+    const hydrateIndex = appSource.indexOf("timeRendererStartupSyncStep('hydrate-session-stores'")
+    const prepareIndex = appSource.indexOf(
+      "timeRendererStartupStep('prepare-terminal-startup-restoration'"
+    )
+    const reconnectIndex = appSource.indexOf("timeRendererStartupStep('reconnect-terminals'")
+    const projectIndex = appSource.indexOf(
+      "timeRendererStartupStep('project-structured-session-tabs'"
+    )
+    const readyIndex = appSource.indexOf('actions.setTerminalStartupRestorationReady(true)')
+    const gateStart = terminalSource.indexOf('const startupActivationGateWorktreeIdsRef')
+    const gateEnd = terminalSource.indexOf('const startupResumeWorktreeIdsRef', gateStart)
+    const gateBlock = terminalSource.slice(gateStart, gateEnd)
+    const gateIndex = gateBlock.indexOf('gateWorktreeAgentActivation(activeWorktreeId)')
+    const createIndex = gateBlock.indexOf(
+      'createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })'
+    )
+
+    expect(hydrateIndex).toBeGreaterThanOrEqual(0)
+    expect(hydrateIndex).toBeLessThan(prepareIndex)
+    expect(prepareIndex).toBeLessThan(reconnectIndex)
+    expect(reconnectIndex).toBeLessThan(projectIndex)
+    expect(projectIndex).toBeLessThan(readyIndex)
+    expect(gateBlock).toContain('terminalStartupRestorationReady')
+    expect(gateBlock).not.toContain('hydrationSucceeded')
+    expect(gateIndex).toBeGreaterThanOrEqual(0)
+    expect(gateIndex).toBeLessThan(createIndex)
+    expect(gateBlock.slice(gateIndex, createIndex)).toContain("outcome !== 'empty'")
   })
 
   it('does not load the terminal workbench on the no-workspace landing path', () => {
@@ -413,7 +495,7 @@ describe('renderer startup runtime routing', () => {
   })
 
   it('does not eagerly import optional status-bar segments on startup', () => {
-    const source = readSource('src/renderer/src/components/status-bar/StatusBar.tsx')
+    const source = readSource('src/renderer/src/components/status-bar/StatusBarSurface.tsx')
 
     expect(source).toContain("import('./ResourceUsageStatusSegment').then")
     expect(source).toContain("import('./PortsStatusSegment').then")

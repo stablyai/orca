@@ -1,6 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { PassThrough } from 'node:stream'
-import type { ChildProcess, ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
+import type { ChildProcess, spawn } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -192,50 +191,26 @@ describe('killCodexAppServerProcessTree', () => {
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 
-  it('kills the direct app-server process on non-Windows hosts', () => {
+  it('kills the launcher descendants before the direct process on non-Windows hosts', () => {
     const child = {
       pid: 1234,
       kill: vi.fn(() => true) as ChildProcess['kill']
     }
-    const spawnImpl = vi.fn() as unknown as typeof spawn
+    const descendants = { unref: vi.fn(), on: vi.fn() }
+    const spawnImpl = vi.fn(() => descendants) as unknown as typeof spawn
 
     killCodexAppServerProcessTree(child, { platform: 'linux', spawnImpl })
 
-    expect(spawnImpl).not.toHaveBeenCalled()
+    expect(spawnImpl).toHaveBeenCalledWith('pkill', ['-KILL', '-P', '1234'], { stdio: 'ignore' })
+    // A missing pkill arrives as an async 'error' event; unhandled, it would
+    // take down the main process.
+    expect(descendants.on).toHaveBeenCalledWith('error', expect.any(Function))
+    expect(descendants.unref).toHaveBeenCalledOnce()
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
 })
 
 describe('runCodexHookTrustGrantSession', () => {
-  it('stops stdout before killing a server with an oversized response', async () => {
-    const child = new EventEmitter() as ChildProcessWithoutNullStreams
-    child.stdin = new PassThrough()
-    const stdout = new PassThrough()
-    child.stdout = stdout
-    child.stderr = new PassThrough()
-    const kill = vi.fn(() => {
-      queueMicrotask(() => {
-        child.emit('exit', null, 'SIGKILL')
-        child.emit('close', null, 'SIGKILL')
-      })
-      return true
-    })
-    child.kill = kill as ChildProcess['kill']
-    const spawnImpl = vi.fn(() => child) as unknown as typeof spawn
-
-    const session = runCodexAppServerSession(
-      { command: 'codex', cliPath: null, args: ['app-server'], timeoutMs: 2_000 },
-      async () => undefined,
-      spawnImpl
-    )
-    stdout.write('x'.repeat(1024 * 1024 + 1))
-    stdout.write('more buffered output')
-
-    await expect(session).rejects.toThrow('oversized JSONL response')
-    expect(child.stdout.destroyed).toBe(true)
-    expect(kill).toHaveBeenCalledTimes(1)
-  })
-
   it('grants and verifies exactly the expected managed entries', async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
     const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')

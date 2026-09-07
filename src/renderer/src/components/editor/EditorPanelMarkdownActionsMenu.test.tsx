@@ -54,6 +54,7 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         isMarkdown: false,
         isDiffSurface: false,
         diffWordWrap: false,
+        diffShowWhitespace: false,
         editorWordWrap: true,
         textDirectionRtl: false,
         shouldShowMarkdownExportAction: false,
@@ -61,6 +62,7 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         canShowMarkdownFrontmatterToggle: false,
         markdownFrontmatterVisible: false,
         onToggleDiffWordWrap,
+        onToggleDiffWhitespace: () => {},
         onToggleEditorWordWrap,
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}
@@ -82,6 +84,7 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         isMarkdown: false,
         isDiffSurface: true,
         diffWordWrap: true,
+        diffShowWhitespace: false,
         editorWordWrap: false,
         textDirectionRtl: false,
         shouldShowMarkdownExportAction: false,
@@ -89,17 +92,49 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         canShowMarkdownFrontmatterToggle: false,
         markdownFrontmatterVisible: false,
         onToggleDiffWordWrap,
+        onToggleDiffWhitespace: () => {},
         onToggleEditorWordWrap,
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}
       })
     )
 
-    expect(checkboxItems.list).toHaveLength(1)
+    expect(checkboxItems.list).toHaveLength(2)
     expect(checkboxItems.list[0]).toMatchObject({ checked: true, label: 'Word Wrap' })
     checkboxItems.list[0]?.onCheckedChange?.(false)
     expect(onToggleDiffWordWrap).toHaveBeenCalledOnce()
     expect(onToggleEditorWordWrap).not.toHaveBeenCalled()
+  })
+
+  it('shows and binds Show Whitespace on diff surfaces', () => {
+    const onToggleDiffWhitespace = vi.fn()
+    renderToStaticMarkup(
+      React.createElement(EditorPanelMarkdownActionsMenu, {
+        isMarkdown: false,
+        isDiffSurface: true,
+        diffWordWrap: false,
+        diffShowWhitespace: true,
+        editorWordWrap: false,
+        textDirectionRtl: false,
+        shouldShowMarkdownExportAction: false,
+        canExportMarkdownToPdf: false,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        onToggleDiffWordWrap: () => {},
+        onToggleDiffWhitespace,
+        onToggleEditorWordWrap: () => {},
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {}
+      })
+    )
+
+    expect(checkboxItems.list).toHaveLength(2)
+    expect(checkboxItems.list[1]).toMatchObject({
+      checked: true,
+      label: 'Show Whitespace'
+    })
+    checkboxItems.list[1]?.onCheckedChange?.(false)
+    expect(onToggleDiffWhitespace).toHaveBeenCalledOnce()
   })
 
   it('omits Right-to-Left when no toggle is supplied, so diff surfaces keep Monaco LTR layout', () => {
@@ -108,6 +143,7 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         isMarkdown: false,
         isDiffSurface: true,
         diffWordWrap: false,
+        diffShowWhitespace: false,
         editorWordWrap: false,
         textDirectionRtl: false,
         shouldShowMarkdownExportAction: false,
@@ -115,13 +151,14 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         canShowMarkdownFrontmatterToggle: false,
         markdownFrontmatterVisible: false,
         onToggleDiffWordWrap: () => {},
+        onToggleDiffWhitespace: () => {},
         onToggleEditorWordWrap: () => {},
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}
       })
     )
 
-    expect(checkboxItems.list.map((item) => item.label)).toEqual(['Word Wrap'])
+    expect(checkboxItems.list.map((item) => item.label)).not.toContain('Right-to-Left')
   })
 
   it('reflects and toggles the resolved RTL direction on editable files', () => {
@@ -131,6 +168,7 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         isMarkdown: false,
         isDiffSurface: false,
         diffWordWrap: false,
+        diffShowWhitespace: false,
         editorWordWrap: true,
         textDirectionRtl: true,
         onToggleTextDirection,
@@ -139,6 +177,7 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         canShowMarkdownFrontmatterToggle: false,
         markdownFrontmatterVisible: false,
         onToggleDiffWordWrap: () => {},
+        onToggleDiffWhitespace: () => {},
         onToggleEditorWordWrap: () => {},
         onToggleMarkdownFrontmatter: () => {},
         onExportMarkdownToPdf: () => {}

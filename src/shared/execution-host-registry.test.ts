@@ -220,6 +220,41 @@ describe('execution host registry', () => {
     ])
   })
 
+  it('treats ready shared-control diagnostics without a status payload as available', () => {
+    const hosts = buildExecutionHostRegistry({
+      repos: [],
+      settings: { activeRuntimeEnvironmentId: null },
+      runtimeEnvironments: [{ id: 'dev-box', name: 'Dev Box' }],
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'dev-box',
+          {
+            status: null,
+            remoteControl: {
+              state: 'ready',
+              pendingRequestCount: 0,
+              subscriptionCount: 1,
+              reconnectAttempt: 0,
+              lastConnectedAt: 123,
+              lastClose: null,
+              lastError: null
+            }
+          }
+        ]
+      ])
+    })
+
+    expect(hosts).toMatchObject([
+      { id: 'local', health: 'local' },
+      {
+        id: 'runtime:dev-box',
+        label: 'Dev Box',
+        health: 'available',
+        remoteControlState: { state: 'ready' }
+      }
+    ])
+  })
+
   it('preserves runtime environment source on runtime hosts', () => {
     const hosts = buildExecutionHostRegistry({
       repos: [],

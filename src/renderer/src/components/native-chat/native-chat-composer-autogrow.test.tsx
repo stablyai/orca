@@ -6,7 +6,7 @@
  *  has no layout engine, so real pixel growth is covered by app validation. */
 
 import { createRef } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -22,12 +22,29 @@ vi.mock('./NativeChatAutocompleteMenus', () => ({
   NativeChatPickerMenu: () => null
 }))
 
+vi.mock('@/components/editor/useLocalImageSrc', () => ({
+  useLocalImageSrc: (src?: string) => (src ? 'blob:attachment-preview' : undefined)
+}))
+
 import { NativeChatComposerField } from './NativeChatComposerField'
+import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 
-afterEach(() => cleanup())
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
-function renderField(draft: string): HTMLTextAreaElement {
-  render(
+const EMPTY_IMAGE_ATTACHMENTS: { id: string; path: string }[] = []
+
+function TestField({
+  draft,
+  imageAttachments = EMPTY_IMAGE_ATTACHMENTS
+}: {
+  draft: string
+  imageAttachments?: { id: string; path: string }[]
+}): React.JSX.Element {
+  const imeEnterGesture = useImeEnterGestureOwnership()
+  return (
     <NativeChatComposerField
       textareaRef={createRef<HTMLTextAreaElement>()}
       draft={draft}
@@ -37,18 +54,18 @@ function renderField(draft: string): HTMLTextAreaElement {
       autocomplete={{ mode: 'none' }}
       activeSuggestion={0}
       notice={null}
-      imageAttachments={[]}
+      imageAttachments={imageAttachments}
       sendButtonDisabled={false}
       isWorking={false}
       attachDisabled={false}
       dictationDisabled={false}
       isDictating={false}
       isDictationHoldMode={false}
+      imeEnterGesture={imeEnterGesture}
       onDraftChange={vi.fn()}
       onTextareaSelect={vi.fn()}
       onKeyDown={vi.fn()}
-      onCompositionStart={vi.fn()}
-      onCompositionEnd={vi.fn()}
+      onImeSettled={vi.fn()}
       onPaste={vi.fn()}
       pickerListboxId="picker"
       onChoosePickerItem={vi.fn()}
@@ -64,6 +81,10 @@ function renderField(draft: string): HTMLTextAreaElement {
       sessionOptionsSnapshot={[]}
     />
   )
+}
+
+function renderField(draft: string): HTMLTextAreaElement {
+  render(<TestField draft={draft} />)
   return screen.getByRole('textbox') as HTMLTextAreaElement
 }
 
@@ -94,5 +115,17 @@ describe('native chat composer autogrow', () => {
     // A JS measure pass writes style.height and only re-measures on the next
     // value change, so a re-wrap from a window/pane resize would strand it.
     expect(renderField('a\n'.repeat(6)).style.height).toBe('')
+  })
+})
+
+describe('native chat composer image attachments', () => {
+  it('renders a thumbnail and opens a full-size preview when clicked', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined)
+    render(<TestField draft="" imageAttachments={[{ id: 'image-1', path: '/tmp/example.png' }]} />)
+
+    expect(await screen.findByRole('img', { name: 'example.png' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'View image: example.png' }))
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.getByRole('dialog').textContent).toContain('example.png')
   })
 })

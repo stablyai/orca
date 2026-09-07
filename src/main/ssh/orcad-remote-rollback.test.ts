@@ -13,10 +13,7 @@ vi.mock('./ssh-relay-install-transfers', () => ({
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { writeRelayFile } from './ssh-relay-install-transfers'
 import { rollbackOrcad, type OrcadRollbackOptions } from './orcad-remote-rollback'
-import {
-  emptyOrcadActivationRecord,
-  type OrcadActivationRecord
-} from './orcad-activation-record'
+import { emptyOrcadActivationRecord, type OrcadActivationRecord } from './orcad-activation-record'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
 

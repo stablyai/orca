@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Download, Loader2, ShieldCheck } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
+import { Loader2 } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import type {
   SkillInstallDestination,
@@ -32,6 +25,7 @@ import { useSkillInstallProgress } from './skill-install-progress-state'
 import { translate } from '@/i18n/i18n'
 import { resolveSkillShareForInstall } from './skill-warning-preview-gate'
 import { useSkillInstallRisk } from './use-skill-install-risk'
+import { SkillInstallDialogFooter } from './SkillInstallDialogFooter'
 
 export function SkillInstallDialog({
   open,
@@ -91,7 +85,12 @@ export function SkillInstallDialog({
   const resolveLink = useCallback(async (value: string): Promise<void> => {
     const shareId = parseSkillShareId(value)
     if (!shareId) {
-      setError(translate('auto.components.skills.install.enterShareLink', 'Enter an Orca skill share link.'))
+      setError(
+        translate(
+          'auto.components.skills.install.enterShareLink',
+          'Enter an Orca skill share link.'
+        )
+      )
       return
     }
     setBusy(true)
@@ -103,14 +102,22 @@ export function SkillInstallDialog({
         setError(
           operation.status === 'unconfigured'
             ? operation.message
-            : translate('auto.components.skills.install.shareUnavailable', 'This share is unavailable. The link may be invalid, expired, or revoked.')
+            : translate(
+                'auto.components.skills.install.shareUnavailable',
+                'This share is unavailable. The link may be invalid, expired, or revoked.'
+              )
         )
         return
       }
       setPreview({ shareId, version: operation.value.version })
     } catch (cause) {
       console.warn('[skills] share resolution failed:', cause)
-      setError(translate('auto.components.skills.install.shareUnavailable', 'This share is unavailable. The link may be invalid, expired, or revoked.'))
+      setError(
+        translate(
+          'auto.components.skills.install.shareUnavailable',
+          'This share is unavailable. The link may be invalid, expired, or revoked.'
+        )
+      )
     } finally {
       setBusy(false)
     }
@@ -204,7 +211,10 @@ export function SkillInstallDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? translate('auto.components.skills.install.reconnectBeforeInstalling', 'Reconnect your Orca account before installing.')
+            ? translate(
+                'auto.components.skills.install.reconnectBeforeInstalling',
+                'Reconnect your Orca account before installing.'
+              )
             : operation.message
         )
         return
@@ -236,7 +246,12 @@ export function SkillInstallDialog({
       ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
     })
     if (!cancelled.cancelled) {
-      setError(translate('auto.components.skills.install.destinationAlreadyFinished', 'The destination had already finished this installation.'))
+      setError(
+        translate(
+          'auto.components.skills.install.destinationAlreadyFinished',
+          'The destination had already finished this installation.'
+        )
+      )
     }
   }
 
@@ -353,65 +368,21 @@ export function SkillInstallDialog({
             {installProgress.phaseLabel}
           </p>
         ) : null}
-        {!bundleVersion ? (
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={close} disabled={busy}>
-              {translate('auto.components.skills.SkillInstallDialog.d198ec91e5', 'Close')}
-            </Button>
-            {!preview && !resolvingInitialLink ? (
-              <Button type="button" disabled={busy || !link.trim()} onClick={() => void inspect()}>
-                {busy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <ShieldCheck className="size-4" />
-                )}
-                {busy
-                  ? translate(
-                      'auto.components.skills.SkillInstallReviewContent.69236de8d6',
-                      'Checking…'
-                    )
-                  : translate(
-                      'auto.components.skills.SkillInstallReviewContent.157de228b4',
-                      'Inspect skill'
-                    )}
-              </Button>
-            ) : null}
-            {busy && installProgress.activeOperationId ? (
-              <Button type="button" variant="secondary" onClick={() => void cancelInstall()}>
-                {translate(
-                  'auto.components.skills.SkillInstallDialog.05588076a9',
-                  'Cancel installation'
-                )}
-              </Button>
-            ) : null}
-            {preview &&
-            (!result || ['conflict', 'partial', 'failed', 'cancelled'].includes(result.status)) ? (
-              <Button
-                type="button"
-                disabled={busy || (scope === 'workspace' && !workspace)}
-                onClick={() => void install()}
-                className="w-32"
-              >
-                {busy ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Download className="size-4" />
-                )}
-                {busy
-                  ? translate('auto.components.skills.SkillInstallDialog.241e72f9d6', 'Installing…')
-                  : result
-                    ? translate(
-                        'auto.components.skills.SkillInstallDialog.59c3b76cdd',
-                        'Retry install'
-                      )
-                    : translate(
-                        'auto.components.skills.SkillInstallDialog.39acb9e8f4',
-                        'Install skill'
-                      )}
-              </Button>
-            ) : null}
-          </DialogFooter>
-        ) : null}
+        <SkillInstallDialogFooter
+          activeOperationId={installProgress.activeOperationId}
+          busy={busy}
+          hasBundleVersion={Boolean(bundleVersion)}
+          hasPreview={Boolean(preview)}
+          link={link}
+          resolvingInitialLink={resolvingInitialLink}
+          result={result}
+          scope={scope}
+          workspace={workspace}
+          onCancelInstall={() => void cancelInstall()}
+          onClose={close}
+          onInspect={() => void inspect()}
+          onInstall={(discardLocal) => void install(discardLocal)}
+        />
       </DialogContent>
     </Dialog>
   )

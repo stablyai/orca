@@ -322,4 +322,66 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
     transport.destroy?.()
   })
+
+  it('reports viewer disconnect as an unverifiable remote exit', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtyExit = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      onPtyExit
+    })
+
+    transport.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    emitSnapshot(latestSubscribePayload().streamId, 'live remote pane')
+
+    transport.disconnect()
+
+    expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', -1)
+    expect(transport.getPtyId()).toBeNull()
+    transport.destroy?.()
+  })
+
+  it('clears every retained transport error when the current stream becomes healthy', async () => {
+    const errors = ['Remote terminal was closed.', 'Remote terminal recovery was rejected.']
+    let attempt = 0
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        attempt += 1
+        subscriptionCallbacks = callbacks
+        if (attempt <= errors.length) {
+          queueMicrotask(() =>
+            callbacks.onError?.({
+              code: 'unauthorized',
+              message: errors[attempt - 1]!
+            })
+          )
+        } else {
+          queueMicrotask(emitMultiplexReady)
+        }
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const onErrorCleared = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+    const callbacks = { onError, onErrorCleared }
+
+    transport.attach({ existingPtyId: 'remote:terminal-1', callbacks })
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(errors[0]))
+
+    transport.attach({ existingPtyId: 'remote:terminal-1', callbacks })
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(errors[1]))
+
+    transport.attach({ existingPtyId: 'remote:terminal-1', callbacks })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    emitSnapshot(latestSubscribePayload().streamId, 'recovered')
+
+    expect(onErrorCleared.mock.calls.map(([message]) => message)).toEqual(errors)
+    transport.destroy?.()
+  })
 })

@@ -892,9 +892,11 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
       ;(Reflect.get(runtime, 'terminalFitOverrides') as Map<string, unknown>).delete('pty-1')
-      ;(Reflect.get(runtime, 'currentDriver') as Map<string, { kind: string }>).set('pty-1', {
-        kind: 'idle'
-      })
+      ;(
+        Reflect.get(runtime, 'terminalDrivers') as {
+          set: (ptyId: string, driver: { kind: 'idle' }) => void
+        }
+      ).set('pty-1', { kind: 'idle' })
 
       const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
       const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>

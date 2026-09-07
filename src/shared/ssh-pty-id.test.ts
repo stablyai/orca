@@ -27,6 +27,24 @@ describe('ssh pty id routing', () => {
     expect(toAppSshPtyId(HOST_ID, 'pty-7')).toBe('ssh:ssh-1779863656395-57g1q1@@pty-7')
   })
 
+  // Why: relays mint epoch-scoped ids (`pty2:<epoch>:<n>`) that carry colons, while
+  // this wrapper — unchanged here, and the version shipped in older clients — splits
+  // an app id on the FIRST `@@` after `ssh:`. Pin the round trip so a colon-bearing
+  // relay id stays routable instead of losing its owning connection.
+  it('round-trips a mint-epoch relay pty id', () => {
+    const relayPtyId = 'pty2:0f8fad5b-d9cb-469f-a165-70867728950e:12'
+    const appId = toAppSshPtyId(CONNECTION, relayPtyId)
+
+    expect(appId).toBe(`ssh:${CONNECTION}@@${relayPtyId}`)
+    expect(parseAppSshPtyId(appId)).toEqual({ connectionId: CONNECTION, relayPtyId })
+    expect(toRelaySshPtyId(CONNECTION, appId)).toBe(relayPtyId)
+    expect(toRelaySshPtyId(HOST_ID, appId)).toBe(relayPtyId)
+    expect(toAppSshPtyId(CONNECTION, appId)).toBe(appId)
+    expect(() => toRelaySshPtyId('ssh-other', appId)).toThrow(
+      `belongs to SSH connection "${CONNECTION}"`
+    )
+  })
+
   it('still rejects a pty id owned by a genuinely different connection', () => {
     expect(() => toRelaySshPtyId('ssh-other', APP_ID)).toThrow(
       `belongs to SSH connection "${CONNECTION}"`

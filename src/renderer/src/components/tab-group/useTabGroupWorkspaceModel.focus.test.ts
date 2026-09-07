@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   closeTab: vi.fn(),
   closeUnifiedTab: vi.fn(),
   closeWebRuntimeSessionTab: vi.fn(),
+  callRuntimeRpc: vi.fn(),
+  runtimeEnvironmentSupportsCapability: vi.fn(),
   createBrowserTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
   createTab: vi.fn(),
@@ -75,6 +77,19 @@ vi.mock('../../runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive,
   toHostSessionTabId: (tabId: string) => tabId
+}))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc,
+  getActiveRuntimeTarget: ({
+    activeRuntimeEnvironmentId
+  }: {
+    activeRuntimeEnvironmentId?: string | null
+  }) =>
+    activeRuntimeEnvironmentId
+      ? { kind: 'environment', environmentId: activeRuntimeEnvironmentId }
+      : { kind: 'local' },
+  runtimeEnvironmentSupportsCapability: mocks.runtimeEnvironmentSupportsCapability
 }))
 
 vi.mock('../../store/slices/browser-webview-cleanup', () => ({
@@ -170,6 +185,8 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
       status: 'failed',
       message: 'The workspace is not connected to a remote Orca host.'
     })
+    mocks.callRuntimeRpc.mockResolvedValue({ ok: true })
+    mocks.runtimeEnvironmentSupportsCapability.mockResolvedValue(true)
     resetStore()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
@@ -195,6 +212,55 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+  })
+
+  it('closes the durable native owner from the real structured tab close action', async () => {
+    const agentTab = {
+      id: 'structured-agent-session-codex-session-1',
+      entityId: 'codex-session-1',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'agent-session',
+      agentSessionAgent: 'codex',
+      label: 'Codex Chat',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    storeBox.state = {
+      ...storeBox.state,
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [agentTab] },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            worktreeId: 'wt-1',
+            activeTabId: agentTab.id,
+            tabOrder: [agentTab.id]
+          }
+        ]
+      }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.closeItem(agentTab.id)
+
+    await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(agentTab.id))
+    expect(mocks.callRuntimeRpc.mock.calls).toEqual([
+      [{ kind: 'local' }, 'agentSession.close', { sessionId: 'codex-session-1' }],
+      [
+        { kind: 'local' },
+        'session.tabs.close',
+        {
+          worktree: 'id:wt-1',
+          tabId: 'agent-session:codex-session-1',
+          reason: 'user'
+        }
+      ]
+    ])
   })
 
   it('falls back to a local shell when the typed remote-create outcome is unavailable', async () => {

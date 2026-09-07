@@ -209,7 +209,9 @@ describe('deployOrcad', () => {
     const result = await deployOrcad(options())
     expect(result).toMatchObject({ code: 'orcad_activation_daemon_degraded' })
     expect(
-      vi.mocked(writeRelayFile).mock.calls.some((call) => String(call[2]).endsWith('orcad-active.json'))
+      vi
+        .mocked(writeRelayFile)
+        .mock.calls.some((call) => String(call[2]).endsWith('orcad-active.json'))
     ).toBe(false)
   })
 

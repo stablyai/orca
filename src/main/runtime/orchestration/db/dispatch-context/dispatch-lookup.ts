@@ -6,6 +6,23 @@ import {
   paneKeyMatchSuffix
 } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
+
+// Why: hoisted and wildcard-free so the graph-publish fan-out hits the SyncDatabase statement cache.
+const ACTIVE_DISPATCH_BY_HANDLE_SQL =
+  // Why: newest-first like the pane lookups below — an unordered LIMIT 1 could pin a stale row if a handle ever has two active dispatches.
+  `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
+       WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
+       ORDER BY rowid DESC LIMIT 1`
+const ACTIVE_DISPATCH_BY_PANE_KEY_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
+       WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')
+       ORDER BY rowid DESC LIMIT 1`
+const ACTIVE_DISPATCH_BY_PANE_SUFFIX_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
+       WHERE assignee_pane_key IS NOT NULL
+         AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
+         AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+       ORDER BY rowid DESC LIMIT 1`
+const LATEST_DISPATCH_BY_HANDLE_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE assignee_handle = ? ORDER BY rowid DESC LIMIT 1`
 
 export function getActiveDispatchForTerminal(
   this: OrchestrationDb,
@@ -116,14 +133,9 @@ export function findActiveDispatchForAssignee(
   assigneeHandle: string,
   assigneePaneKey?: string
 ): DispatchContextRow | undefined {
-  const byHandle = this.db
-    .prepare(
-      // Why: newest-first like the pane lookups below — an unordered LIMIT 1 could pin a stale row if a handle ever has two active dispatches.
-      `SELECT * FROM dispatch_contexts
-       WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
-       ORDER BY rowid DESC LIMIT 1`
-    )
-    .get(assigneeHandle) as DispatchContextRow | undefined
+  const byHandle = this.db.prepare(ACTIVE_DISPATCH_BY_HANDLE_SQL).get(assigneeHandle) as
+    | DispatchContextRow
+    | undefined
   if (byHandle) {
     return byHandle
   }
@@ -132,13 +144,9 @@ export function findActiveDispatchForAssignee(
     return undefined
   }
 
-  const exactPane = this.db
-    .prepare(
-      `SELECT * FROM dispatch_contexts
-       WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')
-       ORDER BY rowid DESC LIMIT 1`
-    )
-    .get(assigneePaneKey) as DispatchContextRow | undefined
+  const exactPane = this.db.prepare(ACTIVE_DISPATCH_BY_PANE_KEY_SQL).get(assigneePaneKey) as
+    | DispatchContextRow
+    | undefined
   if (exactPane) {
     return exactPane
   }
@@ -146,13 +154,7 @@ export function findActiveDispatchForAssignee(
     return undefined
   }
   return this.db
-    .prepare(
-      `SELECT * FROM dispatch_contexts
-       WHERE assignee_pane_key IS NOT NULL
-         AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
-         AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
-       ORDER BY rowid DESC LIMIT 1`
-    )
+    .prepare(ACTIVE_DISPATCH_BY_PANE_SUFFIX_SQL)
     .get(paneKeyMatchSuffix(assigneePaneKey)) as DispatchContextRow | undefined
 }
 
@@ -160,11 +162,9 @@ export function getLatestDispatchForTerminal(
   this: OrchestrationDb,
   handle: string
 ): DispatchContextRow | undefined {
-  return this.db
-    .prepare(
-      'SELECT * FROM dispatch_contexts WHERE assignee_handle = ? ORDER BY rowid DESC LIMIT 1'
-    )
-    .get(handle) as DispatchContextRow | undefined
+  return this.db.prepare(LATEST_DISPATCH_BY_HANDLE_SQL).get(handle) as
+    | DispatchContextRow
+    | undefined
 }
 
 export type DispatchLookupMethods = {

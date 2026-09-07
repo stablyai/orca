@@ -25,6 +25,7 @@ function createSnapshot(
     remoteBrowserPageHandlesByPageId: {},
     activeBrowserTabIdByWorktree: {},
     browserUrlHistory: [],
+    workspaceDocHistory: [],
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     layoutByWorktree: {},
@@ -35,6 +36,7 @@ function createSnapshot(
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
+    closedTerminalTabTombstonesByTabId: {},
     ...overrides
   }
 }

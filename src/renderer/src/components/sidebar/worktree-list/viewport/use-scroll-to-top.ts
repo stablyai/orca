@@ -42,7 +42,8 @@ export function useWorktreeListScrollToTop({
   showScrollToTop: boolean
   scrollToTop: () => void
 } {
-  const detectorRef = useRef<HardScrollUpDetectorState>(createHardScrollUpDetectorState())
+  const detectorRef = useRef<HardScrollUpDetectorState>(undefined!)
+  detectorRef.current ??= createHardScrollUpDetectorState()
   const [showScrollToTop, setShowScrollToTop] = useState(false)
   const showScrollToTopRef = useRef(false)
   const idleTimerRef = useRef<number | null>(null)

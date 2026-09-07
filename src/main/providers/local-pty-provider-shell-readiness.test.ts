@@ -115,6 +115,7 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/posix-shell-startup-command'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -158,6 +159,70 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it('delegates markerless Codex startup to the shell wrapper without a PTY write', async () => {
+      process.env.SHELL = '/bin/zsh'
+      const command = "codex '--dangerously-bypass-approvals-and-sandbox'"
+
+      await provider.spawn({ cols: 80, rows: 24, command })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(command)
+      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('startup')
+      expect(spawnEnv.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('keeps payload-bearing Codex startup in the wrapper readiness path', async () => {
+      process.env.SHELL = '/bin/zsh'
+      const command = "codex '--dangerously-bypass-approvals-and-sandbox' 'review this branch'"
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        command,
+        startupCommandDelivery: 'shell-ready'
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe(command)
+      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('startup')
+      expect(spawnEnv.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('scrubs an inherited wrapper startup command from ordinary panes', async () => {
+      process.env.SHELL = '/bin/zsh'
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: { [POSIX_SHELL_STARTUP_COMMAND_ENV]: 'poisoned command' }
+      })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBeUndefined()
+      expect(mockProc.write).not.toHaveBeenCalled()
+    })
+
+    it('retains PTY delivery for unsupported local shells without leaking wrapper state', async () => {
+      vi.useFakeTimers()
+      try {
+        process.env.SHELL = '/bin/sh'
+        const command = "codex '--dangerously-bypass-approvals-and-sandbox'"
+
+        await provider.spawn({ cols: 80, rows: 24, command })
+
+        const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+        expect(spawnEnv[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBeUndefined()
+        expect(mockProc.write).not.toHaveBeenCalled()
+
+        await vi.advanceTimersByTimeAsync(200)
+        expect(mockProc.write).toHaveBeenCalledWith(`${command}\n`)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
     it('verifies shell identity against the exact spawn PATH', async () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => ({ ...env, PATH: '/post-hook/bin' })

@@ -46,10 +46,7 @@ describe('issue #8784 GHE avatar fallback (regression)', () => {
     // Why: author chip must not ignore API avatar_url and only pass login.
     expect(prPage).not.toMatch(/githubAvatarUrl\(workItem\.author\)/)
 
-    const reviewChip = readFileSync(
-      join(__dirname, '../task-page/github/github-assignee-avatars.tsx'),
-      'utf8'
-    )
+    const reviewChip = readFileSync(join(__dirname, '../task-page/github/Avatars.tsx'), 'utf8')
     expect(reviewChip).toMatch(/GitHubUserAvatar/)
     // Why: list chip must not hardcode github.com/{login}.png.
     expect(reviewChip).not.toMatch(/github\.com\/\$\{reviewer\.login\}\.png/)
@@ -77,20 +74,20 @@ describe('issue #8784 GHE avatar fallback (regression)', () => {
       displayName: 'option.name'
     },
     {
-      file: 'task-page/github/github-assignee-avatars.tsx',
+      file: 'task-page/github/Avatars.tsx',
       fn: 'GitHubAssigneeAvatar',
       login: 'assignee.login',
       displayName: 'assignee.name'
     },
     {
-      file: 'task-page/github/github-assignees-cell.tsx',
+      file: 'task-page/github/AssigneesCell.tsx',
       fn: 'GHAssigneesCell',
       login: 'user.login',
       displayName: 'user.name'
     },
     {
-      file: 'task-page/github/pr-review-picker-panel.tsx',
-      fn: 'PRReviewPickerPanel',
+      file: 'task-page/github/ReviewerPicker.tsx',
+      fn: 'TaskPageGitHubReviewerPicker',
       login: 'reviewer.login',
       displayName: 'reviewer.name'
     }

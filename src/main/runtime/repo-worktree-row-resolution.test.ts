@@ -5,6 +5,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
 import {
+  listStoredWorktreeRowsForRepo,
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
   type RepoWorktreeRowDeps
@@ -110,6 +111,70 @@ describe('host-qualified scoped worktree resolution', () => {
       hostId: 'ssh:builder',
       displayName: 'feature'
     })
+  })
+  it('uses the host-qualified metadata owner when a legacy row has another host', async () => {
+    const deps = createDeps([
+      repo('shared', '/remote/repo', {
+        connectionId: 'builder',
+        executionHostId: 'ssh:builder'
+      })
+    ])
+    const worktreeId = 'shared::/same/worktree'
+    const remoteMeta = {
+      displayName: 'remote workspace',
+      hostId: 'ssh:builder',
+      instanceId: 'remote-instance'
+    } as unknown as WorktreeMeta
+    deps.metaById[worktreeId] = {
+      displayName: 'stale local workspace',
+      hostId: 'local',
+      instanceId: 'local-instance'
+    } as unknown as WorktreeMeta
+    ;(
+      deps.store as Store & {
+        getWorktreeMetaForHost: () => WorktreeMeta
+      }
+    ).getWorktreeMetaForHost = () => remoteMeta
+
+    const rows = await resolveRepoWorktreeRows(
+      deps,
+      deps.store.getRepos()[0]!,
+      deps.metaById,
+      new Map()
+    )
+
+    expect(rows[0]).toMatchObject({
+      displayName: 'remote workspace',
+      hostId: 'ssh:builder',
+      instanceId: 'remote-instance'
+    })
+  })
+
+  it('restores canonical-only SSH rows without leaking colliding local metadata', () => {
+    const local = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const remote = repo('shared', '/remote/repo', {
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+    const deps = createDeps([local, remote])
+    deps.metaById['shared::/local/worktree'] = {
+      displayName: 'local workspace',
+      hostId: 'local'
+    } as WorktreeMeta
+    ;(
+      deps.store as Store & {
+        getAllWorktreeMetaForHost: () => Record<string, WorktreeMeta>
+      }
+    ).getAllWorktreeMetaForHost = () => ({
+      'shared::/remote/worktree': {
+        displayName: 'remote workspace',
+        hostId: 'ssh:builder'
+      } as unknown as WorktreeMeta
+    })
+
+    expect(listStoredWorktreeRowsForRepo(deps.store, remote, 2)).toEqual([
+      expect.objectContaining({ path: '/remote/worktree' })
+    ])
   })
 
   it.each([

@@ -30,6 +30,39 @@ describe('diffFromToolCall', () => {
     ])
   })
 
+  it('reads structured apply_patch file changes as a diff', () => {
+    const diff = diffFromToolCall('apply_patch', {
+      changes: [
+        {
+          path: '/repo/src/app.ts',
+          kind: { type: 'update', move_path: null },
+          diff: '@@ -1,2 +1,2 @@\n const value = 1\n-old()\n+newValue()'
+        }
+      ]
+    })
+
+    expect(diff).toEqual([
+      { kind: 'meta', text: '--- /repo/src/app.ts' },
+      { kind: 'meta', text: '+++ /repo/src/app.ts' },
+      { kind: 'meta', text: '@@ -1,2 +1,2 @@' },
+      { kind: 'context', text: ' const value = 1' },
+      { kind: 'del', text: 'old()' },
+      { kind: 'add', text: 'newValue()' }
+    ])
+  })
+
+  it('reads direct apply_patch text as a diff', () => {
+    expect(
+      diffFromToolCall('apply_patch', {
+        patch: '@@ -1 +1 @@\n-before\n+after'
+      })
+    ).toEqual([
+      { kind: 'meta', text: '@@ -1 +1 @@' },
+      { kind: 'del', text: 'before' },
+      { kind: 'add', text: 'after' }
+    ])
+  })
+
   it('returns null when there is no old/new payload', () => {
     expect(diffFromToolCall('Edit', { file_path: '/x' })).toBeNull()
   })

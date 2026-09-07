@@ -80,6 +80,7 @@ export function extractDroidToolFields(
         extractToolResponseText(hookPayload.tool_output)
       if (responseText) {
         update.lastAssistantMessage = responseText
+        update.lastAssistantMessageIsToolOutput = true
       }
     }
     return update

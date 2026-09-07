@@ -19,7 +19,7 @@ const { animationLoop, animationTiming, setValue } = vi.hoisted(() => ({
   setValue: vi.fn()
 }))
 
-vi.mock('lucide-react-native', () => ({ Radio: 'Radio' }))
+vi.mock('lucide-react-native', () => ({ Activity: 'Activity' }))
 vi.mock('react-native', () => ({
   Animated: {
     Value: function Value() {
@@ -48,12 +48,12 @@ describe('mobile monitoring indicators', () => {
     renderer = null
   })
 
-  it('renders a static Radio for a monitoring agent', async () => {
+  it('renders a static Activity heartbeat for a monitoring agent', async () => {
     await act(async () => {
       renderer = create(createElement(AgentStateDot, { state: 'monitoring' }))
     })
 
-    expect(renderer?.root.findByType('Radio').props).toMatchObject({
+    expect(renderer?.root.findByType('Activity').props).toMatchObject({
       color: DESKTOP_WORKING_COLOR,
       size: 10
     })
@@ -61,14 +61,14 @@ describe('mobile monitoring indicators', () => {
     expect(animationLoop).not.toHaveBeenCalled()
   })
 
-  it('renders a static Radio for an all-monitoring workspace', async () => {
+  it('renders a static Activity heartbeat for an all-monitoring workspace', async () => {
     await act(async () => {
       renderer = create(
         createElement(AgentSpinner, { status: 'working', workingMode: 'monitoring' })
       )
     })
 
-    expect(renderer?.root.findByType('Radio').props).toMatchObject({
+    expect(renderer?.root.findByType('Activity').props).toMatchObject({
       color: DESKTOP_WORKING_COLOR,
       size: 12
     })

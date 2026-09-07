@@ -86,6 +86,28 @@ describe('Store', () => {
     expect(persisted.automations[0].baseBranch).toBeNull()
   })
 
+  it('returns the existing automation for a repeated creation key', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const input = {
+      creationKey: 'move-retry-1',
+      name: 'Retry-safe move',
+      prompt: 'Run checks',
+      agentId: 'claude' as const,
+      projectId: 'r1',
+      workspaceMode: 'new_per_run' as const,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    }
+
+    const first = store.createAutomation(input)
+    const retry = store.createAutomation({ ...input, name: 'Changed by a retry' })
+
+    expect(retry.id).toBe(first.id)
+    expect(store.listAutomations()).toHaveLength(1)
+  })
+
   it('persists session reuse only for existing-workspace automations', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())

@@ -36,10 +36,13 @@ import {
   getCandidateFactStatuses,
   getContextCount,
   getDirtyGitLabel,
-  getReviewPillTone,
   getWorkspaceCleanupBlockerLabels,
   shouldShowGitMetadataChip
 } from './workspace-cleanup-candidate-row-data'
+import {
+  getReviewStateIcon,
+  getReviewStateTone
+} from '@/components/github/review-state-presentation'
 import { StatusPill } from './workspace-cleanup-status-pill'
 import { WorkspaceCleanupMetadataChip } from './workspace-cleanup-metadata-chip'
 import { WorkspaceCleanupForgetLocallyButton } from './workspace-cleanup-forget-locally-button'
@@ -255,10 +258,10 @@ export const CandidateRow = React.memo(function CandidateRow({
             ) : null}
             {reviewInfo.label ? (
               <WorkspaceCleanupMetadataChip
-                icon={GitPullRequest}
+                icon={getReviewStateIcon(reviewInfo.state) ?? GitPullRequest}
                 label={getReviewTooltip(reviewInfo)}
                 value={reviewInfo.label}
-                tone={getReviewPillTone(reviewInfo)}
+                toneClassName={getReviewStateTone(reviewInfo.state)}
               />
             ) : null}
           </div>

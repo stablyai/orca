@@ -704,16 +704,33 @@ describe('runtime-status slice', () => {
     clearRuntimeCompatibilityCacheForTests()
   })
 
-  it('records null and returns false when a runtime refresh fails', async () => {
+  // Both directions of the failure-publication policy, from one failing probe. A user-initiated
+  // check publishes the outage it just observed; a caller holding live transport evidence must
+  // not, because status.get dials its own socket and its failure is unverifiable, not exited.
+  it.each([
+    { name: 'a user-initiated check', options: undefined, publishes: true },
+    { name: 'publishUnreachable defaulted', options: {}, publishes: true },
+    {
+      name: 'a caller that opted out of publishing',
+      options: { publishUnreachable: false },
+      publishes: false
+    }
+  ])('records null and returns false when a runtime refresh fails: $name', async (scenario) => {
     const getStatus = vi.fn().mockRejectedValue(new Error('closed'))
     stubRuntimeEnvironmentApi({ getStatus })
     const store = createSliceStore()
-    store.getState().setRuntimeEnvironmentStatus('env-a', { status: makeStatus(), checkedAt: 1 })
+    const cached = makeStatus()
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: cached, checkedAt: 1 })
 
-    const reachable = await store.getState().refreshRuntimeEnvironmentStatus('env-a')
+    const reachable = await store
+      .getState()
+      .refreshRuntimeEnvironmentStatus('env-a', undefined, scenario.options)
 
+    // The dial-answered contract the bridge's bounded retry chain reads is policy-independent.
     expect(reachable).toBe(false)
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBeNull()
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(
+      scenario.publishes ? null : cached
+    )
   })
 
   it('hydrates saved environments through the single-environment refresh path', async () => {

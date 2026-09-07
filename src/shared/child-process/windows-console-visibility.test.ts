@@ -27,6 +27,15 @@ const ALLOWLIST: readonly string[] = readAllowlist(
   join(__dirname, '__fixtures__', 'windows-console-visibility-allowlist.txt')
 )
 
+/**
+ * The true count of files spawning without `windowsHide`.
+ *
+ * May only ever be DECREASED, and only by fixing a call site. Set equality with
+ * the allowlist does not bound this: a swap (one file fixed and delisted, one
+ * new file added with its entry) satisfies both membership assertions.
+ */
+const UNHIDDEN_SPAWNER_PIN = 65
+
 const CHILD_PROCESS_IMPORT =
   /from\s+['"](?:node:)?child_process['"]|require\(\s*['"](?:node:)?child_process['"]/
 // Includes the promisified and renamed spellings -- `execAsync`, `spawnDetached`,
@@ -36,8 +45,9 @@ const SPAWN_CALL =
   /\b(?:spawn|spawnSync|spawnDetached|execFile|execFileSync|execFileAsync|execFileCb|exec|execSync|execAsync)\s*\(/g
 const SOURCE_ROOT = resolve(__dirname, '../..')
 /**
- * `run-process.ts` is the chokepoint: it sets windowsHide in `resolveSpawn`,
- * not at the call, so scanning it flags its own implementation.
+ * `run-process.ts` is the chokepoint: the flag comes from `resolveSpawn` (now
+ * in `spawn-resolution.ts`), not from the call, so scanning it flags its own
+ * implementation.
  *
  * `fork` is deliberately absent from SPAWN_CALL. Node forwards the option to
  * spawn at runtime, but `ForkOptions` does not declare it, so the two live
@@ -165,5 +175,19 @@ describe('direct child-process calls hide the Windows console', () => {
   it('carries no stale allowlist entry', () => {
     // A fixed file must leave the list, or the ratchet stops ratcheting.
     expect(ALLOWLIST.filter((path) => !offenders.includes(path))).toEqual([])
+  })
+
+  it('holds the offender count at the pin', () => {
+    expect(
+      offenders.length,
+      `${offenders.length} files spawn without windowsHide; the pin is ${UNHIDDEN_SPAWNER_PIN}. ` +
+        'Never raise the pin -- add the flag, or route the call through run-process.ts.'
+    ).toBeLessThanOrEqual(UNHIDDEN_SPAWNER_PIN)
+    // A pin left above reality re-opens room for the next unguarded spawn.
+    expect(
+      offenders.length,
+      `Only ${offenders.length} files spawn without windowsHide. Lower UNHIDDEN_SPAWNER_PIN to ` +
+        `${offenders.length} to keep the ground you just took.`
+    ).toBeGreaterThanOrEqual(UNHIDDEN_SPAWNER_PIN)
   })
 })
