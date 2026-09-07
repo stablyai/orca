@@ -309,11 +309,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       cached !== undefined &&
       cached.data !== null
     ) {
-      // Why: sidebar PR metadata can stay visible while a quiet refresh updates
-      // it; don't block card rendering on a quota-bound GitHub round trip. The
-      // stale-merged-head guard matches the fresh-return path: a worktree that
-      // advanced off a merged PR's head must revalidate synchronously rather
-      // than flash the now-stale merged card while a quiet refetch runs.
+      // Keep valid cached cards visible during refresh; an outdated merged head must await revalidation.
       queueHostedReviewRevalidation(requestKey, startRequest, inflightRequest)
       return cached.data
     }

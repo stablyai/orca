@@ -727,10 +727,7 @@ describe('hosted review slice', () => {
       })
     ).resolves.toEqual(mergedAtHead)
 
-    // Worktree advanced off the merged head. Even on the stale-while-revalidate
-    // fast path — where a fresh cache would normally be served immediately —
-    // the now-stale merged card must not flash; the read revalidates
-    // synchronously and reflects the branch-only result.
+    // Advancing the branch must bypass even the fresh stale-while-revalidate cache.
     await expect(
       store.getState().fetchHostedReviewForBranch('/repo', 'feature/merged', {
         staleWhileRevalidate: true,
