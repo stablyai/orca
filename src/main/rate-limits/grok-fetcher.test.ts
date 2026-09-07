@@ -25,6 +25,10 @@ vi.mock('node:fs', () => ({
 
 vi.mock('node:os', () => ({ homedir: () => '/home/test' }))
 
+vi.mock('./grok-reset-credit-client', () => ({
+  supplementGrokRateLimitResetCredits: vi.fn(async (limits: unknown) => limits)
+}))
+
 import { fetchGrokRateLimits } from './grok-fetcher'
 
 function jsonResponse(body: unknown, status = 200): Response {

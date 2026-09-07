@@ -16,7 +16,9 @@ import {
   billingUsageResult,
   mapMonthlyUsage,
   mapWeeklyCredits,
+  reportsAnyUsageScalar,
   resolveBillingConfig,
+  type GrokBillingConfig,
   type GrokBillingResponse
 } from './grok-billing-mappers'
 
@@ -96,7 +98,7 @@ async function fetchBillingData(
 }
 
 type GrokMonthlyFallbackOutcome =
-  | { kind: 'window'; window: RateLimitWindow | null }
+  | { kind: 'window'; window: RateLimitWindow | null; config: GrokBillingConfig }
   | { kind: 'result'; result: ProviderRateLimits }
 
 // Why: request failures propagate as 'error' (thrown errors reach the caller's
@@ -112,7 +114,7 @@ async function fetchMonthlyUsageFallback(
     return outcome
   }
   const config = outcome.data.config ?? outcome.data
-  return { kind: 'window', window: mapMonthlyUsage(config) }
+  return { kind: 'window', window: mapMonthlyUsage(config), config }
 }
 
 // Why: Orca never runs grok login; it only reads the session file the CLI updates.
@@ -167,6 +169,21 @@ export async function fetchGrokRateLimits(
         }
       )
     }
+    // Why: the credits view can already carry the monthly budget pair; that pair
+    // is a monthly window, so publish it as one rather than mislabelling it
+    // weekly — and skip the redundant second request.
+    const creditsMonthly = mapMonthlyUsage(config)
+    if (creditsMonthly) {
+      return await supplementGrokRateLimitResetCredits(
+        billingUsageResult({ monthly: creditsMonthly }, config, session),
+        session,
+        {
+          signal: options.signal,
+          previousRateLimitResetCredits: options.previousRateLimitResetCredits,
+          previousAuthAccountId: options.previousAuthAccountId
+        }
+      )
+    }
     // Why: some unified-billing accounts expose only a monthly included budget;
     // their credits view omits creditUsagePercent, so read the default view.
     const fallback = await fetchMonthlyUsageFallback(session, options.signal)
@@ -184,7 +201,11 @@ export async function fetchGrokRateLimits(
         }
       )
     }
-    return result('unavailable', 'Grok billing response did not include credit usage')
+    // Why: an account that reports spend fields but no computable percentage is
+    // not a quota-less plan — say the usage is unknown instead of implying zero.
+    return reportsAnyUsageScalar(config) || reportsAnyUsageScalar(fallback.config)
+      ? result('unavailable', 'Grok did not report a usage percentage for this account')
+      : result('unavailable', 'Grok billing response did not include credit usage')
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Grok usage request failed')
   }

@@ -87,6 +87,10 @@ function emitsExplicitZeroScalar(config: GrokBillingConfig): boolean {
   return usageScalars(config).some((value) => parseMoneyVal(value) === 0)
 }
 
+export function reportsAnyUsageScalar(config: GrokBillingConfig): boolean {
+  return usageScalars(config).some((value) => parseMoneyVal(value) !== null)
+}
+
 function resolveWeeklyPercent(config: GrokBillingConfig): number | null {
   const reported = config.creditUsagePercent
   if (typeof reported === 'number' && Number.isFinite(reported)) {
