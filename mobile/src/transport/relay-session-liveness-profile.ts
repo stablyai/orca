@@ -33,15 +33,21 @@ export function createRelaySessionLivenessWatchdog(args: {
     shouldIdleProbe: () => args.isForeground?.() ?? true,
     sendProbe: args.sendProbe,
     onTimeout: (evidence: LivenessTimeoutEvidence) => {
-      args.onLog?.({
-        id: args.nextLogId(),
-        ts: Date.now(),
-        level: 'error',
-        code: 'liveness-timeout',
-        path: 'relay',
-        message: 'Relay health check failed',
-        detail: `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`
-      })
+      // Why: the watchdog terminates the session right after this returns. A sink
+      // that throws must not keep a dead relay 'connected'.
+      try {
+        args.onLog?.({
+          id: args.nextLogId(),
+          ts: Date.now(),
+          level: 'error',
+          code: 'liveness-timeout',
+          path: 'relay',
+          message: 'Relay health check failed',
+          detail: `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`
+        })
+      } catch {
+        // Diagnostics only.
+      }
     },
     terminate: args.terminate
   })
