@@ -41,7 +41,7 @@ const BACKUP_EXISTING_STUB_SCRIPT =
 // The marker is written first so stale-lock recovery only removes a stub this helper wrote.
 const STAGE_SCRIPT =
   `mkdir -p /usr/local/bin && : > ${WSL_STUB_STAGED_MARKER} && ` +
-  `printf '#!/bin/sh\\necho GOLDEN_STUB_AGENT_READY\\nexec sleep 3600\\n' > ${WSL_STUB_PATH} && ` +
+  `printf '#!/bin/sh\\nif [ "$1" = app-server ]; then echo "error: unrecognized subcommand app-server" >&2; exit 2; fi\\necho GOLDEN_STUB_AGENT_READY\\nexec sleep 3600\\n' > ${WSL_STUB_PATH} && ` +
   `chmod 0755 ${WSL_STUB_PATH}`
 
 // The marker is written before the link so a crashed run over-reports rather than leaks a link.

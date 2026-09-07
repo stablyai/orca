@@ -131,7 +131,18 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'message:prompt_suggestion': 'status-chrome',
     'message:system:mirror_error': 'error-surface',
     'message:system:informational': 'timeline-substantive',
-    'message:conversation_reset': 'status-chrome'
+    'message:conversation_reset': 'status-chrome',
+    // A `started`/`completed`/`cancelled` state for one queued command uuid and
+    // nothing else; the CLI keeps it out of its own transcript too. A state that
+    // reads as a failure still surfaces, via the payload check in classify.
+    'message:command_lifecycle': 'status-chrome',
+    // The turn-complete signal: lifecycle, never a transcript row. Error subtypes
+    // included — the turn's assistant frames already carry any user-facing text.
+    'message:result:success': 'status-chrome',
+    'message:result:error_during_execution': 'status-chrome',
+    'message:result:error_max_turns': 'status-chrome',
+    'message:result:error_max_budget_usd': 'status-chrome',
+    'message:result:error_max_structured_output_retries': 'status-chrome'
   }
 } as const satisfies ProviderFrameClassificationTable
 
@@ -186,7 +197,12 @@ function hasProviderError(payload: unknown): boolean {
 const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = {
   // The `thread/compacted` notification is already chrome; its item form is the
   // same event and must not read as a mysterious opcode row.
-  contextCompaction: 'status-chrome'
+  contextCompaction: 'status-chrome',
+  // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
+  // nothing at all. Every other item type this build does not model carries text
+  // a user would want (review output, an image path, hook prompt text, subagent
+  // progress), so those keep their visible fallback row.
+  sleep: 'status-chrome'
 }
 
 function notificationKind(kind: string): string {

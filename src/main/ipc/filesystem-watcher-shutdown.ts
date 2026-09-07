@@ -1,6 +1,7 @@
 import { disposeWatcherProcess } from './parcel-watcher-process'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { trackDetachedLocalUnsubscribe } from './filesystem-watcher-listener-lifecycle'
+import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 
 /** Tear down all watchers on app shutdown. */
 export async function closeAllWatchers(): Promise<void> {
@@ -57,9 +58,7 @@ export async function closeAllWatchers(): Promise<void> {
   }
 
   for (const [rootKey, root] of watcherLifecycleState.watchedRoots) {
-    if (root.batch.timer) {
-      clearTimeout(root.batch.timer)
-    }
+    cancelLocalBatchFlush(root)
     await trackDetachedLocalUnsubscribe(rootKey, root).catch(() => undefined)
   }
   watcherLifecycleState.watchedRoots.clear()

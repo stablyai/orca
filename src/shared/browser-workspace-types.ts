@@ -2,6 +2,7 @@ export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string
   title: string
+  faviconUrl?: string | null
   lastVisitedAt: number
   visitCount: number
 }
@@ -50,6 +51,13 @@ export type BrowserViewportOverride = {
   height: number
   deviceScaleFactor: number
   mobile: boolean
+}
+
+export type BrowserViewportScrollState = {
+  scrollLeft: number
+  scrollTop: number
+  maxScrollLeft: number
+  maxScrollTop: number
 }
 
 /**

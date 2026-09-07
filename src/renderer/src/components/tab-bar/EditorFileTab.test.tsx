@@ -345,6 +345,15 @@ function findMenuItemByText(node: unknown, label: string): ReactElementLike {
   return item
 }
 
+/** Picks Rename, then fires the close-autofocus that actually opens the input. */
+function selectRenameFromMenu(node: unknown): void {
+  ;(findMenuItemByText(node, 'Rename').props.onSelect as () => void)()
+  const content = findElementsByType(node, 'DropdownMenuContent')[0]!
+  ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
+    preventDefault: vi.fn()
+  })
+}
+
 function findSpanByText(node: unknown, label: string): ReactElementLike {
   const span = findElementsByType(node, 'span').find(
     (candidate) =>
@@ -401,7 +410,7 @@ describe('EditorFileTab rename menu', () => {
     // isUntitled; the tab menu must let users rename the screenshot-style
     // "untitled-N.md" files directly.
     expect(renameItem.props.disabled).toBe(false)
-    ;(renameItem.props.onSelect as () => void)()
+    selectRenameFromMenu(firstRender)
 
     const secondRender = expandNode((await renderEditorFileTab(file, onActivate)).element)
     const inputs = findElementsByType(secondRender, 'input')
@@ -425,9 +434,8 @@ describe('EditorFileTab rename menu', () => {
   it('ignores IME composition Enter before renaming the editor file tab', async () => {
     const file = baseFile()
     const firstRender = expandNode((await renderEditorFileTab(file)).element)
-    const renameItem = findMenuItemByText(firstRender, 'Rename')
 
-    ;(renameItem.props.onSelect as () => void)()
+    selectRenameFromMenu(firstRender)
 
     const secondRender = expandNode((await renderEditorFileTab(file)).element)
     const input = findElementsByType(secondRender, 'input')[0]
@@ -457,9 +465,8 @@ describe('EditorFileTab rename menu', () => {
   it('does not re-commit when unmounting the rename input emits multiple blur events', async () => {
     const file = baseFile()
     const firstRender = expandNode((await renderEditorFileTab(file)).element)
-    const renameItem = findMenuItemByText(firstRender, 'Rename')
 
-    ;(renameItem.props.onSelect as () => void)()
+    selectRenameFromMenu(firstRender)
 
     const secondRender = expandNode((await renderEditorFileTab(file)).element)
     const input = findElementsByType(secondRender, 'input')[0]

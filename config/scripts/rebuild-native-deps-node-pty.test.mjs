@@ -1,8 +1,11 @@
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { removeTreeSync } from '../../src/shared/windows-transient-lock-removal.ts'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
+  gitLineEndingEnv,
+  initGitWorkTree,
   mkTempProject,
   runRebuildScript,
   writeFakeElectronRebuild,
@@ -13,7 +16,8 @@ import {
   writeFakeWindowsProcessTreeWithNodeAddonApi,
   writeFakeWindowsRegistry,
   writeNodePtyPatchFile,
-  writePatchedNodePtyBuildArtifacts
+  writePatchedNodePtyBuildArtifacts,
+  writeWindowsProcessTreePatchFile
 } from './rebuild-native-deps-test-fixtures.mjs'
 
 describe('rebuild-native-deps patched node-pty rebuild', () => {
@@ -44,7 +48,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         )
         expect(existsSync(rebuildLogPath)).toBe(false)
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -80,7 +84,92 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         )
       ).toBe('// napi.h\n')
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
+    }
+  })
+
+  const commandLineSourcePath = (projectDir) =>
+    join(
+      projectDir,
+      'node_modules',
+      '@vscode',
+      'windows-process-tree',
+      'src',
+      'process_commandline.cc'
+    )
+
+  // Why inside a git work tree: `git apply` run under one prefixes patch paths
+  // with the cwd-relative prefix, silently skips what does not match, and still
+  // exits 0. The package dir is always under the project root in production, so
+  // a fixture in %TEMP% alone would pass while the real repair did nothing.
+  //
+  // Why both line-ending modes: the patch is stored LF while upstream ships this
+  // source CRLF, so whether the pre-image matches depends on `core.autocrlf` --
+  // and under `false`, Git's own built-in default, it did not. The repair blinds
+  // git to the repo, so that value comes from global config, i.e. from whichever
+  // option the developer's installer wrote. Pinning both makes the case cover the
+  // host that breaks rather than the host that happens to run it.
+  for (const autocrlf of ['false', 'true']) {
+    it(`repairs an un-applied command-line patch in a work tree (autocrlf=${autocrlf})`, () => {
+      const projectDir = mkTempProject()
+
+      try {
+        initGitWorkTree(projectDir)
+        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+        writeFakeElectronRebuild(projectDir)
+        writeFakeNodePtyConptyPayload(projectDir, 'x64')
+        writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir, {
+          commandLinePatchApplied: false
+        })
+        writeWindowsProcessTreePatchFile(projectDir)
+
+        const result = runRebuildScript(
+          projectDir,
+          {
+            npm_config_platform: 'win32',
+            npm_config_arch: 'x64',
+            ...gitLineEndingEnv(autocrlf)
+          },
+          ['--platform=win32', '--arch=x64', '--force']
+        )
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(readFileSync(commandLineSourcePath(projectDir), 'utf8')).toContain(
+          'kProcessCommandLineInformation'
+        )
+      } finally {
+        removeTreeSync(projectDir)
+      }
+    })
+  }
+
+  // Why fail rather than build: an unpatched command-line reader compiles fine
+  // and then opens every process with PROCESS_VM_READ to walk its PEB, which is
+  // the primitive the patch exists to remove.
+  it('refuses a Windows rebuild when the command-line patch cannot be applied', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      initGitWorkTree(projectDir)
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir)
+      writeFakeNodePtyConptyPayload(projectDir, 'x64')
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir, { commandLinePatchApplied: false })
+      // No patch file, so the repair has nothing to apply.
+
+      const result = runRebuildScript(
+        projectDir,
+        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('process_commandline.cc')
+      expect(readFileSync(commandLineSourcePath(projectDir), 'utf8')).not.toContain(
+        'kProcessCommandLineInformation'
+      )
+    } finally {
+      removeTreeSync(projectDir)
     }
   })
 
@@ -104,7 +193,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
       expect(readFileSync(join(runtimeDir, 'conpty.dll'), 'utf8')).toBe('conpty.dll x64')
       expect(readFileSync(join(runtimeDir, 'OpenConsole.exe'), 'utf8')).toBe('OpenConsole.exe x64')
     } finally {
-      rmSync(projectDir, { recursive: true, force: true })
+      removeTreeSync(projectDir)
     }
   })
 
@@ -132,7 +221,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
         expect(rebuildCall.onlyModules).toEqual(['windows-native-registry'])
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -162,7 +251,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
         expect(rebuildCall.onlyModules).toEqual(['node-pty'])
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -193,7 +282,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         expect(rebuildCall.ignoreModules).toEqual(['cpu-features'])
         expect(rebuildCall.force).toBe(true)
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -221,7 +310,7 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         )
         expect(existsSync(rebuildLogPath)).toBe(false)
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
@@ -251,8 +340,41 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         expect(rebuildCall.onlyModules).toEqual(['node-pty'])
         expect(rebuildCall.force).toBe(true)
       } finally {
-        rmSync(projectDir, { recursive: true, force: true })
+        removeTreeSync(projectDir)
       }
     }
   )
+
+  // The binary this step produces is the one copied into the packaged app. The
+  // relay build checks its own artifact and ensure-native-runtime checks what it
+  // loads; nothing checked this one, so a rebuild that quietly emitted the
+  // upstream reader shipped. Both non-clean states have to fail, which is the
+  // caller the tri-state was missing: after a rebuild that reported success, an
+  // absent binary is a broken build, not an absence to shrug at.
+  for (const [addon, expected] of [
+    ['unpatched', 'still imports ReadProcessMemory'],
+    ['none', 'is not there']
+  ]) {
+    it(`fails a Windows rebuild that leaves ${addon} windows-process-tree bytes`, () => {
+      const projectDir = mkTempProject()
+
+      try {
+        writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+        writeFakeElectronRebuild(projectDir, { addon })
+        writeFakeNodePtyConptyPayload(projectDir, 'x64')
+        writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir)
+
+        const result = runRebuildScript(
+          projectDir,
+          { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+          ['--platform=win32', '--arch=x64', '--force']
+        )
+
+        expect(result.status).not.toBe(0)
+        expect(result.stderr).toContain(expected)
+      } finally {
+        removeTreeSync(projectDir)
+      }
+    })
+  }
 })

@@ -198,6 +198,15 @@ export function adjudicateAgentSessionRestart(args: {
     return { disposition: 'conflicted', reason: 'claim conflicted before restart' }
   }
   if (lease.ownerProcess === null) {
+    if (lease.settlementRetryRequired) {
+      // A watched provider death can leave terminal rows unsettled. This latch is not owner
+      // uncertainty and must survive restart until the journal settlement is durably accepted.
+      return {
+        disposition: 'recovering',
+        stage: 'recovering',
+        reason: 'provider-exit settlement requires retry'
+      }
+    }
     if (lease.reservedSpawnToken === null && lease.claimStatus !== 'reserved') {
       // Why: the spawn token is minted before the child and is the only thing a child could be
       // carrying. With no owner and no token nothing can hold this lease, so it is already free —

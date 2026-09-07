@@ -3,7 +3,7 @@ import type { GlobalSettings } from '../shared/global-settings-types'
 import type { Repo } from '../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 import { isFolderRepo } from '../shared/repo-kind'
-import { computeWorkspaceRoot, getWorktreePathSettings } from './ipc/worktree-logic'
+import { computeWorkspaceRootAsync, getWorktreePathSettings } from './ipc/worktree-logic'
 import { getWorktreeMirrorDistro } from './project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from './local-project-runtime-resolution'
 
@@ -27,7 +27,7 @@ export async function prepareLocalWorktreeRootForRepo(
   }
 
   try {
-    const root = computeWorkspaceRoot(
+    const root = await computeWorkspaceRootAsync(
       repo.path,
       getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
     )

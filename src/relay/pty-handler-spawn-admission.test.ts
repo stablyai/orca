@@ -1,5 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import * as ptyShellUtils from './pty-shell-utils'
+import * as processTableSnapshotReader from '../shared/process-table-snapshot-reader'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -32,7 +37,7 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { MAX_RELAY_PTY_SESSIONS, PtyHandler, formatNodePtyUnavailableMessage } from './pty-handler'
+import { MAX_RELAY_PTY_SESSIONS, PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 import {
   beginPtyHandlerTest,
@@ -87,6 +92,80 @@ describe('PtyHandler', () => {
     expect(notifMethods).not.toContain('pty.ackData')
   })
 
+  it('rescans the process table for a close decision but not for a poll', async () => {
+    const hasChildren = vi.mocked(ptyChildProcessInspection.processHasChildren)
+    const snapshot = vi
+      .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
+      .mockResolvedValue({
+        rows: [
+          {
+            pid: mockPtyInstance.pid,
+            ppid: 1,
+            pgid: mockPtyInstance.pid,
+            tpgid: mockPtyInstance.pid,
+            stat: 'S+',
+            tty: '/dev/pts/1',
+            startTime: '1',
+            command: 'bash'
+          }
+        ],
+        capturedAgeMs: 0
+      })
+    const { id } = (await spawnPty({ cols: 80, rows: 24 })) as { id: string }
+    hasChildren.mockClear()
+
+    await dispatcher.callRequest('pty.inspectProcess', { id })
+    // The poll shares the TTL-cached process table used for the foreground lookup,
+    // so it does not fork a separate child-process probe.
+    expect(snapshot).toHaveBeenCalledOnce()
+    expect(hasChildren).not.toHaveBeenCalled()
+
+    await dispatcher.callRequest('pty.hasChildProcesses', { id })
+    // This RPC only ever gates a destructive decision (window close, workspace
+    // cleanup), so it has to see a child started inside the 500ms window.
+    expect(hasChildren).toHaveBeenLastCalledWith(mockPtyInstance.pid, { fresh: true })
+  })
+
+  it('does not re-enter the shared capture after the evidence read gave up on it', async () => {
+    // The budget is worthless if the compatibility fields answer by joining the very capture the
+    // evidence read just abandoned: `inspectPtyChildProcesses` and `getForegroundProcessName`
+    // read the same TTL-shared table with no budget of their own, so on a slow host this call
+    // would still block for the whole capture -- once, then once per managed PTY in the listing.
+    const snapshot = vi
+      .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
+      .mockRejectedValue(new Error('process table unreadable: capture_over_budget'))
+    const hasChildren = vi.spyOn(ptyChildProcessInspection, 'inspectPtyChildProcesses')
+    const foregroundName = vi.spyOn(ptyShellUtils, 'getForegroundProcessName')
+
+    const { id } = (await spawnPty({ cols: 80, rows: 24 })) as { id: string }
+    hasChildren.mockClear()
+    foregroundName.mockClear()
+
+    const inspection = (await dispatcher.callRequest('pty.inspectProcess', { id })) as {
+      hasChildProcesses: boolean
+      childProcessEvidence?: string
+      foregroundProcessEvidence?: { verdict: string; reason?: string }
+    }
+
+    expect(snapshot).toHaveBeenCalled()
+    expect(hasChildren).not.toHaveBeenCalled()
+    // The verdict the gates already handle, reached promptly instead of late.
+    expect(inspection.foregroundProcessEvidence?.verdict).toBe('unverifiable')
+    expect(inspection.foregroundProcessEvidence?.reason).toBe('process_table_unreadable')
+    // The honest verdict rather than a fabricated negative, reached without the wait. The
+    // compatibility boolean still spells `unverifiable` as `false` for older clients.
+    expect(inspection.childProcessEvidence).toBe('unverifiable')
+    expect(inspection.hasChildProcesses).toBe(false)
+
+    const listing = (await dispatcher.callRequest('pty.listProcesses', {})) as {
+      id: string
+      title: string
+    }[]
+
+    expect(foregroundName).not.toHaveBeenCalled()
+    expect(listing.find((entry) => entry.id === id)?.title).toBeTruthy()
+  })
+
   it('rejects strict process inspection for a missing relay PTY', async () => {
     await expect(dispatcher.callRequest('pty.inspectProcess', { id: 'missing' })).rejects.toThrow(
       'terminal_gone'
@@ -95,7 +174,13 @@ describe('PtyHandler', () => {
 
   it('spawns a PTY and returns an id', async () => {
     const result = await spawnPty({ cols: 80, rows: 24 })
-    expect(result).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })
+    // shellReadyArmed rides every spawn reply, false included: absent has to keep
+    // meaning "host predates the field", not "host did not arm".
+    expect(result).toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
   })
@@ -114,7 +199,11 @@ describe('PtyHandler', () => {
       agentSessionCreateOperationId: operationId
     })
 
-    expect(replayed).toEqual({ id: testPtyId(1), incarnationId: expect.any(String) })
+    expect(replayed).toEqual({
+      id: testPtyId(1),
+      incarnationId: expect.any(String),
+      shellReadyArmed: false
+    })
     expect(mockPtySpawn).toHaveBeenCalledOnce()
     expect(mockPtyInstance.kill).not.toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
@@ -222,24 +311,6 @@ describe('PtyHandler', () => {
     expect(mockPtySpawn).toHaveBeenCalledOnce()
   })
 
-  it('hedges both causes on Linux and offers the build-tools remedy nowhere else', () => {
-    const linux = formatNodePtyUnavailableMessage('linux')
-    expect(linux).toContain('Remote terminals are unavailable')
-    // Conditional, not asserted: a host with build-essential can still hit an ABI/Node-version flip.
-    expect(linux).toMatch(/If it is missing the C\/C\+\+ build tools/)
-    expect(linux).toContain('python3')
-    expect(linux).toContain('version and architecture match the installed binding')
-
-    // Windows/macOS ship node-pty prebuilds, so "install make/g++/python3" sends the user chasing nothing.
-    for (const platform of ['win32', 'darwin'] as const) {
-      const message = formatNodePtyUnavailableMessage(platform)
-      expect(message).toContain('Remote terminals are unavailable')
-      expect(message).not.toContain('build tools')
-      expect(message).not.toContain('python3')
-      expect(message).toMatch(/reconnect/i)
-    }
-  })
-
   it('normalizes a missing native binding as degraded node-pty availability', async () => {
     mockPtySpawn.mockImplementationOnce(() => {
       throw new Error(
@@ -251,6 +322,30 @@ describe('PtyHandler', () => {
       'Remote terminals are unavailable'
     )
     expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('keeps the load error it was handed instead of replacing it with guesses', async () => {
+    // #17830: the user got three remedies for four possible faults and could verify none.
+    // The relay must carry what it was actually told, and must not prescribe a toolchain
+    // install it never probed for.
+    const thrown =
+      'Failed to load native module: conpty.node, checked: build/Release, prebuilds/win32-x64'
+    mockPtySpawn.mockImplementationOnce(() => {
+      throw new Error(thrown)
+    })
+
+    const message = await dispatcher.callRequest('pty.spawn', {}).then(
+      () => '',
+      (error: Error) => error.message
+    )
+
+    expect(message).toContain(thrown)
+    expect(message).not.toContain('install make, a C++ compiler, and python3')
+    // Nothing here established a cause — the relay's node-pty directory is not on disk in
+    // this harness — so per docs/reference/ssh-execution-boundary.md it must say so rather
+    // than pick a diagnosis. Every message still names the host, for the bug report.
+    expect(message).toContain('could not establish why')
+    expect(message).toMatch(/Host: linux\/\w+, .*Node v[\d.]+ \(ABI \d+\)/)
   })
 
   it('preserves unrelated node-pty spawn failures', async () => {
@@ -385,6 +480,28 @@ describe('PtyHandler', () => {
     expect(beginWorktreePtySpawn).toHaveBeenCalledWith(expect.any(String))
     expect(beginWorktreePtySpawn.mock.calls[0][0]).not.toBe('')
     expect(finishCreation).toHaveBeenCalledTimes(1)
+  })
+
+  // requireRelaySpawnCwd strips the `::workspace:<uuid>` instance suffix to get the real folder
+  // path, so a fence keyed on the unstripped id would guard a directory no spawn ever uses --
+  // exactly what routing both through one resolver is supposed to make impossible.
+  it('fences a folder-workspace instance id on the directory the spawn will use', async () => {
+    const workspaceRoot = mkdtempSync(join(tmpdir(), 'orca-relay-fence-'))
+    try {
+      const finishCreation = vi.fn()
+      const beginWorktreePtySpawn = vi.fn((_operationPath: string) => finishCreation)
+      handler.setWorktreeRemovalCoordinator({ beginWorktreePtySpawn })
+
+      await dispatcher.callRequest('pty.spawn', {
+        worktreeId: `repo-1::${workspaceRoot}::workspace:b1706d92-9d05-4932-8360-01e00b54305a`
+      })
+
+      const fencedPaths = beginWorktreePtySpawn.mock.calls.map((call) => call[0])
+      expect(fencedPaths).toContain(workspaceRoot)
+      expect(fencedPaths.some((fenced) => fenced.includes('::workspace:'))).toBe(false)
+    } finally {
+      rmSync(workspaceRoot, { recursive: true, force: true })
+    }
   })
 
   it('fences both sibling worktree identity and removing cwd with rollback', async () => {

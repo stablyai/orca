@@ -4,8 +4,10 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
+import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
+const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
 export const OXLINT_SCANS = [
   {
     // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
@@ -24,6 +26,13 @@ export const OXLINT_SCANS = [
 ]
 
 const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
+  [
+    'react-doctor(no-adjust-state-on-prop-change)',
+    new Set([
+      'src/renderer/src/components/use-task-page-github-issue-draft.ts',
+      'src/renderer/src/components/use-task-page-jira-creation-state.ts'
+    ])
+  ],
   [
     'react-doctor(no-derived-state-effect)',
     new Set([
@@ -65,6 +74,10 @@ function splitNullDelimited(output) {
   return output.split('\0').filter(Boolean)
 }
 
+export function isRootCodeQualityPath(file) {
+  return !ROOT_CODE_QUALITY_IGNORED_PREFIXES.some((prefix) => file.startsWith(prefix))
+}
+
 function resolveBase(root, requestedBase) {
   for (const candidate of [
     requestedBase,
@@ -99,7 +112,11 @@ export function collectAddedLineRanges(root, requestedBase) {
   const rangesByFile = new Map()
 
   for (const file of changedFiles) {
-    if (!SOURCE_FILE_PATTERN.test(file) || !existsSync(path.join(root, file))) {
+    if (
+      !isRootCodeQualityPath(file) ||
+      !SOURCE_FILE_PATTERN.test(file) ||
+      !existsSync(path.join(root, file))
+    ) {
       continue
     }
     const diff = runGit(root, ['diff', '--unified=0', '--no-color', comparisonBase, '--', file])
@@ -111,7 +128,11 @@ export function collectAddedLineRanges(root, requestedBase) {
 
   for (const file of untrackedFiles) {
     const absolutePath = path.join(root, file)
-    if (!SOURCE_FILE_PATTERN.test(file) || !existsSync(absolutePath)) {
+    if (
+      !isRootCodeQualityPath(file) ||
+      !SOURCE_FILE_PATTERN.test(file) ||
+      !existsSync(absolutePath)
+    ) {
       continue
     }
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length
@@ -278,11 +299,12 @@ function isSuppressedDiagnostic(diagnostic, root) {
 }
 
 function runOxlintScan(root, scan, files) {
-  const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-  const result = spawnSync(pnpm, ['exec', 'oxlint', ...scan.args, '--format', 'json', ...files], {
+  const { command, prefixArgs } = resolveOxlintInvocation(root)
+  const result = spawnSync(command, [...prefixArgs, ...scan.args, '--format', 'json', ...files], {
     cwd: root,
     encoding: 'utf8',
-    maxBuffer: 128 * 1024 * 1024
+    maxBuffer: 128 * 1024 * 1024,
+    windowsHide: true
   })
   if (result.error) {
     throw result.error

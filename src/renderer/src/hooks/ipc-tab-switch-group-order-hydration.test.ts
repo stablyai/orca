@@ -108,4 +108,14 @@ describe('tab-cycle chord against a group whose tabOrder is still hydrating', ()
     expect(handleSwitchTerminalTab(1)).toBe(true)
     expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
   })
+
+  it('uses the worktree order when keyboard activation sees an empty group projection', () => {
+    const store = stateWithGroupOrder([])
+    store.unifiedTabsByWorktree = { [WT]: [] }
+    store.tabsByWorktree = { [WT]: [{ id: 'term-1' }, { id: 'term-2' }] }
+    getStateMock.mockReturnValue(store)
+
+    expect(handleSwitchTerminalTab(1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+  })
 })

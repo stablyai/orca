@@ -53,7 +53,7 @@ export function useGitLabPrimaryActions(
         setActionInFlight(null)
       }
     }
-  }, [item, repoSelector, mountedRef, handleRefresh])
+  }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleReopen = useCallback(async (): Promise<void> => {
     if (!item || !repoSelector || item.type !== 'mr') {
@@ -86,7 +86,7 @@ export function useGitLabPrimaryActions(
         setActionInFlight(null)
       }
     }
-  }, [item, repoSelector, mountedRef, handleRefresh])
+  }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleMerge = useCallback(async (): Promise<void> => {
     if (!item || !repoSelector || item.type !== 'mr') {
@@ -119,7 +119,7 @@ export function useGitLabPrimaryActions(
         setActionInFlight(null)
       }
     }
-  }, [item, repoSelector, mountedRef, handleRefresh])
+  }, [handleRefresh, item, mountedRef, repoSelector, setActionInFlight])
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     const bodyState = getCommentBodySubmitState(commentDraft)
@@ -173,7 +173,16 @@ export function useGitLabPrimaryActions(
         setCommentSubmitting(false)
       }
     }
-  }, [commentDraft, item, itemId, repoSelector, mountedRef, handleRefresh])
+  }, [
+    commentDraft,
+    handleRefresh,
+    item,
+    itemId,
+    mountedRef,
+    repoSelector,
+    setCommentDraftState,
+    setCommentSubmitting
+  ])
 
   return { handleClose, handleMerge, handleReopen, handleSubmitComment }
 }

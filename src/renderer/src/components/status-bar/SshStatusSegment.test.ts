@@ -20,7 +20,16 @@ describe('connectRuntimeHostForNavigation', () => {
 
     expect(fetchRepos).toHaveBeenCalledWith('windows-2')
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(1, 'repo-a', {
+      executionHostId: 'runtime:windows-2',
+      suppressRemoteLineageRefresh: true
+    })
+    expect(fetchWorktrees).toHaveBeenNthCalledWith(2, 'repo-b', {
+      executionHostId: 'runtime:windows-2',
+      suppressRemoteLineageRefresh: true
+    })
     expect(fetchLineage).toHaveBeenCalledOnce()
+    expect(fetchLineage).toHaveBeenCalledWith({ executionHostId: 'runtime:windows-2' })
   })
 
   it('does not load a catalog when the server is unreachable', async () => {

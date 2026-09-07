@@ -51,6 +51,26 @@ export type NativeChatToolCallBlock = {
   type: 'tool-call'
   name: string
   input: unknown
+  /** Provider lifecycle when the structured app-server path can supply it. */
+  state?: 'running' | 'completed' | 'failed'
+}
+
+/** One resolved hunk from a provider's edit result, carrying true file ranges. */
+export type NativeChatEditPatchHunk = {
+  oldStart: number
+  oldLines: number
+  newStart: number
+  newLines: number
+  /** Signed unified rows, as the provider emitted them. */
+  lines: string[]
+}
+
+/** Hunks the provider resolved against the real file before reporting the edit.
+ *  Claude supplies these on its edit results; Codex resolves equivalently before
+ *  sending, so its patch already carries ranges and needs no companion. */
+export type NativeChatEditPatch = {
+  filePath?: string
+  hunks: NativeChatEditPatchHunk[]
 }
 
 /** The result returned to the agent for a prior tool call. */
@@ -58,6 +78,8 @@ export type NativeChatToolResultBlock = {
   type: 'tool-result'
   output: string
   isError?: boolean
+  /** Present only for edit tools whose result reported resolved hunks. */
+  editPatch?: NativeChatEditPatch
 }
 
 /** A reference to an image, by local path or remote URL. Exactly the field

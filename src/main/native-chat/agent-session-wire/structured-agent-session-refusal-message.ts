@@ -17,6 +17,9 @@ function ownerDescription(record: AgentSessionRecord): string {
 
 function latchedMessage(record: AgentSessionRecord): string {
   const owner = record.lease.ownerProcess
+  if (record.lease.settlementRetryRequired) {
+    return 'The provider exited, but Orca has not finished settling the terminal chat state. Reopen this chat to retry the settlement.'
+  }
   if (record.lease.claimStatus === 'conflicted') {
     return owner
       ? `Two runtimes claimed this session and Orca cannot yet prove that ${ownerDescription(record)} has exited. Quit that process, or reopen this chat once it is gone, and Orca will take the session back.`

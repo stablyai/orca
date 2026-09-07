@@ -2,19 +2,27 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionHandoffStatus } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionHandoffRequest,
+  AgentSessionHandoffStatus
+} from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   reserveStoredAgentSessionHandoffOwner,
   setStoredAgentSessionHandoffStage,
   stopStoredAgentSessionOwnerForHandoff
 } from '../../runtime/agent-session-handoff-record-transitions'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { StructuredAgentSessionHandoffCoordinator } from './structured-agent-session-handoff'
+import { createStructuredHandoffFlowContext } from './structured-agent-session-handoff-flow-context'
+import { handoffStructuredSessionToTui } from './structured-agent-session-handoff-forward'
 import type {
   StructuredAgentSessionHandoffTransport,
   StructuredTuiOwner
 } from './structured-agent-session-handoff-types'
+
+const journals = createTrackedJournalOpener()
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-handoff'
@@ -181,6 +189,19 @@ function createCoordinator(): StructuredAgentSessionHandoffCoordinator {
   })
 }
 
+function request(operation: string): AgentSessionHandoffRequest {
+  return {
+    envelope: {
+      sessionId: SESSION,
+      clientOperationId: operation,
+      expectedRuntimeFence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
+      payloadFingerprint: 'test-handoff'
+    },
+    direction: 'to-tui',
+    mode: 'now'
+  }
+}
+
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-handoff-'))
   operations = 0
@@ -193,7 +214,7 @@ beforeEach(async () => {
   stopRecoveredOwner = vi.fn(async () => undefined)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
   await establishNativeOwner()
-  journal = await openAgentSessionJournal({
+  journal = await journals.open({
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -214,7 +235,81 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
+})
+
+describe('structured session handoff failure handling', () => {
+  it('parks a stopped native cleanup failure in manual recovery without launching TUI', async () => {
+    const operation = operationId()
+    const cleanupError = new Error('journal drain failed')
+    const retainOwner = vi.fn()
+    const releaseOwner = vi.fn()
+    const context = createStructuredHandoffFlowContext({
+      deps: {
+        store,
+        claimKeyId: 'key-1',
+        transport: {
+          hostLabel: 'Test host',
+          launchTui,
+          reproveTuiOwner,
+          recoverTuiOwner: async (record) => makeTuiOwner(record.lease.runtimeFence, 'recovered'),
+          stopRecoveredOwner,
+          closeTuiOwner,
+          waitForTuiExit,
+          waitForTuiIdleOrExit,
+          tuiStatus: () => 'idle',
+          stopFailedTuiLaunch
+        },
+        session: () => ({
+          journal,
+          fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1
+        }),
+        suspendNative: vi.fn(async () => ({
+          state: 'stopped-cleanup-failed' as const,
+          error: cleanupError
+        })),
+        acquireNative: vi.fn(async () => {
+          throw new Error('native acquisition should not run')
+        }),
+        acquireNativeStop: (_sessionId, turnId) => acquireNativeStop(turnId),
+        importTuiHistory: vi.fn(async () => undefined),
+        prepareTuiHistoryCatchup,
+        recoverTuiHistoryCatchup,
+        activateTuiHistoryCatchup,
+        stopTuiHistoryCatchup,
+        publish: (_sessionId, status) => statuses.push(status),
+        schedule: async (_sessionId, task) => task(),
+        now: () => NOW
+      },
+      owner: () => undefined,
+      retainOwner,
+      releaseOwner,
+      setStatus: (_sessionId, status) => statuses.push(status),
+      requireRecord: (sessionId) => {
+        const record = store.getRecord(sessionId)
+        if (!record) {
+          throw new Error('missing record')
+        }
+        return record
+      }
+    })
+
+    await expect(handoffStructuredSessionToTui(context, request(operation), false)).rejects.toBe(
+      cleanupError
+    )
+
+    expect(launchTui).not.toHaveBeenCalled()
+    expect(retainOwner).not.toHaveBeenCalled()
+    expect(releaseOwner).not.toHaveBeenCalled()
+    expect(store.getRecord(SESSION)?.lease).toMatchObject({
+      runtimeKind: 'native',
+      claimStatus: 'released',
+      handoffStage: 'manual-recovery',
+      handoffOperationId: operation,
+      ownerProcess: null
+    })
+  })
 })
 
 // The direction-agnostic restore path is the crash-during-acquisition recovery every
@@ -335,7 +430,7 @@ describe('structured session ownership recovery on restore', () => {
           : { outcome: 'pid-absent' },
       now: NOW + 1_000
     })
-    journal = await openAgentSessionJournal({
+    journal = await journals.open({
       identity: {
         sessionId: SESSION,
         workspaceId: 'workspace-1',

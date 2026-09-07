@@ -10,7 +10,14 @@ const guidePath = join(projectDir, 'skill-guides', 'orca-cli.md')
 const stubPath = join(projectDir, 'skills', 'orca-cli', 'SKILL.md')
 // Why: orchestration and orca-emulator also ship hybrid stubs now, so their version-sensitive
 // command guidance lives in the guide sources — read the cross-guide worktree-id contract there.
-const orchestrationSkillPath = join(projectDir, 'skill-guides', 'orchestration.md')
+// Why: the worktree-selector rule lives in the orchestration placement reference, not the kernel.
+const orchestrationPlacementPath = join(
+  projectDir,
+  'skill-guides',
+  'orchestration',
+  'references',
+  'placement-and-remote.md'
+)
 const emulatorSkillPath = join(projectDir, 'skill-guides', 'orca-emulator.md')
 
 function readSkill(path = guidePath) {
@@ -18,6 +25,24 @@ function readSkill(path = guidePath) {
 }
 
 describe('orca CLI skill guidance', () => {
+  it('keeps external browser routing at the OS/page boundary', () => {
+    const skill = readSkill(guidePath)
+    const description = skill.replace(/\s+/gu, ' ')
+
+    expect(description).toContain(
+      'Use Computer Use for external browser windows, webviews, or desktop UI only when the task requires OS/window-level control such as focus, menus, dialogs, coordinates, or screenshots.'
+    )
+    expect(description).toContain(
+      "`orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages."
+    )
+    expect(skill).toContain(
+      'For external Chrome/Safari/webviews or Orca app chrome/settings, use the Computer Use skill/tool only when the task requires OS/window-level control'
+    )
+    expect(skill).toContain(
+      "Use `orca-cli` for Orca's embedded pages and a page-automation tool such as Playwright or CDP for external pages"
+    )
+  })
+
   it('keeps independent worktree lineage separate from Git base selection', () => {
     const skill = readSkill()
 
@@ -77,7 +102,7 @@ describe('orca CLI skill guidance', () => {
 
   it('requires full worktree ids across bundled agent guidance', () => {
     const cliSkill = readSkill()
-    const orchestrationSkill = readSkill(orchestrationSkillPath)
+    const orchestrationSkill = readSkill(orchestrationPlacementPath)
     const emulatorSkill = readSkill(emulatorSkillPath)
 
     for (const skill of [cliSkill, orchestrationSkill, emulatorSkill]) {

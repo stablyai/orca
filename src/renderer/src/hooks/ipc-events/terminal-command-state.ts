@@ -25,8 +25,12 @@ export function resolveTerminalPresentation(data: {
   return undefined
 }
 
-export function focusTerminalInitiatedTab(tabId: string, leafId?: string | null): void {
-  if (!focusRuntimeTerminalSurface(tabId, leafId)) {
+export function focusTerminalInitiatedTab(
+  tabId: string,
+  leafId?: string | null,
+  worktreeId?: string
+): void {
+  if (!focusRuntimeTerminalSurface(tabId, leafId, worktreeId)) {
     focusTerminalTabSurface(tabId, leafId)
   }
 }

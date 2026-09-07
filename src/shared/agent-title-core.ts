@@ -7,6 +7,7 @@ import {
 } from './agent-name-token-match'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
@@ -54,7 +55,7 @@ export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 // Reserve the whole quarter-circle block so a later frame addition cannot regress this.
 export const QUARTER_CIRCLE_SPINNER_RE = /[\u25d0-\u25d3]/g
 
-export function isGeminiTerminalTitle(title: string): boolean {
+function computeIsGeminiTerminalTitle(title: string): boolean {
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||
@@ -79,6 +80,11 @@ export function isGeminiTerminalTitle(title: string): boolean {
   }
   return titleHasAgentName(title, 'gemini')
 }
+
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const isGeminiTerminalTitle: (title: string) => boolean = memoizeTitleClassification(
+  computeIsGeminiTerminalTitle
+)
 
 export function isPiTerminalTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)

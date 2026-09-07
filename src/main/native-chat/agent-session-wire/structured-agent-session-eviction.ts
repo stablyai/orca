@@ -25,7 +25,10 @@ export type StructuredAgentSessionEvictionContext = {
   hasProviderChild?: boolean
   eventSink: DeferredStructuredAgentSessionEventSink
   adapter: StructuredAgentSessionAdapter
-  forget: () => void
+  /** Closes the session's journal handle and drops the map entry. Async and
+   *  awaited: `close()` is ordered behind queued writes, and a delete that
+   *  returns while the close is still queued leaves nothing to retry. */
+  forget: () => Promise<void>
   /** Drops the cached sink so a later attach mints a fresh one. */
   discardSink: () => void
   /** Hands the lease back now that this host's child is proven gone. No-ops when the record is
@@ -56,7 +59,15 @@ export const STRUCTURED_AGENT_SESSION_EVICTION_STEPS: readonly StructuredAgentSe
         }
       }
     },
-    { name: 'drain-published', run: (context) => context.eventSink.drained() },
+    {
+      name: 'drain-published',
+      run: async (context) => {
+        const barrier = await context.eventSink.drained()
+        if (!barrier.ok) {
+          throw barrier.error
+        }
+      }
+    },
     { name: 'stop-publishing', run: (context) => context.eventSink.unbind() },
     { name: 'close-sink', run: (context) => context.eventSink.close() },
     // Why: the runtime caches one sink per session id and hands the SAME instance to the next

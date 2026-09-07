@@ -198,7 +198,8 @@ export function seedClaudeLeadTurnFromPersistedStatus(
     }
     if (status.payload.lastAssistantMessage) {
       state.lastToolByPaneKey.set(paneKey, {
-        lastAssistantMessage: status.payload.lastAssistantMessage
+        lastAssistantMessage: status.payload.lastAssistantMessage,
+        lastAssistantMessageIsToolOutput: status.payload.lastAssistantMessageIsToolOutput
       })
     }
   }
@@ -238,7 +239,10 @@ export function clearClaudePendingWaitForAgent(
   state.lastToolByPaneKey.set(
     paneKey,
     previousTool?.lastAssistantMessage
-      ? { lastAssistantMessage: previousTool.lastAssistantMessage }
+      ? {
+          lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
+        }
       : {}
   )
 }
@@ -260,7 +264,10 @@ export function clearClaudeAnsweredQuestionWait(
   state.lastToolByPaneKey.set(
     paneKey,
     previousTool?.lastAssistantMessage
-      ? { lastAssistantMessage: previousTool.lastAssistantMessage }
+      ? {
+          lastAssistantMessage: previousTool.lastAssistantMessage,
+          lastAssistantMessageIsToolOutput: previousTool.lastAssistantMessageIsToolOutput
+        }
       : {}
   )
   const resolved = resolveClaudePaneStatus(state, paneKey, restored)

@@ -68,6 +68,12 @@ describe('WebSocketTransport under transient packet loss', () => {
       client.once('open', resolve)
       client.once('error', reject)
     })
+    // Heartbeats intentionally begin after authentication; stamp this synthetic peer as authenticated
+    // so the liveness oracle exercises the production heartbeat path rather than pre-auth expiry.
+    const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
+    for (const serverSocket of wss.clients) {
+      transport.setClientId(serverSocket, 'test-client')
+    }
 
     // Bounded by counted probe events, never by elapsed time.
     await vi.waitFor(() => expect(closed || probesReceived >= swallowedProbe + 2).toBe(true), {

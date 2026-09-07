@@ -260,4 +260,89 @@ describe('useNativeChatComposerAttachments', () => {
     )
     act(() => probe.root.unmount())
   })
+
+  it('settles a pending image attachment in place', async () => {
+    const probe = await renderProbe('pty-1')
+    let id: string | null = null
+    act(() => {
+      id = probe.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    expect(id).toBeTruthy()
+    expect(probe.latest().imageAttachments).toMatchObject([
+      { id, path: '', previewUrl: 'blob:preview-1', pending: true }
+    ])
+
+    act(() => {
+      probe.latest().resolvePendingImageAttachment(id as string, '/tmp/resolved.png', 'conn-1')
+    })
+
+    expect(probe.latest().imageAttachments).toMatchObject([
+      { id, path: '/tmp/resolved.png', previewUrl: 'blob:preview-1', connectionId: 'conn-1' }
+    ])
+    expect(probe.latest().imageAttachments[0]?.pending).toBeUndefined()
+    act(() => probe.root.unmount())
+  })
+
+  it('drops just the targeted pending chip', async () => {
+    const probe = await renderProbe('pty-1')
+    let firstId: string | null = null
+    let secondId: string | null = null
+    act(() => {
+      firstId = probe.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    act(() => {
+      secondId = probe.latest().beginPendingImageAttachment('blob:preview-2')
+    })
+
+    act(() => {
+      probe.latest().dropPendingImageAttachment(firstId as string)
+    })
+
+    expect(probe.latest().imageAttachments).toMatchObject([
+      { id: secondId, previewUrl: 'blob:preview-2', pending: true }
+    ])
+    act(() => probe.root.unmount())
+  })
+
+  it('excludes a pending chip from the scope cache while a settled chip persists', async () => {
+    const probe = await renderProbe('pty-1')
+    let pendingId: string | null = null
+    act(() => {
+      pendingId = probe.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    await act(async () => {
+      probe.latest().attachResolvedPaths(['/tmp/settled.png'])
+    })
+
+    const cached = readNativeChatAttachmentCache('pty-1')
+    expect(cached.some((attachment) => attachment.id === pendingId)).toBe(false)
+    expect(cached).toMatchObject([{ path: '/tmp/settled.png' }])
+    expect(cached[0]?.previewUrl).toBeUndefined()
+    act(() => probe.root.unmount())
+  })
+
+  it('revokes a blob: preview URL on removal but not a data: preview URL', async () => {
+    const probe = await renderProbe('pty-1')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL')
+    let blobId: string | null = null
+    act(() => {
+      blobId = probe.latest().beginPendingImageAttachment('blob:preview-1')
+    })
+    act(() => {
+      probe.latest().beginPendingImageAttachment('data:image/png;base64,AAAA')
+    })
+
+    act(() => {
+      probe.latest().dropPendingImageAttachment(blobId as string)
+    })
+    expect(revoke).toHaveBeenCalledWith('blob:preview-1')
+
+    // Only the remaining data: chip is left to clear; revoke must not fire again.
+    revoke.mockClear()
+    act(() => {
+      probe.latest().clearImageAttachments()
+    })
+    expect(revoke).not.toHaveBeenCalled()
+    act(() => probe.root.unmount())
+  })
 })

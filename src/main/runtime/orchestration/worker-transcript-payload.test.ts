@@ -28,7 +28,47 @@ describe('worker transcript wire bounds', () => {
       alt: 'screenshot'
     })
     expect(JSON.stringify(result)).not.toContain('C:\\\\Users')
+    expect(result.limited).toBe(true)
     expect(result.warnings).toContain('Local image paths were omitted from transcript output.')
+  })
+
+  it('marks text, block-count, and tool-input clipping as limited', () => {
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-clipped',
+        role: 'assistant',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          { type: 'text', text: 'x'.repeat(5_000) },
+          { type: 'tool-call', name: 'Write', input: { content: 'y'.repeat(5_000) } },
+          ...Array.from({ length: 6 }, () => ({ type: 'text' as const, text: 'extra' }))
+        ]
+      }
+    ])
+
+    expect(result.limited).toBe(true)
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        'Some transcript blocks were omitted from oversized messages.',
+        'Oversized transcript text was clipped.',
+        'Oversized tool input was clipped.'
+      ])
+    )
+  })
+
+  it('keeps complete bounded messages unlimited', () => {
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-complete',
+        role: 'assistant',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: 'complete' }]
+      }
+    ])
+
+    expect(result).toMatchObject({ limited: false, warnings: [] })
   })
 
   it('keeps fallback identifiers stable without exposing the transcript path', () => {

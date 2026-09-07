@@ -1,4 +1,5 @@
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
@@ -58,8 +59,15 @@ export function startParkedPtyWatcher(args: {
   ) {
     return
   }
-  const handlePtyExit = (_code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
+  const handlePtyExit = (code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
     useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
+    // A negative code is a synthetic loss sentinel, not a death certificate.
+    // Preserve the tab so host shutdown/reconnect cannot be mistaken for an
+    // explicit close by either this watcher or the orphan sweep.
+    const provenExit = isProvenProcessExit(code)
+    if (!provenExit) {
+      useAppStore.getState().markUnverifiedPtyLoss(tab.id)
+    }
     // Why: detach drops the session-bound exit observer (it pinned the disposed
     // pane's xterm buffers), so this sidecar is the sole owner of a parked PTY's
     // exit. A sleep/shutdown exit must keep the tab AND its layout — revival
@@ -68,6 +76,15 @@ export function startParkedPtyWatcher(args: {
     if (!hadPrimary && isSleepPreservedParkedPtyExit(ptyId)) {
       entry.disposersByPtyId.get(ptyId)?.()
       entry.disposersByPtyId.delete(ptyId)
+      return
+    }
+    if (!provenExit) {
+      entry.disposersByPtyId.get(ptyId)?.()
+      entry.disposersByPtyId.delete(ptyId)
+      discardPreHandlerPtyState(ptyId)
+      if (entry.disposersByPtyId.size === 0 && parkedWatchersByTabId.get(tab.id) === entry) {
+        parkedWatchersByTabId.delete(tab.id)
+      }
       return
     }
     if (entry.disposersByPtyId.size > 1) {

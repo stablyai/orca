@@ -35,6 +35,32 @@ describe('createRemoteRuntimePtyTransport', () => {
     resetRemoteRuntimeTransport()
   })
 
+  it('does not publish a spawn callback while reconnecting a mirrored web terminal', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtySpawn = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-tab-1',
+      leafId: 'pane:1',
+      onPtySpawn
+    })
+
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'remote:env-1@@terminal-old',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+
+    expect(result).toMatchObject({
+      id: 'remote:env-1@@terminal-1',
+      isReattach: true
+    })
+    expect(onPtySpawn).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+  })
+
   it('resolves a HUB-native SSH PTY wake hint to its runtime terminal handle', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
@@ -498,7 +524,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     // Why: no red xterm error — retire quietly and let the next session-tabs
     // snapshot drive respawn/removal.
-    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1'))
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', -1))
     expect(transport.getPtyId()).toBeNull()
     expect(onError).not.toHaveBeenCalled()
   })

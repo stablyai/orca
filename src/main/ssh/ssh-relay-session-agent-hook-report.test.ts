@@ -6,7 +6,10 @@ import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { muxRequestMock } = vi.hoisted(() => ({ muxRequestMock: vi.fn() }))
+const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
+  muxRequestMock: vi.fn(),
+  openConsumerSessionMock: vi.fn()
+}))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
@@ -16,12 +19,18 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn().mockResolvedValue('')
 }))
 
+vi.mock('./ssh-pty-consumer-session', () => ({
+  openSshPtyConsumerSession: openConsumerSessionMock
+}))
+
 vi.mock('./ssh-channel-multiplexer', () => {
   return {
     SshChannelMultiplexer: class MockSshChannelMultiplexer {
       notify = vi.fn()
+      notifyWithSettlement = vi.fn()
       request = muxRequestMock
       onNotification = vi.fn().mockReturnValue(() => {})
+      onNotificationByMethod = vi.fn().mockReturnValue(() => {})
       onRequest = vi.fn().mockReturnValue(() => {})
       onDispose = vi.fn().mockReturnValue(() => {})
       dispose = vi.fn()
@@ -82,6 +91,11 @@ describe('SshRelaySession agent hook install report', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
+      mode: 'legacy-fallback',
+      clientInstanceId: options.clientInstanceId,
+      serverBuildId: 'test-relay-build'
+    }))
     muxRequestMock.mockReset()
     muxRequestMock.mockImplementation(async (method: string) =>
       method === 'session.resolveHome'
@@ -116,7 +130,7 @@ describe('SshRelaySession agent hook install report', () => {
         ? { resolvedPath: '/home/orca' }
         : method === 'preflight.detectAgents'
           ? { agents: ['claude', 'codex'] }
-        : { home: '/home/orca', installers: statuses.length, errors: 1, statuses }
+          : { home: '/home/orca', installers: statuses.length, errors: 1, statuses }
     )
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {} as SshConnection
@@ -148,7 +162,7 @@ describe('SshRelaySession agent hook install report', () => {
         ? { resolvedPath: '/home/orca' }
         : method === 'preflight.detectAgents'
           ? { agents: ['codex'] }
-        : { home: '/home/orca', installers: statuses.length, errors: 0, statuses }
+          : { home: '/home/orca', installers: statuses.length, errors: 0, statuses }
     )
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {} as SshConnection

@@ -15,11 +15,14 @@ import { RelayDispatcherCapacitySignals } from './dispatcher-capacity-signals'
 
 export abstract class RelayDispatcherFrameCodec extends RelayDispatcherCapacitySignals {
   protected handleFrame(client: RelayClient, frame: DecodedFrame): void {
+    // Before the KeepAlive early return: a keepalive is the only proof a quiet client is still there.
+    client.lastReceivedAt = Date.now()
     if (frame.id > client.highestReceivedSeq) {
       client.highestReceivedSeq = frame.id
     }
 
     if (frame.type === MessageType.KeepAlive) {
+      client.keepaliveObserved = true
       return
     }
 

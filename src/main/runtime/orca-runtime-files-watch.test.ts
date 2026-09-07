@@ -87,7 +87,8 @@ function createRuntimeFileCommands(rootPath: string) {
         id: 'wt-1',
         repoId: 'repo-1',
         path: rootPath
-      }
+      },
+      executionHostId: 'local'
     })),
     resolveRuntimeGitTarget: vi.fn(),
     openFile: vi.fn()
@@ -560,7 +561,7 @@ describe('RuntimeFileCommands file watching', () => {
           repoId: 'repo-1',
           path: '/remote/repo'
         },
-        connectionId: 'ssh-1'
+        executionHostId: 'ssh:ssh-1'
       })),
       resolveRuntimeGitTarget: vi.fn(),
       openFile: vi.fn()

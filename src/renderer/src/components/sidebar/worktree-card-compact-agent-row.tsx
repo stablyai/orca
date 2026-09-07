@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -9,25 +9,11 @@ import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
-
-function formatShortTimeAgo(ts: number, now: number): string {
-  const delta = now - ts
-  if (delta < 60_000) {
-    return 'now'
-  }
-  const minutes = Math.floor(delta / 60_000)
-  if (minutes < 60) {
-    return `${minutes}m`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h`
-  }
-  return `${Math.floor(hours / 24)}d`
-}
+import { formatShortTimeAgo } from '@/lib/short-time-ago'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -37,9 +23,18 @@ function getCompactAgentPrimary(
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
-export function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
+export function getCompactAgentSecondary(
+  agent: DashboardAgentRowData,
+  now: number,
+  lastAssistantMessageOverride?: string
+): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
+  }
+  // Why: the only honest thing to say about a pane Orca still holds but no longer hears
+  // from is how long the silence has run; the user supplies the meaning.
+  if (agent.state === 'unverifiable') {
+    return agentNoUpdateLabel(agent.entry, now)
   }
   // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
   if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
@@ -49,7 +44,8 @@ export function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
   if (toolPreview) {
     return toolPreview
   }
-  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim()
+  const lastAssistantMessage =
+    lastAssistantMessageOverride ?? agent.entry.lastAssistantMessage?.trim()
   if (lastAssistantMessage) {
     return lastAssistantMessage
   }
@@ -122,7 +118,26 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
-  const secondary = getCompactAgentSecondary(agent)
+  // Keep a live row's last assistant line stable while status/tool payloads
+  // briefly omit the hook-only field between updates. Committed in an effect so a
+  // discarded concurrent render can't pin an uncommitted message and no extra render
+  // pass runs per streaming ping; a zero stateStartedAt has no per-turn identity, so
+  // those rows never cache.
+  const turn = agent.entry.stateStartedAt
+  const currentMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  const turnHoldable = agent.state === 'working' && turn > 0
+  const heldMessageRef = useRef<{ turn: number; message: string } | null>(null)
+  useEffect(() => {
+    if (turnHoldable && currentMessage) {
+      heldMessageRef.current = { turn, message: currentMessage }
+    } else if (!turnHoldable) {
+      heldMessageRef.current = null
+    }
+  }, [turnHoldable, turn, currentMessage])
+  const held = heldMessageRef.current
+  const stableMessage =
+    turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
+  const secondary = getCompactAgentSecondary(agent, now, stableMessage)
   // Why: sidebar truncation must preserve the passive-vs-active distinction.
   const leadingText = dotState === 'monitoring' ? secondary : primary
   const trailingText =

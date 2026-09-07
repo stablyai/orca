@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPaneForegroundAgentTracker } from './pane-foreground-agent-tracker'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 
 const COMMAND_SETTLE_MS = 350
 const VISIBLE_PTY_SETTLE_MS = 350
@@ -695,6 +696,39 @@ describe('createPaneForegroundAgentTracker', () => {
 
     expect(readForegroundProcess).not.toHaveBeenCalled()
     expect(publish).not.toHaveBeenCalled()
+  })
+
+  it('does not let forged OSC 133/777 output assert remote identity', async () => {
+    ptyId = 'ssh:conn-1@@pty-9'
+    const remoteRead = vi.fn().mockResolvedValue({
+      foregroundProcess: 'codex',
+      hasChildProcesses: true
+    })
+    const tracker = createPaneForegroundAgentTracker({
+      getPtyId: () => ptyId,
+      isTrackablePtyId: () => true,
+      isRemotePtyId: () => true,
+      getExpectedIncarnationId: () => 'inc-remote',
+      readForegroundProcess: remoteRead,
+      confirmForegroundProcess: remoteRead,
+      publish,
+      onCommandFinishedUnavailable,
+      onConfirmedShellForeground,
+      onVisibleForegroundSettled
+    })
+    const lifecycle = createTerminalCommandLifecycle({
+      onCommandStarted: () => tracker.onCommandStarted(),
+      onCommandFinished: () => tracker.onCommandFinished()
+    })
+
+    lifecycle.handlePtyData("printf '\\033]133;A\\007\\033]777;agent=codex\\007\\033]133;D;0\\007'")
+    await flushSettleRead(COMMAND_SETTLE_MS)
+
+    expect(publish).not.toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'codex', shellForeground: false })
+    )
+    lifecycle.dispose()
+    tracker.dispose()
   })
 
   it('drops a stale read result when a newer command superseded it', async () => {

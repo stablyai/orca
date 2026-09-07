@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { ProviderRequestId } from '../../shared/detected-worktree-provider-contract'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import {
   listWorktreesMock,
@@ -443,7 +447,76 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  it('refuses to retire metadata for non-SSH hosts and unowned repos', async () => {
+  // Runtime-host rows are exempt from gcStaleWorktreeMeta exactly as SSH ones are, so a paired
+  // client needs this path to ever drop them (#17776).
+  it('retires runtime-host metadata an authoritative scan proved gone', async () => {
+    const runtimeHostId = toRuntimeExecutionHostId('env-1')
+    const runtimeRepo = {
+      id: 'repo-1',
+      path: '/home/orca/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: runtimeHostId
+    }
+    const metaById: Record<string, ReturnType<typeof makeWorktreeMeta>> = {
+      'repo-1::/home/orca/deleted': makeWorktreeMeta({ hostId: runtimeHostId }),
+      'repo-1::/home/orca/other-host': makeWorktreeMeta({
+        hostId: toSshExecutionHostId('target-a')
+      })
+    }
+    store.getRepos.mockReturnValue([runtimeRepo])
+    store.getProjectHostSetups.mockReturnValue([])
+    store.getAllWorktreeMeta.mockReturnValue(metaById)
+    store.removeWorktreeMeta.mockImplementation((worktreeId: string) => {
+      delete metaById[worktreeId]
+    })
+
+    const forgotten = await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
+      repoId: runtimeRepo.id,
+      executionHostId: runtimeHostId,
+      worktreeIds: ['repo-1::/home/orca/deleted', 'repo-1::/home/orca/other-host']
+    })
+
+    // The row stamped to another host needs that host's own scan, not this one's.
+    expect(forgotten).toEqual({ forgottenWorktreeIds: ['repo-1::/home/orca/deleted'] })
+    expect(store.removeWorktreeMeta).toHaveBeenCalledExactlyOnceWith(
+      'repo-1::/home/orca/deleted',
+      runtimeHostId
+    )
+  })
+
+  // A repo that reaches its checkouts over SSH is not the runtime host's to condemn. The refusal
+  // comes from `findExactRepoOwner`: a runtime `executionHostId` beside a `connectionId` is
+  // contradictory ownership evidence, so no owner resolves at all.
+  it('refuses to retire a connection-backed repo under a runtime host id', async () => {
+    const runtimeHostId = toRuntimeExecutionHostId('env-1')
+    store.getRepos.mockReturnValue([
+      {
+        id: 'repo-1',
+        path: '/home/orca/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        executionHostId: runtimeHostId,
+        connectionId: 'target-a'
+      }
+    ])
+    store.getAllWorktreeMeta.mockReturnValue({
+      'repo-1::/home/orca/deleted': makeWorktreeMeta({ hostId: runtimeHostId })
+    })
+
+    expect(
+      await handlers['worktrees:forgetRemovedForExecutionHost'](null, {
+        repoId: 'repo-1',
+        executionHostId: runtimeHostId,
+        worktreeIds: ['repo-1::/home/orca/deleted']
+      })
+    ).toEqual({ forgottenWorktreeIds: [] })
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('refuses to retire metadata for non-executing hosts and unowned repos', async () => {
     const sshRepo = {
       id: 'repo-1',
       path: '/remote/repo-a',

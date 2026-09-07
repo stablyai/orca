@@ -10,6 +10,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
+import { cancelStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 
@@ -17,7 +18,7 @@ function reportStructuredSessionCloseError(error: unknown): void {
   toast.error(
     translate(
       'components.native-chat.structuredSessionCloseFailed',
-      'Could not close this Codex chat'
+      'Could not close this chat session'
     ),
     { description: error instanceof Error ? error.message : String(error) }
   )
@@ -120,8 +121,12 @@ export function useTabGroupTabCloseCommands({
         worktreeId
       )
       if (item.contentType === 'agent-session') {
+        cancelStructuredAgentLaunch(worktreeId, item.entityId)
         // Why: the structured session lives on the host, so the local tab close must also
         // retire the host's canonical row or it reappears on the next sync.
+        // Cancel a still-reconciling create before closing its owner; otherwise a missing
+        // post-create snapshot is mistaken for an unknown outcome and retried after close.
+        cancelStructuredAgentLaunch(worktreeId, item.entityId)
         const target = getActiveRuntimeTarget({
           activeRuntimeEnvironmentId: runtimeEnvironmentId
         })
@@ -193,6 +198,7 @@ export function useTabGroupTabCloseCommands({
           worktreeId
         )
         if (item.contentType === 'agent-session') {
+          cancelStructuredAgentLaunch(worktreeId, item.entityId)
           const target = getActiveRuntimeTarget({
             activeRuntimeEnvironmentId: runtimeEnvironmentId
           })

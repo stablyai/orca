@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-publication'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
@@ -29,17 +29,19 @@ function publishPage(
 function createPublisher(): {
   publisher: ClientHostedBrowserRowPublisher
   registry: RuntimeBrowserPageRegistry
+  listClientPages: ReturnType<typeof vi.fn>
   events: ClientHostedBrowserRowsEvent[]
   livePlacements: Set<string>
   detach(): void
   attach(): void
 } {
   const registry = new RuntimeBrowserPageRegistry()
+  const listClientPages = vi.fn((worktreeId?: string) => registry.listPages(worktreeId))
   const events: ClientHostedBrowserRowsEvent[] = []
   const livePlacements = new Set<string>()
   let attached = true
   const publisher = new ClientHostedBrowserRowPublisher({
-    listClientPages: (worktreeId) => registry.listPages(worktreeId),
+    listClientPages,
     hasLivePlacement: (browserPageId) => livePlacements.has(browserPageId),
     resolveDeviceName: () => 'Studio',
     getEmitter: () =>
@@ -52,6 +54,7 @@ function createPublisher(): {
   return {
     publisher,
     registry,
+    listClientPages,
     events,
     livePlacements,
     detach: () => {
@@ -156,6 +159,32 @@ describe('ClientHostedBrowserRowPublisher', () => {
     publisher.publishAll()
 
     expect(events.map((event) => event.worktreeId).sort()).toEqual(['wt-1', 'wt-2'])
+  })
+
+  // Why: the bare announcement used to scan the registry once per workspace after its initial
+  // inventory (65 calls for 64 workspaces); grouping that inventory keeps the refresh to one scan.
+  it('scans the registry once when publishing all workspaces', () => {
+    const { publisher, registry, events, livePlacements, listClientPages } = createPublisher()
+    const worktreeIds = Array.from({ length: 64 }, (_, index) => `wt-${index}`)
+    for (const [index, worktreeId] of worktreeIds.entries()) {
+      const browserPageId = `page-${index}`
+      publishPage(registry, browserPageId, worktreeId)
+      livePlacements.add(browserPageId)
+    }
+
+    publisher.publishAll()
+
+    expect(listClientPages).toHaveBeenCalledTimes(1)
+    expect(listClientPages).toHaveBeenCalledWith()
+    expect(events.map((event) => event.worktreeId)).toEqual(worktreeIds)
+    expect(events).toHaveLength(worktreeIds.length)
+    for (const [index, event] of events.entries()) {
+      expect(event.rows).toHaveLength(1)
+      expect(event.rows[0]).toMatchObject({
+        browserPageId: `page-${index}`,
+        worktreeId: worktreeIds[index]
+      })
+    }
   })
 
   // Why: a bare republish must still be able to retract rows the renderer is still showing.

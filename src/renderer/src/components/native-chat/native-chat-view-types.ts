@@ -37,11 +37,12 @@ export type NativeChatBridgeViewProps = NativeChatOrchestrationProps & {
 export type NativeChatStructuredViewProps = NativeChatOrchestrationProps & {
   mode: 'structured'
   tabId: string
+  groupId?: string
   sessionId: string
   target: RuntimeClientTarget
   agent: AgentType
   isVisible: boolean
-  allowFileUriLinks: boolean
+  contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
 export type NativeChatResolvedViewProps = NativeChatOrchestrationProps & {
