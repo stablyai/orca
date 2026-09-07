@@ -96,6 +96,8 @@ async function acquired(
     readProcessStartTime: async () => 1_700_000_000_000,
     captureTurnProcesses: async () => ({ platform: 'win32', identities: new Map() }),
     terminateTurnProcesses: async () => true,
+    // No translator here, so no echo ever arrives; keep the fallback grace short.
+    dispatchEchoAckTimeoutMs: 25,
     ...processControl
   })
   await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-9' })
@@ -232,19 +234,25 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
   it('accepts an immediate resend after verified interruption', async () => {
     let nextTurn = 0
     const codex = fakeCodex()
-    codex.routes['turn/start'] = () => ({ turn: { id: `turn-${++nextTurn}` } })
+    codex.routes['turn/start'] = () => {
+      const turn = { id: `turn-${++nextTurn}` }
+      codex.connections[0].handlers.onNotification?.('turn/started', { threadId: THREAD_ID, turn })
+      return { turn }
+    }
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
       return {}
     }
     const adapter = await acquired(codex)
 
-    await adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: 'client-1',
-      body: USER_MESSAGE,
-      fence: 7
-    })
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'client-1',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toMatchObject({ state: 'accepted', providerIdentity: { turnId: 'turn-1' } })
     await adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
 
     await expect(

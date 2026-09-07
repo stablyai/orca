@@ -225,6 +225,14 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       }),
       ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+      onDispatchSettledLate: (settlement) => {
+        void host?.settleLateDispatch(settlement).catch((error) =>
+          deps.onError?.({
+            scope: `structured-agent-session-late-settlement:${settlement.sessionId}`,
+            error
+          })
+        )
+      },
       onEvent: (event) => {
         if (event.type !== 'ended' || !('cause' in event) || event.cause !== 'unexpected-exit') {
           return

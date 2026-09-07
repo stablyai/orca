@@ -52,7 +52,19 @@ describe('structured session runtime provider-exit wiring', () => {
             return { thread: { id: (params as { threadId: string }).threadId } }
           }
           if (method === 'turn/start') {
-            return { turn: { id: `turn-${++turn}` } }
+            const turnId = `turn-${++turn}`
+            // Codex echoes the accepted message back as a live userMessage item
+            // carrying the client id; dispatch settles its identity on it.
+            handlers.onNotification?.('item/started', {
+              threadId: 'thread-runtime-exit',
+              turnId,
+              item: {
+                type: 'userMessage',
+                id: `item-user-${turn}`,
+                clientId: (params as { clientUserMessageId?: string }).clientUserMessageId ?? null
+              }
+            })
+            return { turn: { id: turnId } }
           }
           if (method === 'model/list') {
             return {

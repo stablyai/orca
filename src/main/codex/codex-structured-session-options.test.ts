@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import {
   applyCodexStructuredSessionOption,
   readCodexStructuredSessionOptions,
@@ -30,6 +31,8 @@ function optionSession(request: CodexAppServerConnection['request']): CodexSessi
     options: new Map(),
     reportedOptions: { model: 'gpt-live', effort: 'high' },
     turnIdWaiters: [],
+    activeTurnIds: new Set<string>(),
+    dispatchEchoes: createCodexDispatchEchoes(),
     translator: null
   }
 }

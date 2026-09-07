@@ -9,6 +9,7 @@ import {
   CodexStructuredSessionAdapter,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { handleCodexSessionExit } from './codex-structured-session-close'
 import type { CodexSession } from './codex-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -100,6 +101,8 @@ describe('Codex structured session close lifecycle', () => {
       options: new Map(),
       reportedOptions: {},
       turnIdWaiters: [],
+      activeTurnIds: new Set<string>(),
+      dispatchEchoes: createCodexDispatchEchoes(),
       translator
     } as CodexSession
     const sessions = new Map([['session-1', session]])

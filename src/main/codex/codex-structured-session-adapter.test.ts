@@ -4,12 +4,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import { CodexAppServerRequestError } from './codex-app-server-connection'
-import type {
-  CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  CodexAppServerLaunch,
-  openCodexAppServerConnection
-} from './codex-app-server-connection'
+import type { openCodexAppServerConnection } from './codex-app-server-connection'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../shared/structured-session-marker'
@@ -21,7 +16,7 @@ import {
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
 
-const THREAD_ID = 'thread-abc'
+import { fakeCodex, THREAD_ID } from './fake-codex-app-server'
 
 function identityFor(sessionId: string): AgentSessionJournalIdentity {
   return {
@@ -37,66 +32,6 @@ const USER_MESSAGE: AgentJournalMessageItem = {
   kind: 'message',
   role: 'user',
   blocks: [{ type: 'text', text: 'ship it' }]
-}
-
-type Route = (params: Record<string, unknown> | undefined) => unknown
-
-// `closed` is readonly on the real connection; the fake flips it so a test can
-// kill the child at a chosen moment.
-type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
-  closed: boolean
-  launch: CodexAppServerLaunch
-  handlers: CodexAppServerConnectionHandlers
-  calls: { method: string; params?: Record<string, unknown> }[]
-  replies: { id: number | string; result?: unknown; code?: number; message?: string }[]
-  closeCount: number
-}
-
-/** Stands in for a live `codex app-server`: every RPC is answered from `routes`,
- *  and the test drives Codex's own traffic through `handlers`. */
-function fakeCodex(routes: Record<string, Route> = {}): {
-  connections: FakeConnection[]
-  openConnection: typeof openCodexAppServerConnection
-  routes: Record<string, Route>
-} {
-  const connections: FakeConnection[] = []
-  const openConnection = (async (launch, handlers = {}) => {
-    const connection: FakeConnection = {
-      launch,
-      handlers,
-      calls: [],
-      replies: [],
-      closeCount: 0,
-      pid: 4321,
-      closed: false,
-      request: async (method, params) => {
-        connection.calls.push({ method, params })
-        const route = routes[method]
-        return route ? route(params) : {}
-      },
-      notify: () => {},
-      respond: (id, result) => connection.replies.push({ id, result }),
-      respondWithError: (id, code, message) => connection.replies.push({ id, code, message }),
-      close: async () => {
-        connection.closeCount += 1
-        connection.closed = true
-        return true
-      }
-    }
-    connections.push(connection)
-    return connection
-  }) as typeof openCodexAppServerConnection
-  routes['thread/start'] ??= () => ({
-    thread: { id: THREAD_ID, path: '/rollouts/abc.jsonl' },
-    model: 'gpt-live',
-    reasoningEffort: 'medium'
-  })
-  routes['thread/resume'] ??= (params) => ({
-    thread: { id: (params as { threadId: string }).threadId },
-    model: 'gpt-live',
-    reasoningEffort: 'medium'
-  })
-  return { connections, openConnection, routes }
 }
 
 function adapterFor(
@@ -124,6 +59,9 @@ function adapterFor(
     terminateTurnProcesses: async () => true,
     now: () => 1_700_000_000_500,
     mintAcquisitionGeneration: () => `generation-${++acquisitionGeneration}`,
+    // Most tests run without a translator, so no echo ever arrives; keep the
+    // fresh-turn fallback grace short instead of the production 2.5s.
+    dispatchEchoAckTimeoutMs: 25,
     ...processControl
   })
 }
@@ -432,9 +370,16 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 })
 
 describe('CodexStructuredSessionAdapter.dispatch', () => {
-  it('accepts a turn Codex names in its response', async () => {
-    const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+  it('accepts a fresh turn Codex names in its response and start notification', async () => {
+    const codex = fakeCodex()
     const adapter = await acquired(codex)
+    codex.routes['turn/start'] = () => {
+      codex.connections[0].handlers.onNotification?.('turn/started', {
+        threadId: THREAD_ID,
+        turn: { id: 'turn-1' }
+      })
+      return { turn: { id: 'turn-1' } }
+    }
 
     const outcome = await adapter.dispatch({
       sessionId: 'session-1',
@@ -463,6 +408,67 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         { type: 'localImage', path: '/tmp/shot.png' },
         { type: 'image', url: 'https://example.test/a.png' }
       ]
+    })
+  })
+
+  it('adopts the ordinal Codex echoes for a send coalesced into the running turn', async () => {
+    const codex = fakeCodex()
+    const adapter = adapterFor(codex)
+    const sink = { appendItem: () => {}, appendTombstone: () => {}, publish: () => {} }
+    await adapter.acquire({
+      identity: identityFor('session-1'),
+      fence: 7,
+      spawnToken: 'spawn-9',
+      events: sink
+    })
+    let sends = 0
+    codex.routes['turn/start'] = (params) => {
+      const clientId = params?.clientUserMessageId ?? null
+      const notify = codex.connections[0].handlers.onNotification
+      if (++sends === 1) {
+        notify?.('turn/started', { threadId: THREAD_ID, turn: { id: 'turn-1' } })
+        notify?.('item/started', {
+          threadId: THREAD_ID,
+          turnId: 'turn-1',
+          item: { type: 'userMessage', id: 'item-user-a', clientId }
+        })
+      } else {
+        // Coalesced: the running turn answers, no second `turn/started`, and
+        // the echo lands after the agent reply — message ordinal 2, not 0.
+        notify?.('item/started', {
+          threadId: THREAD_ID,
+          turnId: 'turn-1',
+          item: { type: 'agentMessage', id: 'item-reply', text: 'working on it' }
+        })
+        notify?.('item/started', {
+          threadId: THREAD_ID,
+          turnId: 'turn-1',
+          item: { type: 'userMessage', id: 'item-user-b', clientId }
+        })
+      }
+      return { turn: { id: 'turn-1' } }
+    }
+
+    const first = await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-a',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    const second = await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-b',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+
+    expect(first).toEqual({
+      state: 'accepted',
+      providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-1', ordinal: 0 }
+    })
+    expect(second).toEqual({
+      state: 'accepted',
+      providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-1', ordinal: 2 }
     })
   })
 
@@ -534,7 +540,8 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-      await vi.advanceTimersByTimeAsync(10_000)
+      // 10s turn-id wait, then the full echo window before settling unknown.
+      await vi.advanceTimersByTimeAsync(40_000)
 
       expect(await dispatching).toEqual({
         state: 'unknown',

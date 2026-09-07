@@ -1,5 +1,6 @@
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
+import { settleCodexEchoWaitersOnClose } from './codex-structured-dispatch-echo'
 import {
   cancelCodexAcquisitionAttempt,
   type CodexAcquisitionRegistry,
@@ -46,6 +47,7 @@ export function handleCodexSessionExit(input: {
   session.unbindReadingControl?.()
   input.onEvent?.(event)
   session.prompts.clear()
+  settleCodexEchoWaitersOnClose(session.dispatchEchoes)
   session.translator?.dispose()
   return true
 }

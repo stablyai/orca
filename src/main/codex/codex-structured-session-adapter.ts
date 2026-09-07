@@ -120,6 +120,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     method: string,
     params: unknown
   ): CodexJournalTranslationAdmission {
+    // Before the cancellation branch, which may consume the frame outright: it
+    // maintains `activeTurnIds`, which classifies a coalesced re-send.
     codexRewind.observeCodexRewindActivity(session, method, params)
     if (this.turnCancellation.handleNotification(sessionId, session, method, params)) {
       return { accepted: true }
@@ -182,7 +184,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     session.dispatchPending = true
     try {
       await this.turnCancellation.captureBaseline(session)
-      return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
+      return await dispatchCodexTurn(
+        session,
+        input,
+        this.deps.requestTimeoutMs,
+        this.deps.dispatchEchoAckTimeoutMs
+      )
     } finally {
       session.dispatchPending = false
     }

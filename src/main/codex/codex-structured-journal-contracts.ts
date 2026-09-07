@@ -1,11 +1,14 @@
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { CodexUserMessageEcho } from './codex-structured-dispatch-echo'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 export type CodexJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
   bindPromptItemId?: (journalItemId: string, threadId: string, promptKey: string) => void
   primaryThreadId?: () => string | null
+  /** Fired for every live `userMessage` item; settles echo dispatch waiters. */
+  onUserMessageEcho?: (echo: CodexUserMessageEcho) => void
   coalesceMs?: number
   maxRetainedBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']

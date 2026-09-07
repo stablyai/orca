@@ -8,6 +8,10 @@ import {
   closeFailedCodexAcquisition,
   stopSupersededCodexAcquisition
 } from './codex-structured-acquisition-lifecycle'
+import {
+  createCodexDispatchEchoes,
+  resolveCodexUserMessageEcho
+} from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { codexProcessIdentity, codexProviderHandleLink } from './codex-structured-owner-identity'
@@ -74,12 +78,19 @@ export async function acquireCodexStructuredSession(input: {
     acquireInput.identity.providerHandle.kind === 'codex'
       ? acquireInput.identity.providerHandle.threadId
       : null
+  // Created before the translator so the echo hook can close over it; the
+  // session object adopts it later (mutable-ref pattern, like primaryThreadId).
+  const dispatchEchoes = createCodexDispatchEchoes()
   const translator = acquireInput.events
     ? createCodexJournalTranslator({
         sink: acquireInput.events,
         primaryThreadId: () => primaryThreadId,
         bindPromptItemId: (journalItemId, threadId, promptKey) =>
-          acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey)
+          acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey),
+        onUserMessageEcho: (echo) =>
+          resolveCodexUserMessageEcho(dispatchEchoes, primaryThreadId, echo, (settlement) =>
+            deps.onDispatchSettledLate?.({ sessionId, ...settlement })
+          )
       })
     : null
   const open = deps.openConnection ?? openCodexAppServerConnection
@@ -193,11 +204,12 @@ export async function acquireCodexStructuredSession(input: {
       threadId: opened.threadId,
       historyPath: opened.historyPath,
       historyMode: opened.historyMode,
-      activeTurnIds: new Set(),
       prompts: acquisition.prompts,
       options: restoredCodexSessionOptions(acquireInput.options),
       reportedOptions: reportedCodexThreadOptions(opened),
       turnIdWaiters: [],
+      activeTurnIds: new Set<string>(),
+      dispatchEchoes,
       translator,
       forceCloseUnexpected: (reason) =>
         input.forceCloseUnexpected(

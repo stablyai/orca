@@ -39,7 +39,7 @@ export class CodexJournalItems {
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule'
+      'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule' | 'onUserMessageEcho'
     >,
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void
@@ -76,6 +76,13 @@ export class CodexJournalItems {
     const identity = this.identityFor(event.threadId, turnId, item)
     // Count echoes for stable resume ordinals, but user bubbles come from submissions.
     if (source === 'live' && item.type === 'userMessage') {
+      // Load-bearing placement: the identity comes from THIS translator's
+      // ordinal projection, so the settled key matches history replay's.
+      this.deps.onUserMessageEcho?.({
+        threadId: event.threadId,
+        clientId: readCodexJournalString(item, 'clientId'),
+        identity
+      })
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
     }
     const translated = codexJournalItem(item)

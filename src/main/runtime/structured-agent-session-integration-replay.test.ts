@@ -85,6 +85,17 @@ function fakeCodex(): CodexScript {
           return { thread: { id: connection.resumedThreadId } }
         }
         if (method === 'turn/start') {
+          // Codex echoes the accepted message back as a live userMessage item
+          // carrying the client id; dispatch settles its identity on it.
+          handlers.onNotification?.('item/started', {
+            threadId: THREAD,
+            turnId: TURN,
+            item: {
+              type: 'userMessage',
+              id: 'item-0',
+              clientId: (params as { clientUserMessageId?: string }).clientUserMessageId ?? null
+            }
+          })
           return { turn: { id: TURN } }
         }
         if (method === 'model/list') {

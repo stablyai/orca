@@ -1,5 +1,9 @@
-import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../shared/agent-session-journal-types'
 import { randomUUID } from 'node:crypto'
+import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import type {
   CodexAppServerConnection,
@@ -44,6 +48,13 @@ export type CodexStructuredSessionAdapterDeps = {
   /** Host capability seam; production uses the native Windows process table. */
   isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
+  /** A dispatch whose echo window expired, proven delivered by a later echo. */
+  onDispatchSettledLate?: (input: {
+    sessionId: string
+    clientMessageId: string
+    providerIdentity: AgentJournalItemIdentity
+  }) => void
+  dispatchEchoAckTimeoutMs?: number
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
@@ -66,12 +77,14 @@ export type CodexSession = {
   threadId: string
   historyPath: string | null
   historyMode?: 'legacy' | 'paginated'
-  activeTurnIds?: Set<string>
   dispatchPending?: boolean
   prompts: CodexAcquisitionWindow['prompts']
   options: Map<string, string>
   reportedOptions: { model?: string; effort?: string }
   turnIdWaiters: ((turnId: string) => void)[]
+  /** Turns this session believes are running; classifies coalesced re-sends. */
+  activeTurnIds: Set<string>
+  dispatchEchoes: CodexDispatchEchoes
   translator: CodexJournalTranslator | null
   unbindReadingControl?: () => void
   /** Terminates this exact child as an unexpected death and enters host recovery. */
