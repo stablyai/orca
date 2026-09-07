@@ -607,7 +607,8 @@ describe('enableMainProcessGpuFeatures', () => {
     })
   }
 
-  // Why: orca-odoo-client#22 — non-Wayland assertions must own every session signal the source reads, not inherit the dev box's.
+  // Why: non-Wayland assertions must own every session signal the source reads,
+  // rather than inherit whatever the developer's own session happens to set.
   function useX11Session(): void {
     delete process.env.WAYLAND_DISPLAY
     delete process.env.ELECTRON_OZONE_PLATFORM_HINT
