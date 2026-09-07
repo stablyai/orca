@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   encodeWindowsPowerShellHookCommand,
   getWindowsPowerShellExecutablePath,
+  needsHookExecutionPolicyBypass,
   WINDOWS_POWERSHELL_HOOK_SWITCHES,
   wrapWindowsPowerShellEncodedCommand
 } from './windows-powershell-hook-launcher'
@@ -54,7 +55,9 @@ describe('windows PowerShell hook launcher', () => {
     // Why it must survive somewhere: Copilot's managed hook is a .ps1, which a
     // Restricted or AllSigned machine policy refuses to run without a bypass.
     // Process scope is exactly what the switch used to set.
-    expect(decodePayload(wrapWindowsPowerShellEncodedCommand('exit 0'))).toContain(
+    expect(
+      decodePayload(wrapWindowsPowerShellEncodedCommand('exit 0', { executionPolicyBypass: true }))
+    ).toContain(
       'Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue'
     )
   })
@@ -64,14 +67,16 @@ describe('windows PowerShell hook launcher', () => {
     // process scope did not take. -ErrorAction covers only the non-terminating
     // half; the switch this replaced printed nothing either way, and an
     // ErrorRecord on stderr corrupts consumers that merge our streams into JSON.
-    const decoded = decodePayload(wrapWindowsPowerShellEncodedCommand('exit 0'))
+    const decoded = decodePayload(
+      wrapWindowsPowerShellEncodedCommand('exit 0', { executionPolicyBypass: true })
+    )
 
     expect(decoded).toMatch(/try \{[^}]*Set-ExecutionPolicy[^}]*\} catch \{\}/)
   })
 
   it('applies the bypass before the caller command and keeps progress silenced', () => {
     const decoded = Buffer.from(
-      encodeWindowsPowerShellHookCommand('& $scriptPath'),
+      encodeWindowsPowerShellHookCommand('& $scriptPath', { executionPolicyBypass: true }),
       'base64'
     ).toString('utf16le')
 
@@ -88,7 +93,7 @@ describe('windows PowerShell hook launcher', () => {
     // first merged line -- the exact corruption HOOK_PROGRESS_SILENCER exists to
     // stop. Silencer-first measured 0 bytes.
     const decoded = Buffer.from(
-      encodeWindowsPowerShellHookCommand('& $scriptPath'),
+      encodeWindowsPowerShellHookCommand('& $scriptPath', { executionPolicyBypass: true }),
       'base64'
     ).toString('utf16le')
 
@@ -96,5 +101,61 @@ describe('windows PowerShell hook launcher', () => {
     expect(decoded.indexOf("$ProgressPreference='SilentlyContinue'")).toBeLessThan(
       decoded.indexOf('Set-ExecutionPolicy')
     )
+  })
+
+  /*
+   * HEADLINE INVARIANT. The launch shape was chosen by measurement on an AV host,
+   * not by reasoning: #16003 measured that the denial happens at CreateProcess and
+   * matches on the FLAG COMBINATION, independently of what the payload decodes to.
+   * So the payload may change freely, and the command line may not.
+   *
+   * This is what stops a later "tidy-up" — folding `-NonInteractive` into the
+   * switches constant is the tempting one (STA-6357 proposes exactly that) — from
+   * silently re-opening a resolved AV defect. Any change to the shape needs a new
+   * measurement on a Kaspersky host, not an argument that it ought to be fine.
+   */
+  it('keeps the launch shape byte-identical whichever payload it carries (AV-measured; re-measure before changing)', () => {
+    const shapeOf = (command: string): string => command.replace(/ -EncodedCommand \S+$/, '')
+
+    const withBypass = wrapWindowsPowerShellEncodedCommand('exit 0', {
+      executionPolicyBypass: true
+    })
+    const withoutBypass = wrapWindowsPowerShellEncodedCommand('exit 0')
+
+    expect(shapeOf(withBypass)).toBe(shapeOf(withoutBypass))
+    expect(shapeOf(withoutBypass)).toBe(`${getWindowsPowerShellExecutablePath()} -NoProfile`)
+    // The payloads must actually differ, or the assertion above proves nothing.
+    expect(decodePayload(withBypass)).not.toBe(decodePayload(withoutBypass))
+  })
+
+  it('omits the execution-policy cmdlet for a payload that only runs a .cmd', () => {
+    // Why it must go: on Windows PowerShell 5.1 the cmdlet takes a host
+    // confirmation path even with -Force, and with stdin redirected that prompt
+    // consumes the hook payload and echoes it to stdout (STA-6357). Execution
+    // policy does not govern a batch file, so a .cmd payload gains nothing by it.
+    const decoded = decodePayload(wrapWindowsPowerShellEncodedCommand('& $scriptPath'))
+
+    expect(decoded).not.toContain('Set-ExecutionPolicy')
+    // The progress silencer is unrelated to the policy bypass and must survive.
+    expect(decoded).toBe("$ProgressPreference='SilentlyContinue'; & $scriptPath")
+  })
+})
+
+describe('needsHookExecutionPolicyBypass', () => {
+  it('asks for the bypass only for a .ps1, whatever its casing', () => {
+    expect(
+      needsHookExecutionPolicyBypass('C:\\Users\\me\\.orca\\agent-hooks\\copilot-hook.ps1')
+    ).toBe(true)
+    expect(
+      needsHookExecutionPolicyBypass('C:\\Users\\me\\.orca\\agent-hooks\\COPILOT-HOOK.PS1')
+    ).toBe(true)
+  })
+
+  it('does not ask for it for the .cmd every other managed hook ships', () => {
+    for (const script of ['claude-hook.cmd', 'cursor-hook.cmd', 'gemini-hook.cmd']) {
+      expect(needsHookExecutionPolicyBypass(`C:\\Users\\me\\.orca\\agent-hooks\\${script}`)).toBe(
+        false
+      )
+    }
   })
 })

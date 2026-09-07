@@ -617,11 +617,44 @@ function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "''")}'`
   // Why: the execution-policy bypass rides in the payload, not on the command
   // line, so the launcher cannot spell the AV-blocked flag triple (#16003).
+  // Why only for a .ps1: the cmdlet consumes redirected stdin on PowerShell 5.1
+  // (STA-6357), and execution policy does not govern the .cmd every other hook ships.
+  const bypass = scriptPath.toLowerCase().endsWith('.ps1')
+    ? 'try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; '
+    : ''
   // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
-  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  return `$ProgressPreference='SilentlyContinue'; ${bypass}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 describe('wrapWindowsHookCommand', () => {
+  it('spares a .cmd hook the stdin-consuming execution-policy cmdlet', () => {
+    // STA-6357: on PowerShell 5.1 Set-ExecutionPolicy takes a host confirmation
+    // path even with -Force, and with the agent's hook JSON piped in that prompt
+    // consumes the payload and echoes it to stdout — so the agent rejects the
+    // hook output and the .cmd behind it reads empty stdin. Execution policy
+    // never governed a batch file, so this costs the .cmd hooks nothing.
+    const command = wrapWindowsHookCommand('C:\\hooks\\cursor-hook.cmd')
+
+    expect(decodeWindowsHookCommand(command)).not.toContain('Set-ExecutionPolicy')
+  })
+
+  it('keeps the bypass for the one managed hook that is a .ps1', () => {
+    // Copilot ships copilot-hook.ps1, which a Restricted or AllSigned machine
+    // policy refuses to run without it.
+    const command = wrapWindowsHookCommand('C:\\hooks\\copilot-hook.ps1')
+
+    expect(decodeWindowsHookCommand(command)).toContain('Set-ExecutionPolicy -Scope Process')
+  })
+
+  it('launches both with the identical AV-measured command shape', () => {
+    // The payloads differ; the command line must not. See the launcher's headline test.
+    const shapeOf = (command: string): string => command.replace(/ -EncodedCommand \S+$/, '')
+
+    expect(shapeOf(wrapWindowsHookCommand('C:\\hooks\\cursor-hook.cmd'))).toBe(
+      shapeOf(wrapWindowsHookCommand('C:\\hooks\\copilot-hook.ps1'))
+    )
+  })
+
   it('invokes the .cmd through an encoded PowerShell command', () => {
     const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)

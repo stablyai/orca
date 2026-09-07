@@ -15,7 +15,10 @@ import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
-import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
+import {
+  needsHookExecutionPolicyBypass,
+  wrapWindowsPowerShellEncodedCommand
+} from './windows-powershell-hook-launcher'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -112,6 +115,7 @@ export function quotePowerShellString(value: string): string {
 }
 
 export {
+  needsHookExecutionPolicyBypass,
   wrapWindowsPowerShellEncodedCommand,
   WINDOWS_POWERSHELL_HOOK_SWITCHES
 } from './windows-powershell-hook-launcher'
@@ -132,7 +136,11 @@ export function wrapWindowsHookCommand(
       ? ''
       : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
   const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; ${fallback}exit 0`
-  return wrapWindowsPowerShellEncodedCommand(command)
+  // Why keyed on the script we are about to run: only Copilot ships a `.ps1`, and
+  // every other managed hook is a `.cmd` that execution policy does not govern.
+  return wrapWindowsPowerShellEncodedCommand(command, {
+    executionPolicyBypass: needsHookExecutionPolicyBypass(scriptPath)
+  })
 }
 
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/

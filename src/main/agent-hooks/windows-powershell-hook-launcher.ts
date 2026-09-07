@@ -70,18 +70,48 @@ const HOOK_PROGRESS_SILENCER = "$ProgressPreference='SilentlyContinue'; "
  * stderr is a live corruption risk for the consumers that merge our streams into
  * JSON stdout (see the progress silencer above). A hook must still answer its
  * agent when the policy is locked down.
+ *
+ * Only a payload that runs a `.ps1` needs it, and it is not free: on Windows
+ * PowerShell 5.1 the cmdlet takes a host confirmation path even with `-Force
+ * -ErrorAction SilentlyContinue`, and with stdin redirected — which is how every
+ * agent delivers its hook JSON — that prompt consumes the payload and echoes it
+ * back onto stdout. The agent then rejects the hook output as malformed JSON and
+ * the script it fronts receives empty stdin (STA-6357). Execution policy does not
+ * govern a batch file, so a `.cmd` payload pays that cost for nothing.
  */
 const HOOK_EXECUTION_POLICY_BYPASS =
   'try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; '
 
+/** Whether PowerShell will execute a script file this policy actually gates. */
+export function needsHookExecutionPolicyBypass(scriptPath: string): boolean {
+  return scriptPath.toLowerCase().endsWith('.ps1')
+}
+
+export type WindowsPowerShellHookOptions = {
+  /**
+   * Default false: the payload runs a `.cmd`, which execution policy does not
+   * govern. A caller that forgets this on a `.ps1` gets a loud policy failure
+   * under a locked-down GPO; the reverse mistake silently corrupts every hook's
+   * stdin, so the quiet failure is the one kept off the default.
+   */
+  executionPolicyBypass?: boolean
+}
+
 // Why: encoding shields paths and switches from cmd.exe and MSYS rewriting (#6078, #14815).
-export function encodeWindowsPowerShellHookCommand(command: string): string {
+export function encodeWindowsPowerShellHookCommand(
+  command: string,
+  options: WindowsPowerShellHookOptions = {}
+): string {
+  const executionPolicyBypass = options.executionPolicyBypass ? HOOK_EXECUTION_POLICY_BYPASS : ''
   return Buffer.from(
-    `${HOOK_PROGRESS_SILENCER}${HOOK_EXECUTION_POLICY_BYPASS}${command}`,
+    `${HOOK_PROGRESS_SILENCER}${executionPolicyBypass}${command}`,
     'utf16le'
   ).toString('base64')
 }
 
-export function wrapWindowsPowerShellEncodedCommand(command: string): string {
-  return `${getWindowsPowerShellExecutablePath()} ${WINDOWS_POWERSHELL_HOOK_SWITCHES} -EncodedCommand ${encodeWindowsPowerShellHookCommand(command)}`
+export function wrapWindowsPowerShellEncodedCommand(
+  command: string,
+  options: WindowsPowerShellHookOptions = {}
+): string {
+  return `${getWindowsPowerShellExecutablePath()} ${WINDOWS_POWERSHELL_HOOK_SWITCHES} -EncodedCommand ${encodeWindowsPowerShellHookCommand(command, options)}`
 }
