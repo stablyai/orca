@@ -8,7 +8,7 @@
 # Unlike deploy/old/scripts/sync-to-server-artifact.sh, there is NO
 # `docker compose build` step here at all — every image except one
 # (gcr.io/distroless/static-debian12, nginx:1.27-alpine, postgres:16-alpine,
-# hashicorp/vault, nats, migrate/migrate) is public and unmodified; the
+# nats, migrate/migrate) is public and unmodified; the
 # server only needs `docker compose pull` (cached after the first run) and
 # the rsynced binaries/static assets bind-mounted in. This is what makes
 # redeploys fast: no server-side compile, no server-side image build. The
@@ -123,19 +123,21 @@ echo ""
 
 echo "[4/6] Pulling public images on server (cached after first run)..."
 # Best-effort: every image here is a pinned tag (postgres:16-alpine,
-# hashicorp/vault:1.17, nats:2.10-alpine, nginx:1.27-alpine via the
-# frontend service) that's already cached on the server after the first
-# successful deploy — a transient registry hiccup (live-verified twice,
-# 2026-08-29: "TLS handshake timeout" against registry-1.docker.io)
-# shouldn't abort an otherwise-ready deploy. `|| true` degrades to the
-# already-cached local image; a genuinely NEW pinned tag (edited in this
-# compose file) would still need a real pull to succeed at least once.
-ssh_cmd "cd ${SERVER_DEPLOY} && docker compose pull postgres vault nats frontend" || \
+# nats:2.10-alpine, nginx:1.27-alpine via the frontend service) that's
+# already cached on the server after the first successful deploy — a
+# transient registry hiccup (live-verified twice, 2026-08-29: "TLS handshake
+# timeout" against registry-1.docker.io) shouldn't abort an otherwise-ready
+# deploy. `|| true` degrades to the already-cached local image; a genuinely
+# NEW pinned tag (edited in this compose file) would still need a real pull
+# to succeed at least once. No local vault image here (2026-09-07) — Vault
+# is the shared vnp-domain instance now, see docker-compose.yml's
+# x-go-common-env comment and ../VAULT-SHARED-MIGRATION.md.
+ssh_cmd "cd ${SERVER_DEPLOY} && docker compose pull postgres nats frontend" || \
     echo "⚠️  Image pull failed (registry hiccup?) — continuing with whatever's already cached on the server."
 echo ""
 
 echo "[5/6] Running migrations (profile: migrate) for every DB-owning service..."
-ssh_cmd "cd ${SERVER_DEPLOY} && docker compose up -d postgres vault nats && sleep 5"
+ssh_cmd "cd ${SERVER_DEPLOY} && docker compose up -d postgres nats && sleep 5"
 bash "${SCRIPT_DIR}/migrate.sh" --remote
 echo ""
 
