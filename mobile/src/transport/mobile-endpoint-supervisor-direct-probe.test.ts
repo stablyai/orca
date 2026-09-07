@@ -6,8 +6,7 @@ import {
   FakeLogicalClient,
   FakeRelaySession,
   FakeSession,
-  host,
-  unreachableDirect
+  host
 } from './mobile-endpoint-supervisor-test-fakes'
 
 // A cell that authenticates and then answers the confirm for a different relay host
@@ -88,12 +87,7 @@ describe('mobile endpoint supervisor direct probe', () => {
     const recordMigration = vi.spyOn(MobileEndpointHysteresis.prototype, 'recordMigration')
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi.fn(() => confirmRejectingRelaySession(logical))
-    // No LAN to race: this is about the relay cadence after a confirm failure.
-    const deps = dependencies({
-      openRelay,
-      openDirect: unreachableDirect(),
-      randomBytes: () => new Uint8Array([128, 0])
-    })
+    const deps = dependencies({ openRelay, randomBytes: () => new Uint8Array([128, 0]) })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     await supervisor.start()

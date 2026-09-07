@@ -28,10 +28,7 @@ function fixture() {
       }),
       host: () => host,
       canSchedule: () => true,
-      canDial: () => true,
       canAttempt: () => true,
-      // These cases model a live relay session, so hysteresis still arbitrates.
-      adoptsOutright: () => false,
       beginOperation: () => {},
       migrate: async () => {},
       onDirectMigrated: async () => {},

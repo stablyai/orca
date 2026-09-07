@@ -51,7 +51,8 @@ export class MobileRelayBackgroundGraceTimer {
 }
 
 type Clearable = { clear(): void }
-type DirectProbe = Clearable & { schedule(delayMs?: number): void; probeNow(): void }
+type DirectProbe = Clearable & { schedule(delayMs?: number): void }
+type DirectGrace = Clearable & { arm(): void }
 
 export class MobileRelayBackgroundGrace {
   private foregroundState = true
@@ -63,7 +64,8 @@ export class MobileRelayBackgroundGrace {
     private readonly logical: StableLogicalRpcClient,
     private readonly relayReconnect: RelayReconnectController,
     private readonly leaseRotation: Clearable,
-    private readonly directProbe: DirectProbe
+    private readonly directProbe: DirectProbe,
+    private readonly directGrace: DirectGrace
   ) {
     this.timer = new MobileRelayBackgroundGraceTimer(dependencies, () => this.suspendRelay())
   }
@@ -78,9 +80,8 @@ export class MobileRelayBackgroundGrace {
     if (foreground) {
       this.foreground()
       this.relayReconnect.handleForeground(this.logical, wasForeground)
-      // Why: a resume dials direct alongside the relay recovery handleForeground
-      // just triggered; a pending probe tick must not delay this one.
-      this.directProbe.probeNow()
+      this.directProbe.schedule(0)
+      this.directGrace.arm()
     } else if (wasForeground) {
       this.background()
     }
@@ -91,6 +92,7 @@ export class MobileRelayBackgroundGrace {
     this.directProbe.clear()
     this.relayReconnect.clear()
     this.leaseRotation.clear()
+    this.directGrace.clear()
     this.logical.setRecoveryPath(null)
   }
 
@@ -106,6 +108,7 @@ export class MobileRelayBackgroundGrace {
     const retainsRelay =
       this.logical.getActivePath() === 'relay' && this.logical.getState() === 'connected'
     this.directProbe.clear()
+    this.directGrace.clear()
     this.logical.setRecoveryPath(null)
     if (retainsRelay) {
       this.timer.arm()
