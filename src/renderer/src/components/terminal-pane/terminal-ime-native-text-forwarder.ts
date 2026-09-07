@@ -62,6 +62,7 @@ export type ImeNativeTextKeyEvent = {
   type: string
   key: string
   code?: string
+  keyCode?: number
   metaKey: boolean
   ctrlKey: boolean
   altKey: boolean
@@ -118,6 +119,7 @@ function isNativeTextKeydown(event: ImeNativeTextKeyEvent, compositionActive: bo
     // terminal-ime-forwarder-space-claim.test.ts.
     event.key.length === 1 &&
     // Composing keystrokes already belong to xterm's composition helper.
+    event.keyCode !== 229 &&
     event.isComposing !== true &&
     !compositionActive
   )
