@@ -27,6 +27,7 @@ import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -90,16 +91,19 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const focusedAgentPaneKey = useFocusedAgentPaneKey(worktreeId)
   const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
 
-  // Why: derive per-agent unvisited flags from the ack map so rows bold on first appearance and mute once the tab is visited.
-  const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
+  // Why: acknowledgement writes are app-global; project only this card's rows
+  // so unrelated worktree activity does not rerender every agent body.
+  const acknowledgedAgentTimes = useAppStore(
+    useShallow((s) => selectAcknowledgedAgentTimes(s, agents))
+  )
   const unvisitedByPaneKey = useMemo(() => {
     const out: Record<string, boolean> = {}
-    for (const a of agents) {
-      const ackAt = acknowledgedAgentsByPaneKey[a.paneKey] ?? 0
-      out[a.paneKey] = ackAt < a.entry.stateStartedAt
+    for (const [index, agent] of agents.entries()) {
+      const ackAt = acknowledgedAgentTimes[index] ?? 0
+      out[agent.paneKey] = ackAt < agent.entry.stateStartedAt
     }
     return out
-  }, [agents, acknowledgedAgentsByPaneKey])
+  }, [agents, acknowledgedAgentTimes])
 
   const handleDismissAgent = useCallback(
     (paneKey: string) => {

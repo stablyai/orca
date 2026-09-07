@@ -257,7 +257,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     failNextResubscribeWith(new Error('terminal_handle_stale'), FIRST_HANDLE)
     dropMultiplexedStream()
 
-    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(FIRST_PTY_ID))
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(FIRST_PTY_ID, -1))
     expect(methodLog.filter((method) => method === 'terminal.resolvePane')).toHaveLength(2)
     expect(subscribedTerminalHandles().filter((handle) => handle === FIRST_HANDLE)).toHaveLength(1)
     expect(transport.getRecoveryState?.().phase).toBe('ended')
@@ -281,7 +281,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     subscribeOutcomes = [new Error('terminal_handle_stale')]
     dropMultiplexedStream()
 
-    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(FIRST_PTY_ID))
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith(FIRST_PTY_ID, -1))
     expect(transport.getRecoveryState?.().phase).toBe('ended')
     expect(transport.getPtyId()).toBeNull()
     expect(onError).not.toHaveBeenCalled()

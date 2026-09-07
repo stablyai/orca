@@ -5,8 +5,8 @@ import { app as electronApp, type BrowserWindow } from 'electron'
  * validation). These runs may use the machine, but must never take the OS
  * foreground away from whatever the developer is doing.
  *
- * ORCA_BACKGROUND_LAUNCH=1 opts a normal launch in; ORCA_E2E_FOREGROUND=1 opts
- * back out for the few specs whose subject *is* native focus (IME, key events).
+ * ORCA_BACKGROUND_LAUNCH=1 keeps automation off screen. Native-focus specs
+ * can use ORCA_E2E_FOREGROUND=1 only without an explicit background request.
  */
 
 type ActivationPolicyApp = {
@@ -19,19 +19,21 @@ type PolicyEnv = Readonly<Record<string, string | undefined>>
 
 /** True when this process must not steal focus, raise windows, or activate the app. */
 export function isBackgroundLaunch(env: PolicyEnv = process.env): boolean {
+  if (env.ORCA_BACKGROUND_LAUNCH === '1') {
+    return true
+  }
   if (env.ORCA_E2E_FOREGROUND === '1') {
     return false
   }
-  return (
-    env.ORCA_BACKGROUND_LAUNCH === '1' ||
-    env.ORCA_E2E_HEADLESS === '1' ||
-    env.ORCA_E2E_HEADFUL === '1'
-  )
+  return env.ORCA_E2E_HEADLESS === '1' || env.ORCA_E2E_HEADFUL === '1'
 }
 
-/** True when no window should reach the screen at all (headless E2E; Playwright drives via CDP). */
+/** True when no window should reach the screen at all (background or headless E2E; Playwright drives via CDP). */
 export function isWindowlessLaunch(env: PolicyEnv = process.env): boolean {
-  return isBackgroundLaunch(env) && env.ORCA_E2E_HEADLESS === '1' && env.ORCA_E2E_HEADFUL !== '1'
+  return (
+    env.ORCA_BACKGROUND_LAUNCH === '1' ||
+    (isBackgroundLaunch(env) && env.ORCA_E2E_HEADLESS === '1' && env.ORCA_E2E_HEADFUL !== '1')
+  )
 }
 
 /**
@@ -63,7 +65,7 @@ export function applyBackgroundActivationPolicy(
 
 /**
  * Reveal a window without taking the foreground: hidden entirely when windowless,
- * `showInactive()` (visible, not raised over the active app) in background launches.
+ * `showInactive()` for explicitly headful E2E runs.
  */
 export function showWindowWithoutStealingFocus(
   window: BrowserWindow,

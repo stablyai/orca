@@ -22,7 +22,8 @@ export function useNativeChatRetainedSession(
     args.transcriptPath ?? null
   ])
   const activeIdentityRef = useRef(identity)
-  const retentionRef = useRef(createNativeChatTranscriptRetention())
+  const retentionRef = useRef<ReturnType<typeof createNativeChatTranscriptRetention>>(undefined!)
+  retentionRef.current ??= createNativeChatTranscriptRetention()
   const sessionMatchesIdentity = activeIdentityRef.current === identity
   const readPhase = sessionMatchesIdentity ? session.readPhase : 'loading'
 

@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, memo } from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
 import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
@@ -24,17 +24,21 @@ export type CombinedDiffTreeNode = SourceControlTreeNode<
   GitStagingArea | CombinedDiffBranchTreeArea
 >
 
+// Why: every row is a single `py-1 text-xs` line (16px line box + 8px padding); measureElement
+// still corrects, but a wrong estimate makes the virtualized tree's scrollbar jump on first paint.
+export const COMBINED_DIFF_TREE_ROW_HEIGHT_PX = 24
 const COMBINED_DIFF_TREE_INDENT_PX = 12
 const COMBINED_DIFF_TREE_DIRECTORY_PADDING_PX = 8
 const COMBINED_DIFF_TREE_FILE_PADDING_PX = 20
 
-export function CombinedDiffFileTreeRow({
+export const CombinedDiffFileTreeRow = memo(function CombinedDiffFileTreeRow({
   node,
   mode,
   worktreePath,
   activeSectionKey,
   sectionIndexByKey,
   isCollapsed,
+  visibleFileCount,
   onToggleDirectory,
   onNavigate
 }: {
@@ -44,6 +48,7 @@ export function CombinedDiffFileTreeRow({
   activeSectionKey: string | null
   sectionIndexByKey: ReadonlyMap<string, number>
   isCollapsed: boolean
+  visibleFileCount?: number
   onToggleDirectory: (key: string) => void
   onNavigate: (entry: CombinedDiffFileTreeEntry) => void
 }): React.JSX.Element {
@@ -77,7 +82,7 @@ export function CombinedDiffFileTreeRow({
           <span className="min-w-0 flex-1 truncate">{node.name}</span>
         </button>
         <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
-          {node.fileCount}
+          {visibleFileCount ?? node.fileCount}
         </span>
       </div>
     )
@@ -132,4 +137,4 @@ export function CombinedDiffFileTreeRow({
       </span>
     </button>
   )
-}
+})

@@ -3,6 +3,7 @@ import { getProcessOutputFields } from '../../shared/process-output-field-scanne
 import { readWindowsProcessTable } from '../windows/windows-process-table'
 import { runPortScanCommand } from './port-scan-command-client'
 import {
+  partitionListenersNeedingMetadata,
   recallListenerMetadata,
   rememberListenerMetadata,
   shouldSkipMetadataCommands,
@@ -19,25 +20,27 @@ import {
 
 export function parseLsofListeningOutput(output: string): RawListeningPort[] {
   const ports: RawListeningPort[] = []
-  let currentPid: number | undefined
-  let currentProcessName: string | undefined
+  let pid: number | undefined
+  let processName: string | undefined
+  let socketId: string | undefined
 
   for (const line of output.split('\n')) {
-    if (!line) {
-      continue
-    }
     const tag = line[0]
     const value = line.slice(1)
     if (tag === 'p') {
-      const pid = Number.parseInt(value, 10)
-      currentPid = Number.isFinite(pid) ? pid : undefined
-      currentProcessName = undefined
+      const parsedPid = Number.parseInt(value, 10)
+      pid = Number.isFinite(parsedPid) ? parsedPid : undefined
+      processName = socketId = undefined
     } else if (tag === 'c') {
-      currentProcessName = value
+      processName = value
+    } else if (tag === 'f') {
+      socketId = undefined // each file record restarts; a socket without `d` must not inherit one
+    } else if (tag === 'd') {
+      socketId = value || undefined
     } else if (tag === 'n') {
       const parsed = parseAddressWithPort(value)
       if (parsed) {
-        ports.push({ pid: currentPid, processName: currentProcessName, ...parsed })
+        ports.push({ pid, processName, ...(socketId ? { socketId } : {}), ...parsed })
       }
     }
   }
@@ -118,17 +121,23 @@ async function scanDarwinLsofPorts(
     '-iTCP',
     '-sTCP:LISTEN',
     '-F',
-    'pcn'
+    // Why `d`: the socket's kernel identity is free on this command and lets the metadata cache
+    // tell a recycled pid on the same port apart from the process it remembered.
+    'pcnd'
   ])
   const ports = parseLsofListeningOutput(stdout)
   if (shouldSkipMetadataCommands(spawnMs, options)) {
     return { ports, metadataAvailable: false }
   }
-  const metadata = await loadDarwinProcessMetadata(
-    new Set(ports.flatMap((p) => (p.pid ? [p.pid] : [])))
-  )
+  // Why: on a quiet machine the same servers keep listening, so the two metadata commands — the
+  // expensive half of the scan — would re-derive answers the last scan already has.
+  const { hydrated, pidsNeedingMetadata } = partitionListenersNeedingMetadata(ports, options)
+  if (pidsNeedingMetadata.size === 0) {
+    return { ports: hydrated, metadataAvailable: true }
+  }
+  const metadata = await loadDarwinProcessMetadata(pidsNeedingMetadata)
   return {
-    ports: ports.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port })),
+    ports: hydrated.map((port) => ({ ...metadata.get(port.pid ?? -1), ...port })),
     metadataAvailable: true
   }
 }

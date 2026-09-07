@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 const mocks = vi.hoisted(() => ({
+  authorizeExternalPath: vi.fn(),
   resolveNativeChatAttachmentOwner: vi.fn(),
   uploadNativeChatAttachmentPaths: vi.fn()
 }))
@@ -91,6 +92,13 @@ async function renderProbe(args: {
   }
 }
 
+beforeEach(() => {
+  mocks.authorizeExternalPath.mockReset().mockResolvedValue(undefined)
+  window.api = {
+    fs: { authorizeExternalPath: mocks.authorizeExternalPath }
+  } as unknown as Window['api']
+})
+
 afterEach(() => {
   root?.unmount()
   root = null
@@ -105,8 +113,45 @@ describe('useNativeChatExternalAttachments', () => {
     await act(async () => {
       probe.latest().attachExternalPaths(['/local/a.txt'])
     })
+    expect(mocks.authorizeExternalPath).toHaveBeenCalledExactlyOnceWith({
+      targetPath: '/local/a.txt'
+    })
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/local/a.txt'])
     expect(mocks.uploadNativeChatAttachmentPaths).not.toHaveBeenCalled()
+  })
+
+  it('waits for local authorization and skips rejected paths without blocking other files', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const authorization = deferred<void>()
+    mocks.authorizeExternalPath
+      .mockReturnValueOnce(authorization.promise)
+      .mockRejectedValueOnce(new Error('denied'))
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths })
+    act(() =>
+      probe.latest().attachExternalPaths(['/external/a.png', '/external/b.png', '/external/c.png'])
+    )
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+    expect(mocks.authorizeExternalPath).toHaveBeenCalledTimes(1)
+    await act(async () => authorization.resolve())
+    expect(attachResolvedPaths).toHaveBeenCalledExactlyOnceWith([
+      '/external/a.png',
+      '/external/c.png'
+    ])
+    expect(mocks.authorizeExternalPath).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not attach local paths when disabled during authorization', async () => {
+    mocks.resolveNativeChatAttachmentOwner.mockReturnValue({ kind: 'local' })
+    const authorization = deferred<void>()
+    mocks.authorizeExternalPath.mockReturnValueOnce(authorization.promise)
+    const attachResolvedPaths = vi.fn()
+    const probe = await renderProbe({ attachResolvedPaths })
+    act(() => probe.latest().attachExternalPaths(['/external/a.png', '/external/b.png']))
+    await probe.setDisabled(true)
+    await act(async () => authorization.resolve())
+    expect(attachResolvedPaths).not.toHaveBeenCalled()
+    expect(mocks.authorizeExternalPath).toHaveBeenCalledTimes(1)
   })
 
   it('uploads SSH worktree paths and attaches the remote results', async () => {
@@ -133,6 +178,7 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshConnectionGeneration: 4
     })
     expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'], 'conn-1')
+    expect(mocks.authorizeExternalPath).not.toHaveBeenCalled()
   })
 
   it('delivers concurrent SSH resolutions in order without deduplicating paths', async () => {

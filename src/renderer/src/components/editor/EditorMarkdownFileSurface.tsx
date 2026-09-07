@@ -66,12 +66,12 @@ export function EditorMarkdownFileSurface({
       )
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex items-center gap-3 border-b border-border/60 bg-blue-500/10 px-3 py-2 text-xs text-blue-950 dark:text-blue-100">
+        <div className="flex items-center gap-3 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1">{richFallbackMessage}</span>
           {isSizeFallback ? (
             <Button
               type="button"
-              variant="secondary"
+              variant="outline"
               size="xs"
               className="shrink-0"
               onClick={() => setSizeOverride(activeFile.id, true)}

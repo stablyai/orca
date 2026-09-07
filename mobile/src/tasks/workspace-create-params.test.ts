@@ -41,6 +41,7 @@ describe('task workspace create params', () => {
       repo: 'id:repo-1',
       name: 'mobile-tasks',
       displayName: 'Fix mobile tasks',
+      displayNameKind: 'generated',
       setupDecision: 'run',
       activate: true,
       startupDraft: 'https://github.com/acme/app/pull/123',
@@ -72,12 +73,38 @@ describe('task workspace create params', () => {
       repo: 'id:repo-1',
       name: 'issue-88',
       displayName: 'Investigate login',
+      displayNameKind: 'generated',
       setupDecision: 'skip',
       activate: true,
       linkedIssue: 88
     })
     expect(params).not.toHaveProperty('startupDraft')
     expect(params).not.toHaveProperty('createdWithAgent')
+  })
+
+  it('marks an edited task label as user-owned', () => {
+    const params = buildTaskWorkspaceCreateParams({
+      item: {
+        provider: 'github',
+        source: {
+          type: 'issue',
+          repoId: 'repo-1',
+          number: 88,
+          title: 'Investigate login',
+          url: 'https://github.com/acme/app/issues/88'
+        }
+      },
+      targetRepoId: 'ignored-for-github',
+      setupDecision: 'skip',
+      workspaceName: 'My workspace',
+      nameIsAutoManaged: false
+    })
+
+    expect(params).toMatchObject({
+      name: 'My workspace',
+      displayName: 'My workspace',
+      displayNameKind: 'user'
+    })
   })
 
   it('keeps the startup draft when no agent was provided so the host can auto-pick', () => {

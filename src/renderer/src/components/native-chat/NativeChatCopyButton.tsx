@@ -12,9 +12,12 @@ import { translate } from '@/i18n/i18n'
  */
 export function NativeChatCopyButton({
   text,
+  label: copyLabel,
   className
 }: {
   text: string
+  /** What this button copies, when it is not the whole message. */
+  label?: string
   className?: string
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
@@ -46,7 +49,7 @@ export function NativeChatCopyButton({
 
   const label = copied
     ? translate('components.native-chat.copyMessage.copied', 'Copied')
-    : translate('components.native-chat.copyMessage.copy', 'Copy message')
+    : (copyLabel ?? translate('components.native-chat.copyMessage.copy', 'Copy message'))
 
   return (
     <button

@@ -49,6 +49,7 @@ export type AgentBackgroundSessionTestState = {
   closeTab: TestMock
   setTabLayout: TestMock
   clearTabPtyId: TestMock
+  markUnverifiedPtyLoss: TestMock
   setAgentStatus: TestMock
   registerAgentLaunchConfig: TestMock
   clearAgentLaunchConfig: TestMock
@@ -114,6 +115,7 @@ export function createAgentBackgroundSessionTestState(mocks: {
     closeTab: mocks.closeTab,
     setTabLayout: mocks.setTabLayout,
     clearTabPtyId: vi.fn(),
+    markUnverifiedPtyLoss: vi.fn(),
     setAgentStatus: vi.fn(),
     registerAgentLaunchConfig: mocks.registerAgentLaunchConfig,
     clearAgentLaunchConfig: vi.fn()

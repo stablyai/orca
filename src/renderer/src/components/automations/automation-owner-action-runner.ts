@@ -16,6 +16,7 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationRun,
+  AutomationRunsPage,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
 import {
@@ -40,8 +41,10 @@ import {
   deleteAutomationForOwner,
   deleteOrphanAutomation,
   listAutomationRunsForOwner,
+  listAutomationRunsPageForOwner,
   listAutomationsForOwner,
   listOrphanAutomationRuns,
+  listOrphanAutomationRunsPage,
   matchAutomationOwnerConflict,
   runAutomationNowForOwner,
   updateAutomationForOwner,
@@ -210,6 +213,19 @@ export async function listOwnedAutomationRuns(
     availability,
     (owner) => listAutomationRunsForOwner(owner, automationId),
     () => listOrphanAutomationRuns(authority, automationId)
+  )
+}
+
+export async function listOwnedAutomationRunsPage(
+  availability: AutomationActionAvailability,
+  authority: AutomationAuthorityRef,
+  automationId: string,
+  options: { limit?: number; cursor?: string }
+): Promise<AutomationActionResult<AutomationRunsPage>> {
+  return await attempt(
+    availability,
+    (owner) => listAutomationRunsPageForOwner(owner, automationId, options),
+    () => listOrphanAutomationRunsPage(authority, automationId, options)
   )
 }
 

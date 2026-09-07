@@ -11,8 +11,14 @@ import type { JournalReducerState } from './journal-reducer'
 import type {
   JournalDispatchRow,
   JournalItemRow,
+  JournalLifecycleBatchRow,
+  JournalLifecycleMutation,
   JournalSubmissionRow,
   JournalTombstoneRow
+} from './journal-row-schema'
+import {
+  MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
+  MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 
@@ -76,6 +82,50 @@ export function journalDispatchRowBuilder(
       ts,
       recovered: input.recovered
     })
+}
+
+export type JournalLifecycleMutationInput =
+  | { kind: 'item'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  | { kind: 'tombstone'; identity: AgentJournalItemIdentity }
+
+export function journalLifecycleBatchRowBuilder(
+  state: () => JournalReducerState,
+  settlementId: string,
+  mutations: readonly JournalLifecycleMutationInput[],
+  options: { fence: number; recovered?: true }
+): RowBuilder<JournalLifecycleBatchRow> {
+  return (seq, ts) => {
+    if (mutations.length === 0 || mutations.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
+      throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
+    }
+    const current = state()
+    const revisions = new Map<string, number>()
+    const built: JournalLifecycleMutation[] = mutations.map((mutation) => {
+      const itemId = agentJournalItemKey(mutation.identity)
+      const resolved = current.aliases.get(itemId) ?? itemId
+      const revision =
+        (revisions.get(resolved) ??
+          Math.max(
+            current.items.get(resolved)?.revision ?? 0,
+            current.tombstones.get(resolved) ?? 0
+          )) + 1
+      revisions.set(resolved, revision)
+      return mutation.kind === 'item'
+        ? { kind: 'item', itemId, revision, body: mutation.body }
+        : { kind: 'tombstone', itemId, revision }
+    })
+    const row: JournalLifecycleBatchRow = {
+      kind: 'lifecycle-batch',
+      settlementId,
+      mutations: built,
+      ...journalRowBase(current.epoch, seq, options.fence, ts),
+      ...(options.recovered ? { recovered: options.recovered } : {})
+    }
+    if (Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES) {
+      throw new Error('journal_lifecycle_batch_byte_bound_exceeded')
+    }
+    return row
+  }
 }
 
 export function journalRowBase(

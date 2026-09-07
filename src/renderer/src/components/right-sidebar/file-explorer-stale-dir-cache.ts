@@ -19,14 +19,16 @@ export function collectStaleDirCachePaths(
 
 export type ExpandedDirLoadDecision = 'skip' | 'load' | 'reload'
 
-/** What the expansion effect owes a newly expanded dir: nothing, a first read, or a forced re-read. */
+/**
+ * What the expansion effect owes a newly expanded dir: nothing, a first read, or a forced re-read.
+ *
+ * Callers must skip a dir with a read already in flight before asking — that state lives in the
+ * loading set, not in `dirCache` (see file-explorer-dir-load-state.ts).
+ */
 export function decideExpandedDirLoad(
   cached: DirCache | undefined,
   stale: boolean
 ): ExpandedDirLoadDecision {
-  if (cached?.loading) {
-    return 'skip'
-  }
   if (!cached?.children.length) {
     return 'load'
   }

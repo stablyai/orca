@@ -28,7 +28,36 @@ const POST_V6_COLUMNS = [
 const VERSIONED_POST_V6_COLUMNS = [
   { version: 27, table: 'federated_dispatches', column: 'to_home_acknowledged_sequence' },
   { version: 30, table: 'dispatch_contexts', column: 'depth' },
-  { version: 30, table: 'remote_dispatch_attachments', column: 'depth' }
+  { version: 30, table: 'remote_dispatch_attachments', column: 'depth' },
+  { version: 31, table: 'dispatch_contexts', column: 'retry_of_dispatch_id' },
+  { version: 31, table: 'dispatch_contexts', column: 'creator_dispatch_id' },
+  { version: 31, table: 'dispatch_contexts', column: 'host_scope' },
+  { version: 31, table: 'worker_terminal_resources', column: 'endpoint_id' },
+  { version: 31, table: 'worker_terminal_resources', column: 'endpoint_incarnation' },
+  // Why: unversioned, these made every shipped v30 database read as v6 and replay the whole chain.
+  { version: 32, table: 'worker_terminal_resources', column: 'recovery_attempt_count' },
+  { version: 32, table: 'worker_terminal_resources', column: 'last_recovery_at' },
+  { version: 33, table: 'messages', column: 'pointer_enter_pending' },
+  { version: 34, table: 'deliveries', column: 'mailbox_handle' },
+  { version: 36, table: 'dispatch_contexts', column: 'consumer_generation' },
+  { version: 36, table: 'remote_dispatch_attachments', column: 'consumer_generation' },
+  { version: 37, table: 'dispatch_contexts', column: 'creator_handle' },
+  { version: 37, table: 'dispatch_contexts', column: 'creator_pane_key' }
+] as const
+
+// Why: v34 shipped without these two, so a v34 stamp proves nothing about them; v35 repairs both
+// and this list keeps a partially-written v35 from claiming the repair.
+const VERSIONED_POST_V6_COLUMN_DEFAULTS = [
+  { version: 35, table: 'deliveries', column: 'mailbox_handle', defaultValue: "''" }
+] as const
+
+const VERSIONED_POST_V6_INDEX_PREDICATES = [
+  { version: 35, index: 'idx_deliveries_one_outstanding', predicate: "mailbox_handle != ''" },
+  {
+    version: 35,
+    index: 'idx_messages_pending_pointer_enter',
+    predicate: 'pointer_enter_pending > 0'
+  }
 ] as const
 
 const POST_V6_INDEXES = [
@@ -50,8 +79,38 @@ function hasOrchestrationColumn(db: Database.Database, table: string, column: st
   return rows.some((row) => row.name === column)
 }
 
+function hasNotNullOrchestrationColumn(
+  db: Database.Database,
+  table: string,
+  column: string
+): boolean {
+  const rows = db.pragma(`table_info(${table})`) as { name: string; notnull: number }[]
+  return rows.some((row) => row.name === column && row.notnull === 1)
+}
+
+function hasOrchestrationColumnDefault(
+  db: Database.Database,
+  table: string,
+  column: string,
+  defaultValue: string
+): boolean {
+  const rows = db.pragma(`table_info(${table})`) as { name: string; dflt_value: unknown }[]
+  return rows.some((row) => row.name === column && row.dflt_value === defaultValue)
+}
+
 function hasOrchestrationIndex(db: Database.Database, index: string): boolean {
   return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)
+}
+
+function hasOrchestrationIndexPredicate(
+  db: Database.Database,
+  index: string,
+  predicate: string
+): boolean {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
+    .get(index) as { sql: string | null } | undefined
+  return !!row?.sql?.includes(predicate)
 }
 
 function messagesAllowQuestions(db: Database.Database): boolean {
@@ -94,6 +153,15 @@ function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): 
     VERSIONED_POST_V6_COLUMNS.every(
       ({ version, table, column }) =>
         storedVersion < version || hasOrchestrationColumn(db, table, column)
+    ) &&
+    (storedVersion < 34 || hasNotNullOrchestrationColumn(db, 'deliveries', 'mailbox_handle')) &&
+    VERSIONED_POST_V6_COLUMN_DEFAULTS.every(
+      ({ version, table, column, defaultValue }) =>
+        storedVersion < version || hasOrchestrationColumnDefault(db, table, column, defaultValue)
+    ) &&
+    VERSIONED_POST_V6_INDEX_PREDICATES.every(
+      ({ version, index, predicate }) =>
+        storedVersion < version || hasOrchestrationIndexPredicate(db, index, predicate)
     ) &&
     POST_V6_INDEXES.every((index) => hasOrchestrationIndex(db, index)) &&
     messagesAllowQuestions(db) &&

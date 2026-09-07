@@ -19,7 +19,8 @@ import {
   isHostCommandMissing,
   resolveHostGitHubCli
 } from './github-cli-host-fallback'
-import { execFileCapture } from './exec-file-capture'
+import { execFileCaptureToTermination } from './exec-file-capture'
+import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
 import type { GitExecOptions } from './git-exec-options'
 import { argsLookIdempotent } from './gh-idempotency'
 import { applyGhHostToArgs, explicitGhHostname, explicitGhRepoHostname } from './gh-host-args'
@@ -109,21 +110,33 @@ export async function ghExecFileAsync(
   // Why: scope by runtime and host so unrelated github.com, GHES, and WSL quotas cannot block each other.
   const rateLimitBucket = classifyGhRateLimitBucket(args)
   const rateLimitProbe = isGhRateLimitProbe(args)
+  const timeoutMs = options.timeout ?? defaultGhExecTimeoutMs(options.env)
   assertGhRateLimitScopeAvailable(args, options, resolved, rateLimitBucket, rateLimitProbe)
   let lastError: unknown
   let attemptedHostFallback = false
   let attemptedDefaultWslFallback = false
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
     try {
-      const { stdout, stderr } = await execFileCapture(resolved.binary, resolved.args, {
-        cwd: resolved.cwd,
-        encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
-        maxBuffer: options.maxBuffer,
-        // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
-        timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
-        env: nonInteractiveGhEnv(options.env),
-        signal: options.signal
-      })
+      // Why to-termination and not execFileCapture: `gh` on PATH is routinely a
+      // shim (mise, asdf, volta, a hand-written wrapper), so the deadline below
+      // has a chain to reap, not one process. execFileCapture's POSIX kill only
+      // signals the direct child, which orphans the rest to init — a wedged
+      // helper then outlives the timeout that was supposed to bound it (#18234).
+      const { stdout, stderr } = await execFileCaptureToTermination(
+        resolved.binary,
+        resolved.args,
+        {
+          cwd: resolved.cwd,
+          encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
+          maxBuffer: options.maxBuffer,
+          // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
+          timeout: timeoutMs,
+          env: nonInteractiveGhEnv(options.env),
+          signal: options.signal,
+          onDeadlineKill: () => logHostedCliDeadlineKill('gh', resolved.binary, args, timeoutMs)
+        },
+        resolved.termination
+      )
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
       lastError = err

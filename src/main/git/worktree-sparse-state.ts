@@ -1,12 +1,18 @@
 import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
+import type { GitRuntimeOptions } from './git-runtime-options'
 import { resolveGitDir } from './status'
 
-export async function detectSparseCheckout(worktreePath: string): Promise<boolean> {
+export async function detectSparseCheckout(
+  worktreePath: string,
+  // Why: git in a WSL distro reports the worktree, and writes its gitdir pointer, in the guest
+  // namespace; without the distro this stats a path Win32 fabricates and reads "not sparse".
+  options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
+): Promise<boolean> {
   // Why: fs.stat the per-worktree gitdir's sparse-checkout pattern file instead of a per-poll `git sparse-checkout list` subprocess that regressed responsiveness (PR #1290);
   // this is the cheap fast-path gate before the enabled check below.
   try {
-    const gitDir = await resolveGitDir(worktreePath)
+    const gitDir = await resolveGitDir(worktreePath, options)
     const stats = await stat(join(gitDir, 'info', 'sparse-checkout'))
     if (!stats.isFile() || stats.size === 0) {
       return false

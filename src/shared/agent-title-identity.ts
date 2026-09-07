@@ -12,12 +12,13 @@ import {
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /**
  * Returns true when the terminal title matches Claude Code's title conventions.
  * Used to scope prompt-cache-timer behavior to Claude sessions only.
  */
-export function isClaudeAgent(title: string): boolean {
+function computeIsClaudeAgent(title: string): boolean {
   if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
     return false
   }
@@ -43,7 +44,11 @@ export function isClaudeAgent(title: string): boolean {
   )
 }
 
-export function getAgentLabel(title: string): string | null {
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const isClaudeAgent: (title: string) => boolean =
+  memoizeTitleClassification(computeIsClaudeAgent)
+
+function computeAgentLabel(title: string): string | null {
   if (isClaudeManagementTitle(title)) {
     return null
   }
@@ -119,3 +124,7 @@ export function getAgentLabel(title: string): string | null {
 
   return null
 }
+
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const getAgentLabel: (title: string) => string | null =
+  memoizeTitleClassification(computeAgentLabel)

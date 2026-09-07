@@ -7,6 +7,7 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import {
+  _getWorktreeAgentOrchestrationIndexBuildCountForTest,
   EMPTY_WORKTREE_AGENT_ORCHESTRATION,
   releaseWorktreeAgentOrchestrationIndexCache,
   selectWorktreeAgentOrchestration
@@ -245,6 +246,93 @@ describe('selectWorktreeAgentOrchestration', () => {
       retainedAgentsByPaneKey: { unrelated: makeRetained('unrelated', 'wt-9') }
     } as unknown as IndexState
     expect(selectWorktreeAgentOrchestration(retainedChurn, 'wt-1')).toBe(first)
+  })
+
+  // Why a build counter and not record identity: `reuseRecordIfOrderedEqual` hides a rebuild
+  // from every identity assertion, so the wasted O(tabs + contexts) pass under `agentStatus:set`
+  // — several a second on a busy install, with a fresh live map each time — was invisible.
+  it('does not rebuild when agentStatus:set replaces the live map without moving a pane', () => {
+    const paneKey = paneKeyFor('tab-1', 0)
+    const context = { taskId: 't', dispatchId: 'd' }
+    const tabsByWorktree = { 'wt-1': [makeTab('tab-1')] }
+    const runtimeAgentOrchestrationByPaneKey = { [paneKey]: context }
+    const publish = (agentStatusByPaneKey: Record<string, AgentStatusEntry>): IndexState =>
+      ({
+        tabsByWorktree,
+        runtimeAgentOrchestrationByPaneKey,
+        agentStatusByPaneKey,
+        retainedAgentsByPaneKey: {}
+      }) as unknown as IndexState
+
+    const first = selectWorktreeAgentOrchestration(
+      publish({ [paneKey]: makeEntry(paneKey, 'wt-1') }),
+      'wt-1'
+    )
+    const buildsAfterFirst = _getWorktreeAgentOrchestrationIndexBuildCountForTest()
+
+    for (let tick = 0; tick < 25; tick += 1) {
+      // A fresh live map every tick, exactly as `agentStatus:set` replaces the slice, plus a
+      // stable entry for the orchestrated pane so the projection is non-trivially equal.
+      const published = publish({
+        [paneKey]: makeEntry(paneKey, 'wt-1'),
+        [`unrelated-${tick}`]: makeEntry(`unrelated-${tick}`, 'wt-9')
+      })
+      expect(selectWorktreeAgentOrchestration(published, 'wt-1')).toBe(first)
+    }
+    expect(_getWorktreeAgentOrchestrationIndexBuildCountForTest()).toBe(buildsAfterFirst)
+
+    // ...and the projection is still load-bearing: moving that pane must re-attribute it.
+    const moved = publish({ [paneKey]: makeEntry(paneKey, 'wt-2') })
+    expect(selectWorktreeAgentOrchestration(moved, 'wt-2')[paneKey]).toBe(context)
+    expect(_getWorktreeAgentOrchestrationIndexBuildCountForTest()).toBe(buildsAfterFirst + 1)
+  })
+
+  // Why counted rather than timed: the projection is the index's per-publication work, and
+  // recomputing it per card would put the O(contexts) scan back on the per-card path that the
+  // index exists to remove — which no identity or correctness assertion would notice.
+  it('projects the live and retained maps once per publication, not once per card', () => {
+    const cardCount = 8
+    const contextCount = 6
+    const tabsByWorktree: Record<string, TerminalTab[]> = {}
+    const runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext> = {}
+    for (let index = 0; index < cardCount; index += 1) {
+      tabsByWorktree[`wt-${index}`] = [makeTab(`tab-${index}`)]
+    }
+    for (let index = 0; index < contextCount; index += 1) {
+      runtimeAgentOrchestrationByPaneKey[paneKeyFor(`tab-${index}`, index)] = {
+        taskId: `t-${index}`,
+        dispatchId: `d-${index}`
+      }
+    }
+    let liveReads = 0
+    let retainedReads = 0
+    const countReads = (target: object, onRead: () => void): object =>
+      new Proxy(target, {
+        get(source, key, receiver) {
+          if (typeof key === 'string') {
+            onRead()
+          }
+          return Reflect.get(source, key, receiver)
+        }
+      })
+    const state = {
+      tabsByWorktree,
+      runtimeAgentOrchestrationByPaneKey,
+      agentStatusByPaneKey: countReads({}, () => {
+        liveReads += 1
+      }),
+      retainedAgentsByPaneKey: countReads({}, () => {
+        retainedReads += 1
+      })
+    } as unknown as IndexState
+
+    for (let card = 0; card < cardCount; card += 1) {
+      selectWorktreeAgentOrchestration(state, `wt-${card}`)
+    }
+    expect({ liveReads, retainedReads }).toEqual({
+      liveReads: contextCount,
+      retainedReads: contextCount
+    })
   })
 
   it('rebuilds when a source it reads actually changes', () => {

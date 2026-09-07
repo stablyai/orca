@@ -1,4 +1,5 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
 import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
 import { randomUUID } from 'node:crypto'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
@@ -20,6 +21,7 @@ import {
   optionalRemoteCliNumber,
   optionalRemoteCliString,
   parseRemoteCliArgs,
+  readRemoteRetryRequestFlag,
   requiredRemoteCliString,
   resolveRemoteCliHandle
 } from './ssh-remote-cli-args'
@@ -155,7 +157,7 @@ async function dispatchRemoteCli(
   const compatibilityEnvelope: RuntimeOrchestrationEnvelope = {
     compatibilityInvocationId: randomUUID(),
     orchestrationRequestId:
-      optionalRemoteCliString(parsed.flags, 'retry-request') ??
+      readRemoteRetryRequestFlag(parsed.flags) ??
       (command === 'orchestration check' || command === 'orchestration ask'
         ? randomUUID()
         : undefined),
@@ -182,6 +184,7 @@ async function dispatchRemoteCli(
         runtime: {
           state: status.graphStatus === 'ready' ? 'ready' : 'graph_not_ready',
           reachable: true,
+          connectionState: runtimeHostConnectionState({ hasStatusEntry: true, status }),
           runtimeId: status.runtimeId
         },
         graph: { state: status.graphStatus }

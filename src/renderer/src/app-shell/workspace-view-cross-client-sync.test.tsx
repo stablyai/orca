@@ -31,6 +31,10 @@ import {
 } from '../../../main/persistence/applying-settings/ui-state-update'
 import type { AppState } from '../store/types'
 import { createUIStore } from '../store/slices/ui-slice-test-harness'
+import {
+  capturePersistedUIWriteBaseline,
+  diffPersistedUIWriteFields
+} from '../store/slices/persisted-ui-write-baseline'
 import { usePersistedUIWriter } from './use-persisted-ui-writer'
 
 const storeRef = vi.hoisted(() => ({
@@ -197,8 +201,10 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   let pendingBroadcasts: PersistedUIState[]
   let holdAcks: boolean
   let rejectSets: boolean
+  let rejectNextSet: boolean
   let setCallCount: number
   let pendingAcks: (() => void)[]
+  let pendingRejects: ((reason?: unknown) => void)[]
 
   async function resolveAcks() {
     await act(async () => {
@@ -249,8 +255,10 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     storeRef.current = store as unknown as typeof storeRef.current
     holdAcks = false
     rejectSets = false
+    rejectNextSet = false
     setCallCount = 0
     pendingAcks = []
+    pendingRejects = []
     ;(window as unknown as { api: unknown }).api = {
       ui: {
         set: (updates: Partial<PersistedUIState>) => {
@@ -258,6 +266,10 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
           // rejectSets models transport failure: nothing reaches the host.
           if (rejectSets) {
             return Promise.reject(new Error('transport failure'))
+          }
+          if (rejectNextSet) {
+            rejectNextSet = false
+            return new Promise<void>((_, reject) => pendingRejects.push(reject))
           }
           // Like the real IPC: main applies the update before the renderer's
           // promise resolves; holdAcks models the in-flight round-trip window.
@@ -516,7 +528,132 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
   })
 
-  it('a synchronously throwing ui.set still settles the marker and reschedules', async () => {
+  it('a terminal rejection leaves one dirty field without an automatic retry loop', async () => {
+    // A rejected transport write is terminal for this attempt. The mirror must
+    // stay dirty for an explicit later edit, but the rejection itself must not
+    // keep scheduling 150ms trailing writes forever.
+    rejectSets = true
+    setCallCount = 0
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+
+    vi.advanceTimersByTime(150)
+    // Let the controlled rejection settle and (on the buggy writer) arm its
+    // next trailing timer, without allowing that timer to fire in this tick.
+    await Promise.resolve()
+
+    // Independent signals: exactly one transport call and no trailing timer
+    // remain after its rejection settles; the failed field is still dirty.
+    expect(setCallCount).toBe(1)
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
+    const state = store.getState()
+    expect(
+      diffPersistedUIWriteFields(
+        capturePersistedUIWriteBaseline(state),
+        state.persistedUIWriteBaseline!
+      )
+    ).toEqual({ hideDefaultBranchWorkspace: true })
+    expect(vi.getTimerCount()).toBe(0)
+
+    // Recovery is explicit: the next user edit arms one debounce and flushes
+    // both the old dirty field and the new edit once transport recovers.
+    rejectSets = false
+    act(() => {
+      store.getState().setHideCliCreatedWorkspaces(true)
+    })
+    vi.advanceTimersByTime(150)
+    await Promise.resolve()
+    expect(setCallCount).toBe(2)
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
+    expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
+
+    // Unmount cleanup must cancel any delayed work and prevent a post-close
+    // write when the store changes later.
+    act(() => {
+      root.unmount()
+    })
+    expect(vi.getTimerCount()).toBe(0)
+    store.getState().setHideDetachedHeadWorkspaces(true)
+    vi.advanceTimersByTime(300)
+    expect(setCallCount).toBe(2)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('a transient rejection still flushes a pending flip-back exactly once', async () => {
+    // A trailing pass that was already needed for an edit made while a write
+    // was in flight must survive that write's rejection. This is distinct from
+    // a terminal rejection with no newer edit (covered above).
+    holdAcks = true
+    rejectNextSet = true
+    setCallCount = 0
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    vi.advanceTimersByTime(150)
+    expect(setCallCount).toBe(1)
+    expect(pendingRejects).toHaveLength(1)
+
+    // Flip the first field back and edit a second field while write #1 is in
+    // flight. The failed write must not be retried; only the pending edit is
+    // eligible for the one trailing flush.
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(false)
+      store.getState().setHideCliCreatedWorkspaces(true)
+    })
+    holdAcks = false
+    pendingRejects.splice(0).forEach((reject) => reject(new Error('transient transport failure')))
+    expect(pendingRejects).toHaveLength(0)
+    await Promise.resolve()
+    vi.advanceTimersByTime(150)
+    await Promise.resolve()
+
+    expect(setCallCount).toBe(2)
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
+    expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
+
+    // Once the pending edit is acknowledged, no rejection-induced timer may
+    // remain to send another copy.
+    vi.advanceTimersByTime(150)
+    await Promise.resolve()
+    expect(setCallCount).toBe(2)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('a rejected trailing write does not inherit automatic retry permission', async () => {
+    // A successful write's trailing pass is still a normal persistence attempt:
+    // if that pass is rejected with no newer edit, it must be terminal too.
+    holdAcks = true
+    setCallCount = 0
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    vi.advanceTimersByTime(150)
+    expect(setCallCount).toBe(1)
+
+    act(() => {
+      store.getState().setHideCliCreatedWorkspaces(true)
+    })
+    await resolveAcks()
+    holdAcks = false
+    rejectSets = true
+
+    // The edit's debounce and the successful ack's trailing pass may overlap;
+    // either way only one rejected trailing attempt is allowed.
+    vi.advanceTimersByTime(150)
+    await Promise.resolve()
+    expect(setCallCount).toBe(2)
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
+
+    vi.advanceTimersByTime(150)
+    await Promise.resolve()
+    expect(setCallCount).toBe(2)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('a synchronously throwing ui.set settles without a retry loop', async () => {
     const api = (
       window as unknown as { api: { ui: { set: (u: Partial<PersistedUIState>) => Promise<void> } } }
     ).api.ui
@@ -532,42 +669,13 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     // A leaked marker would pin the field against hydration for the renderer's life.
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
 
-    // The throw must also reschedule the trailing pass: once the transport
-    // recovers, the dirty field flushes without waiting for another edit.
+    // Recovery is explicit: a later edit flushes the still-dirty field.
     api.set = workingSet
-    await flushDesktopDebounce()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
-  })
-
-  it('a rejection re-schedules the trailing pass it caused to be skipped', async () => {
-    // Round-3 verification: a trailing pass that bails because a write is in
-    // flight relies on that write's settle to reschedule — including rejection,
-    // or a pending flip-back is stranded until the next unrelated edit.
-    holdAcks = true
-    act(() => {
-      store.getState().setHideDefaultBranchWorkspace(true)
-    })
-    await flushDesktopDebounce()
-    // Flip back while write #1 is in flight: only a trailing flush carries it.
-    act(() => {
-      store.getState().setHideDefaultBranchWorkspace(false)
-    })
-    await resolveAcks()
-
-    // Before the trailing pass fires, a different field's write goes out and
-    // is REJECTED while in flight when the trailing pass checks.
-    rejectSets = true
     act(() => {
       store.getState().setHideCliCreatedWorkspaces(true)
     })
     await flushDesktopDebounce()
-
-    rejectSets = false
-    holdAcks = false
-    await flushDesktopDebounce()
-    await flushDesktopDebounce()
-    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
-    expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
   })
 
   it('overlapping in-flight writes on one field decrement, not clear, the marker', () => {

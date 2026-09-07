@@ -247,13 +247,18 @@ describe('remote mirror resource identity', () => {
     })
   })
 
-  it('removes the PTY key when a ready terminal becomes pending', () => {
+  it('retains the PTY key when a ready terminal becomes pending', () => {
     const state = applySnapshot(makeState(), makeTerminalSnapshot())
     const next = applySnapshot(state, makeTerminalSnapshot({ terminal: null }), NOW + 1)
 
-    expect(next.ptyIdsByTabId).not.toBe(state.ptyIdsByTabId)
-    expect(next.ptyIdsByTabId).not.toHaveProperty(MIRRORED_TAB_ID)
-    expect(next.terminalLayoutsByTabId[MIRRORED_TAB_ID]?.ptyIdsByLeafId).toEqual({})
+    expect(next.ptyIdsByTabId).toBe(state.ptyIdsByTabId)
+    expect(next.ptyIdsByTabId[MIRRORED_TAB_ID]).toEqual(['remote:web-env-1@@terminal-1'])
+    expect(next.terminalLayoutsByTabId[MIRRORED_TAB_ID]).toBe(
+      state.terminalLayoutsByTabId[MIRRORED_TAB_ID]
+    )
+    expect(next.terminalLayoutsByTabId[MIRRORED_TAB_ID]?.ptyIdsByLeafId).toEqual({
+      [LEAF_ID]: 'remote:web-env-1@@terminal-1'
+    })
   })
 
   it('cleans up terminal resources and unread state when the host omits the tab', () => {

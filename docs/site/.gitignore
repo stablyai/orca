@@ -1,0 +1,11 @@
+node_modules
+.next
+.source
+out
+.vercel
+next-env.d.ts
+*.tsbuildinfo
+# Keep local deployment credentials out of the publication boundary.
+.env
+.env.*
+.npmrc

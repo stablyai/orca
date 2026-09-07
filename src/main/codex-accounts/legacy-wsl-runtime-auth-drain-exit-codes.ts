@@ -1,0 +1,4 @@
+export const MARKER_PRESENT_EXIT = 20
+export const SOURCE_AUTH_ABSENT_EXIT = 21
+export const LEGACY_HOME_ABSENT_EXIT = 22
+export const LEGACY_HOME_STILL_PRESENT_EXIT = 47

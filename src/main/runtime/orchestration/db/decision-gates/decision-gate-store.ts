@@ -3,6 +3,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
 
 // ── Decision Gates ──
 
@@ -72,7 +73,20 @@ export function createGate(
         optionsJson
       )
     this.completeActiveDispatchesForTask(gate.taskId)
-    this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(gate.taskId)
+    const task = this.getTask(gate.taskId)
+    if (!task) {
+      throw new OrchestrationError(
+        'lifecycle_not_found',
+        `Task ${gate.taskId} was not found while creating a decision gate.`,
+        { taskId: gate.taskId }
+      )
+    }
+    transitionLifecycleWithDb(this.db, {
+      entity: 'task',
+      id: gate.taskId,
+      from: task.status,
+      to: 'blocked'
+    })
     const created = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(id) as
       | DecisionGateRow
       | undefined

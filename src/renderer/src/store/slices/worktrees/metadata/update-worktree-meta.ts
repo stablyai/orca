@@ -2,6 +2,7 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
+import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
@@ -122,11 +123,15 @@ export function createUpdateWorktreeMeta(
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
+    const displayNameProvenance =
+      'displayName' in normalizedUpdates
+        ? { displayNameIsPinned: displayNameUpdatePinsLabel(normalizedUpdates.displayName) }
+        : {}
     const targetEnriched = resolvedPushTarget
-      ? { ...normalizedUpdates, pushTarget: resolvedPushTarget }
+      ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: resolvedPushTarget }
       : shouldClearStaleHostedReviewPushTarget
-        ? { ...normalizedUpdates, pushTarget: undefined }
-        : normalizedUpdates
+        ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: undefined }
+        : { ...normalizedUpdates, ...displayNameProvenance }
     const renameCleared =
       'displayName' in targetEnriched
         ? {

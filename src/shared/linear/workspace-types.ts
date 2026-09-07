@@ -41,6 +41,40 @@ export type LinearConnectionStatus = {
   credentialError?: string
 }
 
+/**
+ * Stable dependency key for Linear reads: only the fields that change what a read returns.
+ * Not interchangeable with the store's `linearStatusScopeSignature`, which hashes full
+ * viewer and workspace metadata for cache invalidation and so churns on read-irrelevant edits.
+ */
+export function linearWorkspaceScopeSignature(
+  status: Pick<
+    LinearConnectionStatus,
+    | 'connected'
+    | 'credentialError'
+    | 'activeWorkspaceId'
+    | 'selectedWorkspaceId'
+    | 'workspaces'
+    | 'viewer'
+  >
+): string {
+  return JSON.stringify({
+    connected: status.connected === true,
+    credentialError: status.credentialError ?? null,
+    workspaceId: status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null,
+    // Why: under 'all', URL lookup still falls back to the active workspace, so it must key reads too.
+    activeWorkspaceId: status.activeWorkspaceId ?? null,
+    // Why: URL resolution routes by organizationUrlKey, and credentialRevision changes what a read returns.
+    viewerOrganizationUrlKey: status.viewer?.organizationUrlKey ?? null,
+    workspaces: (status.workspaces ?? [])
+      .map((workspace) =>
+        [workspace.id, workspace.organizationUrlKey ?? '', workspace.credentialRevision ?? 0].join(
+          '\u001f'
+        )
+      )
+      .sort()
+  })
+}
+
 export type LinearWorkflowState = {
   id: string
   name: string

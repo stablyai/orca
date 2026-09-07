@@ -1,5 +1,5 @@
 import React from 'react'
-import { Activity, CircleCheck } from 'lucide-react'
+import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
@@ -30,6 +30,11 @@ export type AgentDotState =
   | 'failed'
   | 'done'
   | 'idle'
+  // Why: the pane still has a live PTY but its reporting stream has gone quiet past
+  // the staleness window. Distinct from 'idle' because Orca has evidence something is
+  // held there, and never rendered as 'done' or 'working' — it asserts nothing about
+  // the agent, only about what Orca last heard.
+  | 'unverifiable'
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
   // collapses blocked + waiting into a single "needs attention" state. Keep
   // this as a distinct member so that flow can render without inventing a new
@@ -56,6 +61,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Done'
     case 'idle':
       return 'Idle'
+    case 'unverifiable':
+      return 'No recent update'
     case 'permission':
       return 'Needs attention'
   }
@@ -114,6 +121,17 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         aria-label={agentStateLabel(state)}
       >
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  } else if (state === 'unverifiable') {
+    // Why: a dashed ring reads as "incomplete information" rather than a state claim,
+    // and amber carries warning weight without borrowing 'done' green or 'working' yellow.
+    indicator = (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <CircleDashed className={cn('text-amber-500', icon)} aria-hidden="true" />
       </span>
     )
   } else if (state === 'permission' || state === 'waiting') {

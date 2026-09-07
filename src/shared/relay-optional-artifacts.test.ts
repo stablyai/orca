@@ -31,4 +31,12 @@ describe('optional relay artifacts', () => {
     expect(relayArtifactFilenames(true)).toContain('relay.js')
     expect(relayArtifactFilenames(true)).toContain('node-pty-1.1.0-console-list-agent-patch.cjs')
   })
+
+  it('ships the pty-master cloexec patch to every platform', () => {
+    // Only Linux runs it, but its bytes are what change the relay content hash, and therefore what
+    // moves an upgrading host to a fresh directory whose install can apply it (#17915).
+    for (const isWindows of [true, false]) {
+      expect(relayArtifactFilenames(isWindows)).toContain('node-pty-1.1.0-master-cloexec-patch.cjs')
+    }
+  })
 })

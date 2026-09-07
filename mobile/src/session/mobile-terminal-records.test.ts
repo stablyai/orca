@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   getTerminalRecordsFromSessionTabs,
   hasConnectedTerminalAbsentFromSessionTabs,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
   mobileSessionTabsEqual,
+  mobileTerminalThemesEqual,
   type MobileTerminalSessionTab,
   type TerminalRecord
 } from './mobile-terminal-records'
@@ -26,6 +27,35 @@ const darkTheme = {
 }
 
 describe('mobile terminal records', () => {
+  it('compares terminal themes without serializing them', () => {
+    const equivalentTheme = {
+      mode: 'dark' as const,
+      theme: { foreground: '#eeeeee', background: '#111111' }
+    }
+    const stringify = vi.spyOn(JSON, 'stringify').mockImplementation(() => {
+      throw new Error('unexpected theme serialization')
+    })
+
+    try {
+      for (let comparison = 0; comparison < 1_000; comparison += 1) {
+        expect(mobileTerminalThemesEqual(darkTheme, equivalentTheme)).toBe(true)
+        expect(mobileTerminalThemesEqual(darkTheme, lightTheme)).toBe(false)
+      }
+    } finally {
+      stringify.mockRestore()
+    }
+  })
+
+  it('detects additional theme fields from a newer host', () => {
+    const withNewField = {
+      ...darkTheme,
+      theme: { ...darkTheme.theme, futureAccent: '#ff00ff' }
+    }
+
+    expect(mobileTerminalThemesEqual(darkTheme, withNewField)).toBe(false)
+    expect(mobileTerminalThemesEqual(withNewField, { ...withNewField })).toBe(true)
+  })
+
   it('keeps the known theme when a session-tab snapshot omits it', () => {
     const known: TerminalRecord[] = [
       { handle: 'pty-1', title: 'Old title', terminalTheme: darkTheme, isActive: false }
@@ -150,6 +180,20 @@ describe('mobile terminal records', () => {
         ]
       )
     ).toBe(false)
+  })
+
+  it('treats structured agent-session identity changes as session-tab changes', () => {
+    const base = {
+      type: 'agent-session' as const,
+      id: 'agent-tab-1',
+      title: 'Codex',
+      sessionId: 'session-1',
+      agent: 'codex',
+      isActive: true
+    }
+
+    expect(mobileSessionTabsEqual([base], [{ ...base }])).toBe(true)
+    expect(mobileSessionTabsEqual([base], [{ ...base, sessionId: 'session-2' }])).toBe(false)
   })
 
   const record = (over: Partial<TerminalRecord> & { handle: string }): TerminalRecord => ({
