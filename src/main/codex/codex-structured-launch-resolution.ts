@@ -13,7 +13,6 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
-import { resolveCodexStructuredAppServerArgv } from './codex-structured-app-server-args'
 
 export type CodexStructuredLaunchResolverDeps = {
   store: AgentSessionRecordStore
@@ -57,7 +56,7 @@ export function createCodexStructuredLaunchResolver(
       pathEnv,
       ...(homePath ? { homePath } : {})
     })
-    const args = [...resolveCodexStructuredAppServerArgv(record.launchArgs ?? []), 'app-server']
+    const args = [...(record.launchArgs ?? []), 'app-server']
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
     return {
