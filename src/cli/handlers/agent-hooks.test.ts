@@ -32,7 +32,7 @@ const {
   prepareManagedCodexHomeBeforeShellLaunchMock: vi.fn()
 }))
 
-vi.mock('../runtime-client', () => {
+vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     call = callMock
     getCliStatus = getCliStatusMock
@@ -47,7 +47,7 @@ vi.mock('../runtime-client', () => {
     }
   }
 
-  class RuntimeRpcFailureError extends Error {}
+  const { RuntimeRpcFailureError } = await import('../runtime/types.js')
 
   return {
     RuntimeClient,
@@ -67,6 +67,7 @@ vi.mock('../../main/codex/managed-home-shell-preflight', () => ({
 }))
 
 import { main } from '../index'
+import { RuntimeRpcFailureError } from '../runtime-client'
 
 function readDataFile(userDataPath: string): PersistedState {
   return JSON.parse(readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')) as PersistedState
@@ -157,6 +158,29 @@ describe('agent hooks CLI handler', () => {
       appliedBy: 'runtime',
       statuses: local,
       remotes
+    })
+  })
+
+  it('preserves local diagnostics with explicitly unavailable SSH status on older runtimes', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getCliStatusMock.mockResolvedValueOnce({
+      result: { runtime: { reachable: true } }
+    } as never)
+    callMock.mockRejectedValueOnce(
+      new RuntimeRpcFailureError({
+        id: 'legacy',
+        ok: false,
+        error: { code: 'method_not_found', message: 'Unknown method: agentHooks.status' },
+        _meta: { runtimeId: 'legacy' }
+      })
+    )
+    await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+    expect(process.exitCode).not.toBe(1)
+    const printed = vi.mocked(console.log).mock.calls.at(-1)?.[0] as string
+    expect(JSON.parse(printed).result).toMatchObject({
+      appliedBy: 'offline',
+      remotes: null,
+      remotesUnavailableReason: 'runtime does not support SSH hook status'
     })
   })
 

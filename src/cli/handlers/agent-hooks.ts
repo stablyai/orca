@@ -6,6 +6,7 @@ import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import {
   RuntimeClientError,
+  RuntimeRpcFailureError,
   type RuntimeClient,
   type RuntimeRpcSuccess,
   getDefaultUserDataPath
@@ -26,6 +27,7 @@ type AgentHookCommandResult = {
   appliedBy: 'runtime' | 'offline'
   statuses: AgentHookInstallStatus[]
   remotes?: RemoteAgentHookInstallReport[] | null
+  remotesUnavailableReason?: string
 }
 
 // Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
@@ -187,7 +189,9 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
     statusSummary
   ].filter(Boolean)
   if (result.remotes === null) {
-    lines.push('ssh: unavailable — runtime is not reachable')
+    lines.push(
+      `ssh: unavailable — ${result.remotesUnavailableReason ?? 'runtime is not reachable'}`
+    )
   }
   for (const remote of result.remotes ?? []) {
     lines.push(formatRemoteReport(remote))
@@ -225,24 +229,32 @@ async function setAgentHooksEnabled(
   }
 }
 
-/** Reads hook status from the runtime when it is reachable.
- *
- * Only a reachable runtime knows SSH-host state; transport failures must
- * surface instead of printing a false local green.
- */
+// Only method absence permits local diagnostics; transport failures remain errors.
 async function fetchRuntimeHookStatuses(client: RuntimeClient): Promise<{
-  local: AgentHookInstallStatus[]
-  remotes: RemoteAgentHookInstallReport[]
-} | null> {
+  local: AgentHookInstallStatus[] | null
+  remotes: RemoteAgentHookInstallReport[] | null
+  remotesUnavailableReason?: string
+}> {
   const status = await client.getCliStatus()
   if (!status.result.runtime.reachable) {
-    return null
+    return { local: null, remotes: null, remotesUnavailableReason: 'runtime is not reachable' }
   }
-  const response = await client.call<{
-    local: AgentHookInstallStatus[]
-    remotes: RemoteAgentHookInstallReport[]
-  }>('agentHooks.status', undefined, { timeoutMs: 10_000 })
-  return response.result
+  try {
+    const response = await client.call<{
+      local: AgentHookInstallStatus[]
+      remotes: RemoteAgentHookInstallReport[]
+    }>('agentHooks.status', undefined, { timeoutMs: 10_000 })
+    return response.result
+  } catch (error) {
+    if (error instanceof RuntimeRpcFailureError && error.code === 'method_not_found') {
+      return {
+        local: null,
+        remotes: null,
+        remotesUnavailableReason: 'runtime does not support SSH hook status'
+      }
+    }
+    throw error
+  }
 }
 
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
@@ -277,9 +289,12 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
     const result: AgentHookCommandResult = {
       enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
       settingsPath: getDataPath(),
-      appliedBy: runtimeStatuses ? 'runtime' : 'offline',
-      statuses: runtimeStatuses?.local ?? getManagedAgentHookStatuses(),
-      remotes: runtimeStatuses?.remotes ?? null
+      appliedBy: runtimeStatuses.local ? 'runtime' : 'offline',
+      statuses: runtimeStatuses.local ?? getManagedAgentHookStatuses(),
+      remotes: runtimeStatuses.remotes,
+      ...(runtimeStatuses.remotesUnavailableReason
+        ? { remotesUnavailableReason: runtimeStatuses.remotesUnavailableReason }
+        : {})
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },
