@@ -103,7 +103,7 @@ async function createWorktreeLinkedPath(
   mode: WorktreeMaterializeMode,
   platform: NodeJS.Platform,
   backend: CopyOnWriteBackend | null,
-  realCopyFallbackAllowed: () => boolean
+  realCopyFallbackAllowed: () => Promise<boolean>
 ): Promise<void> {
   // Why: share mode must never clone — an independent copy would give each
   // worktree its own node_modules, defeating one-install-serves-all.
@@ -127,7 +127,7 @@ async function createWorktreeLinkedPath(
         // admitted as a free clone its bytes were never charged, so bill them
         // now — and refuse if they no longer fit, rather than silently
         // reopening the unbounded copy this budget exists to close.
-        if (mode === 'copy' && !realCopyFallbackAllowed()) {
+        if (mode === 'copy' && !(await realCopyFallbackAllowed())) {
           throw new WorktreeCopyBudgetFallbackError(target)
         }
       }
@@ -200,7 +200,6 @@ async function materializeWorktreePaths(
     // the link points outside). Resolve the real source so we copy content.
     let copySource = source
     let bytesAreCopied = true
-    let measuredBytes = 0
     if (mode === 'copy') {
       try {
         if (sourceIsSymbolicLink) {
@@ -222,7 +221,6 @@ async function materializeWorktreePaths(
           )
           continue
         }
-        measuredBytes = verdict.bytes
       } catch (error) {
         console.error(`[worktree-symlinks] Failed to size "${safePath.rel}" (${source}):`, error)
         continue
@@ -239,7 +237,7 @@ async function materializeWorktreePaths(
         mode,
         platform,
         backend,
-        () => bytesAreCopied || copyBudget.chargeBytes(measuredBytes)
+        async () => bytesAreCopied || (await copyBudget.chargeSourceBytes(copySource))
       )
     } catch (error) {
       if (error instanceof WorktreeCopyBudgetFallbackError) {
