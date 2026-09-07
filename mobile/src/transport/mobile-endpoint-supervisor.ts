@@ -17,7 +17,6 @@ import {
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import { RelayRecoveryIntentQueue } from './relay-recovery-intent-queue'
-import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -49,7 +48,6 @@ export class MobileEndpointSupervisor {
   private readonly leaseRotation: RelayLeaseRotationTimer
   private readonly logRelay: RelayRecoveryLog
   private readonly directProbe: DirectReturnProbe
-  private readonly directGrace: MobileRelayDirectGraceTimer
   private readonly backgroundGrace: MobileRelayBackgroundGrace
   private readonly sessionEstablisher: MobileRelaySessionEstablisher
 
@@ -74,17 +72,11 @@ export class MobileEndpointSupervisor {
       isForeground: () => this.backgroundGrace.isForeground(),
       setForeground: (foreground) => this.setForeground(foreground),
       replaceRelay: () => void this.recoverRelay(true, true),
-      scheduleDirectProbe: () => this.directProbe.schedule(0)
+      scheduleDirectProbe: () => this.directProbe.probeNow()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
       this.relayRotationPending = true
       void this.recoverRelay(true)
-    })
-    // Why: the race owns recovery exactly like a network-change replacement — its
-    // failure must book the shared cooldown. recoverRelay's own guards already
-    // cover stopped/background/no-relay, so the timer needs no scope check.
-    this.directGrace = new MobileRelayDirectGraceTimer(dependencies, logical, () => {
-      void this.recoverRelay(true, true)
     })
     this.sessionEstablisher = new MobileRelaySessionEstablisher({
       logical,
@@ -119,7 +111,11 @@ export class MobileEndpointSupervisor {
       hysteresis: this.hysteresis,
       host: () => this.host,
       canSchedule: () => this.isActive() && this.logical.getActivePath() === 'relay',
+      canDial: () => this.isActive(),
       canAttempt: () => this.isActive() && !this.operationInFlight,
+      // Why: a reconnect has no session to protect, so the first authenticated
+      // socket wins it outright — hysteresis only arbitrates against a live relay.
+      adoptsOutright: () => this.isActive() && this.logical.getState() !== 'connected',
       beginOperation: () => (this.operationInFlight = true),
       migrate: (client, path, abort) => this.logical.migrateTo(client, path, undefined, abort),
       onDirectMigrated: async () => {
@@ -140,8 +136,7 @@ export class MobileEndpointSupervisor {
       logical,
       this.relayReconnect,
       this.leaseRotation,
-      this.directProbe,
-      this.directGrace
+      this.directProbe
     )
   }
 
@@ -157,7 +152,6 @@ export class MobileEndpointSupervisor {
     }
     this.unsubscribeState = this.logical.onStateChange((state) => {
       if (state === 'connected') {
-        this.directGrace.clear()
         if (this.logical.getActivePath() !== 'relay') {
           void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
         }
@@ -172,14 +166,14 @@ export class MobileEndpointSupervisor {
         logRelayDialFailure(this.logRelay, relayFailure, 'active-session')
       }
     })
-    if (this.relayReconnect.needsRecovery(this.logical.getState())) {
-      // Why: the first direct dial can fail while encrypted relay credentials
-      // are still loading, before the supervisor subscribes to state changes.
-      await this.recoverRelay()
-    } else {
+    if (this.logical.getState() === 'connected') {
       this.directProbe.schedule()
-      this.directGrace.arm()
+      return
     }
+    // Why: nothing is live, so both paths dial from t=0. This also covers the
+    // first direct dial failing while encrypted relay credentials are still
+    // loading, before the supervisor subscribes to state changes.
+    await this.recoverRelay()
   }
 
   setForeground(foreground: boolean): void {
@@ -204,14 +198,26 @@ export class MobileEndpointSupervisor {
     return !this.stopped && this.backgroundGrace.isForeground()
   }
 
-  // forceReplacement: dial past the "direct still looks live" guard — a lease
-  // rotation, a network-change replacement, or the happy-eyeballs grace race.
+  // Why: the relay dial yields to a live session and to nothing else. An
+  // unfinished direct dial ('connecting'/'handshaking') used to block it behind a
+  // fixed head start, which bought an off-LAN phone nothing on every reconnect.
+  private relayDialAllowed(forceReplacement: boolean): boolean {
+    return forceReplacement || this.logical.getState() !== 'connected'
+  }
+
+  // forceReplacement: dial past the "a live session already holds the client"
+  // guard — a lease rotation or a network-change replacement.
   // ownsRecovery: this dial is the connection's only hope, so a failure books the
   // shared cooldown and any session left stale-'connected' by a half-open socket
   // comes down; lease rotation clears it because armRetry owns its own retry.
   private async recoverRelay(forceReplacement = false, ownsRecovery = false): Promise<void> {
     if (!this.isActive() || !this.host.relay) {
       return
+    }
+    if (this.logical.getState() !== 'connected') {
+      // Why: both paths race from t=0. This no-ops unless relay owns the logical
+      // client — when direct owns it, its own session is already redialing.
+      this.directProbe.probeNow()
     }
     if (this.operationInFlight) {
       // Why: a direct cutover or a slow post-migration write can own the mutex when
@@ -225,9 +231,7 @@ export class MobileEndpointSupervisor {
       forceReplacement = true
       ownsRecovery = true
     }
-    // Why: connecting/handshaking is live direct progress; an unforced relay dial
-    // would race it before the grace timer has given direct its head start.
-    if (!forceReplacement && !this.relayReconnect.needsRecovery(this.logical.getState())) {
+    if (!this.relayDialAllowed(forceReplacement)) {
       return
     }
     // Why: revival and lease timers can overlap resume failures; one shared cooldown
@@ -264,9 +268,7 @@ export class MobileEndpointSupervisor {
         }
         return
       }
-      const recoveryNeeded =
-        forceReplacement || this.relayReconnect.needsRecovery(this.logical.getState())
-      if (!this.isActive() || !recoveryNeeded) {
+      if (!this.isActive() || !this.relayDialAllowed(forceReplacement)) {
         return
       }
       this.logical.setRecoveryPath('relay', this.relayReconnect.getFailureCount())
@@ -335,11 +337,7 @@ export class MobileEndpointSupervisor {
         this.relayReconnect.completeCredentialRefresh()
       }
       this.credentialRotationInFlight = false
-      if (
-        credentialRefreshed &&
-        this.isActive() &&
-        this.relayReconnect.needsRecovery(this.logical.getState())
-      ) {
+      if (credentialRefreshed && this.isActive() && this.relayDialAllowed(false)) {
         void this.recoverRelay()
       }
     }
