@@ -27,6 +27,7 @@ type StoreState = {
 }
 
 const mocks = vi.hoisted(() => ({
+  confirm: vi.fn(async () => true),
   store: { current: null as StoreState | null }
 }))
 
@@ -37,6 +38,13 @@ vi.mock('@/store', () => ({
     }
     return selector(mocks.store.current)
   }
+}))
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => mocks.confirm
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: vi.fn(), success: vi.fn() }
 }))
 
 vi.mock('@/components/linear-api-key-dialog', () => ({
@@ -118,6 +126,7 @@ describe('LinearIntegrationCard account scope', () => {
     container?.remove()
     container = null
     mocks.store.current = null
+    mocks.confirm.mockClear()
     Reflect.deleteProperty(window, 'api')
   })
 
@@ -173,6 +182,40 @@ describe('LinearIntegrationCard account scope', () => {
     })
 
     expect(state.testLinearConnection).toHaveBeenCalledWith('workspace-1')
+  })
+
+  it('removes all Linear access after destructive confirmation', async () => {
+    const state = installStore(true, { activeRuntimeEnvironmentId: 'runtime-1' })
+    const rendered = await renderCard()
+
+    await act(async () => {
+      Array.from(rendered.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Remove')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.confirm).toHaveBeenCalledWith({
+      title: 'Remove Linear integration?',
+      description:
+        'Orca will delete its saved credentials for this integration from Remote server: runtime-1. Credentials issued by Linear will not be revoked.',
+      confirmLabel: 'Remove',
+      confirmVariant: 'destructive'
+    })
+    expect(state.disconnectLinear).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps Linear access when removal is canceled', async () => {
+    const state = installStore(true)
+    mocks.confirm.mockResolvedValueOnce(false)
+    const rendered = await renderCard()
+
+    await act(async () => {
+      Array.from(rendered.querySelectorAll('button'))
+        .find((button) => button.textContent === 'Remove')
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(state.disconnectLinear).not.toHaveBeenCalled()
   })
 
   it('clears verification state after adding another Linear workspace', async () => {

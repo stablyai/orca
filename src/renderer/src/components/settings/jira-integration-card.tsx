@@ -10,6 +10,7 @@ import {
 } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { RemoveIntegrationButton } from './RemoveIntegrationButton'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
@@ -109,21 +110,30 @@ export function JiraIntegrationCard(): React.JSX.Element {
       }
       actions={
         !checking ? (
-          <Button
-            variant={connected ? 'outline' : 'default'}
-            size="sm"
-            onClick={() => setDialogOpen(true)}
-          >
-            {connected
-              ? translate(
-                  'auto.components.settings.task.tracker.integration.cards.60996beda6',
-                  'Add Jira site'
-                )
-              : translate(
-                  'auto.components.settings.task.tracker.integration.cards.e2ff968276',
-                  'Connect Jira'
-                )}
-          </Button>
+          <>
+            <Button
+              variant={connected ? 'outline' : 'default'}
+              size="sm"
+              onClick={() => setDialogOpen(true)}
+            >
+              {connected
+                ? translate(
+                    'auto.components.settings.task.tracker.integration.cards.60996beda6',
+                    'Add Jira site'
+                  )
+                : translate(
+                    'auto.components.settings.task.tracker.integration.cards.e2ff968276',
+                    'Connect Jira'
+                  )}
+            </Button>
+            {connected ? (
+              <RemoveIntegrationButton
+                integrationName="Jira"
+                scopeLabel={accountScope.label}
+                onRemove={() => handleDisconnect()}
+              />
+            ) : null}
+          </>
         ) : null
       }
     >
@@ -217,20 +227,12 @@ export function JiraIntegrationCard(): React.JSX.Element {
                 'Jira is connected for this runtime. Re-check if the connected site list looks stale.'
               )}
             </p>
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
-                {translate(
-                  'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
-                  'Re-check'
-                )}
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => void handleDisconnect()}>
-                {translate(
-                  'auto.components.settings.task.tracker.integration.cards.disconnect_all',
-                  'Disconnect'
-                )}
-              </Button>
-            </div>
+            <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
+                'Re-check'
+              )}
+            </Button>
           </>
         ) : !checking ? (
           <>
