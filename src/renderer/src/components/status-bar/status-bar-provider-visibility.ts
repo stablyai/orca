@@ -16,6 +16,7 @@ export type UsageProviderSettings = Pick<
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
+  minimaxApiKeyConfigured: boolean
   grokAuthConfigured: boolean
 }
 
@@ -77,6 +78,7 @@ export function hasUsageProviderSettings(
     // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
+    settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true
   )
 }
@@ -107,7 +109,7 @@ export function hasUsageProviderSettingsForProvider(
     return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
   }
   if (providerId === 'minimax') {
-    return settings.minimaxCookieConfigured === true
+    return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true

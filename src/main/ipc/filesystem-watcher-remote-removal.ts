@@ -9,6 +9,7 @@ import {
 } from './filesystem-watcher-listener-lifecycle'
 import {
   installRemoteWatcher,
+  scheduleDormantRemoteWatcherRearm,
   scheduleRemoteWatcherRetry
 } from './filesystem-watcher-remote-controller'
 
@@ -75,7 +76,9 @@ export async function restoreRemoteWatcherAfterFailedRemoval(
       continue
     }
     const result = await installRemoteWatcher(sender, connectionId, worktreePath)
-    if (result === 'unavailable') {
+    if (result === 'capacity') {
+      scheduleDormantRemoteWatcherRearm(connectionId, worktreePath)
+    } else if (result === 'unavailable') {
       scheduleRemoteWatcherRetry(sender, connectionId, worktreePath)
     }
     sender.send('fs:changed', {

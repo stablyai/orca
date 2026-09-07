@@ -60,6 +60,8 @@ export function createWorkerTerminalResourceStatement(
     terminalHandle: string
     paneKey: string | null
     processIncarnation: string | null
+    endpointId?: string | null
+    endpointIncarnation?: string | null
     hostScope?: string | null
     ownership: Extract<WorkerTerminalOwnershipState, 'owned' | 'external'>
   }
@@ -69,9 +71,9 @@ export function createWorkerTerminalResourceStatement(
     .prepare(
       `INSERT INTO worker_terminal_resources (
          id, origin_dispatch_id, owner_dispatch_id, worktree_id, terminal_handle,
-         pane_key, process_incarnation, host_scope, ownership_state, release_state,
+         pane_key, process_incarnation, endpoint_id, endpoint_incarnation, host_scope, ownership_state, release_state,
          retained_reason
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_requested', ?)`
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_requested', ?)`
     )
     .run(
       id,
@@ -81,6 +83,8 @@ export function createWorkerTerminalResourceStatement(
       params.terminalHandle,
       params.paneKey,
       params.processIncarnation,
+      params.endpointId ?? null,
+      params.endpointIncarnation ?? params.processIncarnation,
       params.hostScope ?? null,
       params.ownership,
       params.ownership === 'external' ? 'external_terminal' : null
@@ -119,6 +123,22 @@ export function getWorkerTerminalResourceFormerlyOwnedBy(
     .get(`%"${dispatchId}"%`) as WorkerTerminalResourceRow | undefined
 }
 
+/** Records bounded recovery bookkeeping without changing ownership or release intent. */
+export function recordWorkerTerminalRecoveryAttempt(
+  this: OrchestrationDb,
+  resourceId: string
+): WorkerTerminalResourceRow | undefined {
+  this.db
+    .prepare(
+      `UPDATE worker_terminal_resources
+          SET recovery_attempt_count = MIN(recovery_attempt_count + 1, 32),
+              last_recovery_at = datetime('now'), updated_at = datetime('now')
+        WHERE id = ?`
+    )
+    .run(resourceId)
+  return this.getWorkerTerminalResource(resourceId)
+}
+
 // Reusable exact settled terminal: transfers cleanup ownership to the new Dispatch and fences
 // release through the old owner. No transaction: composes inside the authority transaction.
 export function transferWorkerTerminalResourceStatement(
@@ -129,6 +149,8 @@ export function transferWorkerTerminalResourceStatement(
     terminalHandle: string
     paneKey: string
     processIncarnation: string
+    endpointId?: string | null
+    endpointIncarnation?: string | null
     hostScope: string | null
   }
 ): WorkerTerminalResourceRow {
@@ -147,6 +169,7 @@ export function transferWorkerTerminalResourceStatement(
        SET owner_dispatch_id = ?, prior_owner_dispatch_ids = ?, release_state = 'not_requested',
            retained_reason = NULL, release_requested_at = NULL, release_completed_at = NULL,
            release_error = NULL, terminal_handle = ?, pane_key = ?, process_incarnation = ?,
+           endpoint_id = COALESCE(?, endpoint_id), endpoint_incarnation = ?,
            host_scope = ?, updated_at = datetime('now')
        WHERE id = ? AND ownership_state = 'owned'`
     )
@@ -156,6 +179,8 @@ export function transferWorkerTerminalResourceStatement(
       params.terminalHandle,
       params.paneKey,
       params.processIncarnation,
+      params.endpointId ?? null,
+      params.endpointIncarnation ?? params.processIncarnation,
       params.hostScope,
       params.resourceId
     )
@@ -170,6 +195,7 @@ export type WorkerTerminalResourceStoreMethods = {
   getWorkerTerminalResource: typeof getWorkerTerminalResource
   getWorkerTerminalResourceByOwner: typeof getWorkerTerminalResourceByOwner
   getWorkerTerminalResourceFormerlyOwnedBy: typeof getWorkerTerminalResourceFormerlyOwnedBy
+  recordWorkerTerminalRecoveryAttempt: typeof recordWorkerTerminalRecoveryAttempt
   transferWorkerTerminalResourceStatement: typeof transferWorkerTerminalResourceStatement
 }
 
@@ -180,6 +206,7 @@ export function attachWorkerTerminalResourceStore(ctor: { prototype: object }): 
     getWorkerTerminalResource,
     getWorkerTerminalResourceByOwner,
     getWorkerTerminalResourceFormerlyOwnedBy,
+    recordWorkerTerminalRecoveryAttempt,
     transferWorkerTerminalResourceStatement
   })
 }

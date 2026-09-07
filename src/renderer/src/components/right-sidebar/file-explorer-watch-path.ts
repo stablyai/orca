@@ -55,18 +55,21 @@ export function createCachedDirPathIndex(
 /**
  * Map an event path to the dirCache key that should be refreshed.
  * Windows watchers often differ in drive-letter casing from the worktree key.
+ *
+ * Why the index is a thunk: the direct `dirPath in cache` hit answers nearly every lookup outside
+ * Windows casing drift, so building it eagerly costs one normalize per cached dir for nothing.
  */
 export function resolveCachedDirPath(
   cache: Record<string, { children: unknown }>,
   dirPath: string,
   worktreePath?: string,
-  cachePathIndex?: ReadonlyMap<string, string>
+  cachePathIndex?: () => ReadonlyMap<string, string>
 ): string | null {
   if (dirPath in cache) {
     return dirPath
   }
   const target = normalizeRuntimePathForComparison(dirPath)
-  const indexedPath = cachePathIndex?.get(target)
+  const indexedPath = cachePathIndex?.().get(target)
   if (indexedPath) {
     return indexedPath
   }

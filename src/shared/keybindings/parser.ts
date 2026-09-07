@@ -16,31 +16,8 @@ export function hasModifier(
   return Boolean(input.shift ?? input.shiftKey)
 }
 
-function isFunctionKeyToken(key: string): boolean {
-  return /^F([1-9]|1[0-9]|2[0-4])$/.test(key)
-}
-
-export function normalizeKeyToken(token: string): string | null {
-  if (token === ' ') {
-    return 'Space'
-  }
-  const trimmed = token.trim()
-  if (!trimmed) {
-    return null
-  }
-  const upper = trimmed.toUpperCase()
-  if (upper.length === 1 && upper >= 'A' && upper <= 'Z') {
-    return upper
-  }
-  if (upper.length === 1 && upper >= '0' && upper <= '9') {
-    return upper
-  }
-  // Function keys F1–F24 (event.key/event.code report them verbatim, e.g. F7).
-  if (isFunctionKeyToken(upper)) {
-    return upper
-  }
-
-  const simple: Record<string, string> = {
+const SIMPLE_KEY_TOKENS = new Map<string, string>(
+  Object.entries({
     '[': 'BracketLeft',
     ']': 'BracketRight',
     '{': 'BracketLeft',
@@ -97,9 +74,34 @@ export function normalizeKeyToken(token: string): string | null {
     SEMICOLON: 'Semicolon',
     QUOTE: 'Quote',
     BACKQUOTE: 'Backquote'
+  })
+)
+
+function isFunctionKeyToken(key: string): boolean {
+  return /^F([1-9]|1[0-9]|2[0-4])$/.test(key)
+}
+
+export function normalizeKeyToken(token: string): string | null {
+  if (token === ' ') {
+    return 'Space'
+  }
+  const trimmed = token.trim()
+  if (!trimmed) {
+    return null
+  }
+  const upper = trimmed.toUpperCase()
+  if (upper.length === 1 && upper >= 'A' && upper <= 'Z') {
+    return upper
+  }
+  if (upper.length === 1 && upper >= '0' && upper <= '9') {
+    return upper
+  }
+  // Function keys F1–F24 (event.key/event.code report them verbatim, e.g. F7).
+  if (isFunctionKeyToken(upper)) {
+    return upper
   }
 
-  return simple[upper] ?? null
+  return SIMPLE_KEY_TOKENS.get(upper) ?? null
 }
 
 export function parseModifierToken(rawPart: string): ModifierToken | null {
@@ -177,7 +179,24 @@ export function parseDoubleTapKeybinding(rawParts: string[]): ParsedKeybinding |
   return parsed
 }
 
+// Binding strings come from a fixed definition set plus user overrides, so the live set is tiny; the cap only guards a caller feeding arbitrary strings.
+const PARSE_CACHE_LIMIT = 512
+const parseCache = new Map<string, ParsedKeybinding | null>()
+
 export function parseKeybinding(binding: string): ParsedKeybinding | null {
+  if (parseCache.has(binding)) {
+    return parseCache.get(binding) ?? null
+  }
+  const parsed = parseKeybindingUncached(binding)
+  if (parseCache.size >= PARSE_CACHE_LIMIT) {
+    parseCache.clear()
+  }
+  // Frozen so a caller can never corrupt the shared entry; every current caller spread-copies before changing a field.
+  parseCache.set(binding, parsed ? Object.freeze(parsed) : null)
+  return parsed
+}
+
+function parseKeybindingUncached(binding: string): ParsedKeybinding | null {
   const rawParts = binding
     .split('+')
     .map((part) => part.trim())

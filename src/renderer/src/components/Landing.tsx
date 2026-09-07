@@ -16,6 +16,7 @@ import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 import { hasGitHubBackedProject, type PreflightIssue } from './landing-preflight-issues'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
+import { useLandingOrcaStarState, type LandingStarState } from './landing-github-star-state'
 
 type ShortcutItem = {
   id: string
@@ -26,30 +27,20 @@ type ShortcutItem = {
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
 const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
 
-type StarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
+type StarButtonProps = {
+  hasRepos: boolean
+  state: LandingStarState
+  setState: React.Dispatch<React.SetStateAction<LandingStarState>>
+}
 
-function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Element | null {
-  const [state, setState] = useState<StarState>('loading')
+function GitHubStarButton({
+  hasRepos,
+  state,
+  setState
+}: StarButtonProps): React.JSX.Element | null {
   const [menuOpen, setMenuOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const mountedRef = useMountedRef()
-
-  useEffect(() => {
-    let cancelled = false
-    void window.api.gh.checkOrcaStarred().then((result) => {
-      if (cancelled) {
-        return
-      }
-      if (result === null) {
-        setState('web-fallback')
-      } else {
-        setState(result ? 'starred' : 'not-starred')
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     if (!menuOpen) {
@@ -237,6 +228,7 @@ export default function Landing(): React.JSX.Element {
 
   // Why: the runtime-aware slice probes the active remote host instead of the renderer host.
   const { preflightIssues } = useLandingPreflightRuntime()
+  const [starState, setStarState] = useLandingOrcaStarState()
 
   const createWorktreeShortcut = useShortcutKeyDetails('workspace.create')
   const previousWorktreeShortcut = useShortcutKeyDetails('worktree.navigateUp')
@@ -318,7 +310,7 @@ export default function Landing(): React.JSX.Element {
 
       {showGitHubSupportFooter && (
         <div className="absolute bottom-6 left-0 right-0 flex justify-center">
-          <GitHubStarButton hasRepos={repos.length > 0} />
+          <GitHubStarButton hasRepos={repos.length > 0} state={starState} setState={setStarState} />
         </div>
       )}
     </div>

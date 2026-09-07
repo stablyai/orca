@@ -3,6 +3,22 @@ import {
   REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL,
   RUN_PANE_KEY_MATCH_SUFFIX_SQL
 } from '../pane-key-match'
+import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
+
+// Additive tables outlive v30 writers, so legacy parent deletes must clean their rows too.
+export const ADDITIVE_LIFECYCLE_DELETE_TRIGGERS_SQL = `
+CREATE TRIGGER IF NOT EXISTS trg_tasks_delete_additive_lifecycle
+AFTER DELETE ON tasks
+BEGIN
+  DELETE FROM attempt_observation_facts WHERE task_id = OLD.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_dispatches_delete_additive_lifecycle
+AFTER DELETE ON dispatch_contexts
+BEGIN
+  DELETE FROM attempt_observation_facts WHERE dispatch_id = OLD.id;
+END;
+`
 
 export function createGraphTablesSql(): string {
   return `
@@ -45,6 +61,8 @@ CREATE TABLE IF NOT EXISTS remote_dispatch_attachments (
   -- Nesting depth of the worker this attachment represents. Propagated from the
   -- Run home; absent from an old client means 1, which fails closed.
   depth                   INTEGER NOT NULL DEFAULT 1,
+  -- Its own counter: a federated worker host has no dispatch_contexts row to borrow one from.
+  consumer_generation     INTEGER NOT NULL DEFAULT 0,
   last_error              TEXT,
   created_at              TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
@@ -55,10 +73,10 @@ CREATE TABLE IF NOT EXISTS remote_dispatch_attachments (
 -- nesting parent. See docs/reference/ssh-execution-boundary.md.
 CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane
   ON remote_dispatch_attachments(pane_key)
-  WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown');
+  WHERE ${potentiallyLiveRemoteAttachmentSql()};
 CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane_suffix
   ON remote_dispatch_attachments(${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL})
-  WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+  WHERE ${potentiallyLiveRemoteAttachmentSql()}
     AND pane_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS federation_relay_items (
@@ -128,6 +146,14 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   capability_hash     TEXT,
   process_incarnation TEXT,
   capability_revoked_at TEXT,
+  -- R1 identity facts; nullable when legacy provenance was never proven.
+  retry_of_dispatch_id TEXT,
+  creator_dispatch_id TEXT,
+  -- Who created this row. A row whose creator is its own assignee is bookkeeping, not delegation,
+  -- so it must not count as a nesting parent. Null on rows written before v37 and for Orca's loop.
+  creator_handle      TEXT,
+  creator_pane_key    TEXT,
+  host_scope          TEXT,
   status              TEXT NOT NULL DEFAULT 'pending'
     CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),
   failure_count       INTEGER NOT NULL DEFAULT 0,
@@ -137,6 +163,9 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   -- Nesting depth: a root coordinator's worker is 1, its worker's worker is 2.
   -- Defaults to 1 so an unstamped row fails closed rather than reading as a root.
   depth               INTEGER NOT NULL DEFAULT 1,
+  -- Bumped whenever the Dispatch is re-pointed at a pane/process, fencing the prior consumer's
+  -- outstanding dispatch mailbox Delivery.
+  consumer_generation INTEGER NOT NULL DEFAULT 0,
   dispatched_at       TEXT,
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
@@ -146,6 +175,8 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
 CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);
 CREATE INDEX IF NOT EXISTS idx_dispatch_status ON dispatch_contexts(status);
 CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_handle ON dispatch_contexts(assignee_handle);
+
+${ADDITIVE_LIFECYCLE_DELETE_TRIGGERS_SQL}
 
 CREATE TABLE IF NOT EXISTS decision_gates (
   id            TEXT PRIMARY KEY,

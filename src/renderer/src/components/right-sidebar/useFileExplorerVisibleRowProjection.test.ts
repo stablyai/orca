@@ -25,7 +25,7 @@ function row(relativePath: string, isDirectory = false, depth?: number): TreeNod
 function cache(childrenByPath: Record<string, TreeNode[]>): Record<string, DirCache> {
   const dirCache: Record<string, DirCache> = {}
   for (const [path, children] of Object.entries(childrenByPath)) {
-    dirCache[path] = { children, loading: false }
+    dirCache[path] = { children }
   }
   return dirCache
 }

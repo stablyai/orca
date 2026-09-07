@@ -5,7 +5,10 @@
 // they share one path here rather than five copies in the host. The host keeps attach, holds and
 // teardown; this is the surface that assumes those already happened.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -74,7 +77,12 @@ export function sendStructuredAgentSessionTurn(
 export function cancelStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: { envelope: AgentSessionMutationEnvelope; turnId: string }
+  params: {
+    envelope: AgentSessionMutationEnvelope
+    turnId: string
+    scope?: 'background-tasks'
+    taskId?: string
+  }
 ): Promise<AgentSessionMutationResult<AgentSessionCancelResult>> {
   return mutate(context, caller, params.envelope, cancelPlan(params))
 }
@@ -112,4 +120,27 @@ export function readStructuredAgentSessionOptions(
     }
     return context.deps.adapter.readOptions({ sessionId, fence: session.fence })
   })
+}
+
+/** Settle provider-proven delivery independently of an in-flight client mutation. */
+export async function settleStructuredAgentSessionLateDispatch(
+  context: StructuredAgentSessionMutationContext,
+  input: {
+    sessionId: string
+    clientMessageId: string
+    providerIdentity: AgentJournalItemIdentity
+  }
+): Promise<void> {
+  const session = context.sessions.get(input.sessionId)
+  if (!session) {
+    return
+  }
+  // The journal queue drains before close; the host queue would defer this past teardown.
+  await session.journal.resolveDispatch({
+    clientMessageId: input.clientMessageId,
+    state: 'accepted',
+    providerIdentity: input.providerIdentity,
+    fence: session.fence
+  })
+  context.publish(input.sessionId, session.journal)
 }

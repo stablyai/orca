@@ -133,6 +133,35 @@ describe('describeToolInput', () => {
       'https://example.com'
     )
     expect(briefToolArg({ cmd: '', query: 'needle' })).toBe('needle')
+    // Inverted, so the skip is still exercised now that the search keys rank first.
+    expect(describeToolInput({ query: '', command: 'git status' })).toBe('git status')
+    expect(briefToolArg({ pattern: '   ', cmd: 'git status' })).toBe('git status')
+  })
+
+  it('labels a classified search row by its term, not the command that ran it', () => {
+    // Codex `commandActions` rows are the only input carrying both keys: the
+    // search term identifies the row, the raw command stays for the detail view.
+    const search = { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', path: '.' }
+
+    expect(describeToolInput(search)).toBe('beta')
+    expect(briefToolArg(search)).toBe('beta')
+    expect(toolFilePath(search)).toBeNull()
+  })
+
+  it('labels by a listed directory without offering it as a file target', () => {
+    // A folder under `path` becomes a tappable open-file link on mobile.
+    const listing = { command: 'ls src', cwd: '/repo', directory: 'src' }
+
+    expect(describeToolInput(listing)).toBe('src')
+    expect(briefToolArg(listing)).toBe('src')
+    expect(toolFilePath(listing)).toBeNull()
+  })
+
+  it('leaves a command-only input labelled by its command', () => {
+    // Bash and Codex's unclassified shell rows carry no search key at all.
+    expect(describeToolInput({ command: 'pnpm test', description: 'Run tests' })).toBe('pnpm test')
+    expect(briefToolArg({ command: 'pnpm test' })).toBe('pnpm test')
+    expect(describeToolInput({ cmd: 'git status --short' })).toBe('git status --short')
   })
 })
 

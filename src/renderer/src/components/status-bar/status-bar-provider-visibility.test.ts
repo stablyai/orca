@@ -73,6 +73,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     geminiCliOAuthEnabled: false,
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
+    minimaxApiKeyConfigured: false,
     grokAuthConfigured: false,
     ...overrides
   }
@@ -127,6 +128,7 @@ describe('hasUsageProviderSettings', () => {
       false
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
   })
 
@@ -194,6 +196,24 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('minimax', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('minimax', null)).toBe(false)
+  })
+
+  it('treats minimaxApiKeyConfigured as a parallel durable signal for MiniMax', () => {
+    // Why: CN endpoint users can configure MiniMax with an API key only. The
+    // visibility check must accept either credential so the status bar stays
+    // visible while the snapshot is still pending.
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'minimax',
+        usageSettings({ minimaxApiKeyConfigured: true })
+      )
+    ).toBe(true)
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'minimax',
+        usageSettings({ minimaxApiKeyConfigured: false, minimaxCookieConfigured: false })
+      )
+    ).toBe(false)
   })
 
   it('treats grokAuthConfigured as the durable signal for Grok', () => {

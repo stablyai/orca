@@ -221,7 +221,7 @@ function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccount
   )
 }
 
-function isAgentSessionOptions(value: unknown): value is Record<string, string> {
+export function isAgentSessionOptions(value: unknown): value is Record<string, string> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }

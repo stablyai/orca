@@ -181,6 +181,61 @@ describe('runQuickCommandInNewTab', () => {
     )
   })
 
+  it('records history while a structured agent quick command publishes asynchronously', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      tabId: null,
+      startupPlan: {} as never,
+      pasteDraftAfterLaunch: false,
+      focusAfterMenuClose: 'structured-session'
+    })
+
+    const result = runQuickCommandInNewTab({
+      command: {
+        id: 'agent-review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1',
+      historyId: 'runtime:local\u0000agent-review'
+    })
+
+    expect(result).toBeNull()
+    expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
+      'group-1',
+      'runtime:local\u0000agent-review'
+    )
+  })
+
+  it('uses the active group for structured history when the caller has no group', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      tabId: null,
+      startupPlan: {} as never,
+      pasteDraftAfterLaunch: false,
+      focusAfterMenuClose: 'structured-session'
+    })
+    mockState.activeGroupIdByWorktree['repo::worktree'] = 'active-group'
+
+    runQuickCommandInNewTab({
+      command: {
+        id: 'agent-review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff'
+      },
+      worktreeId: 'repo::worktree',
+      groupId: null
+    })
+
+    expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
+      'active-group',
+      'agent-review'
+    )
+  })
+
   it('does not launch post-start-only agent quick commands', () => {
     const result = runQuickCommandInNewTab({
       command: {

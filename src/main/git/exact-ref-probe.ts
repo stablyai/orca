@@ -157,7 +157,11 @@ export async function probeAnyExactRefBatched(
   } catch {
     return { found: false, unknown: true }
   }
-  const lines = stdout.split('\n').filter((line) => line.trim().length > 0)
+  // Trim per line so a CRLF-translating host's `\r` does not become part of the type.
+  const lines = stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
   // One line per input, in order; a short read means the batch never answered for the rest.
   if (lines.length !== safeRefs.length) {
     return { found: false, unknown: true }

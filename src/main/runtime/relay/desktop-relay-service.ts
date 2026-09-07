@@ -6,6 +6,7 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { readRelayAuthContext } from './relay-auth-context'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
@@ -112,7 +113,7 @@ export class DesktopRelayService {
     this.refreshDemand()
   }
 
-  fenceAndCloseNow(): void {
+  fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
     // Why: a fence must be hard — a surviving liveness tick could catch the
     // window between the pre-sign-out fence and the profile wipe and briefly
     // resurrect a broker. The next auth mutation re-arms via refreshDemand.
@@ -120,7 +121,7 @@ export class DesktopRelayService {
       clearInterval(this.livenessTimer)
       this.livenessTimer = null
     }
-    this.coordinator.fenceAndCloseNow()
+    this.coordinator.fenceAndCloseNow(hostCloseReason)
   }
 
   async createPairingRelay(

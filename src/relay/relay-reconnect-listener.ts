@@ -14,14 +14,22 @@ export class RelayReconnectListener {
   private readonly socketClients = new Map<Socket, number>()
   private acceptedSocketConnections = 0
   private acceptedSocketClient = false
+  private endpointCredential: string | undefined
+  private endpointCredentialPublished = false
 
   constructor(
     private readonly dispatcher: RelayDispatcher,
     readonly ownership: RelaySocketOwnership,
     private readonly launchVersion: string,
-    private readonly endpointCredential: string | undefined,
+    private readonly credentialFile: string | undefined,
     private readonly callbacks: RelayReconnectCallbacks
   ) {}
+
+  /** Set once the bind succeeded and the file is published; fixed for the process lifetime. */
+  setEndpointCredential(credential: string | undefined): void {
+    this.endpointCredential = credential
+    this.endpointCredentialPublished = true
+  }
 
   get clientCount(): number {
     return this.socketClients.size
@@ -40,6 +48,14 @@ export class RelayReconnectListener {
   }
 
   private acceptConnection(socket: Socket): void {
+    // Why fail closed: the credential is set right after listen() resolves, and today no
+    // connection can be delivered in between. Do not let an auth boundary rest on event-loop
+    // ordering — a client that arrives before publication is refused, never admitted unproved.
+    if (this.credentialFile !== undefined && !this.endpointCredentialPublished) {
+      relayLogLine('[relay] Client arrived before the endpoint credential was published; refusing')
+      socket.destroy()
+      return
+    }
     setupDaemonHandshake(socket, {
       launchVersion: this.launchVersion,
       endpointCredential: this.endpointCredential,

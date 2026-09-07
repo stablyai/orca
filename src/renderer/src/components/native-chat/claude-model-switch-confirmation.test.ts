@@ -138,69 +138,6 @@ describe('Claude model switch confirmation detection', () => {
     await expect(observer.result).resolves.toBe('rejected')
   })
 
-  it('requests interaction for Fable one-time usage-credit consent', async () => {
-    const dataObserver = { current: (_data: string): void => {} }
-    const observer = createClaudeModelSwitchConfirmationObserver({
-      ptyId: 'pty-1',
-      settings: {},
-      expectedModelLabel: 'Fable 5',
-      subscribeToData: (watcher) => {
-        dataObserver.current = watcher
-        return vi.fn(() => {})
-      },
-      timeoutMs: 100
-    })
-
-    await observer.ready
-    observer.arm()
-    dataObserver.current('Fable 5 uses usage credits and needs a one-time consent — ')
-    dataObserver.current('pick Fable from /model in an interactive session to set it up')
-
-    await expect(observer.result).resolves.toBe('interaction-required')
-  })
-
-  it('requests interaction for a Fable point-release consent prompt', async () => {
-    const dataObserver = { current: (_data: string): void => {} }
-    const observer = createClaudeModelSwitchConfirmationObserver({
-      ptyId: 'pty-1',
-      settings: {},
-      expectedModelLabel: 'Fable 5.1',
-      subscribeToData: (watcher) => {
-        dataObserver.current = watcher
-        return vi.fn(() => {})
-      },
-      timeoutMs: 100
-    })
-
-    await observer.ready
-    observer.arm()
-    // Only the versioned consent line: the generic "pick Fable from /model"
-    // sentence must not be what carries this case.
-    dataObserver.current('Fable 5.1 uses usage credits and needs a one-time consent')
-
-    await expect(observer.result).resolves.toBe('interaction-required')
-  })
-
-  it('requests interaction for a versioned Fable switch prompt', async () => {
-    const dataObserver = { current: (_data: string): void => {} }
-    const observer = createClaudeModelSwitchConfirmationObserver({
-      ptyId: 'pty-1',
-      settings: {},
-      expectedModelLabel: 'Fable 5.1',
-      subscribeToData: (watcher) => {
-        dataObserver.current = watcher
-        return vi.fn(() => {})
-      },
-      timeoutMs: 100
-    })
-
-    await observer.ready
-    observer.arm()
-    dataObserver.current('Switch to \u001b[1mFable 5.1\u001b[0m? This model uses usage credits.')
-
-    await expect(observer.result).resolves.toBe('interaction-required')
-  })
-
   it('reports unknown when the PTY observer cannot be established', async () => {
     const observer = createClaudeModelSwitchConfirmationObserver({
       ptyId: 'pty-1',

@@ -74,7 +74,7 @@ export function buildAgentStatusLiveEntry(
 ): AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection {
   const { state, paneKey, payload, terminalTitle, timing, routing, metadata, updatedAt } = args
   const existing = state.agentStatusByPaneKey[paneKey]
-  if (existing && updatedAt < existing.updatedAt) {
+  if (existing && updatedAt < existing.updatedAt && !timing?.allowOlderTimestamp) {
     return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle

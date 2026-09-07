@@ -264,7 +264,11 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
         return { repo: raceWinner }
       }
 
-      const detected = await detectRepoIconAndUpstream({ repoPath: targetPath, kind: repoKind })
+      const detected = await detectRepoIconAndUpstream({
+        repoPath: targetPath,
+        kind: repoKind,
+        executionHostId: LOCAL_EXECUTION_HOST_ID
+      })
       const repo: Repo = {
         id: randomUUID(),
         path: targetPath,

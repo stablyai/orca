@@ -37,6 +37,66 @@ describe('selectDeletionRoots', () => {
     const other = node('/repo/a.ts/impossible-child')
     expect(selectDeletionRoots([file, other])).toEqual([file, other])
   })
+
+  it('reads directory membership once per selected node, including file-only selections', () => {
+    let directoryReads = 0
+    const nodes = Array.from({ length: 1_000 }, (_, index) => ({
+      ...node(`/repo/file-${index}.ts`),
+      get isDirectory() {
+        directoryReads += 1
+        return false
+      }
+    }))
+    const selected = selectDeletionRoots(nodes)
+    expect(directoryReads).toBe(nodes.length)
+    expect(selected).not.toBe(nodes)
+    selected.forEach((entry, index) => expect(entry).toBe(nodes[index]))
+  })
+
+  it('preserves order, node identity and host ownership when children precede parents', () => {
+    const child = node('/repo/docs/guide.md')
+    const first = { ...node('/repo/first.ts'), operationOwner: { kind: 'local' as const } }
+    const parent = {
+      ...node('/repo/docs', true),
+      operationOwner: { kind: 'ssh' as const, connectionId: 'ssh-owner' }
+    }
+    const last = {
+      ...node('/repo/last.ts'),
+      operationOwner: { kind: 'unresolved' as const }
+    }
+    const nodes = [child, first, parent, last]
+    const selected = selectDeletionRoots(nodes)
+    expect(selected).toEqual([first, parent, last])
+    expect(selected[0]).toBe(first)
+    expect(selected[1]).toBe(parent)
+    expect(selected[2]).toBe(last)
+    expect(nodes).toEqual([child, first, parent, last])
+  })
+
+  it('keeps repeated references but excludes distinct directories with the same path', () => {
+    const dir = node('/repo/docs', true)
+    expect(selectDeletionRoots([dir, dir])).toEqual([dir, dir])
+    expect(selectDeletionRoots([dir, { ...dir }])).toEqual([])
+    const file = node('/repo/docs')
+    expect(selectDeletionRoots([file, dir])).toEqual([dir])
+  })
+
+  it.each([
+    ['/repo/docs/', '/repo/docs/guide.md', '/repo/docs-other/guide.md'],
+    ['C:\\Repo\\Docs\\', 'c:/repo/docs/guide.md', 'C:/Repo/Docs-other/guide.md'],
+    ['\\\\Server\\Share\\Docs', '//server/share/docs/guide.md', '//server/other/docs/guide.md']
+  ])('retains path boundaries for %s', (parentPath, childPath, outsidePath) => {
+    const parent = node(parentPath, true)
+    const child = node(childPath)
+    const outside = node(outsidePath)
+    expect(selectDeletionRoots([outside, child, parent])).toEqual([outside, parent])
+  })
+
+  it('keeps case-distinct POSIX paths', () => {
+    const parent = node('/repo/Docs', true)
+    const outside = node('/repo/docs/guide.md')
+    expect(selectDeletionRoots([outside, parent])).toEqual([outside, parent])
+  })
 })
 
 describe('runBatchDeletion', () => {

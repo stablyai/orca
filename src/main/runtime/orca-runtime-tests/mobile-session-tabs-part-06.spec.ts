@@ -595,7 +595,7 @@ describe('OrcaRuntimeService', () => {
     const secondMerge = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
     expect(secondMerge.publicationEpoch).toBe(firstMerge.publicationEpoch)
-    expect(secondMerge.publicationEpoch.match(/:headless-merge:/g) ?? []).toHaveLength(1)
+    expect(secondMerge.publicationEpoch).toBe('headless:stable-epoch')
   })
 
   it('keeps the graph ready when a mobile snapshot references a removed folder workspace', () => {

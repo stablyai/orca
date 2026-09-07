@@ -1,6 +1,5 @@
 import { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
-import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
 import type { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
@@ -34,14 +33,8 @@ export class CdpDebuggerChannel {
     }
     this.attached = true
 
-    // Why: attaching the CDP debugger sets navigator.webdriver = true and
-    // exposes other automation signals that Cloudflare Turnstile checks.
-    // Inject before any page loads so challenges succeed.
     try {
       await this.webContents.debugger.sendCommand('Page.enable', {})
-      await this.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument', {
-        source: ANTI_DETECTION_SCRIPT
-      })
     } catch {
       /* best-effort — page domain may not be ready yet */
     }

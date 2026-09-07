@@ -30,7 +30,10 @@ describe('runtime git status admission', () => {
       return { entries: [], conflictOperation: 'none' }
     })
     const commands = new RuntimeGitStatusCommands({
-      resolveRuntimeGitTarget: async () => ({ worktree: { path: '/workspace/feature' } })
+      resolveRuntimeGitTarget: async () => ({
+        worktree: { path: '/workspace/feature' },
+        executionHostId: 'local'
+      })
     } as never)
     const runtime = {
       getRuntimeId: () => 'test-runtime',

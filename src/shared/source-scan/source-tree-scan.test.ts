@@ -47,6 +47,13 @@ describe('stripComments', () => {
 })
 
 describe('blankStringContents', () => {
+  it('does not rescan the accumulated source for each division operator', () => {
+    const source = 'const x = value / 2;\n'.repeat(10000)
+    const started = performance.now()
+    expect(blankStringContents(source)).toBe(source)
+    expect(performance.now() - started).toBeLessThan(200)
+  })
+
   it('neutralises parentheses inside a string so a call is matched whole', () => {
     // A shell script embedded as a string closed the call early, so the options
     // object fell outside the match and its flags read as absent.
