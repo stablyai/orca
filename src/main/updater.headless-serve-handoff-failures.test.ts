@@ -87,6 +87,76 @@ describe('headless serve update handoff failure paths', () => {
   )
 
   it.skipIf(process.platform !== 'linux')(
+    'aborts the install when the quit-fence census was never armed',
+    async () => {
+      // Why: the continuation authorizes the helper to stop the unit — it must never be
+      // written from an unarmed fence that proved nothing about the terminal floor.
+      const send = vi.fn()
+      harness.captureServeUpdateAppImageMock.mockResolvedValue({
+        ok: true,
+        artifact: {
+          artifactPath: '/downloads/orca-1.0.61.AppImage',
+          sha512: SHA512,
+          targetVersion: '1.0.61'
+        }
+      })
+      harness.readServeUpdateResultForMock.mockReturnValue({
+        verdict: 'accepted',
+        message: ''
+      })
+      harness.autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        harness.autoUpdaterMock.emit('checking-for-update')
+        queueMicrotask(() =>
+          harness.autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+        )
+        return Promise.resolve(null)
+      })
+
+      const {
+        checkForUpdatesFromMenu,
+        downloadUpdate,
+        quitAndInstall,
+        setServeUpdateRuntimeId,
+        setupAutoUpdater
+      } = await loadUpdaterModule()
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        installMode: 'supervised-headless-serve'
+      })
+      setServeUpdateRuntimeId('rt-42')
+
+      checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      downloadUpdate()
+      harness.autoUpdaterMock.emit('update-downloaded', {
+        version: '1.0.61',
+        downloadedFile: '/downloads/orca-1.0.61.AppImage',
+        files: [{ url: 'orca-1.0.61.AppImage', sha512: SHA512 }]
+      })
+
+      quitAndInstall()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(harness.appMock.quit).not.toHaveBeenCalled()
+      expect(harness.killAllPtyMock).not.toHaveBeenCalled()
+      expect(harness.writeServeUpdateCensusContinuationMock).not.toHaveBeenCalled()
+      expect(harness.clearUpdateRequestMock).toHaveBeenCalled()
+      expect(send).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({
+          state: 'error',
+          message: expect.stringContaining('could not verify')
+        })
+      )
+      expect(harness.recordUpdaterLifecycleMock).toHaveBeenCalledWith(
+        'headless_serve_update_census_unarmed',
+        { version: '1.0.61' },
+        expect.objectContaining({ level: 'warn' })
+      )
+    }
+  )
+
+  it.skipIf(process.platform !== 'linux')(
     'stays alive with the real reason when the helper cannot be spawned',
     async () => {
       const send = vi.fn()

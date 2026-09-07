@@ -94,15 +94,15 @@ export function spawnRelay(
   proc.stderr!.on('data', recordStderr)
 
   // Why: a child that exits before the sentinel must fail the await instead of hanging the test.
-  // Why close and not exit: 'exit' can fire while stderr is still open, so the message built
-  // there would truncate the tail. Reject on 'close' (all stdio drained); the bounded timer
-  // covers a child whose stdio never closes after exit.
+  // Why close and not exit: 'exit' can fire while stdout/stderr are still open, so a sentinel
+  // in a later stdout chunk (or the final stderr tail) would be missed if we rejected at exit.
+  // Reject on 'close' (all stdio drained) only when the sentinel was never seen; the bounded
+  // timer covers a child whose stdio never closes after exit.
   let rejectSentinelAfterClose: (() => void) | null = null
   proc.once('exit', (code) => {
     if (sentinelResolved) {
       return
     }
-    sentinelResolved = true
     const fallback = setTimeout(() => {
       sentinelReject(
         new Error(
@@ -122,7 +122,7 @@ export function spawnRelay(
   })
   proc.once('close', () => {
     stderrTail += stderrDecoder.end()
-    if (rejectSentinelAfterClose) {
+    if (rejectSentinelAfterClose && !sentinelResolved) {
       rejectSentinelAfterClose()
       rejectSentinelAfterClose = null
     }
