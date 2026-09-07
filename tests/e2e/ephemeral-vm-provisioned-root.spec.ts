@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { ensureDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
@@ -136,6 +136,8 @@ async function addRecipeRepo(page: Parameters<typeof waitForSessionReady>[0], re
 function seedRecipeRepo(repoPath: string, target: DockerSshRelayTarget): string {
   const createScript = path.join(repoPath, 'create.sh')
   const destroyScript = path.join(repoPath, 'destroy.sh')
+  // The recipe's isolated HOME must still address the engine that owns the fixture container.
+  const docker = `docker --config ${shellQuote(process.env.DOCKER_CONFIG ?? path.join(homedir(), '.docker'))}`
   writeFileSync(
     createScript,
     `#!/usr/bin/env bash
@@ -145,8 +147,8 @@ set -euo pipefail
 [ -n "\${ORCA_REPO_REF:-}" ]
 [ -n "\${ORCA_REPO_REF_HEAD:-}" ]
 [ -n "\${ORCA_REPO_BRANCH:-}" ]
-docker exec ${shellQuote(target.containerName)} git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} cat-file -e "$ORCA_REPO_REF_HEAD^{commit}"
-docker exec ${shellQuote(target.containerName)} git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} checkout -B "$ORCA_REPO_BRANCH" "$ORCA_REPO_REF_HEAD" >&2
+${docker} exec ${shellQuote(target.containerName)} git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} cat-file -e "$ORCA_REPO_REF_HEAD^{commit}"
+${docker} exec ${shellQuote(target.containerName)} git -C ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} checkout -B "$ORCA_REPO_BRANCH" "$ORCA_REPO_REF_HEAD" >&2
 node -e 'console.log(JSON.stringify({schemaVersion:2,checkoutMode:"provisioned-root",connection:{type:"ssh",projectRoot:process.argv[1],target:{label:"Docker provisioned root",host:process.argv[2],port:Number(process.argv[3]),username:"root",identityFile:process.argv[4],identitiesOnly:true}}}))' ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)} ${shellQuote(target.host)} ${target.port} ${shellQuote(target.identityFile)}
 `
   )
@@ -155,7 +157,7 @@ node -e 'console.log(JSON.stringify({schemaVersion:2,checkoutMode:"provisioned-r
     `#!/usr/bin/env bash
 set -euo pipefail
 cat >/dev/null
-docker rm -f ${shellQuote(target.containerName)} >/dev/null
+${docker} rm -f ${shellQuote(target.containerName)} >/dev/null
 `
   )
   chmodSync(createScript, 0o755)

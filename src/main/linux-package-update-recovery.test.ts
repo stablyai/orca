@@ -5,18 +5,14 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
 import type { LinuxPackageInstallRecovery } from '../shared/update-status-types'
+import type { LinuxPackageArtifact } from './linux-package-update-recovery'
 import type * as RecoveryModule from './linux-package-update-recovery'
 
-const { showItemInFolderMock, getPackageTypeMock, buildCommandMock, hashPasses } = vi.hoisted(
-  () => ({
-    showItemInFolderMock: vi.fn(),
-    getPackageTypeMock: vi.fn(),
-    buildCommandMock: vi.fn(),
-    hashPasses: { count: 0 }
-  })
-)
-
-vi.mock('electron', () => ({ shell: { showItemInFolder: showItemInFolderMock } }))
+const { getPackageTypeMock, buildCommandMock, hashPasses } = vi.hoisted(() => ({
+  getPackageTypeMock: vi.fn(),
+  buildCommandMock: vi.fn(),
+  hashPasses: { count: 0 }
+}))
 
 vi.mock('./linux-update-package-type', () => ({ getLinuxRootPackageType: getPackageTypeMock }))
 
@@ -67,9 +63,9 @@ async function writePackage(name: string, contents = PAYLOAD): Promise<string> {
 }
 
 /** Captures a well-formed downloaded event unless a field is overridden. */
-function capture(overrides: Record<string, unknown> = {}): void {
+function capture(overrides: Record<string, unknown> = {}): LinuxPackageArtifact | null {
   const downloadedFile = (overrides.downloadedFile ?? path.join(downloadDir, 'orca.deb')) as string
-  recovery.captureLinuxPackageArtifact({
+  return recovery.captureLinuxPackageArtifact({
     version: VERSION,
     files: [{ url: path.basename(downloadedFile), sha512: SHA512 }],
     ...overrides,
@@ -80,7 +76,6 @@ function capture(overrides: Record<string, unknown> = {}): void {
 beforeEach(async () => {
   vi.resetModules()
   hashPasses.count = 0
-  showItemInFolderMock.mockReset()
   getPackageTypeMock.mockReset().mockReturnValue('deb')
   buildCommandMock.mockReset().mockReturnValue({ ok: true, command: 'installed command' })
   tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'orca-recovery-'))
@@ -103,13 +98,14 @@ afterEach(async () => {
 
 describe('captureLinuxPackageArtifact', () => {
   it('retains the downloaded package with the digest from the event metadata', () => {
-    capture()
-    expect(recovery.getTrackedLinuxPackageArtifact()).toEqual({
+    const artifact = {
       packageType: 'deb',
       version: VERSION,
       path: path.join(downloadDir, 'orca.deb'),
       sha512: SHA512
-    })
+    } satisfies LinuxPackageArtifact
+    expect(capture()).toEqual(artifact)
+    expect(recovery.getTrackedLinuxPackageArtifact()).toEqual(artifact)
   })
 
   it('ignores the event on a build that is not a root package', () => {
@@ -221,7 +217,7 @@ describe('captureLinuxPackageArtifact', () => {
 
   it('keeps a retained artifact when a later event carries a malformed digest', () => {
     capture()
-    capture({ files: [{ url: 'orca.deb', sha512: 'not-a-digest' }] })
+    expect(capture({ files: [{ url: 'orca.deb', sha512: 'not-a-digest' }] })).toBeNull()
     expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
   })
 
@@ -596,7 +592,7 @@ describePosix('validation coalescing', () => {
     capture()
     const [first, second] = await Promise.all([
       recovery.resolveLinuxPackageInstallInstructions(recoveryFor()),
-      recovery.revealLinuxPackage(recoveryFor())
+      recovery.resolveLinuxPackageRevealTarget(recoveryFor())
     ])
     expect(first.ok).toBe(true)
     expect(second.ok).toBe(true)
@@ -609,31 +605,6 @@ describePosix('validation coalescing', () => {
     await recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
     await recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
     expect(hashPasses.count).toBe(2)
-  })
-
-  // Why: a verdict handed to a root package manager must cover the bytes as of the click, not the
-  // bytes a Copy click started streaming seconds earlier.
-  it('never reuses an in-flight pass for a pre-install re-proof', async () => {
-    await writePackage('orca.deb')
-    capture()
-    const artifact = recovery.getTrackedLinuxPackageArtifact()
-    const copyPass = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
-    const installPass = recovery.revalidateLinuxPackageForInstall(artifact!)
-
-    await expect(installPass).resolves.toEqual({ ok: true })
-    await expect(copyPass).resolves.toMatchObject({ ok: true })
-    expect(hashPasses.count).toBe(2)
-  })
-
-  it('lets a later Copy click join the pre-install pass', async () => {
-    await writePackage('orca.deb')
-    capture()
-    const artifact = recovery.getTrackedLinuxPackageArtifact()
-    const installPass = recovery.revalidateLinuxPackageForInstall(artifact!)
-    const copyPass = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
-
-    await Promise.all([installPass, copyPass])
-    expect(hashPasses.count).toBe(1)
   })
 
   it('does not reuse an in-flight pass for a different artifact', async () => {
@@ -652,77 +623,43 @@ describePosix('validation coalescing', () => {
     await Promise.all([first, second])
     expect(hashPasses.count).toBe(2)
   })
-})
 
-describePosix('revalidateLinuxPackageForInstall', () => {
-  it('proves the retained package still matches its release digest', async () => {
+  it('starts a fresh proof when the same package is captured again', async () => {
     await writePackage('orca.deb')
     capture()
-    const artifact = recovery.getTrackedLinuxPackageArtifact()
-    await expect(recovery.revalidateLinuxPackageForInstall(artifact!)).resolves.toEqual({
-      ok: true
-    })
-  })
-
-  it('rejects a package swapped after the download was verified', async () => {
-    await writePackage('orca.deb')
+    const first = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
     capture()
-    const artifact = recovery.getTrackedLinuxPackageArtifact()
-    await writePackage('orca.deb', 'attacker supplied package')
-    await expect(recovery.revalidateLinuxPackageForInstall(artifact!)).resolves.toEqual({
-      ok: false,
-      reason: 'hash-mismatch'
-    })
-  })
+    const second = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
 
-  it('reports a package deleted from the cache as missing', async () => {
-    const filePath = await writePackage('orca.deb')
-    capture()
-    const artifact = recovery.getTrackedLinuxPackageArtifact()
-    await fsp.rm(filePath)
-    await expect(recovery.revalidateLinuxPackageForInstall(artifact!)).resolves.toEqual({
-      ok: false,
-      reason: 'missing'
-    })
+    await Promise.all([first, second])
+    expect(hashPasses.count).toBe(2)
   })
 })
 
-describePosix('revealLinuxPackage', () => {
-  it('reveals a verified package on the machine that owns it', async () => {
+describePosix('resolveLinuxPackageRevealTarget', () => {
+  it('returns the verified package path', async () => {
     const filePath = await writePackage('orca.deb')
     capture()
-    await expect(recovery.revealLinuxPackage(recoveryFor())).resolves.toEqual({ ok: true })
-    expect(showItemInFolderMock).toHaveBeenCalledWith(filePath)
+    await expect(recovery.resolveLinuxPackageRevealTarget(recoveryFor())).resolves.toEqual({
+      ok: true,
+      path: filePath
+    })
   })
 
-  it('does not reveal a package that fails validation', async () => {
+  it('rejects a package that fails validation', async () => {
     const filePath = await writePackage('orca.deb')
     capture()
     await fsp.writeFile(filePath, 'tampered payload')
-    await expect(recovery.revealLinuxPackage(recoveryFor())).resolves.toEqual({
+    await expect(recovery.resolveLinuxPackageRevealTarget(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'hash-mismatch'
     })
-    expect(showItemInFolderMock).not.toHaveBeenCalled()
   })
 
-  it('reports read-failed when the desktop file manager throws', async () => {
-    await writePackage('orca.deb')
-    capture()
-    showItemInFolderMock.mockImplementation(() => {
-      throw new Error('no file manager available')
-    })
-    await expect(recovery.revealLinuxPackage(recoveryFor())).resolves.toEqual({
-      ok: false,
-      reason: 'read-failed'
-    })
-  })
-
-  it('does not reveal anything without a retained artifact', async () => {
-    await expect(recovery.revealLinuxPackage(recoveryFor())).resolves.toEqual({
+  it('returns missing without a retained artifact', async () => {
+    await expect(recovery.resolveLinuxPackageRevealTarget(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'missing'
     })
-    expect(showItemInFolderMock).not.toHaveBeenCalled()
   })
 })

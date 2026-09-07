@@ -17,6 +17,7 @@ function createPane(
     leafId,
     stablePaneId: leafId,
     terminal: {
+      options: { cursorBlink: true },
       element: null,
       cols: 80,
       rows: 24,

@@ -4,7 +4,11 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../shared/secure-file'
+import {
+  hardenExistingSecureFile,
+  isUnreadableError,
+  writeSecureJsonFile
+} from '../../shared/secure-file'
 import { E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 
 const KEYPAIR_FILENAME = E2EE_KEYPAIR_FILENAME
@@ -42,7 +46,17 @@ export function loadOrCreateE2EEKeypair(userDataPath: string): E2EEKeypair {
           return { publicKey, secretKey, publicKeyB64: raw.publicKeyB64 }
         }
       }
-    } catch {
+    } catch (error) {
+      // A read this process is not permitted to make says nothing about the contents. Falling
+      // through would overwrite the only copy of the secret key — and the overwrite succeeds, so
+      // nothing downstream stops it. Every paired device derives its shared secret from this key,
+      // so regenerating silently un-pairs all of them and no old message stays decryptable.
+      if (isUnreadableError(error)) {
+        throw new Error(
+          `Cannot read the E2EE keypair at ${filePath}: the read failed. Refusing to regenerate it, which would invalidate every paired device.`,
+          { cause: error }
+        )
+      }
       // Malformed file — regenerate below.
     }
   }

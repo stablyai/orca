@@ -83,6 +83,31 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBeNull()
   })
 
+  it('drops a preview flagged as tool output even when it leads the transcript', () => {
+    // Regression: providers publish a tool's stdout as `lastAssistantMessage` for status
+    // cards. It leads every transcript assistant turn and never appears in one, so without
+    // this gate it rendered as the reply and no catch-up rule could ever retire it.
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [assistant('Partial')],
+        previewText: 'Exit code 1\nimport { Foo } from "./foo"\nexport function bar() {}',
+        working: true,
+        previewIsToolOutput: true
+      })
+    ).toBeNull()
+  })
+
+  it('still shows a leading preview when it is not tool output', () => {
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [assistant('Partial')],
+        previewText: 'Partial answer that is now much longer than before',
+        working: true,
+        previewIsToolOutput: false
+      })
+    ).toBe('Partial answer that is now much longer than before')
+  })
+
   it('keeps showing while the preview still leads (grows past the last turn)', () => {
     // The transcript hasn't flushed the new content yet; preview is longer.
     expect(

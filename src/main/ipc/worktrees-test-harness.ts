@@ -76,6 +76,15 @@ export {
   type HandlerMap
 } from './worktrees-test-ipc-surface'
 
+/** The single repo every worktree harness test resolves; exported so a test can vary one field. */
+export const harnessRepo = {
+  id: 'repo-1',
+  path: '/workspace/repo',
+  displayName: 'repo',
+  badgeColor: '#000',
+  addedAt: 0
+}
+
 /** Registers worktree IPC handlers against freshly reset shared mocks and returns the runtime stub. */
 export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   delete (store as typeof store & { getAllWorktreeMetaForHost?: (...args: unknown[]) => unknown })
@@ -185,15 +194,8 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     handlers[channel] = handler
   })
 
-  const repo = {
-    id: 'repo-1',
-    path: '/workspace/repo',
-    displayName: 'repo',
-    badgeColor: '#000',
-    addedAt: 0
-  }
-  store.getRepos.mockReturnValue([repo])
-  store.getRepo.mockReturnValue({ ...repo, worktreeBaseRef: null })
+  store.getRepos.mockReturnValue([harnessRepo])
+  store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: null })
   store.getProjects.mockReturnValue([])
   store.getSparsePresets.mockReturnValue([])
   const settings = {

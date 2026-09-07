@@ -39,7 +39,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
     taskStateHydrated,
     tasksSupported,
     trustedOrcaHooks,
-    workspaceDetectedAgentIds
+    workspaceDetectedAgentIds,
+    workspaceLastAutoName
   } = model
   const createWorkspace = useCallback(
     async (
@@ -149,6 +150,9 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
           })
           return
         }
+        const trimmedWorkspaceName = workspaceNameOverride?.trim() ?? ''
+        const nameIsAutoManaged =
+          !trimmedWorkspaceName || trimmedWorkspaceName === workspaceLastAutoName
         let params: Record<string, unknown>
         if (item.provider === 'github') {
           const source = item.source
@@ -192,7 +196,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             baseBranch: baseBranchOverride,
             branchNameOverride,
             sparseCheckout: sparseCheckoutOverride,
-            hostedStartPoint: prStartPoint
+            hostedStartPoint: prStartPoint,
+            nameIsAutoManaged
           })
         } else if (item.provider === 'gitlab') {
           const source = item.source
@@ -236,7 +241,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             baseBranch: baseBranchOverride,
             branchNameOverride,
             sparseCheckout: sparseCheckoutOverride,
-            hostedStartPoint: mrStartPoint
+            hostedStartPoint: mrStartPoint,
+            nameIsAutoManaged
           })
         } else {
           params = buildTaskWorkspaceCreateParams({
@@ -248,7 +254,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             note: comment,
             baseBranch: baseBranchOverride,
             branchNameOverride,
-            sparseCheckout: sparseCheckoutOverride
+            sparseCheckout: sparseCheckoutOverride,
+            nameIsAutoManaged
           })
         }
         const response = await client.sendRequest('worktree.create', params, {
@@ -289,7 +296,8 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       taskStateHydrated,
       tasksSupported,
       trustedOrcaHooks,
-      workspaceDetectedAgentIds
+      workspaceDetectedAgentIds,
+      workspaceLastAutoName
     ]
   )
   return Object.assign(model, { createWorkspace })

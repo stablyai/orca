@@ -514,6 +514,10 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         [ENVIRONMENT_ID, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
       ]),
       activeWorktreeId,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      activeTabIdByWorktree: {},
+      activeGroupIdByWorktree: {},
       browserPagesByWorkspace: {},
       remoteBrowserPageHandlesByPageId: {},
       createBrowserTab: mocks.createBrowserTab,

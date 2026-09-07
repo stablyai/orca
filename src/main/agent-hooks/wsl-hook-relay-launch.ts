@@ -16,6 +16,7 @@ import {
 } from './wsl-hook-relay-sentinel'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { runWslProcess } from '../wsl/wsl-runner'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 import { listRunningWslDistrosAsync } from '../wsl'
 import {
   WSL_HOOK_RELAY_BUNDLE_NAME,
@@ -137,7 +138,11 @@ export function spawnWslRelayProcess(
   return spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-c', command], {
     env,
     stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true
+    windowsHide: true,
+    // Why explicit (#16463): the guest path is in `command`, so the Windows cwd
+    // only decides whether CreateProcessW succeeds -- and an inherited one is a
+    // worktree the user can delete, which kills every later relay launch.
+    cwd: resolveWslInteropSpawnCwd()
   })
 }
 

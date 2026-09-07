@@ -4,6 +4,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import type { RpcContext } from '../core'
 import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
+import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 
 type SessionTabsInventory = {
   snapshots: RuntimeMobileSessionTabsResult[]
@@ -26,10 +27,16 @@ function clientUnderstandsAuthoritativeInventory(context: RpcContext): boolean {
 export function projectSessionTabsForClient(
   snapshot: RuntimeMobileSessionTabsResult,
   clientKind: 'mobile' | 'runtime' | undefined,
-  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
+  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2],
+  structuredNativeChatEnabled: boolean
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
-    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+    projectSessionTabAgentStatus(
+      snapshot,
+      clientKind,
+      clientCapabilities,
+      structuredNativeChatEnabled
+    ),
     clientCapabilities
   )
 }
@@ -40,7 +47,12 @@ function projectInventory(
 ): SessionTabsInventory {
   return {
     snapshots: inventory.snapshots.map((snapshot) =>
-      projectSessionTabsForClient(snapshot, context.clientKind, context.clientCapabilities)
+      projectSessionTabsForClient(
+        snapshot,
+        context.clientKind,
+        context.clientCapabilities,
+        isStructuredNativeChatEnabled(context.runtime)
+      )
     ),
     ...(inventory.authoritative && clientUnderstandsAuthoritativeInventory(context)
       ? { authoritative: true as const }
@@ -109,7 +121,8 @@ export async function subscribeSessionTabsInventory(
     projectSessionTabsForClient(
       snapshot,
       context.clientKind,
-      context.clientCapabilities
+      context.clientCapabilities,
+      isStructuredNativeChatEnabled(context.runtime)
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {

@@ -72,7 +72,7 @@ function field(): HTMLInputElement {
 
 function openList(): void {
   act(() => {
-    field().dispatchEvent(new FocusEvent('focus', { bubbles: true }))
+    field().focus()
   })
 }
 

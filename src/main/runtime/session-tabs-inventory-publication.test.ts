@@ -133,7 +133,7 @@ describe('authoritative session tab inventory publication', () => {
     expect(collections).toBe(4)
   })
 
-  it('coalesces targeted and all-host PTY refreshes behind one aggregate census', async () => {
+  it('keeps targeted PTY refreshes independent from an aggregate census', async () => {
     const runtime = createInventoryRuntime()
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
@@ -143,7 +143,7 @@ describe('authoritative session tab inventory publication', () => {
       terminalIdentityByPtyId: new Map(),
       queriedHostIds: new Set(['local'])
     }
-    let resolveRefresh: ((inventory: typeof emptyInventory) => void) | undefined
+    const pendingResolves: ((inventory: typeof emptyInventory) => void)[] = []
     const internals = runtime as unknown as {
       refreshMobileSessionPtyInventory: (targetWorktreeId?: string | null) => Promise<unknown>
       performMobileSessionPtyRecordsRefresh: (targetWorktreeId: string | null) => Promise<unknown>
@@ -151,7 +151,7 @@ describe('authoritative session tab inventory publication', () => {
     const perform = vi.spyOn(internals, 'performMobileSessionPtyRecordsRefresh').mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveRefresh = resolve
+          pendingResolves.push(resolve)
         })
     )
 
@@ -160,10 +160,13 @@ describe('authoritative session tab inventory publication', () => {
     const targeted = internals.refreshMobileSessionPtyInventory('repo::/target')
     await Promise.resolve()
 
-    expect(perform).toHaveBeenCalledOnce()
-    resolveRefresh?.(emptyInventory)
+    expect(perform).toHaveBeenCalledTimes(2)
+    expect(perform).toHaveBeenNthCalledWith(1, null)
+    expect(perform).toHaveBeenNthCalledWith(2, 'repo::/target')
+    pendingResolves[1]?.(emptyInventory)
 
     await targeted
+    pendingResolves[0]?.(emptyInventory)
     await expect(allHosts).resolves.toEqual({ snapshots: [], authoritative: true })
   })
 

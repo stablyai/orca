@@ -58,6 +58,19 @@ function runtimeState(
   return new StructuredAgentSessionHostRuntimeState(deps)
 }
 
+function liveRecord(): AgentSessionRecord {
+  const record = reservedRecord()
+  record.lease.claimStatus = 'live'
+  record.lease.ownerProcess = {
+    hostId: 'local',
+    pid: 4242,
+    processStartTimeMs: NOW - 1_000,
+    spawnToken: 'spawn-probe'
+  }
+  record.lease.handoffStage = null
+  return record
+}
+
 describe('host runtime-state owner probe', () => {
   it('routes an ownerless reservation through the strict probe instead of fabricating proof', async () => {
     // Fabricating `reservation-unused` here skipped the processless-proof rule the runtime
@@ -97,5 +110,41 @@ describe('host runtime-state owner probe', () => {
       outcome: 'reservation-unused'
     })
     expect(probeOwner).not.toHaveBeenCalled()
+  })
+
+  it('does not force-close a provider for transient lease probe errors', async () => {
+    const onEventSinkFailure = vi.fn()
+    const onEventSinkError = vi.fn()
+    const probeOwner = vi.fn(async () => {
+      throw new Error('lease probe unavailable')
+    })
+    const record = liveRecord()
+    const deps = {
+      store: {
+        listRecords: () => [record],
+        getRecord: () => record
+      },
+      adapter: {},
+      journalRoot: '/tmp',
+      claimKeyId: 'key-1',
+      probeOwner,
+      onEventSinkError
+    } as unknown as StructuredAgentSessionHostDeps
+    const state = new StructuredAgentSessionHostRuntimeState(
+      deps,
+      undefined,
+      undefined,
+      onEventSinkFailure
+    )
+
+    await (
+      state as unknown as { leaseRenewer: { renewNow: () => Promise<void> } }
+    ).leaseRenewer.renewNow()
+
+    expect(onEventSinkError).toHaveBeenCalledWith({
+      sessionId: record.sessionId,
+      error: expect.any(Error)
+    })
+    expect(onEventSinkFailure).not.toHaveBeenCalled()
   })
 })

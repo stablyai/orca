@@ -274,11 +274,75 @@ describe('Cmd-J host-qualified candidate ownership', () => {
     })
 
     expect(
-      searchWorkspaceTabs(entries, 'shell').map((result) => [result.tabId, result.executionHostId])
+      searchWorkspaceTabs(entries, 'shell')
+        .map((result) => [result.tabId, result.executionHostId])
+        .sort(([left], [right]) => String(left).localeCompare(String(right)))
     ).toEqual([
       ['local-terminal', 'local'],
       ['remote-terminal', RUNTIME_HOST_ID]
     ])
+  })
+
+  it('omits editor rows whose bare file id cannot be activated safely', () => {
+    const entries = buildSearchableWorkspaceTabs({
+      worktrees: pairedWorktrees(),
+      repoMap: new Map(),
+      worktreeOrder: new Map(),
+      unifiedTabsByWorktree: {
+        [SHARED_WORKTREE_ID]: [
+          makeTab({
+            id: 'shared-editor',
+            entityId: 'shared-file',
+            contentType: 'editor',
+            executionHostId: 'local'
+          }),
+          makeTab({
+            id: 'shared-editor',
+            entityId: 'shared-file',
+            contentType: 'editor',
+            executionHostId: RUNTIME_HOST_ID
+          })
+        ]
+      },
+      tabsByWorktree: {},
+      openFiles: [
+        {
+          id: 'shared-file',
+          filePath: '/local/local-atlas.ts',
+          relativePath: 'local/local-atlas.ts',
+          worktreeId: SHARED_WORKTREE_ID,
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        },
+        {
+          id: 'shared-file',
+          filePath: '/remote/remote-atlas.ts',
+          relativePath: 'remote/remote-atlas.ts',
+          worktreeId: SHARED_WORKTREE_ID,
+          language: 'typescript',
+          isDirty: false,
+          runtimeEnvironmentId: 'paired-host',
+          mode: 'edit'
+        }
+      ],
+      agentStatusByPaneKey: {},
+      retainedAgentsByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {},
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal',
+      activeTabId: null,
+      activeTabIdByWorktree: {},
+      activeFileId: null,
+      activeFileIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      generatedTitlesEnabled: true
+    })
+
+    expect(searchWorkspaceTabs(entries, 'local-atlas')).toEqual([])
+    expect(searchWorkspaceTabs(entries, 'remote-atlas')).toEqual([])
   })
 
   it('retains one unambiguous legacy tab without guessing between sibling hosts', () => {
@@ -335,7 +399,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
         generatedTitlesEnabled: true,
         groupsByWorktree: {},
         openFiles: [],
-        ownershipWorktrees,
+        folderWorkspaces: [],
         repo: null,
         tabsByWorktree: {
           [SHARED_WORKTREE_ID]: [
@@ -352,7 +416,8 @@ describe('Cmd-J host-qualified candidate ownership', () => {
           ]
         },
         unifiedTabsByWorktree,
-        worktree: ownershipWorktrees[0]
+        worktree: ownershipWorktrees[0],
+        worktreesByRepo: { repo: ownershipWorktrees }
       },
       {
         agentStatusByPaneKey: {},

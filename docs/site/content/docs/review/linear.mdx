@@ -1,0 +1,40 @@
+---
+title: Linear items drawer
+---
+
+import { Callout } from '@/components/docs/prose'
+
+Linear sits next to hosted review providers in the task drawer. Browse, create, update, and link Linear issues to worktrees the same way you link GitHub issues.
+
+## Setup
+
+1. Open [Settings → Integrations → Linear](/docs/settings).
+1. Paste a personal API token from [Linear → Settings → API](https://linear.app/settings/api).
+1. Pick the team(s) you want to see.
+
+## Using Linear
+
+- The task drawer shows GitHub and Linear issues in one combined view.
+- Use **Has Workspace** mode in the Linear task view to list only issues already linked to a local worktree or folder workspace. Rows with an attached workspace open that workspace; you can still start a new one from the same issue when you need a second checkout.
+- Creating a worktree from a Linear issue opens the interactive workspace composer (same path as GitHub items) so issue-command automation, SSH, and folder workspaces apply. Orca pre-fills the name and attaches the issue ID. When Linear exposes a branch name for the issue, Orca uses that as the worktree branch (same naming Linear would suggest), not only a slug of the title. The issue detail menu can **Copy suggested branch name**.
+- After create, open **Edit Worktree Details** on the workspace card and use the **Issue** field with the **Linear** chip (or paste a Linear URL) to link or change the issue without recreating the worktree. GitHub and Linear share that one field — saving a new link replaces the previous provider link.
+- Open an issue detail view to update fields such as status, assignee, priority, labels, and estimate. Priority renders with Linear's own priority icons so the drawer matches what you see in Linear itself.
+- When you launch an agent from a Linear issue, Orca includes any inline images and media embedded in the issue's description, comments, and sub-issues in the prompt context, so the agent can see the mock-up or bug repro without you having to paste screenshots by hand.
+- **New Linear issue** and **New Linear project** keep title/description (and project name, summary, and brief) if you dismiss the dialog by accident — Escape, Cancel, outside click, or close. Text restores when you reopen the dialog in the same app session; drafts clear after a successful create and do not survive an app restart. Team/project pickers still use their usual open-time defaults.
+- Long lists paginate with a **Load more** action — useful when a project has more issues than fit in the initial drawer.
+- Layout choices stick across restarts: list vs board, group-by, order-by, visible columns, and attribute filters. Attribute filters are stored **per Linear workspace**, so switching workspace does not apply another workspace's facets.
+- Orca remembers your last-used task source (GitHub, Linear, or Jira) per repo.
+
+<Callout>
+  Linear status sync (moving an issue to "In Progress" when a worktree is created) is opt-in per
+  team.
+</Callout>
+
+## Agents and CLI
+
+Agents can read and write Linear through `orca linear` (and the `orca-linear` skill). That surface includes MCP-compatible create/update and list filters (`save-issue`, `list-issues`, relation add/remove) plus issue context flags such as `--activity` and `--full`. See [CLI reference → Linear](/docs/cli/reference#linear).
+
+## Next steps
+
+- [Hosted reviews, issues & Actions](/docs/review/github) — connect code review state to the worktree after the task is in progress.
+- [Commit & push from Orca](/docs/review/commit-push) — ship the branch without leaving Orca.

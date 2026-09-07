@@ -127,7 +127,10 @@ describe('SshRelaySession pending PTY kill replay', () => {
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
 
-    expect(shutdownMock).toHaveBeenCalledWith('ssh:target-1@@pty-3', { immediate: true })
+    expect(shutdownMock).toHaveBeenCalledWith('ssh:target-1@@pty-3', {
+      immediate: true,
+      expectedIncarnationId: 'inc-a'
+    })
     expect(order).toEqual(['shutdown:ssh:target-1@@pty-3', 'read-leases'])
     expect(mockStore.clearSshRemotePtyKillIntent).toHaveBeenCalledWith('target-1', 'pty-3')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-3', 'terminated')

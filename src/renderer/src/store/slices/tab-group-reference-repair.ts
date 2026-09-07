@@ -72,7 +72,8 @@ export function appendOwnedTabIdsToGroups(
     if (!ownedTabIds) {
       return group
     }
-    const missingTabIds = ownedTabIds.filter((tabId) => !group.tabOrder.includes(tabId))
+    const orderedTabIds = new Set(group.tabOrder)
+    const missingTabIds = ownedTabIds.filter((tabId) => !orderedTabIds.has(tabId))
     return missingTabIds.length > 0
       ? { ...group, tabOrder: [...group.tabOrder, ...missingTabIds] }
       : group

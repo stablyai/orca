@@ -656,9 +656,21 @@ describe('legacy coordinator takeover races', () => {
     const detectionStarted = new Promise<void>((resolve) => {
       signalDetectionStarted = resolve
     })
+    let detectionCalls = 0
     vi.spyOn(harness.runtime, 'isTerminalRunningAgent').mockImplementation(
       () =>
-        new Promise<boolean>((resolve) => {
+        new Promise<boolean>((resolve, reject) => {
+          detectionCalls += 1
+          // Why reject instead of re-arming: a second call would overwrite resolveDetection and
+          // strand the first promise, hanging to a timeout instead of naming what changed.
+          if (detectionCalls > 1) {
+            reject(
+              new Error(
+                `isTerminalRunningAgent was called ${detectionCalls} times; this test drives exactly one detection.`
+              )
+            )
+            return
+          }
           resolveDetection = resolve
           signalDetectionStarted?.()
         })

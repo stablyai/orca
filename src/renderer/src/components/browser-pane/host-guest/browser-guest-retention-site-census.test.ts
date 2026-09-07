@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest'
 // Guest retention is an OR over several independent signals, and every container from the app
 // shell down to the guest has to agree on the list — Chromium stops painting inside a display:none
 // subtree, so the *most* pinched ancestor wins. Adding a term (the remote-viewer signal, STA-4150)
-// reached the panes while four hand-rolled copies in Terminal.tsx still listed three: nothing
-// typechecks a site that never names the new symbol. So the terms live behind one helper, and this
-// census holds the sites to it — the classification is enforced here, not by review.
+// reached the panes while four hand-rolled copies still listed three: nothing typechecks a site
+// that never names the new symbol. So the terms live behind one helper, and this census holds the
+// sites to it — the classification is enforced here, not by review.
 
 const RENDERER_SRC = join(__dirname, '..', '..', '..')
 
@@ -55,19 +55,12 @@ const RETENTION_HELPER_SYMBOLS = [
 
 // Every place that decides whether a browser guest keeps painting, and the helper it must use.
 const RETENTION_SITES = new Map<string, readonly string[]>([
-  [
-    'components/Terminal.tsx',
-    [
-      // The two outermost workbench wrappers (strict ancestors of every guest in the app), the
-      // hidden-worktree surface, the retention-budget eviction veto, and the invalidation that
-      // reruns them when a term flips.
-      'useAnyBrowserGuestNeedsPaint',
-      'useBrowserGuestPaintRetention',
-      'browserTabsVetoGuestEviction',
-      'onBrowserGuestPaintRetentionChange'
-    ]
-  ],
   ['components/TerminalWorkbenchContainer.tsx', ['useAnyBrowserGuestNeedsPaint']],
+  // The two outermost workbench wrappers: strict ancestors of every guest, so the per-worktree
+  // surface hatch below cannot rescue a guest either one parked with `hidden`.
+  ['components/TerminalSurface.tsx', ['useAnyBrowserGuestNeedsPaint']],
+  ['components/TerminalSplitWorkspaceSurfaces.tsx', ['useAnyBrowserGuestNeedsPaint']],
+  ['components/TerminalWorktreeSplitSurface.tsx', ['useBrowserGuestPaintRetention']],
   [
     'components/browser-pane/assemble-chrome/BrowserPaneOverlayLayer.tsx',
     ['useBrowserGuestPaintRetention']
@@ -75,6 +68,10 @@ const RETENTION_SITES = new Map<string, readonly string[]>([
   [
     'components/browser-pane/host-guest/browser-guest-worktree-retention.ts',
     ['browserPageNeedsPaintRetention']
+  ],
+  [
+    'components/use-terminal-browser-retention.ts',
+    ['browserTabsVetoGuestEviction', 'onBrowserGuestPaintRetentionChange']
   ]
 ])
 

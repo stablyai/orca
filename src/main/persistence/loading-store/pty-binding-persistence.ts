@@ -53,6 +53,8 @@ export class PtyBindingPersistenceOperations {
        * Callers pass false only once absence is meaningful; see the relay's reattach bind.
        */
       mayCreate?: boolean
+      /** Reattach must not revive a surface a prior build durably recorded as retired. */
+      mayReviveRetiredSurface?: boolean
     },
     hostId?: string | null
   ): boolean {
@@ -97,6 +99,12 @@ export class PtyBindingPersistenceOperations {
     // Decided before any mutation so a refusal leaves nothing half-written. Mirrors the four
     // creating branches below — mint a tab, mint a root leaf, split the root and graft a leaf,
     // mint a layout — each of which sets `terminalMembershipChanged`.
+    if (
+      args.mayReviveRetiredSurface === false &&
+      session.terminalSurfaceTombstonesByPaneKey?.[paneKey]
+    ) {
+      return false
+    }
     if (args.mayCreate === false) {
       const existingTab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
         (candidate) => candidate.id === args.tabId

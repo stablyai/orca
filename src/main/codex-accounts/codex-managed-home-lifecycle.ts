@@ -1,6 +1,10 @@
 import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import {
+  WINDOWS_RM_MAX_RETRIES,
+  WINDOWS_RM_RETRY_DELAY_MS
+} from '../../shared/windows-transient-lock-removal'
 import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
@@ -10,10 +14,6 @@ import { writeFileAtomically } from './fs-utils'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
-// Why: mirrors the Windows rm retry policy in local-worktree-filesystem — a
-// just-terminated codex login can briefly keep handles inside a managed home.
-const WINDOWS_RM_MAX_RETRIES = 8
-const WINDOWS_RM_RETRY_DELAY_MS = 150
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
 function removeManagedHomeTreeSync(targetPath: string): void {

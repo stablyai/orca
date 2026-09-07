@@ -78,6 +78,7 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
 
     expect(status.result.runtime).toMatchObject({
       reachable: true,
+      connectionState: 'connected',
       runtimeId: 'runtime-legacy',
       state: 'ready',
       degradations: [expect.objectContaining({ code: 'browser_unavailable' })]

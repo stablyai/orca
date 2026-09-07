@@ -7,6 +7,7 @@ export class SshAgentSessionCapabilities {
   private claimProbe: Promise<void> | null = null
   private claimSupported = false
   private createOperationProbe: Promise<boolean> | null = null
+  private foregroundEvidenceProbe: Promise<boolean> | null = null
 
   constructor(private readonly mux: SshChannelMultiplexer) {}
 
@@ -46,5 +47,36 @@ export class SshAgentSessionCapabilities {
       this.createOperationProbe = null
     }
     return supported
+  }
+
+  /** Whether this relay understands the opt-in no-evidence inventory projection. */
+  async supportsForegroundProcessEvidence(
+    options: { signal?: AbortSignal } = {}
+  ): Promise<boolean> {
+    const probe =
+      this.foregroundEvidenceProbe ??
+      this.mux
+        .request('pty.getCapabilities', undefined, {
+          signal: options.signal,
+          timeoutMs: 5_000
+        })
+        .then((value) => {
+          const capabilities = value as { foregroundProcessEvidenceVersion?: unknown }
+          return capabilities.foregroundProcessEvidenceVersion === 1
+        })
+        .catch(() => false)
+    this.foregroundEvidenceProbe = probe
+    try {
+      const supported = await waitForSshCapabilityProbe(probe, options.signal)
+      if (!supported && this.foregroundEvidenceProbe === probe) {
+        this.foregroundEvidenceProbe = null
+      }
+      return supported
+    } catch {
+      if (!options.signal?.aborted && this.foregroundEvidenceProbe === probe) {
+        this.foregroundEvidenceProbe = null
+      }
+      return false
+    }
   }
 }

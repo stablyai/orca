@@ -35,6 +35,10 @@ const UNRESOLVED_REFUSALS: ReadonlySet<string> = new Set([
 
 /** Which latched records this module may re-ask about. */
 export function structuredSessionRecoveryIsResolvable(record: AgentSessionRecord): boolean {
+  if (record.lease.settlementRetryRequired) {
+    // Settlement latches are cleared only by a successful journal retry, never by owner probing.
+    return false
+  }
   const { claimStatus, handoffStage, ownerProcess, runtimeKind } = record.lease
   if (handoffStage !== 'recovering' && handoffStage !== 'manual-recovery') {
     return false
