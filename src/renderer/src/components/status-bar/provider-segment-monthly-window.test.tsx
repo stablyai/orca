@@ -30,10 +30,23 @@ function windowOf(
   return { usedPercent, windowMinutes, resetsAt, resetDescription: null }
 }
 
-// Grok unified-billing accounts surface a monthly window and nothing else.
+/** Grok ProviderRateLimits fixture with only a monthly window. */
 function grokMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLimits {
   return {
     provider: 'grok',
+    session: null,
+    weekly: null,
+    monthly: windowOf(25, 43200),
+    updatedAt: Date.now(),
+    error: null,
+    status
+  }
+}
+
+/** Cursor ProviderRateLimits fixture with a monthly window. */
+function cursorMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLimits {
+  return {
+    provider: 'cursor',
     session: null,
     weekly: null,
     monthly: windowOf(25, 43200),
@@ -49,6 +62,21 @@ describe('ProviderSegment monthly window', () => {
 
     const markup = renderToStaticMarkup(
       <ProviderSegment p={grokMonthlyLimits('ok')} compact={false} display="used" mode="compact" />
+    )
+
+    expect(markup).toContain('25% used 30d')
+  })
+
+  it('renders a monthly-only Cursor snapshot in the chip instead of a bare icon', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment
+        p={cursorMonthlyLimits('ok')}
+        compact={false}
+        display="used"
+        mode="compact"
+      />
     )
 
     expect(markup).toContain('25% used 30d')
@@ -112,6 +140,40 @@ describe('ProviderSegment monthly window', () => {
 
     expect(markup).toContain('80% used Pro')
     expect(markup).not.toContain('25% used')
+  })
+
+  it('renders the same unlabeled Cursor bars and percents in compact and verbose status-bar modes', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      monthly: windowOf(15, 43200),
+      buckets: [
+        { ...windowOf(6, 43200), name: 'Cursor Models' },
+        { ...windowOf(80, 43200), name: 'Other models' }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    const compact = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
+    )
+    const verbose = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
+    )
+
+    for (const markup of [compact, verbose]) {
+      expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
+      expect(markup).toContain('6%')
+      expect(markup).toContain('80%')
+      expect(markup).not.toContain('used')
+      expect(markup).not.toContain('Cursor Models')
+      expect(markup).not.toContain('Other models')
+      expect(markup).not.toContain('30d')
+    }
   })
 
   // Why: #8378 — status-bar chip showed fixed window size ("5h") while the

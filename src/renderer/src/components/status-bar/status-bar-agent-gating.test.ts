@@ -20,6 +20,7 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('gemini', null)).toBe(true)
     expect(isStatusBarItemAvailable('antigravity', null)).toBe(true)
     expect(isStatusBarItemAvailable('grok', null)).toBe(true)
+    expect(isStatusBarItemAvailable('cursor', null)).toBe(true)
   })
 
   it('hides CLI items not detected on PATH', () => {
@@ -28,6 +29,7 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('gemini', ['claude', 'codex'])).toBe(false)
     expect(isStatusBarItemAvailable('antigravity', ['claude', 'codex'])).toBe(false)
     expect(isStatusBarItemAvailable('grok', ['claude', 'kimi'])).toBe(false)
+    expect(isStatusBarItemAvailable('cursor', ['claude', 'kimi'])).toBe(false)
   })
 
   it('shows CLI items detected on PATH', () => {
@@ -36,5 +38,6 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('gemini', ['gemini'])).toBe(true)
     expect(isStatusBarItemAvailable('antigravity', ['antigravity'])).toBe(true)
     expect(isStatusBarItemAvailable('grok', ['grok'])).toBe(true)
+    expect(isStatusBarItemAvailable('cursor', ['cursor'])).toBe(true)
   })
 })

@@ -8,6 +8,8 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax/minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchCursorRateLimits } from './cursor-fetcher'
+import { readCursorAuthSession } from './cursor-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   deferred,
@@ -50,6 +52,14 @@ vi.mock('./grok-fetcher', () => ({
 
 vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn(async () => ({ status: 'missing' }))
 }))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
@@ -117,6 +127,80 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
+  })
+
+  it('fetches Cursor rate limits alongside Grok and reports auth configured', async () => {
+    const authReadResult = { status: 'ok' as const, accessToken: 'token', source: 'cli' as const }
+    vi.mocked(readCursorAuthSession).mockResolvedValue(authReadResult)
+    vi.mocked(fetchCursorRateLimits).mockResolvedValueOnce(okProvider('cursor', 42))
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    expect(readCursorAuthSession).toHaveBeenCalledTimes(1)
+    expect(fetchCursorRateLimits).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
+      authReadResult
+    })
+    const state = service.getState()
+    expect(state.cursor?.status).toBe('ok')
+    expect(state.cursor?.session?.usedPercent).toBe(42)
+    expect(state.cursorAuthConfigured).toBe(true)
+  })
+
+  it('does not block other providers on a slow Cursor auth read', async () => {
+    const cursorAuth = deferred<{ status: 'missing' }>()
+    vi.mocked(readCursorAuthSession).mockReturnValueOnce(cursorAuth.promise)
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGrokRateLimits).mockResolvedValueOnce(okProvider('grok', 30, Date.now()))
+    const service = new RateLimitService()
+
+    const refresh = service.refresh()
+    // Why: the cycle is split across prepare/apply awaits; wait for Grok to settle instead of counting ticks.
+    await vi.waitFor(() => {
+      expect(service.getState().grok?.status).toBe('ok')
+    })
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
+    const pendingState = service.getState()
+    expect(pendingState.claude?.status).toBe('ok')
+    expect(pendingState.cursor?.status).toBe('fetching')
+    expect(fetchCursorRateLimits).not.toHaveBeenCalled()
+
+    cursorAuth.resolve({ status: 'missing' })
+    await refresh
+
+    expect(service.getState().cursor?.status).toBe('unavailable')
+  })
+
+  it('does not change cursorAuthConfigured when the cycle is aborted before the auth read settles', async () => {
+    vi.mocked(readCursorAuthSession).mockResolvedValueOnce({
+      status: 'ok',
+      accessToken: 'token',
+      source: 'cli'
+    })
+    vi.mocked(fetchCursorRateLimits).mockResolvedValueOnce(okProvider('cursor', 42))
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20, Date.now()))
+    const service = new RateLimitService()
+    await service.refresh()
+    expect(service.getState().cursorAuthConfigured).toBe(true)
+
+    const cursorAuth = deferred<{ status: 'missing' }>()
+    vi.mocked(readCursorAuthSession).mockReturnValueOnce(cursorAuth.promise)
+    const refresh = service.refresh()
+    await flushMicrotasks()
+    service.stop()
+    cursorAuth.resolve({ status: 'missing' })
+    await refresh
+
+    // Why: the aborted cycle's result is discarded, so its auth read must not flip the durable flag.
+    expect(service.getState().cursorAuthConfigured).toBe(true)
+    expect(fetchCursorRateLimits).toHaveBeenCalledTimes(1)
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {

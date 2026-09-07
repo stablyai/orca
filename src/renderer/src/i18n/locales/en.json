@@ -141,7 +141,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "cursorToggleDescription": "Show Cursor monthly plan usage when signed in via cursor-agent."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3724,7 +3725,8 @@
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
-            "codexSignInError": "Codex sign-in failed. Please try again."
+            "codexSignInError": "Codex sign-in failed. Please try again.",
+            "cursorUsageMenu": "Cursor Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3904,6 +3906,9 @@
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
             "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "cursorSignInRequired": "Sign in required",
+            "cursorMissingCredentials": "Run cursor-agent login on the computer running Orca, then retry usage.",
+            "cursorStaleToken": "Cursor sign-in expired. Run cursor-agent login again, then retry usage.",
             "minimax": {
               "expired": {
                 "label": "Sign-in expired",
@@ -3938,7 +3943,7 @@
             "detailed": "Detailed",
             "compact": "Compact",
             "detailedTooltip": "Full usage with bars, labels, and percentages",
-            "compactTooltip": "Condensed usage: only the tightest window",
+            "compactTooltip": "Condensed usage: highest-consumption window; Cursor lists every plan bucket",
             "footerDetailAria": "Usage footer detail"
           },
           "RemoteServerUpdateStatusSegment": {
@@ -9116,6 +9121,8 @@
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "cursorUsageTitle": "Cursor Usage",
+            "cursorUsageDescription": "Show Cursor monthly plan usage when signed in via cursor-agent.",
             "tray": {
               "tray": "tray",
               "system": "system tray",
@@ -9123,7 +9130,8 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
-            }
+            },
+            "cursorKeyword": "cursor"
           }
         },
         "auto": {

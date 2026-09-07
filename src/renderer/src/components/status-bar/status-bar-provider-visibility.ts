@@ -14,10 +14,11 @@ export type UsageProviderSettings = Pick<
   // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
   // which never yields data while that opt-in is off.
   antigravityUsageConfigured: boolean
-  // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
+  // Why: MiniMax/Grok/Cursor sign-in live on disk or in a CLI session, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
   grokAuthConfigured: boolean
+  cursorAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -29,10 +30,11 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  cursor: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
-
+/** True when a provider snapshot has at least one usable window. */
 function hasUsageData(provider: ProviderRateLimits): boolean {
   return Boolean(
     provider.session ||
@@ -43,16 +45,15 @@ function hasUsageData(provider: ProviderRateLimits): boolean {
   )
 }
 
+/** True while a provider fetch has not yet produced usable data. */
 function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
   return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
 }
 
-// Why: a provider that returns `unavailable` is explicitly not configured
-// (Gemini OAuth off, OpenCode Go cookie unset, Claude on API-key billing). Its
-// fetch object is non-null, so a bare `!== null` check still renders a "--"
-// bar for a provider the user never set up. `error` is kept visible on purpose
-// — that's a *configured* provider failing transiently, and hiding it would
-// make the bar flap on every refresh hiccup.
+/**
+ * True when auth/config indicates the provider can be fetched.
+ * Why: `unavailable` means unset (hide); `error` means configured but failing (keep visible).
+ */
 export function isProviderConfigured(
   provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
@@ -67,6 +68,7 @@ export function isProviderConfigured(
   return true
 }
 
+/** True when any usage-provider settings surface is available. */
 export function hasUsageProviderSettings(
   settings: Partial<UsageProviderSettings> | null | undefined
 ): boolean {
@@ -79,10 +81,12 @@ export function hasUsageProviderSettings(
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    settings?.cursorAuthConfigured === true
   )
 }
 
+/** True when settings exist for the given usage provider. */
 export function hasUsageProviderSettingsForProvider(
   providerId: UsageProviderId,
   settings: Partial<UsageProviderSettings> | null | undefined
@@ -114,9 +118,13 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
   }
+  if (providerId === 'cursor') {
+    return settings.cursorAuthConfigured === true
+  }
   return false
 }
 
+/** Placeholder provider snapshot shown during an in-flight fetch. */
 function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRateLimits {
   return {
     provider: providerId,
@@ -130,6 +138,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
   }
 }
 
+/** Provider snapshot to show, or null when the chip should hide. */
 export function getVisibleUsageProvider(
   providerId: UsageProviderId,
   provider: ProviderRateLimits | null | undefined,
@@ -144,6 +153,7 @@ export function getVisibleUsageProvider(
   return provider ?? createPendingProviderSnapshot(providerId)
 }
 
+/** True when the usage roster should show the empty/sign-in state. */
 export function isUsageEmptyState(
   providers: UsageProviderSnapshots,
   settings: Partial<UsageProviderSettings> | null | undefined
@@ -167,7 +177,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    isProviderSnapshotPending(providers.cursor)
   ) {
     return false
   }
@@ -180,6 +191,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.cursor)
   )
 }

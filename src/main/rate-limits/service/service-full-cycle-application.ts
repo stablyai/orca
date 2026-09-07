@@ -34,7 +34,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         kimiResult,
         miniMaxResult
       ],
-      grokResultPromise
+      grokResultPromise,
+      cursorResultPromise
     } = prepared
     if (signal.aborted) {
       return
@@ -210,6 +211,28 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+
+    const cursorResult = await cursorResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const cursor =
+      cursorResult.status === 'fulfilled'
+        ? cursorResult.value
+        : ({
+            provider: 'cursor',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              cursorResult.reason instanceof Error ? cursorResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+    this.trackActiveFailureStreak('cursor', cursor)
+    this.updateState({
+      ...this.state,
+      cursor: this.applyStalePolicy(cursor, previousState.cursor)
     })
   }
 }

@@ -585,6 +585,11 @@ describe('ProviderIcon', () => {
     expect(markup).toContain('data-agent-icon="antigravity"')
   })
 
+  it('renders the Cursor agent icon for the cursor provider', () => {
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'cursor' }))
+    expect(markup).toContain('data-agent-icon="cursor"')
+  })
+
   it('renders the official MiniMax icon asset for the minimax provider', () => {
     // Why: the icon must travel to the status bar / tooltip unchanged so the
     // user recognises the brand. We pin it to an <img> with a non-empty

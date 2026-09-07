@@ -5,6 +5,7 @@ import { SettingsSegmentedControl } from '@/components/settings/SettingsFormCont
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
+import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import {
   clampUsedPercent,
@@ -20,22 +21,21 @@ import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mod
 type ProviderId = ProviderRateLimits['provider']
 export type UsageSection = { label: string; window: RateLimitWindow }
 
-// Windows/buckets that actually carry data — absent limits arrive as null, but a
-// partial/rehydrated provider can also carry an undefined window; both must be
-// dropped so downstream consumers never dereference `window.usedPercent`.
+/** Non-null usage windows/buckets safe to render. */
 function usedSections(p: ProviderRateLimits): UsageSection[] {
   return getWindowSections(p).filter(
     (s): s is UsageSection => s.window !== null && s.window !== undefined
   )
 }
 
+/** Max usedPercent across the given sections. */
 function providerMaxUsed(sections: UsageSection[]): number {
   return sections.length > 0
     ? Math.max(...sections.map((s) => clampUsedPercent(s.window.usedPercent)))
     : 0
 }
 
-// Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
+/** Compact chip label for a window or named bucket. */
 function shortLabel(
   p: ProviderRateLimits,
   section: UsageSection,
@@ -54,13 +54,20 @@ function shortLabel(
     : formatWindowLabel(section.window.windowMinutes)
 }
 
+/** Filters usage sections down to Cursor plan buckets. */
+function cursorUsageSections(p: ProviderRateLimits, sections: UsageSection[]): UsageSection[] {
+  if (p.provider !== 'cursor') {
+    return []
+  }
+  return sections.filter((section) => isCursorUsageBucket(section.label))
+}
+
+/** Highest-consumption window/bucket, labeled for the compact status chip. */
 export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
   const sections = usedSections(p)
   if (sections.length === 0) {
     return null
   }
-  // Why: the footer promises one quiet summary per provider; choose urgency by
-  // consumption even when the user displays the complementary “% left” value.
   const tightest = sections.reduce((current, candidate) =>
     clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
       ? candidate
@@ -69,7 +76,7 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
-// The soonest-resetting window summarizes the agent's next reset in one line.
+/** Countdown to the soonest window reset among sections. */
 function soonestResetLabel(sections: UsageSection[], now: number): string | null {
   const resets = sections
     .map((s) => s.window.resetsAt)
@@ -80,6 +87,7 @@ function soonestResetLabel(sections: UsageSection[], now: number): string | null
   return formatResetCountdown(Math.min(...resets) - now)
 }
 
+/** Single usage window/bucket metric row for the roster. */
 function UsageMetric({
   section,
   label,
@@ -96,7 +104,7 @@ function UsageMetric({
 
   return (
     <span data-usage-window={section.label} className="flex shrink-0 items-center gap-1.5">
-      <span className="text-[10px] text-muted-foreground">{label}</span>
+      {label ? <span className="text-[10px] text-muted-foreground">{label}</span> : null}
       {showBar ? (
         <span data-usage-bar className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
           <span
@@ -110,6 +118,7 @@ function UsageMetric({
   )
 }
 
+/** Provider row in the usage roster dropdown. */
 export function UsageRow({
   p,
   display,
@@ -130,7 +139,10 @@ export function UsageRow({
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
+  const cursorBars = cursorUsageSections(p, sections)
+  const showInlineCursorBars = mode === 'compact' && cursorBars.length > 0
+  const tightest = mode === 'compact' && !showInlineCursorBars ? getTightestUsageSection(p) : null
+  const verboseSections = cursorBars.length > 0 ? cursorBars : sections
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -153,6 +165,12 @@ export function UsageRow({
               </span>
             ) : null}
           </>
+        ) : showInlineCursorBars ? (
+          <span className="ml-auto flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            {cursorBars.map((section) => (
+              <UsageMetric key={section.label} section={section} label="" display={display} />
+            ))}
+          </span>
         ) : tightest ? (
           <span className="ml-auto">
             <UsageMetric
@@ -168,7 +186,7 @@ export function UsageRow({
       </div>
       {hasUsage && mode === 'verbose' ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
-          {sections.map((section) => (
+          {verboseSections.map((section) => (
             <UsageMetric
               key={section.label}
               section={section}
@@ -279,7 +297,7 @@ export function UsageRosterPanel({
               label: translate('auto.components.status.bar.UsageRosterPanel.compact', 'Compact'),
               tooltip: translate(
                 'auto.components.status.bar.UsageRosterPanel.compactTooltip',
-                'Condensed usage: only the tightest window'
+                'Condensed usage: highest-consumption window; Cursor lists every plan bucket'
               )
             }
           ]}

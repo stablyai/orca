@@ -71,10 +71,7 @@ export function formatResetCreditExpiry(
       })
 }
 
-// ---------------------------------------------------------------------------
-// Shared icon component
-// ---------------------------------------------------------------------------
-
+/** Status-bar icon for a rate-limit provider. */
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
@@ -96,6 +93,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
+  }
+  if (provider === 'cursor') {
+    return <AgentIcon agent="cursor" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -135,10 +135,7 @@ function ErrorMessage({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Window section derivation
-// ---------------------------------------------------------------------------
-
+/** Flattens a provider's windows and buckets into labeled sections. */
 export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
