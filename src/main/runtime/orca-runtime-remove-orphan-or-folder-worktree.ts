@@ -44,6 +44,9 @@ export async function removeOrphanOrFolderWorktree({
           : {}),
         localProvider: ptyProvider,
         onPtyStopped: runtime.onPtyStopped ?? undefined,
+        // A structured session is on no PTY surface, so the sweeps above leave it attached to a
+        // workspace this removal is about to forget. Closed best-effort, exactly like those PTYs.
+        closeStructuredSessions: true,
         ...(externalOrphanHost
           ? {
               includeProviderInventory: orphanHost?.kind === 'ssh' && Boolean(sshPtyProvider),

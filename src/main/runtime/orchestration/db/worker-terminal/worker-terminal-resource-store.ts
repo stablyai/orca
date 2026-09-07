@@ -110,6 +110,18 @@ export function getWorkerTerminalResourceByOwner(
     .get(dispatchId) as WorkerTerminalResourceRow | undefined
 }
 
+export function getWorkerTerminalResourceByHandle(
+  this: OrchestrationDb,
+  terminalHandle: string
+): WorkerTerminalResourceRow | undefined {
+  return this.db
+    .prepare(
+      `SELECT * FROM worker_terminal_resources
+        WHERE terminal_handle = ? ORDER BY updated_at DESC LIMIT 1`
+    )
+    .get(terminalHandle) as WorkerTerminalResourceRow | undefined
+}
+
 export function getWorkerTerminalResourceFormerlyOwnedBy(
   this: OrchestrationDb,
   dispatchId: string
@@ -193,6 +205,7 @@ export type WorkerTerminalResourceStoreMethods = {
   backfillWorkerTerminalResources: typeof backfillWorkerTerminalResources
   createWorkerTerminalResourceStatement: typeof createWorkerTerminalResourceStatement
   getWorkerTerminalResource: typeof getWorkerTerminalResource
+  getWorkerTerminalResourceByHandle: typeof getWorkerTerminalResourceByHandle
   getWorkerTerminalResourceByOwner: typeof getWorkerTerminalResourceByOwner
   getWorkerTerminalResourceFormerlyOwnedBy: typeof getWorkerTerminalResourceFormerlyOwnedBy
   recordWorkerTerminalRecoveryAttempt: typeof recordWorkerTerminalRecoveryAttempt
@@ -204,6 +217,7 @@ export function attachWorkerTerminalResourceStore(ctor: { prototype: object }): 
     backfillWorkerTerminalResources,
     createWorkerTerminalResourceStatement,
     getWorkerTerminalResource,
+    getWorkerTerminalResourceByHandle,
     getWorkerTerminalResourceByOwner,
     getWorkerTerminalResourceFormerlyOwnedBy,
     recordWorkerTerminalRecoveryAttempt,

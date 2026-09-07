@@ -30,6 +30,7 @@ describe('OrcaRuntimeService', () => {
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn',
         terminalQuickCommands
       })
     } as never)
@@ -39,7 +40,9 @@ describe('OrcaRuntimeService', () => {
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      minimaxUsageModels: 'general,abab6.5',
+      // Why: without this the paired client silently falls back to 'overseas' and shows the wrong region.
+      minimaxEndpoint: 'cn'
     })
     expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
     expect(runtime.getClientSettings().hostSettingOverrides).toEqual({
@@ -84,6 +87,78 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getClientSettings()).not.toHaveProperty('terminalQuickCommands')
   })
 
+  it('applies native-chat option deltas atomically on the runtime host', () => {
+    let settings = {
+      ...store.getSettings(),
+      nativeChatSessionOptions: {
+        claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } }
+      }
+    }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings
+    } as never)
+
+    runtime.updateClientNativeChatSessionOptions({
+      type: 'apply-picks',
+      agent: 'codex',
+      picks: [
+        { modelId: 'gpt-fast', optionId: 'model', value: 'gpt-fast' },
+        { modelId: 'gpt-fast', optionId: 'effort', value: 'low' }
+      ]
+    })
+    runtime.updateClientNativeChatSessionOptions({
+      type: 'apply-picks',
+      agent: 'claude',
+      picks: [{ modelId: 'sonnet', optionId: 'model', value: 'sonnet' }]
+    })
+
+    expect(settings.nativeChatSessionOptions).toEqual({
+      claude: {
+        model: 'sonnet',
+        valuesByModel: { opus: { effort: 'high' } }
+      },
+      codex: {
+        model: 'gpt-fast',
+        valuesByModel: { 'gpt-fast': { effort: 'low' } }
+      }
+    })
+    expect(updateSettings).toHaveBeenCalledTimes(2)
+  })
+
+  it('compares retired models against the host record at mutation time', () => {
+    let settings = {
+      ...store.getSettings(),
+      nativeChatSessionOptions: { grok: { model: 'grok-5' } }
+    }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings
+    } as never)
+
+    runtime.updateClientNativeChatSessionOptions({
+      type: 'clear-model-if-missing',
+      agent: 'grok',
+      availableModelIds: ['grok-5']
+    })
+    expect(updateSettings).not.toHaveBeenCalled()
+
+    runtime.updateClientNativeChatSessionOptions({
+      type: 'clear-model-if-missing',
+      agent: 'grok',
+      availableModelIds: ['grok-4.5']
+    })
+    expect(settings.nativeChatSessionOptions).toEqual({ grok: {} })
+  })
+
   it('rejects a concurrent add after the quick command limit is reached', () => {
     const terminalQuickCommands = Array.from({ length: MAX_QUICK_COMMANDS }, (_, index) => ({
       id: `command-${index}`,
@@ -122,7 +197,8 @@ describe('OrcaRuntimeService', () => {
       experimentalNewWorktreeCardStyle: false,
       compactWorktreeCards: false,
       minimaxGroupId: '',
-      minimaxUsageModels: 'general'
+      minimaxUsageModels: 'general',
+      minimaxEndpoint: 'overseas'
     }
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
@@ -139,20 +215,23 @@ describe('OrcaRuntimeService', () => {
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5'
+        minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn'
       })
     ).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn'
     })
     expect(updateSettings).toHaveBeenCalledWith(
       {
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
-        minimaxUsageModels: 'general,abab6.5'
+        minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn'
       },
       { notifyListeners: true }
     )
@@ -160,7 +239,8 @@ describe('OrcaRuntimeService', () => {
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5'
+      minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn'
     })
   })
 

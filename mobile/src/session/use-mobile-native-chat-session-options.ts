@@ -1,3 +1,4 @@
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   getAgentSessionOptionCatalog,
@@ -30,6 +31,8 @@ import {
 } from '../../../src/shared/native-chat-session-option-state'
 
 export type MobileNativeChatSessionOptionsController = {
+  conversationCommands?: readonly AgentSessionConversationCommand[]
+  optionPickerRequest?: { id: string; sequence: number } | null
   /** Model descriptor first, then the current model's options; empty when the
    *  agent has no catalog. */
   snapshot: SessionOptionDescriptor[]

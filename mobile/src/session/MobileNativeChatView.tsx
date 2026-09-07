@@ -437,6 +437,9 @@ export function MobileNativeChatView({
         </View>
       ) : null}
       <MobileNativeChatComposer
+        structuredCommands={
+          structuredActivityUi ? (sessionOptions?.controller.conversationCommands ?? []) : undefined
+        }
         value={composerText}
         onChangeText={onComposerTextChange}
         onSend={handleSend}

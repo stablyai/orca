@@ -138,7 +138,7 @@ function runningStatusItem(): AgentJournalRenderItem {
   }
 }
 
-function defaultSendRequest(method: string, params?: Record<string, unknown>) {
+async function defaultSendRequest(method: string, params?: Record<string, unknown>) {
   if (method === 'agentSession.send') {
     return ok({
       ok: true,
@@ -420,6 +420,11 @@ describe('useMobileStructuredAgentSession', () => {
       }),
       expect.any(Object)
     )
+    expect(sendRequest).toHaveBeenCalledWith('settings.mutateNativeChatSessionOptions', {
+      type: 'apply-picks',
+      agent: 'codex',
+      picks: [{ modelId: 'gpt-fast', optionId: 'model', value: 'gpt-fast' }]
+    })
 
     await act(async () => {
       expect(await hook.respondPermission(hook.permission!.options[0]!.send)).toBe(true)

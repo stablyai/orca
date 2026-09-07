@@ -22,8 +22,15 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
     const outcome = await input.plan.run(input.context)
     await settle(
       outcome.ok
-        ? { status: 'succeeded', sessionId: input.envelope.sessionId }
-        : { status: 'failed', code: outcome.refusal.code }
+        ? (input.plan.settledOutcome?.(outcome.value) ?? {
+            status: 'succeeded',
+            sessionId: input.envelope.sessionId
+          })
+        : {
+            status: 'failed',
+            code: outcome.refusal.code,
+            ...(outcome.refusal.rewindReason ? { rewindReason: outcome.refusal.rewindReason } : {})
+          }
     )
     return outcome
   } catch (error) {

@@ -64,10 +64,19 @@ export type WorkerTerminalListState =
 
 export type WorkerDispatchListState = WorkerDispatchState | 'unsupervised'
 
+/**
+ * The frozen output sources a released worker can be read back from.
+ *
+ * One name so widening it stays a single edit: the capture, the durable write, and the archived
+ * read all have to admit the same set, and a kind that reaches the row but not the read side is an
+ * archived worker that throws instead of answering.
+ */
+export type WorkerTerminalArchiveKind = 'transcript_pin' | 'terminal_tail' | 'structured_journal'
+
 export type WorkerTerminalArchiveRow = {
   dispatch_id: string
   resource_id: string
-  kind: 'transcript_pin' | 'terminal_tail'
+  kind: WorkerTerminalArchiveKind
   content: string
   created_at: string
 }

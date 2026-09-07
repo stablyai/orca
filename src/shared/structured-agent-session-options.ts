@@ -13,6 +13,7 @@ import {
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
+import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from './native-chat-session-option-defaults'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
 import type { AgentSessionOptionsResult } from './agent-session-wire'
 
@@ -147,4 +148,45 @@ export function commitStructuredAgentSessionOptionValues(
     }
   }
   return next
+}
+
+export type StructuredSessionOptionPick = {
+  modelId: string
+  optionId: string
+  value: string
+}
+
+/**
+ * The picks a mutation must remember so the next launch starts where the user left off.
+ * Keyed off the same ids the launch seed reads back, so a pick this surface cannot
+ * re-seed is never written.
+ *
+ * Model and effort travel as a pair: a launch resolves a stored effort only under a
+ * stored model, so an effort-only pick adopts the model it was chosen against. Values
+ * come from what the provider committed, not what was requested — it reconciles an
+ * effort the newly selected model cannot run before reporting back.
+ *
+ * `state` may still be pre-commit: a changed model arrives in `committed`, and an
+ * unchanged one is already what the record tracks, so neither reading depends on the
+ * commit having landed.
+ */
+export function structuredAgentSessionOptionPicks(
+  state: StructuredAgentSessionOptionState,
+  committed: Readonly<Record<string, string>>
+): StructuredSessionOptionPick[] {
+  if (!state.catalog) {
+    return []
+  }
+  const committedModel = committed.model
+  const modelId =
+    typeof committedModel === 'string' && committedModel.trim()
+      ? committedModel
+      : resolveEffectiveNativeChatModelId(state.catalog, state.catalog.models, state.record)
+  if (!modelId) {
+    return []
+  }
+  return STRUCTURED_LAUNCH_SEED_OPTION_IDS.flatMap((optionId) => {
+    const value = committed[optionId]
+    return typeof value === 'string' && value.trim() ? [{ modelId, optionId, value }] : []
+  })
 }

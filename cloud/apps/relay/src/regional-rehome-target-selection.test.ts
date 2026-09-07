@@ -36,6 +36,7 @@ async function setup() {
     notBefore: clock,
     ratePerMinute: 10,
     preferenceMaxAgeMs: 24 * 60 * 60_000,
+    hostCooldownMs: 7 * 24 * 60 * 60_000,
     drainGraceMs: 60 * 60_000
   })
   await store.reconcileCells([source, noHeadroom, unclean, highLoad, lowLoad])
@@ -100,22 +101,22 @@ describe('regional rehome target selection', () => {
       sqlFailures: 0
     })
     // Lowest load but the connection hard cap is exhausted.
-    await context.beat(noHeadroom, 2, 0, {
+    await context.beat(noHeadroom, 2, 1, {
       observedRequests: 0,
       enforcedConnections: 999,
       sqlFailures: 0
     })
-    await context.beat(unclean, 3, 0, {
+    await context.beat(unclean, 3, 1, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN
     })
-    await context.beat(highLoad, 4, 0, {
+    await context.beat(highLoad, 4, 1, {
       observedRequests: 50,
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(lowLoad, 5, 0, {
+    await context.beat(lowLoad, 5, 1, {
       observedRequests: 10,
       enforcedConnections: 0,
       sqlFailures: 0
@@ -134,22 +135,22 @@ describe('regional rehome target selection', () => {
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(noHeadroom, 2, 0, {
+    await context.beat(noHeadroom, 2, 1, {
       observedRequests: 0,
       enforcedConnections: 999,
       sqlFailures: 0
     })
-    await context.beat(unclean, 3, 0, {
+    await context.beat(unclean, 3, 1, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN
     })
-    await context.beat(highLoad, 4, 0, {
+    await context.beat(highLoad, 4, 1, {
       observedRequests: 50,
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(lowLoad, 5, 0, {
+    await context.beat(lowLoad, 5, 1, {
       observedRequests: 10,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN

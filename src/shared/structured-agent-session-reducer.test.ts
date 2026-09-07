@@ -475,3 +475,31 @@ describe('structured agent session reducer', () => {
     expect(refreshed.activity).toEqual({ turnId: 'turn-1', text: 'Checking the renderer' })
   })
 })
+
+it('applies catalog-only checkpoints without replacing transcript or submission state', () => {
+  const state = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+    type: 'event',
+    event: {
+      type: 'snapshot',
+      sessionId: 'session-a',
+      fence: 1,
+      page: hydrationPage([item('one', 1)], [submission(1)]),
+      commands: []
+    }
+  })
+  const event = {
+    type: 'batch' as const,
+    sessionId: 'session-a',
+    fence: 1,
+    commands: [{ name: 'loaded', kind: 'skill' as const }],
+    batch: { cursor: state.cursor!, items: [], removedItemIds: [], submissions: [] }
+  }
+  const updated = reduceStructuredAgentSession(state, { type: 'event', event })
+  expect(updated.commands).toEqual(event.commands)
+  expect(updated.items).toBe(state.items)
+  expect(updated.submissions).toBe(state.submissions)
+  expect(updated.cursor).toBe(state.cursor)
+  expect(reduceStructuredAgentSession(updated, { type: 'event', event })).toBe(updated)
+  const { commands: _commands, ...oldEvent } = event
+  expect(reduceStructuredAgentSession(updated, { type: 'event', event: oldEvent })).toBe(updated)
+})

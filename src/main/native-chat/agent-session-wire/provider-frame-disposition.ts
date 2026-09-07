@@ -1,4 +1,5 @@
 import type { CodexAppServerNotificationMethod } from '../../codex/codex-app-server-notification-schema'
+import { CODEX_SUBAGENT_ITEM_TYPE } from '../../codex/codex-subagent-activity'
 import type { ClaudeStreamJsonFrameKind } from './claude-stream-json-frame-schema'
 
 export type ProviderFrameClassification =
@@ -65,7 +66,7 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'item/reasoning/summaryTextDelta': 'stream-into-item',
     'item/reasoning/summaryPartAdded': 'stream-into-item',
     'item/reasoning/textDelta': 'stream-into-item',
-    'thread/compacted': 'status-chrome',
+    'thread/compacted': 'timeline-substantive',
     'model/rerouted': 'status-chrome',
     'model/verification': 'status-chrome',
     'turn/moderationMetadata': 'suppressed-benign',
@@ -195,13 +196,23 @@ function hasProviderError(payload: unknown): boolean {
  *  new item type cannot leak `codex · item:<type>` into the transcript. The
  *  notification catalog above is keyed by METHOD and never matches these. */
 const CODEX_ITEM_CLASSIFICATIONS: Record<string, ProviderFrameClassification> = {
-  // The `thread/compacted` notification is already chrome; its item form is the
-  // same event and must not read as a mysterious opcode row.
-  contextCompaction: 'status-chrome',
+  // The journal coalesces this canonical completion with the legacy notification.
+  contextCompaction: 'timeline-substantive',
+  // Subagent lifecycle renders as the spawn-group roster row, so its raw items
+  // must not print a gray `codex · item:<type>` row beside it. The live
+  // notification path intercepts them before this catalog is reached;
+  // `restoreThread` replays them straight through `items.handle`, which is where
+  // the classification earns its keep.
+  //
+  // `collabAgentToolCall` is deliberately NOT suppressed with it. Nothing
+  // guarantees a session reports subagent work as `subAgentActivity` at all; one
+  // that only ever emits the collab tool call gets no roster row, and suppressing
+  // that too would leave its fan-out showing nothing.
+  [CODEX_SUBAGENT_ITEM_TYPE]: 'status-chrome',
   // `{id, durationMs}` and nothing else — Codex's own transcript renders it as
   // nothing at all. Every other item type this build does not model carries text
-  // a user would want (review output, an image path, hook prompt text, subagent
-  // progress), so those keep their visible fallback row.
+  // a user would want (review output, an image path, hook prompt text), so those
+  // keep their visible fallback row.
   sleep: 'status-chrome'
 }
 

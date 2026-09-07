@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_CODEX_SUBAGENTS_PER_GROUP } from '../../codex/codex-structured-journal-limits'
 import {
   boundWorkerTranscriptMessages,
   redactWorkerTerminalLines
@@ -55,6 +56,80 @@ describe('worker transcript wire bounds', () => {
         'Oversized tool input was clipped.'
       ])
     )
+  })
+
+  // The bound matches the producer's per-group cap, so nothing this build writes
+  // is clipped here. It stays because the journal schema declares no maximum and
+  // a remote host may run a build with a larger one — the transport's own
+  // invariant that no single block is huge.
+  it('caps and redacts a spawn group the way every other collection is capped', () => {
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-roster',
+        role: 'system',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'thread-1:turn-1',
+            agents: Array.from({ length: 80 }, (_unused, index) => ({
+              id: `child-${index}`,
+              label: index === 0 ? `dcap_${'A'.repeat(24)}` : 'read',
+              state: 'working' as const
+            }))
+          }
+        ]
+      }
+    ])
+
+    const block = result.messages[0]?.blocks[0]
+    expect(block?.type).toBe('subagent-group')
+    expect(block?.type === 'subagent-group' ? block.agents : []).toHaveLength(
+      MAX_CODEX_SUBAGENTS_PER_GROUP
+    )
+    expect(JSON.stringify(result.messages)).not.toContain('dcap_')
+    expect(result.limited).toBe(true)
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([
+        'Some subagents were omitted from oversized spawn groups.',
+        'Dispatch capability tokens were redacted from transcript output.'
+      ])
+    )
+  })
+
+  it('bounds a spawn-group state a newer build wrote as an oversized open string', () => {
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-roster-state',
+        role: 'system',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g'.repeat(900),
+            agents: [
+              {
+                id: 'i'.repeat(900),
+                label: 'l'.repeat(900),
+                state: 's'.repeat(900) as 'working'
+              }
+            ]
+          }
+        ]
+      }
+    ])
+
+    const block = result.messages[0]?.blocks[0]
+    const agent = block?.type === 'subagent-group' ? block.agents[0] : undefined
+    expect(block?.type === 'subagent-group' ? block.groupId.length : 0).toBe(512)
+    expect(agent?.id.length).toBe(512)
+    expect(agent?.label.length).toBe(512)
+    // A clipped state names no state any build knows, which is what
+    // `unverifiable` records — a 512-character fragment is not a state at all.
+    expect(agent?.state).toBe('unverifiable')
+    expect(result.limited).toBe(true)
   })
 
   it('keeps complete bounded messages unlimited', () => {

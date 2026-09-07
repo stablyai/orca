@@ -3903,7 +3903,14 @@
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "minimax": {
+              "expired": {
+                "label": "Sign-in expired",
+                "apiKey": "MiniMax API key expired. Replace it in Settings.",
+                "cookie": "MiniMax session cookie expired. Replace it in Settings."
+              }
+            }
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -5780,7 +5787,8 @@
               "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
-              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold."
+              "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.",
+              "runningAgentSession": "This workspace still has running agent sessions, so Orca stopped before deleting any files. Force Delete will close them and discard any work they hold."
             }
           }
         },
@@ -11092,7 +11100,8 @@
           "signInAgain": "Sign in again for Relay",
           "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
-          "retrying": "Retrying"
+          "retrying": "Retrying",
+          "relayCell": "Relay cell"
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",
@@ -13005,7 +13014,10 @@
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead.",
             "prepareSessionResumeFailed": "Could not prepare this session for resume.",
             "sessionDeleted": "Session deleted",
-            "sessionDeleteFailed": "Couldn't delete the session"
+            "sessionDeleteFailed": "Couldn't delete the session",
+            "resumeInChatConflict": "Another chat is already holding this conversation.",
+            "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
+            "resumeInChatFailed": "Could not resume this session in a new chat."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -13141,7 +13153,8 @@
             "delete": "Delete",
             "deleteReasonNonLocalHost": "Only sessions on this device can be deleted.",
             "deleteReasonSyntheticPath": "This session can't be deleted from Orca.",
-            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca."
+            "deleteReasonUnsupportedAgent": "{{value0}} sessions can't be deleted from Orca.",
+            "resumeInNewChat": "Resume in New Chat"
           },
           "AiVaultSessionDeleteDialog": {
             "title": "Delete this session?",
@@ -16213,7 +16226,20 @@
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
           "activityOptions": "Activity options",
-          "threadListOptionsFiltered": "Thread list options, filters active"
+          "threadListOptionsFiltered": "Thread list options, filters active",
+          "showSearch": "Show search",
+          "interrupted": "Interrupted",
+          "state": {
+            "working": "Working",
+            "monitoring": "Monitoring background tasks",
+            "blocked": "Blocked",
+            "waiting": "Waiting for input",
+            "failed": "Failed",
+            "done": "Done",
+            "idle": "Idle",
+            "unverifiable": "No recent update",
+            "permission": "Needs attention"
+          }
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -16942,6 +16968,11 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "notices": {
+        "compaction": "Context compacted",
+        "details": "Details",
+        "plan": "Plan"
+      },
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",
         "send": "Send",
@@ -17007,6 +17038,8 @@
         "imagePreviewUnavailable": "Preview unavailable"
       },
       "tool": {
+        "exitCode": "exit {{value0}}",
+        "milliseconds": "{{value0}}ms",
         "running": "Running…",
         "result": "Result",
         "countOne": "1 tool call",
@@ -17101,11 +17134,6 @@
         "deny": "Deny"
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",
-      "orchestrationPaused": {
-        "label": "Orchestration paused",
-        "message": "Structured Chat blocks terminal prompts and sends. Orchestration messages remain queued; switch to Terminal, then check the Orca inbox with",
-        "command": "orca orchestration check"
-      },
       "structuredSessionCloseFailed": "Could not close this chat session",
       "structuredSessionLaunchFailed": "Could not open {{value0}} chat",
       "structuredSessionLaunchPending": "Starting {{value0}} chat…",
@@ -17144,7 +17172,31 @@
       },
       "structuredSessionFellBackToTerminal": "Structured chat isn't available",
       "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
-      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details."
+      "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details.",
+      "subagents": {
+        "state": {
+          "completed": "completed",
+          "working": "working",
+          "idle": "idle",
+          "failed": "failed",
+          "stopped": "stopped",
+          "unverifiable": "unverifiable",
+          "workingCount": "{{value0}} working",
+          "idleCount": "{{value0}} idle",
+          "failedCount": "{{value0}} failed",
+          "stoppedCount": "{{value0}} stopped",
+          "unverifiableCount": "{{value0}} unverifiable"
+        },
+        "startedOne": "Kicked off 1 subagent",
+        "startedN": "Kicked off {{value0}} subagents",
+        "ranOne": "Ran 1 subagent",
+        "ranN": "Ran {{value0}} subagents",
+        "tokens": "{{value0}} tokens"
+      },
+      "conversationCommand": {
+        "pendingWork": "Wait for pending work and messages to finish before using this command.",
+        "unconfirmed": "Conversation operation was not confirmed."
+      }
     },
     "tab": {
       "bar": {
@@ -17606,7 +17658,9 @@
       "label": "Agents",
       "dashboardLabel": "Agent Dashboard",
       "openActivity": "View activity",
-      "closeActivity": "Turn off activity view"
+      "closeActivity": "Turn off activity view",
+      "projects": "Projects",
+      "workspaces": "Workspaces"
     }
   },
   "runtimeRpc": {

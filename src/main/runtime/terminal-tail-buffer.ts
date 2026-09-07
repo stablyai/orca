@@ -293,7 +293,7 @@ function appendNormalizedToMultilineTailBuffer(
       const line = rewritten[index]!
       const lastChar = line.charCodeAt(line.length - 1)
       if (lastChar === 32 || lastChar === 9) {
-        rewritten[index] = line.replace(/[ \t]+$/g, '')
+        rewritten[index] = trimTerminalLineRight(line)
       }
     }
     for (const line of windowed.lines) {

@@ -13,40 +13,46 @@ import type { BrowserSessionTabSelectionOptions } from './browser-tab-create-pub
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { applyBrowserSessionTabSelection } from './browser-session-tab-selection-snapshot'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { retireStructuredAgentSessionTabFrom } from './structured-agent-session-tab-retirement'
 
 export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithCloseMobileSessionTab {
-  protected async closeStructuredAgentSessionTab(
-    worktreeId: string,
-    snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionAgentTab
-  ): Promise<void> {
+  protected async closeStructuredAgentSessionTab(tab: RuntimeMobileSessionAgentTab): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (host) {
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(tab.sessionId, false)
       }
     }
-    const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== tab.id)
-    const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: active?.id ?? null,
-      activeTabType: active?.type ?? null,
-      tabGroups: (snapshot.tabGroups ?? []).map((group) => ({
-        ...group,
-        tabOrder: group.tabOrder.filter((id) => id !== tab.id),
-        activeTabId: group.activeTabId === tab.id ? null : group.activeTabId,
-        recentTabIds: group.recentTabIds?.filter((id) => id !== tab.id)
-      })),
-      tabs: nextTabs
-    }
-    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
-    this.emitMobileSessionTabsSnapshot(nextSnapshot)
     // Retire durable visibility and the runtime snapshot before stopping the provider.
+    this.retireStructuredAgentSessionTabFromSnapshot(tab.sessionId)
     if (typeof host?.close === 'function') {
       await host.close(tab.sessionId)
     }
+  }
+
+  /**
+   * Prunes a structured session's chat tab from whichever worktree snapshot still carries it.
+   *
+   * Public because orchestration settles structured workers outside the tab surface: stop, release
+   * and the half-started discard all prove their own close and then have to retire the tab that
+   * `publishStructuredAgentSessionTab` put on screen. `setSessionTabVisibility(false)` only clears
+   * the DURABLE restore index, so without this the dead chat tab survives for the rest of the app
+   * session and re-attaches the released session when opened.
+   *
+   * Snapshot-only and renderer-free: it never asks the renderer to close anything, so it is safe on
+   * the startup release reconciler where no renderer exists.
+   */
+  retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean {
+    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+      const nextSnapshot = retireStructuredAgentSessionTabFrom(snapshot, sessionId)
+      if (!nextSnapshot) {
+        continue
+      }
+      this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
+      this.emitMobileSessionTabsSnapshot(nextSnapshot)
+      return true
+    }
+    return false
   }
 
   // Why: a refused echoed close means the echoing client already pruned its

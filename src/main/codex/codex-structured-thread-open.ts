@@ -16,6 +16,7 @@ export type CodexOpenedThread = {
   thread?: Record<string, unknown>
   /** Rollout file Codex named, when it named one. */
   historyPath: string | null
+  historyMode?: 'legacy' | 'paginated'
   model?: string
   effort?: string
 }
@@ -92,6 +93,9 @@ export async function openCodexThread(
     threadId,
     thread,
     historyPath: readCodexThreadPath(opened),
+    ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
+      ? { historyMode: thread.historyMode }
+      : {}),
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {})
   }

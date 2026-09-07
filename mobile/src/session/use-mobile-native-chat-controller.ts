@@ -263,6 +263,8 @@ export function useMobileNativeChatController(args: {
       isWorking: nativeChatAgentWorking,
       reportedModel: activeSessionTab?.agentStatus?.model ?? null,
       structured: {
+        optionPickerRequest: structuredNativeChat.optionPickerRequest,
+        conversationCommands: structuredNativeChat.conversationCommands,
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
         setOption: structuredNativeChat.setStructuredOption,

@@ -2,7 +2,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { openInMemoryRelayDatabase, openRelayDatabase } from './database.js'
+import {
+  openInMemoryRelayDatabase,
+  openRelayDatabase,
+  POSTGRES_SCHEMA_MIGRATIONS,
+  REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS
+} from './database.js'
 
 const temporaryDirectories: string[] = []
 
@@ -140,6 +145,41 @@ describe('relay database', () => {
       ])
     ).toEqual([{ region: 'us-central1' }])
     await second.close()
+  })
+
+  it('renders every region check from the shared region list', async () => {
+    // Derived, not hand-written: a third region must not leave one column
+    // rejecting a value the rest of the relay already accepts.
+    const database = await openInMemoryRelayDatabase()
+    const checked = await database.query(
+      `SELECT name, sql FROM sqlite_master
+       WHERE type = 'table'
+         AND name IN ('relay_assignment_region_preferences', 'relay_cell_regions',
+                      'relay_region_rehome_attempts')
+       ORDER BY name`
+    )
+    const list = `IN ('us-central1', 'asia-east2')`
+    expect(checked.map((row) => row.name)).toEqual([
+      'relay_assignment_region_preferences',
+      'relay_cell_regions',
+      'relay_region_rehome_attempts'
+    ])
+    expect(checked.every((row) => String(row.sql).includes(list))).toBe(true)
+    expect(
+      POSTGRES_SCHEMA_MIGRATIONS.some((statement) => statement.includes(list))
+    ).toBe(true)
+    await database.close()
+  })
+
+  it('indexes rehome attempts by host recency for the per-host cooldown', async () => {
+    const database = await openInMemoryRelayDatabase()
+    const rows = await database.query(
+      `SELECT sql FROM sqlite_master
+       WHERE type = 'index' AND name = 'relay_region_rehome_attempts_host_recency'`
+    )
+    expect(rows[0]?.sql).toContain('(user_id, relay_host_id, created_at)')
+    expect(REGIONAL_REHOME_DEFAULT_HOST_COOLDOWN_MS).toBe(7 * 24 * 60 * 60_000)
+    await database.close()
   })
 
   it('indexes region preference expiry by observation time', async () => {

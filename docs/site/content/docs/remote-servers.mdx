@@ -129,19 +129,23 @@ Install Orca and its bundled CLI on the server, then run:
 <Callout title="On Linux, start it with orca-ide serve">
   The Linux CLI is named `orca-ide`, because GNOME Orca's screen reader already owns
   `/usr/bin/orca`. A packaged `orca serve` does write a bare `orca` into `~/.local/bin`, but only
-  while it is starting, so that shim can never be the command that starts the server. Read
-  `orca serve` as `orca-ide serve` throughout this page when the host is Linux. See
-  [Install → Linux](/docs/install#linux).
+  while it is starting, so that shim can never be the command that starts the server. Read `orca
+  serve` as `orca-ide serve` throughout this page when the host is Linux. See [Install →
+  Linux](/docs/install#linux).
 </Callout>
 
 ```bash
 orca serve --pairing-address <server-tailscale-ip-or-hostname>
+# Linux
+orca-ide serve --pairing-address <server-tailscale-ip-or-hostname>
 ```
 
 For example:
 
 ```bash
 orca serve --pairing-address 100.64.1.20
+# Linux
+orca-ide serve --pairing-address 100.64.1.20
 ```
 
 The command:
@@ -157,6 +161,8 @@ Add `--port 6768` when a firewall, tunnel, or service definition requires a fixe
 
 ```bash
 orca serve --port 6768 --pairing-address 100.64.1.20
+# Linux
+orca-ide serve --port 6768 --pairing-address 100.64.1.20
 ```
 
 Use only one host mode at a time. If the Orca desktop app is already sharing that computer, do not start a second `orca serve` process for the same setup.
@@ -167,6 +173,8 @@ For the Orca mobile app, request a mobile-scoped QR code and link:
 
 ```bash
 orca serve --pairing-address 100.64.1.20 --mobile-pairing
+# Linux
+orca-ide serve --pairing-address 100.64.1.20 --mobile-pairing
 ```
 
 Keep the phone on the same tailnet, open Orca Mobile, choose **Pair**, and scan the terminal QR code or paste the printed link.

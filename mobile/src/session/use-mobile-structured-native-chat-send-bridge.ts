@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { isStructuredAgentSessionComposerCommand } from '../../../src/shared/structured-agent-session-composer'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 
@@ -65,10 +66,22 @@ export function useMobileStructuredNativeChatSendBridge(args: {
               ? await sendStructured(text, images)
               : await sendStructured(text)
       if (outcome === 'accepted') {
-        acceptSend(origin, text.trimEnd(), images)
+        if (
+          !isStructuredAgentSessionComposerCommand(text, 'codex') &&
+          !isStructuredAgentSessionComposerCommand(text, 'claude')
+        ) {
+          acceptSend(origin, text.trimEnd(), images)
+        }
         return 'accepted'
       }
       if (outcome === 'unknown') {
+        if (
+          isStructuredAgentSessionComposerCommand(text, 'codex') ||
+          isStructuredAgentSessionComposerCommand(text, 'claude')
+        ) {
+          restoreRejectedDraft(origin, text)
+          return 'unknown'
+        }
         holdUnconfirmedSend(origin, text.trimEnd(), () =>
           onSendError('Delivery unconfirmed — check chat before retrying')
         )
