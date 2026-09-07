@@ -122,11 +122,9 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
-    // Why: antigravity durability requires the Gemini OAuth opt-in; the
-    // checked item alone must not suppress the usage setup CTA.
-    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
-      false
-    )
+    // Why: the checked item is durable on its own now that the read no longer borrows the
+    // Gemini fetch — this must agree with hasUsageProviderSettingsForProvider('antigravity').
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)

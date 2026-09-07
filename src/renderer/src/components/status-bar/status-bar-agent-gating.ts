@@ -31,11 +31,15 @@ export function isStatusBarItemAvailable(
 }
 
 // Why: Antigravity is read from a credential, so it can be signed in only on a remote execution
-// host with no `agy` on this machine's PATH. A snapshot that actually carries quota is its own
-// proof the slot is useful; PATH detection alone would hide the bar in exactly that case.
+// host with no `agy` on this machine's PATH. A named credential source is proof we found a
+// sign-in somewhere, which is what makes the slot useful — keying on `ok` instead would hide the
+// bar the moment that sign-in expires or its host drops, burying the very message that says so.
 export function isAntigravityStatusBarAvailable(
   detectedAgentIds: TuiAgent[] | null,
-  antigravity: Pick<ProviderRateLimits, 'status'> | null | undefined
+  antigravity: Pick<ProviderRateLimits, 'usageMetadata'> | null | undefined
 ): boolean {
-  return isStatusBarItemAvailable('antigravity', detectedAgentIds) || antigravity?.status === 'ok'
+  return (
+    isStatusBarItemAvailable('antigravity', detectedAgentIds) ||
+    Boolean(antigravity?.usageMetadata?.credentialSource)
+  )
 }

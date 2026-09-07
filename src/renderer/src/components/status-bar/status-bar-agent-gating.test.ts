@@ -43,21 +43,41 @@ describe('isStatusBarItemAvailable', () => {
 })
 
 describe('isAntigravityStatusBarAvailable', () => {
-  const okSnapshot = { status: 'ok' } as const
+  const fromHost = { usageMetadata: { source: 'oauth', credentialSource: 'Dev box' } } as const
 
   it('shows the slot for a sign-in that lives only on a remote host', () => {
     // Why: `agy` may exist only on the SSH host, so PATH detection alone would hide a bar
     // that a successful read has already proved useful.
-    expect(isAntigravityStatusBarAvailable([], okSnapshot)).toBe(true)
+    expect(isAntigravityStatusBarAvailable([], fromHost)).toBe(true)
+  })
+
+  it('keeps the slot once that remote sign-in expires or its host drops', () => {
+    // Why: those verdicts are surfaced deliberately; hiding the bar would bury the message.
+    expect(
+      isAntigravityStatusBarAvailable([], {
+        usageMetadata: { source: 'oauth', failureKind: 'stale-token', credentialSource: 'Dev box' }
+      })
+    ).toBe(true)
+    expect(
+      isAntigravityStatusBarAvailable([], {
+        usageMetadata: { source: 'oauth', failureKind: 'network', credentialSource: 'Dev box' }
+      })
+    ).toBe(true)
   })
 
   it('shows the slot when the CLI is on PATH even with no snapshot yet', () => {
     expect(isAntigravityStatusBarAvailable(['antigravity'], null)).toBe(true)
   })
 
-  it('hides the slot when neither the CLI nor a reading is present', () => {
+  it('hides the slot when no host holds a sign-in and the CLI is absent', () => {
     expect(isAntigravityStatusBarAvailable([], null)).toBe(false)
-    expect(isAntigravityStatusBarAvailable([], { status: 'unavailable' })).toBe(false)
+    expect(
+      isAntigravityStatusBarAvailable([], {
+        usageMetadata: { source: 'oauth', failureKind: 'missing-credentials' }
+      })
+    ).toBe(false)
+    // Why: the Gemini mirror names no credential source, so it must not widen the slot.
+    expect(isAntigravityStatusBarAvailable([], {})).toBe(false)
   })
 
   it('keeps the pre-detection default so the bar does not flicker on cold start', () => {
