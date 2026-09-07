@@ -177,6 +177,19 @@ describe('runtime status recheck', () => {
     expect(getStatus).toHaveBeenCalledTimes(callsAtRecovery)
   })
 
+  it('does not re-toast while the ladder keeps confirming the same outage', async () => {
+    // The ladder republishes null on every failed retry; only a real truthy -> null
+    // transition is news, so the warning must not pop once per retry.
+    const getStatus = vi.fn().mockResolvedValue(unavailableResponse())
+    const store = createStore(getStatus)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
+    await vi.advanceTimersByTimeAsync(3_000 + 6_000 + 12_000 + 30_000)
+
+    expect(getStatus).toHaveBeenCalledTimes(4)
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
   it('stops re-probing a manually disconnected host', async () => {
     // The probe short-circuits locally for these, so retrying only burns a timer forever.
     const getStatus = vi.fn().mockResolvedValue({
