@@ -116,7 +116,8 @@ fail() {
 }
 
 # jq and flock are hard dependencies; without them no verdict can ever be
-# written, so fail loudly instead of burning the app's 90s poll window.
+# written. The verdict carries no attempt binding (the request was not read), so
+# the app's poll still runs its full window — this verdict is for the journal.
 if ! command -v jq >/dev/null 2>&1; then
   log "jq is required but not installed"
   rm -f "$REQUEST"
@@ -136,7 +137,9 @@ if [[ $(id -u) -ne 0 ]]; then
   reject "helper must run as root"
 fi
 # Serialize concurrent invocations; the lock dies with this process.
-exec 9>"$SPOOL_DIR/helper.lock"
+# Why /run/lock and not the spool dir: the spool is service-user-writable without
+# a sticky bit, so a lock there could be symlink-swapped and truncated as root.
+exec 9>/run/lock/orca-serve-update-helper.lock
 if ! flock -w 30 9; then
   reject "another update is in progress"
 fi

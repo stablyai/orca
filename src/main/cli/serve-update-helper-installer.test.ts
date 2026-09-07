@@ -15,10 +15,15 @@ describe('serve update helper installer', () => {
     expect(script).toContain('if [[ $(id -u) -ne 0 ]]')
     expect(script).toContain('/usr/lib/orca/serve-update-helper.sh')
     expect(script).toContain("chmod 0755 '/usr/lib/orca/serve-update-helper.sh'")
-    expect(script).toContain("chown root:root '/var/lib/orca-server-update/helper.json'")
+    // helper.json is published atomically from a root-owned temp copy.
     expect(script).toContain(
-      `printf '{"helperVersion":1,"unitName":%s}' "$(printf '%s' 'orca-serve.service' | jq -Rs .)" > '/var/lib/orca-server-update/helper.json'`
+      "helper_json_tmp=$(mktemp '/var/lib/orca-server-update'/helper.json.XXXXXXXX)"
     )
+    expect(script).toContain(
+      `printf '{"helperVersion":1,"unitName":%s}' "$(printf '%s' 'orca-serve.service' | jq -Rs .)" > "$helper_json_tmp"`
+    )
+    // sudoers rule allows only the helper, with zero arguments
+    expect(script).toContain('orca ALL=(root) NOPASSWD: /usr/lib/orca/serve-update-helper.sh ""')
     // sudoers drop-in is validated before publication and cleaned up on failure
     expect(script).toContain("visudo -cf '/etc/sudoers.d/orca-serve-update-helper.new'")
     expect(script).toContain("chmod 0440 '/etc/sudoers.d/orca-serve-update-helper.new'")
@@ -27,8 +32,7 @@ describe('serve update helper installer', () => {
     expect(script).toContain('#!/usr/bin/env bash')
     expect(script).toContain('{phase: "accepted"')
     expect(script).toContain('{phase: "ok"')
-    // sudoers rule allows only the helper
-    expect(script).toContain('orca ALL=(root) NOPASSWD')
+    // sudoers rule allows only the helper (asserted with zero-args pin above)
   })
 
   it('probes jq and flock before publishing any install artifact', () => {

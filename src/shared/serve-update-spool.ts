@@ -1,6 +1,5 @@
 import { join } from 'node:path'
 
-export const SERVE_UPDATE_SPOOL_DIR = '/var/lib/orca-server-update'
 export const SERVE_UPDATE_REQUEST_FILE = 'request.json'
 export const SERVE_UPDATE_RESULT_FILE = 'result.json'
 export const SERVE_UPDATE_HELPER_MARKER_FILE = 'helper.json'
@@ -8,6 +7,7 @@ export const SERVE_UPDATE_HELPER_MARKER_FILE = 'helper.json'
 export const SERVE_UPDATE_CENSUS_OK_FILE = 'census.ok'
 
 export const SERVE_UPDATE_SPOOL_SCHEMA_VERSION = 2
+export const SERVE_UPDATE_HELPER_VERSION = 1
 
 export type ServeUpdateRequest = {
   schemaVersion: typeof SERVE_UPDATE_SPOOL_SCHEMA_VERSION
@@ -35,7 +35,8 @@ export type ServeUpdateHelperMarker = {
   unitName: string
 }
 
-export type ServeUpdateVerdict = 'accepted' | 'rejected' | 'failed' | 'timeout'
+/** Null verdict means timeout: the helper never answered inside the poll window. */
+export type ServeUpdateVerdict = 'accepted' | 'rejected' | 'failed'
 
 export function getRequestPath(spoolDir: string): string {
   return join(spoolDir, SERVE_UPDATE_REQUEST_FILE)
