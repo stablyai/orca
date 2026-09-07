@@ -24,7 +24,8 @@ export type RelaySessionBrokerOptions = {
   refreshAccessToken: () => Promise<string | null>
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
   onAssignedCellActive?: (cellUrl: string) => void
-  onStatus: (status: RelayBrokerStatus) => void
+  /** `cellUrl` is absent whenever the host holds no active assignment. */
+  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
   fetch?: typeof globalThis.fetch
   createControlSocket?: (url: string, relayJwt: string) => WebSocket
   createDataSocket?: (url: string) => WebSocket

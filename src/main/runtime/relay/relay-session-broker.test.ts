@@ -111,6 +111,26 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     })
   })
 
+  it('publishes the assigned cell with the status and drops it on close', async () => {
+    fakes.controlConnect.mockResolvedValue({
+      type: 'host-hello-ack',
+      v: 1,
+      generation: 1,
+      controlResumeSecret: 'A'.repeat(43),
+      leaseExpiresAt: 1_000_000,
+      activeConnIds: [],
+      pendingConns: []
+    } satisfies RelayHostHelloAckMessage)
+    const onStatus = vi.fn()
+
+    const broker = await RelaySessionBroker.connect(brokerOptions({ onStatus }))
+
+    expect(onStatus.mock.calls).toContainEqual(['connecting', undefined])
+    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://relay.example.test')
+    broker.closeNow()
+    expect(onStatus).toHaveBeenLastCalledWith('offline')
+  })
+
   it('closes partially opened resources without publishing stale state', async () => {
     const controlAck = deferred<RelayHostHelloAckMessage>()
     fakes.controlConnect.mockReturnValue(controlAck.promise)
@@ -387,7 +407,9 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     expect(fakes.controls[2]!.options.previousGeneration).toBeUndefined()
     expect(fakes.controls[2]!.options.controlResumeSecret).toBeUndefined()
     expect(fakes.transports).toHaveLength(2)
-    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith('registered'))
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://relay.example.test')
+    )
     expect(broker.endpoint?.cellUrl).toBe('https://relay.example.test')
   })
 

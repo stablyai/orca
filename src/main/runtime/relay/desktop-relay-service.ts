@@ -26,7 +26,7 @@ type DesktopRelayServiceOptions = {
   userDataPath: string
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
-  onStatus: (status: RelayBrokerStatus) => void
+  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
 }
 
 export function pairingAuthorizationForContext(

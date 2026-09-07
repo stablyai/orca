@@ -13,6 +13,7 @@ import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
+import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
 import { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
@@ -91,7 +92,10 @@ function installRuntimeRpc(
   })
   state.runtimeRpc = runtimeRpc
   registerMobileHandlers(runtimeRpc, {
-    getRelayStatus: () => state.desktopRelayStatus,
+    getRelayStatus: () => ({
+      status: state.desktopRelayStatus,
+      ...(state.desktopRelayCellUrl === undefined ? {} : { cellUrl: state.desktopRelayCellUrl })
+    }),
     consumePendingUnpairedDeviceAuthFailure: (webContentsId) => {
       if (
         !state.mainWindow ||
@@ -249,9 +253,13 @@ async function launchDesktopMode(
         userDataPath: getProfileUserDataPath(),
         appVersion: app.getVersion(),
         runtimeRpc,
-        onStatus: (status) => {
+        onStatus: (status, cellUrl) => {
           state.desktopRelayStatus = status
-          state.mainWindow?.webContents.send('mobile:relayStatusChanged', status)
+          state.desktopRelayCellUrl = cellUrl
+          state.mainWindow?.webContents.send('mobile:relayStatusChanged', {
+            status,
+            ...(cellUrl === undefined ? {} : { cellUrl })
+          } satisfies MobileRelayStatusDetail)
         }
       })
       state.desktopRelayService = relayService
