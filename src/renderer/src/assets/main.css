@@ -244,6 +244,10 @@
   --annotation-highlight: #f59e0b;
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
+  /* Why: vault deep-search highlights sit on gray/foreground rows, so the highlighter
+     keeps near-black text for contrast on the light card; dark mode brightens the fill. */
+  --vault-search-match-bg: #fde047;
+  --vault-search-match-fg: #111827;
   /* Why: tab-group splits use a dedicated divider — `--border` is too faint on
      card/editor surfaces when panes are side-by-side or stacked. Default must
      meet >=3:1 against `--card`, not only the hover/drag strong state. */
@@ -360,6 +364,8 @@
   --annotation-highlight: #fbbf24;
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
+  --vault-search-match-bg: #facc15;
+  --vault-search-match-fg: #09090b;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;

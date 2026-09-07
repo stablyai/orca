@@ -25,6 +25,7 @@ import { registerRuntimeHandlers } from '../runtime'
 import { registerRuntimeEnvironmentHandlers } from '../runtime-environments'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault'
+import { registerAiVaultTranscriptSearchHandler } from '../ai-vault-transcript-search-handler'
 import { registerNativeChatHandlers } from '../native-chat'
 import { registerNotificationHandlers } from '../notifications'
 import { registerNotebookHandlers } from '../notebook'
@@ -214,6 +215,7 @@ export function registerCoreHandlers(
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store, pluginService)
+  registerAiVaultTranscriptSearchHandler()
   registerAiVaultHandlers({
     ensureStructuredSessionOwnership: () => runtime.ensureStructuredAgentSessionHost(),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,

@@ -23,9 +23,11 @@ import {
   SessionMetadata
 } from './ai-vault-session-row-display'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AiVaultTranscriptMatchInfo } from './ai-vault-transcript-deep-search'
 
 export function VaultSessionRow({
   session,
+  transcriptMatch,
   liveState,
   resumeStartup,
   realHomeResumeStartup,
@@ -52,6 +54,8 @@ export function VaultSessionRow({
   onRequestDelete
 }: {
   session: AiVaultSession
+  /** Set when this row surfaced via full-transcript deep search. */
+  transcriptMatch?: AiVaultTranscriptMatchInfo | null
   liveState: AgentStatusState | null
   resumeStartup: AiVaultResumeStartup
   realHomeResumeStartup: AiVaultResumeStartup
@@ -200,6 +204,22 @@ export function VaultSessionRow({
               )}
             </div>
           ) : null}
+          {transcriptMatch ? (
+            <div
+              className="mt-0.5 flex min-w-0 items-center gap-1.5 rounded-sm bg-foreground/5 px-1.5 py-0.5 text-[11px] leading-4 text-muted-foreground"
+              title={translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.transcriptMatch',
+                'Matched inside this session’s transcript'
+              )}
+            >
+              <span className="shrink-0 rounded-full bg-foreground/10 px-1.5 text-[10px] font-medium leading-4 text-foreground/80 tabular-nums">
+                {transcriptMatch.matchCount}
+              </span>
+              <span className="min-w-0 break-words line-clamp-2">
+                <HighlightedSnippet text={transcriptMatch.snippet} query={transcriptMatch.query} />
+              </span>
+            </div>
+          ) : null}
           <SessionMetadata
             session={session}
             liveState={liveState}
@@ -243,5 +263,32 @@ export function VaultSessionRow({
         />
       </ContextMenuContent>
     </ContextMenu>
+  )
+}
+
+/** Renders a transcript snippet with each occurrence of the search term in a
+ *  visible highlight, so the matched location jumps out while scanning rows. */
+function HighlightedSnippet({ text, query }: { text: string; query: string }) {
+  if (!query) {
+    return text
+  }
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = text.split(new RegExp(`(${escaped})`, 'i'))
+  const lower = query.toLowerCase()
+  return (
+    <>
+      {parts.map((part, index) =>
+        part.toLowerCase() === lower ? (
+          <mark
+            key={index}
+            className="rounded-[2px] bg-[var(--vault-search-match-bg)] px-0.5 text-[var(--vault-search-match-fg)]"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
   )
 }

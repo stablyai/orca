@@ -1,4 +1,4 @@
-import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
+import { LoaderCircle, RefreshCw, Search, TextSearch, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type {
@@ -8,6 +8,7 @@ import type {
   AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import { AI_VAULT_TRANSCRIPT_SEARCH_MIN_QUERY_LENGTH } from '../../../../shared/ai-vault-transcript-search'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
@@ -30,6 +31,12 @@ type AiVaultPanelHeaderProps = {
   sessionLimit: AiVaultSessionLimit
   adjustmentCount: number
   onQueryChange: (query: string) => void
+  deepSearchStatus: 'idle' | 'running' | 'done'
+  deepSearchQuery: string
+  deepSearchTruncated: boolean
+  deepSearchMatchCount: number
+  onDeepSearch: () => void
+  onDeepSearchClear: () => void
   onScopeChange: (scope: AiVaultScope) => void
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
   onAgentEnabledChange: (agent: AiVaultAgent, enabled: boolean) => void
@@ -60,6 +67,12 @@ export function AiVaultPanelHeader({
   sessionLimit,
   adjustmentCount,
   onQueryChange,
+  deepSearchStatus,
+  deepSearchQuery,
+  deepSearchTruncated,
+  deepSearchMatchCount,
+  onDeepSearch,
+  onDeepSearchClear,
   onScopeChange,
   onExecutionHostScopeChange,
   onAgentEnabledChange,
@@ -178,6 +191,69 @@ export function AiVaultPanelHeader({
           spellCheck={false}
         />
         {loading ? <LoaderCircle className="size-3 animate-spin text-muted-foreground" /> : null}
+        {deepSearchStatus === 'running' && deepSearchQuery === query ? (
+          <LoaderCircle
+            className="size-3 animate-spin text-muted-foreground"
+            aria-label={translate(
+              'auto.components.right.sidebar.AiVaultPanel.searchingTranscripts',
+              'Searching transcript contents'
+            )}
+          />
+        ) : null}
+        {query.trim().length >= AI_VAULT_TRANSCRIPT_SEARCH_MIN_QUERY_LENGTH &&
+        !(deepSearchStatus === 'running' && deepSearchQuery === query) &&
+        !(deepSearchStatus === 'done' && deepSearchQuery === query) ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="size-5 rounded-sm text-muted-foreground hover:text-foreground"
+            onClick={onDeepSearch}
+            aria-label={translate(
+              'auto.components.right.sidebar.AiVaultPanel.searchTranscripts',
+              'Search transcript contents'
+            )}
+            title={translate(
+              'auto.components.right.sidebar.AiVaultPanel.searchTranscriptsHint',
+              'Also search inside conversation transcripts on this computer'
+            )}
+          >
+            <TextSearch className="size-3" />
+          </Button>
+        ) : null}
+        {deepSearchStatus === 'done' && deepSearchQuery === query ? (
+          <>
+            <span
+              className="rounded-full border border-sidebar-border bg-background px-1.5 py-px text-[10px] font-medium leading-none text-muted-foreground tabular-nums"
+              title={
+                deepSearchTruncated
+                  ? translate(
+                      'auto.components.right.sidebar.AiVaultPanel.transcriptSearchPartial',
+                      'Transcript search was cut short; results may be partial'
+                    )
+                  : translate(
+                      'auto.components.right.sidebar.AiVaultPanel.transcriptSearchCount',
+                      'Sessions matching inside transcript contents'
+                    )
+              }
+            >
+              {deepSearchMatchCount}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="size-5 rounded-sm text-muted-foreground hover:text-foreground"
+              onClick={onDeepSearchClear}
+              aria-label={translate(
+                'auto.components.right.sidebar.AiVaultPanel.clearTranscriptSearch',
+                'Clear transcript matches'
+              )}
+            >
+              <X className="size-3" />
+            </Button>
+          </>
+        ) : null}
         {query ? (
           <Button
             type="button"

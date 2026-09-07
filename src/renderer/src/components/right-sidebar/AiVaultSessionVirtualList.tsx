@@ -9,6 +9,7 @@ import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list/vi
 import { VaultGroupHeader } from './AiVaultPanelControls'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import { VaultSessionRow } from './AiVaultSessionRow'
+import type { AiVaultTranscriptMatchInfo } from './ai-vault-transcript-deep-search'
 import type { AiVaultSessionGroup } from './ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from './ai-vault-original-pane'
 import {
@@ -43,6 +44,7 @@ type AiVaultListRow =
 
 export function AiVaultSessionVirtualList({
   groups,
+  getTranscriptMatch,
   collapsedGroups,
   loading,
   sessionsCount,
@@ -70,6 +72,7 @@ export function AiVaultSessionVirtualList({
   onRequestDelete
 }: {
   groups: readonly AiVaultSessionGroup[]
+  getTranscriptMatch: ((session: AiVaultSession) => AiVaultTranscriptMatchInfo | null) | null
   collapsedGroups: ReadonlySet<string>
   loading: boolean
   sessionsCount: number
@@ -214,6 +217,7 @@ export function AiVaultSessionVirtualList({
               expandedSessionIds={expandedSessionIds}
               vaultScope={vaultScope}
               buildResumeStartup={buildResumeStartup}
+              getTranscriptMatch={getTranscriptMatch}
               getOriginalPaneTarget={getOriginalPaneTarget}
               getSessionLiveState={getSessionLiveState}
               getWorktreeInfo={getWorktreeInfo}
@@ -250,6 +254,7 @@ function AiVaultVirtualRow({
   expandedSessionIds,
   vaultScope,
   buildResumeStartup,
+  getTranscriptMatch,
   getOriginalPaneTarget,
   getSessionLiveState,
   getWorktreeInfo,
@@ -278,6 +283,7 @@ function AiVaultVirtualRow({
   expandedSessionIds: ReadonlySet<string>
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
+  getTranscriptMatch: ((session: AiVaultSession) => AiVaultTranscriptMatchInfo | null) | null
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
@@ -351,6 +357,7 @@ function AiVaultVirtualRow({
       ) : (
         <VaultSessionRow
           session={row.session}
+          transcriptMatch={getTranscriptMatch?.(row.session) ?? null}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={buildResumeStartup(row.session, resumeState?.worktreeId)}
           realHomeResumeStartup={buildResumeStartup(
