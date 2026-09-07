@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join as pathJoin } from 'node:path'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
+import { UNIX_SOCKET_PATH_LIMIT, unixSocketPathBytes } from '../../shared/unix-socket-path-budget'
 
 export type SystemSshResolvedConfig = Pick<
   SshResolvedConfig,
@@ -23,7 +24,6 @@ export type SystemSshResolvedConfig = Pick<
 >
 
 const OPENSSH_CONTROL_SOCKET_SUFFIX_BUDGET = 18
-const UNIX_SOCKET_PATH_LIMIT = process.platform === 'darwin' ? 104 : 108
 const CONTROL_SOCKET_PATH_MAX_LENGTH = UNIX_SOCKET_PATH_LIMIT - OPENSSH_CONTROL_SOCKET_SUFFIX_BUDGET
 
 export function getControlSocketPath(
@@ -65,7 +65,8 @@ export function getControlSocketPath(
   })
   const hash = createHash('sha256').update(key).digest('hex').slice(0, 16)
   const socketPath = pathJoin(dir, hash)
-  return socketPath.length <= CONTROL_SOCKET_PATH_MAX_LENGTH ? socketPath : null
+  // Bytes, not characters: OpenSSH spends the same sun_path budget the kernel measures.
+  return unixSocketPathBytes(socketPath) <= CONTROL_SOCKET_PATH_MAX_LENGTH ? socketPath : null
 }
 
 export function removeControlSocketPath(socketPath: string): void {
