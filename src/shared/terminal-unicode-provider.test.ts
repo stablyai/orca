@@ -44,10 +44,26 @@ describe('Orca terminal unicode provider', () => {
     terminal.dispose()
   })
 
-  it('advances two cells for a keycap sequence', async () => {
+  it('advances two cells for a keycap sequence on every keycap base', async () => {
     const terminal = openTerminal()
 
     await expect(cursorAdvance(terminal, `1${VS16}\u{20E3}`)).resolves.toBe(2)
+    await expect(cursorAdvance(terminal, `#${VS16}\u{20E3}`)).resolves.toBe(2)
+    await expect(cursorAdvance(terminal, `*${VS16}\u{20E3}`)).resolves.toBe(2)
+    // U+00A9 is the lowest code point the selector can promote.
+    await expect(cursorAdvance(terminal, `\u{00A9}${VS16}`)).resolves.toBe(2)
+
+    terminal.dispose()
+  })
+
+  it('leaves a selector after a text base at one cell', async () => {
+    const terminal = openTerminal()
+
+    // VS16 after Latin text is malformed rather than a presentation request, so
+    // the base must keep the width the text around it is laid out against.
+    await expect(cursorAdvance(terminal, `A${VS16}`)).resolves.toBe(1)
+    await expect(cursorAdvance(terminal, `z${VS16}`)).resolves.toBe(1)
+    await expect(cursorAdvance(terminal, ` ${VS16}`)).resolves.toBe(1)
 
     terminal.dispose()
   })
