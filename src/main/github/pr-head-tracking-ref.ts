@@ -24,10 +24,11 @@ export async function fetchPrHeadTrackingRef(
 ): Promise<void> {
   const ref = `refs/remotes/${remote}/${branch}`
   if (!repo.connectionId) {
-    await gitExecFileAsync(
-      ['fetch', remote, `+refs/heads/${branch}:${ref}`],
-      options.localGitExecOptions ?? { cwd: repo.path }
-    )
+    const localGitExecOptions = options.localGitExecOptions ?? { cwd: repo.path }
+    await gitExecFileAsync(['fetch', remote, `+refs/heads/${branch}:${ref}`], {
+      ...localGitExecOptions,
+      timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS
+    })
     return
   }
   if (!sshGitProvider) {

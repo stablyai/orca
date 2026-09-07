@@ -302,7 +302,7 @@ describe('registerWorktreeHandlers', () => {
         'origin',
         '+refs/heads/feat/onboarding-model-choice-782:refs/remotes/origin/feat/onboarding-model-choice-782'
       ],
-      { cwd: '/workspace/repo' }
+      { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [

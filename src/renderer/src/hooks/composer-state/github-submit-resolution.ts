@@ -48,7 +48,10 @@ import {
 } from '@/lib/github-work-item-source-lookup'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'
+import {
+  getGitHubLinkedWorkItemIdentity,
+  resolveGitHubPrStartPointSelection
+} from './source-selection-decisions'
 
 export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
   const {
@@ -97,26 +100,27 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
           startPointSelection?.repoId === selectedRepo.id &&
           startPointIdentity.number === linkedWorkItemIdentity.number
         ) {
-          const selectedPrStartPoint =
-            startPointSelection.resolved ??
-            (await resolveGitHubPrStartPointForRepo({
-              repoId: selectedRepo.id,
-              prNumber: startPointIdentity.number,
-              settings: getSettingsForRepoRuntimeOwner(
-                { repos: [selectedRepo], settings },
-                selectedRepo.id
-              ),
-              ...(startPointSelection.item.branchName
-                ? { headRefName: startPointSelection.item.branchName }
-                : {}),
-              ...(startPointSelection.item.baseRefName
-                ? { baseRefName: startPointSelection.item.baseRefName }
-                : {}),
-              ...(startPointSelection.item.isCrossRepository !== undefined
-                ? { isCrossRepository: startPointSelection.item.isCrossRepository }
-                : {})
-            }))
-          startPointSelection.resolved = selectedPrStartPoint
+          const selectedPrStartPoint = await resolveGitHubPrStartPointSelection(
+            startPointSelection,
+            () =>
+              resolveGitHubPrStartPointForRepo({
+                repoId: selectedRepo.id,
+                prNumber: startPointIdentity.number,
+                settings: getSettingsForRepoRuntimeOwner(
+                  { repos: [selectedRepo], settings },
+                  selectedRepo.id
+                ),
+                ...(startPointSelection.item.branchName
+                  ? { headRefName: startPointSelection.item.branchName }
+                  : {}),
+                ...(startPointSelection.item.baseRefName
+                  ? { baseRefName: startPointSelection.item.baseRefName }
+                  : {}),
+                ...(startPointSelection.item.isCrossRepository !== undefined
+                  ? { isCrossRepository: startPointSelection.item.isCrossRepository }
+                  : {})
+              })
+          )
           const smartGitHubMetadata = getSmartGitHubSubmitResolution(startPointSelection.item)
           const resolution: Exclude<PendingSmartGitHubSubmitResolution, { kind: 'none' }> = {
             ...smartGitHubMetadata,

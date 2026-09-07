@@ -22,6 +22,36 @@ export type SmartGitHubPrStartPointSelection = {
   repoId: string
   item: GitHubWorkItem
   resolved?: GitHubPrStartPoint
+  pendingResolution?: Promise<GitHubPrStartPoint>
+}
+
+export function resolveGitHubPrStartPointSelection(
+  selection: SmartGitHubPrStartPointSelection,
+  resolve: () => Promise<GitHubPrStartPoint>
+): Promise<GitHubPrStartPoint> {
+  if (selection.resolved) {
+    return Promise.resolve(selection.resolved)
+  }
+  if (selection.pendingResolution) {
+    return selection.pendingResolution
+  }
+
+  const pendingResolution = resolve()
+  selection.pendingResolution = pendingResolution
+  void pendingResolution.then(
+    (result) => {
+      if (selection.pendingResolution === pendingResolution) {
+        selection.resolved = result
+        selection.pendingResolution = undefined
+      }
+    },
+    () => {
+      if (selection.pendingResolution === pendingResolution) {
+        selection.pendingResolution = undefined
+      }
+    }
+  )
+  return pendingResolution
 }
 
 export function getGitHubLinkedWorkItemIdentity(
