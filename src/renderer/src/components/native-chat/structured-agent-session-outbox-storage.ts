@@ -1,7 +1,9 @@
 import {
+  createStructuredAgentSessionOutboxEntry,
   parseStructuredAgentSessionOutboxEntry,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 
 const OUTBOX_PREFIX = 'orca:desktopStructuredAgentSessionOutbox:v1:'
 
@@ -41,3 +43,43 @@ export function writeOutbox(
     return false
   }
 }
+
+export function enqueueStructuredAgentSessionLaunchPrompt(
+  sessionId: string,
+  text: string
+): StructuredAgentSessionOutboxEntry | null {
+  const entry = createStructuredAgentSessionOutboxEntry({
+    clientMessageId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+    sessionId,
+    text,
+    attachments: [],
+    queuedAt: Date.now()
+  })
+  return writeOutbox(sessionId, [...readOutbox(sessionId), entry]) ? entry : null
+}
+
+export function discardStructuredAgentSessionLaunchOutbox(sessionId: string): void {
+  writeOutbox(sessionId, [])
+}
+
+export function mutateStructuredAgentSessionLaunchPrompt(
+  sessionId: string,
+  clientMessageId: string,
+  update: StructuredAgentSessionLaunchPromptMutation
+): boolean {
+  const current = readOutbox(sessionId)
+  let matched = false
+  const next = current.flatMap((entry) => {
+    if (entry.clientMessageId !== clientMessageId) {
+      return [entry]
+    }
+    matched = true
+    const replacement = update(entry)
+    return replacement ? [replacement] : []
+  })
+  return matched && writeOutbox(sessionId, next)
+}
+
+export type StructuredAgentSessionLaunchPromptMutation = (
+  entry: StructuredAgentSessionOutboxEntry
+) => StructuredAgentSessionOutboxEntry | null

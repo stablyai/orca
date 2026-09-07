@@ -1,6 +1,7 @@
 import type {
   RetainedAgentEntry,
   DropAgentStatusByTabPrefixOptions,
+  DropAgentStatusOptions,
   DropHibernatedAgentPaneOptions
 } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
@@ -33,7 +34,7 @@ export function createAgentStatusDropActions(
 > {
   const { set, freshness } = runtime
   return {
-    dropAgentStatus: (paneKey) => {
+    dropAgentStatus: (paneKey, opts?: DropAgentStatusOptions) => {
       let liveExisted = false
       set((s) => {
         const hasLive = paneKey in s.agentStatusByPaneKey
@@ -44,6 +45,14 @@ export function createAgentStatusDropActions(
           (entry) => entry.paneKey === paneKey
         )
         const nextAck = removeAcknowledgement(s.acknowledgedAgentsByPaneKey, paneKey)
+        // Row dismissal keeps cutoff/manual-unread: the pane may still be live, and its next
+        // hook event would replay every cleared stateHistory event as unread without them.
+        const nextClearedAt = opts?.paneRemoved
+          ? removeAcknowledgement(s.activityClearedAtByPaneKey, paneKey)
+          : s.activityClearedAtByPaneKey
+        const nextManualUnread = opts?.paneRemoved
+          ? removeAcknowledgement(s.manuallyUnreadTurnsByPaneKey, paneKey)
+          : s.manuallyUnreadTurnsByPaneKey
         const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
         const nextLaunchConfigs = hasLaunchConfig
           ? { ...s.agentLaunchConfigByPaneKey }
@@ -52,17 +61,19 @@ export function createAgentStatusDropActions(
           delete nextLaunchConfigs[paneKey]
         }
         if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
-          if (hasLaunchConfig) {
-            return {
-              agentLaunchConfigByPaneKey: nextLaunchConfigs,
-              ...(nextAck !== s.acknowledgedAgentsByPaneKey
-                ? { acknowledgedAgentsByPaneKey: nextAck }
-                : {})
-            }
+          const cleanupPatch = {
+            ...(hasLaunchConfig ? { agentLaunchConfigByPaneKey: nextLaunchConfigs } : {}),
+            ...(nextAck !== s.acknowledgedAgentsByPaneKey
+              ? { acknowledgedAgentsByPaneKey: nextAck }
+              : {}),
+            ...(nextClearedAt !== s.activityClearedAtByPaneKey
+              ? { activityClearedAtByPaneKey: nextClearedAt }
+              : {}),
+            ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
+              ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
+              : {})
           }
-          return nextAck !== s.acknowledgedAgentsByPaneKey
-            ? { acknowledgedAgentsByPaneKey: nextAck }
-            : s
+          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
         if (hasLive) {
@@ -83,6 +94,8 @@ export function createAgentStatusDropActions(
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),
+          activityClearedAtByPaneKey: nextClearedAt,
+          manuallyUnreadTurnsByPaneKey: nextManualUnread,
           ...(needsSuppressor
             ? {
                 retentionSuppressedPaneKeys: {
@@ -160,6 +173,12 @@ export function createAgentStatusDropActions(
         const nextAck = !keepsCompletionEvidence
           ? removeAcknowledgement(s.acknowledgedAgentsByPaneKey, paneKey)
           : s.acknowledgedAgentsByPaneKey
+        const nextClearedAt = !keepsCompletionEvidence
+          ? removeAcknowledgement(s.activityClearedAtByPaneKey, paneKey)
+          : s.activityClearedAtByPaneKey
+        const nextManualUnread = !keepsCompletionEvidence
+          ? removeAcknowledgement(s.manuallyUnreadTurnsByPaneKey, paneKey)
+          : s.manuallyUnreadTurnsByPaneKey
         if (
           !hasLive &&
           !hasRetained &&
@@ -167,9 +186,18 @@ export function createAgentStatusDropActions(
           !migrationUnsupported.changed &&
           !keepsCompletionEvidence
         ) {
-          return nextAck !== s.acknowledgedAgentsByPaneKey
-            ? { acknowledgedAgentsByPaneKey: nextAck }
-            : s
+          const cleanupPatch = {
+            ...(nextAck !== s.acknowledgedAgentsByPaneKey
+              ? { acknowledgedAgentsByPaneKey: nextAck }
+              : {}),
+            ...(nextClearedAt !== s.activityClearedAtByPaneKey
+              ? { activityClearedAtByPaneKey: nextClearedAt }
+              : {}),
+            ...(nextManualUnread !== s.manuallyUnreadTurnsByPaneKey
+              ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
+              : {})
+          }
+          return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
         hadLive = hasLive
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
@@ -204,6 +232,8 @@ export function createAgentStatusDropActions(
           ...(nextAck !== s.acknowledgedAgentsByPaneKey
             ? { acknowledgedAgentsByPaneKey: nextAck }
             : {}),
+          activityClearedAtByPaneKey: nextClearedAt,
+          manuallyUnreadTurnsByPaneKey: nextManualUnread,
           ...(needsSuppressor
             ? {
                 retentionSuppressedPaneKeys: {

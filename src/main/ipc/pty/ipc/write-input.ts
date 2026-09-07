@@ -152,7 +152,9 @@ export function createPtyWriteInput(deps: {
         first = false
         provider.write(id, chunk.value)
         if (!nextChunk.done) {
-          await new Promise((resolve) => setTimeout(resolve, 0))
+          // setImmediate, not setTimeout(0): the yield exists to let abort/data callbacks run
+          // between chunks, and a clamped timer tick per 16 KiB is pure latency.
+          await new Promise((resolve) => setImmediate(resolve))
         }
         chunk = nextChunk
         nextChunk = chunks.next()

@@ -170,7 +170,7 @@ describe('registerHostedReviewHandlers', () => {
         head: 'feature/pr',
         title: 'Feature PR'
       }),
-      null,
+      'local',
       { localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'interactive' } }
     )
   })
@@ -211,7 +211,7 @@ describe('registerHostedReviewHandlers', () => {
     expect(createHostedReviewMock).toHaveBeenCalledWith(
       resolvedWorktreePath,
       expect.anything(),
-      null,
+      'local',
       {
         localGitExecOptions: { admissionTier: 'interactive' },
         sharedLinkPaths: ['node_modules']
@@ -239,9 +239,14 @@ describe('registerHostedReviewHandlers', () => {
       title: 'Feature PR'
     })
 
-    expect(createHostedReviewMock).toHaveBeenCalledWith(worktreePath, expect.anything(), 'ssh-1', {
-      localGitExecOptions: { admissionTier: 'interactive' }
-    })
+    expect(createHostedReviewMock).toHaveBeenCalledWith(
+      worktreePath,
+      expect.anything(),
+      'ssh:ssh-1',
+      {
+        localGitExecOptions: { admissionTier: 'interactive' }
+      }
+    )
   })
 
   it('routes local WSL project review status through main-process runtime options', async () => {
@@ -291,7 +296,7 @@ describe('registerHostedReviewHandlers', () => {
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoPath: localRepo.path,
-        connectionId: undefined,
+        executionHostId: 'local',
         branch: 'feature/wsl',
         linkedGitHubPR: 42,
         localGitExecOptions: { wslDistro: 'Ubuntu', admissionTier: 'background' }
@@ -352,7 +357,7 @@ describe('registerHostedReviewHandlers', () => {
     })
 
     expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ connectionId: 'ssh-1', branch: 'feature/owner' })
+      expect.objectContaining({ executionHostId: 'ssh:ssh-1', branch: 'feature/owner' })
     )
   })
 
@@ -396,7 +401,7 @@ describe('registerHostedReviewHandlers', () => {
     expect(getHostedReviewCreationEligibilityMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoPath: worktreePath,
-        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1',
         branch: 'feature/pr',
         base: 'main'
       })
@@ -435,7 +440,7 @@ describe('registerHostedReviewHandlers', () => {
         body: null,
         draft: false
       },
-      'ssh-1',
+      'ssh:ssh-1',
       { localGitExecOptions: { admissionTier: 'interactive' } }
     )
     expect(resolveRegisteredWorktreePathMock).not.toHaveBeenCalled()
@@ -471,7 +476,7 @@ describe('registerHostedReviewHandlers', () => {
     expect(createStackedHostedReviewMock).toHaveBeenCalledWith(
       worktreePath,
       expect.objectContaining({ base: 'stack/parent', head: 'stack/child' }),
-      'ssh-1',
+      'ssh:ssh-1',
       { localGitExecOptions: { admissionTier: 'interactive' } }
     )
     expect(createHostedReviewMock).not.toHaveBeenCalled()

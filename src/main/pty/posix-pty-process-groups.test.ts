@@ -1,8 +1,20 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { recordSelfInitiatedTreeKillMock } = vi.hoisted(() => ({
+  recordSelfInitiatedTreeKillMock: vi.fn()
+}))
+vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
+  recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
+}))
+
 import {
   forceKillPosixPtyProcessGroups,
   getPosixPtyProcessGroups
 } from './posix-pty-process-groups'
+
+beforeEach(() => {
+  recordSelfInitiatedTreeKillMock.mockReset()
+})
 
 const TABLE = `
   100  100 ttys001
@@ -86,5 +98,37 @@ describe('POSIX PTY process-group termination', () => {
 
     expect(fallback).toHaveBeenCalledOnce()
     expect(readProcessTable).not.toHaveBeenCalled()
+  })
+})
+
+describe('POSIX PTY group-sweep breadcrumbs', () => {
+  it('records every group it actually signalled', () => {
+    forceKillPosixPtyProcessGroups(100, vi.fn(), {
+      platform: 'darwin',
+      currentPid: 999,
+      readProcessTable: () => TABLE,
+      signalProcessGroup: vi.fn()
+    })
+
+    expect(recordSelfInitiatedTreeKillMock.mock.calls.map(([kill]) => kill)).toEqual([
+      { pid: 101, site: 'posix-pty-process-group-sweep', scope: 'posix-process-group' },
+      { pid: 103, site: 'posix-pty-process-group-sweep', scope: 'posix-process-group' },
+      { pid: 100, site: 'posix-pty-process-group-sweep', scope: 'posix-process-group' }
+    ])
+  })
+
+  it('does not claim a group that was already gone', () => {
+    forceKillPosixPtyProcessGroups(100, vi.fn(), {
+      platform: 'darwin',
+      currentPid: 999,
+      readProcessTable: () => TABLE,
+      signalProcessGroup: (pgid: number) => {
+        if (pgid === 103) {
+          throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
+        }
+      }
+    })
+
+    expect(recordSelfInitiatedTreeKillMock.mock.calls.map(([kill]) => kill.pid)).toEqual([101, 100])
   })
 })

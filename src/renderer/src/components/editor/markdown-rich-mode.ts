@@ -21,6 +21,19 @@ export type MarkdownRichModeEligibility = {
   unsupportedMessage: string | null
 }
 
+/**
+ * The part of rich-mode eligibility that is a pure function of the document.
+ *
+ * Why this is split out: `unsupportedMessage` is deliberately late-bound — the
+ * matcher messages are `get message()` accessors that call `translate()` at
+ * access time, so they follow the active UI language. Anything that caches
+ * eligibility must cache this decision and re-resolve the message per read.
+ */
+export type MarkdownRichModeEligibilityDecision = {
+  exceedsSizeLimit: boolean
+  unsupportedReason: MarkdownRichModeUnsupportedReason | null
+}
+
 const KNOWN_MARKDOWN_HTML_TAG_NAMES = new Set(defaultSchema.tagNames ?? [])
 
 const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
@@ -60,6 +73,25 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
 ]
 
 export function getMarkdownRichModeUnsupportedMessage(content: string): string | null {
+  return resolveMarkdownRichModeUnsupportedMessage(getMarkdownRichModeUnsupportedReason(content))
+}
+
+/**
+ * Reads the matcher's localized message through its getter, so the string
+ * always reflects the language active at call time.
+ */
+export function resolveMarkdownRichModeUnsupportedMessage(
+  reason: MarkdownRichModeUnsupportedReason | null
+): string | null {
+  if (reason === null) {
+    return null
+  }
+  return UNSUPPORTED_PATTERNS.find((matcher) => matcher.reason === reason)?.message ?? null
+}
+
+export function getMarkdownRichModeUnsupportedReason(
+  content: string
+): MarkdownRichModeUnsupportedReason | null {
   // Why: front-matter is handled externally — stripped before the rich editor
   // sees the content and displayed as a read-only block. Only the body needs
   // to pass the unsupported-content checks.
@@ -82,7 +114,7 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
       continue
     }
     if (matcher.pattern.test(contentWithoutCode)) {
-      return matcher.message
+      return matcher.reason
     }
   }
 
@@ -94,23 +126,33 @@ export function getMarkdownRichModeUnsupportedMessage(content: string): string |
     if (roundTripOutput && preservesEmbeddedHtml(contentWithoutCode, roundTripOutput)) {
       return null
     }
-    return htmlMatcher!.message
+    return htmlMatcher!.reason
   }
 
   return null
 }
 
-export function getMarkdownRichModeEligibility({
+export function getMarkdownRichModeEligibilityDecision({
   content,
   sizeOverridden
 }: {
   content: string
   sizeOverridden: boolean
-}): MarkdownRichModeEligibility {
-  const exceedsSizeLimit = !sizeOverridden && exceedsMarkdownRichModeSizeLimit(content)
+}): MarkdownRichModeEligibilityDecision {
   return {
-    exceedsSizeLimit,
-    unsupportedMessage: getMarkdownRichModeUnsupportedMessage(content)
+    exceedsSizeLimit: !sizeOverridden && exceedsMarkdownRichModeSizeLimit(content),
+    unsupportedReason: getMarkdownRichModeUnsupportedReason(content)
+  }
+}
+
+export function getMarkdownRichModeEligibility(params: {
+  content: string
+  sizeOverridden: boolean
+}): MarkdownRichModeEligibility {
+  const decision = getMarkdownRichModeEligibilityDecision(params)
+  return {
+    exceedsSizeLimit: decision.exceedsSizeLimit,
+    unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
   }
 }
 

@@ -14,6 +14,8 @@ import type {
 } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
+import type { RuntimeTerminalSend } from '../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-process-liveness'
@@ -54,9 +56,19 @@ export type TerminalCreateOptions = {
   deferMobileSessionPublish?: boolean
 }
 
+/** Identity a fenced spawn can be re-found by in the execution host's own inventory. */
+export type AgentSessionCreateReclaimIdentity = {
+  worktreeId: string
+  connectionId: string | null
+  terminalHandle: string
+}
+
 export type AgentSessionCreateOperation = {
   fingerprint: string
   promise: Promise<RuntimeCreateAgentSessionResult>
+  // Why: a lost pty.spawn response leaves the host holding a live PTY the client
+  // never named; this is the name it was launched under, so a replay can adopt it.
+  reclaim: { identity?: AgentSessionCreateReclaimIdentity }
 }
 
 export type PtyForegroundAgentRefresh = {
@@ -147,7 +159,8 @@ export type TerminalWaiter = {
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
-  pollInterval: NodeJS.Timeout | null
+  /** Retires this waiter from the shared idle-poll sweep; null when not polling. */
+  cancelIdlePoll: (() => void) | null
   abortCleanup: (() => void) | null
 }
 
@@ -156,4 +169,13 @@ export type RuntimeProviderSnapshotReadOptions = {
   timeoutMs?: number
   retireOnTimeout?: boolean
   visibleScreenOnly?: boolean
+}
+
+/** Agent-prompt writes add the correlation inputs a queued-acceptance receipt needs. */
+export type RuntimeAgentPromptWriteOptions = RuntimeTerminalWriteOptions & {
+  /** Return an accepted receipt as soon as input lands, instead of waiting for the turn. */
+  acceptQueued?: boolean
+  observationTimeoutMs?: number
+  requestId?: string
+  onInputAccepted?: (send: RuntimeTerminalSend) => void
 }

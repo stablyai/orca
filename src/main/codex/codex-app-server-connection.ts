@@ -7,7 +7,6 @@ import { CodexAppServerHandshakeExitUnprovenError } from './codex-app-server-han
 import { terminateCodexAppServerProcessTree } from './codex-app-server-process-teardown'
 import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
-import { NDJSON_MAX_LINE_BYTES } from '../../shared/main-process-ndjson-framer'
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError
@@ -48,7 +47,6 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const GRACEFUL_EXIT_MS = 1_500
 const FORCED_EXIT_MS = 1_000
 const STDERR_TAIL_MAX_BYTES = 8192
-export const CODEX_APP_SERVER_MAX_RECORD_BYTES = NDJSON_MAX_LINE_BYTES
 
 /**
  * Spawns `codex app-server`, completes the initialize handshake, and returns a
@@ -117,7 +115,7 @@ export async function openCodexAppServerConnection(
 
   /** A death nobody asked for kills every in-flight call AND tells the owner,
    *  which is the only signal the session has that its lease is now worthless.
-   *  Once only: an oversized line kills the child and its `close` arrives after,
+   *  Once only: a fatal handler failure kills the child before `close` arrives,
    *  and a spawn failure arrives as both `error` and `close`. */
   function handleUnexpectedEnd(cause?: Error): void {
     if (!terminalError) {
@@ -159,7 +157,6 @@ export async function openCodexAppServerConnection(
 
   const recordReader = createCodexAppServerRecordReader({
     stdout: child.stdout,
-    maxRecordBytes: CODEX_APP_SERVER_MAX_RECORD_BYTES,
     onRecord: (parsed, line) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         handlers.onUnhandledFrame?.('frame:invalid-json', line)

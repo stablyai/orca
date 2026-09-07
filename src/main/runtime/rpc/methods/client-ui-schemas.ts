@@ -3,6 +3,10 @@ import {
   isFeatureInteractionId,
   type FeatureInteractionId
 } from '../../../../shared/feature-interactions'
+import {
+  ACTIVITY_GROUP_BY_VALUES,
+  THREAD_READ_FILTER_VALUES
+} from '../../../../shared/agents-view-thread-filters'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import {
@@ -122,6 +126,12 @@ const UiUpdateFields = z
     showInactiveWorkspaces: z.boolean().optional(),
     workspaceHostScope: z.string().optional(),
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
+    agentsVisibleHostIds: z.array(z.string()).nullable().optional(),
+    agentsFilterRepoIds: StringArray.optional(),
+    agentsShowChildAgents: z.boolean().optional(),
+    agentsCompactMode: z.boolean().optional(),
+    agentsReadFilter: z.enum(THREAD_READ_FILTER_VALUES).optional(),
+    agentsGroupBy: z.enum(ACTIVITY_GROUP_BY_VALUES).optional(),
     workspaceHostOrder: z.array(z.string()).optional(),
     automationHostFilter: z
       .union([
@@ -171,6 +181,8 @@ const UiUpdateFields = z
     updateReassuranceSeen: z.boolean().optional(),
     osc52ClipboardDefaultOnNoticePending: z.boolean().optional(),
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
+    activityClearedAtByPaneKey: z.record(z.string(), z.number().finite()).optional(),
+    manuallyUnreadTurnsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     browserDefaultUrl: NullableString.optional(),
     browserDefaultSearchEngine: z
       .enum(['google', 'duckduckgo', 'bing', 'kagi'])

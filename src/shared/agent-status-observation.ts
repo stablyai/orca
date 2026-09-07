@@ -62,6 +62,14 @@ export type AgentStatusObservation = {
  *  body, so a hook or OSC writer cannot declare its own provenance. */
 export type WithAgentStatusObservation = { observation?: AgentStatusObservation }
 
+/** REPLICA-local receipt clock for a row this renderer mirrored from another host's snapshot.
+ *  Stamped by `buildMirroredAgentStatusPatch` when the authority's observation clock advances,
+ *  and carried forward when it does not (a repeated snapshot restates evidence already seen;
+ *  it is not a new observation). `agentStatusEvidenceObservedAt` prefers it, so a mirrored row
+ *  decays against THIS machine's clock instead of subtracting the host's — see THE DECAY RULE.
+ *  Absent on every locally observed row. Never sent over IPC or persisted. */
+export type MirroredEvidenceReceipt = { mirroredEvidenceReceivedAt?: number }
+
 /** Renderer-local count of ACCEPTED status writes this pane's row has taken. Incremented only by
  *  the store's accept branch, off the row it replaces, and carried through by every field-level
  *  rewrite — so it answers "did the pane report again?", which `updatedAt` cannot, because the
@@ -71,7 +79,8 @@ export type WithAgentStatusObservation = { observation?: AgentStatusObservation 
  *
  *  Declared here beside the observation facet because both are per-write facets mixed into
  *  `AgentStatusEntry` rather than fields a reporter supplies. */
-export type AgentStatusRowFacets = WithAgentStatusObservation & { acceptedStatusSeq?: number }
+export type AgentStatusRowFacets = WithAgentStatusObservation &
+  MirroredEvidenceReceipt & { acceptedStatusSeq?: number }
 
 // ─── THE ORDERING RULE ──────────────────────────────────────────────────────
 // `(authorityId, incarnation, revision)` is a total order ONLY within one authorityId.
@@ -84,16 +93,21 @@ export type AgentStatusRowFacets = WithAgentStatusObservation & { acceptedStatus
 // Staleness must be computed against the SAME authority clock that stamped `observedAt`,
 // or replicas must decay on LOCAL RECEIPT time instead.
 //
-// `observedAt` is the authority's wall clock. Today `isExplicitAgentStatusFresh`
-// (renderer/src/lib/pane-agent-evidence.ts) computes `rendererNow - entry.updatedAt`, and
-// for a MIRRORED REMOTE entry `updatedAt` is the HOST's clock. A host running minutes fast
-// makes every remote row look permanently fresh; a host running slow makes them decay on
-// arrival. Declaring `observedAt` display-only does NOT fix that — the skew is in the
+// `observedAt` is the authority's wall clock. `isExplicitAgentStatusFresh`
+// (renderer/src/lib/pane-agent-evidence.ts) computes `rendererNow - <observation clock>`, and
+// for a MIRRORED REMOTE entry the authority's stamps are the HOST's clock. A host running
+// minutes fast made every remote row look permanently fresh; a host running slow made them
+// decay on arrival. Declaring `observedAt` display-only does NOT fix that — the skew is in the
 // subtraction, not in the tiebreak. A replica must either receive the authority's own
 // freshness verdict, or stamp its own receipt time and decay against that.
 //
-// This PR does not fix it. It records the contract at the type so the PR that moves the
-// first consumer has something to be correct against.
+// RESOLVED by the receipt stamp: `buildMirroredAgentStatusPatch` writes
+// `mirroredEvidenceReceivedAt` from the replica's own clock, and
+// `agentStatusEvidenceObservedAt` decays against it, so both sides of the subtraction come
+// from one machine. The authority's own verdict was rejected: a published verdict is computed
+// at publish time and cannot age between snapshots, so the moment the host stops publishing —
+// the loss-of-contact case this whole rule exists for — the replica would hold `fresh` forever.
+// The receipt stamp keeps decaying while nothing arrives, which is the required behaviour.
 
 /** Bounds the per-pane incarnation map. Panes are created for the life of the process;
  *  eviction is safe because `incarnation` is floored by an authority-wide counter (below). */

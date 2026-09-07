@@ -17,6 +17,14 @@ const LINUX_GLIBC: NativeHostAbi = {
   nodeAbi: '127'
 }
 
+const DARWIN_ARM64: NativeHostAbi = {
+  platform: 'darwin',
+  arch: 'arm64',
+  libc: 'none',
+  glibcVersion: null,
+  nodeAbi: '127'
+}
+
 const dirs: string[] = []
 const temp = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'orcad-slot-'))
@@ -48,18 +56,32 @@ describe('resolveOrcadPrebuildsDir', () => {
 })
 
 describe('installPrebuiltSlot', () => {
-  it('installs the slot binary and spawn-helper into build/Release', () => {
+  it('installs the slot binary and spawn-helper into build/Release on macOS', () => {
+    const prebuilds = temp()
+    const nodePtyDir = temp()
+    stageSlot(prebuilds, 'darwin-arm64')
+
+    const outcome = installPrebuiltSlot({ abi: DARWIN_ARM64, nodePtyDir, prebuildsDir: prebuilds })
+
+    expect(outcome).toEqual({ installed: true, slot: 'darwin-arm64', spawnHelper: true })
+    expect(existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))).toBe(true)
+    // Without the executable bit every spawn fails EACCES at the moment a user opens a terminal.
+    const helper = statSync(join(nodePtyDir, 'build', 'Release', 'spawn-helper'))
+    expect(helper.mode & 0o111).not.toBe(0)
+  })
+
+  it('installs a Linux slot without claiming a spawn-helper it never execs', () => {
+    // node-pty builds spawn-helper only under binding.gyp's OS=="mac"; reporting one off
+    // macOS is what made every Linux orcad boot degraded on spawn_helper_missing (#17844).
     const prebuilds = temp()
     const nodePtyDir = temp()
     stageSlot(prebuilds, 'linux-x64-glibc')
 
     const outcome = installPrebuiltSlot({ abi: LINUX_GLIBC, nodePtyDir, prebuildsDir: prebuilds })
 
-    expect(outcome).toEqual({ installed: true, slot: 'linux-x64-glibc', spawnHelper: true })
+    expect(outcome).toEqual({ installed: true, slot: 'linux-x64-glibc', spawnHelper: false })
     expect(existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))).toBe(true)
-    // Without the executable bit every spawn fails EACCES at the moment a user opens a terminal.
-    const helper = statSync(join(nodePtyDir, 'build', 'Release', 'spawn-helper'))
-    expect(helper.mode & 0o111).not.toBe(0)
+    expect(existsSync(join(nodePtyDir, 'build', 'Release', 'spawn-helper'))).toBe(false)
   })
 
   it('will not load a glibc slot on a musl host', () => {

@@ -1,70 +1,67 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { getAppImageCliArgs } from './appimage-cli-redirect'
+import { getCliLaunchArgs } from './cli-launch-redirect'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-mode-argv'
 
-// Why: index.ts runs CLI redirects before rewriting argv. Direct AppImage serve
-// stays in Electron so launch switches do not cross into the strict Node-mode
-// CLI parser; other CLI commands still depend on redirect ordering (#12677).
-
+const CLI_ENTRY_PATH = '/opt/orca/resources/app.asar.unpacked/out/cli/index.js'
 const REDIRECT_OPTIONS = {
   platform: 'linux' as const,
   isPackaged: true,
   commandNames: ['serve', 'status']
 }
-// A mounted AppImage is the case where the runtime does export these.
-const MOUNTED_APPIMAGE_ENV = { APPIMAGE: '/opt/orca/Orca.AppImage', APPDIR: '/tmp/.mount_ab12' }
 
 function rewriteAsIndexDoes(argv: string[]): string[] {
   return argvRequestsServeMode(argv) ? normalizeServeModeArgv(argv) : argv
 }
 
-describe('serve argv rewrite vs AppImage CLI redirect ordering', () => {
-  const launchArgv = ['/opt/orca/orca-ide', '--no-sandbox', 'serve', '--port', '7777', '--json']
+describe('serve argv rewrite vs CLI launch redirect ordering', () => {
+  const launchArgv = [
+    '/opt/orca/orca-ide',
+    '--disable-features=Vulkan',
+    'serve',
+    '--port',
+    '7777',
+    '--json'
+  ]
 
-  it('keeps clean serve validation on the CLI path', () => {
-    expect(getAppImageCliArgs(launchArgv, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toEqual([
-      'serve',
-      '--port',
-      '7777',
-      '--json'
-    ])
+  it('leaves direct serve in the main process', () => {
+    expect(getCliLaunchArgs(launchArgv, CLI_ENTRY_PATH, REDIRECT_OPTIONS)).toBeNull()
   })
 
-  it('keeps an injected Chromium switch in Electron before argv rewriting', () => {
-    const injected = [...launchArgv.slice(0, 2), '--disable-features=FedCm', ...launchArgv.slice(2)]
-    expect(getAppImageCliArgs(injected, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toBeNull()
-  })
-
-  it('loses the redirect if the rewrite runs first', () => {
+  it('rewrites direct serve into the in-process flag shape', () => {
     const rewritten = rewriteAsIndexDoes(launchArgv)
+    expect(rewritten).toContain('--disable-features=Vulkan')
     expect(rewritten).toContain('--serve')
-    expect(getAppImageCliArgs(rewritten, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toBeNull()
+    expect(rewritten).toContain('--serve-port')
+    expect(getCliLaunchArgs(rewritten, CLI_ENTRY_PATH, REDIRECT_OPTIONS)).toBeNull()
   })
 
   it('leaves non-serve CLI commands redirectable either way', () => {
     const argv = ['/opt/orca/orca-ide', 'status']
     expect(rewriteAsIndexDoes(argv)).toEqual(argv)
-    expect(getAppImageCliArgs(argv, MOUNTED_APPIMAGE_ENV, REDIRECT_OPTIONS)).toEqual(['status'])
+    expect(getCliLaunchArgs(argv, CLI_ENTRY_PATH, REDIRECT_OPTIONS)).toEqual(['status'])
+  })
+
+  it('redirects serve help instead of binding a server', () => {
+    const argv = ['/opt/orca/orca-ide', 'serve', '--help']
+    expect(rewriteAsIndexDoes(argv)).toEqual(argv)
+    expect(getCliLaunchArgs(argv, CLI_ENTRY_PATH, REDIRECT_OPTIONS)).toEqual(['serve', '--help'])
   })
 
   // Why source text: the ordering is the preflight phase's executable statement order, and the
   // cases above stay green if it is reversed — nothing else would catch the regression.
-  it('keeps the preflight running both CLI redirects before the argv rewrite', () => {
+  it('keeps the preflight running the CLI redirect before the argv rewrite', () => {
     const source = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
       'utf8'
     )
-    const packagedRedirect = source.indexOf('maybeRedirectPackagedCliEntryLaunch({')
-    const appImageRedirect = source.indexOf('maybeRedirectAppImageCliLaunch({')
+    const cliRedirect = source.indexOf('maybeRedirectCliLaunch({')
     const rewrite = source.indexOf('process.argv = normalizeServeModeArgv(process.argv)')
     const serveModeCheck = source.indexOf("state.isServeMode = process.argv.includes('--serve')")
 
-    expect(packagedRedirect).toBeGreaterThanOrEqual(0)
-    expect(appImageRedirect).toBeGreaterThanOrEqual(0)
-    expect(rewrite).toBeGreaterThan(packagedRedirect)
-    expect(rewrite).toBeGreaterThan(appImageRedirect)
+    expect(cliRedirect).toBeGreaterThanOrEqual(0)
+    expect(rewrite).toBeGreaterThan(cliRedirect)
     // The rewrite is pointless unless it lands before the flag it exists to inject is read.
     expect(serveModeCheck).toBeGreaterThan(rewrite)
   })

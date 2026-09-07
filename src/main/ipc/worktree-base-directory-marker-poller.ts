@@ -28,7 +28,7 @@ const PENDING_MARKER_MAX_TICKS = 300
 // Why: matches the git-common poller's fan-out bound (#17828) — bounded
 // concurrency turns hundreds of serial round trips into a handful of batches
 // without dumping every candidate onto libuv's 4-thread pool at once.
-const MARKER_PROBE_CONCURRENCY = 8
+export const MARKER_PROBE_CONCURRENCY = 8
 
 function statSignature(s: { mtimeMs: number; ctimeMs: number; ino: number }): string {
   return `${s.mtimeMs}:${s.ctimeMs}:${s.ino}`
@@ -186,7 +186,7 @@ export async function startBasePoller(
   }
 
   const checkPendingMarkers = async (): Promise<void> => {
-    const events: WorktreeBasePollEvent[] = []
+    const dueDirs: string[] = []
     for (const [dir, firstSeenTick] of markerProbeStartedAt) {
       if (firstSeenTick === null) {
         continue
@@ -195,13 +195,19 @@ export async function startBasePoller(
         markerProbeStartedAt.set(dir, null)
         continue
       }
+      dueDirs.push(dir)
+    }
+    const events: WorktreeBasePollEvent[] = []
+    // Same bound as the full scan's fan-out: serial probes cost D x latency per tick,
+    // which a WSL- or network-backed base directory pays for up to `pendingMarkerMaxTicks`.
+    await forEachWithConcurrency(dueDirs, MARKER_PROBE_CONCURRENCY, async (dir) => {
       options.onPendingMarkerProbe?.(join(dir, '.git'))
       if (await hasGitMarker(dir)) {
         markerProbeStartedAt.delete(dir)
         snapshot.markers.set(dir, true)
         events.push({ type: 'create', path: join(dir, '.git') })
       }
-    }
+    })
     if (!disposed && events.length > 0) {
       onEvents(events)
     }

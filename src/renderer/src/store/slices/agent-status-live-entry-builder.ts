@@ -74,7 +74,7 @@ export function buildAgentStatusLiveEntry(
 ): AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection {
   const { state, paneKey, payload, terminalTitle, timing, routing, metadata, updatedAt } = args
   const existing = state.agentStatusByPaneKey[paneKey]
-  if (existing && updatedAt < existing.updatedAt) {
+  if (existing && updatedAt < existing.updatedAt && !timing?.allowOlderTimestamp) {
     return { entry: null, reason: 'stale' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
@@ -222,6 +222,11 @@ export function buildAgentStatusLiveEntry(
     workingMode: payload.workingMode,
     prompt: payload.prompt,
     updatedAt,
+    // Why: a writer that carries no observation clock (OSC bytes, launch seeds) is itself
+    // fresh evidence, so it must not inherit the previous row's older observation time.
+    ...(timing?.evidenceObservedAt !== undefined
+      ? { evidenceObservedAt: timing.evidenceObservedAt }
+      : {}),
     stateStartedAt,
     agentType: identity.agentType,
     model:

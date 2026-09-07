@@ -8,6 +8,7 @@ import {
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { createDaemonActiveProviderFixtures } from './pty-ipc-daemon-provider-fixtures'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { SshPtyAbsentFromRelayError } from '../providers/ssh-pty-errors'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -344,6 +345,7 @@ describe('registerPtyHandlers', () => {
         )
         const store = {
           upsertSshRemotePtyLease: vi.fn(),
+          supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
           persistPtyBinding: vi.fn()
         }
         registerSshPtyProvider('ssh-1', {
@@ -459,7 +461,9 @@ describe('registerPtyHandlers', () => {
       })
       it('marks a caller-supplied SSH session expired when remote reattach is gone', async () => {
         const sshSpawn = vi.fn(async () => {
-          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
+          // The class, not the message: `SSH_SESSION_EXPIRED` is also what a live PTY whose
+          // source stream needs restoring refuses with, and only this one is host-reported absence.
+          throw new SshPtyAbsentFromRelayError('SSH_SESSION_EXPIRED: remote-pty')
         })
         const store = {
           markSshRemotePtyLease: vi.fn(),
@@ -509,10 +513,70 @@ describe('registerPtyHandlers', () => {
 
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
       })
+      it('leaves the lease alone when the refusal did not observe the process', async () => {
+        // A `restoreRequired` reattach is refused with the SAME `SSH_SESSION_EXPIRED` text, and it
+        // means the opposite: the PTY is live, only its source stream could not be resumed. The
+        // lease and the in-memory ownership are between them this client's only record that the
+        // remote process exists, and #9819's sweep reads a PTY it has no record of as one it may
+        // SIGKILL on the next connect. Erasing them here is how a live shell gets reaped.
+        const sshSpawn = vi.fn(async () => {
+          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
+        })
+        const store = {
+          markSshRemotePtyLease: vi.fn(),
+          clearSshRemotePtyKillIntent: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+
+        await expect(
+          handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            env: {},
+            connectionId: 'ssh-1',
+            sessionId: 'remote-pty'
+          })
+        ).rejects.toThrow('SSH_SESSION_EXPIRED: remote-pty')
+
+        // The spawn still fails; what must not happen is the destructive bookkeeping.
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
+      })
       it('marks a scoped SSH session expired using the raw relay lease id', async () => {
         const scopedPtyId = 'ssh:ssh-1@@remote-pty'
         const sshSpawn = vi.fn(async () => {
-          throw new Error('SSH_SESSION_EXPIRED: remote-pty')
+          // The class, not the message: `SSH_SESSION_EXPIRED` is also what a live PTY whose
+          // source stream needs restoring refuses with, and only this one is host-reported absence.
+          throw new SshPtyAbsentFromRelayError('SSH_SESSION_EXPIRED: remote-pty')
         })
         const store = {
           markSshRemotePtyLease: vi.fn(),

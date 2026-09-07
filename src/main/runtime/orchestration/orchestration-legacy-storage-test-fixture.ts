@@ -166,10 +166,15 @@ export function createLegacyStorageCutoverFixture(): {
   raw
     .prepare(
       `INSERT INTO deliveries (
-         id, run_id, consumer_generation, message_ids, status
-       ) VALUES (?, ?, 0, ?, 'outstanding')`
+         id, run_id, mailbox_handle, consumer_generation, message_ids, status
+       ) VALUES (?, ?, ?, 0, ?, 'outstanding')`
     )
-    .run(legacyDeliveryId, LEGACY_RUN_ID, JSON.stringify([legacyMessages[0].id]))
+    .run(
+      legacyDeliveryId,
+      LEGACY_RUN_ID,
+      `run:${LEGACY_RUN_ID}`,
+      JSON.stringify([legacyMessages[0].id])
+    )
   raw
     .prepare("UPDATE messages SET delivery_contract = 'legacy_direct' WHERE id = ?")
     .run(rejection.id)

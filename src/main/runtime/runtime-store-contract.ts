@@ -61,6 +61,7 @@ export type RuntimeStore = {
   automationOwnerPrecondition?: Store['automationOwnerPrecondition']
   automationChangeSelector?: Store['automationChangeSelector']
   listAutomationRuns?: Store['listAutomationRuns']
+  listAutomationRunsPage?: Store['listAutomationRunsPage']
   createAutomation?: Store['createAutomation']
   updateAutomation?: Store['updateAutomation']
   deleteAutomation?: Store['deleteAutomation']
@@ -86,6 +87,9 @@ export type RuntimeStore = {
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     floatingTerminalEnabled?: GlobalSettings['floatingTerminalEnabled']
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
+    experimentalNativeChat?: GlobalSettings['experimentalNativeChat']
+    openAgentTabsInChatByDefault?: GlobalSettings['openAgentTabsInChatByDefault']
+    experimentalStructuredNativeChat?: GlobalSettings['experimentalStructuredNativeChat']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
     visibleTaskProviders?: GlobalSettings['visibleTaskProviders']
@@ -111,7 +115,9 @@ export type RuntimeStore = {
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
+    hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
+    nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value
@@ -120,4 +126,5 @@ export type RuntimeStore = {
     updates: Partial<GlobalSettings>,
     options?: { notifyListeners?: boolean; originWebContentsId?: number }
   ) => unknown
+  onSettingsChanged?: Store['onSettingsChanged']
 }

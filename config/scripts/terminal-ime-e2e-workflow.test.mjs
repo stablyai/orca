@@ -68,6 +68,21 @@ describe('terminal IME e2e workflow', () => {
     expect(runner).not.toContain('pkill')
   })
 
+  it('runs native Wayland independently with CJK fonts and retained evidence', () => {
+    const job = workflow.jobs['linux-wayland']
+    expect(job.needs).toBeUndefined()
+    const install = job.steps.find((step) => step.run?.includes('apt-get install')).run
+    for (const tool of ['gnome-shell', 'ibus-hangul', 'fonts-noto-cjk', 'xwininfo']) {
+      expect(install).toContain(tool === 'xwininfo' ? 'x11-utils' : tool)
+    }
+    expect(job.steps.find((step) => step.run?.includes('--nested-wayland')).run).toBe(
+      'node config/scripts/run-terminal-ibus-hangul-e2e.mjs --nested-wayland'
+    )
+    const upload = job.steps.find((step) => step.uses?.startsWith('actions/upload-artifact'))
+    expect(upload.if).toBe('always()')
+    expect(upload.with.name).toBe('terminal-wayland-ime-evidence')
+  })
+
   it('bounds blocking native input commands', () => {
     const nativeSpec = readFileSync(
       join(projectDir, 'tests/e2e/terminal-ibus-hangul-native.spec.ts'),

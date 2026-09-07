@@ -1,6 +1,8 @@
 import type { IDisposable } from '@xterm/xterm'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
+import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
@@ -102,6 +104,11 @@ export function createTerminalPaneManagerOptions(
     },
     resolveExternalPaneDropTarget,
     onExternalPaneDrop,
+    terminalLigaturesEnabled: () =>
+      resolveTerminalLigaturesEnabled(
+        settingsRef.current?.terminalLigatures,
+        settingsRef.current?.terminalFontFamily
+      ),
     terminalOptions: () => {
       const currentSettings = settingsRef.current
       const terminalFontWeights = resolveTerminalFontWeights(
@@ -170,6 +177,8 @@ export function createTerminalPaneManagerOptions(
     formatLinkTooltip: (paneId, url, hint) =>
       formatTerminalUrlTooltip(url, hint, context.getHttpLinkSourceOwnerForPane(paneId)),
     initialRenderingSuspended: !isVisibleRef.current,
+    // Reopening the floating panel must rebuild silently corrupted glyph atlases.
+    retainHiddenWebgl: worktreeId !== FLOATING_TERMINAL_WORKTREE_ID,
     terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
     debugLabel: `tab:${tabId}/wt:${worktreeId}`
   }

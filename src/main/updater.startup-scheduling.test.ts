@@ -31,6 +31,7 @@ warmUpdaterModule()
 describe('updater', () => {
   beforeEach(() => {
     resetUpdaterMocks()
+    vi.useFakeTimers()
   })
 
   it('does not load or configure electron-updater during dev setup', async () => {

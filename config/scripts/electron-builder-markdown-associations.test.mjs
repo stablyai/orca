@@ -103,14 +103,24 @@ describe('electron-builder markdown file associations', () => {
 
   // Why: this include was renamed from daemon-host-uninstall.nsh to carry the markdown
   // hooks too. electron-builder allows only one include, so a merge that drops the daemon
-  // sweep would silently orphan a running orca-terminal-daemon.exe on every uninstall.
+  // sweep would silently orphan a running daemon host on every uninstall.
+  //
+  // Asserted against comment-stripped script, and on the app exe name first: the relocated
+  // host is a verbatim copy of the app exe (daemonHostExeName, daemon-host-relocation.ts),
+  // so a macro that kills only orca-terminal-daemon.exe matches no running process. The
+  // prose above the macro names both, so a toContain over the raw file proves nothing.
   it('keeps the daemon-host uninstall sweep across the include rename', async () => {
-    const hooks = await readInstallerHooks()
+    const script = stripNsisCommentLines(await readInstallerHooks())
 
-    expect(hooks).toContain('orca-terminal-daemon.exe')
-    expect(hooks).toContain('$LOCALAPPDATA\\Orca\\daemon-host')
+    expect(script).toMatch(/taskkill[^\n]*\/IM\s+"?\$\{APP_EXECUTABLE_FILENAME\}"?/)
+    // Legacy name, so hosts left by builds that renamed the copy still get reaped.
+    expect(script).toMatch(/taskkill[^\n]*\/IM\s+"?orca-terminal-daemon\.exe"?/)
+    // Scopes both kills to the uninstalling user: an elevated machine-wide uninstall must
+    // not reach another logged-on user's session.
+    expect(script).toMatch(/\/FI\s+"USERNAME eq /)
+    expect(script).toContain('$LOCALAPPDATA\\Orca\\daemon-host')
     // Without this guard, uninstallOldVersion would kill the daemon on every update —
     // defeating the relocation that keeps terminals alive across updates.
-    expect(hooks).toMatch(/\$\{ifNot\}\s+\$\{isUpdated\}/)
+    expect(script).toMatch(/\$\{ifNot\}\s+\$\{isUpdated\}/)
   })
 })

@@ -3,10 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { useAppStore } from '@/store'
-import {
-  getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import NativeChatView from './NativeChatView'
@@ -24,14 +21,12 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   groupId,
   isActive,
   target,
-  allowFileUriLinks,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
   groupId: string | undefined
   isActive: boolean
   target: RuntimeClientTarget
-  allowFileUriLinks: boolean
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
@@ -69,11 +64,11 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       <NativeChatView
         mode="structured"
         tabId={tab.id}
+        groupId={groupId}
         sessionId={tab.entityId}
         agent={tab.agentSessionAgent}
         isVisible={isActive}
         target={target}
-        allowFileUriLinks={allowFileUriLinks}
       />
     </div>
   )
@@ -87,12 +82,11 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     worktreeId: string
     isWorktreeActive: boolean
   }): React.JSX.Element {
-    const { unifiedTabs, groups, runtimeEnvironmentId, allowFileUriLinks } = useAppStore(
+    const { unifiedTabs, groups, runtimeEnvironmentId } = useAppStore(
       useShallow((state) => ({
         unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
         groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
-        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
-        allowFileUriLinks: getExecutionHostIdForWorktree(state, worktreeId) === 'local'
+        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       }))
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
@@ -127,7 +121,6 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             groupId={tab.groupId}
             isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
             target={target}
-            allowFileUriLinks={allowFileUriLinks}
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}

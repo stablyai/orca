@@ -21,6 +21,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
       allowMissingPersistedTab?: boolean
       killPtys?: boolean
       authorizedPty?: RuntimePtyWorktreeRecord
+      force?: boolean
     } = {}
   ): void {
     const closedParentTabId = tab.parentTabId
@@ -38,7 +39,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
     const projectedPtyIds = this.commitHeadlessTerminalTabRetirement(
       worktreeId,
       closedParentTabId,
-      { allowMissing: options.allowMissingPersistedTab }
+      { allowMissing: options.allowMissingPersistedTab, force: options.force }
     )
     this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, closedParentTabId)
     if (options.authorizedPty) {
@@ -107,7 +108,7 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
         : {}),
       tabs: nextTabs
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, nextSnapshot)
+    this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 

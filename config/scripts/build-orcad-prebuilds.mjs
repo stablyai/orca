@@ -177,10 +177,11 @@ function build() {
   copyFileSync(builtBinary, join(slotDir, 'pty.node'))
   console.log(`[orcad-prebuilds] stored ${slot}/pty.node`)
 
-  // Why spawn-helper ships too: on Unix node-pty posix_spawns build/Release/spawn-helper,
+  // Why spawn-helper ships too: on macOS node-pty posix_spawns build/Release/spawn-helper,
   // so a slot without it installs cleanly and then fails ENOENT the first time a user
-  // opens a terminal. Windows has no spawn-helper.
-  if (process.platform !== 'win32') {
+  // opens a terminal. binding.gyp builds the helper only under OS=="mac"; every other
+  // platform forks directly, so demanding one there fails a healthy Linux slot build.
+  if (process.platform === 'darwin') {
     const helperSource = join(dirname(builtBinary), 'spawn-helper')
     if (!existsSync(helperSource)) {
       throw new Error(`[orcad-prebuilds] spawn-helper missing at ${helperSource}`)

@@ -1,3 +1,5 @@
+import { setVisibleSessionId } from './agent-session-visible-tab-index'
+import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 /** Durable single-writer session records and their operation ledger. */
 
 import {
@@ -125,22 +127,22 @@ export class AgentSessionRecordStore {
 
   /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
   setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
-    return this.transact(() => {
-      if (visible) {
-        if (!this.state.records.has(sessionId)) {
-          throw new Error('agent_session_identity_required')
-        }
-        this.state.visibleSessionIds.add(sessionId)
-      } else {
-        this.state.visibleSessionIds.delete(sessionId)
-      }
-      this.state.visibleSessionIdsIndexPresent = true
-    })
+    return this.transact(() => setVisibleSessionId(this.state, sessionId, visible))
   }
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
     const scope = agentSessionScopeKey(location)
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
+  }
+
+  setConversationCommand(
+    sessionId: string,
+    fence: number,
+    command: NonNullable<AgentSessionRecord['conversationCommand']>
+  ): Promise<void> {
+    return this.transact(() =>
+      commitConversationCommandRecord(this.state, sessionId, fence, command)
+    )
   }
 
   /** A record this build cannot validate: readable as present, never grantable as a writer. */

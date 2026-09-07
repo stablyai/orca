@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
+  SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR,
   SSH_SESSION_EXPIRED_ERROR,
   isSshPtyAbsentFromRelayError
 } from './ssh-pty-errors'
@@ -73,6 +74,8 @@ describe('SSH PTY relay absence verdict', () => {
     )
 
     expect(isSshPtyAbsentFromRelayError(rejection)).toBe(false)
-    expect((rejection as Error).message).toContain(SSH_SESSION_EXPIRED_ERROR)
+    // Nor may it wear the expiry token: that is what the renderer retires a pane binding on.
+    expect((rejection as Error).message).not.toContain(SSH_SESSION_EXPIRED_ERROR)
+    expect((rejection as Error).message).toContain(SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR)
   })
 })

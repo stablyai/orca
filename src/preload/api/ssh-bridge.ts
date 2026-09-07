@@ -9,6 +9,7 @@ import type {
   SshTargetCreateInput,
   SshTarget,
   SshTargetUpdateInput,
+  SshTerminateSessionsResult,
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../../shared/ssh-types'
@@ -51,7 +52,7 @@ export const sshApi = {
   disconnect: (args: { targetId: string }): Promise<void> =>
     ipcRenderer.invoke('ssh:disconnect', args),
 
-  terminateSessions: (args: { targetId: string }): Promise<void> =>
+  terminateSessions: (args: { targetId: string }): Promise<SshTerminateSessionsResult> =>
     ipcRenderer.invoke('ssh:terminateSessions', args),
 
   resetRelay: (args: { targetId: string }): Promise<void> =>

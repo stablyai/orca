@@ -16,6 +16,27 @@ function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
 }
 
 describe('recordAgentProviderSession', () => {
+  it('does not capture a structured native owner for terminal resume on restart', () => {
+    const store = createTestStore()
+    const paneKey = 'structured-tab:leaf-1'
+    const providerSession = { key: 'session_id' as const, id: 'provider-session-uuid' }
+
+    store
+      .getState()
+      .setAgentStatus(
+        paneKey,
+        { state: 'working', prompt: 'keep going', agentType: 'claude' },
+        'Claude Chat',
+        undefined,
+        { tabId: 'structured-tab', worktreeId: 'wt-1' },
+        { providerSession, terminalResumeEligible: false }
+      )
+    store.getState().captureAllSleepingAgentSessions('quit')
+
+    expect(store.getState().agentStatusByPaneKey[paneKey]?.providerSession).toEqual(providerSession)
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+  })
+
   it('preserves the root session while a child permission hook moves Codex to waiting', () => {
     const store = createTestStore()
     const providerSession = { key: 'session_id' as const, id: 'root-session' }
@@ -220,6 +241,46 @@ describe('recordAgentProviderSession', () => {
       launchConfig,
       origin: 'worktree-sleep'
     })
+  })
+
+  it('keeps the activity cutoff and manual-unread stamp across a heartbeat for the same pane', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })] }
+    } as Partial<AppState>)
+    const providerSession = {
+      key: 'session_id' as const,
+      id: 'pi-session-1',
+      transcriptPath: '/tmp/pi-session-1.jsonl'
+    }
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: 'finish', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' }
+      )
+    store.getState().applyActivityClearedAt({ 'tab-1:leaf-1': 5_000 })
+    store.getState().unacknowledgeAgents(['tab-1:leaf-1'])
+
+    store.getState().recordAgentProviderSession(
+      'tab-1:leaf-1',
+      'pi',
+      providerSession,
+      { updatedAt: 20 },
+      {
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: null
+      }
+    )
+
+    // The pane is not retired here — only its live status becomes a sleeping record. Dropping
+    // these maps would replay history the user already cleared on the next heartbeat.
+    expect(store.getState().activityClearedAtByPaneKey['tab-1:leaf-1']).toBe(5_000)
+    expect(store.getState().manuallyUnreadTurnsByPaneKey['tab-1:leaf-1']).toBeGreaterThan(0)
   })
 
   it('does not reuse Pi launch config when the session file identity changes', () => {

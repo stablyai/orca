@@ -252,8 +252,11 @@ export function getTabEntryOptions(
   if (isLikelyNewFileIntent(trimmed)) {
     return toOptions([newFile, search, ...fuzzyExistingFiles], actionLimit)
   }
+  // Why no create row: a spaced, extension-less phrase is a web query, and a
+  // stray arrow/click on "Create file" leaves an empty `release notes` on disk
+  // that then outranks search as an exact match forever after.
   if (/\s/.test(trimmed)) {
-    return toOptions([search, ...fuzzyExistingFiles, newFile], actionLimit)
+    return toOptions([search, ...fuzzyExistingFiles], actionLimit)
   }
   // Why: a single token is still a quick-open attempt ("btn" → Button.tsx), so
   // only phrases promote web search over fuzzy matches. Fuzzy matching is a
