@@ -137,6 +137,13 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       },
       timeoutMs
     )
+    if (
+      !result.ok &&
+      method === 'agentSession.conversationCommand' &&
+      result.refusal.code === 'agent_session_operation_unknown'
+    ) {
+      return { status: 'unknown' }
+    }
     return result.ok
       ? { status: 'accepted', value: result.value }
       : { status: 'refused', message: result.refusal.message }

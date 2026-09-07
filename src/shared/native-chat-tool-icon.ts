@@ -1,3 +1,4 @@
+import { mcpToolIdentity, type NativeChatMcpIdentity } from './native-chat-tool-identity'
 /**
  * The category vocabulary for native-chat tool rows, and the one glyph each
  * category keeps. A row is `icon + word + argument`: the icon is decorative and
@@ -81,7 +82,8 @@ const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   ['webfetch', 'webSearch'],
   ['todowrite', 'todoList'],
   ['web search', 'webSearch'],
-  ['websearch', 'webSearch']
+  ['websearch', 'webSearch'],
+  ['web_search', 'webSearch']
 ])
 
 /** The edit family, lowercased for row-word matching. Deliberately not
@@ -95,9 +97,12 @@ const MCP_TOOL_PREFIX = 'mcp__'
 
 /** The category a row word names, or null when the lane emitted something this
  *  vocabulary doesn't model yet. */
-export function nativeChatToolCategory(rowWord: string): NativeChatToolCategory | null {
+export function nativeChatToolCategory(
+  rowWord: string,
+  mcpIdentity?: NativeChatMcpIdentity
+): NativeChatToolCategory | null {
   const word = rowWord.trim().toLowerCase()
-  if (word.startsWith(MCP_TOOL_PREFIX)) {
+  if (word.startsWith(MCP_TOOL_PREFIX) || mcpToolIdentity(rowWord, mcpIdentity) !== null) {
     return 'mcpToolCall'
   }
   // Before the edit family: a command tool runs whatever it is handed, so a
@@ -111,19 +116,22 @@ export function nativeChatToolCategory(rowWord: string): NativeChatToolCategory 
 /** The glyph for a row word. Never empty, so rows stay left-aligned: a word
  *  outside the vocabulary takes the generic tool glyph, and only a row that
  *  really ran a command claims the terminal. */
-export function nativeChatToolIconName(rowWord: string): NativeChatToolIconName {
-  return NATIVE_CHAT_TOOL_ICON_NAMES[nativeChatToolCategory(rowWord) ?? 'other']
+export function nativeChatToolIconName(
+  rowWord: string,
+  mcpIdentity?: NativeChatMcpIdentity
+): NativeChatToolIconName {
+  return NATIVE_CHAT_TOOL_ICON_NAMES[nativeChatToolCategory(rowWord, mcpIdentity) ?? 'other']
 }
 
 /** The one category every call in a run shares, or null when the run spans
  *  categories or holds no calls. A run header names the whole run, not any one
  *  call in it, so it may only claim a category true of all of them. */
 export function nativeChatToolRunCategory(
-  calls: readonly { name: string }[]
+  calls: readonly { name: string; mcpIdentity?: NativeChatMcpIdentity }[]
 ): NativeChatToolCategory | null {
   let shared: NativeChatToolCategory | null = null
   for (const call of calls) {
-    const category = nativeChatToolCategory(call.name) ?? 'other'
+    const category = nativeChatToolCategory(call.name, call.mcpIdentity) ?? 'other'
     if (shared !== null && shared !== category) {
       return null
     }
@@ -136,7 +144,7 @@ export function nativeChatToolRunCategory(
  *  glyph for a run that spans categories, and null when the run has no tool
  *  call to describe and so heads with no glyph at all. */
 export function nativeChatToolRunIconName(
-  calls: readonly { name: string }[]
+  calls: readonly { name: string; mcpIdentity?: NativeChatMcpIdentity }[]
 ): NativeChatToolIconName | null {
   if (calls.length === 0) {
     return null

@@ -28,6 +28,16 @@ describe('provider frame activity', () => {
     expect(codexProviderFrameActivity('item/reasoning/summaryPartAdded', {})).toBeNull()
   })
 
+  it('names a fan-out from either Codex item type that reports one', () => {
+    for (const type of ['collabAgentToolCall', 'subAgentActivity']) {
+      expect(
+        codexProviderFrameActivity('item/started', {
+          item: { type, kind: 'started', agentThreadId: 'child-1', agentPath: '/root/read' }
+        })
+      ).toBe('Coordinating with another agent')
+    }
+  })
+
   it('uses Claude descriptions and safe semantic status without exposing tool labels', () => {
     expect(
       claudeProviderFrameActivity('message:system:task_started', {

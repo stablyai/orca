@@ -3,14 +3,18 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import { CloudRelayTransport } from '../rpc/relay-transport'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { RelayControlClient } from './relay-control-client'
+import { RELAY_HOST_ATTACH_DEADLINE_MS } from './relay-control-protocol'
 import type {
   RelayConnectionOpenMessage,
   RelayDrainMessage,
-  RelayHostHelloAckMessage
+  RelayHostHelloAckMessage,
+  RelayPendingConnection
 } from './relay-control-protocol'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import type { RelayIdentity } from './relay-session-broker-contract'
 import type { RelayAssignment } from './relay-http-client'
+
+const OBSERVED_OPEN_LIMIT = 16
 
 type RelayControlOriginOptions = {
   assignment: RelayAssignment
@@ -41,8 +45,14 @@ export class RelayControlOrigin {
   private generation = 0
   private controlResumeSecret: string | null = null
   private leaseExpiresAt = 0
-  private acceptingConnections = true
   private closed = false
+  // conn-opens seen on any control of this origin, kept for the cell's attach
+  // window so a replayed pending connection keeps the relay's own kind/device
+  // when the ack does not restate it (a cell that predates that field).
+  private readonly observedOpens = new Map<
+    string,
+    { message: RelayConnectionOpenMessage; seenAt: number }
+  >()
   private readonly detachMobileSocketTransport: () => void
 
   constructor(options: RelayControlOriginOptions) {
@@ -114,7 +124,6 @@ export class RelayControlOrigin {
       controlResumeSecret: this.controlResumeSecret
     })
     this.activate(control, ack)
-    this.acceptingConnections = true
     // Why: the resumed control owns the same server generation and splices;
     // the predecessor remains only long enough for any idempotent reply in flight.
     if (previous && previous.pendingRequestCount === 0) {
@@ -127,12 +136,6 @@ export class RelayControlOrigin {
         setTimeout(() => this.closeRetiredControl(previous), 10_100)
       )
     }
-  }
-
-  markDraining(): void {
-    // The relay changes the control's protocol state when it sends drain. This
-    // marker exists for the broker's ownership policy, not a second wire event.
-    this.acceptingConnections = false
   }
 
   refreshAuthorization(relayJwt: string): void {
@@ -159,6 +162,7 @@ export class RelayControlOrigin {
     }
     this.controls.clear()
     this.activeControl = null
+    this.observedOpens.clear()
     try {
       await this.transport.stop()
     } finally {
@@ -248,15 +252,84 @@ export class RelayControlOrigin {
     for (const connectionId of ack.activeConnIds) {
       this.options.onConnectionOwned(connectionId, this)
     }
+    this.replayPendingConnections(ack)
+  }
+
+  // The cell sends conn-open once. A control that rotates or rebinds mid-accept
+  // restates the still-waiting connections here instead, and without this replay
+  // the phone waits out its attach deadline and is closed as if the host were offline.
+  private replayPendingConnections(ack: RelayHostHelloAckMessage): void {
+    const active = new Set(ack.activeConnIds)
+    for (const pending of ack.pendingConns) {
+      if (active.has(pending.connId) || this.transport.hasConnection(pending.connId)) {
+        continue
+      }
+      const message = this.pendingConnectionOpen(pending)
+      if (!message) {
+        console.warn('[relay] pending connection not replayable: relay stated no kind/device')
+        continue
+      }
+      // Not remembered: a replay must not extend the observed entry's own life.
+      this.dialConnection(message)
+    }
+  }
+
+  private pendingConnectionOpen(
+    pending: RelayPendingConnection
+  ): RelayConnectionOpenMessage | null {
+    // A pending entry may restate only the identifiers. kind and relayDeviceId
+    // decide local pairing authority and E2EE device binding, so they are taken
+    // from the relay — the ack itself, or the conn-open this process already saw.
+    const observed = this.observedOpens.get(pending.connId)?.message
+    const kind = pending.kind ?? observed?.kind
+    const relayDeviceId = pending.relayDeviceId ?? observed?.relayDeviceId
+    if (!kind || !relayDeviceId) {
+      return null
+    }
+    return {
+      type: 'conn-open',
+      connId: pending.connId,
+      connTicket: pending.connTicket,
+      kind,
+      relayDeviceId,
+      // The cell's attach timer started before this control existed, so the real
+      // remaining budget is unknown and never longer than the contract deadline.
+      attachDeadlineMs: RELAY_HOST_ATTACH_DEADLINE_MS
+    }
   }
 
   private openConnection(message: RelayConnectionOpenMessage): void {
-    if (!this.acceptingConnections) {
+    if (this.closed) {
       return
     }
+    this.rememberOpen(message)
+    this.dialConnection(message)
+  }
+
+  private dialConnection(message: RelayConnectionOpenMessage): void {
     this.options.onConnectionOwned(message.connId, this)
     void this.transport.openConnection(message).catch(() => {
       this.options.onConnectionReleased(message.connId, this)
     })
+  }
+
+  private rememberOpen(message: RelayConnectionOpenMessage): void {
+    const now = Date.now()
+    for (const [connId, entry] of this.observedOpens) {
+      // Past the attach deadline the cell has already failed the connection.
+      if (now - entry.seenAt > RELAY_HOST_ATTACH_DEADLINE_MS) {
+        this.observedOpens.delete(connId)
+      }
+    }
+    // The contract caps a session at 8 connections; the surplus is a clock that
+    // never advanced, so drop oldest-first rather than growing without bound.
+    while (this.observedOpens.size >= OBSERVED_OPEN_LIMIT) {
+      const oldest = this.observedOpens.keys().next()
+      if (oldest.done) {
+        break
+      }
+      this.observedOpens.delete(oldest.value)
+    }
+    this.observedOpens.set(message.connId, { message, seenAt: now })
   }
 }

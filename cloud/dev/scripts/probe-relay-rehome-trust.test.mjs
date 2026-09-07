@@ -111,3 +111,23 @@ test('fails when both trust-probe attempts return a transient 503', async () => 
   )
   assert.equal(calls, 2)
 })
+
+test('approves the asia-east2 rehome sources and still rejects unlisted cells', () => {
+  for (const cellId of ['production-gce-c27', 'production-gce-c28', 'production-gce-c29']) {
+    const parsed = parseRehomeTrustProbeArguments(
+      argv.map((value) => (value === 'production-gce-c7' ? cellId : value)),
+      environment
+    )
+    assert.equal(parsed.cellId, cellId)
+  }
+  for (const cellId of ['production-gce-c1', 'production-gce-c17', 'production-gce-c30']) {
+    assert.throws(
+      () =>
+        parseRehomeTrustProbeArguments(
+          argv.map((value) => (value === 'production-gce-c7' ? cellId : value)),
+          environment
+        ),
+      /--cell-id is not approved/
+    )
+  }
+})

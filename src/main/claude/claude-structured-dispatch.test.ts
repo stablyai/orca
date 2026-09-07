@@ -7,6 +7,7 @@ import { dispatchClaudeTurn, resolveClaudeReplayWaiter } from './claude-structur
 import { readClaudeImage } from './claude-structured-dispatch-content'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
 function sessionFor(send = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
   return {
@@ -21,6 +22,7 @@ function sessionFor(send = vi.fn().mockResolvedValue(undefined)): ClaudeSession 
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
+    commands: new ClaudeSlashCommandCatalog(),
     dispatchSequence: 0,
     optionMutationSequence: 0,
     options: new Map(),

@@ -6,7 +6,8 @@ import type {
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
-  type StructuredAgentSessionCreateParams
+  type StructuredAgentSessionCreateParams,
+  type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
@@ -88,7 +89,8 @@ export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): b
 
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
-  agent: AgentSessionHandleProvider
+  agent: AgentSessionHandleProvider,
+  resumeFrom?: StructuredAgentSessionResumeSource
 ): StructuredAgentSessionLaunchIntent {
   const sessionId = createStructuredAgentSessionId(agent, () => crypto.randomUUID())
   const state = useAppStore.getState()
@@ -107,6 +109,7 @@ export function createStructuredAgentSessionLaunchIntent(
       sessionId,
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
+      ...(resumeFrom ? { resumeFrom } : {}),
       randomUuid: () => crypto.randomUUID()
     })
   }
@@ -171,17 +174,10 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
 /**
  * Only the host that will execute the session can answer whether it supports creating one there —
  * on Windows that means reading the provider child's process start time, which a client cannot
- * observe.
- *
- * Codex is absent on purpose: its answer is settled by the launch route and owned elsewhere, so
- * probing here would change Codex's wire traffic. Note that this early return is also why the
- * unresolvable-selector race above has never been able to refuse a Codex launch — the race is
- * identical for Codex, nothing asks. Whoever gives Codex a probe inherits it.
+ * observe. Both providers ask: the host classifies per agent, and Codex inherits the
+ * unresolvable-selector retry above along with the probe.
  */
 async function requireHostCreateSupport(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
-  if (intent.agent !== 'claude') {
-    return
-  }
   if (!(await hostSupportsCreate(intent))) {
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(

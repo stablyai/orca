@@ -1,3 +1,4 @@
+import { RELAY_DEFAULT_REGION } from '@orca-cloud/relay-contract'
 import type { RelayDatabase, SqlRow } from './database.js'
 
 export type CellInventorySnapshotRow = {
@@ -92,7 +93,7 @@ export async function readAssignmentInventorySnapshot(
   return {
     cells: cellRows.map((row) => ({
       cellId: asText(row, 'cell_id'),
-      region: optionalText(row, 'region') ?? 'us-central1',
+      region: optionalText(row, 'region') ?? RELAY_DEFAULT_REGION,
       admissionState: optionalText(row, 'admission_state') ?? 'unset',
       enabled: asInteger(row, 'enabled') === 1,
       capacityRequests: asInteger(row, 'capacity_requests'),

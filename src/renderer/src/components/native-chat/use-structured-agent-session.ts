@@ -1,5 +1,9 @@
+import * as conversationCommands from './structured-conversation-command-send'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentSessionConversationCommand,
+  AgentSessionConversationCommandResult
+} from '../../../../shared/agent-session-conversation-command'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type {
   AgentSessionMutationResult,
@@ -16,6 +20,7 @@ import {
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionPicks,
   structuredAgentSessionOptionSnapshot
 } from '../../../../shared/structured-agent-session-options'
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-projection'
@@ -27,12 +32,15 @@ import {
 } from './use-structured-agent-session-outbox'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
-import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
+import {
+  projectStructuredAgentSessionMessages,
+  pendingStructuredSessionPrompts,
+  type StructuredPromptItem
+} from './structured-agent-session-message-projection'
 import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
+import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 
-export type StructuredPromptItem = AgentJournalRenderItem & {
-  body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' | 'question' }>
-}
+export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
 export function useStructuredAgentSession(args: {
   sessionId: string
@@ -57,6 +65,11 @@ export function useStructuredAgentSession(args: {
   const stateRef = useRef(state)
   const [writeError, setWriteError] = useState<string | null>(null)
   const operationIds = useRef(new Map<string, string>())
+  const [conversationSupport, setConversationSupport] = useState<{
+    sessionId: string
+    commands: readonly AgentSessionConversationCommand[]
+  } | null>(null)
+  const commandPending = useRef(false)
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent)
   )
@@ -90,7 +103,7 @@ export function useStructuredAgentSession(args: {
         return null
       }
       const targetFence = stateRef.current.fence
-      const key = `${fingerprintMethod}:${JSON.stringify(fields)}`
+      const key = `${sessionId}:${fingerprintMethod}:${JSON.stringify(fields)}`
       const clientOperationId =
         operationIdOverride ?? operationIds.current.get(key) ?? structuredSessionOperationId()
       operationIds.current.set(key, clientOperationId)
@@ -130,16 +143,16 @@ export function useStructuredAgentSession(args: {
       if (stateRef.current.fence !== targetFence) {
         return null
       }
-      operationIds.current.delete(key)
+      if (!conversationCommands.isUnconfirmedConversationCommand(fingerprintMethod, result.value)) {
+        operationIds.current.delete(key)
+      }
       setWriteError(null)
       return result.value
     },
     [sessionId, target]
   )
 
-  // Turns are what confirm an option: the provider names the model it is running
-  // on the frame that opens each one, so re-read the options as a turn changes
-  // rather than leaving the last write unconfirmed for the life of the session.
+  // Refresh options each turn to confirm which model the provider actually selected.
   const turnId = activeStructuredAgentSessionTurnId(state.items)
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity),
@@ -158,6 +171,7 @@ export function useStructuredAgentSession(args: {
     })
       .then((result) => {
         if (!stale) {
+          setConversationSupport({ sessionId, commands: result.conversationCommands ?? [] })
           setOptionState((current) =>
             current.record === activeOptionRecordRef.current
               ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
@@ -192,11 +206,20 @@ export function useStructuredAgentSession(args: {
           { key: id, value }
         )
         if (result && activeOptionRecordRef.current === targetRecord) {
+          const committed = result.options ?? { [id]: value }
           setOptionState((current) =>
             current.record === targetRecord
-              ? commitStructuredAgentSessionOptionValues(current, result.options ?? { [id]: value })
+              ? commitStructuredAgentSessionOptionValues(current, committed)
               : current
           )
+          const picks = structuredAgentSessionOptionPicks(optionState, committed)
+          if (picks.length > 0) {
+            void enqueueSessionOptionSettingsWrite(target, {
+              type: 'apply-picks',
+              agent,
+              picks
+            })
+          }
         }
         return Boolean(result)
       } finally {
@@ -207,7 +230,7 @@ export function useStructuredAgentSession(args: {
         )
       }
     },
-    [mutate, optionState]
+    [agent, mutate, optionState, target]
   )
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
@@ -226,12 +249,24 @@ export function useStructuredAgentSession(args: {
     [optionSnapshot, setOption]
   )
 
-  const prompts = state.items.filter(
-    (item): item is StructuredPromptItem =>
-      (item.body.kind === 'approval' || item.body.kind === 'question') &&
-      item.body.resolution.state === 'pending'
-  )
+  const prompts = pendingStructuredSessionPrompts(state.items)
   return {
+    conversationCommands:
+      conversationSupport?.sessionId === sessionId ? conversationSupport.commands : [],
+    runConversationCommand: (command: AgentSessionConversationCommand) =>
+      conversationCommands.sendStructuredConversationCommand({
+        command,
+        pending: commandPending,
+        blocked: Boolean(
+          turnId || prompts.length || isMonitoringBackgroundTasks || outboxController.outbox.length
+        ),
+        send: (command) =>
+          mutate<AgentSessionConversationCommandResult>(
+            'agentSession.conversationCommand',
+            'agentSession.conversationCommand',
+            { command }
+          )
+      }),
     messages: projectStructuredAgentSessionMessages(
       state.items,
       outboxController.outbox,
@@ -245,7 +280,8 @@ export function useStructuredAgentSession(args: {
     prompts,
     outbox: outboxController.outbox,
     blockedClientMessageId: outboxController.blockedClientMessageId,
-    send: outboxController.send,
+    send: (...input: Parameters<typeof outboxController.send>) =>
+      !commandPending.current && outboxController.send(...input),
     retry: outboxController.retry,
     isWorking: turnId !== null,
     turnActivity,
@@ -270,6 +306,7 @@ export function useStructuredAgentSession(args: {
       ),
     optionSnapshot,
     optionSurface,
+    sessionCommands: state.commands ?? undefined,
     setStructuredOption
   }
 }

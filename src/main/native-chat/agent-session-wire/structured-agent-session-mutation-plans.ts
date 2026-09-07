@@ -31,6 +31,8 @@ export type MutationPlan<TValue> = {
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
+  recoverUnknownFromDurableState?: boolean
+  settledOutcome?: (value: TValue) => AgentSessionOperationOutcome
 }
 
 export function sendPlan(params: {

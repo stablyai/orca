@@ -38,6 +38,16 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     new Set([
       'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts'
     ])
+  ],
+  [
+    // The rule wants one named handle cleared by name. Both startup effects arm a variable number
+    // of refresh timers, every one of them through addTimer into `timers`, which their cleanups
+    // clear -- a shape the rule reports whether the handles live in an array, a Set, or a nested
+    // helper. The finding predates this list; it surfaced when the effect body changed. This map
+    // keys on file, not line, so the entry covers both effects in it; nothing else in the file
+    // arms a timer, so widening it further is the only alternative, not a narrower option.
+    'react-doctor(effect-needs-cleanup)',
+    new Set(['mobile/src/session/use-mobile-session-startup.ts'])
   ]
 ])
 

@@ -3,6 +3,7 @@ import {
   ASSIGNMENT_LIMITS,
   CONTROL_CONTINUITY_LIMITS,
   RELAY_CLOSE_CODE,
+  RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS,
   RELAY_PROTOCOL_LIMITS
 } from '@orca-cloud/relay-contract'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -1003,5 +1004,117 @@ describe('control lease recovery after the session is gone', () => {
       registry.drain(0)
       vi.advanceTimersByTime(0)
     }
+  })
+})
+
+describe('host hello ack pending connections', () => {
+  const DETAILS = new Set([RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS])
+  const LEGACY_ENTRY = { connId: 'conn-1', connTicket: 'T'.repeat(43) }
+  const DETAILED_ENTRY = { ...LEGACY_ENTRY, kind: 'invite', relayDeviceId: 'device-1' }
+
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  })
+
+  function newRegistry(): ReturnType<typeof createRegistry> {
+    return createRegistry(
+      vi
+        .fn<RelayAssignmentStore['activateControl']>()
+        .mockResolvedValue('control:production-gce-c3:1')
+    )
+  }
+
+  function addPendingConnection(session: HostSession): void {
+    session.pendingConns.set('conn-1', {
+      ...LEGACY_ENTRY,
+      reservation: {
+        userId: identity.sub,
+        relayHostId: identity.relayHostId,
+        credentialKind: 'invite',
+        relayDeviceId: 'device-1'
+      },
+      client: new FakeSocket() as unknown as WebSocket,
+      attachTimer: setTimeout(() => {}, 60_000),
+      credentialActivityId: null
+    } as unknown as Parameters<typeof session.pendingConns.set>[1])
+  }
+
+  function sentAck(socket: FakeSocket): Record<string, unknown> {
+    const acks = socket.send.mock.calls
+      .map((call) => JSON.parse(String(call[0])) as Record<string, unknown>)
+      .filter((message) => message.type === 'host-hello-ack')
+    return acks.at(-1)!
+  }
+
+  function sessionOf(registry: HostSessionRegistry): HostSession {
+    return registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+  }
+
+  async function ackFor(capabilities?: ReadonlySet<string>): Promise<Record<string, unknown>> {
+    const { registry, activate } = newRegistry()
+    const socket = new FakeSocket()
+    registry.acceptControl(
+      socket as unknown as WebSocket,
+      identity,
+      undefined,
+      capabilities ?? new Set()
+    )
+    await activate(socket as unknown as WebSocket, identity, null, 1, false, 1)
+    const session = sessionOf(registry)
+    addPendingConnection(session)
+    socket.send.mockClear()
+    ;(registry as unknown as { sendHelloAck(session: HostSession): void }).sendHelloAck(session)
+    return sentAck(socket)
+  }
+
+  async function ackAfterRebind(
+    first: ReadonlySet<string>,
+    successor: ReadonlySet<string>
+  ): Promise<{ opening: Record<string, unknown>; rebound: Record<string, unknown> }> {
+    const { registry, activate } = newRegistry()
+    const opening = new FakeSocket()
+    registry.acceptControl(opening as unknown as WebSocket, identity, undefined, first)
+    await activate(opening as unknown as WebSocket, identity, null, 1, false, 1)
+    const session = sessionOf(registry)
+    addPendingConnection(session)
+    opening.send.mockClear()
+    ;(registry as unknown as { sendHelloAck(session: HostSession): void }).sendHelloAck(session)
+
+    const rebound = new FakeSocket()
+    registry.acceptControl(rebound as unknown as WebSocket, identity, undefined, successor)
+    await activate(rebound as unknown as WebSocket, identity, session, 1, true, 1)
+    return { opening: sentAck(opening), rebound: sentAck(rebound) }
+  }
+
+  it('states the pending kind and device to a host that advertised it can read them', async () => {
+    const ack = await ackFor(DETAILS)
+
+    expect(ack.pendingConns).toEqual([DETAILED_ENTRY])
+  })
+
+  it('restates only the identifiers to a host that never advertised the capability', async () => {
+    // A shipped host parses these entries strictly, so an unannounced key fails
+    // the whole ack parse and kills a control that was working.
+    const ack = await ackFor()
+
+    expect(ack.pendingConns).toEqual([LEGACY_ENTRY])
+  })
+
+  it('downgrades the restated entry when the successor control drops the capability', async () => {
+    // The capability belongs to the socket, not the session: a rebind can land a
+    // control whose decoder is older than the one that opened the session.
+    const { opening, rebound } = await ackAfterRebind(DETAILS, new Set())
+
+    expect(opening.pendingConns).toEqual([DETAILED_ENTRY])
+    expect(rebound.pendingConns).toEqual([LEGACY_ENTRY])
+  })
+
+  it('upgrades the restated entry when the successor control adds the capability', async () => {
+    const { opening, rebound } = await ackAfterRebind(new Set(), DETAILS)
+
+    expect(opening.pendingConns).toEqual([LEGACY_ENTRY])
+    expect(rebound.pendingConns).toEqual([DETAILED_ENTRY])
   })
 })

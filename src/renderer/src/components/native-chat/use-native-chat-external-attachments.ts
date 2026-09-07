@@ -62,7 +62,23 @@ export function useNativeChatExternalAttachments({
         return
       }
       if (owner.kind !== 'ssh') {
-        attachResolvedPaths(paths)
+        void (async () => {
+          const authorizedPaths: string[] = []
+          for (const targetPath of paths) {
+            if (disabledRef.current) {
+              return
+            }
+            try {
+              await window.api.fs.authorizeExternalPath({ targetPath })
+              authorizedPaths.push(targetPath)
+            } catch {
+              // Skip unreadable paths, matching workspace composer drops.
+            }
+          }
+          if (authorizedPaths.length > 0 && !disabledRef.current) {
+            attachResolvedPaths(authorizedPaths)
+          }
+        })()
         return
       }
       void (async () => {

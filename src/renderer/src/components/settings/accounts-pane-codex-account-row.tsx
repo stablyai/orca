@@ -1,6 +1,7 @@
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import type { CodexRateLimitAccountsState } from '../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
+import { getCodexAccountDisplayDetail } from '@/lib/codex-account-display-label'
 import { selectCodexProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -48,6 +49,7 @@ export function renderCodexAccountRow(
         accountId: account.id
       })
   const needsReauthentication = Boolean(accountAuthWarning)
+  const accountDetail = getCodexAccountDisplayDetail(account, codexAccounts.accounts)
   const isReauthing = codexAction === `reauth:${account.id}`
   const isRemoving = codexAction === `remove:${account.id}`
   const isBusy = codexAction !== 'idle' || accountRuntimeUnavailable
@@ -111,6 +113,12 @@ export function renderCodexAccountRow(
               needsReauthentication ? 'text-destructive' : 'text-muted-foreground'
             }`}
           >
+            {accountDetail ? (
+              <>
+                <span className="min-w-0 break-words">{accountDetail}</span>
+                <span className="shrink-0 opacity-50">•</span>
+              </>
+            ) : null}
             {needsReauthentication ? (
               <span className="truncate">
                 {translate(
@@ -118,12 +126,8 @@ export function renderCodexAccountRow(
                   'Codex reported this sign-in is out of date'
                 )}
               </span>
-            ) : account.workspaceLabel ? (
-              <span className="truncate">{account.workspaceLabel}</span>
             ) : null}
-            {needsReauthentication || account.workspaceLabel ? (
-              <span className="shrink-0 opacity-50">•</span>
-            ) : null}
+            {needsReauthentication ? <span className="shrink-0 opacity-50">•</span> : null}
             <span className="shrink-0">{formatAccountTimestamp(account.lastAuthenticatedAt)}</span>
           </div>
         </button>

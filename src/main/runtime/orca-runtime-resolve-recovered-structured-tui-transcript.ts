@@ -7,6 +7,10 @@ import { supportsCodexStructuredLocation } from '../codex/codex-structured-locat
 import { supportsClaudeStructuredLocation } from '../claude/claude-structured-location-support'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { resolveStructuredAgentSessionCreateSupport } from '../native-chat/structured-agent-session-create-support'
+import {
+  resolveCommittedStructuredAgentSessionAdoptionIntent,
+  resolveStructuredAgentSessionAdoptionForCreate
+} from './structured-agent-session-create-adoption'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -18,6 +22,8 @@ import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentS
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
   protected async resolveRecoveredStructuredTuiTranscript(input: {
@@ -91,14 +97,23 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     const repo = this.store?.getRepo(target.worktree.repoId)
-    // WSL routing describes *this* machine; no remote or runtime host may inherit it.
-    const wslDistro =
-      repo && target.executionHostId === LOCAL_EXECUTION_HOST_ID
+    const folderScope = parseWorkspaceKey(target.worktree.id)
+    const folderWorkspace = folderScope?.type === 'folder'
+    // WSL routing describes *this* machine; no remote or runtime host may inherit
+    // it. Both branches key on executionHostId: the target no longer carries a
+    // connectionId, which used to spell remote, unresolved and local alike.
+    const isLocalHost = target.executionHostId === LOCAL_EXECUTION_HOST_ID
+    const configuredWslDistro =
+      repo && isLocalHost
         ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
         : null
-    const folderWorkspace = this.store
-      ?.getFolderWorkspaces?.()
-      .some((workspace) => workspace.id === target.worktree.id)
+    // Folder workspaces have no repo Git options, so a WSL UNC path is the only
+    // durable signal that native Windows structured Codex cannot safely use it.
+    const wslDistro =
+      configuredWslDistro ??
+      (folderWorkspace && isLocalHost
+        ? (parseWslUncPath(target.worktree.path)?.distro ?? null)
+        : null)
     return {
       executionHostId: target.executionHostId,
       wslDistro,
@@ -111,6 +126,8 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     envelope: { sessionId: string; clientOperationId: string }
     worktree: string
     agent: 'claude' | 'codex'
+    callerKey?: string
+    resumeFrom?: { providerSessionId: string }
   }): Promise<AgentSessionAttachParams> {
     if (input.agent === 'claude') {
       return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) => {
@@ -144,6 +161,8 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       envelope: { sessionId: string; clientOperationId: string }
       worktree: string
       agent: 'claude' | 'codex'
+      callerKey?: string
+      resumeFrom?: { providerSessionId: string }
     },
     resolveAccountHomePath: (context: {
       workspacePath: string
@@ -168,6 +187,35 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     )
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const workspacePath = (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
+    const host = getStructuredAgentSessionHost()
+    const committedReplay = resolveCommittedStructuredAgentSessionAdoptionIntent({
+      host,
+      ...input,
+      location,
+      ...(options ? { options } : {})
+    })
+    if (committedReplay) {
+      return committedReplay
+    }
+    const selectedAccountHomePath = await resolveAccountHomePath({
+      workspacePath,
+      launchEnv,
+      location
+    })
+    // Adopting pins the account home to wherever the conversation actually lives, which is not
+    // necessarily the one a fresh create would pick: Codex resolves its rollout under
+    // `accountHome.path`, and Claude reads its transcript under `<home>/projects`. Resuming under
+    // the wrong home finds nothing and lands the user in a blank chat wearing the old chat's name.
+    const adoption = input.resumeFrom
+      ? await resolveStructuredAgentSessionAdoptionForCreate({
+          host,
+          settings,
+          agent: input.agent,
+          providerSessionId: input.resumeFrom.providerSessionId,
+          selfSessionId: input.envelope.sessionId,
+          selectedAccountHomePath
+        })
+      : null
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -180,9 +228,27 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       agent: input.agent,
       accountHome: {
         variable: input.agent === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
-        path: await resolveAccountHomePath({ workspacePath, launchEnv, location })
+        path: adoption ? adoption.accountHomePath : selectedAccountHomePath
       },
       ...(options ? { options } : {}),
+      ...(input.resumeFrom && adoption
+        ? {
+            // `adopt` is what makes the reservation seed the handle chain. Presence of
+            // `providerHandle` alone must not: `agentSession.ensure` already passes one today
+            // without adopting anything.
+            adopt: {
+              providerHandle:
+                input.agent === 'claude'
+                  ? {
+                      kind: 'claude' as const,
+                      sessionId: input.resumeFrom.providerSessionId,
+                      leafUuid: null
+                    }
+                  : { kind: 'codex' as const, threadId: input.resumeFrom.providerSessionId },
+              transcriptPath: adoption.transcriptPath
+            }
+          }
+        : {}),
       runtimeKind: 'native'
     }
   }

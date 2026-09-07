@@ -179,9 +179,10 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
 
   it('validates a correct plan for every wave cell at that cell\'s rehome protocol', () => {
     for (const cellId of SAME_CAP_CELLS) {
-      const [region, cap] = resolveCellShape(cellId).stdout.trim().split(' ')
+      const [, cap] = resolveCellShape(cellId).stdout.trim().split(' ')
       const protocol = REHOME_SOURCE_CELLS.has(cellId) ? 1 : 0
-      assert.equal(protocol, region === 'us-central1' ? 1 : 0, cellId)
+      // Every reviewed serving cell carries rehome trust now, in either region.
+      assert.equal(protocol, 1, cellId)
       const config = {
         mode: 'same-cap-cell',
         cellId,
@@ -209,6 +210,29 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
         cellId
       )
     }
+  })
+
+  it('validates a protocol-0 plan for a cell outside the rehome source list', () => {
+    const cellId = 'production-gce-c17'
+    assert.equal(REHOME_SOURCE_CELLS.has(cellId), false)
+    const config = {
+      mode: 'same-cap-cell',
+      cellId,
+      hardCap: 1000,
+      unobservedBound: 60,
+      image: TARGET_IMAGE,
+      rollbackImage: ROLLBACK_IMAGE,
+      rehomeDirectorServiceAccount: DIRECTOR_IDENTITY,
+      rehomeAudience: AUDIENCE,
+      regionalRehomeProtocol: '0'
+    }
+    const plan = rollPlan({ cellId, cap: 1000, protocol: 0 })
+    assert.deepEqual(validateCapacityPlan(plan, config), { mode: 'same-cap-cell', changes: 2 })
+    // Protocol 1 must reject a plan with no rehome lines, or the absent-line rule decides nothing.
+    assert.throws(
+      () => validateCapacityPlan(plan, { ...config, regionalRehomeProtocol: '1' }),
+      /reviewed image and capacity/
+    )
   })
 
   it('leaves the US-only capacity job on the default allowlist', () => {

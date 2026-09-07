@@ -11,6 +11,7 @@ import type {
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionBackgroundTaskState,
+  type AgentSessionSlashCommand,
   type AgentSessionHandoffStatus,
   type AgentSessionSubscribeEvent,
   type AgentSessionTurnActivity
@@ -35,9 +36,11 @@ type Subscriber = {
   emit: AgentSessionSubscriberEmit
   cursor: AgentJournalCursor
   fence: number
+  commands?: AgentSessionSlashCommand[] | null
 }
 
 export type AgentSessionSubscribersHooks = {
+  readCommands?: (sessionId: string) => AgentSessionSlashCommand[] | undefined
   /** Fires after any publication that can change journal content, whether or not anyone
    *  is subscribed to the transcript: session lists project status from this same edge. */
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
@@ -257,7 +260,10 @@ export class AgentSessionSubscribers {
       const page = result.page
       const advanced = page.window.nextCursor.sequence > subscriber.cursor.sequence
       if (!advanced) {
-        if (handoff || emitCheckpoint || publishedActivity !== undefined) {
+        const commandsChanged =
+          this.hooks.readCommands !== undefined &&
+          (this.hooks.readCommands(subscriber.sessionId) ?? null) !== subscriber.commands
+        if (handoff || emitCheckpoint || publishedActivity !== undefined || commandsChanged) {
           this.emit(subscriber, {
             type: 'batch',
             sessionId: subscriber.sessionId,
@@ -296,15 +302,20 @@ export class AgentSessionSubscribers {
     }
   }
 
-  private isActive(subscriber: Subscriber): boolean {
-    return this.bySession.get(subscriber.sessionId)?.get(subscriber.id) === subscriber
-  }
+  private isActive = (subscriber: Subscriber): boolean =>
+    this.bySession.get(subscriber.sessionId)?.get(subscriber.id) === subscriber
 
   /** A dead transport cannot be allowed to turn a durable mutation into an
    *  unknown outcome or poison every later publication. */
   private emit(subscriber: Subscriber, event: AgentSessionSubscribeEvent): void {
     try {
-      subscriber.emit(event)
+      const commands = this.hooks.readCommands?.(subscriber.sessionId) ?? null
+      const includeCommands =
+        this.hooks.readCommands !== undefined &&
+        event.type !== 'end' &&
+        (event.type !== 'batch' || commands !== subscriber.commands)
+      subscriber.emit(includeCommands ? { ...event, commands: commands ?? null } : event)
+      subscriber.commands = commands
     } catch {
       this.drop(subscriber)
     }
