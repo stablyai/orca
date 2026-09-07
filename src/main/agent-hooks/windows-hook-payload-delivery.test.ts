@@ -32,7 +32,7 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { ClaudeHookService } from '../claude/hook-service'
-import { WINDOWS_CMD_SAFE_PATH } from './installer-utils'
+import { wrapWindowsDirectCmdHookCommand } from './windows-direct-cmd-hook-command'
 import { getConfigPath, getWindowsManagedLifecycleHook } from '../claude/hook-settings'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 
@@ -87,12 +87,14 @@ type HookRun = { exitCode: number | null; stdout: string; stderr: string; timedO
 function runHookCommand(
   executable: string,
   args: string[],
-  env: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv,
+  options: { shell?: boolean } = {}
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true,
+      shell: options.shell ?? false,
       env
     })
     let stdout = ''
@@ -177,9 +179,12 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
     // Why: assert nothing about the launcher's shape here — this test's whole value is
     // that it fails for any launcher that loses the payload, named conhost or not.
     const registeredCommand = settings.hooks.PreToolUse[0].hooks[0].command
-    // ...with one exception: a cmd-safe profile must reach the script with no interpreter in
+    // ...with one exception: a supported profile must reach the script with no interpreter in
     // front of it, or #18875's per-event PowerShell start-up has quietly come back.
-    if (WINDOWS_CMD_SAFE_PATH.test(join(home, '.orca', 'agent-hooks', 'claude-hook.cmd'))) {
+    // Why (#19187): this gate was `WINDOWS_CMD_SAFE_PATH`, which excluded a space — so on a
+    // profile-scoped, spaced TEMP the no-PowerShell assertion silently dropped, on exactly the
+    // machines where the launcher had come back. Ask the module whether it serves the path.
+    if (wrapWindowsDirectCmdHookCommand(join(home, '.orca', 'agent-hooks', 'claude-hook.cmd'))) {
       expect(registeredCommand).not.toMatch(/powershell|-EncodedCommand/i)
     }
 
@@ -193,13 +198,23 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
       ORCA_PANE_KEY: PANE_KEY
     })
 
+    // Why (#19187): the cmd leg used to be `spawn('cmd.exe', ['/d','/c', registeredCommand])`.
+    // Node applies MSVCRT quoting to an args array, escaping any `"` in the command as `\"`;
+    // cmd.exe does not decode backslash escapes, so a quoted command arrives with four quotes on
+    // the line, trips cmd's "old behaviour" strip (leading quote and last quote removed) and
+    // dispatches a token starting with a backslash. That fails, and the launcher's own
+    // `|| echo {}` reports exit 0 — a false pass for any quoted command. `shell: true` spawns it
+    // the way a shell-spawning consumer does (`%ComSpec% /d /s /c "<command>"`, verbatim), so the
+    // harness cannot drift from the consumer the way a hand-rolled argv can.
     const shells = [
-      { name: 'cmd.exe', executable: 'cmd.exe', args: ['/d', '/c', registeredCommand] },
-      { name: 'Git Bash', executable: findGitBash(), args: ['-c', registeredCommand] }
+      { name: 'cmd.exe', executable: registeredCommand, args: [] as string[], shell: true },
+      { name: 'Git Bash', executable: findGitBash(), args: ['-c', registeredCommand], shell: false }
     ]
     for (const shell of shells) {
       const before = listener.posts.length
-      const result = await runHookCommand(shell.executable, shell.args, env)
+      const result = await runHookCommand(shell.executable, shell.args, env, {
+        shell: shell.shell
+      })
       expect(result.timedOut, `${shell.name} timed out`).toBe(false)
       expect(result.exitCode, `${shell.name} exit code`).toBe(0)
 

@@ -156,10 +156,15 @@ type HookRun = {
 function runHookProcess(
   executable: string,
   args: string[],
-  env: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv,
+  options: { shell?: boolean } = {}
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(executable, args, {
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: options.shell ?? false
+    })
     const stdinErrors: NodeJS.ErrnoException[] = []
     let stderr = ''
     let stdout = ''
@@ -425,9 +430,16 @@ describe('Windows managed hook stdin structure', () => {
 
         // Why: MSYS rewrites switches and paths, so the command must survive both shells (#14815).
         const gitBash = findGitBash()
+        // Why (#19187): the cmd leg used to be `spawn('cmd.exe', ['/d','/c', entry.command])`.
+        // Node MSVCRT-quotes an args array, escaping any `"` in the command as `\"`; cmd.exe does
+        // not decode backslash escapes, so a quoted command trips its "old behaviour" quote strip
+        // and dispatches a token beginning with a backslash. That fails, and the launcher's own
+        // `|| echo {}` still prints `{}` and exits 0 — so the leg reports a pass for a command
+        // that never ran. `shell: true` spawns it as a shell-spawning consumer does
+        // (`%ComSpec% /d /s /c "<command>"`, verbatim), which cannot drift from the consumer.
         const shells = [
-          { name: 'cmd.exe', executable: 'cmd.exe', args: ['/d', '/c', entry.command] },
-          { name: 'Git Bash', executable: gitBash, args: ['-c', entry.command] }
+          { name: 'cmd.exe', executable: entry.command, args: [] as string[], shell: true },
+          { name: 'Git Bash', executable: gitBash, args: ['-c', entry.command], shell: false }
         ]
         // Why: cover guard exit, reached curl, and the launcher's missing-script fallback.
         const environments = [
@@ -453,7 +465,9 @@ describe('Windows managed hook stdin structure', () => {
         for (const shell of shells) {
           for (const environment of environments) {
             const label = `${shell.name} / ${environment.name}`
-            const result = await runHookProcess(shell.executable, shell.args, environment.env)
+            const result = await runHookProcess(shell.executable, shell.args, environment.env, {
+              shell: shell.shell
+            })
             expect(result.exitCode, `${label} exit code`).toBe(0)
             expect(result.stderr, `${label} stderr`).toBe('')
             expect(() => JSON.parse(result.stdout.trim()), `${label} stdout is JSON`).not.toThrow()

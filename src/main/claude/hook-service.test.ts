@@ -24,7 +24,8 @@ vi.mock('../git-bash', async (importOriginal) => ({
 }))
 
 import type { SFTPWrapper } from 'ssh2'
-import { createManagedCommandMatcher, WINDOWS_CMD_SAFE_PATH } from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { WINDOWS_HOOK_STDIN_DRAIN_LABEL } from '../agent-hooks/hook-stdin-contract'
 import { ClaudeHookService } from './hook-service'
 import {
@@ -50,6 +51,7 @@ function hasManagedCommand(hook: TestHook, matcher: (command: string | undefined
 describe('getWindowsManagedLifecycleHook', () => {
   const SAFE_SCRIPT_PATH = 'C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
   const UNSAFE_SCRIPT_PATH = 'C:\\Users\\%name%\\a^b&c\\.orca\\agent-hooks\\claude-hook.cmd'
+  const SPACED_SCRIPT_PATH = 'C:\\Users\\Bob Smith\\.orca\\agent-hooks\\claude-hook.cmd'
 
   it('registers the script itself, with no interpreter in front of it (#18875)', () => {
     // Why this is the whole point: the encoded launcher spent a PowerShell start-up per hook
@@ -58,11 +60,25 @@ describe('getWindowsManagedLifecycleHook', () => {
     const hook = getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH, { gitBashAvailable: true })
 
     expect(hook.args).toBeUndefined()
-    expect(hook.command).toBe('C:/Users/alice/.orca/agent-hooks/claude-hook.cmd || echo {}')
+    expect(hook.command).toBe('"C:/Users/alice/.orca/agent-hooks/claude-hook.cmd" || echo {}')
     expect(hook.command).not.toMatch(/powershell|-EncodedCommand|conhost/i)
     // Why: Git Bash/MSYS mangles backslash paths and rewrites slash-prefixed switches.
     expect(hook.command).not.toMatch(/\\/)
     expect(hook.command).not.toMatch(/ \/[a-zA-Z]+( |$)/)
+  })
+
+  // Why (#19187): this is the assertion that pins the reported defect at the layer users feel.
+  // `WINDOWS_CMD_SAFE_PATH` excluded the space, so every `C:\Users\First Last` profile fell
+  // through to the encoded launcher and got none of #18875's benefit — the per-event PowerShell
+  // start-up and its stdout-holding orphan were still there. It needs no platform gate because
+  // `gitBashAvailable` is injectable, so it runs on the POSIX CI legs too.
+  it('registers the direct shape for a spaced profile, not the encoded launcher (#19187)', () => {
+    const hook = getWindowsManagedLifecycleHook(SPACED_SCRIPT_PATH, { gitBashAvailable: true })
+
+    expect(hook.args).toBeUndefined()
+    expect(hook.command).toBe('"C:/Users/Bob Smith/.orca/agent-hooks/claude-hook.cmd" || echo {}')
+    expect(hook.command).not.toMatch(/powershell|-EncodedCommand|conhost/i)
+    expect(hook.command).not.toMatch(/\\/)
   })
 
   it('falls back to the encoded launcher when the profile path is not cmd-safe', () => {
@@ -410,9 +426,15 @@ describe('ClaudeHookService.install', () => {
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'pins the encoded-launcher fallback for a profile path the shells cannot carry bare',
+    'pins the encoded-launcher fallback for a profile path quoting cannot rescue',
     () => {
-      const tmpHome = mkdtempSync(join(tmpdir(), 'orca claude home with spaces '))
+      // Why (#19187): this used to use a spaced home, because a space was believed to be
+      // uncarryable. It is not — double quotes keep a spaced path one token in both hosts, and a
+      // spaced profile now takes the direct shape (asserted below). What quoting genuinely cannot
+      // rescue is `%`: cmd expands `%VAR%` *inside* double quotes, so such a path must stay on the
+      // encoded launcher. That is what this test pins now — the fallback still exists, for the
+      // paths that actually need it.
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca claude %home% '))
       vi.stubEnv('HOME', tmpHome)
       vi.stubEnv('USERPROFILE', tmpHome)
       try {
@@ -443,7 +465,7 @@ describe('ClaudeHookService.install', () => {
   )
 
   it.skipIf(process.platform !== 'win32')(
-    'installs the bare script path on every event when the profile path is cmd-safe (#18875)',
+    'installs the direct script path on every event when the profile path is supported (#18875)',
     () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-direct-'))
       vi.stubEnv('HOME', tmpHome)
@@ -451,7 +473,10 @@ describe('ClaudeHookService.install', () => {
       const scriptPath = join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME)
       // Why: a runner whose tmpdir carries a space (a profile-scoped TEMP) belongs to the
       // fallback case above, not this one; skip rather than assert the wrong contract.
-      if (!WINDOWS_CMD_SAFE_PATH.test(scriptPath)) {
+      // Why (#19187): this gate used to be `WINDOWS_CMD_SAFE_PATH`, which excluded a space — so on
+      // a profile-scoped, spaced TEMP these tests skipped, and the direct shape went unasserted on
+      // exactly the machines that had the bug. Ask the module itself whether it serves the path.
+      if (wrapWindowsDirectCmdHookCommand(scriptPath) === null) {
         vi.unstubAllEnvs()
         rmSync(tmpHome, { recursive: true, force: true })
         return
@@ -463,7 +488,7 @@ describe('ClaudeHookService.install', () => {
           readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
         ) as { hooks: Record<string, { hooks: TestHook[] }[]> }
 
-        const expected = `${scriptPath.replaceAll('\\', '/')} || echo {}`
+        const expected = `"${scriptPath.replaceAll('\\', '/')}" || echo {}`
         for (const { eventName } of CLAUDE_EVENTS) {
           const hook = settings.hooks[eventName]?.[0]?.hooks?.[0]
           expect(hook?.args, eventName).toBeUndefined()
@@ -480,13 +505,74 @@ describe('ClaudeHookService.install', () => {
   )
 
   it.skipIf(process.platform !== 'win32')(
+    'upgrades an existing unquoted entry for the same path in place (#19187)',
+    () => {
+      // Why: this is the path every current Windows user takes on upgrade, and the one most
+      // likely to ship looking correct while fixing nothing. The stale entry names the SAME
+      // script path as the new one and differs only by the quotes, so a same-path check that
+      // compares commands by string equality either leaves it alone (user stays broken) or
+      // appends a second entry (the hook fires twice). Neither is visible from the unit tests.
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-upgrade-'))
+      vi.stubEnv('HOME', tmpHome)
+      vi.stubEnv('USERPROFILE', tmpHome)
+      const scriptPath = join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME)
+      if (wrapWindowsDirectCmdHookCommand(scriptPath) === null) {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+        return
+      }
+      try {
+        const settingsPath = join(tmpHome, '.claude', 'settings.json')
+        mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+        // The exact string #18905 shipped: same path, no quotes.
+        const unquoted = `${scriptPath.replaceAll('\\', '/')} || echo {}`
+        writeFileSync(
+          settingsPath,
+          JSON.stringify({
+            hooks: Object.fromEntries(
+              CLAUDE_EVENTS.map(({ eventName }) => [
+                eventName,
+                [{ hooks: [{ type: 'command', command: unquoted, timeout: 10 }] }]
+              ])
+            )
+          }),
+          'utf-8'
+        )
+
+        expect(new ClaudeHookService().install().state).toBe('installed')
+
+        const settings = JSON.parse(readFileSync(settingsPath, 'utf-8')) as {
+          hooks: Record<string, { hooks: TestHook[] }[]>
+        }
+        const expected = `"${scriptPath.replaceAll('\\', '/')}" || echo {}`
+        for (const { eventName } of CLAUDE_EVENTS) {
+          const hooks = settings.hooks[eventName].flatMap((definition) => definition.hooks)
+          const managed = hooks.filter((hook) => hook.command.includes(CLAUDE_SCRIPT_FILE_NAME))
+          expect(managed, `${eventName}: exactly one managed entry, not a duplicate`).toHaveLength(
+            1
+          )
+          expect(managed[0].command, eventName).toBe(expected)
+        }
+        expect(JSON.stringify(settings.hooks), 'no unquoted leftover').not.toContain(unquoted)
+        expect(new ClaudeHookService().getStatus().state).toBe('installed')
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
     'sweeps a previously installed encoded launcher on reinstall, keeping user hooks',
     () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-migrate-'))
       vi.stubEnv('HOME', tmpHome)
       vi.stubEnv('USERPROFILE', tmpHome)
       const scriptPath = join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME)
-      if (!WINDOWS_CMD_SAFE_PATH.test(scriptPath)) {
+      // Why (#19187): this gate used to be `WINDOWS_CMD_SAFE_PATH`, which excluded a space — so on
+      // a profile-scoped, spaced TEMP these tests skipped, and the direct shape went unasserted on
+      // exactly the machines that had the bug. Ask the module itself whether it serves the path.
+      if (wrapWindowsDirectCmdHookCommand(scriptPath) === null) {
         vi.unstubAllEnvs()
         rmSync(tmpHome, { recursive: true, force: true })
         return
@@ -535,7 +621,10 @@ describe('ClaudeHookService.install', () => {
       vi.stubEnv('HOME', tmpHome)
       vi.stubEnv('USERPROFILE', tmpHome)
       const scriptPath = join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME)
-      if (!WINDOWS_CMD_SAFE_PATH.test(scriptPath)) {
+      // Why (#19187): this gate used to be `WINDOWS_CMD_SAFE_PATH`, which excluded a space — so on
+      // a profile-scoped, spaced TEMP these tests skipped, and the direct shape went unasserted on
+      // exactly the machines that had the bug. Ask the module itself whether it serves the path.
+      if (wrapWindowsDirectCmdHookCommand(scriptPath) === null) {
         vi.unstubAllEnvs()
         rmSync(tmpHome, { recursive: true, force: true })
         return
@@ -563,7 +652,7 @@ describe('ClaudeHookService.install', () => {
         }
         expect(JSON.stringify(settings.hooks)).not.toContain('someone-else')
         expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(
-          `${scriptPath.replaceAll('\\', '/')} || echo {}`
+          `"${scriptPath.replaceAll('\\', '/')}" || echo {}`
         )
         expect(new ClaudeHookService().getStatus().state).toBe('installed')
       } finally {
