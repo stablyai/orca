@@ -29,4 +29,23 @@ describe('PTY startup barrier ordering', () => {
       expect(barrierIndex).toBeLessThan(providerIndex)
     }
   })
+
+  it('gives a missing SSH PTY provider its recovery before every provider resolution', () => {
+    // Why: a runtime-owned SSH target has no relay after an app restart until its owner
+    // re-attaches it; each spawn path (renderer, runtime controller, stable-pane adoption)
+    // must await that recovery before `getProvider` throws on the miss.
+    for (const relPath of [
+      'src/main/ipc/pty/ipc/spawn-preflight.ts',
+      'src/main/ipc/pty/runtime/spawn-preflight.ts',
+      'src/main/ipc/pty/pane/adopt-stable.ts'
+    ]) {
+      const source = readRepoSource(relPath)
+      const recoveryIndex = source.indexOf('await providerRecovery')
+      const providerIndex = source.indexOf('getProvider(args.connectionId)')
+      expect(source).toContain('recoverMissingSshPtyProvider(args.connectionId)')
+      expect(recoveryIndex, relPath).toBeGreaterThanOrEqual(0)
+      expect(providerIndex, relPath).toBeGreaterThanOrEqual(0)
+      expect(recoveryIndex, relPath).toBeLessThan(providerIndex)
+    }
+  })
 })

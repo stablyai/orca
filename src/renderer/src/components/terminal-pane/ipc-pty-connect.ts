@@ -198,11 +198,16 @@ function handleConnectError(
     return undefined
   }
   if (connectionId && message.includes('No PTY provider for connection')) {
-    if (!isRuntimeOwnedSshTargetId(connectionId)) {
-      context
-        .getCallbacks()
-        .onError?.('SSH connection is not active. Use the reconnect dialog or Settings to connect.')
-    }
+    // Why runtime-owned targets get the raw message: main re-attaches their relay on spawn,
+    // so a provider miss here means that re-attach failed and its message names the retry.
+    // The Settings/reconnect-dialog wording applies only to hosts users can reconnect.
+    context
+      .getCallbacks()
+      .onError?.(
+        isRuntimeOwnedSshTargetId(connectionId)
+          ? message
+          : 'SSH connection is not active. Use the reconnect dialog or Settings to connect.'
+      )
   } else {
     context.getCallbacks().onError?.(message)
   }

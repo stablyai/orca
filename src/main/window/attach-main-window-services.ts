@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
 import {
@@ -20,6 +20,10 @@ import {
 } from '../ipc/pty'
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
+import {
+  installRuntimeOwnedSshPtyProviderRecovery,
+  reattachRuntimeOwnedSshTargetsAtStartup
+} from '../ephemeral-vm-runtime-ssh-reattach'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
@@ -119,6 +123,11 @@ export function attachMainWindowServices(
     void hydrateLocalPtyRegistryAtBoot(store)
   }
   registerSshHandlers(store, () => mainWindow, runtime)
+  // Why after registerSshHandlers: both dial through the registered SSH connect. Runtime-owned
+  // targets are skipped by the renderer's startup restore, so main owns their re-attach.
+  const getUserDataPath = (): string => app.getPath('userData')
+  installRuntimeOwnedSshPtyProviderRecovery(getUserDataPath)
+  void reattachRuntimeOwnedSshTargetsAtStartup(getUserDataPath)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   registerTccPromptNoticeHandlers(mainWindow)

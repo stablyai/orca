@@ -119,8 +119,11 @@ describe('createIpcPtyTransport', () => {
     )
   })
 
-  it('suppresses the SSH-not-active toast for a runtime-owned (per-workspace-env) target', async () => {
-    // Why: a runtime-owned SSH target disappearing is expected teardown (no reconnect dialog exists), so no toast should fire.
+  it('surfaces the provider miss verbatim for a runtime-owned (per-workspace-env) target', async () => {
+    // Why: main re-attaches a runtime-owned relay on spawn, so a provider miss that still
+    // reaches the pane is a failed re-attach. Runtime-owned targets have no reconnect
+    // dialog or Settings entry, so the canned "use Settings" line would name a control that
+    // does not exist; the raw message carries the retry instead.
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi
       .fn()
@@ -148,7 +151,8 @@ describe('createIpcPtyTransport', () => {
       callbacks: { onError }
     })
 
-    expect(onError).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith('No PTY provider for connection runtime-ssh-orca-1')
+    expect(onError).not.toHaveBeenCalledWith(expect.stringContaining('Settings'))
   })
 
   it('refuses to call a cross-connection SSH reattach expired, and still raises no error toast', async () => {
