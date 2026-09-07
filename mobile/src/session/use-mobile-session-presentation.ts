@@ -3,9 +3,11 @@ import { classifyConnection, verdictDisplayLabel } from '../transport/connection
 import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
 import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
-import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
+import { selectMobileSessionReconnectViewState } from './mobile-session-reconnect-view-state'
+import { getMobileSessionTabStripRows } from './mobile-session-tab-strip-entries'
+import type { MobileSessionTabStripCacheModel } from './use-mobile-session-tab-strip-cache'
 
-export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
+export function useMobileSessionPresentation(scope: MobileSessionTabStripCacheModel) {
   const {
     created,
     worktreeId,
@@ -24,6 +26,8 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     terminalKeyboardMetrics,
     toastOpacityRef,
     hostEndpoint,
+    activeSessionTabId,
+    cachedTabStrip,
     initialSessionAutoCreateRef,
     terminalFrameHeightRef,
     handleCreateTerminal,
@@ -58,6 +62,23 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   const showConnectionRetry =
     connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
 
+  // Why: a reconnect to a workspace this phone has already drawn should re-draw it, not blank
+  // the screen while the RPCs land. See mobile-session-reconnect-view-state.
+  const reconnectViewState = selectMobileSessionReconnectViewState({
+    connState,
+    verdictKind: connectionVerdict.kind,
+    terminalsLoaded,
+    liveTabCount: visibleTabs.length,
+    activeHandle,
+    cachedPreview: cachedTabStrip
+  })
+  const tabStripRows = getMobileSessionTabStripRows({
+    liveTabs: visibleTabs,
+    activeSessionTabId,
+    preview:
+      reconnectViewState.kind === 'reconnecting-with-cache' ? reconnectViewState.preview : null
+  })
+
   const terminalSummary =
     connState === 'connected'
       ? showLoadingState
@@ -88,6 +109,8 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   return {
     showLoadingState,
     showEmptyState,
+    reconnectViewState,
+    tabStripRows,
     connectionVerdict,
     showConnectionRetry,
     terminalSummary,
@@ -97,5 +120,5 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   }
 }
 
-export type MobileSessionPresentationModel = MobileSessionBulkCloseModel &
+export type MobileSessionPresentationModel = MobileSessionTabStripCacheModel &
   ReturnType<typeof useMobileSessionPresentation>

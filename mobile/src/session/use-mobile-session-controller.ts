@@ -27,6 +27,7 @@ import { useMobileSessionTerminalCreateActions } from './use-mobile-session-term
 import { useMobileSessionContentCreateActions } from './use-mobile-session-content-create-actions'
 import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
 import { useMobileSessionBulkClose } from './use-mobile-session-bulk-close'
+import { useMobileSessionTabStripCache } from './use-mobile-session-tab-strip-cache'
 import { useMobileSessionPresentation } from './use-mobile-session-presentation'
 import { useMobileSessionPanelRouteActions } from './use-mobile-session-panel-route-actions'
 
@@ -113,7 +114,8 @@ export function useMobileSessionController() {
     useMobileSessionCloseActions(contentCreateActions)
   )
   const bulkClose = Object.assign(closeActions, useMobileSessionBulkClose(closeActions))
-  const presentation = Object.assign(bulkClose, useMobileSessionPresentation(bulkClose))
+  const tabStripCache = Object.assign(bulkClose, useMobileSessionTabStripCache(bulkClose))
+  const presentation = Object.assign(tabStripCache, useMobileSessionPresentation(tabStripCache))
   const panelRouteActions = Object.assign(
     presentation,
     useMobileSessionPanelRouteActions(presentation)
