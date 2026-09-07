@@ -37,6 +37,34 @@ const RemoteReleaseReceiptSchema = z
     output: z.unknown().optional()
   })
   .passthrough()
+  .refine((receipt) => {
+    if (
+      ((receipt.state === 'already_released' || receipt.state === 'retained') &&
+        receipt.processAction !== 'none') ||
+      (receipt.state !== 'retained' && receipt.reason !== undefined)
+    ) {
+      return false
+    }
+    return (
+      (receipt.state !== 'released' && receipt.state !== 'already_released') ||
+      !outputContradictsRelease(receipt.output)
+    )
+  })
+
+function outputContradictsRelease(output: unknown): boolean {
+  // Optional output stays optional, but an explicit non-exit cannot certify release.
+  if (!output || typeof output !== 'object' || !('status' in output)) {
+    return false
+  }
+  const status = output.status
+  if (!status || typeof status !== 'object') {
+    return false
+  }
+  return (
+    ('terminal' in status && status.terminal !== undefined && status.terminal !== 'exited') ||
+    ('liveness' in status && status.liveness !== undefined && status.liveness !== 'exited')
+  )
+}
 
 export async function releaseFederatedWorker(args: {
   runtime: OrcaRuntimeService

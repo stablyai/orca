@@ -2,6 +2,7 @@ import type { WorkerTerminalResourceRow } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import { hasWorkerTerminalUserInput } from './worker-terminal-user-input-latch'
 
 // Finds an owned, settled, exact-match resource for an explicitly reused terminal.
 export function findTransferableWorkerTerminalResource(
@@ -40,6 +41,11 @@ export function findTransferableWorkerTerminalResource(
       'terminal_release_in_progress',
       `Terminal ${params.terminalHandle} has a release in progress; wait for cleanup or use another terminal.`
     )
+  }
+  // Input during a committed stop cannot cancel that stop, but forbids later ownership transfer.
+  // Check after the release fence: an external reuse must not bypass cleanup already in progress.
+  if (hasWorkerTerminalUserInput(this, params.paneKey)) {
+    return undefined
   }
   return exact.find(
     (candidate) =>

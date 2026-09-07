@@ -1,10 +1,12 @@
 import { isEquivalentPaneKey } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import { recordWorkerTerminalUserInputStatement } from './worker-terminal-user-input-latch'
 
 // Real user input durably relinquishes orchestration ownership.
 export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: string): number {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    recordWorkerTerminalUserInputStatement(this, paneKey)
     const exact = this.db
       .prepare(
         `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
