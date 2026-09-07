@@ -30,11 +30,14 @@ export function normalizePiCompatibleEvent(
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
   const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
   const isOmpApprovalResolution = agentType === 'omp' && eventName === 'tool_approval_resolved'
+  const isPiUiPromptStart = agentType === 'pi' && eventName === 'ui_prompt_start'
+  const isPiUiPromptEnd = agentType === 'pi' && eventName === 'ui_prompt_end'
 
   const stateName =
-    isPiCompatibleAsk || isOmpApprovalRequest
+    isPiCompatibleAsk || isOmpApprovalRequest || isPiUiPromptStart
       ? 'blocked'
       : isOmpApprovalResolution ||
+          isPiUiPromptEnd ||
           eventName === 'before_agent_start' ||
           eventName === 'agent_start' ||
           eventName === 'tool_call' ||

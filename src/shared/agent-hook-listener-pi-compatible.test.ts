@@ -347,6 +347,32 @@ describe('shared agent-hook-listener', () => {
     expect(tool?.payload.interactivePrompt).toBe(JSON.stringify(questions))
   })
 
+  it('blocks a Pi pane while extension UI waits for user input', () => {
+    const requested = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'ui_prompt_start' }
+      },
+      'production'
+    )
+
+    expect(requested?.payload).toMatchObject({ state: 'blocked', agentType: 'pi' })
+
+    const resolved = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'ui_prompt_end' }
+      },
+      'production'
+    )
+
+    expect(resolved?.payload).toMatchObject({ state: 'working', agentType: 'pi' })
+  })
+
   it('blocks an OMP pane on a tool approval request and clears it on resolution', () => {
     const requested = normalizeHookPayload(
       state,
