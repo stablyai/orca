@@ -195,6 +195,38 @@ describe('MobileRelayE2eeLink', () => {
     }
   })
 
+  it('writes no e2ee frame when withdrawn between relay-auth and the hello', () => {
+    const socket = new ThrowingSocket()
+    const sent: string[] = []
+    socket.send.mockImplementation((frame: string) => {
+      sent.push(frame)
+    })
+    const link = new MobileRelayE2eeLink({
+      endpoint: {
+        cellUrl: 'https://relay-c1.onorca.dev',
+        relayHostId: 'AbCdEf0123_-xyZ9'
+      },
+      credential: 'credential',
+      expectedCredentialKind: 'resume',
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'desktop-key',
+      onAuthenticated: vi.fn(),
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onError: vi.fn(),
+      createSocket: () => socket as unknown as WebSocket
+    })
+    socket.onopen?.()
+
+    // The window a lost reconnect race is withdrawn in: the cell has the outer
+    // credential but has not answered, so no key exchange has started.
+    link.close()
+
+    expect(sent).toHaveLength(1)
+    expect(JSON.parse(sent[0]!)).toMatchObject({ type: 'relay-auth' })
+    expect(socket.close).toHaveBeenCalledOnce()
+  })
+
   it('cancels the missing-close timer when explicitly closed', async () => {
     vi.useFakeTimers()
     try {

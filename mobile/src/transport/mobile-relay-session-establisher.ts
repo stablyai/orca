@@ -19,6 +19,25 @@ function directWon(logical: StableLogicalRpcClient): boolean {
   return logical.getActivePath() !== 'relay' && logical.getState() === 'connected'
 }
 
+// Why: migrateTo consults its abort predicate only after E2EE authentication, so
+// a dial that has already lost would still make the cell reserve a splice and the
+// desktop finish a handshake. Closing the socket withdraws it at whatever stage it
+// reached — before any e2ee frame when the hello has not landed yet. The caller
+// still reports the dial as aborted, so nothing is booked against relay.
+function withdrawWhenDirectWins(
+  logical: StableLogicalRpcClient,
+  session: { close(): void }
+): () => void {
+  const withdraw = (): void => {
+    if (directWon(logical)) {
+      session.close()
+    }
+  }
+  const unsubscribe = logical.onStateChange(withdraw)
+  withdraw()
+  return unsubscribe
+}
+
 // Turns one relay credential into the active runtime session: resolve the cell
 // assignment if the director rejects the cached one, open the cell socket,
 // migrate the logical client onto it, then persist the resume confirmation and
@@ -113,6 +132,7 @@ export class MobileRelaySessionEstablisher {
       },
       args.isForeground
     )
+    const stopWithdrawWatch = withdrawWhenDirectWins(args.logical, session)
     try {
       // Why: backgrounding or a direct winner withdraws this dial before cutover.
       await args.logical.migrateTo(
@@ -126,6 +146,10 @@ export class MobileRelaySessionEstablisher {
         return { ok: false, error: new RelayDialAbortedError() }
       }
       return { ok: false, error: session.getFailure() ?? toError(error) }
+    } finally {
+      // Why: past the cutover this session is the active path, and a later direct
+      // promotion must not read as a reason to close the client's own socket.
+      stopWithdrawWatch()
     }
     // Why: migrateTo now resolves at E2EE authentication, so the resume confirm can
     // still fail this session after the cutover. Booking a dying session as an

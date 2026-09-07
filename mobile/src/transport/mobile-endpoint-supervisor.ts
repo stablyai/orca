@@ -10,13 +10,11 @@ import {
 } from './mobile-endpoint-supervisor-support'
 import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
 import { createRelayRecoveryLog, type RelayRecoveryLog } from './mobile-relay-recovery-log'
-import {
-  mobileRelayCredentialNeedsRotation,
-  rotateMobileRelayCredential
-} from './mobile-relay-credential-rotation'
+import { MobileRelayCredentialRefresh } from './mobile-relay-credential-refresh'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import { RelayRecoveryIntentQueue } from './relay-recovery-intent-queue'
+import { RelayLostRaceDamper } from './mobile-relay-lost-race-damper'
 import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
 import * as recoveryPresentation from './mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -40,7 +38,7 @@ export class MobileEndpointSupervisor {
   private operationInFlight = false
   private readonly pending = new RelayRecoveryIntentQueue()
   private readonly nudgeRouter: MobileEndpointNudgeRouter
-  private credentialRotationInFlight = false
+  private readonly credentialRefresh: MobileRelayCredentialRefresh
   private relayRotationPending = false
   private unsubscribeState: (() => void) | null = null
   private readonly hysteresis: MobileEndpointHysteresis
@@ -48,6 +46,7 @@ export class MobileEndpointSupervisor {
   private readonly leaseRotation: RelayLeaseRotationTimer
   private readonly logRelay: RelayRecoveryLog
   private readonly directProbe: DirectReturnProbe
+  private readonly lostRace: RelayLostRaceDamper
   private readonly backgroundGrace: MobileRelayBackgroundGrace
   private readonly sessionEstablisher: MobileRelaySessionEstablisher
 
@@ -63,6 +62,24 @@ export class MobileEndpointSupervisor {
       minimumDwellMs: MINIMUM_DWELL_MS
     })
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
+    this.credentialRefresh = new MobileRelayCredentialRefresh({
+      logical,
+      now: dependencies.now,
+      randomBytes: dependencies.randomBytes,
+      writeBundle: dependencies.writeBundle,
+      bundle: () => this.bundle,
+      adoptBundle: (bundle) => (this.bundle = bundle),
+      persistResolvedRelay: async (resolved) => {
+        this.host = await persistRelayHost(this.host, resolved, dependencies.saveHost)
+      },
+      isStopped: () => this.stopped,
+      completeRefresh: () => this.relayReconnect.completeCredentialRefresh(),
+      onRefreshed: () => {
+        if (this.isActive() && this.relayDialAllowed(false)) {
+          void this.recoverRelay()
+        }
+      }
+    })
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
     this.relayReconnect.reportRecoveryTo(logical)
     this.nudgeRouter = new MobileEndpointNudgeRouter({
@@ -73,6 +90,11 @@ export class MobileEndpointSupervisor {
       setForeground: (foreground) => this.setForeground(foreground),
       replaceRelay: () => void this.recoverRelay(true, true),
       scheduleDirectProbe: () => this.directProbe.probeNow()
+    })
+    this.lostRace = new RelayLostRaceDamper(dependencies, () => {
+      // Why: the window closing is the moment to re-ask. If direct came back the
+      // guards below no-op; if it never did, relay recovery resumes on its own.
+      void this.recoverRelay()
     })
     this.leaseRotation = new RelayLeaseRotationTimer(dependencies, () => {
       this.relayRotationPending = true
@@ -95,6 +117,7 @@ export class MobileEndpointSupervisor {
       adoptBundle: (bundle) => (this.bundle = bundle),
       recordMigration: () => {
         this.relayRotationPending = false
+        this.lostRace.reset()
         this.hysteresis.recordMigration(dependencies.now())
         logRelayConnected(this.logRelay)
       },
@@ -121,7 +144,7 @@ export class MobileEndpointSupervisor {
       onDirectMigrated: async () => {
         this.leaseRotation.clear()
         this.relayRotationPending = false
-        await this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
+        await this.credentialRefresh.run(this.relayReconnect.resetForDirectConnection())
       },
       afterProbe: () => {
         this.operationInFlight = false
@@ -153,7 +176,7 @@ export class MobileEndpointSupervisor {
     this.unsubscribeState = this.logical.onStateChange((state) => {
       if (state === 'connected') {
         if (this.logical.getActivePath() !== 'relay') {
-          void this.rotateCredentialIfNeeded(this.relayReconnect.resetForDirectConnection())
+          void this.credentialRefresh.run(this.relayReconnect.resetForDirectConnection())
         }
         this.directProbe.schedule()
       } else if (!this.backgroundGrace.isForeground()) {
@@ -177,6 +200,10 @@ export class MobileEndpointSupervisor {
   }
 
   setForeground(foreground: boolean): void {
+    if (foreground) {
+      // Why: a resume is the user waiting on the screen, never a blip.
+      this.lostRace.reset()
+    }
     this.backgroundGrace.setForeground(foreground)
     if (foreground && this.relayRotationPending) {
       void this.recoverRelay(true)
@@ -188,6 +215,7 @@ export class MobileEndpointSupervisor {
   stop(): void {
     this.stopped = true
     this.pending.clear()
+    this.lostRace.reset()
     this.directProbe.stop()
     this.unsubscribeState?.()
     this.unsubscribeState = null
@@ -232,6 +260,12 @@ export class MobileEndpointSupervisor {
       ownsRecovery = true
     }
     if (!this.relayDialAllowed(forceReplacement)) {
+      return
+    }
+    if (!forceReplacement && this.lostRace.suppresses()) {
+      // Why: the previous race was lost to direct and booked nothing, so only
+      // this damper stands between a flapping LAN and a cell socket per blip.
+      this.logRelay('relay race damped after losing to direct')
       return
     }
     // Why: revival and lease timers can overlap resume failures; one shared cooldown
@@ -283,6 +317,9 @@ export class MobileEndpointSupervisor {
         this.logical.setRecoveryPath(null)
         // Why: direct won the race or the supervisor went inactive — not a
         // failure; booking backoff would delay the next genuine recovery.
+        if (this.isActive() && this.logical.getState() === 'connected') {
+          this.lostRace.record()
+        }
         return
       }
       // Why: cleanup may happen while a relay dial is awaiting the network;
@@ -301,43 +338,6 @@ export class MobileEndpointSupervisor {
       }
       // Why: the active relay can drop while migration follow-up still owns the mutex.
       if ((retryAfterOperation || queued) && this.isActive()) {
-        void this.recoverRelay()
-      }
-    }
-  }
-
-  private async rotateCredentialIfNeeded(force = false): Promise<void> {
-    if (
-      this.stopped ||
-      this.credentialRotationInFlight ||
-      !this.bundle ||
-      this.logical.getActivePath() === 'relay' ||
-      (!force && !mobileRelayCredentialNeedsRotation(this.bundle, this.dependencies.now()))
-    ) {
-      return
-    }
-    this.credentialRotationInFlight = true
-    let credentialRefreshed = false
-    try {
-      const result = await rotateMobileRelayCredential({
-        client: this.logical,
-        bundle: this.bundle,
-        writeBundle: this.dependencies.writeBundle,
-        randomBytes: this.dependencies.randomBytes
-      })
-      this.bundle = result.bundle
-      // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
-      credentialRefreshed = true
-      this.host = await persistRelayHost(this.host, result.relay, this.dependencies.saveHost)
-    } catch {
-      // Why: pending material remains durable; the next authenticated direct
-      // opportunity must reconcile it before creating another install key.
-    } finally {
-      if (credentialRefreshed) {
-        this.relayReconnect.completeCredentialRefresh()
-      }
-      this.credentialRotationInFlight = false
-      if (credentialRefreshed && this.isActive() && this.relayDialAllowed(false)) {
         void this.recoverRelay()
       }
     }
