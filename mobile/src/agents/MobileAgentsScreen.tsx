@@ -4,6 +4,7 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
+  SectionList,
   Text,
   TextInput,
   View
@@ -77,17 +78,13 @@ export function MobileAgentsScreen({ hostId }: MobileAgentsScreenProps): React.J
   const clientRef = useRef<RpcClient | null>(null)
   const connStateRef = useRef<ConnectionState>(connState)
   const hostIdRef = useRef(hostId)
-  const loadedRef = useRef(false)
+  const focusedRef = useRef(false)
   // Why: assigned during render (not in an effect) so an in-flight worktree.ps
   // response that resolves right after a host/client switch already sees the
   // new selection and gets dropped by the fetcher's staleness guard.
   clientRef.current = client
   connStateRef.current = connState
   hostIdRef.current = hostId
-
-  useEffect(() => {
-    loadedRef.current = loaded
-  }, [loaded])
 
   useEffect(() => {
     let cancelled = false
@@ -117,11 +114,10 @@ export function MobileAgentsScreen({ hostId }: MobileAgentsScreenProps): React.J
     () =>
       createMobileAgentsFetcher({
         readCurrent: () => ({
-          client: clientRef.current,
+          client: focusedRef.current ? clientRef.current : null,
           connectionState: connStateRef.current,
           hostId: hostIdRef.current
         }),
-        isLoaded: () => loadedRef.current,
         applyWorktrees: (next) => {
           setWorktrees(next)
           setLoaded(true)
@@ -131,20 +127,29 @@ export function MobileAgentsScreen({ hostId }: MobileAgentsScreenProps): React.J
           setError(message)
           setLoaded(true)
         },
-        applyTransportError: (message) => setError(message)
+        applyTransportError: (message) => {
+          setError(message)
+          setLoaded(true)
+        }
       }),
     []
   )
 
   useFocusEffect(
     useCallback(() => {
+      focusedRef.current = true
       if (connState !== 'connected') {
-        return undefined
+        return () => {
+          focusedRef.current = false
+        }
       }
       void fetchAgents()
       const timer = setInterval(() => void fetchAgents(), MOBILE_AGENTS_POLL_INTERVAL_MS)
-      return () => clearInterval(timer)
-    }, [connState, fetchAgents])
+      return () => {
+        focusedRef.current = false
+        clearInterval(timer)
+      }
+    }, [client, connState, fetchAgents])
   )
 
   const threads = useMemo(() => buildMobileAgentThreads(worktrees, now), [now, worktrees])
@@ -155,6 +160,11 @@ export function MobileAgentsScreen({ hostId }: MobileAgentsScreenProps): React.J
   const groups = useMemo(
     () => groupMobileAgentThreads(filteredThreads, groupBy),
     [filteredThreads, groupBy]
+  )
+
+  const sections = useMemo(
+    () => groups.map((group) => ({ ...group, data: group.threads })),
+    [groups]
   )
 
   const onRefresh = useCallback(async () => {
@@ -267,7 +277,7 @@ export function MobileAgentsScreen({ hostId }: MobileAgentsScreenProps): React.J
         <Text style={styles.inlineError}>{error}</Text>
       ) : null}
 
-      <ScrollView
+      <SectionList
         style={styles.body}
         contentContainerStyle={styles.bodyContent}
         refreshControl={
@@ -278,37 +288,37 @@ export function MobileAgentsScreen({ hostId }: MobileAgentsScreenProps): React.J
             colors={[colors.textSecondary]}
           />
         }
-      >
-        {centerState ? (
-          <View style={styles.centerState}>
-            {centerState.kind === 'loading' || centerState.kind === 'connecting' ? (
-              <ActivityIndicator color={colors.textSecondary} />
-            ) : null}
-            <Text style={styles.centerText}>{centerState.message}</Text>
-            {centerState.kind === 'error' && centerState.showReconnect ? (
-              <Pressable style={styles.reconnectButton} onPress={() => void forceReconnect(hostId)}>
-                <Text style={styles.reconnectText}>Reconnect</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : (
-          groups.map((group) => (
-            <View key={group.key} style={styles.group}>
-              <Text style={styles.groupLabel}>{group.label}</Text>
-              <View style={styles.groupRows}>
-                {group.threads.map((thread) => (
-                  <MobileAgentThreadRow
-                    key={`${thread.worktreeId}:${thread.agent.paneKey}`}
-                    thread={thread}
-                    now={now}
-                    onPress={() => openThread(thread)}
-                  />
-                ))}
-              </View>
-            </View>
-          ))
+        sections={centerState ? [] : sections}
+        keyExtractor={(thread) => `${thread.worktreeId}:${thread.agent.paneKey}`}
+        initialNumToRender={12}
+        maxToRenderPerBatch={12}
+        windowSize={5}
+        stickySectionHeadersEnabled={false}
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.groupLabel}>{section.label}</Text>
         )}
-      </ScrollView>
+        renderItem={({ item }) => (
+          <MobileAgentThreadRow thread={item} now={now} onPress={() => openThread(item)} />
+        )}
+        ListEmptyComponent={
+          centerState ? (
+            <View style={styles.centerState}>
+              {centerState.kind === 'loading' || centerState.kind === 'connecting' ? (
+                <ActivityIndicator color={colors.textSecondary} />
+              ) : null}
+              <Text style={styles.centerText}>{centerState.message}</Text>
+              {centerState.kind === 'error' && centerState.showReconnect ? (
+                <Pressable
+                  style={styles.reconnectButton}
+                  onPress={() => void forceReconnect(hostId)}
+                >
+                  <Text style={styles.reconnectText}>Reconnect</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null
+        }
+      />
     </SafeAreaView>
   )
 }

@@ -5,7 +5,7 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { formatTimeAgo } from '../worktree/agent-row-display'
 import type { MobileAgentThread } from './mobile-agent-list'
 
-const INDENT_PER_DEPTH = 14
+const INDENT_PER_DEPTH = spacing.lg
 
 export function MobileAgentThreadRow({
   thread,
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   },
   main: {
     flex: 1,
-    gap: 3
+    gap: spacing.xs
   },
   title: {
     color: colors.textPrimary,
@@ -69,11 +69,11 @@ const styles = StyleSheet.create({
   toolSummary: {
     color: colors.textMuted,
     fontFamily: typography.monoFamily,
-    fontSize: 11
+    fontSize: typography.metaSize
   },
   time: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: typography.metaSize,
     minWidth: 48,
     textAlign: 'right'
   }

@@ -56,6 +56,16 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('buildMobileAgentThreads', () => {
+  it('keeps monitoring agents visible in status grouping', () => {
+    const threads = buildMobileAgentThreads(
+      [worktree({ agents: [agent('monitor', { workingMode: 'monitoring' })] })],
+      NOW
+    )
+    expect(
+      groupMobileAgentThreads(threads, 'status').flatMap((group) => group.threads)
+    ).toHaveLength(1)
+  })
+
   it('returns empty when no worktrees or agents exist', () => {
     expect(buildMobileAgentThreads([], NOW)).toEqual([])
     expect(buildMobileAgentThreads([worktree({ agents: undefined })], NOW)).toEqual([])

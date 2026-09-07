@@ -1,8 +1,12 @@
+import {
+  WorktreeCatalogSnapshotClient,
+  WORKTREE_PS_FULL_LIMIT
+} from '../worktree/worktree-catalog-snapshot-client'
 import type { ConnectionState, RpcResponse } from '../transport/types'
 import type { Worktree } from '../worktree/workspace-list-sections'
 
 export const MOBILE_AGENTS_POLL_INTERVAL_MS = 3000
-export const MOBILE_AGENTS_WORKTREE_PS_LIMIT = 10000
+export const MOBILE_AGENTS_WORKTREE_PS_LIMIT = WORKTREE_PS_FULL_LIMIT
 
 export type MobileAgentsCenterState =
   | { kind: 'loading'; message: string }
@@ -20,6 +24,9 @@ export function getMobileAgentsCenterState(args: {
   error: string | null
   verdictLabel: string
 }): MobileAgentsCenterState | null {
+  if (!args.loaded && args.error && !args.isErrorVerdict) {
+    return { kind: 'error', message: args.error, showReconnect: false }
+  }
   if (!args.loaded && args.connectionState === 'connected') {
     return { kind: 'loading', message: 'Loading agents...' }
   }
@@ -57,7 +64,6 @@ export type MobileAgentsFetchSnapshot = {
 
 export type MobileAgentsFetcherIo = {
   readCurrent: () => MobileAgentsFetchSnapshot
-  isLoaded: () => boolean
   applyWorktrees: (worktrees: Worktree[]) => void
   applyRequestError: (message: string) => void
   applyTransportError: (message: string) => void
@@ -68,35 +74,43 @@ export type MobileAgentsFetcherIo = {
 // delayed response captured for a prior host/client is dropped instead of
 // overwriting the new host's state.
 export function createMobileAgentsFetcher(io: MobileAgentsFetcherIo): () => Promise<void> {
-  let inFlight = false
+  let inFlight: MobileAgentsFetchSnapshot | null = null
+  const catalog = new WorktreeCatalogSnapshotClient()
   return async () => {
     const request = io.readCurrent()
-    if (!request.client || request.connectionState !== 'connected' || inFlight) {
+    if (
+      !request.client ||
+      request.connectionState !== 'connected' ||
+      (inFlight?.client === request.client && inFlight?.hostId === request.hostId)
+    ) {
       return
     }
-    inFlight = true
+    inFlight = request
     try {
-      const response = await request.client.sendRequest('worktree.ps', {
-        limit: MOBILE_AGENTS_WORKTREE_PS_LIMIT
-      })
+      const fetched = await catalog.fetch(request.client, request.hostId)
       const current = io.readCurrent()
       if (current.client !== request.client || current.hostId !== request.hostId) {
         return
       }
-      if (response.ok) {
-        // Why: mobile trusts the authenticated host's worktree.ps shape, matching
-        // the existing consumers in app/index.tsx and the host index screen.
-        const result = response.result as { worktrees: Worktree[] }
-        io.applyWorktrees(result.worktrees)
+      if (fetched.kind === 'request_failed') {
+        io.applyRequestError(fetched.code)
+      } else if (fetched.pending.admission.kind === 'invalid') {
+        io.applyRequestError('Invalid worktree catalog response')
       } else {
-        io.applyRequestError(response.error.message)
+        const worktrees = catalog.admit(fetched.pending)
+        if (worktrees) {
+          io.applyWorktrees(worktrees)
+        }
       }
     } catch (error) {
-      if (!io.isLoaded()) {
+      const current = io.readCurrent()
+      if (current.client === request.client && current.hostId === request.hostId) {
         io.applyTransportError(error instanceof Error ? error.message : 'Unable to load agents')
       }
     } finally {
-      inFlight = false
+      if (inFlight === request) {
+        inFlight = null
+      }
     }
   }
 }

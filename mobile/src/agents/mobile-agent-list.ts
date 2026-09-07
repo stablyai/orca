@@ -34,6 +34,7 @@ export type MobileAgentThreadGroup = {
 
 const ATTENTION_STATES: Record<AgentDotState, boolean> = {
   working: true,
+  monitoring: false,
   blocked: true,
   waiting: true,
   interrupted: true,
@@ -43,6 +44,7 @@ const ATTENTION_STATES: Record<AgentDotState, boolean> = {
 
 const STATUS_ORDER: readonly AgentDotState[] = [
   'working',
+  'monitoring',
   'blocked',
   'waiting',
   'interrupted',

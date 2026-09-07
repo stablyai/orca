@@ -56,6 +56,21 @@ describe('mobile agents screen state', () => {
     ).toEqual({ kind: 'error', message: 'Socket closed', showReconnect: true })
   })
 
+  it('shows a first-load transport failure while the socket still reports connected', () => {
+    expect(
+      getMobileAgentsCenterState({
+        loaded: false,
+        connectionState: 'connected',
+        isErrorVerdict: false,
+        showConnecting: false,
+        visibleGroupCount: 0,
+        hasActiveFilter: false,
+        error: 'Request timed out',
+        verdictLabel: 'Connected'
+      })
+    ).toEqual({ kind: 'error', message: 'Request timed out', showReconnect: false })
+  })
+
   it('keeps an error-only first load from also claiming empty activity', () => {
     expect(
       getMobileAgentsCenterState({
@@ -103,12 +118,15 @@ describe('mobile agents screen state', () => {
 function deferredResponse(): {
   promise: Promise<RpcResponse>
   resolve: (response: RpcResponse) => void
+  reject: (error: Error) => void
 } {
   let resolve!: (response: RpcResponse) => void
-  const promise = new Promise<RpcResponse>((r) => {
+  let reject!: (error: Error) => void
+  const promise = new Promise<RpcResponse>((r, j) => {
     resolve = r
+    reject = j
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 function psSuccess(worktrees: unknown[]): RpcResponse {
@@ -122,7 +140,6 @@ describe('createMobileAgentsFetcher', () => {
     const errors: string[] = []
     const fetcher = createMobileAgentsFetcher({
       readCurrent: () => snapshot,
-      isLoaded: () => true,
       applyWorktrees: (worktrees) => applied.push(worktrees),
       applyRequestError: (message) => errors.push(message),
       applyTransportError: (message) => errors.push(message)
@@ -186,6 +203,37 @@ describe('createMobileAgentsFetcher', () => {
 
     expect(harness.applied).toEqual([])
     expect(harness.errors).toEqual([])
+  })
+
+  it('drops a rejected request from the previous host', async () => {
+    const deferred = deferredResponse()
+    const client = { sendRequest: () => deferred.promise }
+    const harness = makeHarness({ client, connectionState: 'connected', hostId: 'host-a' })
+    const pending = harness.fetcher()
+    harness.setSnapshot({ client, connectionState: 'connected', hostId: 'host-b' })
+    deferred.reject(new Error('old host failed'))
+    await pending
+    expect(harness.errors).toEqual([])
+  })
+
+  it('starts the new host request without waiting for the old host timeout', async () => {
+    const old = deferredResponse()
+    const harness = makeHarness({
+      client: { sendRequest: () => old.promise },
+      connectionState: 'connected',
+      hostId: 'host-a'
+    })
+    const pending = harness.fetcher()
+    harness.setSnapshot({
+      client: { sendRequest: async () => psSuccess([]) },
+      connectionState: 'connected',
+      hostId: 'host-b'
+    })
+    await harness.fetcher()
+    expect(harness.applied).toEqual([[]])
+    old.resolve(psSuccess([{ worktreeId: 'stale' }]))
+    await pending
+    expect(harness.applied).toEqual([[]])
   })
 
   it('keeps at most one worktree.ps request in flight', async () => {

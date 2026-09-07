@@ -33,7 +33,7 @@ export const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
-    gap: 3
+    gap: spacing.xs
   },
   title: {
     color: colors.textPrimary,
