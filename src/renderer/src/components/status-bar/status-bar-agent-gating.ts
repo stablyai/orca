@@ -1,3 +1,4 @@
+import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
@@ -27,4 +28,14 @@ export function isStatusBarItemAvailable(
     return true
   }
   return detectedAgentIds.includes(id as TuiAgent)
+}
+
+// Why: Antigravity is read from a credential, so it can be signed in only on a remote execution
+// host with no `agy` on this machine's PATH. A snapshot that actually carries quota is its own
+// proof the slot is useful; PATH detection alone would hide the bar in exactly that case.
+export function isAntigravityStatusBarAvailable(
+  detectedAgentIds: TuiAgent[] | null,
+  antigravity: Pick<ProviderRateLimits, 'status'> | null | undefined
+): boolean {
+  return isStatusBarItemAvailable('antigravity', detectedAgentIds) || antigravity?.status === 'ok'
 }

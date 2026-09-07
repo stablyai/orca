@@ -130,6 +130,46 @@ describe('fetchAntigravityQuota', () => {
     expect(cancel).toHaveBeenCalled()
   })
 
+  it('still tries the stable host when the daily request rejects outright', async () => {
+    netFetchMock.mockImplementation((url: string) =>
+      String(url).includes('daily-')
+        ? Promise.reject(new Error('socket hang up'))
+        : Promise.resolve(routeOk(String(url)))
+    )
+    const result = await fetchAntigravityQuota('token-1')
+    expect(result.status).toBe('ok')
+  })
+
+  it('gives each host its own deadline instead of one shared budget', async () => {
+    const signals: (AbortSignal | undefined)[] = []
+    netFetchMock.mockImplementation((url: string, init: RequestInit) => {
+      signals.push(init?.signal ?? undefined)
+      return String(url).includes('daily-')
+        ? Promise.reject(new Error('timed out'))
+        : Promise.resolve(routeOk(String(url)))
+    })
+    await fetchAntigravityQuota('token-1')
+    // Why: a shared deadline would hand the fallback the same, already-spent signal.
+    expect(signals[0]).not.toBe(signals.at(-1))
+  })
+
+  it('reports the failing host when every request rejects', async () => {
+    netFetchMock.mockImplementation(() => Promise.reject(new Error('ENOTFOUND')))
+    const result = await fetchAntigravityQuota('token-1')
+    expect(result).toMatchObject({ status: 'error' })
+    expect(result.status === 'error' && result.message).toContain('cloudcode-pa.googleapis.com')
+  })
+
+  it('stops before the second host when the caller aborts', async () => {
+    const controller = new AbortController()
+    netFetchMock.mockImplementation(() => {
+      controller.abort()
+      return Promise.reject(new Error('aborted'))
+    })
+    await fetchAntigravityQuota('token-1', controller.signal)
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('sends the caller abort signal alongside its own timeout', async () => {
     const controller = new AbortController()
     await fetchAntigravityQuota('token-1', controller.signal)

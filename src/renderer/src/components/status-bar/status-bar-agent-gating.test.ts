@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import {
+  isAntigravityStatusBarAvailable,
+  isStatusBarItemAvailable
+} from './status-bar-agent-gating'
 
 describe('isStatusBarItemAvailable', () => {
   it('shows non-CLI items regardless of detection', () => {
@@ -36,5 +39,28 @@ describe('isStatusBarItemAvailable', () => {
     expect(isStatusBarItemAvailable('gemini', ['gemini'])).toBe(true)
     expect(isStatusBarItemAvailable('antigravity', ['antigravity'])).toBe(true)
     expect(isStatusBarItemAvailable('grok', ['grok'])).toBe(true)
+  })
+})
+
+describe('isAntigravityStatusBarAvailable', () => {
+  const okSnapshot = { status: 'ok' } as const
+
+  it('shows the slot for a sign-in that lives only on a remote host', () => {
+    // Why: `agy` may exist only on the SSH host, so PATH detection alone would hide a bar
+    // that a successful read has already proved useful.
+    expect(isAntigravityStatusBarAvailable([], okSnapshot)).toBe(true)
+  })
+
+  it('shows the slot when the CLI is on PATH even with no snapshot yet', () => {
+    expect(isAntigravityStatusBarAvailable(['antigravity'], null)).toBe(true)
+  })
+
+  it('hides the slot when neither the CLI nor a reading is present', () => {
+    expect(isAntigravityStatusBarAvailable([], null)).toBe(false)
+    expect(isAntigravityStatusBarAvailable([], { status: 'unavailable' })).toBe(false)
+  })
+
+  it('keeps the pre-detection default so the bar does not flicker on cold start', () => {
+    expect(isAntigravityStatusBarAvailable(null, null)).toBe(true)
   })
 })

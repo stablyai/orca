@@ -91,6 +91,11 @@ async function postInternal(
   return { ok: true, data: (await res.json()) as unknown }
 }
 
+function hostFailureMessage(host: string, error: unknown): string {
+  const reason = error instanceof Error ? error.message : 'request failed'
+  return `Antigravity quota request to ${host} failed: ${reason}`
+}
+
 async function fetchFromHost(
   host: string,
   accessToken: string,
@@ -134,11 +139,21 @@ export async function fetchAntigravityQuota(
   accessToken: string,
   callerSignal?: AbortSignal
 ): Promise<AntigravityQuotaFetch> {
-  const timeout = AbortSignal.timeout(API_TIMEOUT_MS)
-  const signal = callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout
   let last: AntigravityQuotaFetch = { status: 'error', message: 'No Cloud Code host answered' }
   for (const host of API_HOSTS) {
-    last = await fetchFromHost(host, accessToken, signal)
+    if (callerSignal?.aborted) {
+      return last
+    }
+    // Why: one deadline shared across hosts lets a slow first host spend the budget the
+    // fallback needs, so the second attempt starts already aborted.
+    const timeout = AbortSignal.timeout(API_TIMEOUT_MS)
+    const signal = callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout
+    try {
+      last = await fetchFromHost(host, accessToken, signal)
+    } catch (error) {
+      // Why: a rejected request is this host's verdict, not the account's — the next host still gets a turn.
+      last = { status: 'error', message: hostFailureMessage(host, error) }
+    }
     // Why: an auth or entitlement verdict is the account's, not the host's — retrying decides nothing.
     if (last.status !== 'error') {
       return last

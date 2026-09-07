@@ -1,5 +1,5 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
+import { resolveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
@@ -81,11 +81,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           } satisfies ProviderRateLimits)
 
     // Why: the mirror stays as the fallback for accounts whose quota only exists as the shared
-    // Google Code Assist pool; a direct Antigravity read supersedes it whenever one succeeds.
-    const antigravity =
-      antigravityResult.status === 'fulfilled' && antigravityResult.value.status === 'ok'
-        ? antigravityResult.value
-        : deriveAntigravityRateLimits(gemini)
+    // Google Code Assist pool, but a direct read that reached a verdict about the user's
+    // Antigravity sign-in has to survive it.
+    const antigravity = resolveAntigravityRateLimits(
+      antigravityResult.status === 'fulfilled' ? antigravityResult.value : null,
+      gemini
+    )
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
