@@ -136,7 +136,6 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id);
-CREATE INDEX IF NOT EXISTS idx_tasks_worktree ON tasks(worktree_id);
 
 CREATE TABLE IF NOT EXISTS dispatch_contexts (
   id                  TEXT PRIMARY KEY,
