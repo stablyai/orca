@@ -2,6 +2,7 @@ import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { useMobileSessionStartup } from '../session/use-mobile-session-startup'
 import { HostProtocolGate, useHostProtocolGates } from './HostProtocolGate'
 
 const nativeTestState = vi.hoisted(() => ({
@@ -74,6 +75,95 @@ function renderedText(renderer: ReactTestRenderer): string {
   return JSON.stringify(renderer.toJSON())
 }
 
+// Why: mirrors the route's foundation -> startup plumbing (statusPending from the gate feeding the
+// real startup hook) so the assertion lands on the shipped hook, not a restatement of it.
+type StartupScope = Parameters<typeof useMobileSessionStartup>[0]
+
+function createStartupScope() {
+  const noop = () => {}
+  return {
+    created: undefined as string | undefined,
+    activeHandleRef: { current: null as string | null },
+    hostId: 'host-1',
+    worktreeId: 'wt-1',
+    isFloatingWorkspaceRoute: false,
+    setTerminals: noop,
+    terminalsRef: { current: [] },
+    setSessionTabs: noop,
+    appliedSnapshotMarkerRef: { current: { epoch: null, version: -1 } },
+    closedTabTombstonesRef: { current: new Map() },
+    setTerminalsLoaded: noop,
+    setActiveHandle: noop,
+    setActiveSessionTabId: noop,
+    setMarkdownDocs: noop,
+    setFileDocs: noop,
+    terminalGestureInputQueuesRef: { current: new Map() },
+    terminalGestureInputInFlightRef: { current: new Set() },
+    sessionTabActionSheetKeyboardHideSubRef: { current: null },
+    sessionTabActionSheetRequestSeqRef: { current: 0 },
+    initializedHandlesRef: { current: new Set() },
+    terminalDiagnosticsRef: { current: { resetRoute: noop } },
+    activeSessionTabTypeRef: { current: null },
+    pendingActiveSessionTabIdRef: { current: null },
+    selectedSessionTabIdRef: { current: null },
+    pendingActiveTerminalHandleRef: { current: null },
+    pendingBrowserFocusPageIdRef: { current: null },
+    pendingTerminalActivationAttemptRef: { current: null },
+    initialSessionAutoCreateRef: { current: null },
+    bufferedTerminalDraftState: { resetDrafts: noop, clearPendingRestorations: noop },
+    clearPendingLiveInputCommit: noop,
+    clearDelayedActionTimers: noop,
+    showToast: noop,
+    clearTerminalCache: noop,
+    fetchTerminals: async () => true,
+    ensureSessionTabs: async () => {}
+  }
+}
+
+let startupScope = createStartupScope()
+
+function StartupProbe() {
+  const { statusPending } = useHostProtocolGates()
+  useMobileSessionStartup({
+    ...startupScope,
+    client: hostClient.current.client,
+    connState: hostClient.current.state,
+    statusPending
+  } as unknown as StartupScope)
+  return createElement('StartupProbe')
+}
+
+// status.get stays unresolved until the test settles it; every other method lands on `activate`.
+function clientWithDeferredStatus() {
+  let resolveStatus: (result: Record<string, unknown>) => void = () => {}
+  const status = new Promise<{ ok: true; result: Record<string, unknown> }>((resolve) => {
+    resolveStatus = (result) => resolve({ ok: true, result })
+  })
+  const activate = vi.fn().mockResolvedValue({ ok: true, result: {} })
+  const client = {
+    sendRequest: (method: string, params?: unknown) =>
+      method === 'status.get' ? status : activate(method, params)
+  } as unknown as RpcClient
+  return { activate, client, settle: (result: Record<string, unknown>) => resolveStatus(result) }
+}
+
+function startupGateElement() {
+  return createElement(
+    HostProtocolGate,
+    { hostId: 'host-1' },
+    createElement('HostContent', null, createElement(StartupProbe))
+  )
+}
+
+async function renderStartupGate(): Promise<ReactTestRenderer> {
+  let created: ReactTestRenderer | null = null
+  await act(async () => {
+    created = create(startupGateElement())
+    await Promise.resolve()
+  })
+  return created as unknown as ReactTestRenderer
+}
+
 describe('HostProtocolGate', () => {
   let renderer: ReactTestRenderer | null = null
 
@@ -81,11 +171,13 @@ describe('HostProtocolGate', () => {
     nativeTestState.openUrl.mockClear()
     nativeTestState.platform.OS = 'ios'
     probeMounts.count = 0
+    startupScope = createStartupScope()
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -258,5 +350,130 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     expect(renderedText(renderer)).toContain('HostContent')
+  })
+  // Reaches the connected-but-unverified window the way production does: the route mounts while the
+  // client is still connecting, so the gate overlays it instead of holding the tree back.
+  async function connectWithPendingStatus(client: RpcClient): Promise<void> {
+    await act(async () => {
+      hostClient.current = { client, state: 'connected' }
+      renderer?.update(startupGateElement())
+      await Promise.resolve()
+    })
+  }
+
+  async function settleVerdict(settle: (result: Record<string, unknown>) => void): Promise<void> {
+    await act(async () => {
+      settle({ protocolVersion: 3, minCompatibleMobileVersion: 0 })
+      await Promise.resolve()
+    })
+  }
+
+  it('holds worktree.activate until the host compat verdict settles', async () => {
+    const { activate, client, settle } = clientWithDeferredStatus()
+    hostClient.current = { client: null, state: 'connecting' }
+    renderer = await renderStartupGate()
+    expect(activate).not.toHaveBeenCalled()
+
+    await connectWithPendingStatus(client)
+    expect(renderedText(renderer)).toContain('Checking host compatibility')
+    // Why: activate writes host state (protocol-1 hosts ignore notifyClients: false), so an
+    // unknown verdict must not have produced one.
+    expect(activate).not.toHaveBeenCalled()
+
+    await settleVerdict(settle)
+    expect(activate).toHaveBeenCalledTimes(1)
+    expect(activate).toHaveBeenCalledWith('worktree.activate', {
+      worktree: 'id:wt-1',
+      notifyClients: false,
+      navigation: 'caller'
+    })
+  })
+
+  it('defers the created-workspace activate recovery past the pending verdict', async () => {
+    vi.useFakeTimers()
+    startupScope.created = '1'
+    const { activate, client, settle } = clientWithDeferredStatus()
+    hostClient.current = { client: null, state: 'connecting' }
+    renderer = await renderStartupGate()
+    await connectWithPendingStatus(client)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    expect(activate).not.toHaveBeenCalled()
+
+    await settleVerdict(settle)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1800)
+    })
+    expect(activate).toHaveBeenCalledTimes(1)
+    expect(activate).toHaveBeenCalledWith('worktree.activate', {
+      worktree: 'id:wt-1',
+      notifyClients: false,
+      navigation: 'caller'
+    })
+  })
+
+  it('sends one activate when hydration lands after the creation route is consumed', async () => {
+    vi.useFakeTimers()
+    startupScope.created = '1'
+    // Slow hydration is the window the recovery timer must not beat.
+    startupScope.ensureSessionTabs = () => new Promise<void>((resolve) => setTimeout(resolve, 3000))
+    const { activate, client, settle } = clientWithDeferredStatus()
+    hostClient.current = { client: null, state: 'connecting' }
+    renderer = await renderStartupGate()
+    await connectWithPendingStatus(client)
+    await settleVerdict(settle)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+    })
+    // Hydration landed: a tab claims the active handle and autocreate consumes ?created=1.
+    startupScope.activeHandleRef.current = 'term-1'
+    startupScope.created = undefined
+    await act(async () => {
+      renderer?.update(startupGateElement())
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+
+    expect(activate).toHaveBeenCalledTimes(1)
+  })
+
+  it('never activates when the verdict comes back blocked', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { activate, client, settle } = clientWithDeferredStatus()
+    hostClient.current = { client: null, state: 'connecting' }
+    renderer = await renderStartupGate()
+    await connectWithPendingStatus(client)
+
+    await act(async () => {
+      settle({ protocolVersion: 1, minCompatibleMobileVersion: 0 })
+      await Promise.resolve()
+    })
+
+    const output = renderedText(renderer)
+    expect(output).toContain('Update Orca on your computer')
+    expect(output).not.toContain('StartupProbe')
+    expect(activate).not.toHaveBeenCalled()
+  })
+
+  it('skips the created-workspace activate recovery when a terminal is already active', async () => {
+    vi.useFakeTimers()
+    startupScope.created = '1'
+    const { activate, client, settle } = clientWithDeferredStatus()
+    hostClient.current = { client: null, state: 'connecting' }
+    renderer = await renderStartupGate()
+    await connectWithPendingStatus(client)
+    await settleVerdict(settle)
+    // The route reset clears this ref on mount, so a terminal can only claim it after the verdict.
+    startupScope.activeHandleRef.current = 'term-1'
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5000)
+    })
+    expect(activate).not.toHaveBeenCalled()
   })
 })

@@ -148,23 +148,59 @@ describe('mobile session startup', () => {
   })
 
   it('loads session tabs without waiting for desktop activation', () => {
-    const startupEffect = sliceBetween(
-      'void (async () => {',
+    const readsEffect = sliceBetween(
+      'hydrationRef.current = (async () => {',
       'return () => {\n      disposed = true',
       startupSource
     )
 
-    expect(startupEffect).toContain("void client\n          .sendRequest('worktree.activate'")
-    expect(startupEffect).toContain("if (client && created !== '1' && !isFloatingWorkspaceRoute)")
-    expect(startupEffect).toContain("if (client && created === '1' && !isFloatingWorkspaceRoute)")
-    expect(startupEffect).toContain('notifyClients: false')
-    expect(startupEffect).toContain("navigation: 'caller'")
-    expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
-    expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
-      startupEffect.indexOf('await ensureSessionTabs()')
+    expect(readsEffect).toContain('await Promise.all([')
+    const parallelReads = sliceBetween('await Promise.all([', '])', readsEffect)
+    // Why: ensureSessionTabs can reject, and must not strand the follow-up refreshes.
+    expect(parallelReads).toContain('ensureSessionTabs().catch(() => null)')
+    expect(parallelReads).toContain('fetchTerminals({ allowEmptyLoaded: false })')
+    expect(readsEffect).toContain(
+      'addTimer(() => void fetchTerminals({ allowEmptyLoaded: false }), 750)'
     )
-    expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
-    expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
+    expect(readsEffect).toContain(
+      'addTimer(() => void fetchTerminals({ allowEmptyLoaded: true }), 1500)'
+    )
+    // Why: hydration must not be sequenced behind a host write, so activation lives in its own effect.
+    expect(readsEffect).not.toContain('worktree.activate')
+  })
+
+  it('sends worktree.activate only after the host compat verdict settles', () => {
+    expect(foundationSource).toContain('const { statusPending } = useHostProtocolGates()')
+    expect(foundationSource).toContain(
+      "import { useHostProtocolGates } from '../components/HostProtocolGate'"
+    )
+    expect(foundationSource).toContain('statusPending,')
+    expect(startupSource).toContain('    statusPending,\n')
+
+    const activateEffect = sliceBetween(
+      'if (statusPending || connState !== ',
+      'return () => {\n      disposed = true',
+      startupSource.slice(startupSource.indexOf('// Why: activate writes host state'))
+    )
+
+    expect(activateEffect).toContain(
+      "if (statusPending || connState !== 'connected' || !client || isFloatingWorkspaceRoute)"
+    )
+    expect(activateEffect).toContain("void client\n        .sendRequest('worktree.activate'")
+    expect(activateEffect).toContain("if (created !== '1')")
+    expect(activateEffect).toContain('notifyClients: false')
+    expect(activateEffect).toContain("navigation: 'caller'")
+    expect(activateEffect).not.toContain('await ensureSessionTabs()')
+    // The recovery arms only once hydration settled, so a consumed `created` cannot add a second send.
+    expect(activateEffect).toContain('await hydrationRef.current')
+    expect(activateEffect.indexOf('await hydrationRef.current')).toBeLessThan(
+      activateEffect.indexOf('}, 1800)')
+    )
+    // The created-workspace recovery still yields to a terminal that claimed the route first.
+    expect(activateEffect).toContain('if (activeHandleRef.current)')
+    expect(activateEffect).toContain('}, 1800)')
+    expect(activateEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
+    expect(activateEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")
   })
 
   it('fails runtime capability gates closed before probing a replacement client', () => {

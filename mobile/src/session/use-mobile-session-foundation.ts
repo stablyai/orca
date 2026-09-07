@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { HOST_DOCK_MIN_WIDTH } from '../storage/preferences'
 import { useHostClient, useForceReconnect } from '../transport/client-context'
+import { useHostProtocolGates } from '../components/HostProtocolGate'
 import {
   useLastConnectedAt,
   useReconnectAttempt
@@ -36,6 +37,8 @@ export function useMobileSessionFoundation() {
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider (docs/mobile-shared-client-per-host.md).
   const { client, clientId, state: connState } = useHostClient(hostId)
+  // Why: every /h/ route renders under <HostProtocolGate>; host-writing startup RPCs wait on its verdict.
+  const { statusPending } = useHostProtocolGates()
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
@@ -98,6 +101,7 @@ export function useMobileSessionFoundation() {
     client,
     clientId,
     connState,
+    statusPending,
     reconnectAttempts,
     lastConnectedAt,
     forceReconnectHost,
