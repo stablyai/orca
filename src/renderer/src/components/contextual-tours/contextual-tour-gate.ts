@@ -173,7 +173,7 @@ export function getContextualTourStepProgress(args: {
   stepIndex: number
 }): { current: number; total: number } | null {
   const visibleIndex = args.visibleStepIndexes.indexOf(args.stepIndex)
-  if (visibleIndex < 0) {
+  if (visibleIndex === -1) {
     return null
   }
   return { current: visibleIndex + 1, total: args.visibleStepIndexes.length }

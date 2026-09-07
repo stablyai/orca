@@ -1,5 +1,5 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
+  AiVaultAgent,
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
@@ -30,16 +30,22 @@ export type AiVaultScanOptions = {
   openclawLegacyStateDir?: string
   piSessionsDir?: string
   ompSessionsDir?: string
+  primeAgentSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
+  clineSessionsDir?: string
   kimiSessionsDir?: string
   limit?: number
+  unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
   // the recency cap (see discoverInScopeClaudeFiles).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
+  // Superseded/cancelled scans stop between parse batches instead of parsing
+  // every remaining transcript for a caller that already left.
+  signal?: AbortSignal
 }
 
 export type FileWithMtime = {
@@ -86,6 +92,11 @@ export type ResumableParseFinalizeOptions = {
 // read or a display-only trailing line can never corrupt the cached fold.
 export type ResumableSessionParseState = {
   consumeLine(line: string): void
+  // Optional zero-copy path for parsers that can reject irrelevant records
+  // from a bounded byte prefix before decoding a potentially huge JSONL line.
+  consumeLineBytes?(line: Buffer): void
+  // Lets a parser terminate an excluded transcript without draining the file.
+  shouldStop?(): boolean
   clone(): ResumableSessionParseState
   // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void
@@ -110,6 +121,11 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // True once an older message fell out of the newest-N preview window, so the
+  // earliest preview turn is no longer the session's opening ask.
+  previewMessagesTruncated: boolean
+  firstUserPrompt: string | null
+  lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).
   queuedMessageCount: number
   subagentTranscriptCount: number

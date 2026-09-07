@@ -1,4 +1,4 @@
-import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 // Why: request/response shapes shared by the worker entry and the main-thread
@@ -29,8 +29,6 @@ export type OpenCodeSqliteListValue = {
   candidates: SessionFileCandidate[]
   issues: AiVaultScanIssue[]
 }
-
-export type OpenCodeSqliteParseValue = AiVaultSession | null
 
 export type OpenCodeSqliteWorkerResponse =
   | { id: number; ok: true; value: unknown }

@@ -34,6 +34,7 @@ import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../orca-profiles/profile-project-transfer'
 import { findOrcaProfileProjectsByPath } from '../orca-profiles/profile-project-presence'
+import { flushActiveProfileBeforeFileMutation } from '../orca-profiles/profile-persistence-deadline'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import {
   createCloudLinkedOrcaProfile,
@@ -44,6 +45,8 @@ import {
   signOutCurrentOrcaProfile
 } from '../orca-profiles/profile-cloud-service'
 import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members-handlers'
+import { onOrcaCloudSessionInvalidated } from '../orca-profiles/profile-cloud-session-invalidation'
+import { broadcastOrcaProfileAuthStatusChanged } from './orca-profile-auth-status-broadcast'
 
 type RegisterOrcaProfileHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
@@ -168,18 +171,20 @@ export function registerOrcaProfileHandlers(
   store: Store,
   options: RegisterOrcaProfileHandlersOptions = {}
 ): void {
-  ipcMain.handle(
-    'orcaProfiles:list',
-    (): OrcaProfileListResult => ({
-      ...getOrcaProfileListState(),
-      multiProfileUi: isMultiProfileUiEnabled()
-    })
+  ipcMain.handle('orcaProfiles:list', (): OrcaProfileListResult => ({
+    ...getOrcaProfileListState(),
+    multiProfileUi: isMultiProfileUiEnabled()
+  }))
+
+  ipcMain.handle('orcaProfiles:authStatus', (): OrcaProfileAuthStatus =>
+    getCurrentOrcaProfileAuthStatus(getProfileUserDataPath())
   )
 
-  ipcMain.handle(
-    'orcaProfiles:authStatus',
-    (): OrcaProfileAuthStatus => getCurrentOrcaProfileAuthStatus(getProfileUserDataPath())
-  )
+  // Why: a background refresh can revoke the session with no renderer request in
+  // flight, so push the change instead of waiting for the next pane to ask.
+  // Why not options.onAuthMutation: that hook drives the relay coordinator, which
+  // is the caller that just failed the refresh — re-entering it here would be a loop.
+  onOrcaCloudSessionInvalidated(broadcastOrcaProfileAuthStatusChanged)
 
   ipcMain.handle(
     'orcaProfiles:createLocal',
@@ -212,8 +217,8 @@ export function registerOrcaProfileHandlers(
       }
       // Why: the current profile must be persisted before the global index
       // points startup at the target profile.
+      await flushActiveProfileBeforeFileMutation(store)
       await runBeforeProfileRelaunch(options.onBeforeRelaunch)
-      store.flush()
       setActiveOrcaProfile(profileId)
 
       scheduleProfileRelaunch('profile-switch')
@@ -236,10 +241,7 @@ export function registerOrcaProfileHandlers(
       if (args.mode === 'move' && args.sourceProfileId === current.activeProfileId) {
         // Why: transfer before any relaunch side effect so a duplicate-target
         // or validation failure cannot strand the app in a quitting state.
-        // flush→transfer→freeze runs synchronously with no interleaving, and
-        // the freeze keeps late sync saves from resurrecting the moved
-        // project from stale memory before the relaunch.
-        store.flush()
+        await flushActiveProfileBeforeFileMutation(store)
         const result = transferOrcaProfileProject(args, getProfileUserDataPath())
         if (result.status === 'transferred') {
           store.freezeWrites()
@@ -250,7 +252,7 @@ export function registerOrcaProfileHandlers(
         }
         return result
       }
-      store.flush()
+      await flushActiveProfileBeforeFileMutation(store)
       return transferOrcaProfileProject(args, getProfileUserDataPath())
     }
   )

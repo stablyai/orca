@@ -10,6 +10,8 @@ import { PanelBottomClose, PanelRightClose, SquareTerminal } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { requestActiveTerminalPaneSplit } from './request-active-terminal-pane-split'
+import { TAB_CONTEXT_SUBMENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { cn } from '@/lib/utils'
 
 export function TerminalTabSplitMenuSection({
   unifiedTabId,
@@ -19,6 +21,7 @@ export function TerminalTabSplitMenuSection({
   onActivate,
   splitRightShortcut,
   splitDownShortcut,
+  showTerminalSplit = true,
   trailingSeparator = false
 }: {
   unifiedTabId: string
@@ -28,6 +31,7 @@ export function TerminalTabSplitMenuSection({
   onActivate: (tabId: string) => void
   splitRightShortcut: string
   splitDownShortcut: string
+  showTerminalSplit?: boolean
   trailingSeparator?: boolean
 }): React.JSX.Element {
   const splitActiveTerminalPane = (direction: 'vertical' | 'horizontal'): void => {
@@ -40,33 +44,37 @@ export function TerminalTabSplitMenuSection({
   return (
     <>
       <TabWorkspaceLayoutMenuSection unifiedTabId={unifiedTabId} groupId={groupId} />
-      <DropdownMenuSub>
-        <DropdownMenuSubTrigger className="[&>svg:last-child]:size-3.5">
-          <SquareTerminal className="size-3.5 shrink-0" />
-          {translate(
-            'auto.components.tab.bar.TerminalTabSplitMenuSection.splitTerminal',
-            'Split terminal'
-          )}
-        </DropdownMenuSubTrigger>
-        <DropdownMenuSubContent className="min-w-[12rem]">
-          <DropdownMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
-            <PanelRightClose className="size-3.5 shrink-0" />
+      {showTerminalSplit ? (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="[&>svg:last-child]:size-3.5">
+            <SquareTerminal className="size-3.5 shrink-0" />
             {translate(
-              'auto.components.tab.bar.SortableTabContextMenu.splitTerminalRight',
-              'Split terminal right'
+              'auto.components.tab.bar.TerminalTabSplitMenuSection.splitTerminal',
+              'Split terminal'
             )}
-            <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => splitActiveTerminalPane('horizontal')}>
-            <PanelBottomClose className="size-3.5 shrink-0" />
-            {translate(
-              'auto.components.tab.bar.SortableTabContextMenu.splitTerminalDown',
-              'Split terminal down'
-            )}
-            <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuSubContent>
-      </DropdownMenuSub>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent
+            className={cn('min-w-[12rem]', TAB_CONTEXT_SUBMENU_CONTENT_CLASS)}
+          >
+            <DropdownMenuItem onSelect={() => splitActiveTerminalPane('vertical')}>
+              <PanelRightClose className="size-3.5 shrink-0" />
+              {translate(
+                'auto.components.tab.bar.SortableTabContextMenu.splitTerminalRight',
+                'Split terminal right'
+              )}
+              <DropdownMenuShortcut>{splitRightShortcut}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => splitActiveTerminalPane('horizontal')}>
+              <PanelBottomClose className="size-3.5 shrink-0" />
+              {translate(
+                'auto.components.tab.bar.SortableTabContextMenu.splitTerminalDown',
+                'Split terminal down'
+              )}
+              <DropdownMenuShortcut>{splitDownShortcut}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      ) : null}
       {trailingSeparator ? <DropdownMenuSeparator /> : null}
     </>
   )

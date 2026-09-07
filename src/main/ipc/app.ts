@@ -5,12 +5,13 @@ import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { FloatingTerminalCwdRequest, MarkdownDocument } from '../../shared/types'
+import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import { relaunchApp } from '../app-relaunch'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
-import { isPwshAvailable } from '../pwsh'
-import { isWslAvailable, listWslDistros } from '../wsl'
+import { isPwshAvailableAsync } from '../pwsh'
+import { isWslAvailableAsync, listWslDistrosAsync } from '../wsl'
 import { isGitBashAvailable } from '../git-bash'
 import { setUnreadDockBadgeCount } from '../dock/unread-badge'
 import { destroySystemTray } from '../tray/system-tray'
@@ -21,7 +22,10 @@ import {
   resolveFloatingTerminalCwd
 } from './floating-workspace-directory'
 import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
+import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
+import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
@@ -242,6 +246,7 @@ async function readKeyboardInputSourceId(): Promise<string | null> {
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
   registerRendererShutdownCheckpointHandler(store)
+  registerMacKeyboardLayoutChangeNotifications()
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
@@ -258,9 +263,11 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
   })
 
-  ipcMain.handle('wsl:isAvailable', (): boolean => isWslAvailable())
-  ipcMain.handle('wsl:listDistros', (): string[] => listWslDistros())
-  ipcMain.handle('pwsh:isAvailable', (): boolean => isPwshAvailable())
+  // Why: these probes spawn wsl.exe/pwsh.exe; the sync variants would block the main event
+  // loop — every PTY message, window IPC and watchdog beat — for up to 5s per renderer read.
+  ipcMain.handle('wsl:isAvailable', (): Promise<boolean> => isWslAvailableAsync())
+  ipcMain.handle('wsl:listDistros', (): Promise<string[]> => listWslDistrosAsync())
+  ipcMain.handle('pwsh:isAvailable', (): Promise<boolean> => isPwshAvailableAsync())
   ipcMain.handle('gitBash:isAvailable', (): boolean => isGitBashAvailable())
 
   // Why: renderer layout fingerprint tags ABC/CJK-Roman as 'us', breaking Option+letter (#1205); HIToolbox prefs override it.
@@ -278,6 +285,8 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       return null
     }
   })
+
+  ipcMain.handle('app:getKeyboardLayoutSnapshot', () => readMacKeyboardLayoutSnapshot())
 
   ipcMain.handle('app:relaunch', async () => {
     // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
@@ -298,6 +307,8 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       app.quit()
     }, 150)
   })
+
+  registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
 
   ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
     setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)

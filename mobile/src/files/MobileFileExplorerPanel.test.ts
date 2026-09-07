@@ -83,18 +83,6 @@ vi.mock('../transport/client-context', () => ({
   })
 }))
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 function entry(name: string, isDirectory = false): MobileDirEntry {
   return { name, isDirectory }
 }
@@ -113,21 +101,16 @@ function createMockClient(entriesByPath: Record<string, MobileDirEntry[]>): Mock
 
 async function renderExplorer(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    await act(async () => {
-      renderer = create(
-        createElement(MobileFileExplorerPanel, {
-          hostId: 'host-a',
-          worktreeId: 'worktree-a',
-          name: 'Example Worktree',
-          embedded: true
-        })
-      )
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  await act(async () => {
+    renderer = create(
+      createElement(MobileFileExplorerPanel, {
+        hostId: 'host-a',
+        worktreeId: 'worktree-a',
+        name: 'Example Worktree',
+        embedded: true
+      })
+    )
+  })
   if (!renderer) {
     throw new Error('MobileFileExplorerPanel did not render')
   }

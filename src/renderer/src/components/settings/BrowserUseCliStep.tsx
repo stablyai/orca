@@ -2,7 +2,7 @@ import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
-import { StepBadge } from './BrowserUseStepBadge'
+import { StepBadge } from './SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
 

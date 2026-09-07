@@ -1,5 +1,5 @@
-import type { LinearWorkspaceCandidate } from '../../shared/linear-agent-access'
-import type { LinearWorkspace } from '../../shared/types'
+import type { LinearWorkspaceCandidate } from '../../shared/linear/agent-access'
+import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 import { linearError } from './issue-context-errors'
 
 export function resolveWorkspaceSelector(

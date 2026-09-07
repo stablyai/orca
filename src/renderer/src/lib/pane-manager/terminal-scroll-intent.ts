@@ -1,4 +1,19 @@
+import {
+  addTerminalFollowOutputWaiter,
+  notifyTerminalFollowOutputWaiters
+} from './terminal-follow-output-waiters'
 import { isTerminalScrollIntentRebuildInFlight } from './terminal-scroll-intent-rebuild'
+import {
+  readKeyedTerminalScrollIntent,
+  readKeyedTerminalScrollIntentBinding,
+  writeKeyedTerminalScrollIntent,
+  writeKeyedTerminalScrollIntentBinding
+} from './terminal-scroll-intent-key-store'
+import type {
+  TerminalScrollIntent,
+  TerminalScrollIntentKey,
+  TerminalScrollIntentKind
+} from './terminal-scroll-intent-key-store'
 import {
   clampTerminalViewportY,
   isTerminalViewportAtBottom,
@@ -7,22 +22,10 @@ import {
   type TerminalScrollBufferType
 } from './terminal-scroll-buffer-snapshot'
 
-type TerminalScrollIntentKind = 'followOutput' | 'pinnedViewport'
-
 export type TerminalScrollIntentTarget = {
   buffer?: Parameters<typeof readTerminalScrollBufferSnapshot>[0]['buffer']
   scrollToBottom?: () => void
   scrollToLine?: (line: number) => void
-}
-
-export type TerminalScrollIntentKey = string
-
-type TerminalScrollIntent = {
-  kind: TerminalScrollIntentKind
-  bufferType: TerminalScrollBufferType
-  viewportY: number
-  baseY: number
-  revision: number
 }
 
 export type TerminalStructuralScrollIntentSnapshot = {
@@ -49,11 +52,21 @@ const terminalScrollIntentKeyByTerminal = new WeakMap<
   TerminalScrollIntentKey
 >()
 const terminalScrollIntentKeyBindingByTerminal = new WeakMap<TerminalScrollIntentTarget, number>()
-const terminalScrollIntentByKey = new Map<TerminalScrollIntentKey, TerminalScrollIntent>()
-const terminalScrollIntentBindingByKey = new Map<TerminalScrollIntentKey, number>()
 
 let nextTerminalScrollIntentRevision = 1
 let nextTerminalScrollIntentKeyBinding = 1
+
+/** Runs `listener` once the terminal's intent next becomes follow-output; returns a canceller. Fires immediately when already following. */
+export function onTerminalScrollIntentFollowOutput(
+  terminal: TerminalScrollIntentTarget,
+  listener: () => void
+): () => void {
+  if (getTerminalScrollIntentKind(terminal) === 'followOutput') {
+    listener()
+    return () => {}
+  }
+  return addTerminalFollowOutputWaiter(terminal, listener)
+}
 
 function writeIntent(
   terminal: TerminalScrollIntentTarget,
@@ -76,7 +89,10 @@ function writeIntentSnapshot(
   terminalScrollIntentByTerminal.set(terminal, intent)
   const key = terminalScrollIntentKeyByTerminal.get(terminal)
   if (key) {
-    terminalScrollIntentByKey.set(key, intent)
+    writeKeyedTerminalScrollIntent(key, intent)
+  }
+  if (kind === 'followOutput') {
+    notifyTerminalFollowOutputWaiters(terminal)
   }
   return intent
 }
@@ -87,7 +103,7 @@ function readStoredIntent(terminal: TerminalScrollIntentTarget): TerminalScrollI
     return terminalIntent
   }
   const key = terminalScrollIntentKeyByTerminal.get(terminal)
-  return key ? terminalScrollIntentByKey.get(key) : undefined
+  return key ? readKeyedTerminalScrollIntent(key) : undefined
 }
 
 export function bindTerminalScrollIntentKey(
@@ -101,8 +117,8 @@ export function bindTerminalScrollIntentKey(
   const binding = nextTerminalScrollIntentKeyBinding
   nextTerminalScrollIntentKeyBinding += 1
   terminalScrollIntentKeyBindingByTerminal.set(terminal, binding)
-  terminalScrollIntentBindingByKey.set(key, binding)
-  const existing = terminalScrollIntentByKey.get(key)
+  writeKeyedTerminalScrollIntentBinding(key, binding)
+  const existing = readKeyedTerminalScrollIntent(key)
   if (existing) {
     terminalScrollIntentByTerminal.set(terminal, existing)
   }
@@ -118,7 +134,7 @@ export function isTerminalScrollIntentKeyBindingCurrent(
   }
   return (
     terminalScrollIntentKeyBindingByTerminal.get(terminal) ===
-    terminalScrollIntentBindingByKey.get(key)
+    readKeyedTerminalScrollIntentBinding(key)
   )
 }
 

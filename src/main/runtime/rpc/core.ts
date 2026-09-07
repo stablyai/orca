@@ -1,13 +1,15 @@
 // Why: single boundary between raw RPC frames and OrcaRuntimeService; keeps schema, handler, and result type on one object.
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 
 export type PairingRpcContext = {
   getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
@@ -44,7 +46,20 @@ export type RpcRequest = {
   authToken: string
   method: string
   params?: unknown
+  orchestrationCapability?: string
+  orchestrationContractVersion?: number
+  orchestrationRequestId?: string
+  compatibilityInvocationId?: string
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
 }
+
+export type LegacyCoordinatorAuthorityProof = Readonly<{
+  runId: string
+  principalId: string | null
+  terminalHandle: string
+  paneKey: string
+  consumerGeneration: number
+}>
 
 export type RpcContext = {
   runtime: OrcaRuntimeService
@@ -60,6 +75,36 @@ export type RpcContext = {
   pairedDeviceId?: string
   // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
+  // Why: negotiation is bound to the authenticated socket, never asserted by a destructive request.
+  clientCapabilities?: readonly RuntimeCapability[]
+  // Why: mobile v2 auth is exact-key validated; capability upgrades must mutate only the authenticated socket after auth.
+  updateClientCapabilities?: (capabilities: readonly RuntimeCapability[]) => void
+  // Why: Dispatch authority rides in the authenticated RPC envelope, never in user payload fields.
+  orchestrationCapability?: string
+  // Why: long-lived mutations such as ask can durably expose acceptance before their waiter settles.
+  recordMutationReceipt?: (receipt: unknown) => void
+  // Why: only local worker_done makes pending proof that its atomic settlement transaction never committed.
+  markWorkerDoneMutationEffectFree?: () => void
+  // Why: prompt receipts may retry only until the PTY write boundary makes effects ambiguous.
+  markMutationEffectPossible?: () => void
+  // Why: worker-start commits this identity with its starting Dispatch so crash recovery always has an inspectable operation.
+  orchestrationMutation?: {
+    callerFingerprint: string
+    requestId: string
+    method: string
+    payloadHash: string
+  }
+  // Why: a prompt retry with --wait-submit observes its durable receipt instead of writing again.
+  replayedMutationReceipt?: unknown
+  // Why: Run-scoped handlers must compare declared handles with request attestation.
+  orchestrationCompatibilityEvidence?: OrchestrationCompatibilityEvidence
+  // Why: only the compatibility authority router can set this trusted scope; user params cannot bypass Run consumer binding.
+  legacyCoordinatorRunId?: string
+  legacyCoordinatorAuthority?: LegacyCoordinatorAuthorityProof
+  revalidateLegacyCoordinator?: () => string
+  orchestrationCompatibilityCallerAuthority?: OrchestrationCompatibilityCallerAuthority
+  // Why: federation pins the authenticated saved-environment caller without exposing its token to handlers or storage.
+  authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
   // Why: mobile terminal traffic bypasses JSON streaming; undefined on Unix/socket and non-E2EE WebSocket paths.
   sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
@@ -68,15 +113,19 @@ export type RpcContext = {
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
   ) => () => void
+  // Why: non-terminal binary protocols own their dedicated authenticated subscription socket.
+  registerBinaryMessageHandler?: (
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
+  ) => () => void
 }
 
-export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => Promise<unknown> | unknown
+export type RpcHandler<TParams> = (params: TParams, ctx: RpcContext) => unknown
 
 // Why: RpcMethod erases the param type; centralizing the cast in defineMethod sidesteps RpcHandler's contravariance.
 export type RpcMethod = {
   readonly name: string
   readonly params: ZodType | null
-  readonly handler: (params: unknown, ctx: RpcContext) => Promise<unknown> | unknown
+  readonly handler: (params: unknown, ctx: RpcContext) => unknown
 }
 
 type DefineMethodSpec<TSchema extends ZodType | null> = {

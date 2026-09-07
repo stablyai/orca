@@ -151,6 +151,15 @@ describe('installer-utils-remote', () => {
     expect(result).toBeNull()
   })
 
+  it('parses settings.json with one leading BOM', async () => {
+    const { sftp, fs } = createFakeSftp()
+    fs.files.set('/home/u/.cursor/hooks.json', '\uFEFF{"version":1,"hooks":{}}')
+
+    const result = await readHooksJsonRemote(sftp, '/home/u/.cursor/hooks.json')
+
+    expect(result).toEqual({ version: 1, hooks: {} })
+  })
+
   it('rethrows non-ENOENT read errors so callers can distinguish I/O failures from parse failures', async () => {
     const sftp = {
       readFile: (_path: string, _enc: string, cb: (err: unknown) => void): void => {

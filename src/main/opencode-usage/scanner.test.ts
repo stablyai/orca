@@ -3,12 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
-import {
-  attributeOpenCodeUsageEvent,
-  parseOpenCodeUsageDatabase,
-  parseOpenCodeUsageRow,
-  scanOpenCodeUsageDatabases
-} from './scanner'
+import { listOpenCodeDatabases } from './opencode-database-discovery'
+import { parseOpenCodeUsageRow } from './opencode-usage-row-parsing'
+import { attributeOpenCodeUsageEvent } from './opencode-usage-worktree-attribution'
+import { parseOpenCodeUsageDatabase, scanOpenCodeUsageDatabases } from './scanner'
 
 const WORKTREE = '/workspace/repo'
 
@@ -421,6 +419,19 @@ describe('scanOpenCodeUsageDatabases', () => {
     db.close()
     return path
   }
+
+  it('does not scan disk databases when OPENCODE_DB uses memory', async () => {
+    writeSessionTotalsDb('opencode.db', [])
+    process.env.OPENCODE_DB = ':memory:'
+
+    await expect(listOpenCodeDatabases()).resolves.toEqual([])
+  })
+
+  it('does not return a directory configured as OPENCODE_DB', async () => {
+    process.env.OPENCODE_DB = '.'
+
+    await expect(listOpenCodeDatabases()).resolves.toEqual([])
+  })
 
   it('counts a session duplicated into a stale backup database exactly once', async () => {
     // The backup holds a stale snapshot of session-1; the canonical db has

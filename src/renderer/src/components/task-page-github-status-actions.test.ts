@@ -5,7 +5,7 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage,
   validateTaskPageGitHubDuplicateTarget
 } from './task-page-github-status-actions'
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 describe('TaskPage GitHub status actions', () => {
   it('builds completed and not planned close updates', () => {

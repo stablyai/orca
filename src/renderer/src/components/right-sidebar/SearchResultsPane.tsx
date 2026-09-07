@@ -1,6 +1,10 @@
 import React from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { SearchFileResult, SearchMatch, SearchResult } from '../../../../shared/types'
+import type {
+  SearchFileResult,
+  SearchMatch,
+  SearchResult
+} from '../../../../shared/code-search-types'
 import type { SearchRow } from './search-rows'
 import { FileResultRow, MatchResultRow } from './SearchResultItems'
 import { translate } from '@/i18n/i18n'

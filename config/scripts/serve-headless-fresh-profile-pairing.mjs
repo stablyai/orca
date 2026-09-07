@@ -55,7 +55,6 @@ Object.assign(childEnv, {
   ORCA_DEV_USER_DATA_PATH: profileDir,
   HOME: isolatedHome,
   USERPROFILE: isolatedHome,
-  ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
   ...(process.platform === 'linux'
     ? { ELECTRON_DISABLE_SANDBOX: process.env.ELECTRON_DISABLE_SANDBOX ?? '1' }
     : {})
@@ -260,7 +259,7 @@ function printReadyLine(line) {
   if (!payload || payload.type !== 'orca_server_ready') {
     return false
   }
-  console.log(`Orca server ready: ${payload.endpoint ?? 'websocket unavailable'}`)
+  console.log(`Orca server ready: ${payload.boundEndpoint ?? 'websocket unavailable'}`)
   if (payload.pairing?.endpoint) {
     console.log(`Pairing endpoint: ${payload.pairing.endpoint}`)
   }

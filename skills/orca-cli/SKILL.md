@@ -1,30 +1,19 @@
 ---
 name: orca-cli
 description: >-
-  Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
-  terminals, repos, automations, worktree comments, and the browser embedded
-  inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
-  "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
-  "give this to another agent", "another worktree", "Orca browser", or
-  "control the browser inside Orca". Prefer this over raw `git worktree`, ad hoc
-  PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
-  Use Computer Use for browser windows, webviews, or desktop UI outside Orca's
-  embedded browser.
+  Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, artifacts,
+  skill sharing, worktree comments, and Orca's embedded browser through the `orca` CLI. Use
+  when the user says "$orca-cli", "Orca worktree", "child worktree", "spawn codex/claude in a
+  worktree", "read/wait/send Orca terminal", "handoff" / "handover" / "give this to another
+  agent", "Orca browser", "orca artifacts", or "share skills". Prefer it over raw git
+  worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only
+  for external windows or desktop UI that needs OS-level control, and Playwright or CDP for
+  external pages.
 ---
 
 # Orca CLI
 
-This file is a discovery stub, not the usage guide. The full, version-matched Orca CLI
-reference is served by the `orca` binary itself — kept out of this file on purpose so it
-can never drift from the binary that will actually run your commands.
-
-Engage Orca whenever its running editor/runtime is the source of truth: Orca-managed
-worktrees, folder contexts, terminals, repos, automations, worktree comments, and the
-browser embedded inside the Orca app. Triggers include "$orca-cli", "Orca worktree",
-"child worktree", "spawn codex/claude in a worktree", "read/wait/send Orca terminal",
-"full handoff" / "handover" / "give this to another agent", and "control the browser
-inside Orca". Use plain shell tools when Orca state does not matter.
+This discovery stub loads the version-matched guide from the Orca executable used for this session.
 
 ## Resolve the CLI for this session
 
@@ -45,34 +34,13 @@ same way in POSIX shells, PowerShell, and cmd.exe.
 If the selected executable cannot run, report its exact error and stop. Do not fall through
 to another executable, which could silently target a different Orca build.
 
-## Load the full guide before running Orca commands
+## Load the version-matched guide before running Orca commands
 
 ```text
 ORCA skills get orca-cli
 ```
 
-That prints the complete, version-matched guide for the exact binary that will handle your
-next commands — worktrees, handoffs, terminals, automations, and the built-in browser.
-Read it first, then run the specific command you need.
-
-Don't guess subcommands or flags from memory or from a cached copy of this stub. They
-change between Orca releases, and this file deliberately no longer lists them. Confirm the
-app is up with `ORCA status --json` (start it with `ORCA open --json` if needed), and
-prefer `--json` for agent-driven calls.
-
-## If an older Orca does not recognize `skills get`
-
-Use this fallback only when the selected binary explicitly reports that `skills get` is an
-unknown command. Another failure is not proof of an older binary; report it rather than
-guessing or changing executables. For a confirmed pre-guide binary, use only this bounded,
-read-only bootstrap to orient. Do not dead-end and do not invent commands:
-
-```text
-ORCA status --json
-ORCA worktree ps --json
-ORCA terminal list --json
-```
-
-Then tell the user that updating Orca restores the full, version-matched guide via
-`ORCA skills get orca-cli`. Beyond these commands, ask the user rather than guessing a
-command surface this older binary may not support.
+Prefer `--json`. Use the selected executable's `--help` for commands or flags the guide does
+not cover. If a command reports that Orca is not running, start it with `ORCA open --json`
+and retry. If `skills get` is unknown, explain that updating Orca restores the guide; use
+`--help` for read-only discovery and do not guess unsupported commands.

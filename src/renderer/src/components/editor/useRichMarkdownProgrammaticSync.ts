@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { syncDocLinkMenu, type DocLinkMenuState } from './rich-markdown-commands'
 import { normalizeEmptyListItems } from './rich-markdown-normalize'
@@ -20,6 +20,7 @@ type RichMarkdownProgrammaticSyncOptions = {
   editor: Editor | null
   fileId: string
   filePath: string
+  externalSshTargetId?: string
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   lastCommittedMarkdownRef: MutableRefObject<string>
   originalSourceRef: MutableRefObject<string>
@@ -46,6 +47,7 @@ export function useRichMarkdownProgrammaticSync({
   editor,
   fileId,
   filePath,
+  externalSshTargetId,
   isApplyingProgrammaticUpdateRef,
   lastCommittedMarkdownRef,
   originalSourceRef,
@@ -68,6 +70,7 @@ export function useRichMarkdownProgrammaticSync({
         editor,
         createRichMarkdownImageResolverContext({
           filePath,
+          externalSshTargetId,
           runtimeEnvironmentId,
           settings,
           worktreeId,
@@ -79,6 +82,7 @@ export function useRichMarkdownProgrammaticSync({
     }
   }, [
     editor,
+    externalSshTargetId,
     filePath,
     isApplyingProgrammaticUpdateRef,
     runtimeEnvironmentId,

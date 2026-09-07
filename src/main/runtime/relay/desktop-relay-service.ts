@@ -6,6 +6,7 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { readRelayAuthContext } from './relay-auth-context'
 import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
@@ -18,13 +19,14 @@ import type {
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
+import { createRelayRegionPreferenceReader } from './relay-region-preference'
 
 type DesktopRelayServiceOptions = {
   authConfig: OrcaCloudAuthConfig
   userDataPath: string
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
-  onStatus: (status: RelayBrokerStatus) => void
+  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
 }
 
 export function pairingAuthorizationForContext(
@@ -42,12 +44,18 @@ export function pairingAuthorizationForContext(
     : null
 }
 
+// Why: a broker that died without arming a retry (sleep past token expiry,
+// transient auth read) must not stay dead until the user clicks Retry. The
+// cadence is slow because it is a safety net, not the primary retry path.
+const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
+
 export class DesktopRelayService {
   private readonly coordinator: RelayAuthCoordinator
   private readonly revokeOutbox: RelayRevokeOutbox
   private readonly runtimeRpc: OrcaRuntimeRpcServer
   private readonly demandLedger: RelayDemandLedger
   private demandExpiryTimer: ReturnType<typeof setTimeout> | null = null
+  private livenessTimer: ReturnType<typeof setInterval> | null = null
   private stopped = false
 
   constructor(options: DesktopRelayServiceOptions) {
@@ -63,6 +71,7 @@ export class DesktopRelayService {
       revokeOutbox: this.revokeOutbox,
       relayHostId: deriveRelayHostId(keypair.publicKey)
     })
+    const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
       readContext: () => readRelayAuthContext(options.authConfig, options.userDataPath),
       hasDemand: ({ identity }) =>
@@ -79,6 +88,8 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
+          resolvePreferredRegion: regionPreference.resolvePreferredRegion,
+          onAssignedCellActive: regionPreference.noteAssignedCell,
           onStatus: options.onStatus
         })
         void this.flushRevokeOutbox(broker)
@@ -92,12 +103,26 @@ export class DesktopRelayService {
     this.refreshDemand()
   }
 
+  // Safe to call from any wake signal (power resume, network change).
+  ensureLive(): void {
+    if (!this.stopped) {
+      this.coordinator.ensureLive()
+    }
+  }
+
   authMutated(): void {
     this.refreshDemand()
   }
 
-  fenceAndCloseNow(): void {
-    this.coordinator.fenceAndCloseNow()
+  fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
+    // Why: a fence must be hard — a surviving liveness tick could catch the
+    // window between the pre-sign-out fence and the profile wipe and briefly
+    // resurrect a broker. The next auth mutation re-arms via refreshDemand.
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
+    }
+    this.coordinator.fenceAndCloseNow(hostCloseReason)
   }
 
   async createPairingRelay(
@@ -217,6 +242,10 @@ export class DesktopRelayService {
       clearTimeout(this.demandExpiryTimer)
       this.demandExpiryTimer = null
     }
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
+    }
     this.coordinator.stop()
   }
 
@@ -270,8 +299,7 @@ export class DesktopRelayService {
   }
 
   private async activeBrokerForDemand(): Promise<RelaySessionBroker | null> {
-    const broker =
-      this.coordinator.getActiveBroker() ?? (await this.coordinator.waitForActiveBroker())
+    const broker = this.coordinator.getLiveBroker() ?? (await this.coordinator.waitForLiveBroker())
     return broker instanceof RelaySessionBroker ? broker : null
   }
 
@@ -286,6 +314,9 @@ export class DesktopRelayService {
   private refreshDemand(): void {
     if (this.stopped) {
       return
+    }
+    if (!this.livenessTimer) {
+      this.livenessTimer = setInterval(() => this.ensureLive(), RELAY_LIVENESS_INTERVAL_MS)
     }
     if (this.demandExpiryTimer) {
       clearTimeout(this.demandExpiryTimer)

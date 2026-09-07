@@ -2,6 +2,7 @@ import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   type BackgroundMountTerminalWorktreeDetail
 } from '@/constants/terminal'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 
 const pendingMounts = new Map<string, BackgroundMountTerminalWorktreeDetail>()
 const requestListeners = new Set<() => void>()
@@ -141,12 +142,30 @@ export function shouldMountBackgroundWorktreeTab(
 // until first reveal, parked byte watchers own their side effects meanwhile.
 export const COLD_ACTIVATION_TAB_DEFER_THRESHOLD = 4
 
+export function canMountTerminalWorkspaceForStartup(args: {
+  workspaceSessionReady: boolean
+  hydrationSucceeded: boolean
+  startupWorktreeRefreshCompleted: boolean
+}): boolean {
+  return (
+    args.workspaceSessionReady && (args.hydrationSucceeded || args.startupWorktreeRefreshCompleted)
+  )
+}
+
 export function canDeferColdActivationTabsForHost(args: {
   executionHostId: string | null
+  pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
 }): boolean {
-  // Why: restored identities can be transient or stale while remote ownership
-  // hydrates. Only positively confirmed local execution has daemon snapshots.
-  return args.executionHostId === 'local'
+  const host = parseExecutionHostId(args.executionHostId)
+  if (host?.kind === 'local') {
+    return true
+  }
+  // Why: remote ownership must match the exact host advertising bounded
+  // snapshots; stale runtime identities stay eager instead of losing output.
+  return (
+    host?.kind === 'runtime' &&
+    args.pairedRuntimeParkingEnvironmentIds?.has(host.environmentId) === true
+  )
 }
 
 function replaceActivationDeferredMountTabs(
@@ -178,7 +197,8 @@ export function planColdActivationTabDeferral(opts: {
   deferredMountTabIdsByWorktree: Map<string, ReadonlySet<string>>
   worktreeId: string
   allTabIds: readonly string[]
-  isTabLive: (tabId: string) => boolean
+  /** Worktree is passed so duplicate legacy tab ids fail closed by owner. */
+  isTabLive: (tabId: string, worktreeId?: string) => boolean
   /** Safe to leave unmounted: parked byte watchers can cover it and no spawn
    *  is pending. Non-deferrable tabs mount immediately. */
   isTabDeferrable: (tabId: string) => boolean
@@ -199,7 +219,7 @@ export function planColdActivationTabDeferral(opts: {
     // Why live/previously-allowed tabs stay in: narrowing would unmount
     // panes that are already up (or background mounts still registering).
     if (
-      isTabLive(tabId) ||
+      isTabLive(tabId, worktreeId) ||
       immediateTabIds.has(tabId) ||
       previouslyAllowed?.has(tabId) ||
       !isTabDeferrable(tabId)

@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { MOBILE_TUI_AGENT_FAVICON_DOMAINS } from '../tasks/mobile-tui-agents'
 
 // Agents that render a hand-authored glyph in MobileAgentIcon and therefore

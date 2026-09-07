@@ -17,9 +17,9 @@ export async function runFileWatchStream(args: {
     let settled = false
     let setupFailed = false
     let watchReady = false
-    let unwatch: (() => void) | null = null
+    let unwatch: (() => Promise<void>) | null = null
     let terminalError: Error | null = null
-    let setupPromise: Promise<() => void> | null = null
+    let setupPromise: Promise<() => Promise<void>> | null = null
     let cleanupPromise: Promise<void> | null = null
     let logicalCleanupStarted = false
     let endEmitted = false

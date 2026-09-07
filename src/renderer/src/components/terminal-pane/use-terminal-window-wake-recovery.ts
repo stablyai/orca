@@ -1,11 +1,15 @@
 import { useEffect } from 'react'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { recoverVisibleTerminalWindowWake } from './terminal-visibility-resume'
+import { repairPaneWebglCanvasDpr } from '@/lib/pane-manager/terminal-canvas-dpr-repair'
+import { presentPaneViewport } from '@/lib/pane-manager/pane-webgl-renderer'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 import type { IDisposable } from '@xterm/xterm'
+import { activePaneIsCoveredByNativeChat } from './native-chat-covered-pane'
 
 type UseTerminalWindowWakeRecoveryArgs = {
   isVisible: boolean
+  isChatViewMode: boolean
   managerRef: React.RefObject<PaneManager | null>
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
@@ -16,8 +20,11 @@ type WindowWakePtyBinding = IDisposable & {
   reassertPtySizeAfterWindowWake?: () => void
 }
 
+const DPR_RECOVERY_RETRY_FRAMES = 16
+
 export function useTerminalWindowWakeRecovery({
   isVisible,
+  isChatViewMode,
   managerRef,
   isActiveRef,
   isVisibleRef,
@@ -28,7 +35,10 @@ export function useTerminalWindowWakeRecovery({
       return
     }
     let wakeRecoveryFrameId: number | null = null
+    let dprRecoveryFrameId: number | null = null
+    let dprRecoveryFramesRemaining = 0
     let settledClearGlyphAtlases = false
+    let observedDevicePixelRatio = window.devicePixelRatio
     const cancelScheduledWakeRecovery = (): void => {
       if (wakeRecoveryFrameId === null || typeof cancelAnimationFrame !== 'function') {
         wakeRecoveryFrameId = null
@@ -36,6 +46,13 @@ export function useTerminalWindowWakeRecovery({
       }
       cancelAnimationFrame(wakeRecoveryFrameId)
       wakeRecoveryFrameId = null
+    }
+    const cancelScheduledDprRecovery = (): void => {
+      if (dprRecoveryFrameId !== null && typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(dprRecoveryFrameId)
+      }
+      dprRecoveryFrameId = null
+      dprRecoveryFramesRemaining = 0
     }
     const reassertPanePtySizes = (): void => {
       for (const binding of panePtyBindingsRef?.current.values() ?? []) {
@@ -71,6 +88,7 @@ export function useTerminalWindowWakeRecovery({
       recoverVisibleTerminalWindowWake({
         manager,
         isActive: isActiveRef.current,
+        isChatViewMode: isChatViewMode && activePaneIsCoveredByNativeChat(manager),
         clearGlyphAtlases
       })
       if (typeof requestAnimationFrame !== 'function') {
@@ -89,6 +107,7 @@ export function useTerminalWindowWakeRecovery({
         recoverVisibleTerminalWindowWake({
           manager: settledManager,
           isActive: isActiveRef.current,
+          isChatViewMode: isChatViewMode && activePaneIsCoveredByNativeChat(settledManager),
           clearGlyphAtlases: clearGlyphAtlasesOnSettle
         })
         reassertPanePtySizes()
@@ -101,7 +120,7 @@ export function useTerminalWindowWakeRecovery({
     const onFocus = (): void => recoverVisibleWake(false, 'focus')
     const onVisibilityChange = (): void => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        recoverVisibleWake(true, 'visibilitychange')
+        recoverVisibleWake(false, 'visibilitychange')
       }
     }
     // Why: Linux has no window-occlusion tracking, so visibilitychange never
@@ -111,7 +130,59 @@ export function useTerminalWindowWakeRecovery({
         recoverVisibleWake(true, 'system-resumed')
       }
     }
+    const repairVisiblePanesForDpr = (devicePixelRatio: number): boolean => {
+      const manager = managerRef.current
+      if (!manager || !isVisibleRef.current) {
+        return false
+      }
+      let deferred = false
+      for (const pane of manager.getPanes?.() ?? []) {
+        const state = repairPaneWebglCanvasDpr(pane)
+        deferred ||= state === 'deferred'
+        if (state === 'repaired') {
+          presentPaneViewport(pane)
+        }
+      }
+      if (!deferred) {
+        observedDevicePixelRatio = devicePixelRatio
+      }
+      return !deferred
+    }
+    const scheduleDprRecovery = (): void => {
+      if (dprRecoveryFrameId !== null || typeof requestAnimationFrame !== 'function') {
+        return
+      }
+      dprRecoveryFramesRemaining = DPR_RECOVERY_RETRY_FRAMES
+      const retry = (): void => {
+        dprRecoveryFrameId = null
+        if (repairVisiblePanesForDpr(window.devicePixelRatio)) {
+          dprRecoveryFramesRemaining = 0
+          return
+        }
+        dprRecoveryFramesRemaining -= 1
+        if (dprRecoveryFramesRemaining > 0) {
+          dprRecoveryFrameId = requestAnimationFrame(retry)
+        }
+      }
+      dprRecoveryFrameId = requestAnimationFrame(retry)
+    }
+    const onWindowResize = (): void => {
+      // Why: Chromium emits window resize on devicePixelRatio changes even when
+      // the CSS box is unchanged (monitor move / undock). xterm's own observer
+      // misses that while the canvas had no box (laptop lid closed).
+      const devicePixelRatio = window.devicePixelRatio
+      if (devicePixelRatio === observedDevicePixelRatio) {
+        return
+      }
+      if (dprRecoveryFrameId !== null) {
+        return
+      }
+      if (!repairVisiblePanesForDpr(devicePixelRatio)) {
+        scheduleDprRecovery()
+      }
+    }
     window.addEventListener('focus', onFocus)
+    window.addEventListener('resize', onWindowResize)
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
       document.addEventListener('visibilitychange', onVisibilityChange)
     }
@@ -125,11 +196,13 @@ export function useTerminalWindowWakeRecovery({
         : null
     return () => {
       cancelScheduledWakeRecovery()
+      cancelScheduledDprRecovery()
       window.removeEventListener('focus', onFocus)
+      window.removeEventListener('resize', onWindowResize)
       if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
         document.removeEventListener('visibilitychange', onVisibilityChange)
       }
       unsubscribeSystemResumed?.()
     }
-  }, [isActiveRef, isVisible, isVisibleRef, managerRef, panePtyBindingsRef])
+  }, [isActiveRef, isChatViewMode, isVisible, isVisibleRef, managerRef, panePtyBindingsRef])
 }

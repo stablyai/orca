@@ -1,11 +1,16 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
+import { resolveDecayedAgentRowState } from '@/lib/agent-row-decay-state'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { isSyntheticAgentPermissionTitle } from '../../../../shared/synthetic-agent-title'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../../../shared/agent-detection'
-import type { TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusEvidenceObservedAt,
   type AgentStateHistoryEntry,
   type AgentStatusEntry,
   type MigrationUnsupportedPtyEntry
@@ -15,13 +20,16 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 /**
  * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
  *   1 — Needs you (`blocked` / `waiting`)
- *   2 — Done (`done`, not interrupted)
+ *   2 — Done (`done`, not interrupted, completed within AGENT_STATUS_STALE_AFTER_MS)
  *   3 — Working (`working`)
- *   4 — Idle (no live entry, stale entry, or interrupted `done`)
+ *   4 — Unverifiable (stale non-`done` entry on a pane Orca still holds a live PTY for:
+ *       the reporting stream stopped, not necessarily the work)
+ *   5 — Idle (no live entry, interrupted `done`, an aged-out completion, or a stale entry
+ *       with no live PTY behind it)
  *
  * Primary sort key; ties fall back to the attention timestamp. See docs/smart-worktree-order-redesign.md.
  */
-export type SmartClass = 1 | 2 | 3 | 4
+export type SmartClass = 1 | 2 | 3 | 4 | 5
 
 /**
  * What surfaced a worktree into Class 1 (carried only for Class 1, the only class telemetry reports on).
@@ -34,10 +42,11 @@ export type AttentionCause = 'blocked' | 'waiting' | 'title-heuristic'
  * Per-worktree resolution computed once before sorting.
  *
  * `attentionTimestamp` by class:
- *   - Class 1 / 2: `stateStartedAt` of the current entry.
+ *   - Class 1: `stateStartedAt` of the current entry. Class 2: the entry's completion time.
  *   - Class 3: `stateStartedAt` of the most recent prior `done`/`blocked`/`waiting` entry,
  *     falling back to the current `working` `stateStartedAt`.
- *   - Class 4: `0` — comparator drops to `effectiveRecentActivity` for idle ordering.
+ *   - Class 4: when the evidence was last observed, so the least-silent pane ranks first.
+ *   - Class 5: `0` — comparator drops to `effectiveRecentActivity` for idle ordering.
  *
  * `cause` is set only when `cls === 1`; feeds the `smart_sort_class_1_promotion` telemetry event.
  */
@@ -47,7 +56,7 @@ export type WorktreeAttention = {
   cause?: AttentionCause
 }
 
-export const IDLE: WorktreeAttention = { cls: 4, attentionTimestamp: 0 }
+export const IDLE: WorktreeAttention = { cls: 5, attentionTimestamp: 0 }
 
 export function hasFreshAttributedAgentStatus(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
@@ -103,17 +112,20 @@ export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]):
  * panes fall back to the title heuristic (design doc Edge case 9). Authority is per-pane, not per-worktree.
  */
 export type PaneInput =
-  | { kind: 'hook'; entry: AgentStatusEntry }
+  // Why hasLivePty: a stale entry's decay destination depends on whether Orca still holds the
+  // pane's PTY — losing the reporting stream is not the same as nothing running there.
+  | { kind: 'hook'; entry: AgentStatusEntry; hasLivePty: boolean }
   // Why: TerminalTab has no per-tab lastActivityAt; the worktree-level value suffices for cross-worktree ordering.
   | { kind: 'title'; status: AgentStatus | null; worktreeLastActivityAt: number }
 
 /**
  * Resolve a worktree's class + attention timestamp from its panes' inputs.
- * Stale hook entries are skipped; the worktree falls to Class 4 with no fresh hook and no title heuristic.
+ * A stale hook entry lands in Class 4 or 5 depending on live-PTY evidence; the worktree falls to
+ * Class 5 with no fresh hook and no title heuristic.
  * Across panes: `cls` is the **min** (most demanding pane wins), `attentionTimestamp` the **max** within that class.
  */
 export function resolveAttention(panes: PaneInput[], now: number): WorktreeAttention {
-  let bestCls: SmartClass = 4
+  let bestCls: SmartClass = 5
   let bestTs = 0
   let bestCause: AttentionCause | undefined
 
@@ -125,6 +137,20 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
     if (pane.kind === 'hook') {
       const entry = pane.entry
       if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+        // Why: a pane Orca still holds a PTY for outranks a genuinely empty one — the user may
+        // know why it went quiet (a long build), which Orca never can. It never outranks a
+        // reporting pane, and it never claims the agent finished.
+        if (resolveDecayedAgentRowState(entry, pane.hasLivePty) === 'unverifiable') {
+          const observedAt = agentStatusEvidenceObservedAt(entry)
+          if (
+            Number.isFinite(observedAt) &&
+            (4 < bestCls || (bestCls === 4 && observedAt > bestTs))
+          ) {
+            bestCls = 4
+            bestTs = observedAt
+            bestCause = undefined
+          }
+        }
         continue
       }
       // Why: non-finite stateStartedAt (NaN/Infinity) would poison comparisons; treat as a missing entry.
@@ -137,12 +163,19 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         ts = entry.stateStartedAt
         cause = entry.state
       } else if (entry.state === 'done') {
-        // Why: interrupted `done` (Ctrl+C) means the user is done with the turn; treat as idle, not Class 2.
-        if (entry.interrupted) {
+        // Why: null covers interrupted `done` (Ctrl+C — user is finished with it) and idle session
+        // boundaries; neither is attention.
+        const completedAt = agentEntryCompletionAt(entry)
+        if (completedAt === null) {
+          continue
+        }
+        // Why: same-state `done` writes advance updatedAt without moving the completion, so the hook
+        // freshness gate alone can keep a row in Class 2 long after the UI shows it aged out.
+        if (now - completedAt > AGENT_STATUS_STALE_AFTER_MS) {
           continue
         }
         cls = 2
-        ts = entry.stateStartedAt
+        ts = completedAt
       } else {
         // working
         cls = 3
@@ -195,27 +228,26 @@ export function buildExplicitEntriesByTabId(
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
 ): Map<string, AgentStatusEntry[]> {
   const byTab = new Map<string, AgentStatusEntry[]>()
-  const entries = [
-    ...Object.values(agentStatusByPaneKey ?? {}),
-    ...Object.values(migrationUnsupportedByPtyId ?? {}).flatMap((entry) => {
-      const agentEntry = migrationUnsupportedToAgentStatusEntry(entry)
-      return agentEntry ? [agentEntry] : []
-    })
-  ]
-  if (entries.length === 0) {
-    return byTab
-  }
-  for (const entry of entries) {
+  const pushEntry = (entry: AgentStatusEntry): void => {
     const parsed = parsePaneKey(entry.paneKey)
     // Why: skip malformed/legacy-numeric paneKeys rather than bucketing unroutable rows under a tab.
     if (!parsed) {
-      continue
+      return
     }
     const bucket = byTab.get(parsed.tabId)
     if (bucket) {
       bucket.push(entry)
     } else {
       byTab.set(parsed.tabId, [entry])
+    }
+  }
+  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
+    pushEntry(entry)
+  }
+  for (const entry of Object.values(migrationUnsupportedByPtyId ?? {})) {
+    const agentEntry = migrationUnsupportedToAgentStatusEntry(entry)
+    if (agentEntry) {
+      pushEntry(agentEntry)
     }
   }
   return byTab
@@ -246,6 +278,88 @@ function leafIdFromPaneKey(paneKey: string): string | null {
   return parsePaneKey(paneKey)?.leafId ?? null
 }
 
+/** Renderer state a single tab's panes are resolved from. */
+export type TabPaneInputSources = {
+  entriesByTabId: ReadonlyMap<string, AgentStatusEntry[]>
+  ptyIdsByTabId: Record<string, string[]>
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+}
+
+/**
+ * One terminal tab's contribution to an attention resolution: its hook entries, plus the
+ * title heuristic for panes no fresh hook covers. Gated on `tabHasLivePty` so a slept tab's
+ * stale working-pattern title can't leak through.
+ */
+export function collectTabPaneInputs(
+  tab: Pick<TerminalTab, 'id' | 'title'>,
+  worktreeLastActivityAt: number,
+  sources: TabPaneInputSources,
+  now: number
+): PaneInput[] {
+  const panes: PaneInput[] = []
+  const hasLivePty = tabHasLivePty(sources.ptyIdsByTabId, tab.id)
+  // Why: leaves covered by a hook entry skip the title fallback so we don't double-count them.
+  const hookLeafIds = new Set<string>()
+  // Stale hooks still suppress one-shot permission titles, matching worktree and tab status dots.
+  const permissionHookLeafIds = new Set<string>()
+  for (const entry of sources.entriesByTabId.get(tab.id) ?? []) {
+    panes.push({ kind: 'hook', entry, hasLivePty })
+    const leafId = leafIdFromPaneKey(entry.paneKey)
+    if (leafId !== null) {
+      permissionHookLeafIds.add(leafId)
+    }
+    // Why: restored rows own their co-restored title without asserting live state.
+    if (
+      !entry.restoredUnconfirmed &&
+      !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+    ) {
+      continue
+    }
+    if (leafId !== null) {
+      hookLeafIds.add(leafId)
+    }
+  }
+
+  // Why: runtimePaneTitlesByTabId survives sleep, so a slept tab's stale working-pattern title would leak in without this gate.
+  if (!hasLivePty) {
+    return panes
+  }
+
+  const paneTitles = sources.runtimePaneTitlesByTabId[tab.id]
+  if (!paneTitles || Object.keys(paneTitles).length === 0) {
+    const coveredLeafIds = isSyntheticAgentPermissionTitle(tab.title)
+      ? permissionHookLeafIds
+      : hookLeafIds
+    if (coveredLeafIds.size === 0) {
+      // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
+      panes.push({
+        kind: 'title',
+        status: classifyTitleActivity(tab.title),
+        worktreeLastActivityAt
+      })
+    }
+    return panes
+  }
+
+  // Why: split-pane tabs host multiple agents, one title each; mirrors getWorkingAgentsPerWorktree precedence.
+  const tabLayout = sources.terminalLayoutsByTabId?.[tab.id]
+  const paneTitleEntries = Object.entries(paneTitles)
+  for (const [runtimePaneId, title] of paneTitleEntries) {
+    const coveredLeafIds = isSyntheticAgentPermissionTitle(title)
+      ? permissionHookLeafIds
+      : hookLeafIds
+    const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
+    const hasSingleUnmappedHook =
+      leafId === null && coveredLeafIds.size === 1 && paneTitleEntries.length === 1
+    if ((leafId !== null && coveredLeafIds.has(leafId)) || hasSingleUnmappedHook) {
+      continue
+    }
+    panes.push({ kind: 'title', status: classifyTitleActivity(title), worktreeLastActivityAt })
+  }
+  return panes
+}
+
 /**
  * Build the per-worktree attention map consumed by the smart comparator.
  * Hook authority is per-pane; panes without a fresh hook fall back to the title heuristic,
@@ -263,9 +377,18 @@ export function buildAttentionByWorktree(
 ): Map<string, WorktreeAttention> {
   const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId)
   const byAttributedWorktree = buildExplicitEntriesByWorktreeId(agentStatusByPaneKey)
-  const mirroredTabIds = new Set(
-    Object.values(tabsByWorktree ?? {}).flatMap((tabs) => tabs.map((tab) => tab.id))
-  )
+  const mirroredTabIds = new Set<string>()
+  for (const tabs of Object.values(tabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      mirroredTabIds.add(tab.id)
+    }
+  }
+  const paneSources: TabPaneInputSources = {
+    entriesByTabId: byTab,
+    ptyIdsByTabId,
+    runtimePaneTitlesByTabId,
+    terminalLayoutsByTabId
+  }
   const result = new Map<string, WorktreeAttention>()
 
   for (const worktree of worktrees) {
@@ -276,57 +399,15 @@ export function buildAttentionByWorktree(
         const parsed = parsePaneKey(entry.paneKey)
         return parsed !== null && !mirroredTabIds.has(parsed.tabId)
       })
-      .map((entry) => ({ kind: 'hook' as const, entry }))
+      // Why hasLivePty false: these entries were filtered to panes with no tab in this renderer,
+      // so there is no live-PTY evidence here to hold them above idle.
+      .map((entry) => ({ kind: 'hook' as const, entry, hasLivePty: false }))
     if (tabs.length === 0) {
       result.set(worktree.id, resolveAttention(panes, now))
       continue
     }
     for (const tab of tabs) {
-      const hookEntries = byTab.get(tab.id)
-      // Why: leaves covered by a hook entry skip the title fallback so we don't double-count them.
-      const hookLeafIds = new Set<string>()
-      if (hookEntries) {
-        for (const entry of hookEntries) {
-          panes.push({ kind: 'hook', entry })
-          // Why: only fresh hook entries suppress the title fallback; a stale one would hide the live title and drop to Class 4.
-          if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
-            continue
-          }
-          const leafId = leafIdFromPaneKey(entry.paneKey)
-          if (leafId !== null) {
-            hookLeafIds.add(leafId)
-          }
-        }
-      }
-
-      // Why: runtimePaneTitlesByTabId survives sleep, so a slept tab's stale working-pattern title would leak in without this gate.
-      if (!tabHasLivePty(ptyIdsByTabId, tab.id)) {
-        continue
-      }
-
-      const paneTitles = runtimePaneTitlesByTabId[tab.id]
-      if (paneTitles && Object.keys(paneTitles).length > 0) {
-        // Why: split-pane tabs host multiple agents, one title each; mirrors getWorkingAgentsPerWorktree precedence.
-        const tabLayout = terminalLayoutsByTabId?.[tab.id]
-        for (const [runtimePaneId, title] of Object.entries(paneTitles)) {
-          const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
-          if (leafId !== null && hookLeafIds.has(leafId)) {
-            continue
-          }
-          panes.push({
-            kind: 'title',
-            status: classifyTitleActivity(title),
-            worktreeLastActivityAt: worktree.lastActivityAt
-          })
-        }
-      } else if (hookLeafIds.size === 0) {
-        // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
-        panes.push({
-          kind: 'title',
-          status: classifyTitleActivity(tab.title),
-          worktreeLastActivityAt: worktree.lastActivityAt
-        })
-      }
+      panes.push(...collectTabPaneInputs(tab, worktree.lastActivityAt, paneSources, now))
     }
     result.set(worktree.id, resolveAttention(panes, now))
   }

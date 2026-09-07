@@ -4,6 +4,11 @@
 
 export const CLAUDE_STATUSLINE_PATHNAME = '/statusline/claude'
 
+// Why: the statusline ticks ~3x/sec while streaming and the service drops same-value posts
+// inside LIVE_CLAUDE_INGEST_DEDUPE_MS (30s) anyway; a per-pane client floor below that bound
+// keeps the usage bar live while capping curl spawns at one per pane per interval.
+export const CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS = 15
+
 export type ClaudeStatusLineWindow = {
   used_percentage?: number
   /** OAuth-usage-shaped sibling field (0-100); accepted so a CLI schema drift degrades instead of going dark. */

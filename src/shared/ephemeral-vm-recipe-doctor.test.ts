@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { doctorEphemeralVmRecipe } from './ephemeral-vm-recipe-doctor'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 
 const roots: string[] = []
 

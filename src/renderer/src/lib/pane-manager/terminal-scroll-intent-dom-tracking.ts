@@ -8,7 +8,8 @@ import {
   syncTerminalScrollIntentFromViewport
 } from './terminal-scroll-intent'
 import { syncTerminalScrollIntentSoon } from './terminal-scroll-intent-settle'
-import type { TerminalScrollIntentKey, TerminalScrollIntentTarget } from './terminal-scroll-intent'
+import type { TerminalScrollIntentTarget } from './terminal-scroll-intent'
+import type { TerminalScrollIntentKey } from './terminal-scroll-intent-key-store'
 import {
   isTerminalScrollIntentRebuildInFlight,
   onTerminalScrollIntentBufferRebuildComplete

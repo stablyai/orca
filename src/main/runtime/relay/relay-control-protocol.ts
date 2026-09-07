@@ -26,8 +26,28 @@ export const RelayHostChallengeMessageSchema = z
   })
   .strict()
 
+const ConnectionKindSchema = z.enum(['invite', 'resume'])
+
+// Mirrors RELAY_HOST_CAPABILITIES_HEADER in the relay contract. It rides the
+// control upgrade rather than host-hello because the cell parses host-hello
+// strictly: a new hello key is refused by every already-deployed cell.
+export const RELAY_HOST_CAPABILITY_HEADERS = {
+  'x-orca-host-capabilities': 'pending-conn-details'
+} as const
+
+// Mirrors RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs in the relay contract: the
+// window the cell keeps a phone waiting for the host's data socket.
+export const RELAY_HOST_ATTACH_DEADLINE_MS = 10_000
+
+// kind/relayDeviceId are accepted but not required: today's cells restate only
+// the identifiers, and a strict schema would make adding them a breaking change.
 const PendingConnectionSchema = z
-  .object({ connId: OpaqueIdSchema, connTicket: Base64Url32ByteSchema })
+  .object({
+    connId: OpaqueIdSchema,
+    connTicket: Base64Url32ByteSchema,
+    kind: ConnectionKindSchema.optional(),
+    relayDeviceId: OpaqueIdSchema.optional()
+  })
   .strict()
 
 export const RelayHostHelloAckMessageSchema = z
@@ -47,7 +67,7 @@ export const RelayConnectionOpenMessageSchema = z
     type: z.literal('conn-open'),
     connId: OpaqueIdSchema,
     connTicket: Base64Url32ByteSchema,
-    kind: z.enum(['invite', 'resume']),
+    kind: ConnectionKindSchema,
     relayDeviceId: OpaqueIdSchema,
     attachDeadlineMs: z.number().int().positive().max(60_000)
   })
@@ -119,7 +139,7 @@ export const RelayControlErrorMessageSchema = z
   })
   .strict()
 
-export type RelayHostChallengeMessage = z.infer<typeof RelayHostChallengeMessageSchema>
+export type RelayPendingConnection = z.infer<typeof PendingConnectionSchema>
 export type RelayHostHelloAckMessage = z.infer<typeof RelayHostHelloAckMessageSchema>
 export type RelayConnectionOpenMessage = z.infer<typeof RelayConnectionOpenMessageSchema>
 export type RelayDrainMessage = z.infer<typeof RelayDrainMessageSchema>
@@ -143,4 +163,30 @@ export function parseRelayControlMessage(raw: RawData): Record<string, unknown> 
   } catch {
     return null
   }
+}
+
+export type RelayHostHello = {
+  relayHostId: string
+  assignmentEpoch: number
+  hostPublicKeyB64: string
+  appVersion: string
+  previousGeneration?: number
+  controlResumeSecret?: string
+}
+
+// Optional members are omitted rather than sent as undefined: the cell parses
+// host-hello strictly and an explicit null is not the same as absent.
+export function encodeRelayHostHello(hello: RelayHostHello): string {
+  return JSON.stringify({
+    type: 'host-hello',
+    v: 1,
+    relayHostId: hello.relayHostId,
+    assignmentEpoch: hello.assignmentEpoch,
+    hostPublicKeyB64: hello.hostPublicKeyB64,
+    appVersion: hello.appVersion,
+    ...(hello.previousGeneration === undefined
+      ? {}
+      : { previousGeneration: hello.previousGeneration }),
+    ...(hello.controlResumeSecret ? { controlResumeSecret: hello.controlResumeSecret } : {})
+  })
 }

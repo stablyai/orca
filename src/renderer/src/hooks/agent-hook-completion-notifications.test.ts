@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
-import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
 const dispatchAgentHookTerminalLifecycle = vi.fn()
@@ -167,9 +168,7 @@ describe('agent hook completion notifications', () => {
     }
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  afterEach(() => vi.useRealTimers())
 
   it('requires fresh working after notifications start disabled and later re-enable', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
@@ -178,6 +177,7 @@ describe('agent hook completion notifications', () => {
       syncAgentHookCompletionNotificationSettings
     } = await import('./agent-hook-completion-notifications')
 
+    syncAgentHookCompletionNotificationSettings()
     mockStoreState.settings.notifications.agentTaskComplete = true
     syncAgentHookCompletionNotificationSettings()
 
@@ -419,6 +419,43 @@ describe('agent hook completion notifications', () => {
         })
       })
     )
+  })
+
+  it('does not fire a completion notification for a session-boundary done row', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    // Why: Claude SessionStart lands as a sessionBoundary 'done' so a resumed session gets
+    // its sidebar row while idle (STA-3386) — connecting to a session is not completing a turn.
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'done',
+        prompt: '',
+        agentType: 'claude',
+        sessionBoundary: true,
+        stateStartedAt: 1_700_000_000_000
+      }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+
+    // Why: the resumed session's next real turn must still notify normally.
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: { ...hookStatus('working'), agentType: 'claude' }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: { ...hookStatus('done'), agentType: 'claude', stateStartedAt: 1_700_000_020_000 }
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
 
   it('does not notify twice when the same done hook snapshot replays after activation', async () => {

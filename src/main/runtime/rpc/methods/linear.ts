@@ -2,9 +2,8 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
-import { LinearIssueAttributeFilterSchema } from './linear-issue-attribute-filter-schema'
+import { LINEAR_ISSUE_LIST_METHOD, LINEAR_MCP_ISSUE_LIST_METHOD } from './linear-issue-list-method'
 
-const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
 const VALID_CUSTOM_VIEW_MODELS = ['issue', 'project'] as const
 const LinearPriority = z.number().int().min(0).max(4).optional()
 const LinearLabelIds = z.array(requiredString('Invalid label ID')).optional()
@@ -33,16 +32,6 @@ const SearchIssues = z.object({
   limit: OptionalFiniteNumber,
   workspaceId: OptionalString
 })
-
-const ListIssues = z
-  .object({
-    filter: z.enum(VALID_FILTERS).optional(),
-    limit: OptionalFiniteNumber,
-    workspaceId: OptionalString,
-    attributeFilter: LinearIssueAttributeFilterSchema.optional()
-  })
-  .strict()
-  .optional()
 
 const CreateIssue = z.object({
   teamId: requiredString('Team ID is required'),
@@ -163,14 +152,8 @@ export const LINEAR_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.linearSearchIssues(params.query, params.limit, params.workspaceId)
   }),
-  defineMethod({
-    name: 'linear.listIssues',
-    params: ListIssues,
-    handler: async (params, { runtime }) =>
-      runtime.linearListIssues(params?.filter, params?.limit, params?.workspaceId, {
-        attributeFilter: params?.attributeFilter
-      })
-  }),
+  LINEAR_ISSUE_LIST_METHOD,
+  LINEAR_MCP_ISSUE_LIST_METHOD,
   defineMethod({
     name: 'linear.createIssue',
     params: CreateIssue,

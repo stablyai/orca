@@ -30,6 +30,14 @@ import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCovera
 import { SkillUsageExamplesSection } from './SkillUsageExamplesSection'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { translate } from '@/i18n/i18n'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { NumberField } from './SettingsFormControls'
+import {
+  getNestedWorkerDepthDescription,
+  getNestedWorkerDepthTitle
+} from './nested-worker-depth-copy'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -43,9 +51,21 @@ function resolveOrchestrationExampleIcon(example: SkillUsageExample): LucideIcon
   return EXAMPLE_ICONS[example.id as keyof typeof EXAMPLE_ICONS] ?? Workflow
 }
 
-export function OrchestrationPane(): React.JSX.Element {
+type OrchestrationPaneProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+}
+
+export function OrchestrationPane({
+  settings,
+  updateSettings
+}: OrchestrationPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const showOrchestration = matchesSettingsSearch(searchQuery, getOrchestrationPaneSearchEntries())
+  const showNestedWorkerDepth = !isPairedWebClientWindow()
+  const searchEntries = getOrchestrationPaneSearchEntries({
+    includeNestedWorkerDepth: showNestedWorkerDepth
+  })
+  const showOrchestration = matchesSettingsSearch(searchQuery, searchEntries)
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationInstallCommand = !activeSkillRuntime.installDisabledReason
@@ -66,6 +86,7 @@ export function OrchestrationPane(): React.JSX.Element {
     loading: orchestrationSkillLoading,
     error: orchestrationSkillError,
     skills: discoveredSkills,
+    sources: discoveredSkillSources,
     refresh: refreshOrchestrationSkill
   } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
@@ -86,7 +107,8 @@ export function OrchestrationPane(): React.JSX.Element {
         'auto.components.settings.OrchestrationPane.2aacdb0517',
         'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'
       )}
-      keywords={getOrchestrationPaneSearchEntries()[0].keywords}
+      keywords={searchEntries[0].keywords}
+      forceVisible
       className="space-y-5 py-2"
     >
       <AgentSkillSetupPanel
@@ -104,6 +126,7 @@ export function OrchestrationPane(): React.JSX.Element {
         terminalAriaLabel="Orchestration skill install terminal"
         terminalWorktreeId="settings-orchestration-skill-terminal"
         terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+        terminalRuntime={activeSkillRuntime.agentRuntime}
         installed={orchestrationSkillDetected}
         loading={orchestrationSkillLoading}
         error={activeSkillRuntime.installDisabledReason ?? orchestrationSkillError}
@@ -150,16 +173,28 @@ export function OrchestrationPane(): React.JSX.Element {
           <OrchestrationSkillAgentCoverage
             embedded
             skills={discoveredSkills}
+            sources={discoveredSkillSources}
             loading={orchestrationSkillLoading}
           />
         }
         onRecheck={refreshOrchestrationSkill}
-        // Why: the local-host-only freshness scan cannot vouch for a WSL runtime,
-        // so fall back to the presence-only pill there (mirrors the Computer Use card).
         freshnessSkillName={
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCHESTRATION_SKILL_NAME
+          activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
         }
       />
+
+      {showNestedWorkerDepth ? (
+        <NumberField
+          label={getNestedWorkerDepthTitle()}
+          description={getNestedWorkerDepthDescription()}
+          value={resolveNestedWorkerMaxDepth(settings)}
+          min={1}
+          integer
+          onChange={(nestedWorkerMaxDepth) => {
+            void updateSettings({ nestedWorkerMaxDepth })
+          }}
+        />
+      ) : null}
 
       <OrchestrationSkillPromptDialog
         command={orchestrationInstallCommand}

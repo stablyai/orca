@@ -5,19 +5,30 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import { SkillFreshnessStatusPill } from './SkillFreshnessStatusPill'
+import { consumeSkillFreshnessUpdateDialogRequest } from './skill-freshness-update-dialog'
 
 const mocks = vi.hoisted(() => ({
-  inventory: null as SkillFreshnessInventory | null
+  inventory: null as SkillFreshnessInventory | null,
+  loading: false,
+  error: null as string | null
 }))
 
 vi.mock('@/hooks/useSkillFreshness', () => ({
   useSkillFreshness: () => ({
     inventory: mocks.inventory,
-    loading: false,
-    error: null,
+    loading: mocks.loading,
+    error: mocks.error,
     refresh: vi.fn()
   })
 }))
+
+function detailsButton(container: HTMLDivElement): HTMLButtonElement | null {
+  return container.querySelector('[data-slot="button"]')
+}
+
+function pillText(container: HTMLDivElement): string {
+  return (container.textContent ?? '').replace(detailsButton(container)?.textContent ?? '', '')
+}
 
 function inventory(
   entries: { name: string; status: 'current' | 'outdated' | 'unrecognized' }[],
@@ -46,6 +57,7 @@ function inventory(
       errorCategory: null
     })),
     eligibleUpdateNames,
+    scanIssues: [],
     scannedAt: 1
   }
 }
@@ -66,6 +78,10 @@ async function renderPill(skillName: string): Promise<HTMLDivElement> {
 describe('SkillFreshnessStatusPill', () => {
   beforeEach(() => {
     mocks.inventory = null
+    mocks.loading = false
+    mocks.error = null
+    // Why: the dialog request is module-level state shared across tests.
+    consumeSkillFreshnessUpdateDialogRequest()
   })
 
   afterEach(async () => {
@@ -80,16 +96,21 @@ describe('SkillFreshnessStatusPill', () => {
   it('shows Update available for an eligible outdated skill', async () => {
     mocks.inventory = inventory([{ name: 'orca-cli', status: 'outdated' }], ['orca-cli'])
 
-    expect((await renderPill('orca-cli')).textContent).toBe('Update available')
+    const rendered = await renderPill('orca-cli')
+    expect(pillText(rendered)).toBe('Update available')
+    expect(detailsButton(rendered)?.textContent).toBe('Details')
   })
 
   it('shows Up to date when every placement is current', async () => {
     mocks.inventory = inventory([{ name: 'orca-cli', status: 'current' }], [])
 
-    expect((await renderPill('orca-cli')).textContent).toBe('Up to date')
+    const rendered = await renderPill('orca-cli')
+    expect(pillText(rendered)).toBe('Up to date')
+    // Why: nothing is out of date, so the review dialog would have no row to show.
+    expect(detailsButton(rendered)).toBeNull()
   })
 
-  it('falls back to Installed for a blocked outdated placement', async () => {
+  it('flags a blocked outdated placement instead of reading as all-clear', async () => {
     mocks.inventory = inventory(
       [
         { name: 'orca-cli', status: 'outdated' },
@@ -98,10 +119,42 @@ describe('SkillFreshnessStatusPill', () => {
       []
     )
 
-    expect((await renderPill('orca-cli')).textContent).toBe('Installed')
+    const rendered = await renderPill('orca-cli')
+    // Why: a green pill over a copy the update cannot reach hides real drift.
+    expect(pillText(rendered)).toBe('Review skill')
+    expect(detailsButton(rendered)?.textContent).toBe('Details')
   })
 
   it('falls back to Installed before the inventory loads', async () => {
-    expect((await renderPill('orca-cli')).textContent).toBe('Installed')
+    const rendered = await renderPill('orca-cli')
+    expect(pillText(rendered)).toBe('Installed')
+    expect(detailsButton(rendered)).toBeNull()
+  })
+
+  it('shows a neutral verdict while freshness is being checked', async () => {
+    mocks.loading = true
+
+    const rendered = await renderPill('orca-cli')
+    expect(pillText(rendered)).toBe('Checking...')
+    expect(detailsButton(rendered)).toBeNull()
+  })
+
+  it('does not report success after a freshness check fails', async () => {
+    mocks.error = 'Could not read skills.'
+
+    const rendered = await renderPill('orca-cli')
+    expect(pillText(rendered)).toBe('Check failed')
+    expect(detailsButton(rendered)).toBeNull()
+  })
+
+  it('opens the freshness review dialog from Details', async () => {
+    mocks.inventory = inventory([{ name: 'orca-cli', status: 'outdated' }], ['orca-cli'])
+    const rendered = await renderPill('orca-cli')
+
+    await act(async () => {
+      detailsButton(rendered)?.click()
+    })
+
+    expect(consumeSkillFreshnessUpdateDialogRequest()).toBe(true)
   })
 })

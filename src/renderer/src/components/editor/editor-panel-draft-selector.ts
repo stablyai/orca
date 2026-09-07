@@ -43,7 +43,7 @@ export function createEditorPanelDraftSelector(
       const draft = state.editorDrafts[fileId]
       return (
         draft !== previousSelection[fileId] ||
-        (draft === undefined && Object.prototype.hasOwnProperty.call(previousSelection, fileId))
+        (draft === undefined && Object.hasOwn(previousSelection, fileId))
       )
     })
     if (!changed) {

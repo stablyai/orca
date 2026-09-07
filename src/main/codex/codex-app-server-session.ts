@@ -1,6 +1,13 @@
-import { spawn, type ChildProcess, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import {
+  killCodexAppServerProcessTree,
+  spawnCodexAppServerProcess,
+  type CodexAppServerSpawn
+} from './codex-app-server-process-tree-kill'
+import { createCodexAppServerRecordReader } from './codex-app-server-record-reader'
 
 // Why: `codex app-server` is Orca's sanctioned RPC surface into Codex-owned
 // state (hook trust hashes, the sqlite thread index). This module owns the
@@ -10,6 +17,17 @@ import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-s
 export type CodexAppServerInvocation = {
   command: string
   args: string[]
+  /**
+   * The resolved CLI path, used to pair the CLI with the `node` it was installed
+   * against — without it a CLI resolved out of a version-manager directory runs
+   * under whatever node leads PATH and dies on a NODE_MODULE_VERSION mismatch
+   * (stablyai/orca#10932).
+   *
+   * Required, and `null` only for a guest-side launcher (wsl.exe) where the host
+   * path means nothing. Optional would let a native builder omit it and silently
+   * fall back to pairing against a cmd.exe wrapper with no type error.
+   */
+  cliPath: string | null
   /** Overlay applied on top of the inherited environment (e.g. CODEX_HOME). */
   env?: Record<string, string>
   /** Env keys stripped from the inherited environment before spawn (e.g. an
@@ -53,46 +71,18 @@ export type CodexAppServerRpc = {
 
 const JSON_RPC_METHOD_NOT_FOUND = -32601
 const STDERR_TAIL_MAX_BYTES = 8192
-const STDOUT_LINE_MAX_BYTES = 1024 * 1024
 
-export function killCodexAppServerProcessTree(
-  child: Pick<ChildProcess, 'pid' | 'kill'>,
-  options: { platform?: NodeJS.Platform; spawnImpl?: typeof spawn } = {}
-): void {
-  const platform = options.platform ?? process.platform
-  const spawnImpl = options.spawnImpl ?? spawn
-  if (platform === 'win32' && child.pid) {
-    try {
-      // Why: npm-installed Codex runs behind cmd.exe; killing only that wrapper
-      // leaves the app-server child alive after a timeout or failed shutdown.
-      const killer = spawnImpl('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
-        stdio: 'ignore',
-        windowsHide: true
-      })
-      let fellBack = false
-      const killDirectChild = (): void => {
-        if (!fellBack) {
-          fellBack = true
-          child.kill('SIGKILL')
-        }
-      }
-      killer.on('error', killDirectChild)
-      killer.on('exit', (code) => {
-        if (code !== 0) {
-          killDirectChild()
-        }
-      })
-      killer.unref()
-      return
-    } catch {
-      // Fall through to the direct-child best effort when taskkill cannot start.
-    }
+/** Codex answering "no such method" is the only response that proves the RPC
+ *  surface is absent rather than temporarily failing. */
+export function isCodexMethodNotFoundError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
   }
-  child.kill('SIGKILL')
-}
-
-function isMethodNotFoundError(error: { code?: number; message?: string }): boolean {
-  return error.code === JSON_RPC_METHOD_NOT_FOUND || /method not found/i.test(error.message ?? '')
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  return (
+    code === JSON_RPC_METHOD_NOT_FOUND ||
+    /method not found/i.test(typeof message === 'string' ? message : '')
+  )
 }
 
 /**
@@ -103,7 +93,7 @@ function isMethodNotFoundError(error: { code?: number; message?: string }): bool
 export async function runCodexAppServerSession<T>(
   invocation: CodexAppServerInvocation,
   body: (rpc: CodexAppServerRpc) => Promise<T>,
-  spawnImpl: typeof spawn = spawn
+  spawnImpl: CodexAppServerSpawn = spawnCodexAppServerProcess
 ): Promise<T> {
   // Why: a default-home grant must run against the real ~/.codex, so strip an
   // inherited CODEX_HOME (envToDelete) after applying the overlay, not before.
@@ -111,8 +101,11 @@ export async function runCodexAppServerSession<T>(
   for (const key of invocation.envToDelete ?? []) {
     delete childEnv[key]
   }
+  const pairedEnv = invocation.cliPath
+    ? withCliRuntimeOnPath(invocation.cliPath, childEnv)
+    : childEnv
   const child = spawnImpl(invocation.command, invocation.args, {
-    env: childEnv,
+    env: pairedEnv,
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   }) as ChildProcessWithoutNullStreams
@@ -156,36 +149,24 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
   })
 
-  let stdoutBuffer = ''
-  child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
-    stdoutBuffer += chunk
-    if (Buffer.byteLength(stdoutBuffer) > STDOUT_LINE_MAX_BYTES) {
-      // Why: Windows process-tree termination is asynchronous; stop buffered
-      // chunks from spawning another taskkill for the same oversized response.
-      child.stdout.destroy()
-      killCodexAppServerProcessTree(child)
-      failPending(new Error('codex app-server emitted an oversized JSONL response'))
-      return
-    }
-    let newlineIndex
-    while ((newlineIndex = stdoutBuffer.indexOf('\n')) !== -1) {
-      const line = stdoutBuffer.slice(0, newlineIndex).trim()
-      stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1)
-      if (!line) {
-        continue
+  createCodexAppServerRecordReader({
+    stdout: child.stdout,
+    onRecord: (parsed) => {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return
       }
-      let message: JsonRpcResponse
-      try {
-        message = JSON.parse(line) as JsonRpcResponse
-      } catch {
-        continue
+      const message = parsed as JsonRpcResponse
+      if (typeof message.id !== 'number') {
+        return
       }
-      if (typeof message.id === 'number' && pending.has(message.id)) {
-        const waiter = pending.get(message.id)!
+      const waiter = pending.get(message.id)
+      if (waiter) {
         pending.delete(message.id)
         waiter.resolve(message)
       }
-    }
+    },
+    onRejected: () => undefined,
+    onFatal: failPending
   })
 
   function failPending(error: Error): void {
@@ -250,7 +231,7 @@ export async function runCodexAppServerSession<T>(
       }
     })
     if (response.error) {
-      if (isMethodNotFoundError(response.error)) {
+      if (isCodexMethodNotFoundError(response.error)) {
         throw new CodexAppServerUnsupportedError(
           `codex app-server does not support ${method}: ${response.error.message ?? 'method not found'}`
         )

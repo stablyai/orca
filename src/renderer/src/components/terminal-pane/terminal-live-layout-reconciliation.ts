@@ -1,4 +1,7 @@
-import type { TerminalPaneLayoutNode, TerminalPaneSplitDirection } from '../../../../shared/types'
+import type {
+  TerminalPaneLayoutNode,
+  TerminalPaneSplitDirection
+} from '../../../../shared/terminal-tab-types'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 
 /**

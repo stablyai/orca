@@ -1,15 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
 import {
   buildMobileAiVaultResumeLaunch,
   buildMobileAiVaultResumeCommand,
   createMobileAiVaultResumeMutationRegistry,
-  readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
-  resumeAiVaultSessionInTerminal,
-  RESUME_RPC_TIMEOUT_MS
+  resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   return {
@@ -120,6 +121,69 @@ describe('buildMobileAiVaultResumeCommand', () => {
 })
 
 describe('buildMobileAiVaultResumeLaunch', () => {
+  it('routes Kimi through the resumable-agent startup plan', () => {
+    // Why: kimi joining RESUMABLE_TUI_AGENTS moves it off the plain command fallback, so the
+    // cd prefix Kimi needs (sessions are work-dir-scoped) must survive the new branch.
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'kimi',
+        sessionId: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
+      }),
+      hostPlatform: 'darwin'
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && kimi '--yolo' '--session' 'session_431324d7-2165-42f0-9ecd-9f93437b3201'",
+      launchConfig: { agentCommand: "kimi '--yolo'" },
+      launchAgent: 'kimi'
+    })
+  })
+
+  it('preserves an arbitrary OMP transcript locator for later cold resume', () => {
+    const launch = buildMobileAiVaultResumeLaunch({
+      session: session({
+        agent: 'omp',
+        sessionId: 'omp-custom-1',
+        filePath: '/custom/omp-sessions/project/session.jsonl'
+      }),
+      hostPlatform: 'linux',
+      settings: {
+        agentDefaultArgs: { omp: '--model custom' },
+        agentDefaultEnv: { omp: { OMP_PROFILE: 'custom' } }
+      }
+    })
+
+    expect(launch).toMatchObject({
+      command:
+        "cd '/Users/ada/repo' && omp '--model' 'custom' --resume '/custom/omp-sessions/project/session.jsonl'",
+      env: { OMP_PROFILE: 'custom' },
+      launchConfig: {
+        agentCommand: "omp '--model' 'custom'",
+        agentArgs: '--model custom',
+        agentEnv: { OMP_PROFILE: 'custom' },
+        ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
+      },
+      launchAgent: 'omp'
+    })
+
+    const coldLaunch = buildAgentResumeStartupPlan({
+      agent: 'omp',
+      providerSession: { key: 'session_id', id: 'omp-custom-1' },
+      cmdOverrides: {},
+      agentArgs: launch.launchConfig?.agentArgs,
+      agentEnv: launch.launchConfig?.agentEnv,
+      agentCommand: launch.launchConfig?.agentCommand,
+      ompResumeFilePath: launch.launchConfig?.ompResumeFilePath,
+      platform: 'linux'
+    })
+    expect(coldLaunch).toMatchObject({
+      launchCommand:
+        "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
+      env: { OMP_PROFILE: 'custom' }
+    })
+  })
+
   it('uses shared TUI startup planning for default args, env, and launch config', () => {
     const launch = buildMobileAiVaultResumeLaunch({
       session: session({

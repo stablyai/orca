@@ -21,6 +21,16 @@ export function getAutomationRerunPendingRemainingMs({
   return Math.max(0, pendingStartedAt + AUTOMATION_RERUN_PENDING_MIN_VISIBLE_MS - now)
 }
 
+export async function waitForAutomationRerunPendingVisibility(
+  pendingStartedAt: number
+): Promise<void> {
+  const remainingMs = getAutomationRerunPendingRemainingMs({ pendingStartedAt })
+  if (remainingMs <= 0) {
+    return
+  }
+  await new Promise<void>((resolve) => window.setTimeout(resolve, remainingMs))
+}
+
 export function canRerunAutomationRun({
   automation,
   run

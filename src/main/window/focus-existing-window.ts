@@ -1,4 +1,9 @@
 import type { App, BrowserWindow } from 'electron'
+import {
+  isBackgroundLaunch,
+  isWindowlessLaunch,
+  showWindowWithoutStealingFocus
+} from './foreground-activation-policy'
 
 type FocusTimer = (callback: () => void, ms: number) => unknown
 
@@ -8,12 +13,19 @@ export type FocusExistingMainWindowOptions = {
   app: Pick<App, 'focus' | 'isReady'>
   getWindow: () => BrowserWindow | null
   openWindow: () => BrowserWindow
+  /** False while some other path must own the first window; the reopen is dropped, not queued. */
+  canOpenWindow?: () => boolean
   platform?: NodeJS.Platform
   setTimeout?: FocusTimer
   warn?: (message: string, error?: unknown) => void
 }
 
 function safelyFocusApp(app: Pick<App, 'focus'>): void {
+  // Why: stealing the foreground is the whole point of this path for a real
+  // second-instance launch, and exactly what an automated run must never do.
+  if (isBackgroundLaunch()) {
+    return
+  }
   try {
     app.focus({ steal: true })
   } catch {
@@ -26,14 +38,16 @@ function safelyFocusApp(app: Pick<App, 'focus'>): void {
 }
 
 export function safelyRevealWindow(window: BrowserWindow): void {
-  if (window.isDestroyed()) {
+  if (window.isDestroyed() || isWindowlessLaunch()) {
     return
   }
   if (window.isMinimized()) {
     window.restore()
   }
-  window.show()
-  window.focus()
+  showWindowWithoutStealingFocus(window)
+  if (!isBackgroundLaunch()) {
+    window.focus()
+  }
 }
 
 function pulseAlwaysOnTop(window: BrowserWindow, setTimer: FocusTimer): void {
@@ -74,15 +88,17 @@ function activateWindow(
 ): void {
   safelyFocusApp(app)
   safelyRevealWindow(window)
-  if (platform === 'win32') {
+  // Why: moveTop/always-on-top/refocus are foreground reinforcement; in a
+  // background launch they would drag the window over the developer's work.
+  if (platform === 'win32' && !isBackgroundLaunch()) {
     try {
       window.moveTop()
     } catch {
       // Older Electron versions or destroyed windows may reject this; focus retry remains.
     }
     pulseAlwaysOnTop(window, setTimer)
+    retryFocus(window, app, setTimer)
   }
-  retryFocus(window, app, setTimer)
 }
 
 // Why: a second-instance/activate reopen can race transient startup pressure
@@ -133,7 +149,7 @@ export function focusExistingMainWindow(
   let openedWindow = false
 
   if (!window || window.isDestroyed()) {
-    if (!opts.app.isReady()) {
+    if (!opts.app.isReady() || opts.canOpenWindow?.() === false) {
       return 'pending'
     }
     window = openWindowWithRetry(opts, platform, setTimer, 1)

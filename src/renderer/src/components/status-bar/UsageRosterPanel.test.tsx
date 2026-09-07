@@ -28,6 +28,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }: React.PropsWithChildren<{ onSelect?: () => void }>) => <div {...props}>{children}</div>
 }))
 
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { UsageRosterPanel, UsageRow } from './UsageRosterPanel'
 
 const signedOutCodex: ProviderRateLimits = {
@@ -90,42 +91,161 @@ describe('UsageRow', () => {
     const sessionReset = mocks.now + 2 * 60_000
     const weeklyReset = mocks.now + 7 * 24 * 60 * 60_000
     const markup = renderToStaticMarkup(
-      <UsageRosterPanel
-        providers={[
-          {
-            ...signedOutCodex,
-            session: {
-              usedPercent: 25,
-              windowMinutes: 300,
-              resetsAt: sessionReset,
-              resetDescription: null
-            },
-            weekly: {
-              usedPercent: 10,
-              windowMinutes: 10_080,
-              resetsAt: weeklyReset,
-              resetDescription: null
-            },
-            status: 'ok',
-            error: null
-          }
-        ]}
-        display="used"
-        statusBarUsageMode="verbose"
-        onStatusBarUsageModeChange={() => {}}
-        isRefreshing={false}
-        onRefresh={() => {}}
-        onOpenProvider={() => {}}
-        onSignIn={() => {}}
-        canSignIn={() => true}
-        onManageAccounts={() => {}}
-        onUsageDetails={() => {}}
-      />
+      <TooltipProvider>
+        <UsageRosterPanel
+          providers={[
+            {
+              ...signedOutCodex,
+              session: {
+                usedPercent: 25,
+                windowMinutes: 300,
+                resetsAt: sessionReset,
+                resetDescription: null
+              },
+              weekly: {
+                usedPercent: 10,
+                windowMinutes: 10_080,
+                resetsAt: weeklyReset,
+                resetDescription: null
+              },
+              status: 'ok',
+              error: null
+            }
+          ]}
+          display="used"
+          statusBarUsageMode="verbose"
+          onStatusBarUsageModeChange={() => {}}
+          isRefreshing={false}
+          onRefresh={() => {}}
+          onOpenProvider={() => {}}
+          onSignIn={() => {}}
+          canSignIn={() => true}
+          onManageAccounts={() => {}}
+          onUsageDetails={() => {}}
+        />
+      </TooltipProvider>
     )
 
     expect(mocks.useResetCountdownClock).toHaveBeenCalledOnce()
     expect(mocks.useResetCountdownClock).toHaveBeenCalledWith([sessionReset, weeklyReset])
     expect(markup).toContain('Resets in 2m')
+    expect(markup).toContain('5h')
+    expect(markup).toContain('25%')
+    expect(markup).toContain('wk')
+    expect(markup).toContain('10%')
+  })
+
+  it('renders the tightest window inline in compact mode', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          ...signedOutCodex,
+          session: {
+            usedPercent: 25,
+            windowMinutes: 300,
+            resetsAt: mocks.now + 2 * 60_000,
+            resetDescription: null
+          },
+          weekly: {
+            usedPercent: 60,
+            windowMinutes: 10_080,
+            resetsAt: mocks.now + 7 * 24 * 60 * 60_000,
+            resetDescription: null
+          },
+          status: 'ok',
+          error: null
+        }}
+        display="used"
+        mode="compact"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain('data-usage-mode="compact"')
+    expect(markup.match(/data-usage-window=/g)).toHaveLength(1)
+    expect(markup).not.toContain('data-usage-bar')
+    expect(markup).toContain('60%')
+    expect(markup).not.toContain('25%')
+    expect(markup).not.toContain('Resets in')
+  })
+
+  it('uses the same compact selection for Claude subscription windows', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          provider: 'claude',
+          session: {
+            usedPercent: 25,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          },
+          weekly: {
+            usedPercent: 60,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          },
+          fableWeekly: {
+            usedPercent: 75,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          },
+          updatedAt: 0,
+          status: 'ok',
+          error: null
+        }}
+        display="used"
+        mode="compact"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup.match(/data-usage-window=/g)).toHaveLength(1)
+    expect(markup).not.toContain('data-usage-bar')
+    expect(markup).toContain('Fable')
+    expect(markup).toContain('75%')
+    expect(markup).not.toContain('25%')
+    expect(markup).not.toContain('60%')
+  })
+
+  it('renders every window below the header in verbose mode', () => {
+    const markup = renderToStaticMarkup(
+      <UsageRow
+        p={{
+          ...signedOutCodex,
+          session: {
+            usedPercent: 25,
+            windowMinutes: 300,
+            resetsAt: null,
+            resetDescription: null
+          },
+          weekly: {
+            usedPercent: 60,
+            windowMinutes: 10_080,
+            resetsAt: null,
+            resetDescription: null
+          },
+          status: 'ok',
+          error: null
+        }}
+        display="used"
+        state={{ kind: 'usage', statusLabel: null }}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+
+    expect(markup).toContain('data-usage-mode="verbose"')
+    expect(markup.match(/data-usage-window=/g)).toHaveLength(2)
+    expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
+    expect(markup).toContain('25%')
+    expect(markup).toContain('60%')
   })
 })
 
@@ -153,19 +273,21 @@ describe('UsageRosterPanel density picker', () => {
   ): void {
     act(() => {
       root.render(
-        <UsageRosterPanel
-          providers={[]}
-          display="used"
-          statusBarUsageMode={statusBarUsageMode}
-          onStatusBarUsageModeChange={onStatusBarUsageModeChange}
-          isRefreshing={false}
-          onRefresh={() => {}}
-          onOpenProvider={() => {}}
-          onSignIn={() => {}}
-          canSignIn={() => true}
-          onManageAccounts={() => {}}
-          onUsageDetails={() => {}}
-        />
+        <TooltipProvider>
+          <UsageRosterPanel
+            providers={[]}
+            display="used"
+            statusBarUsageMode={statusBarUsageMode}
+            onStatusBarUsageModeChange={onStatusBarUsageModeChange}
+            isRefreshing={false}
+            onRefresh={() => {}}
+            onOpenProvider={() => {}}
+            onSignIn={() => {}}
+            canSignIn={() => true}
+            onManageAccounts={() => {}}
+            onUsageDetails={() => {}}
+          />
+        </TooltipProvider>
       )
     })
   }

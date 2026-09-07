@@ -1,11 +1,9 @@
 import type {
-  RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
-  RuntimeTerminalSend,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -13,13 +11,11 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
-  formatTerminalClose,
   formatTerminalCreate,
   formatTerminalFocus,
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
-  formatTerminalSend,
   formatTerminalShow,
   formatTerminalSplit,
   formatTerminalWait,
@@ -30,6 +26,10 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
+import {
+  annotateOmittedHostScope,
+  type WithAnnotatedHostScope
+} from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
   getBrowserWorktreeSelector,
@@ -37,6 +37,8 @@ import {
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
+import { terminalCloseHandler } from './terminal-close'
+import { terminalSendHandler } from './terminal-send'
 
 // Why: terminal wait legitimately needs to outlive the CLI's default RPC
 // timeout. Even without an explicit server timeout, the client must allow
@@ -53,10 +55,16 @@ const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }
 
 export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'terminal list': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<RuntimeTerminalListResult>('terminal.list', {
-      worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeTerminalListResult>>(
+      'terminal.list',
+      {
+        worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
+        // Why: agent JSON calls dominate; topology stays available through an explicit opt-in.
+        includeVisualLayouts: !json || flags.has('include-visual-layouts')
+      }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatTerminalList)
   },
   'terminal show': async ({ flags, client, cwd, json }) => {
@@ -74,23 +82,33 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     if (cursorFlag !== undefined && cursor === undefined) {
       throw new RuntimeClientError('invalid_argument', '--cursor must be a non-negative integer')
     }
+    const screen = flags.get('screen') === true
+    // Why: a cursor pages through accumulated output. A screen read is the current frame and has
+    // nothing behind it to page, so accepting both would imply history that is not there.
+    if (screen && cursorFlag !== undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--screen reads the current rendered screen, which has no cursor to page from. Use --cursor without --screen to page through accumulated output.'
+      )
+    }
     const result = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
       terminal: await getTerminalHandle(flags, cwd, client),
       ...(cursor !== undefined ? { cursor } : {}),
+      ...(screen ? { screen: true } : {}),
       limit: getOptionalPositiveIntegerFlag(flags, 'limit')
     })
+    // Why: an older host drops the unknown `screen` param and answers with its ordinary stream
+    // read, which carries no source. Returning that silently is the exact failure this flag
+    // exists to prevent, so refuse rather than hand back the other question's answer.
+    if (screen && result.result.terminal.source === undefined) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca host does not support --screen reads, so it answered with accumulated output instead of the rendered screen. Update Orca on the host, or drop --screen to read accumulated output deliberately.'
+      )
+    }
     printResult(result, json, formatTerminalRead)
   },
-  'terminal send': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {
-      terminal: await getTerminalHandle(flags, cwd, client),
-      text: getOptionalStringFlag(flags, 'text'),
-      enter: flags.get('enter') === true,
-      interrupt: flags.get('interrupt') === true,
-      client: { id: 'orca-cli', type: 'desktop' }
-    })
-    printResult(result, json, formatTerminalSend)
-  },
+  'terminal send': terminalSendHandler,
   'terminal wait': async ({ flags, client, cwd, json }) => {
     const timeoutMs = getOptionalPositiveIntegerFlag(flags, 'timeout-ms')
     const result = await client.call<{ wait: RuntimeTerminalWait }>(
@@ -150,13 +168,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   },
   // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
   'terminal switch': terminalFocusHandler,
-  'terminal close': async ({ flags, client, cwd, json }) => {
-    const method = flags.get('tab') === true ? 'terminal.closeTab' : 'terminal.close'
-    const result = await client.call<{ close: RuntimeTerminalClose }>(method, {
-      terminal: await getTerminalHandle(flags, cwd, client)
-    })
-    printResult(result, json, formatTerminalClose)
-  },
+  'terminal close': terminalCloseHandler,
   'terminal split': async ({ flags, client, cwd, json }) => {
     const directionFlag = getOptionalStringFlag(flags, 'direction')
     if (

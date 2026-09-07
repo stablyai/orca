@@ -6,7 +6,7 @@ describe('nativeChatCardDismissKey', () => {
     expect(nativeChatCardDismissKey(null)).toBeNull()
   })
 
-  it('keys a question by its count and first question text', () => {
+  it('keys a question by its full canonical content', () => {
     const key = nativeChatCardDismissKey({
       kind: 'question',
       prompt: {
@@ -16,7 +16,8 @@ describe('nativeChatCardDismissKey', () => {
         ]
       }
     })
-    expect(key).toBe('question:2:Pick a color')
+    expect(key).toContain('Pick a color')
+    expect(key).toContain('Pick a size')
   })
 
   it('gives identical questions the same key (so a lingering re-emit stays hidden)', () => {
@@ -26,6 +27,22 @@ describe('nativeChatCardDismissKey', () => {
         prompt: { questions: [{ question: 'Continue?', multiSelect: false, options: [] }] }
       })
     expect(make()).toBe(make())
+  })
+
+  it('distinguishes prompts whose later questions or options changed', () => {
+    const card = (second: string, option: string) =>
+      nativeChatCardDismissKey({
+        kind: 'question',
+        prompt: {
+          questions: [
+            { question: 'Same first', multiSelect: false, options: [] },
+            { question: second, multiSelect: false, options: [{ label: option }] }
+          ]
+        }
+      })
+
+    expect(card('Old second', 'A')).not.toBe(card('New second', 'A'))
+    expect(card('Old second', 'A')).not.toBe(card('Old second', 'B'))
   })
 
   it('keys an approval by its title and detail', () => {

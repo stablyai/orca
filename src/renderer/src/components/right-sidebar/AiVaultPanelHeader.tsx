@@ -10,6 +10,7 @@ import type {
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { VaultHostScopeMenu, VaultScopeSwitch, VaultViewMenu } from './AiVaultPanelControls'
 import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
+import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 type AiVaultPanelHeaderProps = {
   query: string
@@ -26,14 +27,17 @@ type AiVaultPanelHeaderProps = {
   sort: AiVaultSort
   group: AiVaultGroup
   hideEmptySessions: boolean
+  sessionLimit: AiVaultSessionLimit
   adjustmentCount: number
   onQueryChange: (query: string) => void
   onScopeChange: (scope: AiVaultScope) => void
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
   onAgentEnabledChange: (agent: AiVaultAgent, enabled: boolean) => void
+  onAllAgentsEnabledChange: (enabled: boolean) => void
   onSortChange: (sort: AiVaultSort) => void
   onGroupChange: (group: AiVaultGroup) => void
   onHideEmptySessionsChange: (hideEmptySessions: boolean) => void
+  onSessionLimitChange: (limit: AiVaultSessionLimit) => void
   onReset: () => void
   onRefresh: () => void
 }
@@ -53,14 +57,17 @@ export function AiVaultPanelHeader({
   sort,
   group,
   hideEmptySessions,
+  sessionLimit,
   adjustmentCount,
   onQueryChange,
   onScopeChange,
   onExecutionHostScopeChange,
   onAgentEnabledChange,
+  onAllAgentsEnabledChange,
   onSortChange,
   onGroupChange,
   onHideEmptySessionsChange,
+  onSessionLimitChange,
   onReset,
   onRefresh
 }: AiVaultPanelHeaderProps): React.JSX.Element {
@@ -117,11 +124,14 @@ export function AiVaultPanelHeader({
             sort={sort}
             group={group}
             hideEmptySessions={hideEmptySessions}
+            sessionLimit={sessionLimit}
             adjustmentCount={adjustmentCount}
             onAgentEnabledChange={onAgentEnabledChange}
+            onAllAgentsEnabledChange={onAllAgentsEnabledChange}
             onSortChange={onSortChange}
             onGroupChange={onGroupChange}
             onHideEmptySessionsChange={onHideEmptySessionsChange}
+            onSessionLimitChange={onSessionLimitChange}
             onReset={onReset}
           />
           <Button

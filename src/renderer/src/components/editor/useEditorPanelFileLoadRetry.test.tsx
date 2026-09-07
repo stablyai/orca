@@ -10,6 +10,7 @@ import {
   type FileContent
 } from './editor-panel-content-types'
 import {
+  OWNER_NOT_READY_RETRY_DELAY_MS,
   OWNER_NOT_READY_RETRY_LIMIT,
   shouldRetryFileLoadError,
   useEditorPanelFileLoadRetry
@@ -46,19 +47,21 @@ function Harness({
   file,
   fileContents,
   attemptsRef,
+  isVisible = true,
   loadFileContent,
   setFileContents
 }: {
   file: OpenFile
   fileContents: Record<string, FileContent>
   attemptsRef: { current: Record<string, number> }
+  isVisible?: boolean
   loadFileContent: (filePath: string, id: string) => Promise<void>
   setFileContents: (
     updater: (prev: Record<string, FileContent>) => Record<string, FileContent>
   ) => void
 }): null {
   useEditorPanelFileLoadRetry({
-    activeFile: file,
+    activeFile: isVisible ? file : null,
     fileContents,
     fileLoadRetryAttemptsRef: attemptsRef,
     loadFileContent: loadFileContent as never,
@@ -98,6 +101,67 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_NOT_READY_ERROR)).toBe(true)
     expect(shouldRetryFileLoadError(WORKTREE_OWNER_UNREACHABLE_ERROR)).toBe(false)
     expect(shouldRetryFileLoadError('Access denied: outside allowed directories')).toBe(false)
+  })
+
+  it('does not spend retry budget when hiding cancels a pending retry', () => {
+    setTimeoutSpy.mockRestore()
+    setTimeoutSpy = vi.spyOn(window, 'setTimeout')
+    const file = makeFile()
+    const attemptsRef = { current: {} as Record<string, number> }
+    const fileContents: Record<string, FileContent> = {
+      [file.id]: { content: '', isBinary: false, loadError: WORKTREE_OWNER_NOT_READY_ERROR }
+    }
+    const loadFileContent = vi.fn(async () => undefined)
+    const setFileContents = vi.fn((updater) => updater(fileContents))
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    act(() => {
+      root?.render(
+        <Harness
+          file={file}
+          fileContents={fileContents}
+          attemptsRef={attemptsRef}
+          loadFileContent={loadFileContent}
+          setFileContents={setFileContents as never}
+        />
+      )
+    })
+    expect(loadFileContent).not.toHaveBeenCalled()
+    expect(attemptsRef.current[file.id]).toBeUndefined()
+
+    act(() => {
+      root?.render(
+        <Harness
+          file={file}
+          fileContents={fileContents}
+          attemptsRef={attemptsRef}
+          isVisible={false}
+          loadFileContent={loadFileContent}
+          setFileContents={setFileContents as never}
+        />
+      )
+    })
+    act(() => vi.advanceTimersByTime(OWNER_NOT_READY_RETRY_DELAY_MS))
+    expect(loadFileContent).not.toHaveBeenCalled()
+    expect(attemptsRef.current[file.id]).toBeUndefined()
+
+    act(() => {
+      root?.render(
+        <Harness
+          file={file}
+          fileContents={fileContents}
+          attemptsRef={attemptsRef}
+          loadFileContent={loadFileContent}
+          setFileContents={setFileContents as never}
+        />
+      )
+    })
+    act(() => vi.advanceTimersByTime(OWNER_NOT_READY_RETRY_DELAY_MS))
+    expect(loadFileContent).toHaveBeenCalledOnce()
+    expect(attemptsRef.current[file.id]).toBe(1)
   })
 
   it('stops after the budget and shows a truthful terminal message, then Retry re-arms', () => {

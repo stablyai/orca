@@ -1,5 +1,5 @@
 import { ghExecFileAsync } from '../git/runner'
-import type { GitHubOwnerRepo } from '../../shared/types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -12,7 +12,18 @@ import {
   parseGitHubRemoteIdentity,
   type LocalGitExecOptions
 } from './github-repository-identity'
+import {
+  effectiveGitHubRemoteHost,
+  gitHubSshConfigHostAlias
+} from './github-remote-identity-parsing'
+import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
 import { parseWslPath } from '../wsl'
+import {
+  getSshGitProvider,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE,
+  getSshGitProviderGeneration
+} from '../providers/ssh-git-dispatch'
+import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 
@@ -31,9 +42,19 @@ type HostAuthCacheEntry = {
 const hostAuthCache = new Map<string, HostAuthCacheEntry>()
 const hostAuthInFlight = new Map<string, Promise<string | null | undefined>>()
 
-// Why: connection-backed Git operations execute remotely, but gh intentionally
-// executes on the native host. Only WSL selects a distinct gh config/runtime.
-function runtimeCacheKey(repoPath: string, wslDistro?: string): string {
+// Why: gh intentionally executes on the native host even for connection-backed
+// repos, but the answer still describes that connection's runtime (it is probed
+// without the repository cwd). Keying it per connection stops a local repo and
+// an SSH-hosted repo at the same path from adopting each other's auth state.
+// Provider generation fences stale answers when reconnect replaces the runtime.
+function runtimeCacheKey(
+  repoPath: string,
+  connectionId?: string | null,
+  wslDistro?: string
+): string {
+  if (connectionId) {
+    return `connection:${connectionId}:${getSshGitProviderGeneration(connectionId)}`
+  }
   const resolvedDistro = wslDistro ?? parseWslPath(repoPath)?.distro
   return `local:${resolvedDistro?.toLowerCase() ?? 'host'}`
 }
@@ -42,11 +63,6 @@ function runtimeCacheKey(repoPath: string, wslDistro?: string): string {
 export function _resetGitHubHostAuthCache(): void {
   hostAuthCache.clear()
   hostAuthInFlight.clear()
-}
-
-/** @internal - exposed for cache-bound tests only */
-export function _getGitHubHostAuthCacheSize(): number {
-  return hostAuthCache.size
 }
 
 function pruneHostAuthCache(now: number): void {
@@ -90,10 +106,8 @@ function normalizeGitHubHost(host: string): NormalizedGitHubHost | null {
     return null
   }
   const hostname = match[1]
-  const rawPort = match[2] ?? null
-  // Why: default web ports do not distinguish a gh auth host from the same
-  // hostname without an explicit port.
-  const port = rawPort === '80' || rawPort === '443' ? null : rawPort
+  // Why: remote URL parsing already removes protocol-default ports; any port left here identifies the endpoint.
+  const port = match[2] ?? null
   return { hostname, port, authority: port ? `${hostname}:${port}` : hostname }
 }
 
@@ -114,10 +128,11 @@ function authenticatedHostFromInventory(host: string, output: string): string | 
   if (exact) {
     return exact.authority
   }
-  const compatible = inventory.filter(
-    (candidate) =>
-      candidate.hostname === requested.hostname && (!requested.port || candidate.port === null)
-  )
+  // Why: a non-default web port identifies the API endpoint; portless credentials target a different server.
+  if (requested.port) {
+    return null
+  }
+  const compatible = inventory.filter((candidate) => candidate.hostname === requested.hostname)
   // Why: an SSH remote has no API port. Only a unique auth-inventory host can
   // safely supply it; multiple ported endpoints on one hostname are ambiguous.
   return compatible.length === 1 ? compatible[0].authority : null
@@ -130,7 +145,7 @@ async function resolveAuthenticatedGitHubHost(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string | null | undefined> {
   const normalizedHost = normalizeGitHubHost(host)?.authority ?? host.trim().toLowerCase()
-  const cacheKey = `${runtimeCacheKey(repoPath, localGitOptions.wslDistro)}\0${normalizedHost}`
+  const cacheKey = `${runtimeCacheKey(repoPath, connectionId, localGitOptions.wslDistro)}\0${normalizedHost}`
   const now = Date.now()
   pruneHostAuthCache(now)
   const cached = hostAuthCache.get(cacheKey)
@@ -215,22 +230,56 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
   repoPath: string,
   remoteName: string,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  requireVerifiedSshProbe = false
 ): Promise<GitHubEnterpriseRepoSlug | null | undefined> {
   const localGitOptions = getHostedReviewLocalGitOptions(options)
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+  if (requireVerifiedSshProbe && connectionId && !getSshGitProvider(connectionId)) {
+    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  }
   let remoteUrl: string | null
   try {
     remoteUrl = await getRemoteUrlForRepo(context, remoteName)
-  } catch {
+  } catch (error) {
+    if (requireVerifiedSshProbe && connectionId && !isStableMissingGitRemoteError(error)) {
+      throw error
+    }
     return null
   }
+  if (requireVerifiedSshProbe && connectionId && !remoteUrl && !getSshGitProvider(connectionId)) {
+    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  }
   const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
-  if (!identity || identity.host === 'github.com') {
+  if (!identity) {
+    return null
+  }
+  // Why: GHES routing needs the effective host behind an SSH alias.
+  let effectiveHost = identity.host
+  const aliasHost = remoteUrl ? gitHubSshConfigHostAlias(remoteUrl) : null
+  if (aliasHost) {
+    const { hostname, resolved } = await resolveSshConfigHostname(aliasHost, context)
+    if (!resolved || !hostname) {
+      if (requireVerifiedSshProbe && connectionId) {
+        throw new Error('Remote repository identity is unverifiable.')
+      }
+      const authenticatedLiteralHost = await resolveAuthenticatedGitHubHost(
+        identity.host,
+        repoPath,
+        connectionId,
+        localGitOptions
+      )
+      return authenticatedLiteralHost
+        ? { owner: identity.owner, repo: identity.repo, host: authenticatedLiteralHost }
+        : undefined
+    }
+    effectiveHost = effectiveGitHubRemoteHost(identity.host, hostname)
+  }
+  if (effectiveHost === 'github.com') {
     return null
   }
   const authenticatedHost = await resolveAuthenticatedGitHubHost(
-    identity.host,
+    effectiveHost,
     repoPath,
     connectionId,
     localGitOptions
@@ -246,7 +295,14 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
 export async function getEnterpriseGitHubRepoSlug(
   repoPath: string,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  requireVerifiedSshProbe = false
 ): Promise<GitHubEnterpriseRepoSlug | null | undefined> {
-  return getEnterpriseGitHubRepoSlugForRemote(repoPath, 'origin', connectionId, options)
+  return getEnterpriseGitHubRepoSlugForRemote(
+    repoPath,
+    'origin',
+    connectionId,
+    options,
+    requireVerifiedSshProbe
+  )
 }

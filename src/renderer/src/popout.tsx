@@ -1,7 +1,12 @@
+// Why first, and why the import-free shim: react-dom reads
+// __REACT_DEVTOOLS_GLOBAL_HOOK__ once at module evaluation, so the global has to
+// exist before it. The observer below only wraps a property react-dom re-reads
+// per commit, so its own import graph can evaluate whenever it likes.
+import './lib/react-devtools-commit-hook-shim'
+import './lib/react-commit-cascade-observer'
 import './assets/main.css'
 
 import { StrictMode, useEffect } from 'react'
-import { createRoot } from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -14,14 +19,17 @@ import { buildAppFontFamily } from './lib/app-font-family'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
 
 // Why: the pop-out window is a separate BrowserWindow with its own React root,
 // so it must run the same renderer bootstrap as main.tsx (crash diagnostics,
 // theme, i18n, error boundary) rather than inheriting anything from the main
 // window. It shares the preload/window.api but not the DOM or JS context.
 recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
-installRendererCrashDiagnostics()
+installRendererCrashDiagnostics('dashboard-popout')
+setReactCommitCascadeRendererSurface('dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
   applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
@@ -50,15 +58,14 @@ if (!rootElement) {
   throw new Error('Pop-out root element not found.')
 }
 
-// The main process loads popout.html with ?view=<name> so a single entry can
-// host different dashboard layouts (kanban, etc.).
-const requestedView = new URLSearchParams(window.location.search).get('view')
-
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
 
   useEffect(() => {
     let disposed = false
+    // Why: the preview terminal's copy/paste chords honor user keybinding
+    // overrides, which live in a separate file from settings.
+    void useAppStore.getState().fetchKeybindings()
     const setSettings = (next: GlobalSettings): void => {
       if (!disposed) {
         useAppStore.setState({ settings: next })
@@ -106,12 +113,12 @@ function PopoutRoot(): React.JSX.Element {
         'The dashboard could not finish rendering. Retry to remount it, or reopen it.'
       )}
     >
-      <DashboardPopoutRoot view={requestedView} />
+      <DashboardPopoutRoot />
     </RecoverableRenderErrorBoundary>
   )
 }
 
-createRoot(rootElement).render(
+getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
   <StrictMode>
     <I18nProvider>
       <PopoutSettingsSync />

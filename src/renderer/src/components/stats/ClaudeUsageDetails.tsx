@@ -5,8 +5,8 @@ import type {
   ClaudeUsageSummary
 } from '../../../../shared/claude-usage-types'
 import { ClaudeUsageDailyChart } from './ClaudeUsageDailyChart'
-import { ClaudeUsageRecentSessionsTable } from './ClaudeUsageRecentSessionsTable'
 import { UsageBreakdownSection } from './UsageBreakdownSection'
+import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'
 import { translate } from '@/i18n/i18n'
 
 type ClaudeUsageDetailsProps = {
@@ -57,7 +57,30 @@ export function ClaudeUsageDetails({
         />
       </div>
 
-      <ClaudeUsageRecentSessionsTable recentSessions={recentSessions} summary={summary ?? null} />
+      <UsageRecentSessionsTable
+        title={translate('auto.components.stats.ClaudeUsagePane.7e76c84153', 'Recent sessions')}
+        description={
+          <>
+            {translate('auto.components.stats.ClaudeUsagePane.abfc4a4943', 'Cache reuse rate:')}{' '}
+            {summary?.cacheReuseRate !== null && summary?.cacheReuseRate !== undefined
+              ? `${Math.round(summary.cacheReuseRate * 100)}%`
+              : translate('auto.components.stats.ClaudeUsagePane.7765a4c3e1', 'n/a')}
+          </>
+        }
+        headings={[
+          translate('auto.components.stats.ClaudeUsagePane.01476891c7', 'Last active'),
+          translate('auto.components.stats.ClaudeUsagePane.c17bed0416', 'Project'),
+          translate('auto.components.stats.ClaudeUsagePane.1afc25eb06', 'Model'),
+          translate('auto.components.stats.ClaudeUsagePane.0f03975d59', 'Turns'),
+          translate('auto.components.stats.ClaudeUsagePane.faf3444859', 'Input'),
+          translate('auto.components.stats.ClaudeUsagePane.a8b7487ff7', 'Output'),
+          translate('auto.components.stats.ClaudeUsagePane.21ea00bfa8', 'Cache')
+        ]}
+        unknownModel={translate('auto.components.stats.ClaudeUsagePane.cfe2282ffa', 'Unknown')}
+        rows={recentSessions}
+        getActivity={(row) => row.turns}
+        getTrailingTokens={(row) => row.cacheReadTokens + row.cacheWriteTokens}
+      />
     </>
   )
 }

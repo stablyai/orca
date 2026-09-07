@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
+import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -171,6 +172,11 @@ export function RightPanelCommentComposer({
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      // Why: the Enter that only confirms a CJK candidate still reports the held
+      // modifier, so submitting here posts the comment without its last syllable.
+      if (isImeCompositionKeyDown(event)) {
+        return
+      }
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
       if (event.key === 'Enter' && modifierPressed) {
         event.preventDefault()

@@ -1,4 +1,4 @@
-import type { PRCheckDetail, PRCheckRunDetails } from './types'
+import type { PRCheckDetail, PRCheckRunDetails } from './github/check-types'
 
 export const PROMPT_LOG_TAIL_LINES = 150
 export const PROMPT_LOG_TAIL_SCAN_CODE_UNITS = 256 * 1024
@@ -81,6 +81,11 @@ export function getCheckDetailsPromptKey(check: PRCheckDetail, index: number): s
   }
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}:${check.name}`
+  }
+  // Keep in step with getCheckIdentityKey / getCheckRunTabIdentity: a GitLab job
+  // without a web_url would otherwise key on its index and miss its loaded log.
+  if (check.gitlabJobId) {
+    return `gitlab-job:${check.gitlabJobId}:${check.name}`
   }
   if (check.url) {
     return `url:${check.url}:${check.name}`

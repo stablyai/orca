@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
-import type { WorktreeGroupBy } from './worktree-list-groups'
+import type { WorktreeGroupBy } from './worktree-list/grouping/row-types'
 
 const roots: Root[] = []
 

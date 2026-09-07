@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
 // Locally-typed subset of the desktop status payload read from status.get.
 export type DesktopStatus = {
+  appVersion?: string
   protocolVersion?: number
   minCompatibleMobileVersion?: number
   // Why: absent on hosts that predate the mobile Floating Workspace entry;

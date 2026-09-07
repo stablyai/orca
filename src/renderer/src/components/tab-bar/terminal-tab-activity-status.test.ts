@@ -1,10 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   hasUnreadAgentCompletionForTerminalTab,
+  resetUnreadAgentCompletionTabIdsCacheForTest,
   resetTerminalTabActivityFlagsCacheForTest,
-  resolveTerminalTabActivityStatus
+  resolveTerminalTabActivityStatus,
+  resolveTerminalTabAttentionBadge,
+  terminalTabActivityToAgentDotState,
+  terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 
 const TAB_ID = 'tab-1'
@@ -38,6 +45,7 @@ const LIVE_PTY = { [TAB_ID]: ['pty-1'] }
 
 beforeEach(() => {
   resetTerminalTabActivityFlagsCacheForTest()
+  resetUnreadAgentCompletionTabIdsCacheForTest()
   vi.useFakeTimers()
   vi.setSystemTime(NOW)
 })
@@ -45,15 +53,74 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   resetTerminalTabActivityFlagsCacheForTest()
+  resetUnreadAgentCompletionTabIdsCacheForTest()
 })
 
 describe('resolveTerminalTabActivityStatus', () => {
+  // Why: Orca injects its own "<Agent> - action required" OSC title on a blocked/waiting hook and
+  // classifies that title back as evidence. Once the pane's row aged past the freshness window it
+  // stopped registering its identity, so the self-authored title outranked the pane's own `done`
+  // row and the tab glyph claimed a question nobody was asking.
+  it('does not paint a stale self-authored action-required title as a live question', () => {
+    const done = entry(FIRST_LEAF_ID, 'done', {
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+    })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: { id: TAB_ID, title: 'Codex - action required' },
+        agentStatusByPaneKey: { [done.paneKey]: done },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('active')
+  })
+
   it('reports a fresh hook working state', () => {
     const working = entry(FIRST_LEAF_ID, 'working')
     expect(
       resolveTerminalTabActivityStatus({
         tab: TAB,
         agentStatusByPaneKey: { [working.paneKey]: working },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('working')
+  })
+
+  it.each(['tab', 'pane'] as const)(
+    'keeps native permission %s titles after hook freshness expires',
+    (surface) => {
+      const stale = entry(FIRST_LEAF_ID, 'working', {
+        agentType: 'gemini',
+        updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+      })
+      expect(
+        resolveTerminalTabActivityStatus({
+          tab: { id: TAB_ID, title: '✋ Gemini CLI' },
+          agentStatusByPaneKey: { [stale.paneKey]: stale },
+          ptyIdsByTabId: LIVE_PTY,
+          runtimePaneTitlesByTabId: surface === 'pane' ? { [TAB_ID]: { 1: '✋ Gemini CLI' } } : {}
+        })
+      ).toBe('permission')
+    }
+  )
+
+  it('reports monitoring without hiding active or actionable siblings', () => {
+    const monitoring = entry(FIRST_LEAF_ID, 'working', { workingMode: 'monitoring' })
+    const working = entry(SECOND_LEAF_ID, 'working')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [monitoring.paneKey]: monitoring },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('monitoring')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: {
+          [monitoring.paneKey]: monitoring,
+          [working.paneKey]: working
+        },
         ptyIdsByTabId: LIVE_PTY
       })
     ).toBe('working')
@@ -85,7 +152,7 @@ describe('resolveTerminalTabActivityStatus', () => {
     ).toBe('done')
   })
 
-  it('treats an interrupted done as done, matching the worktree card', () => {
+  it('reports an interrupted done as interrupted, matching the worktree card', () => {
     const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
     expect(
       resolveTerminalTabActivityStatus({
@@ -93,7 +160,22 @@ describe('resolveTerminalTabActivityStatus', () => {
         agentStatusByPaneKey: { [interrupted.paneKey]: interrupted },
         ptyIdsByTabId: LIVE_PTY
       })
-    ).toBe('done')
+    ).toBe('interrupted')
+  })
+
+  it('does not let a finished sibling mask an interrupted outcome', () => {
+    const interrupted = entry(FIRST_LEAF_ID, 'done', { interrupted: true })
+    const finished = entry(SECOND_LEAF_ID, 'done')
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: {
+          [interrupted.paneKey]: interrupted,
+          [finished.paneKey]: finished
+        },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('interrupted')
   })
 
   it('falls back to a live working title when hook status is stale', () => {
@@ -104,6 +186,39 @@ describe('resolveTerminalTabActivityStatus', () => {
         tab: { id: TAB_ID, title: 'Codex working' },
         agentStatusByPaneKey: { [stale.paneKey]: stale },
         ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('working')
+  })
+
+  it('does not revive an unconfirmed restored row from its preserved title', () => {
+    const restored = entry(FIRST_LEAF_ID, 'working', { restoredUnconfirmed: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: { id: TAB_ID, title: 'Codex working' },
+        agentStatusByPaneKey: { [restored.paneKey]: restored },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('active')
+  })
+
+  it('keeps an independently live sibling title visible beside an unconfirmed row', () => {
+    const restored = entry(FIRST_LEAF_ID, 'working', { restoredUnconfirmed: true })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: TAB,
+        agentStatusByPaneKey: { [restored.paneKey]: restored },
+        runtimePaneTitlesByTabId: { [TAB_ID]: { 1: 'Codex working', 2: 'Claude working' } },
+        ptyIdsByTabId: LIVE_PTY,
+        terminalLayout: {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: FIRST_LEAF_ID },
+            second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+          },
+          activeLeafId: FIRST_LEAF_ID,
+          expandedLeafId: null
+        }
       })
     ).toBe('working')
   })
@@ -194,5 +309,113 @@ describe('hasUnreadAgentCompletionForTerminalTab', () => {
     expect(
       hasUnreadAgentCompletionForTerminalTab({ [`tab-2:${SECOND_LEAF_ID}`]: true }, TAB_ID)
     ).toBe(false)
+    expect(hasUnreadAgentCompletionForTerminalTab(undefined, TAB_ID)).toBe(false)
+  })
+
+  // Why: the param accepts boolean maps, so a cleared-to-`false` marker must not read as unread.
+  it('ignores a falsy marker left on the owning tab', () => {
+    expect(
+      hasUnreadAgentCompletionForTerminalTab({ [`${TAB_ID}:${FIRST_LEAF_ID}`]: false }, TAB_ID)
+    ).toBe(false)
+  })
+
+  it('preserves first-colon ownership for legacy and malformed pane keys', () => {
+    expect(hasUnreadAgentCompletionForTerminalTab({ [TAB_ID]: true }, TAB_ID)).toBe(true)
+    expect(hasUnreadAgentCompletionForTerminalTab({ [`${TAB_ID}:3`]: true }, TAB_ID)).toBe(true)
+    expect(
+      hasUnreadAgentCompletionForTerminalTab(
+        { [`${TAB_ID}:${FIRST_LEAF_ID}:suffix`]: true },
+        TAB_ID
+      )
+    ).toBe(true)
+    expect(
+      hasUnreadAgentCompletionForTerminalTab({ [`${TAB_ID}0:${SECOND_LEAF_ID}`]: true }, TAB_ID)
+    ).toBe(false)
+  })
+
+  it('changes only the owning tab when immutable marker snapshots add and clear unread', () => {
+    const before = { [`tab-2:${SECOND_LEAF_ID}`]: true }
+    const added = { ...before, [`${TAB_ID}:${FIRST_LEAF_ID}`]: true }
+    const cleared = { ...added, [`${TAB_ID}:${FIRST_LEAF_ID}`]: false }
+
+    expect(hasUnreadAgentCompletionForTerminalTab(before, TAB_ID)).toBe(false)
+    expect(hasUnreadAgentCompletionForTerminalTab(added, TAB_ID)).toBe(true)
+    expect(hasUnreadAgentCompletionForTerminalTab(cleared, TAB_ID)).toBe(false)
+    expect(hasUnreadAgentCompletionForTerminalTab(before, 'tab-2')).toBe(true)
+    expect(hasUnreadAgentCompletionForTerminalTab(added, 'tab-2')).toBe(true)
+    expect(hasUnreadAgentCompletionForTerminalTab(cleared, 'tab-2')).toBe(true)
+  })
+
+  it('indexes one immutable marker snapshot once across all mounted tab lookups', () => {
+    const ownKeys = vi.fn(Reflect.ownKeys)
+    let valueReads = 0
+    const markers: Record<string, true> = Object.fromEntries(
+      Array.from({ length: 1_000 }, (_, index) => [`owner-${index}:leaf`, true] as const)
+    )
+    const unread = new Proxy<Record<string, true>>(markers, {
+      ownKeys,
+      get: (target, property, receiver) => {
+        valueReads += 1
+        return Reflect.get(target, property, receiver)
+      }
+    })
+
+    for (let publication = 0; publication < 5; publication += 1) {
+      for (let tab = 0; tab < 500; tab += 1) {
+        expect(hasUnreadAgentCompletionForTerminalTab(unread, `absent-${tab}`)).toBe(false)
+      }
+    }
+
+    expect(ownKeys).toHaveBeenCalledTimes(1)
+    expect(valueReads).toBe(1_000)
+  })
+})
+
+describe('resolveTerminalTabAttentionBadge', () => {
+  it('prefers working, then permission, then unread, then done', () => {
+    expect(resolveTerminalTabAttentionBadge({ status: 'working', hasUnread: true })).toBe('working')
+    expect(resolveTerminalTabAttentionBadge({ status: 'permission', hasUnread: true })).toBe(
+      'permission'
+    )
+    expect(resolveTerminalTabAttentionBadge({ status: 'monitoring', hasUnread: true })).toBe(
+      'monitoring'
+    )
+    expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: true })).toBe('unread')
+    expect(resolveTerminalTabAttentionBadge({ status: 'done', hasUnread: false })).toBe('done')
+    expect(resolveTerminalTabAttentionBadge({ status: 'interrupted', hasUnread: false })).toBe(
+      'interrupted'
+    )
+    expect(resolveTerminalTabAttentionBadge({ status: 'active', hasUnread: false })).toBeNull()
+  })
+})
+
+describe('terminalTabHasUnreadActivity', () => {
+  it('is true for a tab bell or completion pane', () => {
+    expect(
+      terminalTabHasUnreadActivity({
+        terminalTabId: TAB_ID,
+        unreadTerminalTabs: { [TAB_ID]: true },
+        unreadAgentCompletionPanes: {}
+      })
+    ).toBe(true)
+    expect(
+      terminalTabHasUnreadActivity({
+        terminalTabId: TAB_ID,
+        unreadTerminalTabs: {},
+        unreadAgentCompletionPanes: { [`${TAB_ID}:${FIRST_LEAF_ID}`]: true }
+      })
+    ).toBe(true)
+  })
+})
+
+describe('terminalTabActivityToAgentDotState', () => {
+  it('maps glyph statuses and drops quiet ones', () => {
+    expect(terminalTabActivityToAgentDotState('working')).toBe('working')
+    expect(terminalTabActivityToAgentDotState('monitoring')).toBe('monitoring')
+    expect(terminalTabActivityToAgentDotState('permission')).toBe('permission')
+    expect(terminalTabActivityToAgentDotState('done')).toBe('done')
+    expect(terminalTabActivityToAgentDotState('interrupted')).toBe('interrupted')
+    expect(terminalTabActivityToAgentDotState('active')).toBeNull()
+    expect(terminalTabActivityToAgentDotState('inactive')).toBeNull()
   })
 })

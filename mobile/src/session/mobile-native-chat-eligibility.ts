@@ -1,10 +1,15 @@
+import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
-import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat-agent-support'
+import {
+  isNativeChatSupportedAgent,
+  nativeChatRequiresLocalTranscript
+} from '../../../src/shared/native-chat-agent-support'
 
 // Why: native chat renders an agent's own JSONL transcript, and the host
-// resolver knows these transcript layouts. Grok is additionally gated on host
-// readability because Model-A SSH stores its transcript on the remote target.
+// resolver knows these transcript layouts. Agents whose hook reports no
+// transcript path (Grok, omp) are additionally gated on host readability,
+// because Model-A SSH stores their transcript on the remote target.
 export function isMobileNativeChatTranscriptReadable(
   connectionId: string | null | undefined
 ): boolean {
@@ -25,6 +30,11 @@ export type MobileNativeChatTab = {
   type: string
   launchAgent?: string | null
   agentStatus?: AgentStatusEntry | null
+  /** Host-provided launch context still parked as an unsent TUI-input draft. */
+  launchDraft?: string
+  launchDraftCreatedAt?: number
+  sessionId?: string | null
+  agent?: string | null
 }
 
 /** Resolve a session tab to the transcript identity native chat needs, or
@@ -35,7 +45,17 @@ export function resolveMobileNativeChat(
   tab: MobileNativeChatTab | null,
   nativeChatTranscriptIsLocalReadable = false
 ): MobileNativeChatResolution | null {
-  if (!tab || tab.type !== 'terminal') {
+  if (!tab) {
+    return null
+  }
+  if (tab.type === 'agent-session') {
+    // Structured tabs are journal-backed, so any provider the shared reducer can
+    // replay renders here — there is no per-agent transcript layout to know.
+    return tab.sessionId && isAgentSessionHandleProvider(tab.agent)
+      ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null }
+      : null
+  }
+  if (tab.type !== 'terminal') {
     return null
   }
   const liveAgent = tab.agentStatus?.agentType ?? null
@@ -47,7 +67,7 @@ export function resolveMobileNativeChat(
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
-  if (agent === 'grok' && !nativeChatTranscriptIsLocalReadable) {
+  if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
     return null
   }
   return {
@@ -63,4 +83,16 @@ export function canShowMobileNativeChat(
   nativeChatTranscriptIsLocalReadable = false
 ): boolean {
   return resolveMobileNativeChat(tab, nativeChatTranscriptIsLocalReadable) !== null
+}
+
+export function resolveMobileNativeChatFileSessionId(
+  tab: MobileNativeChatTab | null
+): string | null {
+  if (tab?.type === 'agent-session') {
+    return tab.sessionId ?? null
+  }
+  if (tab?.type === 'terminal') {
+    return tab.agentStatus?.providerSession?.id ?? null
+  }
+  return null
 }

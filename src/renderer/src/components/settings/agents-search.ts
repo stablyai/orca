@@ -60,9 +60,11 @@ function expandAgentSearchText(value: string): string[] {
 }
 
 type AgentsPaneSearchOptions = {
+  includeAgentAwake?: boolean
   includeAgentRuntime?: boolean
 }
 
+const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 
 const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
@@ -113,6 +115,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: getAgentAwakeTitle(),
+    id: AGENT_AWAKE_SEARCH_ENTRY_ID,
     description: getAgentAwakeDescription(),
     keywords: getAgentAwakeSearchKeywords()
   },
@@ -141,11 +144,13 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
 ])
 
 export function getAgentsPaneSearchEntries({
+  includeAgentAwake = true,
   includeAgentRuntime = true
 }: AgentsPaneSearchOptions = {}) {
   const entries = getAllAgentsPaneSearchEntries()
-  if (includeAgentRuntime) {
-    return entries
-  }
-  return entries.filter((entry) => !('id' in entry) || entry.id !== AGENT_RUNTIME_SEARCH_ENTRY_ID)
+  return entries.filter(
+    (entry) =>
+      (!('id' in entry) || entry.id !== AGENT_RUNTIME_SEARCH_ENTRY_ID || includeAgentRuntime) &&
+      (!('id' in entry) || entry.id !== AGENT_AWAKE_SEARCH_ENTRY_ID || includeAgentAwake)
+  )
 }

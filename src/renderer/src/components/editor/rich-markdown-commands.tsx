@@ -1,6 +1,6 @@
 import type React from 'react'
 import type { Editor } from '@tiptap/react'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import { stripMarkdownExtension } from './markdown-doc-links'
 
 export type DocLinkMenuState = {

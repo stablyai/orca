@@ -1,17 +1,32 @@
-import { execFile, execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import {
   chmodSync,
+  closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   renameSync,
   rmSync,
   statSync,
   writeFileSync
 } from 'node:fs'
-import { dirname, win32 as pathWin32 } from 'node:path'
-
-let cachedWindowsUserSid: string | null | undefined
+import { dirname } from 'node:path'
+import {
+  DEFAULT_HARDENING_CACHE_BOUNDS,
+  SecurePathHardeningCache,
+  type SecurePathHardeningCacheBounds
+} from './secure-path-hardening-cache'
+import {
+  configureHardeningRetryBudget,
+  mayAttemptHardening,
+  recordHardeningOutcome
+} from './secure-path-hardening-retry-budget'
+import {
+  bestEffortRestrictWindowsPath,
+  resetSecureFileWindowsUserSidForTests,
+  restrictWindowsPathSync
+} from './secure-path-windows-acl'
 
 type HardenedPathCacheEntry = {
   isDirectory: boolean
@@ -24,21 +39,31 @@ type HardenedPathCacheEntry = {
   birthtimeMs: number
 }
 
-// Why: PowerShell hardening (~1-1.5s) stalls the main thread, so cache idempotent re-hardens per process.
-const hardenedPathsThisProcess = new Map<string, HardenedPathCacheEntry>()
+const UNSUPPORTED_DIRECTORY_FSYNC_CODES = new Set(['EINVAL', 'ENOTSUP', 'EOPNOTSUPP'])
 
-// Why: child writes constantly bump a dir's mtime, so cache dirs by path (not metadata) to avoid a PowerShell spawn every read (#4901).
+// Why: hardening spawns icacls synchronously (once when the DACL already verifies, four times when it must be rewritten), so cache idempotent re-hardens per process.
+let hardenedPathsThisProcess = new SecurePathHardeningCache<HardenedPathCacheEntry>(
+  DEFAULT_HARDENING_CACHE_BOUNDS
+)
+
+// Why: child writes constantly bump a dir's mtime, so cache dirs by path (not metadata) to avoid an icacls spawn every read (#4901).
 // Limitation: a dir deleted+recreated in-process won't re-harden; fine since we never delete our secure dirs at runtime.
-const hardenedDirectoryPathsThisProcess = new Set<string>()
+let hardenedDirectoryPathsThisProcess = new SecurePathHardeningCache<true>(
+  DEFAULT_HARDENING_CACHE_BOUNDS
+)
 
 function hardenSecureDirectoryOnce(dirPath: string): void {
   // Why: dir hardening stays async — re-applying it stormed the main thread (#4901); files inside are hardened synchronously anyway.
-  if (hardenedDirectoryPathsThisProcess.has(dirPath)) {
+  if (hardenedDirectoryPathsThisProcess.get(dirPath)) {
     return
   }
-  applySecurePathRestriction(dirPath, true, process.platform, false)
-  // Cache even though the async ACL may still be in flight — dir restriction is best-effort, no retry.
-  hardenedDirectoryPathsThisProcess.add(dirPath)
+  // Cache before the ACL lands so concurrent writes don't restorm; a failure drops it, under the retry budget.
+  hardenedDirectoryPathsThisProcess.set(dirPath, true)
+  applySecurePathRestriction(dirPath, true, process.platform, false, (restricted) => {
+    if (!restricted) {
+      hardenedDirectoryPathsThisProcess.delete(dirPath)
+    }
+  })
 }
 
 function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean {
@@ -56,18 +81,50 @@ function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean
     return true
   }
   // Why: async re-harden is safe here — read path hardens each file at most once/process; new files harden synchronously on the write path.
-  if (applySecurePathRestriction(targetPath, isDirectory, process.platform, false)) {
+  const outcome = applySecurePathRestriction(
+    targetPath,
+    isDirectory,
+    process.platform,
+    false,
+    (restricted) => {
+      if (!restricted) {
+        hardenedPathsThisProcess.delete(targetPath)
+      }
+    }
+  )
+  if (outcome !== 'failed') {
     rememberHardenedPath(targetPath, isDirectory)
     return true
   }
   return false
 }
 
-export function writeSecureJsonFile(targetPath: string, value: unknown): void {
-  writeSecureFile(targetPath, JSON.stringify(value, null, 2))
+/** Returns false when the file was written but its permissions could not be restricted. */
+export function writeSecureJsonFile(targetPath: string, value: unknown): boolean {
+  return writeSecureFile(targetPath, JSON.stringify(value, null, 2))
 }
 
-export function writeSecureFile(targetPath: string, contents: string): void {
+/** Returns false when the file was written but its permissions could not be restricted. */
+export function writeDurableSecureJsonFile(targetPath: string, value: unknown): boolean {
+  return writeSecureFile(targetPath, JSON.stringify(value, null, 2), { durable: true })
+}
+
+/**
+ * Writes `contents` and restricts the result to the current user.
+ *
+ * Returns whether the restriction actually took. Hardening stays best-effort — it fails
+ * legitimately on FAT32, network paths and restricted tokens, and must not break a write — but
+ * the outcome is now reported rather than assumed, so a caller storing a credential can react.
+ *
+ * The return value covers the *file* only. The parent directory is hardened fire-and-forget — on
+ * Windows that lane is async and answers `pending` regardless — so a `true` here says nothing
+ * about the directory's ACL.
+ */
+export function writeSecureFile(
+  targetPath: string,
+  contents: string,
+  options: { durable?: boolean } = {}
+): boolean {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -81,17 +138,85 @@ export function writeSecureFile(targetPath: string, contents: string): void {
       encoding: 'utf-8',
       mode: 0o600
     })
+    if (options.durable) {
+      fsyncFileSync(tmpFile)
+    }
     // Why: writeFileSync mode is a no-op on Windows, so restrict the credential's ACL synchronously before the rename publishes it under inherited ACLs.
-    applySecurePathRestriction(tmpFile, false, process.platform, true)
+    const stagedOutcome = applySecurePathRestriction(tmpFile, false, process.platform, true)
     renameSync(tmpFile, targetPath)
     // Why: these hold auth credentials, so the published path must stay current-user only; cache only on confirmed success so failures retry.
-    if (applySecurePathRestriction(targetPath, false, process.platform, true)) {
+    // The staged file's protected DACL survives the rename, so this pass usually just verifies it.
+    const publishedOutcome = applySecurePathRestriction(targetPath, false, process.platform, true)
+    if (publishedOutcome === 'applied') {
       rememberHardenedPath(targetPath, false)
     }
+    if (options.durable) {
+      bestEffortFsyncDirectorySync(dir)
+    }
+    return stagedOutcome === 'applied' && publishedOutcome === 'applied'
   } catch (error) {
     rmSync(tmpFile, { force: true })
     throw error
   }
+}
+
+function fsyncPathSync(path: string, flags: 'r' | 'r+'): void {
+  const descriptor = openSync(path, flags)
+  try {
+    fsyncSync(descriptor)
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
+export function fsyncFileSync(path: string): void {
+  // FlushFileBuffers requires a write-capable handle on Windows.
+  fsyncPathSync(path, process.platform === 'win32' ? 'r+' : 'r')
+}
+
+export function bestEffortFsyncDirectorySync(directory: string): void {
+  if (process.platform === 'win32') {
+    return
+  }
+  try {
+    fsyncPathSync(directory, 'r')
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      UNSUPPORTED_DIRECTORY_FSYNC_CODES.has((error as NodeJS.ErrnoException).code ?? '')
+    ) {
+      return
+    }
+    throw error
+  }
+}
+
+/**
+ * Errors that mean the contents were never seen, so they say nothing about what the file holds.
+ *
+ * `ENOENT` is deliberately absent: "there is no file" genuinely licenses creating one. So is a
+ * parse failure, which means the bytes WERE read and were garbage - the self-heal these stores
+ * were built for. The distinction is "could not read it" versus "read it and it was garbage".
+ *
+ * Why it matters: a reader that treats every failure as corruption regenerates the file, and the
+ * regeneration succeeds - `renameSync` over an unreadable file needs `FILE_DELETE_CHILD` on the
+ * parent, not `DELETE` on the file - so the original is destroyed by the code meant to heal it.
+ * `EPERM`/`EACCES` is the hardened-DACL case: a file granting a SID this process does not hold,
+ * reachable through a relocated user-data path, a share or roaming profile, a restored backup
+ * under a new local SID, or a half-applied harden. The rest are transient and, on Windows, more
+ * likely than that: `EBUSY` is what antivirus produces by holding a file open at the moment of a
+ * read, which for a credential read on the startup path is an ordinary Tuesday.
+ */
+export function isUnreadableError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return (
+    code === 'EPERM' ||
+    code === 'EACCES' ||
+    code === 'EBUSY' ||
+    code === 'EMFILE' ||
+    code === 'ENFILE' ||
+    code === 'EIO'
+  )
 }
 
 export function hardenExistingSecureFile(targetPath: string): void {
@@ -121,24 +246,48 @@ export function hardenSecurePath(
   )
 }
 
-/** Applies hardening; async Windows calls only report that best-effort ACL work was accepted. */
+/**
+ * `pending` is the honest answer for the async Windows branch: it has not happened yet, and
+ * reporting it as `applied` is what let a dead ACL look like a working one. The real outcome
+ * arrives through `onAsyncSettled`.
+ */
+type HardeningOutcome = 'applied' | 'pending' | 'failed'
+
 function applySecurePathRestriction(
   targetPath: string,
   isDirectory: boolean,
   platform: NodeJS.Platform,
-  sync: boolean
-): boolean {
+  sync: boolean,
+  onAsyncSettled?: (restricted: boolean) => void
+): HardeningOutcome {
   if (platform === 'win32') {
     if (sync) {
+      // Why no retry floor here: the write path is user-driven, not polled, and a failed apply
+      // must still be retried on the next write of the same credential.
       // Why: apply the ACL synchronously so the credential file isn't briefly readable under inherited ACLs (writeFileSync mode is a no-op on Windows).
-      return restrictWindowsPathSync(targetPath, isDirectory)
+      const restricted = restrictWindowsPathSync(targetPath, isDirectory)
+      if (restricted) {
+        // Success only: this is how a recovered host clears the read path's backoff (and reports
+        // `recovered`). Recording a failure here would put the exempt lane back under the budget.
+        recordHardeningOutcome(targetPath, true)
+      }
+      return restricted ? 'applied' : 'failed'
     }
-    // Why: dir/read-path re-harden runs async to avoid blocking the main thread (#4901); return true optimistically since it's best-effort.
-    bestEffortRestrictWindowsPath(targetPath, isDirectory)
-    return true
+    // Why the floor: this is the read path, polled at ~2/s (#4901). Retrying every failure there
+    // is the same storm the cache exists to prevent.
+    if (!mayAttemptHardening(targetPath)) {
+      onAsyncSettled?.(false)
+      return 'failed'
+    }
+    // Why: dir/read-path re-harden runs async to avoid blocking the main thread (#4901).
+    bestEffortRestrictWindowsPath(targetPath, isDirectory, (restricted) => {
+      recordHardeningOutcome(targetPath, restricted)
+      onAsyncSettled?.(restricted)
+    })
+    return 'pending'
   }
   chmodSync(targetPath, isDirectory ? 0o700 : 0o600)
-  return true
+  return 'applied'
 }
 
 /** Caches the current metadata snapshot for a just-hardened path, or clears it if the path is gone. */
@@ -196,153 +345,24 @@ function hardenedPathCacheEntriesMatch(
   )
 }
 
-function buildWindowsRestrictAclArgs(
-  targetPath: string,
-  currentUserSid: string,
-  isDirectory: boolean
-): string[] {
-  return [
-    '-NoProfile',
-    '-NonInteractive',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-Command',
-    WINDOWS_RESTRICT_ACL_SCRIPT,
-    targetPath,
-    currentUserSid,
-    isDirectory ? '1' : '0'
-  ]
-}
-
-function bestEffortRestrictWindowsPath(targetPath: string, isDirectory: boolean): void {
-  const currentUserSid = getCurrentWindowsUserSid()
-  if (!currentUserSid) {
-    return
-  }
-  // Why: async to avoid blocking the main thread — sync PowerShell cold-start (~1-1.5s) on the frequent read path stormed it (#4901).
-  execFile(
-    getWindowsSystemToolPath('WindowsPowerShell\\v1.0\\powershell.exe'),
-    buildWindowsRestrictAclArgs(targetPath, currentUserSid, isDirectory),
-    {
-      windowsHide: true,
-      timeout: 5000
-    },
-    () => {
-      // Why: ignore errors — hardening is best-effort; PowerShell ACL APIs may be unavailable or locked down.
-    }
-  )
-}
-
-function restrictWindowsPathSync(targetPath: string, isDirectory: boolean): boolean {
-  const currentUserSid = getCurrentWindowsUserSid()
-  if (!currentUserSid) {
-    return false
-  }
-  // Why: file must not be published until its ACL is actually restricted, so block and report real success (read path stays async, #4901).
-  try {
-    execFileSync(
-      getWindowsSystemToolPath('WindowsPowerShell\\v1.0\\powershell.exe'),
-      buildWindowsRestrictAclArgs(targetPath, currentUserSid, isDirectory),
-      {
-        stdio: ['ignore', 'ignore', 'ignore'],
-        windowsHide: true,
-        timeout: 5000
-      }
-    )
-    return true
-  } catch {
-    // Why: best-effort — a failed ACL apply must not crash the write; false leaves the path uncached to retry later.
-    return false
-  }
-}
-
-const WINDOWS_RESTRICT_ACL_SCRIPT = `
-$ErrorActionPreference = 'Stop'
-$path = $args[0]
-$currentUserSid = $args[1]
-$isDirectory = $args[2] -eq '1'
-$allowedSidTexts = @($currentUserSid, 'S-1-5-18', 'S-1-5-32-544')
-$allowedSids = @{}
-foreach ($sidText in $allowedSidTexts) {
-  $allowedSids[$sidText] = $true
-}
-$acl = Get-Acl -LiteralPath $path
-$acl.SetAccessRuleProtection($true, $false)
-foreach ($rule in @($acl.Access)) {
-  [void]$acl.RemoveAccessRuleSpecific($rule)
-}
-$inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::None
-if ($isDirectory) {
-  $inheritanceFlags = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
-}
-foreach ($sidText in $allowedSidTexts) {
-  $sid = [System.Security.Principal.SecurityIdentifier]::new($sidText)
-  $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
-    $sid,
-    [System.Security.AccessControl.FileSystemRights]::FullControl,
-    $inheritanceFlags,
-    [System.Security.AccessControl.PropagationFlags]::None,
-    [System.Security.AccessControl.AccessControlType]::Allow
-  )
-  [void]$acl.AddAccessRule($rule)
-}
-Set-Acl -LiteralPath $path -AclObject $acl
-$verifiedAcl = Get-Acl -LiteralPath $path
-if (-not $verifiedAcl.AreAccessRulesProtected) {
-  throw 'ACL inheritance is still enabled'
-}
-$fullControl = [System.Security.AccessControl.FileSystemRights]::FullControl
-foreach ($rule in @($verifiedAcl.Access)) {
-  $sid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
-  if (-not $allowedSids.ContainsKey($sid)) {
-    throw "Unexpected ACL entry $sid"
-  }
-  if ($rule.AccessControlType -ne [System.Security.AccessControl.AccessControlType]::Allow) {
-    throw "Unexpected ACL deny entry $sid"
-  }
-  if (($rule.FileSystemRights -band $fullControl) -ne $fullControl) {
-    throw "ACL entry $sid does not grant FullControl"
-  }
-}
-`.trim()
-
-function getCurrentWindowsUserSid(): string | null {
-  if (cachedWindowsUserSid !== undefined) {
-    return cachedWindowsUserSid
-  }
-  try {
-    const output = execFileSync(
-      getWindowsSystemToolPath('whoami.exe'),
-      ['/user', '/fo', 'csv', '/nh'],
-      {
-        encoding: 'utf-8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        windowsHide: true,
-        timeout: 5000
-      }
-    ).trim()
-    const columns = parseCsvLine(output)
-    cachedWindowsUserSid = columns[1] ?? null
-  } catch {
-    cachedWindowsUserSid = null
-  }
-  return cachedWindowsUserSid
-}
-
-function getWindowsSystemToolPath(relativeSystem32Path: string): string {
-  const systemRoot = process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows'
-  return pathWin32.join(systemRoot, 'System32', relativeSystem32Path)
-}
-
-function parseCsvLine(line: string): string[] {
-  return line.split(/","/).map((part) => part.replace(/^"/, '').replace(/"$/, ''))
-}
-
 export function __resetSecureFileWindowsUserSidForTests(): void {
-  cachedWindowsUserSid = undefined
+  resetSecureFileWindowsUserSidForTests()
 }
 
-export function __resetSecureFileHardenedPathsForTests(): void {
-  hardenedPathsThisProcess.clear()
-  hardenedDirectoryPathsThisProcess.clear()
+export function __resetSecureFileHardenedPathsForTests(
+  bounds: SecurePathHardeningCacheBounds = DEFAULT_HARDENING_CACHE_BOUNDS
+): void {
+  hardenedPathsThisProcess = new SecurePathHardeningCache(bounds)
+  hardenedDirectoryPathsThisProcess = new SecurePathHardeningCache(bounds)
+  configureHardeningRetryBudget(bounds)
+}
+
+export function __getSecureFileHardeningCacheStateForTests(): {
+  paths: ReturnType<SecurePathHardeningCache<HardenedPathCacheEntry>['state']>
+  directories: ReturnType<SecurePathHardeningCache<true>['state']>
+} {
+  return {
+    paths: hardenedPathsThisProcess.state(),
+    directories: hardenedDirectoryPathsThisProcess.state()
+  }
 }

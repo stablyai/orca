@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import {
+  computerUseClickModifiersValidationMessage,
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
 } from '../../../../shared/computer-use-key-spec'
@@ -67,7 +68,8 @@ export const Click = ComputerObserveTargetBase.extend({
   x: OptionalFiniteNumber,
   y: OptionalFiniteNumber,
   clickCount: OptionalPositiveInt,
-  mouseButton: z.enum(['left', 'right', 'middle']).optional()
+  mouseButton: z.enum(['left', 'right', 'middle']).optional(),
+  modifiers: z.string().optional()
 }).superRefine((value, ctx) => {
   validateComputerTarget(value, ctx)
   const hasElement = value.elementIndex !== undefined
@@ -90,6 +92,12 @@ export const Click = ComputerObserveTargetBase.extend({
       code: 'custom',
       message: 'Click accepts either --element-index or coordinate flags, not both'
     })
+  }
+  if (value.modifiers !== undefined) {
+    const message = computerUseClickModifiersValidationMessage(value.modifiers)
+    if (message) {
+      ctx.addIssue({ code: 'custom', message })
+    }
   }
 })
 

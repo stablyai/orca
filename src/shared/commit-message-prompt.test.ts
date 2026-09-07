@@ -250,27 +250,67 @@ describe('excerptAgentFailureOutput', () => {
 describe('tokenizeCustomCommandTemplate', () => {
   it('splits on whitespace', () => {
     const r = tokenizeCustomCommandTemplate('claude -p')
-    expect(r).toEqual({ ok: true, tokens: ['claude', '-p'] })
+    expect(r).toEqual({ ok: true, tokens: ['claude', '-p'], spans: expect.any(Array) })
   })
 
   it('groups double-quoted segments with spaces', () => {
     const r = tokenizeCustomCommandTemplate('claude --msg "hello world"')
-    expect(r).toEqual({ ok: true, tokens: ['claude', '--msg', 'hello world'] })
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['claude', '--msg', 'hello world'],
+      spans: expect.any(Array)
+    })
   })
 
   it('groups single-quoted segments verbatim', () => {
     const r = tokenizeCustomCommandTemplate(`agent --json '{"k":"v"}'`)
-    expect(r).toEqual({ ok: true, tokens: ['agent', '--json', '{"k":"v"}'] })
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['agent', '--json', '{"k":"v"}'],
+      spans: expect.any(Array)
+    })
   })
 
   it('honors backslash escapes inside double quotes', () => {
     const r = tokenizeCustomCommandTemplate('claude --msg "she said \\"hi\\""')
-    expect(r).toEqual({ ok: true, tokens: ['claude', '--msg', 'she said "hi"'] })
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['claude', '--msg', 'she said "hi"'],
+      spans: expect.any(Array)
+    })
   })
 
   it('keeps adjacent quoted/unquoted regions in one token (a"b"c → abc)', () => {
     const r = tokenizeCustomCommandTemplate('foo a"b"c')
-    expect(r).toEqual({ ok: true, tokens: ['foo', 'abc'] })
+    expect(r).toEqual({ ok: true, tokens: ['foo', 'abc'], spans: expect.any(Array) })
+  })
+
+  it('always reports one span per token', () => {
+    for (const source of ['claude -p', 'claude --msg "hello world"', 'foo a"b"c', '   \t  ']) {
+      const r = tokenizeCustomCommandTemplate(source)
+      expect(r.ok && r.spans.length).toBe(r.ok && r.tokens.length)
+    }
+  })
+
+  it('reports source spans covering each raw token including quotes', () => {
+    const source = 'claude --msg "hello world"'
+    const r = tokenizeCustomCommandTemplate(source)
+    expect(r).toEqual({
+      ok: true,
+      tokens: ['claude', '--msg', 'hello world'],
+      spans: [
+        { start: 0, end: 6, divergesFromShell: false },
+        { start: 7, end: 12, divergesFromShell: false },
+        { start: 13, end: 26, divergesFromShell: false }
+      ]
+    })
+    if (r.ok) {
+      expect(r.spans.map(({ start, end }) => source.slice(start, end))).toEqual([
+        'claude',
+        '--msg',
+        '"hello world"'
+      ])
+    }
   })
 
   it('returns an error for an unclosed quote', () => {
@@ -283,7 +323,7 @@ describe('tokenizeCustomCommandTemplate', () => {
 
   it('returns an empty token list for whitespace-only input', () => {
     const r = tokenizeCustomCommandTemplate('   \t  ')
-    expect(r).toEqual({ ok: true, tokens: [] })
+    expect(r).toEqual({ ok: true, tokens: [], spans: [] })
   })
 })
 
@@ -325,5 +365,60 @@ describe('planCustomCommand', () => {
     if (!r.ok) {
       expect(r.error).toMatch(/unclosed/i)
     }
+  })
+})
+
+describe('Windows command overrides keep native path separators (#11375)', () => {
+  const WINDOWS_PATH = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+  it('eats backslashes under the POSIX default, which is what broke Windows paths', () => {
+    // Pinned as the reason 'literal' exists, not as desired behavior.
+    const posix = tokenizeCustomCommandTemplate(WINDOWS_PATH)
+
+    expect(posix.ok && posix.tokens).toEqual([
+      'C:WindowsSystem32WindowsPowerShellv1.0powershell.exe'
+    ])
+  })
+
+  it('keeps a native absolute path intact in literal mode', () => {
+    const literal = tokenizeCustomCommandTemplate(WINDOWS_PATH, 'literal')
+
+    expect(literal.ok && literal.tokens).toEqual([WINDOWS_PATH])
+  })
+
+  it('still splits on whitespace and honours quotes in literal mode', () => {
+    const quoted = tokenizeCustomCommandTemplate(
+      '"C:\\Program Files\\Git\\bin\\bash.exe" --login -i',
+      'literal'
+    )
+
+    expect(quoted.ok && quoted.tokens).toEqual([
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      '--login',
+      '-i'
+    ])
+  })
+
+  it('leaves a trailing backslash alone instead of swallowing the delimiter', () => {
+    const trailing = tokenizeCustomCommandTemplate('C:\\tools\\ --flag', 'literal')
+
+    expect(trailing.ok && trailing.tokens).toEqual(['C:\\tools\\', '--flag'])
+  })
+
+  it('keeps POSIX escaping the default so `foo\\ bar` stays one token', () => {
+    const posix = tokenizeCustomCommandTemplate('/usr/local/my\\ agent/bin --flag')
+
+    expect(posix.ok && posix.tokens).toEqual(['/usr/local/my agent/bin', '--flag'])
+  })
+
+  it('substitutes {prompt} as one argument with a Windows binary path', () => {
+    const plan = planCustomCommand(
+      `${WINDOWS_PATH} -Command {prompt}`,
+      'write a commit message',
+      'literal'
+    )
+
+    expect(plan.ok && plan.binary).toBe(WINDOWS_PATH)
+    expect(plan.ok && plan.args).toEqual(['-Command', 'write a commit message'])
   })
 })

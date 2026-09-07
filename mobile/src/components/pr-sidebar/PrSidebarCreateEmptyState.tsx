@@ -18,7 +18,7 @@ import {
   runMobileHostedReviewCreateIntent
 } from '../../source-control/mobile-hosted-review-create-intent-runner'
 import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
-import { openMobilePrUrl } from '../MobilePrComposeSheet'
+import { openMobilePrUrl } from '../mobile-pr-url'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
 import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
 

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useAppStore } from '../store'
 import { focusTerminalTabSurface } from '../lib/focus-terminal-tab-surface'
-import { ORCA_BROWSER_FOCUS_REQUEST_EVENT } from '../components/browser-pane/browser-focus'
+import { ORCA_BROWSER_FOCUS_REQUEST_EVENT } from '../components/browser-pane/host-guest/browser-focus'
 import { useModalReturnFocus } from './useModalReturnFocus'
 
 vi.mock('../lib/focus-terminal-tab-surface', () => ({

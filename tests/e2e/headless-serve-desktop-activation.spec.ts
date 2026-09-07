@@ -23,12 +23,15 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime/client'
+import { RuntimeClientError } from '../../src/cli/runtime/types'
 import type {
   RuntimeStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalRead
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { parsePaneKey } from '../../src/shared/stable-pane-id'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(
@@ -50,8 +53,7 @@ function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolati
       ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
     },
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
 }
 
@@ -65,6 +67,35 @@ function readDaemonPid(userDataDir: string): number {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
   return parsed.pid
+}
+
+function readPersistedPromotionBinding(
+  userDataDir: string,
+  worktreeId: string,
+  tabId: string,
+  leafId: string
+): { tabId: string; leafId: string; ptyId: string } | null {
+  try {
+    const persisted = JSON.parse(
+      readFileSync(
+        path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json'),
+        'utf8'
+      )
+    ) as {
+      workspaceSession?: {
+        tabsByWorktree?: Record<string, { id?: string; ptyId?: string | null }[]>
+        terminalLayoutsByTabId?: Record<string, { ptyIdsByLeafId?: Record<string, string | null> }>
+      }
+    }
+    const tab = persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.find(
+      (candidate) => candidate.id === tabId
+    )
+    const ptyId =
+      persisted.workspaceSession?.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId]
+    return tab && ptyId ? { tabId, leafId, ptyId } : null
+  } catch {
+    return null
+  }
 }
 
 async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
@@ -119,10 +150,22 @@ test('promotes the headless owner without replacing its daemon terminal', async 
     const client = new RuntimeClient(userDataDir, 5_000)
 
     await expect
-      .poll(async () => (await client.getCliStatus()).result.app.desktopWindowStatus, {
-        timeout: 60_000,
-        message: 'headless serve never became safely openable'
-      })
+      .poll(
+        async () => {
+          try {
+            return (await client.getCliStatus()).result.app.desktopWindowStatus
+          } catch (error) {
+            if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
+              return 'starting'
+            }
+            throw error
+          }
+        },
+        {
+          timeout: 60_000,
+          message: 'headless serve never became safely openable'
+        }
+      )
       .toBe('openable')
 
     const beforeStatus = await client.call<RuntimeStatus>('status.get')
@@ -133,8 +176,11 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       title: 'Serve promotion continuity'
     })
     const terminal = created.result.terminal
-    if (!terminal.ptyId) {
-      throw new Error('Headless terminal did not expose its daemon PTY id')
+    const originalPtyId = terminal.ptyId
+    const originalTabId = terminal.tabId
+    const paneIdentity = terminal.paneKey ? parsePaneKey(terminal.paneKey) : null
+    if (!originalPtyId || !originalTabId || !paneIdentity) {
+      throw new Error('Headless terminal did not expose its durable pane and daemon PTY identity')
     }
 
     const beforeMarker = `SERVE_PROMOTION_BEFORE_${Date.now()}`
@@ -177,6 +223,26 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       })
     }
 
+    await expect
+      .poll(
+        () =>
+          readPersistedPromotionBinding(
+            userDataDir,
+            terminal.worktreeId,
+            originalTabId,
+            paneIdentity.leafId
+          ),
+        {
+          timeout: 15_000,
+          message: 'headless terminal binding was not persisted during desktop promotion'
+        }
+      )
+      .toEqual({
+        tabId: originalTabId,
+        leafId: paneIdentity.leafId,
+        ptyId: originalPtyId
+      })
+
     const page = await serveApp.firstWindow({ timeout: 60_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
@@ -210,6 +276,6 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       await closeElectronAppForE2E(serveApp)
     }
     await cleanupE2EDaemons(userDataDir)
-    rmSync(userDataDir, { recursive: true, force: true })
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
   }
 })

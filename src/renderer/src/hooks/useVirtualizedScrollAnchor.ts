@@ -46,6 +46,14 @@ type UseVirtualizedScrollAnchorOptions<
   // Why: some callers record user scroll anchors outside this hook; passive
   // programmatic scroll events during remount must not teach them a transient row.
   recordAnchorOnScroll?: boolean
+  // Why: old key -> new key for rows this render re-keyed without moving, so an
+  // anchor recorded under the old key follows its own row instead of pinning a
+  // neighbour. Omitted by callers whose row keys are stable.
+  rekeyedRowKeys?: ReadonlyMap<string, string>
+  // Why: callers that already maintain an identity-stable key -> index map (large diff reviews
+  // rebuild `rows` once per loaded file) pass it in so this hook does not rebuild a second Map
+  // on every one of those renders. Must agree with `getRowKey` over `rows`.
+  rowIndexByKey?: ReadonlyMap<string, number>
   // Why: when provided, anchor restore runs only when this value changes
   // (structural row changes) or while a prior restore is still converging —
   // not on every totalSize/isScrolling tick. Measurement-driven shifts are the
@@ -80,7 +88,9 @@ export function useVirtualizedScrollAnchor<
   programmaticScrollMarks,
   recordAnchorOnCleanup = true,
   recordAnchorOnScroll = true,
+  rekeyedRowKeys,
   restoreSignal,
+  rowIndexByKey: providedRowIndexByKey,
   rows,
   scrollElementRef,
   scrollOffsetRef,
@@ -88,13 +98,16 @@ export function useVirtualizedScrollAnchor<
   totalSize,
   virtualizer
 }: UseVirtualizedScrollAnchorOptions<TRow, TScrollElement, TItemElement>): void {
-  const rowIndexByKey = useMemo(() => {
+  const rowIndexByKey = useMemo<ReadonlyMap<string, number>>(() => {
+    if (providedRowIndexByKey) {
+      return providedRowIndexByKey
+    }
     const indexByKey = new Map<string, number>()
     rows.forEach((row, index) => {
       indexByKey.set(getRowKey(row), index)
     })
     return indexByKey
-  }, [getRowKey, rows])
+  }, [getRowKey, providedRowIndexByKey, rows])
 
   const recordVirtualScrollAnchor = useCallback(
     (scrollTop: number) => {
@@ -254,7 +267,8 @@ export function useVirtualizedScrollAnchor<
         // adjustment; restoring here would fight concurrent user scrolling.
         return
       }
-      if (anchor.scrollTop !== undefined) {
+      // Why: pending restores own layout shifts; unmarked user scrolls disarm them in the listener.
+      if (anchor.scrollTop !== undefined && !pendingRestoreRef.current) {
         const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
         const clampExplained =
           anchor.scrollTop > maxScrollTop + 1 && el.scrollTop >= maxScrollTop - 2
@@ -290,6 +304,7 @@ export function useVirtualizedScrollAnchor<
       pendingRestoreRef,
       programmaticScrollMarks: programmaticScrollMarksRef.current,
       recordScrollAnchor,
+      rekeyedRowKeys,
       rowIndexByKey,
       scrollOffsetRef,
       virtualizer
@@ -299,6 +314,7 @@ export function useVirtualizedScrollAnchor<
     getItemElementKey,
     itemElementSelector,
     recordScrollAnchor,
+    rekeyedRowKeys,
     restoreSignal,
     rowIndexByKey,
     scrollElementRef,

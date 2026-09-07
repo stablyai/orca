@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { Mic } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import type { FeatureTip } from '../../../../shared/feature-tips'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -19,7 +17,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
-import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
 import { FeatureTipActions } from './FeatureTipActions'
@@ -33,8 +30,7 @@ import {
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-
-const WAVEFORM_BAR_HEIGHTS = [30, 60, 90, 70, 100, 50, 80, 35, 65]
+import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
 
 function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
   return (
@@ -42,37 +38,6 @@ function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
       {children}
     </span>
   )
-}
-
-function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
-  if (tip.action === 'setup-cli') {
-    return <CliFeatureTipVisual />
-  }
-
-  switch (tip.action) {
-    case 'learn-cmd-j-palette':
-      // Kept for type exhaustiveness; the cmd-j tip is rendered via
-      // CmdJPaletteTipDialog and never reaches this function at runtime.
-      return <CmdJPaletteFeatureTipVisual />
-    case 'enable-voice':
-      return (
-        <div className="flex flex-col items-center gap-2.5">
-          <div className="flex size-14 items-center justify-center rounded-full bg-foreground text-background">
-            <Mic className="size-5" />
-          </div>
-          {/* Animated waveform — purely decorative, signals "voice" without copy */}
-          <div className="flex h-6 items-center justify-center gap-1" aria-hidden="true">
-            {WAVEFORM_BAR_HEIGHTS.map((height, i) => (
-              <span
-                key={i}
-                className="block w-[3px] rounded-[2px] bg-foreground/60 animate-waveform"
-                style={{ height: `${height}%`, animationDelay: `${i * 0.1}s` }}
-              />
-            ))}
-          </div>
-        </div>
-      )
-  }
 }
 
 export default function FeatureTipsModal(): JSX.Element | null {
@@ -140,6 +105,13 @@ export default function FeatureTipsModal(): JSX.Element | null {
     markCurrentTipSeen()
     closeModal()
     openSettingsTarget({ pane: 'shortcuts', repoId: null })
+    openSettingsPage()
+  }
+
+  const openVoiceSettings = (): void => {
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({ pane: 'voice', repoId: null })
     openSettingsPage()
   }
 
@@ -371,7 +343,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
                 skillTerminalOpen ? 'translate-x-full opacity-0' : 'translate-x-0 opacity-100'
               }`}
             >
-              {skillTerminalOpen ? null : <FeatureTipVisual tip={currentTip} />}
+              {skillTerminalOpen ? null : <CliFeatureTipVisual />}
             </div>
           </div>
         </DialogContent>
@@ -393,29 +365,20 @@ export default function FeatureTipsModal(): JSX.Element | null {
     )
   }
 
-  return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md gap-4 p-7" showCloseButton>
-        <DialogHeader className="items-center gap-4 px-8 text-center sm:text-center">
-          <FeatureTipVisual tip={currentTip} />
-          <DialogTitle className="text-2xl font-semibold tracking-tight">
-            {currentTip.title}
-          </DialogTitle>
-          <DialogDescription className="max-w-sm text-sm leading-relaxed">
-            {currentTip.description}
-          </DialogDescription>
-        </DialogHeader>
+  if (currentTip.action !== 'enable-voice') {
+    currentTip.action satisfies never
+    return null
+  }
 
-        <DialogFooter className="sm:justify-center">
-          <FeatureTipActions
-            currentTip={currentTip}
-            primaryBusy={primaryBusy}
-            onPrimaryAction={() => void handlePrimaryAction()}
-            onSkip={handleSkip}
-            showSkip
-          />
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+  return (
+    <VoiceDictationTipDialog
+      open={isOpen}
+      tip={currentTip}
+      primaryBusy={primaryBusy}
+      onOpenChange={handleOpenChange}
+      onPrimaryAction={() => void handlePrimaryAction()}
+      onSkip={handleSkip}
+      onVoiceSettingsClick={openVoiceSettings}
+    />
   )
 }

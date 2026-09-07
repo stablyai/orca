@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type {
-  NestedRepoScanResult,
-  Repo,
-  ProjectGroup,
-  FolderWorkspace
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { NestedRepoScanResult, ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
+  createCompatibleRuntimeStatusResponse,
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
@@ -269,7 +267,7 @@ describe('project group store routing', () => {
           { projectGroupId: projectGroup.id, name: 'Runtime folder' },
           { runtimeEnvironmentId: 'env-1' }
         )
-    ).resolves.toEqual(folderWorkspace)
+    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'runtime:env-1' })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -277,6 +275,40 @@ describe('project group store routing', () => {
       params: { projectGroupId: projectGroup.id, name: 'Runtime folder' },
       timeoutMs: 15_000
     })
+    expect(folderWorkspacesCreate).not.toHaveBeenCalled()
+  })
+
+  it('blocks Jira folder creation on runtimes without durable linked context support', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.linked-work-item-context.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+    )
+    const store = createTestStore()
+
+    await expect(
+      store.getState().createFolderWorkspace(
+        {
+          projectGroupId: projectGroup.id,
+          name: 'Jira folder',
+          linkedTask: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'ORCA-123 Link Jira',
+            url: 'https://company.atlassian.net/browse/ORCA-123',
+            jiraIdentifier: 'ORCA-123'
+          }
+        },
+        { runtimeEnvironmentId: 'env-1' }
+      )
+    ).rejects.toThrow('Update the remote runtime to link Jira')
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(folderWorkspacesCreate).not.toHaveBeenCalled()
   })
 
@@ -315,7 +347,7 @@ describe('project group store routing', () => {
         name: 'Refund fix',
         linkedTask
       })
-    ).resolves.toEqual(folderWorkspace)
+    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'local' })
     await expect(
       store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
     ).resolves.toBe(true)
@@ -770,9 +802,13 @@ describe('project group store routing', () => {
       _meta: { runtimeId: 'runtime-remote' }
     })
     const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
+    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-ambient' } as never })
 
-    await expect(store.getState().scanNestedRepos('/platform')).resolves.toEqual({
+    await expect(
+      store.getState().scanNestedRepos('/platform', undefined, {
+        runtimeEnvironmentId: 'env-selected'
+      })
+    ).resolves.toEqual({
       selectedPath: '/platform',
       selectedPathKind: 'non_git_folder',
       repos: [{ path: '/platform/api', displayName: 'api', depth: 1 }],
@@ -786,7 +822,7 @@ describe('project group store routing', () => {
     })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
+      selector: 'env-selected',
       method: 'projectGroup.scanNested',
       params: { path: '/platform' },
       timeoutMs: 20_000

@@ -4,7 +4,9 @@ import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type CommitMessageAgentEnvironmentResolvers = {
-  prepareForCodexLaunch?: (target?: CommitMessageAgentRuntimeTarget) => string | null
+  prepareForCodexLaunch?: (
+    target?: CommitMessageAgentRuntimeTarget
+  ) => string | null | Promise<string | null>
   prepareForClaudeLaunch?: (
     target?: CommitMessageAgentRuntimeTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -53,7 +55,9 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
       ? 'OPENCODE_CONFIG_DIR'
       : agentId === 'pi' || agentId === 'omp'
         ? 'PI_CODING_AGENT_DIR'
-        : null
+        : agentId === 'grok'
+          ? 'GROK_HOME'
+          : null
   if (!configVar) {
     return null
   }
@@ -86,6 +90,8 @@ export async function prepareLocalCommitMessageAgentEnv(
   resolvers: CommitMessageAgentEnvironmentResolvers | undefined,
   target?: CommitMessageAgentRuntimeTarget
 ): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
+  // Why: a non-null result short-circuits the resolvers below, so any agent added
+  // to prepareShellConfigDirEnv must not also need a Codex/Claude-style resolver.
   const shellConfigEnv = target?.runtime === 'wsl' ? null : prepareShellConfigDirEnv(agentId)
   if (shellConfigEnv) {
     return shellConfigEnv
@@ -96,7 +102,7 @@ export async function prepareLocalCommitMessageAgentEnv(
 
   try {
     if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
-      const codexHomePath = resolvers.prepareForCodexLaunch(target)
+      const codexHomePath = await resolvers.prepareForCodexLaunch(target)
       const wslCodexHome = codexHomePath ? parseWslUncPath(codexHomePath) : null
       if (target?.runtime === 'wsl') {
         const codexHomeForTarget = wslCodexHome?.linuxPath ?? null

@@ -1,5 +1,5 @@
 import type { App, BrowserWindow } from 'electron'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { focusExistingMainWindow } from './focus-existing-window'
 
 type FakeWindowOptions = {
@@ -78,7 +78,38 @@ function makeTimer(): {
   }
 }
 
+// These cases exercise foreground behavior against Electron mocks.
+beforeEach(() => {
+  vi.stubEnv('ORCA_BACKGROUND_LAUNCH', undefined)
+  vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
+  vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
+})
+afterEach(() => vi.unstubAllEnvs())
+
 describe('focusExistingMainWindow', () => {
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'never restores or activates a background window on %s',
+    (platform) => {
+      vi.stubEnv('ORCA_BACKGROUND_LAUNCH', '1')
+      vi.stubEnv('ORCA_E2E_FOREGROUND', '1')
+      const app = makeFakeApp()
+      const window = makeFakeWindow({ minimized: true })
+      const timer = makeTimer()
+      focusExistingMainWindow({
+        app,
+        getWindow: () => window,
+        openWindow: vi.fn(),
+        platform,
+        setTimeout: timer.setTimeout
+      })
+      expect(app.focus).not.toHaveBeenCalled()
+      for (const call of Object.values(window.calls)) {
+        expect(call).not.toHaveBeenCalled()
+      }
+      expect(timer.scheduledMs()).toEqual([])
+    }
+  )
+
   it('aggressively foregrounds an existing Windows window on second launch', () => {
     const app = makeFakeApp()
     const window = makeFakeWindow()
@@ -110,19 +141,56 @@ describe('focusExistingMainWindow', () => {
 
   it('restores minimized windows before focusing them', () => {
     const window = makeFakeWindow({ minimized: true })
+    const timer = makeTimer()
 
     focusExistingMainWindow({
       app: makeFakeApp(),
       getWindow: () => window,
       openWindow: vi.fn(),
       platform: 'darwin',
-      setTimeout: makeTimer().setTimeout
+      setTimeout: timer.setTimeout
     })
 
     expect(window.calls.restore).toHaveBeenCalledTimes(1)
     expect(window.calls.show).toHaveBeenCalledTimes(1)
     expect(window.calls.focus).toHaveBeenCalledTimes(1)
     expect(window.calls.moveTop).not.toHaveBeenCalled()
+    expect(timer.scheduledMs()).toEqual([])
+  })
+
+  // The blocking install-DACL repair holds the first window for up to 20s of blank
+  // screen, which is exactly when a user double-clicks the shortcut again. That
+  // second instance must not spawn a renderer onto a tree icacls is rewriting.
+  it('drops a reopen while another path must own the first window', () => {
+    const openWindow = vi.fn()
+
+    const result = focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => null,
+      openWindow,
+      canOpenWindow: () => false
+    })
+
+    expect(result).toBe('pending')
+    expect(openWindow).not.toHaveBeenCalled()
+  })
+
+  it('still focuses a window that already exists while reopening is held', () => {
+    const window = makeFakeWindow()
+    const openWindow = vi.fn()
+
+    const result = focusExistingMainWindow({
+      app: makeFakeApp(),
+      getWindow: () => window,
+      openWindow,
+      canOpenWindow: () => false,
+      platform: 'darwin',
+      setTimeout: makeTimer().setTimeout
+    })
+
+    expect(result).toBe('focused')
+    expect(openWindow).not.toHaveBeenCalled()
+    expect(window.calls.focus).toHaveBeenCalledTimes(1)
   })
 
   it('waits for normal startup when no window exists before app readiness', () => {

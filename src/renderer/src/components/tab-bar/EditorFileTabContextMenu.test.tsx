@@ -51,6 +51,9 @@ vi.mock('lucide-react', () => ({
   Copy: function Copy(props: Record<string, unknown>) {
     return { type: 'Copy', props }
   },
+  CopyX: function CopyX(props: Record<string, unknown>) {
+    return { type: 'CopyX', props }
+  },
   ExternalLink: function ExternalLink(props: Record<string, unknown>) {
     return { type: 'ExternalLink', props }
   },
@@ -59,6 +62,9 @@ vi.mock('lucide-react', () => ({
   },
   ListX: function ListX(props: Record<string, unknown>) {
     return { type: 'ListX', props }
+  },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
   },
   PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
     return { type: 'PanelRightClose', props }
@@ -196,7 +202,9 @@ function extractText(node: unknown): string {
   return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
-async function renderMenu(): Promise<unknown> {
+async function renderMenu(
+  overrides: { onActivate?: () => void; onOpenRenameInput?: () => void } = {}
+): Promise<unknown> {
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -216,6 +224,8 @@ async function renderMenu(): Promise<unknown> {
     isPinned: false,
     isRenaming: false,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
+    tabCount: 1,
     canRename: true,
     canShowMarkdownPreview: false,
     resolvedLanguage: 'typescript',
@@ -226,9 +236,12 @@ async function renderMenu(): Promise<unknown> {
     onOpenRenameInput: vi.fn(),
     onTogglePin: vi.fn(),
     onClose: vi.fn(),
+    onCloseOthers: vi.fn(),
     onCloseAll: vi.fn(),
     onCloseToRight: vi.fn(),
-    onOpenMarkdownPreview: vi.fn()
+    onCloseToLeft: vi.fn(),
+    onOpenMarkdownPreview: vi.fn(),
+    ...overrides
   })
 }
 
@@ -254,6 +267,27 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('opens rename only after menu close releases focus and consumes the request once', async () => {
+    const onActivate = vi.fn()
+    const onOpenRenameInput = vi.fn()
+    const tree = expandNode(await renderMenu({ onActivate, onOpenRenameInput }))
+    const rename = findElementsByType(tree, 'DropdownMenuItem').find((item) =>
+      extractText(item.props.children).includes('Rename')
+    )!
+    const content = findElementsByType(tree, 'DropdownMenuContent')[0]!
+    ;(rename.props.onSelect as () => void)()
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(onOpenRenameInput).not.toHaveBeenCalled()
+    const preventDefault = vi.fn()
+    const close = content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void
+    close({ preventDefault })
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(onActivate).toHaveBeenCalledTimes(1)
+    expect(onOpenRenameInput).toHaveBeenCalledTimes(1)
+    close({ preventDefault })
+    expect(onOpenRenameInput).toHaveBeenCalledTimes(1)
   })
 
   it('renders assigned shortcuts next to Rename, Close, and Close All Editor Tabs', async () => {
@@ -283,6 +317,17 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     }
 
     expect(findElementsByType(tree, 'DropdownMenuShortcut')).toHaveLength(3)
+  })
+
+  it('renders Close Others and both directional close items', async () => {
+    const tree = expandNode(await renderMenu())
+    const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(labels).toContain('Close Others')
+    expect(labels.some((label) => label.includes('Close Tabs To The Right'))).toBe(true)
+    expect(labels.some((label) => label.includes('Close Tabs To The Left'))).toBe(true)
   })
 
   it('hides the shortcut chip when close-all is unassigned', async () => {

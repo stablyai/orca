@@ -47,6 +47,7 @@ vi.mock('./relay-control-client', () => ({
   RelayControlClient: class {
     connect = fakes.controlConnect
     closeNow = vi.fn()
+    isLive = vi.fn(() => true)
     confirmResume = vi.fn().mockResolvedValue({
       type: 'device-resume-confirmed',
       v: 1,
@@ -78,6 +79,7 @@ vi.mock('../rpc/relay-transport', () => ({
     stop = vi.fn().mockResolvedValue(undefined)
     setGeneration = vi.fn()
     metadataFor = vi.fn()
+    hasConnection = vi.fn(() => false)
     openConnection = vi.fn().mockResolvedValue(undefined)
 
     constructor() {
@@ -87,6 +89,7 @@ vi.mock('../rpc/relay-transport', () => ({
 }))
 
 import { RelaySessionBroker, StaleRelayBrokerError } from './relay-session-broker'
+import { RelayHttpError } from './relay-http-client'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -109,12 +112,40 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     })
   })
 
+  it('publishes the assigned cell with the status and drops it on close', async () => {
+    fakes.controlConnect.mockResolvedValue({
+      type: 'host-hello-ack',
+      v: 1,
+      generation: 1,
+      controlResumeSecret: 'A'.repeat(43),
+      leaseExpiresAt: 1_000_000,
+      activeConnIds: [],
+      pendingConns: []
+    } satisfies RelayHostHelloAckMessage)
+    const onStatus = vi.fn()
+
+    const broker = await RelaySessionBroker.connect(brokerOptions({ onStatus }))
+
+    expect(onStatus.mock.calls).toContainEqual(['connecting', undefined])
+    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://relay.example.test')
+
+    // Why: the pool publishes offline while it still holds the assignment it is
+    // about to rotate; forwarding that cell leaves the UI naming a dead one.
+    fakes.controls[0]!.options.onClose(1006)
+    expect(onStatus.mock.calls).toContainEqual(['offline', undefined])
+    expect(onStatus.mock.calls).toContainEqual(['draining', 'https://relay.example.test'])
+
+    broker.closeNow()
+    expect(onStatus).toHaveBeenLastCalledWith('offline')
+  })
+
   it('closes partially opened resources without publishing stale state', async () => {
     const controlAck = deferred<RelayHostHelloAckMessage>()
     fakes.controlConnect.mockReturnValue(controlAck.promise)
     let current = true
     const statuses: string[] = []
     const keypair = nacl.box.keyPair()
+    const detachTransport = vi.fn()
     const connecting = RelaySessionBroker.connect({
       authConfig: {
         relayTokenEndpoint: 'https://auth.example.test/v1/relay-token',
@@ -127,12 +158,14 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
       },
       appVersion: '1.0.0',
-      mobileSocketWiring: { attachTransport: vi.fn() } as never,
+      mobileSocketWiring: { attachTransport: vi.fn(() => detachTransport) } as never,
       isCurrent: () => current,
       refreshAccessToken: async () => null,
       onStatus: (status) => statuses.push(status)
     })
     await vi.waitFor(() => expect(fakes.controls).toHaveLength(1))
+    const transportStopped = deferred<void>()
+    fakes.transports[0]!.stop.mockReturnValue(transportStopped.promise)
     current = false
     controlAck.resolve({
       type: 'host-hello-ack',
@@ -147,7 +180,37 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     await expect(connecting).rejects.toBeInstanceOf(StaleRelayBrokerError)
     expect(fakes.controls[0]!.closeNow).toHaveBeenCalledOnce()
     expect(fakes.transports[0]!.stop).toHaveBeenCalledOnce()
+    expect(detachTransport).not.toHaveBeenCalled()
+    transportStopped.resolve(undefined)
+    await vi.waitFor(() => expect(detachTransport).toHaveBeenCalledOnce())
     expect(statuses).toEqual(['connecting'])
+  })
+
+  it('fails connect when the control closes before origin activation', async () => {
+    // Why: a socket can deliver hello-ack and close in the same ws parser turn;
+    // onClose then fires before the connect promise settles, so nothing may
+    // publish this control as active.
+    fakes.controlConnect.mockImplementationOnce(async () => {
+      fakes.controls[0]!.options.onClose(1006)
+      return {
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 1,
+        controlResumeSecret: 'A'.repeat(43),
+        leaseExpiresAt: 1_000_000,
+        activeConnIds: [],
+        pendingConns: []
+      } satisfies RelayHostHelloAckMessage
+    })
+    const statuses: string[] = []
+
+    await expect(
+      RelaySessionBroker.connect(brokerOptions({ onStatus: (status) => statuses.push(status) }))
+    ).rejects.toThrow('relay_control_closed_before_activation')
+
+    expect(statuses).not.toContain('registered')
+    expect(statuses.at(-1)).toBe('offline')
+    await vi.waitFor(() => expect(fakes.transports[0]!.stop).toHaveBeenCalled())
   })
 
   it('activates a new origin while keeping basis-bound work on the drained origin', async () => {
@@ -176,7 +239,29 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         assignmentEpoch: 2,
         leaseExpiresAt: 2_000_000
       })
-    const broker = await RelaySessionBroker.connect(brokerOptions({ onStatus: vi.fn() }))
+    const resolvePreferredRegion = vi
+      .fn()
+      .mockResolvedValueOnce('asia-east2')
+      .mockResolvedValueOnce('us-central1')
+    const broker = await RelaySessionBroker.connect(
+      brokerOptions({
+        onStatus: vi.fn(),
+        resolvePreferredRegion
+      })
+    )
+    expect(fakes.assign).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        preferredRegion: 'asia-east2',
+        reconnect: true,
+        // Why: the rate-gate wait relies on this fencing to abort superseded
+        // callers; dropping the wiring must fail here, not only in the field.
+        isCurrent: expect.any(Function)
+      })
+    )
+    const wiredIsCurrent = (fakes.assign.mock.calls[0]![0] as { isCurrent: () => boolean })
+      .isCurrent
+    expect(wiredIsCurrent()).toBe(true)
     fakes.controls[0]!.options.onConnectionOpen({
       connId: 'old-basis',
       connTicket: 'T'.repeat(43),
@@ -191,6 +276,12 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       recovery: 'resolve-director'
     })
     await vi.waitFor(() => expect(fakes.controls).toHaveLength(2))
+
+    expect(fakes.assign).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ preferredRegion: 'us-central1', reconnect: true })
+    )
+    expect(resolvePreferredRegion).toHaveBeenCalledTimes(2)
 
     expect(broker.endpoint?.cellUrl).toBe('https://relay-c2.example.test')
     expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()
@@ -249,6 +340,94 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     expect(fakes.controls[1]!.confirmResume).toHaveBeenCalledOnce()
   })
 
+  it('reports the assigned cell each time an origin registers', async () => {
+    fakes.controlConnect.mockResolvedValue({
+      type: 'host-hello-ack',
+      v: 1,
+      generation: 1,
+      controlResumeSecret: 'A'.repeat(43),
+      leaseExpiresAt: 1_000_000,
+      activeConnIds: [],
+      pendingConns: []
+    } satisfies RelayHostHelloAckMessage)
+    fakes.assign
+      .mockResolvedValueOnce({
+        cellUrl: 'https://cell-a.relay.example.test',
+        assignmentEpoch: 1,
+        leaseExpiresAt: 1_000_000
+      })
+      .mockResolvedValueOnce({
+        cellUrl: 'https://cell-b.relay.example.test',
+        assignmentEpoch: 2,
+        leaseExpiresAt: 2_000_000
+      })
+    const onAssignedCellActive = vi.fn()
+
+    await RelaySessionBroker.connect(brokerOptions({ onAssignedCellActive }))
+    expect(onAssignedCellActive.mock.calls).toEqual([['https://cell-a.relay.example.test']])
+    fakes.controls[0]!.options.onDrain({
+      type: 'drain',
+      graceMs: 5_000,
+      recovery: 'resolve-director'
+    })
+    await vi.waitFor(() => expect(onAssignedCellActive).toHaveBeenCalledTimes(2))
+    expect(onAssignedCellActive).toHaveBeenLastCalledWith('https://cell-b.relay.example.test')
+  })
+
+  it('attaches a phone whose accept straddles a control rebind', async () => {
+    const ack: RelayHostHelloAckMessage = {
+      type: 'host-hello-ack',
+      v: 1,
+      generation: 7,
+      controlResumeSecret: 'R'.repeat(43),
+      leaseExpiresAt: 1_000_000,
+      activeConnIds: [],
+      pendingConns: []
+    }
+    fakes.controlConnect.mockResolvedValueOnce(ack).mockResolvedValueOnce({
+      ...ack,
+      leaseExpiresAt: 2_000_000,
+      // The cell restates the connection it already announced once; without the
+      // replay the phone waits out its 10s attach deadline and is closed 4404.
+      pendingConns: [{ connId: 'straddling-basis', connTicket: 'T'.repeat(43) }]
+    })
+    fakes.assign.mockResolvedValue({
+      cellUrl: 'https://relay.example.test',
+      assignmentEpoch: 1,
+      leaseExpiresAt: 2_000_000
+    })
+    const broker = await RelaySessionBroker.connect(brokerOptions())
+    fakes.controls[0]!.options.onConnectionOpen({
+      connId: 'straddling-basis',
+      connTicket: 'T'.repeat(43),
+      kind: 'invite',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 10_000
+    })
+    // The blip that costs the control also kills the in-flight data socket.
+    fakes.transports[0]!.openConnection.mockClear()
+
+    fakes.controls[0]!.options.onDrain({
+      type: 'drain',
+      graceMs: 5_000,
+      recovery: 'resolve-director'
+    })
+    await vi.waitFor(() => expect(fakes.controls).toHaveLength(2))
+
+    expect(fakes.transports).toHaveLength(1)
+    await vi.waitFor(() =>
+      expect(fakes.transports[0]!.openConnection).toHaveBeenCalledWith({
+        type: 'conn-open',
+        connId: 'straddling-basis',
+        connTicket: 'T'.repeat(43),
+        kind: 'invite',
+        relayDeviceId: 'device-1',
+        attachDeadlineMs: 10_000
+      })
+    )
+    expect(brokerBasisIds(broker)).toEqual(['straddling-basis'])
+  })
+
   it('opens a fresh same-cell generation when process-local rebind state is lost', async () => {
     const ack: RelayHostHelloAckMessage = {
       type: 'host-hello-ack',
@@ -290,8 +469,138 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     expect(fakes.controls[2]!.options.previousGeneration).toBeUndefined()
     expect(fakes.controls[2]!.options.controlResumeSecret).toBeUndefined()
     expect(fakes.transports).toHaveLength(2)
-    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith('registered'))
+    await vi.waitFor(() =>
+      expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://relay.example.test')
+    )
     expect(broker.endpoint?.cellUrl).toBe('https://relay.example.test')
+  })
+
+  it('backs off drain resolution failures without duplicate retries or post-close work', async () => {
+    vi.useFakeTimers()
+    try {
+      const ack: RelayHostHelloAckMessage = {
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 1,
+        controlResumeSecret: 'R'.repeat(43),
+        leaseExpiresAt: 1_000_000,
+        activeConnIds: [],
+        pendingConns: []
+      }
+      fakes.controlConnect.mockResolvedValue(ack)
+      fakes.assign
+        .mockResolvedValueOnce({
+          cellUrl: 'https://relay.example.test',
+          assignmentEpoch: 1,
+          leaseExpiresAt: 1_000_000
+        })
+        .mockRejectedValue(new Error('director_unavailable'))
+      const broker = await RelaySessionBroker.connect(brokerOptions({ random: () => 0.5 }))
+      const drain = {
+        type: 'drain' as const,
+        graceMs: 5_000,
+        recovery: 'resolve-director' as const
+      }
+
+      fakes.controls[0]!.options.onDrain(drain)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fakes.assign).toHaveBeenCalledTimes(2)
+      fakes.controls[0]!.options.onDrain(drain)
+      await vi.advanceTimersByTimeAsync(499)
+      expect(fakes.assign).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fakes.assign).toHaveBeenCalledTimes(3)
+      await vi.advanceTimersByTimeAsync(999)
+      expect(fakes.assign).toHaveBeenCalledTimes(3)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fakes.assign).toHaveBeenCalledTimes(4)
+
+      broker.closeNow()
+      await vi.advanceTimersByTimeAsync(5 * 60_000)
+      expect(fakes.assign).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not retry drain resolution before the director Retry-After window', async () => {
+    vi.useFakeTimers()
+    try {
+      const ack: RelayHostHelloAckMessage = {
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 1,
+        controlResumeSecret: 'R'.repeat(43),
+        leaseExpiresAt: 1_000_000,
+        activeConnIds: [],
+        pendingConns: []
+      }
+      fakes.controlConnect.mockResolvedValue(ack)
+      fakes.assign
+        .mockResolvedValueOnce({
+          cellUrl: 'https://relay.example.test',
+          assignmentEpoch: 1,
+          leaseExpiresAt: 1_000_000
+        })
+        .mockRejectedValue(new RelayHttpError('assignment', 503, 30_000))
+      const broker = await RelaySessionBroker.connect(brokerOptions({ random: () => 0.5 }))
+
+      fakes.controls[0]!.options.onDrain({
+        type: 'drain',
+        graceMs: 5_000,
+        recovery: 'resolve-director'
+      })
+      await vi.advanceTimersByTimeAsync(29_999)
+      expect(fakes.assign).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fakes.assign).toHaveBeenCalledTimes(3)
+      broker.closeNow()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers through a new origin after the director failure clears', async () => {
+    vi.useFakeTimers()
+    try {
+      const ack: RelayHostHelloAckMessage = {
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 1,
+        controlResumeSecret: 'R'.repeat(43),
+        leaseExpiresAt: 1_000_000,
+        activeConnIds: [],
+        pendingConns: []
+      }
+      fakes.controlConnect.mockResolvedValue(ack)
+      fakes.assign
+        .mockResolvedValueOnce({
+          cellUrl: 'https://relay-c1.example.test',
+          assignmentEpoch: 1,
+          leaseExpiresAt: 1_000_000
+        })
+        .mockRejectedValueOnce(new Error('director_unavailable'))
+        .mockResolvedValueOnce({
+          cellUrl: 'https://relay-c2.example.test',
+          assignmentEpoch: 2,
+          leaseExpiresAt: 2_000_000
+        })
+      const broker = await RelaySessionBroker.connect(brokerOptions({ random: () => 0.5 }))
+
+      fakes.controls[0]!.options.onDrain({
+        type: 'drain',
+        graceMs: 5_000,
+        recovery: 'resolve-director'
+      })
+      await vi.advanceTimersByTimeAsync(499)
+      expect(broker.endpoint?.cellUrl).toBe('https://relay-c1.example.test')
+      await vi.advanceTimersByTimeAsync(1)
+      expect(broker.endpoint?.cellUrl).toBe('https://relay-c2.example.test')
+      expect(fakes.assign).toHaveBeenCalledTimes(3)
+      broker.closeNow()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
@@ -316,7 +625,7 @@ function brokerOptions(
       publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
     },
     appVersion: '1.0.0',
-    mobileSocketWiring: { attachTransport: vi.fn() } as never,
+    mobileSocketWiring: { attachTransport: vi.fn(() => () => {}) } as never,
     isCurrent: () => true,
     refreshAccessToken: async () => null,
     onStatus: vi.fn(),

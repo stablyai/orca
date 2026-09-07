@@ -1,13 +1,27 @@
 import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
-import { dirname, resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
+import { runProcessSync } from '../../shared/child-process/run-process'
+import {
+  SERVE_UPDATE_HANDOFF_PATH_ENV,
+  getServeUpdateHandoffPath
+} from '../../shared/serve-update-handoff'
 import {
   getEphemeralVmRecipeResultConnection,
   parseEphemeralVmRecipeResult
 } from '../../shared/ephemeral-vm-recipes'
+import { getDefaultUserDataPath } from './metadata'
+import { getMacAppBundlePath } from './mac-app-update-bundle'
+import {
+  readServeUpdateHandoffSync,
+  resumeInterruptedServeUpdate,
+  superviseForegroundServe
+} from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
+const USER_NAMESPACE_PROBE_TIMEOUT_MS = 2_000
 
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
@@ -18,7 +32,7 @@ export function launchOrcaApp(): void {
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
-    spawnDetached(overrideExecutable, getExecutableAppArgs(), {
+    spawnDetached(overrideExecutable, getExecutableAppArgs(overrideExecutable), {
       ...getExecutableSpawnOptions(overrideExecutable),
       env: stripElectronRunAsNode(process.env)
     })
@@ -39,7 +53,7 @@ export function launchOrcaApp(): void {
       }
     }
 
-    spawnDetached(process.execPath, [], {
+    spawnDetached(process.execPath, getExecutableAppArgs(process.execPath), {
       env: stripElectronRunAsNode(process.env)
     })
     return
@@ -75,7 +89,8 @@ export function serveOrcaApp(
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
-  const childArgs = [...getExecutableAppArgs(), '--serve']
+  const childArgs = [...getExecutableAppArgs(executable)]
+  childArgs.push('--serve')
   if (args.json) {
     childArgs.push('--serve-json')
   }
@@ -101,48 +116,51 @@ export function serveOrcaApp(
     childArgs.push('--serve-recipe-json', '--serve-project-root', args.projectRoot)
   }
 
-  const child = spawnProcess(executable, childArgs, {
+  const handoffPath =
+    args.recipeJson !== true && getMacAppBundlePath(executable)
+      ? getServeUpdateHandoffPath(getDefaultUserDataPath())
+      : null
+  const childEnv = stripElectronRunAsNode(process.env)
+  if (handoffPath) {
+    childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
+  }
+  const spawnOptions: SpawnOptions = {
     detached: args.recipeJson === true,
     cwd: resolveAppRoot(),
-    stdio: args.recipeJson === true ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+    stdio:
+      args.recipeJson === true
+        ? ['ignore', 'pipe', 'inherit']
+        : handoffPath
+          ? ['inherit', 'inherit', 'inherit', 'ipc']
+          : 'inherit',
     ...getExecutableSpawnOptions(executable),
-    env: stripElectronRunAsNode(process.env)
-  })
+    env: childEnv
+  }
+  const interruptedHandoff = handoffPath ? readServeUpdateHandoffSync(handoffPath) : null
+  if (interruptedHandoff?.phase === 'install-requested') {
+    // Why: the node-mode CLI is not an NSRunningApplication, so it can retain launchd ownership while ShipIt swaps the app.
+    return resumeInterruptedServeUpdate({
+      executable,
+      childArgs,
+      spawnOptions,
+      spawnChild: spawnProcess,
+      handoffPath: handoffPath!,
+      handoff: interruptedHandoff
+    })
+  }
+  const child = spawnProcess(executable, childArgs, spawnOptions)
 
   if (args.recipeJson) {
     return waitForRecipeJson(child)
   }
-
-  return new Promise((resolve, reject) => {
-    let forceKillTimer: ReturnType<typeof setTimeout> | null = null
-    const forwardSignal = (signal: NodeJS.Signals): void => {
-      child.kill(signal)
-      forceKillTimer ??= setTimeout(() => {
-        child.kill('SIGKILL')
-      }, 5000)
-    }
-    const cleanup = (): void => {
-      process.off('SIGINT', forwardSignal)
-      process.off('SIGTERM', forwardSignal)
-      if (forceKillTimer) {
-        clearTimeout(forceKillTimer)
-        forceKillTimer = null
-      }
-    }
-    process.on('SIGINT', forwardSignal)
-    process.on('SIGTERM', forwardSignal)
-    child.once('error', (error) => {
-      cleanup()
-      reject(error)
-    })
-    child.once('exit', (code, signal) => {
-      cleanup()
-      if (typeof code === 'number') {
-        resolve(code)
-        return
-      }
-      reject(new RuntimeClientError('runtime_serve_failed', `Orca serve exited via ${signal}`))
-    })
+  return superviseForegroundServe({
+    executable,
+    childArgs,
+    spawnOptions,
+    spawnChild: spawnProcess,
+    child,
+    handoffPath,
+    expectedHandoff: null
   })
 }
 
@@ -237,8 +255,34 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
   })
 }
 
-function getExecutableAppArgs(): string[] {
-  return process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
+function getExecutableAppArgs(executable: string): string[] {
+  const args = process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
+  if (shouldDisableExtractedAppImageSandbox(executable)) {
+    args.push('--no-sandbox')
+  }
+  return args
+}
+
+function shouldDisableExtractedAppImageSandbox(executable: string): boolean {
+  if (process.platform !== 'linux' || !existsSync(join(dirname(executable), 'AppRun'))) {
+    return false
+  }
+  // An extracted AppImage has no root-owned setuid sandbox; mirror AppRun's userns fallback.
+  if (process.getuid?.() === 0) {
+    return true
+  }
+  try {
+    return (
+      runProcessSync({
+        program: 'unshare',
+        args: ['-Ur', 'true'],
+        stdio: 'ignore',
+        timeoutMs: USER_NAMESPACE_PROBE_TIMEOUT_MS
+      }).code !== 0
+    )
+  } catch {
+    return true
+  }
 }
 
 function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {
@@ -270,14 +314,4 @@ export function stripElectronRunAsNode(env: NodeJS.ProcessEnv): NodeJS.ProcessEn
   const next = { ...env }
   delete next.ELECTRON_RUN_AS_NODE
   return next
-}
-
-function getMacAppBundlePath(execPath: string): string | null {
-  if (process.platform !== 'darwin') {
-    return null
-  }
-  const macOsDir = dirname(execPath)
-  const contentsDir = dirname(macOsDir)
-  const appBundlePath = dirname(contentsDir)
-  return appBundlePath.endsWith('.app') ? appBundlePath : null
 }

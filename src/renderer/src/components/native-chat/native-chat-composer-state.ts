@@ -24,8 +24,6 @@ export {
   type NativeChatSkillDiscoverySnapshot
 } from './native-chat-picker-items'
 
-export type ComposerAutocompleteMode = 'none' | 'slash' | 'mention' | 'skill'
-
 type PickerAutocomplete = {
   query: string
   items: NativeChatPickerItem[]
@@ -53,11 +51,19 @@ export function deriveComposerAutocomplete(
   skills: readonly DiscoveredSkill[] = [],
   profile: NativeChatAgentProfile | null = null,
   discovery: NativeChatSkillDiscoverySnapshot = { ...EMPTY_DISCOVERY, skills },
-  dismissedTriggerKey: string | null = null
+  dismissedTriggerKey: string | null = null,
+  sessionSkillNames?: readonly string[]
 ): ComposerAutocomplete {
   const before = draft.slice(0, caret)
   if (before.startsWith('/') && !/\s/.test(before)) {
-    return deriveSlashAutocomplete(before, agentCommands, profile, discovery, dismissedTriggerKey)
+    return deriveSlashAutocomplete(
+      before,
+      agentCommands,
+      profile,
+      discovery,
+      dismissedTriggerKey,
+      sessionSkillNames
+    )
   }
   const mentionMatch = before.match(/(?:^|\s)@(\S*)$/)
   if (mentionMatch) {
@@ -83,7 +89,7 @@ export function deriveComposerAutocomplete(
     grouped: false,
     commandsEnabled: false,
     skillsEnabled: true,
-    items: buildNativeChatPickerItems([], discovery.skills, query, '$'),
+    items: buildNativeChatPickerItems([], discovery.skills, query, '$', sessionSkillNames),
     skillStatus: discovery.status === 'idle' ? 'loading' : discovery.status,
     ...(discovery.errorKind ? { skillErrorKind: discovery.errorKind } : {})
   }
@@ -94,7 +100,8 @@ function deriveSlashAutocomplete(
   agentCommands: readonly SlashCommandSuggestion[],
   profile: NativeChatAgentProfile | null,
   discovery: NativeChatSkillDiscoverySnapshot,
-  dismissedTriggerKey: string | null
+  dismissedTriggerKey: string | null,
+  sessionSkillNames: readonly string[] | undefined
 ): ComposerAutocomplete {
   const triggerKey = '/:0'
   if (dismissedTriggerKey === triggerKey) {
@@ -108,7 +115,8 @@ function deriveSlashAutocomplete(
     agentCommands,
     hasSlashSkills ? discovery.skills : [],
     query,
-    '/'
+    '/',
+    hasSlashSkills ? sessionSkillNames : []
   )
   return {
     mode: 'slash',

@@ -5,6 +5,7 @@ import {
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { salvagingRecord } from './zod-salvage'
 
 const terminalTabIdSchema = z
   .string()
@@ -64,7 +65,16 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
 const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
-  agentEnv: sleepingAgentLaunchEnvSchema
+  agentEnv: sleepingAgentLaunchEnvSchema,
+  // Why: AI Vault can scan arbitrary OMP roots, so cold restore must retain
+  // the exact provider resume locator instead of reconstructing its store.
+  ompResumeFilePath: z
+    .string()
+    .trim()
+    .min(1)
+    .max(32 * 1024)
+    .refine((value) => !hasUnsafeLaunchEnvChars(value))
+    .optional()
 })
 
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {
@@ -88,7 +98,9 @@ const sleepingAgentSessionRecordSchema = z
     interrupted: z.boolean().optional(),
     connectionId: z.string().nullable().optional(),
     launchConfig: sleepingAgentLaunchConfigSchema.optional(),
-    origin: z.enum(['worktree-sleep', 'quit', 'live']).optional()
+    origin: z.enum(['worktree-sleep', 'quit', 'live']).optional(),
+    automaticResumeBlockedBy: z.enum(['legacy-orchestration-worker']).optional(),
+    restoreOnTabOpenOnly: z.boolean().optional()
   })
   .refine(
     (record) => getAgentResumeArgv(record.agent, record.providerSession) !== null,
@@ -97,23 +109,8 @@ const sleepingAgentSessionRecordSchema = z
     { message: 'provider session is not resumable for this agent', path: ['providerSession'] }
   )
 
-export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return undefined
-  }
-
-  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = Object.create(
-    null
-  )
-  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (isUnsafeObjectKey(paneKey)) {
-      continue
-    }
-    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
-    if (parsed.success && parsed.data.paneKey === paneKey) {
-      cleaned[paneKey] = parsed.data
-    }
-  }
-
-  return Object.keys(cleaned).length > 0 ? { ...cleaned } : undefined
-}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
+export const sleepingAgentSessionsByPaneKeySchema = salvagingRecord(
+  z.string().refine((paneKey) => !isUnsafeObjectKey(paneKey)),
+  sleepingAgentSessionRecordSchema,
+  (paneKey, record) => record.paneKey === paneKey
+).transform((records) => (Object.keys(records).length > 0 ? records : undefined))

@@ -4,6 +4,14 @@ import {
   isSafeDisplayCharacter,
   stripUnsafeDisplayCharacters
 } from '../../../../shared/skill-display-text'
+import { compareBaseSensitivityLocaleText } from '@/lib/locale-text-collators'
+
+// Send classification lives in shared so mobile gates optimistic echoes with
+// the same rules; re-exported here to keep renderer import paths stable.
+export {
+  classifyNativeChatSend,
+  type NativeChatSendClassification
+} from '../../../../shared/native-chat-slash-commands'
 
 export type NativeChatPickerItem =
   | {
@@ -39,13 +47,20 @@ export function buildNativeChatPickerItems(
   commands: readonly SlashCommandSuggestion[],
   skills: readonly DiscoveredSkill[],
   query: string,
-  prefix: '/' | '$'
+  prefix: '/' | '$',
+  sessionSkillNames?: readonly string[]
 ): NativeChatPickerItem[] {
-  const mergedSkills = mergeNativeChatSkills(skills)
+  const unclassifiedNames = new Set(
+    commands.filter((command) => command.kindUnspecified).map((command) => command.name)
+  )
+  const mergedSkills = mergeNativeChatSkills(skills, sessionSkillNames, unclassifiedNames)
   const skillNames = new Set(mergedSkills.map((skill) => skill.name))
-  const commandNames = new Set(commands.map((command) => command.name))
+  const resolvedCommands = commands.filter(
+    (command) => !(command.kindUnspecified && skillNames.has(command.name))
+  )
+  const commandNames = new Set(resolvedCommands.map((command) => command.name))
   const commandItems = rankItems(
-    commands.map((command, index) => ({
+    resolvedCommands.map((command, index) => ({
       item: {
         kind: 'command' as const,
         // Why: the name is the dispatch token and the catalog is curated, so
@@ -72,7 +87,9 @@ export function buildNativeChatPickerItems(
 }
 
 function mergeNativeChatSkills(
-  skills: readonly DiscoveredSkill[]
+  skills: readonly DiscoveredSkill[],
+  sessionSkillNames: readonly string[] | undefined,
+  unclassifiedNames: ReadonlySet<string>
 ): Extract<NativeChatPickerItem, { kind: 'skill' }>[] {
   const exactPaths = new Map<string, DiscoveredSkill>()
   for (const skill of skills) {
@@ -88,21 +105,41 @@ function mergeNativeChatSkills(
     }
     byName.set(safeName, [...(byName.get(safeName) ?? []), { ...skill, name: safeName }])
   }
-  return [...byName.entries()]
-    .map(([name, namedSkills]) => {
-      const sorted = [...namedSkills].sort(compareDiscoveredSkills)
-      return {
-        kind: 'skill' as const,
-        id: `skill:${name}`,
-        name,
-        description: sorted[0]?.description ? sanitizePickerText(sorted[0].description, 240) : null,
-        sources: sorted.map((skill) => ({
-          sourceKind: skill.sourceKind,
-          skillFilePath: skill.skillFilePath
-        }))
-      }
-    })
+  const discovered = new Map(
+    [...byName.entries()].map(([name, namedSkills]) => [name, pickerSkill(name, namedSkills)])
+  )
+  // Why: when the running session reports its own skills, that report is the
+  // authority on which ones exist — a disk scan cannot see what the session
+  // actually loaded (plugin roots, setting-source filters), and a scanned root
+  // the session ignored must not be offered. The scan stays the source of
+  // description and scope for the names both know about.
+  const names =
+    sessionSkillNames !== undefined
+      ? [
+          ...sessionSkillNames.filter(isTokenSafe),
+          ...[...discovered.keys()].filter((name) => unclassifiedNames.has(name))
+        ]
+      : [...discovered.keys()]
+  return [...new Set(names)]
+    .map((name) => discovered.get(name) ?? pickerSkill(name, []))
     .sort(comparePickerSkills)
+}
+
+function pickerSkill(
+  name: string,
+  namedSkills: readonly DiscoveredSkill[]
+): Extract<NativeChatPickerItem, { kind: 'skill' }> {
+  const sorted = [...namedSkills].sort(compareDiscoveredSkills)
+  return {
+    kind: 'skill' as const,
+    id: `skill:${name}`,
+    name,
+    description: sorted[0]?.description ? sanitizePickerText(sorted[0].description, 240) : null,
+    sources: sorted.map((skill) => ({
+      sourceKind: skill.sourceKind,
+      skillFilePath: skill.skillFilePath
+    }))
+  }
 }
 
 function rankItems<T extends NativeChatPickerItem>(
@@ -184,9 +221,18 @@ function sanitizePickerText(value: string, maxLength: number): string {
 function compareDiscoveredSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
   return (
     SCOPE_PRIORITY[a.sourceKind] - SCOPE_PRIORITY[b.sourceKind] ||
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+    compareBaseSensitivityLocaleText(a.name, b.name) ||
     a.skillFilePath.localeCompare(b.skillFilePath)
   )
+}
+
+// A session-reported skill this host could not locate on disk sorts last: it is
+// real and invocable, but carries no scope or description to rank on.
+const UNLOCATED_SCOPE_PRIORITY = Object.keys(SCOPE_PRIORITY).length
+
+function skillScopePriority(item: Extract<NativeChatPickerItem, { kind: 'skill' }>): number {
+  const sourceKind = item.sources[0]?.sourceKind
+  return sourceKind === undefined ? UNLOCATED_SCOPE_PRIORITY : SCOPE_PRIORITY[sourceKind]
 }
 
 function comparePickerSkills(
@@ -194,8 +240,8 @@ function comparePickerSkills(
   b: Extract<NativeChatPickerItem, { kind: 'skill' }>
 ): number {
   return (
-    SCOPE_PRIORITY[a.sources[0].sourceKind] - SCOPE_PRIORITY[b.sources[0].sourceKind] ||
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    skillScopePriority(a) - skillScopePriority(b) ||
+    compareBaseSensitivityLocaleText(a.name, b.name)
   )
 }
 
@@ -216,33 +262,4 @@ export function applyPickerSuggestion(
   const insertedToken = `${prefix}${item.name}`
   const nextBefore = `${before.slice(0, tokenStart)}${insertedToken} `
   return { draft: nextBefore + after, caret: nextBefore.length, insertedToken }
-}
-
-export type NativeChatSendClassification = 'chat' | 'command' | 'unknown-token'
-
-export function classifyNativeChatSend(
-  draft: string,
-  commands: readonly SlashCommandSuggestion[],
-  pickerSkillOriginToken: string | null,
-  skillPrefix: '/' | '$' | null
-): NativeChatSendClassification {
-  // Why: the supported TUIs only treat a line-leading token as a command, so a
-  // draft with leading whitespace is prose; trimming here would claim a "Ran"
-  // line for text the agent never dispatched.
-  const firstToken = draft.split(/\s/, 1)[0] ?? ''
-  if (pickerSkillOriginToken && firstToken === pickerSkillOriginToken) {
-    return 'chat'
-  }
-  if (commands.some((command) => firstToken === `/${command.name}`)) {
-    return 'command'
-  }
-  if (firstToken.startsWith('/')) {
-    return 'unknown-token'
-  }
-  // Why: `$` is Codex grammar only. For other agents a leading `$PATH`-style
-  // token is ordinary prose and must keep its bubble and attachments.
-  if (skillPrefix === '$' && firstToken.startsWith('$')) {
-    return 'unknown-token'
-  }
-  return 'chat'
 }

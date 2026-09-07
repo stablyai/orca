@@ -1,4 +1,13 @@
-import type { PRCheckDetail, PRState } from '../../../../src/shared/types'
+import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
+import type {
+  PRState,
+  ProviderCheckSummary
+} from '../../../../src/shared/github/pull-request-types'
+import {
+  classifyCheckOutcome,
+  summarizeProviderChecks,
+  type CheckOutcome as SharedCheckOutcome
+} from '../../../../src/shared/provider-check-summary'
 import { prStateToken } from '../pr-state-token'
 
 // Pure presentation logic for the PR sidebar's checks + state badge. No React /
@@ -18,31 +27,18 @@ export type MobileStatusToken =
 
 export type CheckOutcome = 'success' | 'pending' | 'failure' | 'neutral'
 
-const FAILURE_CONCLUSIONS = new Set<PRCheckDetail['conclusion']>([
-  'failure',
-  'cancelled',
-  'timed_out'
-])
+const OUTCOME_BY_SHARED: Record<SharedCheckOutcome, CheckOutcome> = {
+  passed: 'success',
+  failed: 'failure',
+  pending: 'pending',
+  neutral: 'neutral'
+}
 
-const SUCCESS_CONCLUSIONS = new Set<PRCheckDetail['conclusion']>(['success'])
-
-// Why: a check that is queued/in_progress, or completed with a null/`pending`
-// conclusion, is still pending — never render it as a failure (U5 edge case).
+// Why: delegate to the one shared classifier — a second copy here is what made mobile call a
+// `skipped` check unresolved and an `action_required` gate pending while desktop called them
+// green and red for the same PR.
 export function checkOutcome(check: PRCheckDetail): CheckOutcome {
-  if (check.status !== 'completed') {
-    return 'pending'
-  }
-  if (check.conclusion === null || check.conclusion === 'pending') {
-    return 'pending'
-  }
-  if (FAILURE_CONCLUSIONS.has(check.conclusion)) {
-    return 'failure'
-  }
-  if (SUCCESS_CONCLUSIONS.has(check.conclusion)) {
-    return 'success'
-  }
-  // neutral / skipped are non-blocking — treat as neutral, not failure.
-  return 'neutral'
+  return OUTCOME_BY_SHARED[classifyCheckOutcome(check)]
 }
 
 // Sort order: failures first (most actionable), then pending, then success /
@@ -71,38 +67,21 @@ export type PRChecksSummary = {
   label: string
 }
 
+const OUTCOME_BY_STATE: Record<ProviderCheckSummary['state'], CheckOutcome | 'none'> = {
+  success: 'success',
+  failure: 'failure',
+  pending: 'pending',
+  neutral: 'neutral',
+  none: 'none'
+}
+
 export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSummary {
   if (checks.length === 0) {
     return { total: 0, passed: 0, pending: 0, failed: 0, outcome: 'none', label: 'No checks' }
   }
-  let passed = 0
-  let pending = 0
-  let failed = 0
-  let neutral = 0
-  for (const check of checks) {
-    const outcome = checkOutcome(check)
-    if (outcome === 'failure') {
-      failed += 1
-    } else if (outcome === 'pending') {
-      pending += 1
-    } else if (outcome === 'success') {
-      passed += 1
-    } else {
-      neutral += 1
-    }
-  }
-  // Worst-case wins so a single failure colors the summary red even if others passed.
-  // A neutral-only set reads as neutral (not success) with a non-empty label.
-  const outcome: CheckOutcome | 'none' =
-    failed > 0
-      ? 'failure'
-      : pending > 0
-        ? 'pending'
-        : passed > 0
-          ? 'success'
-          : neutral > 0
-            ? 'neutral'
-            : 'none'
+  // Counts and the worst-case rollup come from the shared summarizer; only the label wording is mobile's.
+  const { total, passed, pending, failed, neutral, state } = summarizeProviderChecks(checks)
+  const outcome = OUTCOME_BY_STATE[state]
   const parts: string[] = []
   if (failed > 0) {
     parts.push(`${failed} failing`)
@@ -117,7 +96,7 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
     parts.push(`${neutral} neutral`)
   }
   return {
-    total: checks.length,
+    total,
     passed,
     pending,
     failed,
@@ -141,6 +120,8 @@ export function checkStatusLabel(check: PRCheckDetail): string {
       return 'Cancelled'
     case 'timed_out':
       return 'Timed out'
+    case 'action_required':
+      return 'Action required'
     case 'neutral':
       return 'Neutral'
     case 'skipped':

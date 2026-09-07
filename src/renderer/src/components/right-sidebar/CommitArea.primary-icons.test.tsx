@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CommitArea } from './SourceControl'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionKind } from './source-control-dropdown-item-types'
 
 // Why: split out from CommitArea.test.tsx so each file stays under the
 // project's max-lines budget. These tests cover the directional-icon
@@ -39,7 +40,6 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     isFixingCommitFailureWithAI: false,
     isFixingPushFailureWithAI: false,
     sourceControlAiActionsVisible: true,
-    aiEnabled: false,
     aiAgentConfigured: false,
     isGenerating: false,
     generateError: null as string | null,
@@ -66,11 +66,13 @@ function primaryButton(props: ReturnType<typeof baseProps>): string {
       <CommitArea {...props} />
     </TooltipProvider>
   )
-  const match = markup.match(/<button\b[\s\S]*?<\/button>/)
-  if (!match) {
+  const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+    .map((match) => match[0])
+    .find((entry) => entry.includes('data-slot="button"'))
+  if (!button) {
     throw new Error('primary button not found')
   }
-  return match[0]
+  return button
 }
 
 describe('CommitArea primary action icons', () => {

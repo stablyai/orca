@@ -26,28 +26,34 @@ export class RecentPtyOutputBuffer {
   // Original chunk boundaries are owed only to the one-time path-candidate
   // backfill; compact() ends that obligation and lets read() collapse.
   private preserveChunkBoundaries: boolean
+  // Why configurable: the relay retains a different window than the main process.
+  private readonly limit: number
 
-  constructor(options?: { preserveChunkBoundaries?: boolean }) {
+  constructor(options?: { preserveChunkBoundaries?: boolean; limit?: number }) {
     this.preserveChunkBoundaries = options?.preserveChunkBoundaries ?? true
+    this.limit = options?.limit ?? RECENT_PTY_OUTPUT_LIMIT
+    if (!Number.isSafeInteger(this.limit) || this.limit <= 0) {
+      throw new Error(`RecentPtyOutputBuffer limit must be a positive integer, got ${this.limit}`)
+    }
   }
 
   append(data: string): void {
     if (data.length === 0) {
       return
     }
-    if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
-      this.chunks = [data.slice(-RECENT_PTY_OUTPUT_LIMIT)]
+    if (data.length >= this.limit) {
+      this.chunks = [data.slice(-this.limit)]
       this.headIndex = 0
       this.headOffset = 0
-      this.totalLen = RECENT_PTY_OUTPUT_LIMIT
-      this.headChunkIsPartial = data.length > RECENT_PTY_OUTPUT_LIMIT
+      this.totalLen = this.limit
+      this.headChunkIsPartial = data.length > this.limit
       return
     }
     this.chunks.push(data)
     this.totalLen += data.length
-    while (this.totalLen > RECENT_PTY_OUTPUT_LIMIT) {
+    while (this.totalLen > this.limit) {
       const headRemaining = this.chunks[this.headIndex].length - this.headOffset
-      const excess = this.totalLen - RECENT_PTY_OUTPUT_LIMIT
+      const excess = this.totalLen - this.limit
       if (headRemaining <= excess) {
         // Release the dropped chunk's reference; the slot is reclaimed on compaction.
         this.chunks[this.headIndex] = ''

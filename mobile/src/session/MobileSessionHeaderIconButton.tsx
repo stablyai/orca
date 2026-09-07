@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import { Pressable } from 'react-native'
 import { colors } from '../theme/mobile-theme'
-import { styles } from '../../app/h/[hostId]/session/mobile-session-styles'
+import { styles } from './mobile-session-styles'
 
 type HeaderIconProps = {
   size?: number

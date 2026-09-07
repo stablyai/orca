@@ -18,7 +18,7 @@ const {
   runPreflightCheckMock: vi.fn()
 }))
 
-vi.mock('../../../ipc/preflight', () => ({
+vi.mock('../../../preflight/agent-detection', () => ({
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock,
   detectRemoteAgents: detectRemoteAgentsMock,
   detectRemoteWindowsTerminalCapabilities: detectRemoteWindowsTerminalCapabilitiesMock,

@@ -252,6 +252,54 @@ describe('nativeChat:readSession handler', () => {
     }
   })
 
+  it('settles the view with a pending frame while the transcript is unflushed', async () => {
+    // The user-visible bug: a session that has not been prompted never writes
+    // its JSONL, so with no frame at all the chat view spins indefinitely.
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-unflushed-'))
+    tempRoots.push(root)
+    await mkdir(join(root, '.claude', 'projects', '-repo'), { recursive: true })
+
+    registerNativeChatHandlers()
+    const subscribe = listeners.get('nativeChat:subscribe')
+    expect(subscribe).toBeDefined()
+
+    const sent: { channel: string; payload: unknown }[] = []
+    let destroyedCb: (() => void) | undefined
+    const sender = {
+      id: 7,
+      isDestroyed: () => false,
+      once: (event: string, cb: () => void) => {
+        if (event === 'destroyed') {
+          destroyedCb = cb
+        }
+      },
+      send: (channel: string, payload: unknown) => sent.push({ channel, payload })
+    }
+
+    const previousHome = process.env.HOME
+    process.env.HOME = root
+    try {
+      subscribe!({ sender }, { subscriptionId: 'sub-pending', agent: 'claude', sessionId: 'ghost' })
+
+      await waitFor(() => sent.some((s) => s.channel === 'nativeChat:appended'), 6_000)
+      expect(sent[0]).toMatchObject({
+        channel: 'nativeChat:appended',
+        payload: {
+          subscriptionId: 'sub-pending',
+          frame: { type: 'snapshot', messages: [], hasMore: false, pending: true }
+        }
+      })
+
+      destroyedCb!()
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
   it('drops cleanup registration when sender is destroyed before subscribe completes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-destroy-race-'))
     tempRoots.push(root)
