@@ -59,6 +59,7 @@ import {
   RemoteRuntimePtyRecoveryState
 } from './remote-runtime-pty-recovery-state'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { resolveAgentResumeStartupShellForPane } from './agent-resume-startup-shell'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
@@ -2207,6 +2208,7 @@ export function createRemoteRuntimePtyTransport(
         const resumeProviderSessionToSend = options.resumeProviderSession ?? resumeProviderSession
         const launchTokenToSend = options.launchToken ?? launchToken
         const launchAgentToSend = options.launchAgent ?? launchAgent
+        const agentResumeStartupShell = resolveAgentResumeStartupShellForPane(worktreeId, tabId)
         const legacyCreateParams = {
           worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
           clientMutationId: terminalCreateMutationId,
@@ -2267,6 +2269,10 @@ export function createRemoteRuntimePtyTransport(
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
                       placement: { tabId, leafId },
+                      // Why: quoting must follow the shell this pane actually runs;
+                      // the host would otherwise fall back to the global setting and
+                      // send PowerShell quotes into a cmd.exe/Git Bash tab (#12320).
+                      ...(agentResumeStartupShell ? { startupShell: agentResumeStartupShell } : {}),
                       presentation: 'background'
                     },
                     timeoutMs

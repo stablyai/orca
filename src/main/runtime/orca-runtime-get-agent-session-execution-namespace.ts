@@ -133,11 +133,13 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
     // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
     // shape must match the PTY route this scope already resolved.
     const isRemote = Boolean(workspace.connectionId)
-    const shell = resolveLocalWindowsAgentStartupShell({
-      platform,
-      isRemote,
-      terminalWindowsShell: settings.terminalWindowsShell
-    })
+    const shell =
+      request.startupShell ??
+      resolveLocalWindowsAgentStartupShell({
+        platform,
+        isRemote,
+        terminalWindowsShell: settings.terminalWindowsShell
+      })
     const startup = buildAgentResumeStartupPlan({
       agent: request.agent,
       providerSession: identity.providerSession,

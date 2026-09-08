@@ -133,7 +133,12 @@ const ExplicitEnsure = z
     agentArgs: AgentArgs.optional(),
     launchPreferences: LaunchPreferences.optional(),
     presentation: Presentation.optional(),
-    placement: Placement.optional()
+    placement: Placement.optional(),
+    // Why: quoting must follow the shell the pane actually runs. The per-tab
+    // override lives in renderer state, so the client resolves it and sends the
+    // result; without it the host falls back to the global setting (#12320,
+    // #13095) and a tab whose shell differs gets literal quote characters.
+    startupShell: z.enum(['posix', 'powershell', 'cmd']).optional()
   })
   .strict()
   .superRefine((value, context) => {
