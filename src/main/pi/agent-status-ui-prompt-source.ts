@@ -30,6 +30,15 @@ export function getPiAgentStatusUiPromptHandlerSourceLines(kind: PiAgentKind): s
     '    }',
     "    post('ui_prompt_end', { is_idle: isIdle })",
     '  })',
+    '',
+    "  pi.on('session_shutdown', () => {",
+    '    if (isOmpRuntime()) return',
+    '    // Why: pi tears an open dialog down through resetExtensionUI without resolving its',
+    '    // promise, so a replaced session never emits the matching ui_prompt_end and the wait',
+    '    // would stick forever. Reset without posting: shutdown is not a turn boundary, and',
+    '    // the session_start that follows republishes the corrected state.',
+    '    piUiPromptDepth = 0',
+    '  })',
     ''
   ]
 }

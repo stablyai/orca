@@ -322,7 +322,9 @@ describe('getPiTitlebarExtensionSource', () => {
       // Why: settling does not answer the dialog, so the pane still needs the user.
       const expected = name === 'session_shutdown' ? IDLE_TITLE : PROMPT_TITLE
       expect(harness.lastTitle()).toBe(expected)
-      expect(vi.getTimerCount()).toBe(0)
+      // Why: settling stops the spinner but must leave the marker re-assert running, or
+      // pi's own next title write would silently retire a dialog that is still open.
+      expect(vi.getTimerCount()).toBe(name === 'session_shutdown' ? 0 : 1)
     }
   )
 
@@ -359,7 +361,9 @@ describe('getPiTitlebarExtensionSource', () => {
     // Why: an open dialog must not suspend the cap that stops a stranded spinner.
     vi.advanceTimersByTime(301_000)
 
-    expect(vi.getTimerCount()).toBe(0)
+    // Why: the spinner is capped, but the marker re-assert survives it — the dialog is
+    // still open, so the pane must keep reporting that it needs input.
+    expect(vi.getTimerCount()).toBe(1)
     expect(harness.lastTitle()).toBe(PROMPT_TITLE)
   })
 
@@ -439,6 +443,89 @@ describe('getPiTitlebarExtensionSource', () => {
     // Why: the close carries no ui, so it falls back to the ctx the modal invalidated.
     await expect(harness.handlers.ui_prompt_end?.({}, undefined)).resolves.toBeUndefined()
     // Why: a later turn still recovers a clean title through a live ctx.
+    await harness.callHook('agent_start')
+    await vi.advanceTimersByTimeAsync(80)
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+  })
+
+  it('does not strand the marker when the closing ctx throws on ui access', async () => {
+    const harness = createHarness()
+    // Why: pi's ctx.ui is a getter that calls assertActive(); a session-replacing dialog
+    // invalidates the runner, so reading ctx.ui throws rather than yielding undefined.
+    const stale = {
+      get ui(): never {
+        throw new Error('This extension ctx is stale')
+      }
+    }
+
+    await harness.callHook('ui_prompt_start')
+    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
+
+    await expect(harness.handlers.ui_prompt_end?.({}, stale as never)).resolves.toBeUndefined()
+    // Why: the opening ctx still paints, so the pane stops asking for input.
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+
+    // Why: a stranded markerPainted would suppress every later working frame.
+    await harness.callHook('agent_start')
+    await vi.advanceTimersByTimeAsync(80)
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+  })
+
+  it('does not reject when the opening ctx throws on ui access', async () => {
+    const harness = createHarness()
+    const stale = {
+      get ui(): never {
+        throw new Error('This extension ctx is stale')
+      }
+    }
+
+    await harness.callHook('agent_start')
+    await expect(harness.handlers.ui_prompt_start?.({}, stale as never)).resolves.toBeUndefined()
+    // Why: no marker went up, so the spinner must keep running.
+    await vi.advanceTimersByTimeAsync(80)
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+  })
+
+  it('re-asserts the marker when pi repaints the title under a dialog', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('agent_start')
+    await harness.callHook('ui_prompt_start')
+    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
+
+    // Why: pi repaints on session_info_changed/rebindCurrentSession with no event we see,
+    // so a marker that is merely "not overwritten by us" would be silently lost.
+    harness.titles.push('π - other - orca-app')
+    await vi.advanceTimersByTimeAsync(80)
+    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
+  })
+
+  it('re-asserts the marker on an idle pane with no spinner running', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('ui_prompt_start')
+    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
+
+    // Why: no turn is running, so renderFrame never fires — only the slow re-assert can
+    // undo a title pi writes from session_info_changed or its update-check restore.
+    harness.titles.push('\u03c0 - other - orca-app')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
+
+    await harness.callHook('ui_prompt_end')
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('releases the marker when a session replacement drops the dialog', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('ui_prompt_start')
+    expect(harness.lastTitle()).toBe(PROMPT_TITLE)
+
+    // Why: pi hides the dialog without resolving it, so no close is coming.
+    await harness.callHook('session_start', { reason: 'switch' })
+    expect(vi.getTimerCount()).toBe(0)
     await harness.callHook('agent_start')
     await vi.advanceTimersByTimeAsync(80)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)

@@ -128,21 +128,30 @@ describe('Pi UI prompt status', () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
     harness.reload()
-    await post(harness, 'session_start', { reason: 'reload' })
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
+    // Why: re-registering handlers is not a session boundary and must not lose the wait.
     expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
   })
 
-  it('keeps a session-switching modal blocked until it actually closes', async () => {
+  it('releases a modal that a session replacement tore down without a close', async () => {
     const harness = createHarness()
     await post(harness, 'before_agent_start', { prompt: 'Old session prompt' })
     await post(harness, 'ui_prompt_start')
-    await post(harness, 'session_start', { reason: 'switch' })
     expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
-    expect(harness.statuses.at(-1)?.payload.prompt).toBe('')
-    await harness.callHook('ui_prompt_end', {}, { isIdle: () => true })
-    await flushPosts()
-    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+    // Why: pi hides the dialog through resetExtensionUI without resolving its promise,
+    // so no ui_prompt_end is ever emitted — these two boundaries are the only release.
+    await post(harness, 'session_shutdown')
+    await post(harness, 'session_start', { reason: 'switch' })
+    await post(harness, 'tool_execution_end', { toolName: 'bash' })
+    expect(harness.statuses.at(-1)?.payload.state).not.toBe('waiting')
+  })
+
+  it('releases a modal dropped by a reload that emits no shutdown', async () => {
+    const harness = createHarness()
+    await post(harness, 'ui_prompt_start')
+    await post(harness, 'session_start', { reason: 'reload' })
+    await post(harness, 'tool_execution_end', { toolName: 'bash' })
+    expect(harness.statuses.at(-1)?.payload.state).not.toBe('waiting')
   })
 
   it('still captures the assistant reply that lands while a modal is open', async () => {
