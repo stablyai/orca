@@ -266,7 +266,12 @@ function EphemeralVmRuntimeRow({
           {hasError ? <AlertTriangle className="size-3.5 shrink-0 text-destructive" /> : null}
         </div>
         <p className="truncate text-xs text-muted-foreground">
-          {runtime.recipeId} · {getEphemeralVmRecipeResultProjectRoot(runtime.recipeResult)}
+          {runtime.recipeId}
+          {/* recipeResult is absent for infra-fleet-service-backed runtimes
+              (TASK-BE-EVM-010) — no project root to show for those. */}
+          {runtime.recipeResult
+            ? ` · ${getEphemeralVmRecipeResultProjectRoot(runtime.recipeResult)}`
+            : null}
         </p>
         {runtime.cleanupLastError ? (
           <p className="mt-0.5 truncate text-xs text-destructive">{runtime.cleanupLastError}</p>

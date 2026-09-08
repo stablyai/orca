@@ -83,6 +83,11 @@ service TenantService {
   rpc AddTeamMember(AddTeamMemberRequest) returns (TeamMembership);   // upsert: role + priority
   rpc RemoveTeamMember(RemoveTeamMemberRequest) returns (google.protobuf.Empty);
   rpc ListTeamMembers(ListTeamMembersRequest) returns (ListTeamMembersResponse);
+  // ListTeamsForUser — added for devServer.listForUser's team-grant lookup
+  // (BUG-013), not any team-admin UI need. The only current caller is
+  // cross-service (api-gateway's wscompat), not the Team CRUD console flows
+  // the rest of this group backs.
+  rpc ListTeamsForUser(ListTeamsForUserRequest) returns (ListTeamsForUserResponse);
 }
 ```
 

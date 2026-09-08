@@ -40,6 +40,14 @@ type HandshakeInfo struct {
 // pendingCall is one in-flight JSON-RPC request awaiting its response.
 type pendingCall struct {
 	resultCh chan JSONRPCResponse
+	// streaming marks a call whose response arrives as MULTIPLE frames
+	// sharing this call's request id (vm.provision's stream.started/
+	// stream.chunk/stream.end shape — see streamCall's doc comment). readLoop
+	// must not auto-delete this pending entry after its first frame the way
+	// it does for an ordinary call() — the caller (streamCall/its consumer)
+	// owns calling the returned complete func exactly once, on the terminal
+	// frame or early cancellation.
+	streaming bool
 }
 
 // session is one persistent connection to a single dev server's agent —
@@ -262,7 +270,16 @@ func (s *session) readLoop(t Transport) {
 		if err == nil && ok {
 			s.mu.Lock()
 			call := s.pending[resp.ID]
-			delete(s.pending, resp.ID)
+			// A streaming call's pending entry stays registered across
+			// multiple response frames — only an ordinary (non-streaming)
+			// call is auto-cleared on its one response. An error response is
+			// always terminal even for a streaming call (e.g. vm.provision
+			// dispatch-time "method not found": the dispatcher never even
+			// sends 'stream.started', see streamCall's doc comment), so it
+			// clears the entry regardless of streaming.
+			if call != nil && (resp.Error != nil || !call.streaming) {
+				delete(s.pending, resp.ID)
+			}
 			s.mu.Unlock()
 			if call != nil {
 				call.resultCh <- resp
@@ -664,6 +681,86 @@ func (s *session) call(ctx context.Context, method string, params any) (json.Raw
 	case <-callCtx.Done():
 		s.dropPending(reqID)
 		return nil, fmt.Errorf("devserveragent: request %q timed out: %w", method, callCtx.Err())
+	}
+}
+
+// streamCall sends method and blocks for exactly the FIRST response frame —
+// mirroring call()'s wait — then hands back a channel for every SUBSEQUENT
+// frame sharing this request's id, until the caller invokes the returned
+// complete func exactly once (on a terminal frame or early cancellation),
+// matching StreamPty/StreamScreencast's subscribe/unsubscribe contract.
+//
+// This is vm.provision's real wire shape (agent-ephemeral-vm-handler.ts's
+// handleVmProvision, mirroring agent-git-handler.ts's handleGitExecStream —
+// the confirmed precedent): the RPC dispatcher answers the original request
+// id immediately with {result:{type:'stream.started'}} BEFORE the handler
+// even starts running, then the handler pushes zero-or-more
+// {result:{type:'stream.chunk',...}} frames and exactly one terminal
+// {result:{type:'stream.end',...}} frame — all sharing that same id. This is
+// NOT the pty.data/browser.screencastReady notification demux shape (a
+// separate method+params push with no id) that subscribePty/
+// subscribeScreencast handle — it's multiple RESPONSE frames for one
+// request, which ordinary call() cannot receive (its pendingCall is deleted
+// after the first frame). See pendingCall.streaming's doc comment for the
+// readLoop-side half of this.
+func (s *session) streamCall(ctx context.Context, method string, params any) (firstResult json.RawMessage, rest <-chan JSONRPCResponse, complete func(), err error) {
+	s.mu.Lock()
+	if s.transport == nil || !s.handshaked {
+		s.mu.Unlock()
+		return nil, nil, nil, fmt.Errorf("devserveragent: not connected")
+	}
+	t := s.transport
+	reqID := s.nextRequestID
+	s.nextRequestID++
+	frameID := s.nextFrameID
+	s.nextFrameID++
+	ack := s.highestPeerSeq
+	call := &pendingCall{resultCh: make(chan JSONRPCResponse, 256), streaming: true}
+	s.pending[reqID] = call
+	s.mu.Unlock()
+
+	complete = func() {
+		s.mu.Lock()
+		if s.pending[reqID] == call {
+			delete(s.pending, reqID)
+		}
+		s.mu.Unlock()
+	}
+
+	var paramsRaw json.RawMessage
+	if params != nil {
+		encoded, encErr := json.Marshal(params)
+		if encErr != nil {
+			complete()
+			return nil, nil, nil, encErr
+		}
+		paramsRaw = encoded
+	}
+	req := JSONRPCRequest{JSONRPC: "2.0", ID: reqID, Method: method, Params: paramsRaw}
+	frame, encErr := EncodeJSONRPCFrame(req, frameID, ack)
+	if encErr != nil {
+		complete()
+		return nil, nil, nil, encErr
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, s.cfg.RequestTimeout)
+	defer cancel()
+
+	if writeErr := t.WriteFrame(callCtx, frame); writeErr != nil {
+		complete()
+		return nil, nil, nil, fmt.Errorf("devserveragent: sending %q: %w", method, writeErr)
+	}
+
+	select {
+	case resp := <-call.resultCh:
+		if resp.Error != nil {
+			complete() // no-op if readLoop already cleared it (it does, for an error frame)
+			return nil, nil, nil, resp.Error
+		}
+		return resp.Result, call.resultCh, complete, nil
+	case <-callCtx.Done():
+		complete()
+		return nil, nil, nil, fmt.Errorf("devserveragent: request %q timed out: %w", method, callCtx.Err())
 	}
 }
 

@@ -34,12 +34,16 @@ func resolveTerminalSession(ctx context.Context, tenantID, ptyID string, session
 		return domain.TerminalSession{}, domain.DevServer{}, apperrors.New(apperrors.KindNotFound, "INFRA_TERMINAL_NOT_FOUND", "terminal session not found", nil)
 	}
 	if session.ConnectionID == "" {
-		// Every session this service can currently spawn is connection-bound
-		// (see SpawnTerminalSession's doc comment on host-local sessions not
-		// being implemented) — an empty ConnectionID here would mean the row
-		// is corrupt/from a future host-local code path this pass doesn't
-		// support yet.
-		return domain.TerminalSession{}, domain.DevServer{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_TERMINAL_HOST_LOCAL_UNSUPPORTED", "terminal session has no connection_id — host-local sessions are not supported by this control-plane operation", nil)
+		// Same condition TASK-019 renames in SpawnTerminalSession, reached
+		// from the other direction: a control-plane op (resize/kill/focus/
+		// etc.) against a session row that has no connection_id at all.
+		// Every session SpawnTerminalSession can currently create is
+		// connection-bound (see spawn_terminal_session.go's doc comment), so
+		// reaching this means either a corrupt row or a not-yet-existing
+		// host-local code path — same INFRA_TERMINAL_NO_COMPUTE_BOUND code
+		// as the creation-time guard so a caller doesn't need to special-case
+		// two different names for the same underlying condition.
+		return domain.TerminalSession{}, domain.DevServer{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_TERMINAL_NO_COMPUTE_BOUND", "terminal session has no connection_id — host-local sessions are not supported by this control-plane operation", nil)
 	}
 
 	connected, devServer, _, err := resolver.ResolveConnection(ctx, tenantID, session.ConnectionID)

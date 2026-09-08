@@ -121,6 +121,24 @@ func (s *TerminalSessionStore) Close(ctx context.Context, tenantID, ptyID string
 	return nil
 }
 
+// CloseAllForConnection sets closed_at for every OPEN session bound to
+// connectionID — BE-SOL-STORAGE-003 §3/TASK-BE-STORAGE-010: called only once
+// connections.status has genuinely transitioned to closed (grace-period
+// expiry or explicit teardown), never for a merely degraded connection.
+// Zero matching rows is not an error — a connection with no open terminal
+// sessions is a normal, expected case.
+func (s *TerminalSessionStore) CloseAllForConnection(ctx context.Context, tenantID, connectionID string, closedAt time.Time) error {
+	_, err := s.pool.Exec(ctx, `
+		UPDATE infra.terminal_sessions
+		SET closed_at = $3
+		WHERE tenant_id = $1 AND connection_id = $2::uuid AND closed_at IS NULL
+	`, tenantID, connectionID, closedAt)
+	if err != nil {
+		return fmt.Errorf("postgres: close all terminal sessions for connection: %w", err)
+	}
+	return nil
+}
+
 // rowScanner abstracts over pgx.Row/pgx.Rows — both expose Scan(...any) error,
 // letting Get and List share one column-order-sensitive scan function
 // instead of duplicating it.

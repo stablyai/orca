@@ -22,6 +22,11 @@ type fakeDevServerAgentClient struct {
 	execResult map[string]any
 	execErr    error
 	execCalls  []string // methods called with, for assertions
+	// execParams records the params map passed on each Exec call, in the
+	// same order as execCalls — TASK-BE-EVM-001's recipeId/runtimeId
+	// assertions need to inspect what was actually sent, not just the
+	// method name.
+	execParams []map[string]any
 
 	// execCalled/lastMethod are a simpler single-call view of execCalls,
 	// used by kill_workspace_port_test.go/establish_connection_test.go.
@@ -69,6 +74,20 @@ type fakeDevServerAgentClient struct {
 
 	inspectResult InspectProcessResult
 	inspectErr    error
+
+	// streamVmProvisionEvents/Err/Unsubscribed/Calls mirror
+	// streamScreencastEvents's convention exactly, for StreamVmProvision
+	// (TASK-BE-EVM-003).
+	streamVmProvisionEvents       chan VmProvisionEvent
+	streamVmProvisionErr          error
+	streamVmProvisionUnsubscribed bool
+	streamVmProvisionCalls        []VmProvisionParams
+
+	// dialHiddenSshTarget* drive DialHiddenSshTarget's fake answer —
+	// TASK-BE-EVM-014's AgentOutboundSshProvisioner tests.
+	dialHiddenSshTargetResult string
+	dialHiddenSshTargetErr    error
+	dialHiddenSshTargetCalls  []domain.EphemeralVmSshTarget
 }
 
 type resizePtyCall struct {
@@ -78,6 +97,7 @@ type resizePtyCall struct {
 func (f *fakeDevServerAgentClient) Exec(ctx context.Context, devServer domain.DevServer, method string, params map[string]any) (map[string]any, error) {
 	f.mu.Lock()
 	f.execCalls = append(f.execCalls, method)
+	f.execParams = append(f.execParams, params)
 	f.execCalled = true
 	f.lastMethod = method
 	f.mu.Unlock()
@@ -183,6 +203,38 @@ func (f *fakeDevServerAgentClient) InspectProcess(ctx context.Context, devServer
 		return InspectProcessResult{}, f.inspectErr
 	}
 	return f.inspectResult, nil
+}
+
+func (f *fakeDevServerAgentClient) StreamVmProvision(ctx context.Context, devServer domain.DevServer, params VmProvisionParams) (<-chan VmProvisionEvent, func(), error) {
+	f.mu.Lock()
+	f.streamVmProvisionCalls = append(f.streamVmProvisionCalls, params)
+	f.mu.Unlock()
+	if f.streamVmProvisionErr != nil {
+		return nil, nil, f.streamVmProvisionErr
+	}
+	events := f.streamVmProvisionEvents
+	if events == nil {
+		events = make(chan VmProvisionEvent)
+	}
+	unsubscribe := func() {
+		f.mu.Lock()
+		f.streamVmProvisionUnsubscribed = true
+		f.mu.Unlock()
+	}
+	return events, unsubscribe, nil
+}
+
+func (f *fakeDevServerAgentClient) DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (string, error) {
+	f.mu.Lock()
+	f.dialHiddenSshTargetCalls = append(f.dialHiddenSshTargetCalls, target)
+	f.mu.Unlock()
+	if f.dialHiddenSshTargetErr != nil {
+		return "", f.dialHiddenSshTargetErr
+	}
+	if f.dialHiddenSshTargetResult != "" {
+		return f.dialHiddenSshTargetResult, nil
+	}
+	return runtimeID, nil
 }
 
 func TestScanWorkspacePorts_RequiresTenantContext(t *testing.T) {

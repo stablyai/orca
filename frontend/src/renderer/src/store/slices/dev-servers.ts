@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { DevServer } from '../../../../shared/dev-server-types'
 import type { AppState } from '../types'
+import { callRuntimeRpc, type RuntimeClientTarget } from '../../runtime/runtime-rpc-client'
 
 // ─── Slice Type ───────────────────────────────────────────────────────────────
 
@@ -19,6 +20,28 @@ export type DevServerSlice = {
       Pick<DevServer, 'platform' | 'arch' | 'nodeVersion' | 'lastConnectedAt' | 'lastError'>
     >
   ) => void
+  /** Hydrates `devServers` from `devServer.listForUser` (CR-STORAGE-006's
+   *  hydrate-on-mount pattern, FE-TASK-STORAGE-012) — an existing, real RPC
+   *  (see BE-SOL-STORAGE-002's audit appendix), scoped to dev servers the
+   *  caller's department/team was granted access to. Additive: useDevServersSync
+   *  already loads the unscoped `devServer.list` on mount and keeps doing so
+   *  unchanged (see its own doc comment); this gives the slice its own
+   *  testable hydrate entry point, matching FE-TASK-STORAGE-013's pattern for
+   *  ssh.ts/runtime-environment-ssh.ts, not a replacement wiring.
+   *
+   *  Known caveat (BUG-013, not fixed here — out of scope): `devServer.
+   *  listForUser`'s team-membership grants were confirmed still ignored by
+   *  BE-SOL-STORAGE-002's audit as of TASK-BE-STORAGE-005 (team_ids
+   *  resolution depends on a separate in-flight backend-go fix) — a user
+   *  granted access only via a team, not directly or via department, may see
+   *  an incomplete list from this hydrate today.
+   *
+   *  Swallows RPC failures silently (no `devServers` write, no crash) — the
+   *  slice has no existing "hydrate sync status" field to report into (only
+   *  `persistenceStatus`, which tracks client-state *write* failures, an
+   *  unrelated concept); do not invent one here per this task's scope.
+   */
+  hydrateDevServers: (target: RuntimeClientTarget) => Promise<void>
 }
 
 // ─── Slice Implementation ─────────────────────────────────────────────────────
@@ -53,5 +76,20 @@ export const createDevServerSlice: StateCreator<AppState, [], [], DevServerSlice
   updateDevServerStatus: (id, status, extra = {}) =>
     set((state) => ({
       devServers: state.devServers.map((ds) => (ds.id === id ? { ...ds, status, ...extra } : ds))
-    }))
+    })),
+
+  hydrateDevServers: async (target) => {
+    try {
+      const { devServers } = await callRuntimeRpc<{ devServers: DevServer[] }>(
+        target,
+        'devServer.listForUser',
+        {}
+      )
+      set({ devServers })
+    } catch {
+      // Why: a failed/unreachable hydrate must not crash the caller or wipe
+      // out a devServers list a prior successful load/status-push already
+      // populated — see this action's doc comment for the BUG-013 caveat.
+    }
+  }
 })

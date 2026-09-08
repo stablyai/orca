@@ -7,8 +7,10 @@ package grpc
 
 import (
 	"context"
+	"time"
 
 	"github.com/stablyai/orca-go/common/apperrors"
+	"github.com/stablyai/orca-go/services/orchestration-service/internal/domain"
 	"github.com/stablyai/orca-go/services/orchestration-service/internal/usecase"
 
 	orchestrationv1 "github.com/stablyai/orca-go/proto/gen/go/orca/orchestration/v1"
@@ -18,11 +20,13 @@ import (
 type Server struct {
 	orchestrationv1.UnimplementedOrchestrationServiceServer
 
-	createDispatchContext      *usecase.CreateDispatchContext
-	createGate                 *usecase.CreateGate
-	resolveGate                *usecase.ResolveGate
-	updateTaskStatusAndPromote *usecase.UpdateTaskStatusAndPromote
-	getDispatchContextForTask  *usecase.GetDispatchContextForTask
+	createDispatchContext             *usecase.CreateDispatchContext
+	createGate                        *usecase.CreateGate
+	resolveGate                       *usecase.ResolveGate
+	updateTaskStatusAndPromote        *usecase.UpdateTaskStatusAndPromote
+	getDispatchContextForTask         *usecase.GetDispatchContextForTask
+	listActiveDispatchContextsForUser *usecase.ListActiveDispatchContextsForUser
+	failDispatch                      *usecase.FailDispatch
 }
 
 func New(
@@ -31,13 +35,17 @@ func New(
 	resolveGate *usecase.ResolveGate,
 	updateTaskStatusAndPromote *usecase.UpdateTaskStatusAndPromote,
 	getDispatchContextForTask *usecase.GetDispatchContextForTask,
+	listActiveDispatchContextsForUser *usecase.ListActiveDispatchContextsForUser,
+	failDispatch *usecase.FailDispatch,
 ) *Server {
 	return &Server{
-		createDispatchContext:      createDispatchContext,
-		createGate:                 createGate,
-		resolveGate:                resolveGate,
-		updateTaskStatusAndPromote: updateTaskStatusAndPromote,
-		getDispatchContextForTask:  getDispatchContextForTask,
+		createDispatchContext:             createDispatchContext,
+		createGate:                        createGate,
+		resolveGate:                       resolveGate,
+		updateTaskStatusAndPromote:        updateTaskStatusAndPromote,
+		getDispatchContextForTask:         getDispatchContextForTask,
+		listActiveDispatchContextsForUser: listActiveDispatchContextsForUser,
+		failDispatch:                      failDispatch,
 	}
 }
 
@@ -46,18 +54,48 @@ func (s *Server) CreateDispatchContext(ctx context.Context, req *orchestrationv1
 		Handle:              req.GetHandle(),
 		CoordinatorRunID:    req.GetCoordinatorRunId(),
 		OrchestrationTaskID: req.GetOrchestrationTaskId(),
+		WorktreeID:          req.GetWorktreeId(),
 	})
 	if err != nil {
 		return nil, apperrors.ToGRPCStatus(err)
 	}
 	return &orchestrationv1.CreateDispatchContextResponse{
-		Context: &orchestrationv1.DispatchContext{
-			Id:                  dc.ID,
-			Handle:              dc.Handle,
-			CoordinatorRunId:    dc.CoordinatorRunID,
-			OrchestrationTaskId: dc.OrchestrationTaskID,
-		},
+		Context: toProtoDispatchContext(dc),
 	}, nil
+}
+
+func (s *Server) ListActiveDispatchContextsForUser(ctx context.Context, _ *orchestrationv1.ListActiveDispatchContextsForUserRequest) (*orchestrationv1.ListActiveDispatchContextsForUserResponse, error) {
+	contexts, err := s.listActiveDispatchContextsForUser.Execute(ctx)
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	out := make([]*orchestrationv1.DispatchContext, 0, len(contexts))
+	for _, dc := range contexts {
+		out = append(out, toProtoDispatchContext(dc))
+	}
+	return &orchestrationv1.ListActiveDispatchContextsForUserResponse{DispatchContexts: out}, nil
+}
+
+// toProtoDispatchContext maps a domain.DispatchContext to its proto wire
+// shape, shared by every handler that returns one (CreateDispatchContext,
+// GetDispatchContextForTask, ListActiveDispatchContextsForUser) so the
+// mapping can't drift between them.
+func toProtoDispatchContext(dc domain.DispatchContext) *orchestrationv1.DispatchContext {
+	var lastHeartbeatAt string
+	if !dc.LastHeartbeatAt.IsZero() {
+		lastHeartbeatAt = dc.LastHeartbeatAt.Format(time.RFC3339)
+	}
+	return &orchestrationv1.DispatchContext{
+		Id:                  dc.ID,
+		Handle:              dc.Handle,
+		CoordinatorRunId:    dc.CoordinatorRunID,
+		OrchestrationTaskId: dc.OrchestrationTaskID,
+		UserId:              dc.UserID,
+		WorktreeId:          dc.WorktreeID,
+		Status:              string(dc.Status),
+		FailureCount:        dc.FailureCount,
+		LastHeartbeatAt:     lastHeartbeatAt,
+	}
 }
 
 func (s *Server) CreateGate(ctx context.Context, req *orchestrationv1.CreateGateRequest) (*orchestrationv1.CreateGateResponse, error) {
@@ -126,11 +164,22 @@ func (s *Server) GetDispatchContextForTask(ctx context.Context, req *orchestrati
 		return &orchestrationv1.GetDispatchContextForTaskResponse{}, nil
 	}
 	return &orchestrationv1.GetDispatchContextForTaskResponse{
-		Dispatch: &orchestrationv1.DispatchContext{
-			Id:                  dc.ID,
-			Handle:              dc.Handle,
-			CoordinatorRunId:    dc.CoordinatorRunID,
-			OrchestrationTaskId: dc.OrchestrationTaskID,
-		},
+		Dispatch: toProtoDispatchContext(dc),
 	}, nil
+}
+
+func (s *Server) FailDispatch(ctx context.Context, req *orchestrationv1.FailDispatchRequest) (*orchestrationv1.FailDispatchResponse, error) {
+	out, err := s.failDispatch.Execute(ctx, usecase.FailDispatchInput{
+		DispatchContextID: req.GetDispatchContextId(),
+		ErrorMessage:      req.GetErrorMessage(),
+		GRPCStatusCode:    req.GetGrpcStatusCode(),
+	})
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	resp := &orchestrationv1.FailDispatchResponse{Recorded: out.Recorded}
+	if out.Recorded {
+		resp.Context = toProtoDispatchContext(out.Context)
+	}
+	return resp, nil
 }

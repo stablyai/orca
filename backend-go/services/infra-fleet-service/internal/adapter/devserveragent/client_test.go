@@ -47,6 +47,15 @@ type fakeAgent struct {
 	// not just that some pre-registered result came back.
 	paramsMu       sync.Mutex
 	receivedParams map[string]json.RawMessage
+
+	// vmProvisionFrames, when set, is a canned sequence of `result` payloads
+	// sent back-to-back for a "vm.provision" request, ALL sharing that
+	// request's real id — TASK-BE-EVM-003's regression tests for the
+	// stream.started/stream.chunk/stream.end wire shape (see
+	// agent-ephemeral-vm-handler.ts's handleVmProvision, the real
+	// precedent). Takes precedence over the generic single-result `results`
+	// map for method=="vm.provision".
+	vmProvisionFrames []map[string]any
 }
 
 // lastParams returns the raw params this fake agent most recently received
@@ -148,6 +157,18 @@ func (f *fakeAgent) handler(w http.ResponseWriter, r *http.Request) {
 		}
 		f.receivedParams[req.Method] = req.Params
 		f.paramsMu.Unlock()
+
+		if req.Method == "vm.provision" && f.vmProvisionFrames != nil {
+			for _, frame := range f.vmProvisionFrames {
+				encoded, _ := json.Marshal(frame)
+				resp := JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: encoded}
+				fr, _ := EncodeJSONRPCFrame(resp, 2, decoded.ID)
+				if err := conn.Write(ctx, websocket.MessageBinary, fr); err != nil {
+					return
+				}
+			}
+			continue
+		}
 
 		result, known := f.results[req.Method]
 		if !known {

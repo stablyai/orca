@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	gitgatewayv1 "github.com/stablyai/orca-go/proto/gen/go/orca/gitgateway/v1"
 	scmintegrationv1 "github.com/stablyai/orca-go/proto/gen/go/orca/scmintegration/v1"
 )
 
@@ -49,6 +50,8 @@ type fakeScmIntegrationClient struct {
 	listLabelsBySlugFunc              func(ctx context.Context, in *scmintegrationv1.ListLabelsBySlugRequest) (*scmintegrationv1.ListLabelsBySlugResponse, error)
 	addIssueCommentBySlugFunc         func(ctx context.Context, in *scmintegrationv1.AddIssueCommentBySlugRequest) (*scmintegrationv1.ProjectComment, error)
 	updateIssueCommentBySlugFunc      func(ctx context.Context, in *scmintegrationv1.UpdateIssueCommentBySlugRequest) (*scmintegrationv1.ProjectComment, error)
+	starRepositoryFunc                func(ctx context.Context, in *scmintegrationv1.StarRepositoryRequest) (*scmintegrationv1.StarRepositoryResponse, error)
+	updatePullRequestFunc             func(ctx context.Context, in *scmintegrationv1.UpdatePullRequestRequest) (*scmintegrationv1.PullRequest, error)
 
 	// credentials.* group (channels_credentials_test.go, TASK-042).
 	setIntegrationCredentialFunc       func(ctx context.Context, in *scmintegrationv1.SetIntegrationCredentialRequest) (*scmintegrationv1.SetIntegrationCredentialResponse, error)
@@ -192,6 +195,14 @@ func (f *fakeScmIntegrationClient) UpdateIssueCommentBySlug(ctx context.Context,
 	return f.updateIssueCommentBySlugFunc(ctx, in)
 }
 
+func (f *fakeScmIntegrationClient) StarRepository(ctx context.Context, in *scmintegrationv1.StarRepositoryRequest, _ ...grpc.CallOption) (*scmintegrationv1.StarRepositoryResponse, error) {
+	return f.starRepositoryFunc(ctx, in)
+}
+
+func (f *fakeScmIntegrationClient) UpdatePullRequest(ctx context.Context, in *scmintegrationv1.UpdatePullRequestRequest, _ ...grpc.CallOption) (*scmintegrationv1.PullRequest, error) {
+	return f.updatePullRequestFunc(ctx, in)
+}
+
 // ── github.* ──────────────────────────────────────────────────────────────
 
 // TestGitHubCheckOrcaStarredChannel_ReturnsNull verifies the channel
@@ -208,6 +219,126 @@ func TestGitHubCheckOrcaStarredChannel_ReturnsNull(t *testing.T) {
 	}
 	if result != nil {
 		t.Errorf("want nil (unable to determine star status), got %v", result)
+	}
+}
+
+func TestGitHubStarOrcaChannel_AlwaysStarsTheOrcaRepoRegardlessOfSource(t *testing.T) {
+	var gotReq *scmintegrationv1.StarRepositoryRequest
+	fake := &fakeScmIntegrationClient{
+		starRepositoryFunc: func(ctx context.Context, in *scmintegrationv1.StarRepositoryRequest) (*scmintegrationv1.StarRepositoryResponse, error) {
+			gotReq = in
+			return &scmintegrationv1.StarRepositoryResponse{Starred: true}, nil
+		},
+	}
+	r := NewRegistry()
+	registerSCMChannels(r, fake, &fakeGitGatewayClient{})
+
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "github.starOrca",
+		argsJSON(t, map[string]any{"source": "landing-page"}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != true {
+		t.Errorf("want true, got %v", result)
+	}
+	if gotReq.GetRepo() != "getorca/orca" {
+		t.Errorf("want the relayed repo to always be the Orca repo regardless of source, got %q", gotReq.GetRepo())
+	}
+}
+
+func TestGitHubStarOrcaChannel_MissingSourceDoesNotFail(t *testing.T) {
+	fake := &fakeScmIntegrationClient{
+		starRepositoryFunc: func(ctx context.Context, in *scmintegrationv1.StarRepositoryRequest) (*scmintegrationv1.StarRepositoryResponse, error) {
+			return &scmintegrationv1.StarRepositoryResponse{Starred: true}, nil
+		},
+	}
+	r := NewRegistry()
+	registerSCMChannels(r, fake, &fakeGitGatewayClient{})
+
+	if _, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "github.starOrca", nil); err != nil {
+		t.Fatalf("unexpected error with no args: %v", err)
+	}
+}
+
+func TestGitHubStarOrcaChannel_RPCErrorPropagates(t *testing.T) {
+	fake := &fakeScmIntegrationClient{
+		starRepositoryFunc: func(ctx context.Context, in *scmintegrationv1.StarRepositoryRequest) (*scmintegrationv1.StarRepositoryResponse, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	r := NewRegistry()
+	registerSCMChannels(r, fake, &fakeGitGatewayClient{})
+
+	if _, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "github.starOrca", argsJSON(t, map[string]any{})); err == nil {
+		t.Fatal("want an RPC error to propagate as a channel error, not silently swallowed")
+	}
+}
+
+func TestGitHubUpdatePRTitleChannel_ResolvesRepoAndUpdatesTitle(t *testing.T) {
+	var gotReq *scmintegrationv1.UpdatePullRequestRequest
+	fake := &fakeScmIntegrationClient{
+		updatePullRequestFunc: func(ctx context.Context, in *scmintegrationv1.UpdatePullRequestRequest) (*scmintegrationv1.PullRequest, error) {
+			gotReq = in
+			return &scmintegrationv1.PullRequest{Number: in.GetNumber()}, nil
+		},
+	}
+	gitClient := &fakeGitGatewayClient{
+		getRemoteUrlFunc: func(ctx context.Context, in *gitgatewayv1.GetRemoteUrlRequest) (*gitgatewayv1.GetRemoteUrlResponse, error) {
+			if in.GetRemoteName() == "upstream" {
+				return &gitgatewayv1.GetRemoteUrlResponse{Url: "https://github.com/getorca/orca.git"}, nil
+			}
+			return nil, errors.New("no upstream remote")
+		},
+	}
+	r := NewRegistry()
+	registerSCMChannels(r, fake, gitClient)
+
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "github.updatePRTitle",
+		argsJSON(t, map[string]any{"repo": "repo-id-1", "prNumber": 7, "title": "new title"}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != true {
+		t.Errorf("want true (frontend contract is Promise<boolean>), got %v", result)
+	}
+	if gotReq.GetRepo() != "getorca/orca" || gotReq.GetNumber() != 7 || gotReq.GetTitle() != "new title" {
+		t.Errorf("unexpected relayed request: %+v", gotReq)
+	}
+}
+
+func TestGitHubUpdatePRTitleChannel_UnresolvableRepoPropagatesAsError(t *testing.T) {
+	fake := &fakeScmIntegrationClient{}
+	gitClient := &fakeGitGatewayClient{
+		getRemoteUrlFunc: func(ctx context.Context, in *gitgatewayv1.GetRemoteUrlRequest) (*gitgatewayv1.GetRemoteUrlResponse, error) {
+			return nil, errors.New("no remote configured")
+		},
+	}
+	r := NewRegistry()
+	registerSCMChannels(r, fake, gitClient)
+
+	if _, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "github.updatePRTitle",
+		argsJSON(t, map[string]any{"repo": "repo-id-1", "prNumber": 7, "title": "new title"})); err == nil {
+		t.Fatal("want an error when the repo cannot be resolved to a GitHub owner/repo")
+	}
+}
+
+func TestGitHubUpdatePRTitleChannel_RPCErrorPropagates(t *testing.T) {
+	fake := &fakeScmIntegrationClient{
+		updatePullRequestFunc: func(ctx context.Context, in *scmintegrationv1.UpdatePullRequestRequest) (*scmintegrationv1.PullRequest, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	gitClient := &fakeGitGatewayClient{
+		getRemoteUrlFunc: func(ctx context.Context, in *gitgatewayv1.GetRemoteUrlRequest) (*gitgatewayv1.GetRemoteUrlResponse, error) {
+			return &gitgatewayv1.GetRemoteUrlResponse{Url: "https://github.com/getorca/orca.git"}, nil
+		},
+	}
+	r := NewRegistry()
+	registerSCMChannels(r, fake, gitClient)
+
+	if _, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "github.updatePRTitle",
+		argsJSON(t, map[string]any{"repo": "repo-id-1", "prNumber": 7, "title": "new title"})); err == nil {
+		t.Fatal("want an RPC error to propagate as a channel error, not silently swallowed into false")
 	}
 }
 

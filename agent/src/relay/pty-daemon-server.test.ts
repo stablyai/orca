@@ -4,7 +4,11 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import type { AgentLogger } from './agent-logger'
-import { DaemonMessageDecoder, encodeDaemonMessage, type DaemonMessage } from './pty-daemon-protocol'
+import {
+  DaemonMessageDecoder,
+  encodeDaemonMessage,
+  type DaemonMessage
+} from './pty-daemon-protocol'
 
 // ── Fake node-pty (same shape as pty-agent-bridge.test.ts) ──────────────────
 type FakePty = {
@@ -48,7 +52,9 @@ function requestOnce(
   return new Promise((resolve, reject) => {
     const socket = net.createConnection(socketPath)
     const decoder = new DaemonMessageDecoder((msg) => {
-      if ('id' in msg && msg.id === id) {resolve({ socket, response: msg })}
+      if ('id' in msg && msg.id === id) {
+        resolve({ socket, response: msg })
+      }
     })
     socket.on('data', (chunk) => decoder.feed(chunk.toString('utf8')))
     socket.once('error', reject)
@@ -63,7 +69,7 @@ describe('pty-daemon-server', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    exitSpy = vi.spyOn(process, 'exit').mockImplementation(((() => undefined) as unknown) as never)
+    exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as unknown as never)
   })
 
   afterEach(() => {
@@ -76,7 +82,11 @@ describe('pty-daemon-server', () => {
     const { runPtyDaemon } = await import('./pty-daemon-server')
     const socketPath = socketPathFor('ping')
     void runPtyDaemon(socketPath, log)
-    await vi.waitFor(() => { if (!fs.existsSync(socketPath)) {throw new Error('socket not ready')} } )
+    await vi.waitFor(() => {
+      if (!fs.existsSync(socketPath)) {
+        throw new Error('socket not ready')
+      }
+    })
 
     const { socket, response } = await requestOnce(socketPath, 1, 'daemon.ping')
     expect(response).toMatchObject({ id: 1, result: { ok: true, ptys: 0 } })
@@ -87,7 +97,11 @@ describe('pty-daemon-server', () => {
     const { runPtyDaemon } = await import('./pty-daemon-server')
     const socketPath = socketPathFor('create')
     void runPtyDaemon(socketPath, log)
-    await vi.waitFor(() => { if (!fs.existsSync(socketPath)) {throw new Error('socket not ready')} } )
+    await vi.waitFor(() => {
+      if (!fs.existsSync(socketPath)) {
+        throw new Error('socket not ready')
+      }
+    })
 
     const created = await requestOnce(socketPath, 1, 'pty.create', { cols: 80, rows: 24 })
     expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -103,10 +117,17 @@ describe('pty-daemon-server', () => {
     const { runPtyDaemon } = await import('./pty-daemon-server')
     const socketPath = socketPathFor('unknown-method')
     void runPtyDaemon(socketPath, log)
-    await vi.waitFor(() => { if (!fs.existsSync(socketPath)) {throw new Error('socket not ready')} } )
+    await vi.waitFor(() => {
+      if (!fs.existsSync(socketPath)) {
+        throw new Error('socket not ready')
+      }
+    })
 
     const { socket, response } = await requestOnce(socketPath, 1, 'not.a.real.method')
-    expect(response).toMatchObject({ id: 1, error: { message: expect.stringContaining('Unknown daemon method') } })
+    expect(response).toMatchObject({
+      id: 1,
+      error: { message: expect.stringContaining('Unknown daemon method') }
+    })
     socket.end()
   })
 
@@ -116,7 +137,11 @@ describe('pty-daemon-server', () => {
 
     // First instance binds for real.
     void runPtyDaemon(socketPath, log)
-    await vi.waitFor(() => { if (!fs.existsSync(socketPath)) {throw new Error('socket not ready')} } )
+    await vi.waitFor(() => {
+      if (!fs.existsSync(socketPath)) {
+        throw new Error('socket not ready')
+      }
+    })
     exitSpy.mockClear()
 
     // Real process.exit(0) never returns — simulate that here so the mocked call
@@ -154,5 +179,29 @@ describe('pty-daemon-server', () => {
     created.socket.end()
     closed.socket.end()
     vi.useRealTimers()
+  })
+
+  // CR-STORAGE-008(a)/TASK-AG-STORAGE-007: confirmed-logout path — kills
+  // immediately, unlike daemon.sessionClosed's grace-period arm above.
+  it('daemon.sessionTeardown kills existing PTYs immediately, no grace period', async () => {
+    const { runPtyDaemon } = await import('./pty-daemon-server')
+    const socketPath = socketPathFor('teardown')
+    void runPtyDaemon(socketPath, log)
+    while (!fs.existsSync(socketPath)) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+
+    const created = await requestOnce(socketPath, 1, 'pty.create', {})
+    const pty = spawnMock.mock.results.at(-1)!.value as FakePty
+
+    const torn = await requestOnce(socketPath, 2, 'daemon.sessionTeardown')
+    expect(torn.response).toMatchObject({ id: 2, result: { ok: true } })
+
+    // No grace period to wait out — the kill already happened synchronously
+    // inside dispatchDaemonRequest.
+    expect(pty.kill).toHaveBeenCalledWith('SIGTERM')
+
+    created.socket.end()
+    torn.socket.end()
   })
 })

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { createTestStore } from './store-test-helpers'
@@ -7,6 +7,14 @@ import {
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
 } from './runtime-environment-ssh'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+
+vi.mock('../../runtime/runtime-rpc-client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  callRuntimeRpc: vi.fn()
+}))
+
+const callRuntimeRpcMock = vi.mocked(callRuntimeRpc)
 
 const ENV_A = 'env-a'
 const ENV_B = 'env-b'
@@ -194,5 +202,60 @@ describe('runtime-environment-ssh slice', () => {
         'old devbox'
       )
     })
+  })
+})
+
+describe('hydrateEnvironmentSshState', () => {
+  beforeEach(() => {
+    callRuntimeRpcMock.mockReset()
+  })
+
+  it('populates the bucket with targets, tombstones, and per-target states on success', async () => {
+    const store = createTestStore()
+    callRuntimeRpcMock.mockImplementation((_target, method, params) => {
+      switch (method) {
+        case 'ssh.listTargets':
+          return Promise.resolve({
+            targets: [
+              { id: 'ssh-1', label: 'devbox' },
+              { id: 'ssh-2', label: 'buildbox' }
+            ]
+          } as never)
+        case 'ssh.listRemovedTargetLabels':
+          return Promise.resolve({ labels: { 'ssh-old': 'retired box' } } as never)
+        case 'ssh.getState': {
+          const targetId = (params as { targetId: string }).targetId
+          if (targetId === 'ssh-1') {
+            return Promise.resolve({
+              state: connState('ssh-1', 'connected')
+            } as never)
+          }
+          return Promise.resolve({ state: null } as never)
+        }
+        default:
+          return Promise.reject(new Error(`unexpected method ${method}`))
+      }
+    })
+
+    await store.getState().hydrateEnvironmentSshState(ENV_A)
+
+    const bucket = store.getState().sshStateByEnvironment.get(ENV_A)
+    expect(bucket?.targetsHydrated).toBe(true)
+    expect(bucket?.targetLabels.get('ssh-1')).toBe('devbox')
+    expect(bucket?.removedTargetLabels.get('ssh-old')).toBe('retired box')
+    expect(bucket?.connectionStates.get('ssh-1')?.status).toBe('connected')
+    expect(bucket?.connectionStates.has('ssh-2')).toBe(false)
+    // Local maps and other environments stay untouched.
+    expect(store.getState().sshTargetLabels.size).toBe(0)
+    expect(store.getState().sshStateByEnvironment.has(ENV_B)).toBe(false)
+  })
+
+  it('does not crash and leaves the bucket un-hydrated when the target-list RPC fails', async () => {
+    const store = createTestStore()
+    callRuntimeRpcMock.mockRejectedValue(new Error('method not found'))
+
+    await expect(store.getState().hydrateEnvironmentSshState(ENV_A)).resolves.toBeUndefined()
+
+    expect(store.getState().sshStateByEnvironment.get(ENV_A)?.targetsHydrated ?? false).toBe(false)
   })
 })

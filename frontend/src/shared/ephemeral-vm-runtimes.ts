@@ -42,13 +42,18 @@ export const EphemeralVmRuntimeRecordSchema = z.object({
   runtimeEnvironmentId: z.string().min(1).optional(),
   sshTargetId: z.string().min(1).optional(),
   status: EphemeralVmRuntimeStatusSchema,
-  cleanupStatus: EphemeralVmCleanupStatusSchema,
+  // Optional (TASK-BE-EVM-010): backend-go's infra-fleet-service-backed
+  // runtimes track no cleanup sub-state machine or per-runtime recipe
+  // result distinct from `status` — only the desktop-local recipe store
+  // (ephemeral-vm-runtime-store.ts) always populates these. Consumers must
+  // handle the missing case rather than assume every runtime has them.
+  cleanupStatus: EphemeralVmCleanupStatusSchema.optional(),
   cleanupDisabled: z.boolean().optional(),
   cleanupLastAttemptAt: z.number().finite().optional(),
   cleanupLastError: z.string().min(1).optional(),
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
-  recipeResult: EphemeralVmRecipeResultSchema
+  recipeResult: EphemeralVmRecipeResultSchema.optional()
 })
 
 export type EphemeralVmRuntimeRecord = z.infer<typeof EphemeralVmRuntimeRecordSchema>

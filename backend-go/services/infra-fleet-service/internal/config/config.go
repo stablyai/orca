@@ -35,6 +35,17 @@ type Config struct {
 	// Currently only used to publish orca.infrafleet.dev_server.disconnected
 	// (see usecase.PollFleetHealth).
 	NATSURL string
+	// EphemeralVmSshMode selects which usecase.EphemeralVmSshProvisioner
+	// implementation cmd/server/main.go wires for `ssh`-type ephemeral VM
+	// recipe results (TASK-BE-EVM-012, BE-SOL-EVM-004 §5a): "agent-outbound"
+	// (Hướng A, TASK-BE-EVM-014) or "backend-relay-deploy" (Hướng B,
+	// TASK-BE-EVM-013). Any value other than exactly "agent-outbound" is
+	// treated as "backend-relay-deploy" — fail-safe default, matching
+	// ServerDeployment's "unrecognized value doesn't silently widen
+	// behavior" convention just above, and because backend-relay-deploy
+	// reuses the already-shipped sshrelay/sshconn pipeline (no new agent
+	// capability required).
+	EphemeralVmSshMode string
 }
 
 func Load() (Config, error) {
@@ -42,10 +53,16 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	sshMode := os.Getenv("EPHEMERAL_VM_SSH_MODE")
+	if sshMode != "agent-outbound" {
+		sshMode = "backend-relay-deploy"
+	}
+
 	return Config{
 		Base:                    base,
 		ServerDeployment:        os.Getenv("ORCA_SERVER_DEPLOYMENT") == "true",
 		DatabaseCredentialsFile: commonconfig.StringEnv("DATABASE_CREDENTIALS_FILE", "/vault/secrets/database-credentials"),
 		NATSURL:                 commonconfig.StringEnv("NATS_URL", "nats://localhost:4222"),
+		EphemeralVmSshMode:      sshMode,
 	}, nil
 }

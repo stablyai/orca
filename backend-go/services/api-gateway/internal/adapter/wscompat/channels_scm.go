@@ -69,6 +69,68 @@ func registerGitHubChannels(r *Registry, client scmintegrationv1.ScmIntegrationS
 		return nil, nil
 	})
 
+	// orcaRepoSlug is the one repo github.starOrca ever stars — not
+	// user-supplied (the frontend call site sends only {source}, a UI-location
+	// tag, per runtime-github-client.ts:79-88).
+	const orcaRepoSlug = "getorca/orca" // confirm the real org/repo slug against the actual GitHub remote before shipping
+
+	// github.starOrca — the write-side twin of github.checkOrcaStarred's
+	// honest nil,nil no-op above: now has a real backing RPC (SOL-012/TASK-034),
+	// so it is wired for real rather than staying a stub.
+	r.Register("github.starOrca", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		type starArgs struct {
+			Source string `json:"source"`
+		}
+		// source (runtime-github-client.ts:79-88's caller-supplied UI-location
+		// tag, e.g. "landing-page") is accepted for wire-shape compatibility but
+		// not forwarded to scm-integration-service — GitHub's star API has no
+		// concept of "why," and this service does not log/analytics-track
+		// per-call metadata. If starOrca's source ever needs recording for
+		// product analytics, that belongs in a telemetry event emitted here in
+		// api-gateway, not as a new scm-integration-service RPC field.
+		_, _ = decodeArg[starArgs](args, 0)
+
+		rpcCtx, cancel := context.WithTimeout(ctx, scmRPCTimeout)
+		defer cancel()
+		resp, err := client.StarRepository(attachSCMIdentity(rpcCtx, id), &scmintegrationv1.StarRepositoryRequest{
+			TenantId: id.TenantID, Provider: scmintegrationv1.ScmProvider_SCM_PROVIDER_GITHUB, Repo: orcaRepoSlug,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return resp.GetStarred(), nil
+	})
+
+	// github.updatePRTitle
+	r.Register("github.updatePRTitle", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		type updateTitleArgs struct {
+			Repo   string `json:"repo"` // "id:<repoId>" | "<repoPath>" — same shape github.listWorkItems resolves
+			Number int32  `json:"prNumber"`
+			Title  string `json:"title"`
+		}
+		in, err := decodeArg[updateTitleArgs](args, 0)
+		if err != nil {
+			return nil, err
+		}
+		ownerRepo, _, resolveErr := resolveGitHubOwnerRepo(ctx, gitClient, in.Repo)
+		if resolveErr != nil {
+			return nil, resolveErr
+		}
+		rpcCtx, cancel := context.WithTimeout(ctx, scmRPCTimeout)
+		defer cancel()
+		title := in.Title
+		_, err = client.UpdatePullRequest(attachSCMIdentity(rpcCtx, id), &scmintegrationv1.UpdatePullRequestRequest{
+			TenantId: id.TenantID, Provider: scmintegrationv1.ScmProvider_SCM_PROVIDER_GITHUB,
+			Repo: ownerRepo.slug(), Number: in.Number, Title: &title,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return true, nil // github.updatePRTitle's frontend contract is Promise<boolean>
+		// (frontend/src/preload/api-types.ts:1605-1610); the RPC's real
+		// PullRequest response is discarded in favor of a plain success bool.
+	})
+
 	// github.rateLimit — real backing RPC already exists (BUG-012's
 	// finding); this is the wiring-only piece.
 	r.Register("github.rateLimit", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {

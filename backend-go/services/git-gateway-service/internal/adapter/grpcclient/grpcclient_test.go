@@ -93,16 +93,20 @@ func TestConnectionResolver_ResolveConnection_NotConnected(t *testing.T) {
 	if conn.RepoPath != "wt-1" {
 		t.Errorf("expected RepoPath to fall back to worktreeID %q, got %q", "wt-1", conn.RepoPath)
 	}
-	if fake.gotResolveConnection.GetConnectionId() != "wt-1" {
-		t.Errorf("expected ConnectionId=wt-1 on the request, got %q", fake.gotResolveConnection.GetConnectionId())
+	if fake.gotResolveConnection.GetWorktreeId() != "wt-1" {
+		t.Errorf("expected WorktreeId=wt-1 on the request, got %q", fake.gotResolveConnection.GetWorktreeId())
+	}
+	if fake.gotResolveConnection.GetConnectionId() != "" {
+		t.Errorf("expected ConnectionId to stay unset (worktreeID is not a connections.id uuid), got %q", fake.gotResolveConnection.GetConnectionId())
 	}
 }
 
 func TestConnectionResolver_ResolveConnection_Connected(t *testing.T) {
 	fake := &fakeInfraFleetServiceClient{
 		resolveConnectionResp: &infrafleetv1.ResolveConnectionResponse{
-			Connected: true,
-			RepoPath:  "/remote/repo",
+			Connected:    true,
+			RepoPath:     "/remote/repo",
+			ConnectionId: "conn-uuid-1",
 		},
 	}
 	r := NewConnectionResolver(fake)
@@ -114,8 +118,11 @@ func TestConnectionResolver_ResolveConnection_Connected(t *testing.T) {
 	if !conn.Connected {
 		t.Error("expected Connected=true")
 	}
-	if conn.ConnectionID != "wt-2" {
-		t.Errorf("expected ConnectionID=wt-2, got %q", conn.ConnectionID)
+	// ConnectionID must come from the response's real infra.connections.id,
+	// not be echoed back as worktreeID — RelayExecutor's Relay RPC requires
+	// that actual uuid (see relay_executor.go's Complete doc comment).
+	if conn.ConnectionID != "conn-uuid-1" {
+		t.Errorf("expected ConnectionID=conn-uuid-1 from the response, got %q", conn.ConnectionID)
 	}
 	if conn.RepoPath != "/remote/repo" {
 		t.Errorf("expected RepoPath from response, got %q", conn.RepoPath)
@@ -1124,5 +1131,81 @@ func TestRelayExecutor_ListWorktreePaths_WithDevServerIDInContext_UsesRelayByDev
 	}
 	if len(infos) != 1 || infos[0].Path != "/repo" {
 		t.Errorf("unexpected result: %+v", infos)
+	}
+}
+
+// ── TASK-BE-EVM-015: ctx-carried HiddenTargetID (usecase.WithHiddenTargetID)
+// makes relay() route via a "ViaHiddenTarget"-suffixed agent method name
+// with hiddenTargetId in params — same devServer/RelayByDevServer dispatch
+// as any other repo on that Dev Server, no new transport. ──
+
+func TestGitDispatch_HiddenTargetID_RoutesToAgentHiddenTargetMethod(t *testing.T) {
+	resultJSON, err := json.Marshal(map[string]any{"branch": "main", "clean": true})
+	if err != nil {
+		t.Fatalf("marshal fixture: %v", err)
+	}
+	fake := &fakeInfraFleetServiceClient{relayByDevServerResp: &infrafleetv1.RelayResponse{ResultJson: string(resultJSON)}}
+	r := NewRelayExecutor(fake)
+
+	// Mirrors dispatchExecutorForRepo's real ordering: WithDevServerID first
+	// (so relay() picks RelayByDevServer at all), then WithHiddenTargetID on
+	// top of that same ctx — see that function's real body.
+	ctx := usecase.WithDevServerID(ctxWithTenant(t), "ds-1")
+	ctx = usecase.WithHiddenTargetID(ctx, "runtime-1")
+
+	if _, err := r.GetStatus(ctx, "/repo"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if fake.gotRelayByDevServer == nil {
+		t.Fatal("expected RelayByDevServer to be called")
+	}
+	if got := fake.gotRelayByDevServer.GetMethod(); got != "git.statusViaHiddenTarget" {
+		t.Errorf("expected method=git.statusViaHiddenTarget, got %q", got)
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal([]byte(fake.gotRelayByDevServer.GetParamsJson()), &params); err != nil {
+		t.Fatalf("unmarshal params: %v", err)
+	}
+	if params["hiddenTargetId"] != "runtime-1" {
+		t.Errorf("expected hiddenTargetId=runtime-1 in params, got %+v", params)
+	}
+	if params["worktreePath"] != "/repo" {
+		t.Errorf("expected worktreePath to still be sent unchanged, got %+v", params)
+	}
+}
+
+func TestGitDispatch_NoHiddenTargetID_UnchangedBehavior(t *testing.T) {
+	resultJSON, err := json.Marshal(map[string]any{"branch": "main", "clean": true})
+	if err != nil {
+		t.Fatalf("marshal fixture: %v", err)
+	}
+	fake := &fakeInfraFleetServiceClient{relayByDevServerResp: &infrafleetv1.RelayResponse{ResultJson: string(resultJSON)}}
+	r := NewRelayExecutor(fake)
+
+	// No WithHiddenTargetID — regression guard: every ordinary repo (not
+	// backed by a ssh-type ephemeral VM's hidden target) must keep calling
+	// the plain method name with no hiddenTargetId param, exactly as before
+	// this task.
+	ctx := usecase.WithDevServerID(ctxWithTenant(t), "ds-1")
+
+	if _, err := r.GetStatus(ctx, "/repo"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if fake.gotRelayByDevServer == nil {
+		t.Fatal("expected RelayByDevServer to be called")
+	}
+	if got := fake.gotRelayByDevServer.GetMethod(); got != "git.status" {
+		t.Errorf("expected unchanged method=git.status, got %q", got)
+	}
+
+	var params map[string]any
+	if err := json.Unmarshal([]byte(fake.gotRelayByDevServer.GetParamsJson()), &params); err != nil {
+		t.Fatalf("unmarshal params: %v", err)
+	}
+	if _, present := params["hiddenTargetId"]; present {
+		t.Errorf("expected no hiddenTargetId param for an ordinary repo, got %+v", params)
 	}
 }

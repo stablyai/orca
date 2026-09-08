@@ -1,7 +1,9 @@
 package agentwsserver
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/domain"
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/usecase"
 )
 
@@ -43,6 +46,14 @@ type TokenIssuer struct {
 	// unit tests that only exercise token-issuance mechanics, not
 	// persistence. main.go's composition root always wires a real one.
 	Resolver *usecase.ResolveDirectWebSocketDevServer
+	// EphemeralVmRuntimes correlates a freshly-resolved dev_servers.id back
+	// to the ephemeral_vm_runtimes row that requested it — TASK-BE-EVM-011's
+	// decision (BE-SOL-EVM-003's "Quyết định đã chốt" section): the real
+	// dev_servers.id PK is a UUID generated inside Resolver.Execute, only
+	// known here, never inside EphemeralVmRelay.Provision's own event
+	// stream. nil is tolerated the same way Resolver is — token issuance
+	// still works, the runtime's environment_id just stays unset.
+	EphemeralVmRuntimes usecase.EphemeralVmRuntimeRepository
 
 	mu   sync.Mutex
 	meta map[string]pendingTokenMeta // plaintext token -> metadata
@@ -53,13 +64,14 @@ type pendingTokenMeta struct {
 	expiresAt   time.Time
 }
 
-// NewTokenIssuer constructs a TokenIssuer. resolver may be nil — see
-// TokenIssuer.Resolver's doc comment.
-func NewTokenIssuer(registry *Registry, cfg Config, logger *slog.Logger, resolver *usecase.ResolveDirectWebSocketDevServer) *TokenIssuer {
+// NewTokenIssuer constructs a TokenIssuer. resolver and ephemeralVmRuntimes
+// may both be nil — see TokenIssuer.Resolver's and .EphemeralVmRuntimes's
+// doc comments.
+func NewTokenIssuer(registry *Registry, cfg Config, logger *slog.Logger, resolver *usecase.ResolveDirectWebSocketDevServer, ephemeralVmRuntimes usecase.EphemeralVmRuntimeRepository) *TokenIssuer {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &TokenIssuer{Registry: registry, Cfg: cfg, Logger: logger, Resolver: resolver, meta: make(map[string]pendingTokenMeta)}
+	return &TokenIssuer{Registry: registry, Cfg: cfg, Logger: logger, Resolver: resolver, EphemeralVmRuntimes: ephemeralVmRuntimes, meta: make(map[string]pendingTokenMeta)}
 }
 
 // ServeHTTP handles POST and GET /api/agent-token. Auth is checked before
@@ -205,6 +217,7 @@ func (t *TokenIssuer) handlePost(w http.ResponseWriter, r *http.Request) {
 			t.logger().ErrorContext(r.Context(), "agentwsserver: resolving dev_servers row failed — agent will connect but stay invisible to the Admin Console", slog.String("devServerId", devServerID), slog.Any("error", err))
 		} else {
 			registrySlotKey = resolved.ID
+			t.linkEphemeralVmRuntime(r.Context(), devServerID, resolved.ID)
 		}
 	}
 
@@ -239,6 +252,26 @@ func (t *TokenIssuer) handlePost(w http.ResponseWriter, r *http.Request) {
 		"created":      true,
 		"agentCommand": fmt.Sprintf("ORCA_URL=wss://%s/agent AGENT_TOKEN=%s node agent.js", host, token),
 	})
+}
+
+// linkEphemeralVmRuntime writes devServerDbID (the just-resolved
+// dev_servers.id PK) onto ephemeral_vm_runtimes.environment_id when
+// devServerID (the agent's self-declared external id) matches a runtime's
+// id for this tenant — TASK-BE-EVM-011's decision. The overwhelmingly
+// common case is "no match" (most agents minting a token are not ephemeral
+// VMs, and even ephemeral VM agents only match when their recipe/VM opted
+// into the DEV_SERVER_ID=<runtimeID> contract) — that is not logged as an
+// error, only genuine failures are, mirroring the Resolver best-effort
+// pattern immediately above this call site.
+func (t *TokenIssuer) linkEphemeralVmRuntime(ctx context.Context, devServerID, devServerDbID string) {
+	if t.EphemeralVmRuntimes == nil {
+		return
+	}
+	_, err := t.EphemeralVmRuntimes.SetEnvironmentID(ctx, t.Cfg.DefaultTenantID, devServerID, devServerDbID)
+	if err == nil || errors.Is(err, domain.ErrEphemeralVmRuntimeNotFound) {
+		return
+	}
+	t.logger().ErrorContext(ctx, "agentwsserver: linking ephemeral vm runtime environment_id failed", slog.String("devServerId", devServerID), slog.Any("error", err))
 }
 
 // resolveExpiresIn applies the TTL policy: a permanent token gets a 30-day

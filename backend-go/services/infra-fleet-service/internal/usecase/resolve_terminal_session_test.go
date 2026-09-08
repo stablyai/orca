@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stablyai/orca-go/common/apperrors"
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/domain"
 )
 
@@ -55,5 +56,24 @@ func TestResolveTerminalSession_NeitherConnectionNorDevServerFound_ReturnsNotFou
 	_, _, err := resolveTerminalSession(withTenant(context.Background(), "tenant-1"), "tenant-1", "pty-1", sessions, resolver, devServers)
 	if err == nil {
 		t.Fatal("expected an error when neither ResolveConnection nor the devServerId fallback finds anything")
+	}
+}
+
+func TestResolveTerminalSession_EmptyConnectionID_ReturnsNoComputeBound(t *testing.T) {
+	sessions := &fakeTerminalSessionRepository{
+		byPtyID: map[string]domain.TerminalSession{
+			"pty-1": {PtyID: "pty-1", TenantID: "tenant-1", ConnectionID: ""},
+		},
+	}
+	resolver := &fakeConnectionResolver{byConnectionID: map[string]domain.DevServer{}}
+	devServers := &fakeDevServerRepository{}
+
+	_, _, err := resolveTerminalSession(withTenant(context.Background(), "tenant-1"), "tenant-1", "pty-1", sessions, resolver, devServers)
+	var appErr *apperrors.AppError
+	if !errors.As(err, &appErr) {
+		t.Fatalf("expected an *apperrors.AppError, got %v", err)
+	}
+	if appErr.Code != "INFRA_TERMINAL_NO_COMPUTE_BOUND" {
+		t.Errorf("expected code INFRA_TERMINAL_NO_COMPUTE_BOUND, got %q", appErr.Code)
 	}
 }

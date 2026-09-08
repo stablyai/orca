@@ -765,22 +765,20 @@ export class WebRuntimeClient {
   }
 }
 
+// Why: `response.id` is only ever registered in ONE of `subscriptions`/`pending`
+// (ids come from the same per-connection nextId() counter, never reused), so a
+// truthy `this.subscriptions.get(response.id)` lookup already proves this
+// response belongs to that subscription — any well-formed response for it
+// should route to onResponse. The old streaming/end/scrollback-only gate
+// silently dropped a StreamChannelHandler's plain, non-streaming ack
+// (registry.go's DispatchStreamChannel writes it via writeDialectResult with
+// no `streaming` flag; only later push events get `streaming: true` — see
+// push_bridge.go's pipePushForDialect) — found auditing FE-TASK-EVM-002's
+// subscribeRuntimeStreamChannel, which depends on that first ack arriving.
 function isSubscriptionResponse(
   response: RuntimeRpcResponse<unknown> | Record<string, unknown>
 ): response is RuntimeRpcResponse<unknown> {
-  if (!('ok' in response)) {
-    return false
-  }
-  if (response.ok === false) {
-    return true
-  }
-  if (response.ok === false) {
-    return true
-  }
-  const success = response as RuntimeRpcResponse<unknown> & { ok: true; streaming?: true }
-  return (
-    success.streaming === true || isEndResult(success.result) || isScrollbackResult(success.result)
-  )
+  return 'ok' in response
 }
 
 function isRuntimeFailureResponse(
@@ -813,10 +811,6 @@ function isFileWatchReadyResponse(
 
 function isEndResult(value: unknown): value is { type: 'end' } {
   return !!value && typeof value === 'object' && (value as { type?: unknown }).type === 'end'
-}
-
-function isScrollbackResult(value: unknown): value is { type: 'scrollback' } {
-  return !!value && typeof value === 'object' && (value as { type?: unknown }).type === 'scrollback'
 }
 
 async function websocketPayloadToUint8(

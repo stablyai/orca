@@ -248,13 +248,27 @@ func scanTask(row pgx.Row) (domain.OrchestrationTask, error) {
 // persisted when the caller supplies one (NULLIF collapses "" to NULL for
 // the nullable FK), and left NULL for an ad-hoc coordinator-only dispatch —
 // a single INSERT, trivially atomic on its own.
-func (r *Repository) CreateDispatchContext(ctx context.Context, tenantID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error) {
+func (r *Repository) CreateDispatchContext(ctx context.Context, tenantID, userID, worktreeID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error) {
 	id := uuid.NewString()
+	// orchestration_task_id is passed as *string (nil for "no task"),
+	// resolved in Go rather than via SQL's NULLIF($n,'') — pgx sends a Go
+	// string parameter as `text`, and NULLIF(text, '') against a UUID
+	// column fails type inference at bind time ("column ... is of type
+	// uuid but expression is of type text", a real, pre-existing bug this
+	// fix closes: NULLIF's result type comes from its arguments, which are
+	// both text here, so Postgres never gets a chance to coerce to the
+	// column's uuid type the way a bare parameter reference would).
+	// user_id/worktree_id are plain TEXT columns (no such coercion issue),
+	// so they keep using NULLIF directly.
+	var orchestrationTaskIDArg *string
+	if orchestrationTaskID != "" {
+		orchestrationTaskIDArg = &orchestrationTaskID
+	}
 	row := r.pool.QueryRow(ctx, `
-		INSERT INTO orchestration.dispatch_contexts (id, tenant_id, handle, coordinator_run_id, orchestration_task_id, status)
-		VALUES ($1,$2,$3,$4,NULLIF($5,''),'pending')
+		INSERT INTO orchestration.dispatch_contexts (id, tenant_id, user_id, worktree_id, handle, coordinator_run_id, orchestration_task_id, status)
+		VALUES ($1,$2,NULLIF($3,''),NULLIF($4,''),$5,$6,$7,'pending')
 		RETURNING created_at
-	`, id, tenantID, handle, coordinatorRunID, orchestrationTaskID)
+	`, id, tenantID, userID, worktreeID, handle, coordinatorRunID, orchestrationTaskIDArg)
 
 	var createdAt time.Time
 	if err := row.Scan(&createdAt); err != nil {
@@ -263,12 +277,73 @@ func (r *Repository) CreateDispatchContext(ctx context.Context, tenantID, handle
 	return domain.DispatchContext{
 		ID:                  id,
 		TenantID:            tenantID,
+		UserID:              userID,
+		WorktreeID:          worktreeID,
 		Handle:              handle,
 		CoordinatorRunID:    coordinatorRunID,
 		OrchestrationTaskID: orchestrationTaskID,
 		Status:              domain.DispatchStatusPending,
 		CreatedAt:           createdAt,
 	}, nil
+}
+
+// ListActiveDispatchContextsForUser returns every non-terminal dispatch
+// context for (tenantID, userID) — see usecase.DispatchContextRepository's
+// doc comment. "Active" excludes completed/failed/circuit_broken; a
+// circuit_broken dispatch is done trying, not still running, so it's
+// excluded the same as failed/completed for this "what's currently running
+// for me" view.
+func (r *Repository) ListActiveDispatchContextsForUser(ctx context.Context, tenantID, userID string) ([]domain.DispatchContext, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, tenant_id, user_id, worktree_id, handle, coordinator_run_id, orchestration_task_id,
+		       status, failure_count, last_failure, dispatched_at, completed_at,
+		       last_heartbeat_at, created_at
+		FROM orchestration.dispatch_contexts
+		WHERE tenant_id = $1 AND user_id = $2
+		  AND status NOT IN ('completed', 'failed', 'circuit_broken')
+		ORDER BY created_at DESC
+	`, tenantID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: query active dispatch contexts for user: %w", err)
+	}
+	defer rows.Close()
+
+	out := []domain.DispatchContext{}
+	for rows.Next() {
+		var d domain.DispatchContext
+		var worktreeID, orchestrationTaskID, lastFailure *string
+		var dispatchedAt, completedAt, lastHeartbeatAt *time.Time
+		if err := rows.Scan(
+			&d.ID, &d.TenantID, &d.UserID, &worktreeID, &d.Handle, &d.CoordinatorRunID, &orchestrationTaskID,
+			&d.Status, &d.FailureCount, &lastFailure, &dispatchedAt, &completedAt,
+			&lastHeartbeatAt, &d.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("postgres: scan active dispatch context row: %w", err)
+		}
+		if worktreeID != nil {
+			d.WorktreeID = *worktreeID
+		}
+		if orchestrationTaskID != nil {
+			d.OrchestrationTaskID = *orchestrationTaskID
+		}
+		if lastFailure != nil {
+			d.LastFailure = *lastFailure
+		}
+		if dispatchedAt != nil {
+			d.DispatchedAt = *dispatchedAt
+		}
+		if completedAt != nil {
+			d.CompletedAt = *completedAt
+		}
+		if lastHeartbeatAt != nil {
+			d.LastHeartbeatAt = *lastHeartbeatAt
+		}
+		out = append(out, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: iterate active dispatch context rows: %w", err)
+	}
+	return out, nil
 }
 
 // GetLatestForTask returns the most recently created dispatch_contexts row
@@ -279,7 +354,7 @@ func (r *Repository) CreateDispatchContext(ctx context.Context, tenantID, handle
 // nullable-column handling.
 func (r *Repository) GetLatestForTask(ctx context.Context, tenantID, orchestrationTaskID string) (domain.DispatchContext, error) {
 	row := r.pool.QueryRow(ctx, `
-		SELECT id, tenant_id, orchestration_task_id, handle, coordinator_run_id, status, created_at
+		SELECT id, tenant_id, worktree_id, orchestration_task_id, handle, coordinator_run_id, status, created_at
 		FROM orchestration.dispatch_contexts
 		WHERE tenant_id = $1 AND orchestration_task_id = $2
 		ORDER BY created_at DESC
@@ -288,18 +363,75 @@ func (r *Repository) GetLatestForTask(ctx context.Context, tenantID, orchestrati
 
 	var dc domain.DispatchContext
 	var status string
-	var orchestrationTaskIDCol *string
-	if err := row.Scan(&dc.ID, &dc.TenantID, &orchestrationTaskIDCol, &dc.Handle, &dc.CoordinatorRunID, &status, &dc.CreatedAt); err != nil {
+	var worktreeIDCol, orchestrationTaskIDCol *string
+	if err := row.Scan(&dc.ID, &dc.TenantID, &worktreeIDCol, &orchestrationTaskIDCol, &dc.Handle, &dc.CoordinatorRunID, &status, &dc.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.DispatchContext{}, usecase.ErrDispatchContextNotFound
 		}
 		return domain.DispatchContext{}, fmt.Errorf("postgres: get latest dispatch context for task: %w", err)
+	}
+	if worktreeIDCol != nil {
+		dc.WorktreeID = *worktreeIDCol
 	}
 	if orchestrationTaskIDCol != nil {
 		dc.OrchestrationTaskID = *orchestrationTaskIDCol
 	}
 	dc.Status = domain.DispatchStatus(status)
 	return dc, nil
+}
+
+// RecordDispatchFailure loads dispatch_contexts row id (locked, tenant-
+// scoped), applies domain.DispatchContext.RecordFailure(reason) in Go, and
+// persists the updated failure_count/status/last_failure — same
+// SELECT...FOR UPDATE-then-write transaction shape as CreateGate below,
+// applied to a single row instead of a cross-table update. See
+// usecase.DispatchContextRepository's doc comment.
+func (r *Repository) RecordDispatchFailure(ctx context.Context, tenantID, dispatchContextID, reason string) (domain.DispatchContext, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.DispatchContext{}, fmt.Errorf("postgres: begin tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var dc domain.DispatchContext
+	var status string
+	var orchestrationTaskID, userID *string
+	err = tx.QueryRow(ctx, `
+		SELECT id, tenant_id, user_id, handle, coordinator_run_id, orchestration_task_id, status, failure_count
+		FROM orchestration.dispatch_contexts
+		WHERE id = $1 AND tenant_id = $2
+		FOR UPDATE
+	`, dispatchContextID, tenantID).Scan(
+		&dc.ID, &dc.TenantID, &userID, &dc.Handle, &dc.CoordinatorRunID, &orchestrationTaskID, &status, &dc.FailureCount,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.DispatchContext{}, usecase.ErrDispatchContextNotFound
+	}
+	if err != nil {
+		return domain.DispatchContext{}, fmt.Errorf("postgres: query dispatch context for failure record: %w", err)
+	}
+	if userID != nil {
+		dc.UserID = *userID
+	}
+	if orchestrationTaskID != nil {
+		dc.OrchestrationTaskID = *orchestrationTaskID
+	}
+	dc.Status = domain.DispatchStatus(status)
+
+	updated := dc.RecordFailure(reason)
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE orchestration.dispatch_contexts
+		SET failure_count = $1, status = $2, last_failure = $3
+		WHERE id = $4 AND tenant_id = $5
+	`, updated.FailureCount, string(updated.Status), updated.LastFailure, dispatchContextID, tenantID); err != nil {
+		return domain.DispatchContext{}, fmt.Errorf("postgres: update dispatch context failure: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.DispatchContext{}, fmt.Errorf("postgres: commit dispatch failure tx: %w", err)
+	}
+	return updated, nil
 }
 
 // ---- GateRepository -------------------------------------------------

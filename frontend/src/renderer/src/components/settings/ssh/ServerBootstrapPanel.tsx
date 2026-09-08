@@ -1,5 +1,5 @@
 // ServerBootstrapPanel — main bootstrap UI with step tracker and log viewer (CR-004, TASK-004-C)
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Terminal, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,13 +12,21 @@ import { ServerBootstrapIdleScreen } from './ServerBootstrapIdleScreen'
 import { BootstrapStepList } from './BootstrapStepList'
 import { BootstrapLogViewer } from './BootstrapLogViewer'
 
-export function ServerBootstrapPanel({
-  target
-}: {
-  target: SshTarget
-}): React.JSX.Element {
+export function ServerBootstrapPanel({ target }: { target: SshTarget }): React.JSX.Element {
   const bootstrapState = useAppStore((s) => s.bootstrapByServer[target.id])
   const [showLog, setShowLog] = useState(false)
+
+  // Why: a page refresh mid-bootstrap has no bootstrapByServer entry yet
+  // (that state only exists via live window.api.ssh.onBootstrapProgress
+  // IPC events — see useIpcEvents.ts — nothing replays past events on
+  // mount). Fall back to the coarse devServers[].healthStatus signal so the
+  // panel shows "still bootstrapping"/"done" instead of the idle/start
+  // screen — see resumeBootstrapProgressIfAny's own doc comment
+  // (BACKLOG-007) for exactly what this can and can't tell the user.
+  useEffect(() => {
+    useAppStore.getState().resumeBootstrapProgressIfAny(target.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target.id])
 
   const handleStartBootstrap = async (): Promise<void> => {
     try {
@@ -38,12 +46,7 @@ export function ServerBootstrapPanel({
 
   // Idle or no state → show idle/start screen
   if (!bootstrapState || bootstrapState.phase === 'idle') {
-    return (
-      <ServerBootstrapIdleScreen
-        target={target}
-        onStart={() => void handleStartBootstrap()}
-      />
-    )
+    return <ServerBootstrapIdleScreen target={target} onStart={() => void handleStartBootstrap()} />
   }
 
   return (
@@ -84,10 +87,7 @@ export function ServerBootstrapPanel({
             <Terminal className="size-4" />
             {translate('fleet.bootstrap.showLog', 'Bootstrap log')}
             <ChevronDown
-              className={cn(
-                'size-4 transition-transform duration-150',
-                showLog && 'rotate-180'
-              )}
+              className={cn('size-4 transition-transform duration-150', showLog && 'rotate-180')}
             />
           </Button>
         </CollapsibleTrigger>

@@ -40,6 +40,9 @@ type Server struct {
 	getSshState         *usecase.GetSshState
 	establishConnection *usecase.EstablishConnection
 	killWorkspacePort   *usecase.KillWorkspacePort
+	// teardownConnection backs the confirmed-logout explicit-close RPC
+	// (BE-SOL-STORAGE-003 §5, TASK-BE-STORAGE-012).
+	teardownConnection *usecase.TeardownConnection
 	// --- Terminal/PTY (TASK-185) ---
 	spawnTerminalSession   *usecase.SpawnTerminalSession
 	resizeTerminalSession  *usecase.ResizeTerminalSession
@@ -78,6 +81,15 @@ type Server struct {
 
 	relayByDevServer     *usecase.RelayByDevServer
 	isDevServerConnected *usecase.IsDevServerConnected
+
+	// --- Ephemeral VM (SOL-004 Group 1/2a, TASK-002/004) ---
+	listEphemeralVmRuntimes *usecase.ListEphemeralVmRuntimes
+	ephemeralVmRelay        *usecase.EphemeralVmRelay
+
+	// getFleetConnectivitySummary backs CR-STORAGE-007's poll-driven health
+	// summary (TASK-BE-STORAGE-006) — see usecase.GetFleetConnectivitySummary's
+	// doc comment.
+	getFleetConnectivitySummary *usecase.GetFleetConnectivitySummary
 }
 
 func New(
@@ -123,6 +135,10 @@ func New(
 	resolveAccessRequest *usecase.ResolveAccessRequest,
 	relayByDevServer *usecase.RelayByDevServer,
 	isDevServerConnected *usecase.IsDevServerConnected,
+	listEphemeralVmRuntimes *usecase.ListEphemeralVmRuntimes,
+	ephemeralVmRelay *usecase.EphemeralVmRelay,
+	getFleetConnectivitySummary *usecase.GetFleetConnectivitySummary,
+	teardownConnection *usecase.TeardownConnection,
 ) *Server {
 	return &Server{
 		registerDevServer:          registerDevServer,
@@ -167,7 +183,61 @@ func New(
 		resolveAccessRequest:       resolveAccessRequest,
 		relayByDevServer:           relayByDevServer,
 		isDevServerConnected:       isDevServerConnected,
+
+		listEphemeralVmRuntimes: listEphemeralVmRuntimes,
+		ephemeralVmRelay:        ephemeralVmRelay,
+
+		getFleetConnectivitySummary: getFleetConnectivitySummary,
+
+		teardownConnection: teardownConnection,
 	}
+}
+
+// TeardownConnection backs BE-SOL-STORAGE-003 §5's confirmed-logout
+// explicit-close path — tenant scoping comes from the authenticated
+// context, per infrafleet.proto's TeardownConnectionRequest doc comment.
+func (s *Server) TeardownConnection(ctx context.Context, req *infrafleetv1.TeardownConnectionRequest) (*emptypb.Empty, error) {
+	if err := s.teardownConnection.Execute(ctx, req.GetConnectionId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+// GetFleetConnectivitySummary backs CR-STORAGE-007's poll-driven health
+// summary — see usecase.GetFleetConnectivitySummary's doc comment.
+// tenant/user scoping comes from the authenticated identity in ctx, never
+// from req (which is deliberately empty, see infrafleet.proto's
+// GetFleetConnectivitySummaryRequest doc comment).
+func (s *Server) GetFleetConnectivitySummary(ctx context.Context, req *infrafleetv1.GetFleetConnectivitySummaryRequest) (*infrafleetv1.GetFleetConnectivitySummaryResponse, error) {
+	conns, err := s.getFleetConnectivitySummary.Execute(ctx)
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	out := make([]*infrafleetv1.ConnectionHealthEntry, 0, len(conns))
+	for _, conn := range conns {
+		out = append(out, toProtoConnectionHealthEntry(conn))
+	}
+	return &infrafleetv1.GetFleetConnectivitySummaryResponse{Connections: out}, nil
+}
+
+// toProtoConnectionHealthEntry maps a domain.Connection to the wire shape
+// GetFleetConnectivitySummary returns — LastActivityAt/DegradedSince stay
+// unset (nil) on the proto message when the domain field is nil, never a
+// fabricated zero timestamp (see infrafleet.proto's ConnectionHealthEntry
+// doc comment: "unset if never active" / "unset unless status == degraded").
+func toProtoConnectionHealthEntry(conn domain.Connection) *infrafleetv1.ConnectionHealthEntry {
+	entry := &infrafleetv1.ConnectionHealthEntry{
+		ConnectionId: conn.ID,
+		DevServerId:  conn.DevServerID,
+		Status:       conn.Status,
+	}
+	if conn.LastActivityAt != nil {
+		entry.LastActivityAt = timestamppb.New(*conn.LastActivityAt)
+	}
+	if conn.DegradedSince != nil {
+		entry.DegradedSince = timestamppb.New(*conn.DegradedSince)
+	}
+	return entry
 }
 
 func (s *Server) RegisterDevServer(ctx context.Context, req *infrafleetv1.RegisterDevServerRequest) (*infrafleetv1.RegisterDevServerResponse, error) {
@@ -629,6 +699,7 @@ func toProtoDevServer(ds domain.DevServer) *infrafleetv1.DevServer {
 		ApprovalStatus: string(ds.Status),
 		GroupId:        ds.GroupID,
 		Kind:           toProtoAgentKind(ds.Kind),
+		HealthStatus:   string(ds.HealthStatus),
 	}
 }
 

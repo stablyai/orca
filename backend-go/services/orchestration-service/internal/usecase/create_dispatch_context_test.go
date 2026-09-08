@@ -74,6 +74,30 @@ func TestCreateDispatchContext_ThreadsOrchestrationTaskID(t *testing.T) {
 	}
 }
 
+// TestCreateDispatchContext_ThreadsWorktreeID proves a caller-supplied
+// WorktreeID reaches the repository call and round-trips on the result —
+// see specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+func TestCreateDispatchContext_ThreadsWorktreeID(t *testing.T) {
+	repo := &fakeDispatchContextRepository{}
+	uc := NewCreateDispatchContext(repo, &synchronousSerializer{})
+
+	ctx := withTenant(context.Background(), "tenant-1")
+	got, err := uc.Execute(ctx, CreateDispatchContextInput{
+		Handle:           "handle-1",
+		CoordinatorRunID: "run-1",
+		WorktreeID:       "repo-1::/opt/worktree",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.WorktreeID != "repo-1::/opt/worktree" {
+		t.Errorf("expected result WorktreeID %q, got %q", "repo-1::/opt/worktree", got.WorktreeID)
+	}
+	if len(repo.created) != 1 || repo.created[0].WorktreeID != "repo-1::/opt/worktree" {
+		t.Fatalf("expected repository to receive WorktreeID, got %+v", repo.created)
+	}
+}
+
 func TestCreateDispatchContext_RepositoryFailurePropagates(t *testing.T) {
 	repo := &fakeDispatchContextRepository{err: errors.New("db unavailable")}
 	uc := NewCreateDispatchContext(repo, &synchronousSerializer{})

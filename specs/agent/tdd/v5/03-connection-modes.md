@@ -310,3 +310,62 @@ describe('createSession', () => {
 ## 5. Addendum (2026-08-03) — Push Notifications Use the Same Connection
 
 All 3 current production Dev Servers run in `direct-websocket` mode (agent-initiated outbound connection, per §1). The one-way push notifications added in TDD-AG-02 §5 / TDD-AG-07 §9 (`pty.data`, `pty.exit`, `fs.changed`) don't open a second channel or change the connection mode — they're agent-initiated frames sent over this same `ws` connection, using the same `WireState`/`encodeDataFrame` as every response. No change to `connectDirect()`, `listenRelay()`, or the mode-selection logic was needed.
+
+
+---
+
+## 6. Addendum (2026-09-07) - connectDirect's exit(2)-on-drop description is superseded by a real reconnect loop
+
+**Status: describes OUTDATED behavior - corrected here, per TASK-AG-STORAGE-004.**
+
+Section 1's `connectDirect()` code sample above ("DO NOT retry: token is
+one-time use... `setTimeout(() => process.exit(2), 200)`") described an
+earlier version. Reading the real, current
+`agent/src/relay/agent-connection-direct.ts` (and the compiled
+`deploy/agent/agent.js` bundle) shows the function was redesigned into an
+in-process, infinite reconnect loop:
+
+```typescript
+// agent/src/relay/agent-connection-direct.ts - REAL current behavior
+const RECONNECT_DELAYS_MS = [1000, 2000, 5000, 15000, 30000]
+
+async function connectDirect(config, tools, log) {
+  const tokenManager = config.apiSecret ? new AgentTokenManager({ /* ... */ }) : null
+  if (tokenManager) await tokenManager.init()
+
+  let reconnectAttempt = 0
+  while (true) {
+    const result = await runConnection()   // opens ws, sends handshake, waits for close
+    if (result === 'exit') { tokenManager?.dispose(); process.exit(0); return }
+    // result is 'reconnect-renew' or 'reconnect-auth-failed' for any other close code
+    if (tokenManager) await tokenManager.forceRenew().catch(() => {})
+    const delay = RECONNECT_DELAYS_MS[Math.min(reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)]
+    reconnectAttempt += 1
+    await sleep(delay)
+  }
+}
+```
+
+Key differences from Section 1's description:
+
+- The process **never calls `process.exit(2)`** for a dropped connection -
+  only a clean `code===1000` close (leads to `exit(0)`) or `SIGINT`/`SIGTERM`
+  end the process. Every other close reconnects in the same process.
+- Token renewal is proactive, not "wait for systemd to fetch a new one":
+  `AgentTokenManager` (`agent/src/relay/agent-token-manager.ts`) fetches a
+  token at startup and renews at 80% of its TTL before it's needed,
+  holding the renewed token in memory so a drop can reconnect immediately;
+  `forceRenew()` is called as a fallback if a reconnect attempt itself
+  fails auth.
+- Backoff is `[1000, 2000, 5000, 15000, 30000]` ms (capped at the last
+  value), not systemd's restart cadence.
+
+This does not change the wire protocol or connection-mode selection
+(sections 1-3 above remain accurate for those) - only the "what happens
+when the socket closes" narrative needs this correction. See
+`specs/agent/crs/v3/storage/solutions/SOL-AG-STORAGE-002-fleet-health-and-hydration-reporting.md`
+section 2 for the investigation that found this drift, and
+`specs/agent/crs/v3/storage/solutions/SOL-AG-STORAGE-003-agent-spawn-pty-daemon-grace-period.md`
+for why this matters (the transport layer already reconnects reliably; the
+remaining gap is whether in-flight work survives the gap, not the
+connection itself).

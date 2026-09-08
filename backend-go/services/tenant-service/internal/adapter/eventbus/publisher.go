@@ -57,3 +57,45 @@ func (p *Publisher) PublishProfileInvalidated(ctx context.Context, tenantID, use
 		Payload:    payload,
 	})
 }
+
+// StarNagVisibilitySubject carries {tenant_id, user_id, event, mode,
+// surface} — see notification-service's own eventbus/consumer.go for the
+// receiving side (this subject falls under the "orca.tenant.>" wildcard
+// filter Subject's own EnsureStream call already registers for the TENANT
+// stream, so no new EnsureStream call is needed here).
+const StarNagVisibilitySubject = "orca.tenant.star_nag.visibility_changed"
+
+// starNagVisibilityBody is deliberately shaped to also be a valid
+// notification-service EventPayload: UserID -> UserID, and Body carries the
+// JSON-encoded {event, mode, surface} triple notification-service's default
+// translation rule passes through unchanged (see notification-service's
+// TranslateEvent) — this avoids inventing a second wire format for the
+// same fact.
+type starNagVisibilityBody struct {
+	Event   string `json:"event"`             // "show" | "hide"
+	Mode    string `json:"mode,omitempty"`    // "gh" | "web" — only set for "show"
+	Surface string `json:"surface,omitempty"` // "card" | "toast" — only set for "show"
+}
+
+type starNagVisibilityPayload struct {
+	UserID string `json:"user_id"`
+	Body   string `json:"body"`
+}
+
+func (p *Publisher) PublishStarNagVisibilityChanged(ctx context.Context, tenantID, userID, event, mode, surface string) error {
+	body, err := json.Marshal(starNagVisibilityBody{Event: event, Mode: mode, Surface: surface})
+	if err != nil {
+		return fmt.Errorf("eventbus: marshal star nag visibility body: %w", err)
+	}
+	payload, err := json.Marshal(starNagVisibilityPayload{UserID: userID, Body: string(body)})
+	if err != nil {
+		return fmt.Errorf("eventbus: marshal star nag visibility payload: %w", err)
+	}
+	return p.pub.Publish(ctx, StarNagVisibilitySubject, commoneventbus.Event{
+		ID:         uuid.NewString(),
+		TenantID:   tenantID,
+		OccurredAt: time.Now().UTC(),
+		Version:    1,
+		Payload:    payload,
+	})
+}

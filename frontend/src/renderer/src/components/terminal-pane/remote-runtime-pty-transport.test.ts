@@ -1071,6 +1071,42 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
+  // TASK-021 (specs/backend-go/bugs/missing-v3/): infra-fleet-service's
+  // SpawnTerminalSession returns INFRA_TERMINAL_NO_COMPUTE_BOUND when a
+  // runtime:<environmentId> target has no dev-server/SSH connection bound —
+  // this should surface as a distinct, actionable message rather than the
+  // raw wire error string.
+  it('surfaces a human-readable message for INFRA_TERMINAL_NO_COMPUTE_BOUND instead of the raw RPC error', async () => {
+    const failure = {
+      ok: false,
+      error: {
+        code: 'failed_precondition',
+        message:
+          'INFRA_TERMINAL_NO_COMPUTE_BOUND: this environment has no dev server or SSH connection bound — attach compute before opening a terminal'
+      }
+    }
+    runtimeCall.mockImplementation(async (args: { method: string }) =>
+      args.method === 'terminal.create' ? failure : { ok: true, result: {} }
+    )
+
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: { onError } })
+
+    expect(onError).toHaveBeenCalledWith(
+      'This environment has no compute attached — attach a dev server or SSH connection to this environment before opening a terminal.'
+    )
+    expect(onError).not.toHaveBeenCalledWith(
+      expect.stringContaining('INFRA_TERMINAL_NO_COMPUTE_BOUND')
+    )
+  })
+
   it('passes activation intent when creating the remote runtime terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createRemoteRuntimePtyTransport('env-1', {

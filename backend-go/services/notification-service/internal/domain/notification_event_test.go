@@ -37,6 +37,27 @@ func TestTranslateEvent_CredentialRotatedIsCritical(t *testing.T) {
 	}
 }
 
+func TestTranslateEvent_StarNagVisibilityChangedPassesBodyThroughUnchanged(t *testing.T) {
+	// TASK-014: tenant-service's starNagVisibilityBody JSON triple
+	// ({event,mode,surface}) rides in payload.Body unchanged — the
+	// subjectRule's own Body is deliberately "".
+	rawBody := `{"event":"show","mode":"gh","surface":"card"}`
+	payload := EventPayload{UserID: "user-1", Body: rawBody}
+	got, err := TranslateEvent("ne-1", "evt-1", "orca.tenant.star_nag.visibility_changed", "tenant-1", payload, time.Now())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Type != "star_nag_visibility" {
+		t.Errorf("expected type star_nag_visibility, got %s", got.Type)
+	}
+	if got.Body != rawBody {
+		t.Errorf("expected payload.Body to pass through unchanged, got %q", got.Body)
+	}
+	if len(got.Channels) != 1 || got.Channels[0] != ChannelDeliveryWS {
+		t.Errorf("expected WS-only delivery, got %v", got.Channels)
+	}
+}
+
 func TestTranslateEvent_UnknownSubjectFallsBackToGenericRule(t *testing.T) {
 	got, err := TranslateEvent("ne-1", "evt-1", "orca.some-new-service.thing.happened", "tenant-1", EventPayload{UserID: "user-1"}, time.Now())
 	if err != nil {

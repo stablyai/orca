@@ -30,8 +30,21 @@ type DispatchContext struct {
 	// See docs/execution-plan.md Epic C: added so callers can observe the FK
 	// they supplied on CreateDispatchContextRequest.
 	OrchestrationTaskId string `protobuf:"bytes,4,opt,name=orchestration_task_id,json=orchestrationTaskId,proto3" json:"orchestration_task_id,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// user_id: the caller who initiated this dispatch, from identity at
+	// creation time. Empty for a system-initiated dispatch with no end-user
+	// caller. Added for CR-STORAGE-006/007.
+	UserId          string `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Status          string `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
+	FailureCount    int32  `protobuf:"varint,7,opt,name=failure_count,json=failureCount,proto3" json:"failure_count,omitempty"`
+	LastHeartbeatAt string `protobuf:"bytes,8,opt,name=last_heartbeat_at,json=lastHeartbeatAt,proto3" json:"last_heartbeat_at,omitempty"` // RFC3339; empty if never heartbeated
+	// worktree_id: the frontend worktree this dispatch is running for,
+	// caller-supplied on CreateDispatchContextRequest (like handle/
+	// coordinator_run_id/orchestration_task_id, unlike user_id). Empty for a
+	// dispatch with no worktree association. See
+	// specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+	WorktreeId    string `protobuf:"bytes,9,opt,name=worktree_id,json=worktreeId,proto3" json:"worktree_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DispatchContext) Reset() {
@@ -92,6 +105,41 @@ func (x *DispatchContext) GetOrchestrationTaskId() string {
 	return ""
 }
 
+func (x *DispatchContext) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *DispatchContext) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *DispatchContext) GetFailureCount() int32 {
+	if x != nil {
+		return x.FailureCount
+	}
+	return 0
+}
+
+func (x *DispatchContext) GetLastHeartbeatAt() string {
+	if x != nil {
+		return x.LastHeartbeatAt
+	}
+	return ""
+}
+
+func (x *DispatchContext) GetWorktreeId() string {
+	if x != nil {
+		return x.WorktreeId
+	}
+	return ""
+}
+
 type CreateDispatchContextRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Handle           string                 `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
@@ -103,8 +151,13 @@ type CreateDispatchContextRequest struct {
 	// and CreateGate could never resolve a task to block, failing closed with
 	// ORCH_DISPATCH_CONTEXT_NO_TASK for every dispatch context.
 	OrchestrationTaskId string `protobuf:"bytes,3,opt,name=orchestration_task_id,json=orchestrationTaskId,proto3" json:"orchestration_task_id,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// worktree_id: the frontend worktree this dispatch is running for.
+	// Optional — an ad-hoc dispatch with no worktree association
+	// legitimately omits it. See
+	// specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+	WorktreeId    string `protobuf:"bytes,4,opt,name=worktree_id,json=worktreeId,proto3" json:"worktree_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateDispatchContextRequest) Reset() {
@@ -154,6 +207,13 @@ func (x *CreateDispatchContextRequest) GetCoordinatorRunId() string {
 func (x *CreateDispatchContextRequest) GetOrchestrationTaskId() string {
 	if x != nil {
 		return x.OrchestrationTaskId
+	}
+	return ""
+}
+
+func (x *CreateDispatchContextRequest) GetWorktreeId() string {
+	if x != nil {
+		return x.WorktreeId
 	}
 	return ""
 }
@@ -686,20 +746,234 @@ func (x *GetDispatchContextForTaskResponse) GetDispatch() *DispatchContext {
 	return nil
 }
 
+type ListActiveDispatchContextsForUserRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListActiveDispatchContextsForUserRequest) Reset() {
+	*x = ListActiveDispatchContextsForUserRequest{}
+	mi := &file_orca_orchestration_v1_orchestration_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListActiveDispatchContextsForUserRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListActiveDispatchContextsForUserRequest) ProtoMessage() {}
+
+func (x *ListActiveDispatchContextsForUserRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_orca_orchestration_v1_orchestration_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListActiveDispatchContextsForUserRequest.ProtoReflect.Descriptor instead.
+func (*ListActiveDispatchContextsForUserRequest) Descriptor() ([]byte, []int) {
+	return file_orca_orchestration_v1_orchestration_proto_rawDescGZIP(), []int{12}
+}
+
+type ListActiveDispatchContextsForUserResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	DispatchContexts []*DispatchContext     `protobuf:"bytes,1,rep,name=dispatch_contexts,json=dispatchContexts,proto3" json:"dispatch_contexts,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *ListActiveDispatchContextsForUserResponse) Reset() {
+	*x = ListActiveDispatchContextsForUserResponse{}
+	mi := &file_orca_orchestration_v1_orchestration_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListActiveDispatchContextsForUserResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListActiveDispatchContextsForUserResponse) ProtoMessage() {}
+
+func (x *ListActiveDispatchContextsForUserResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_orca_orchestration_v1_orchestration_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListActiveDispatchContextsForUserResponse.ProtoReflect.Descriptor instead.
+func (*ListActiveDispatchContextsForUserResponse) Descriptor() ([]byte, []int) {
+	return file_orca_orchestration_v1_orchestration_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ListActiveDispatchContextsForUserResponse) GetDispatchContexts() []*DispatchContext {
+	if x != nil {
+		return x.DispatchContexts
+	}
+	return nil
+}
+
+type FailDispatchRequest struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	DispatchContextId string                 `protobuf:"bytes,1,opt,name=dispatch_context_id,json=dispatchContextId,proto3" json:"dispatch_context_id,omitempty"`
+	// Human-readable detail from the caller's own failed dispatch/relay call —
+	// persisted verbatim as dispatch_contexts.last_failure when the failure is
+	// actually recorded (see recorded in the response).
+	ErrorMessage string `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	// The standard gRPC status code (google.golang.org/grpc/codes.Code, e.g.
+	// 14 = Unavailable, 4 = DeadlineExceeded) the caller's own failed call
+	// returned. 0 (OK) or an unrecognized code both classify as a real
+	// dispatch failure (fail-closed: count it) — only UNAVAILABLE/
+	// DEADLINE_EXCEEDED are treated as transport, mirroring
+	// usecase.ClassifyDispatchFailure exactly.
+	GrpcStatusCode uint32 `protobuf:"varint,3,opt,name=grpc_status_code,json=grpcStatusCode,proto3" json:"grpc_status_code,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *FailDispatchRequest) Reset() {
+	*x = FailDispatchRequest{}
+	mi := &file_orca_orchestration_v1_orchestration_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailDispatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailDispatchRequest) ProtoMessage() {}
+
+func (x *FailDispatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_orca_orchestration_v1_orchestration_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailDispatchRequest.ProtoReflect.Descriptor instead.
+func (*FailDispatchRequest) Descriptor() ([]byte, []int) {
+	return file_orca_orchestration_v1_orchestration_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *FailDispatchRequest) GetDispatchContextId() string {
+	if x != nil {
+		return x.DispatchContextId
+	}
+	return ""
+}
+
+func (x *FailDispatchRequest) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *FailDispatchRequest) GetGrpcStatusCode() uint32 {
+	if x != nil {
+		return x.GrpcStatusCode
+	}
+	return 0
+}
+
+type FailDispatchResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The dispatch context as it stands after this call — unchanged from
+	// before the call when recorded is false.
+	Context *DispatchContext `protobuf:"bytes,1,opt,name=context,proto3" json:"context,omitempty"`
+	// True when this failure was classified as real and actually counted
+	// toward failure_count/circuit_broken. False means it was classified as a
+	// transient transport failure and intentionally NOT recorded.
+	Recorded      bool `protobuf:"varint,2,opt,name=recorded,proto3" json:"recorded,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FailDispatchResponse) Reset() {
+	*x = FailDispatchResponse{}
+	mi := &file_orca_orchestration_v1_orchestration_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FailDispatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FailDispatchResponse) ProtoMessage() {}
+
+func (x *FailDispatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_orca_orchestration_v1_orchestration_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FailDispatchResponse.ProtoReflect.Descriptor instead.
+func (*FailDispatchResponse) Descriptor() ([]byte, []int) {
+	return file_orca_orchestration_v1_orchestration_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *FailDispatchResponse) GetContext() *DispatchContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *FailDispatchResponse) GetRecorded() bool {
+	if x != nil {
+		return x.Recorded
+	}
+	return false
+}
+
 var File_orca_orchestration_v1_orchestration_proto protoreflect.FileDescriptor
 
 const file_orca_orchestration_v1_orchestration_proto_rawDesc = "" +
 	"\n" +
-	")orca/orchestration/v1/orchestration.proto\x12\x15orca.orchestration.v1\"\x9b\x01\n" +
+	")orca/orchestration/v1/orchestration.proto\x12\x15orca.orchestration.v1\"\xbe\x02\n" +
 	"\x0fDispatchContext\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12,\n" +
 	"\x12coordinator_run_id\x18\x03 \x01(\tR\x10coordinatorRunId\x122\n" +
-	"\x15orchestration_task_id\x18\x04 \x01(\tR\x13orchestrationTaskId\"\x98\x01\n" +
+	"\x15orchestration_task_id\x18\x04 \x01(\tR\x13orchestrationTaskId\x12\x17\n" +
+	"\auser_id\x18\x05 \x01(\tR\x06userId\x12\x16\n" +
+	"\x06status\x18\x06 \x01(\tR\x06status\x12#\n" +
+	"\rfailure_count\x18\a \x01(\x05R\ffailureCount\x12*\n" +
+	"\x11last_heartbeat_at\x18\b \x01(\tR\x0flastHeartbeatAt\x12\x1f\n" +
+	"\vworktree_id\x18\t \x01(\tR\n" +
+	"worktreeId\"\xb9\x01\n" +
 	"\x1cCreateDispatchContextRequest\x12\x16\n" +
 	"\x06handle\x18\x01 \x01(\tR\x06handle\x12,\n" +
 	"\x12coordinator_run_id\x18\x02 \x01(\tR\x10coordinatorRunId\x122\n" +
-	"\x15orchestration_task_id\x18\x03 \x01(\tR\x13orchestrationTaskId\"a\n" +
+	"\x15orchestration_task_id\x18\x03 \x01(\tR\x13orchestrationTaskId\x12\x1f\n" +
+	"\vworktree_id\x18\x04 \x01(\tR\n" +
+	"worktreeId\"a\n" +
 	"\x1dCreateDispatchContextResponse\x12@\n" +
 	"\acontext\x18\x01 \x01(\v2&.orca.orchestration.v1.DispatchContextR\acontext\"\x9c\x01\n" +
 	"\fDecisionGate\x12\x0e\n" +
@@ -729,14 +1003,26 @@ const file_orca_orchestration_v1_orchestration_proto_rawDesc = "" +
 	" GetDispatchContextForTaskRequest\x122\n" +
 	"\x15orchestration_task_id\x18\x01 \x01(\tR\x13orchestrationTaskId\"g\n" +
 	"!GetDispatchContextForTaskResponse\x12B\n" +
-	"\bdispatch\x18\x01 \x01(\v2&.orca.orchestration.v1.DispatchContextR\bdispatch2\x89\x05\n" +
+	"\bdispatch\x18\x01 \x01(\v2&.orca.orchestration.v1.DispatchContextR\bdispatch\"*\n" +
+	"(ListActiveDispatchContextsForUserRequest\"\x80\x01\n" +
+	")ListActiveDispatchContextsForUserResponse\x12S\n" +
+	"\x11dispatch_contexts\x18\x01 \x03(\v2&.orca.orchestration.v1.DispatchContextR\x10dispatchContexts\"\x94\x01\n" +
+	"\x13FailDispatchRequest\x12.\n" +
+	"\x13dispatch_context_id\x18\x01 \x01(\tR\x11dispatchContextId\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12(\n" +
+	"\x10grpc_status_code\x18\x03 \x01(\rR\x0egrpcStatusCode\"t\n" +
+	"\x14FailDispatchResponse\x12@\n" +
+	"\acontext\x18\x01 \x01(\v2&.orca.orchestration.v1.DispatchContextR\acontext\x12\x1a\n" +
+	"\brecorded\x18\x02 \x01(\bR\brecorded2\x9b\a\n" +
 	"\x14OrchestrationService\x12\x82\x01\n" +
 	"\x15CreateDispatchContext\x123.orca.orchestration.v1.CreateDispatchContextRequest\x1a4.orca.orchestration.v1.CreateDispatchContextResponse\x12a\n" +
 	"\n" +
 	"CreateGate\x12(.orca.orchestration.v1.CreateGateRequest\x1a).orca.orchestration.v1.CreateGateResponse\x12d\n" +
 	"\vResolveGate\x12).orca.orchestration.v1.ResolveGateRequest\x1a*.orca.orchestration.v1.ResolveGateResponse\x12\x91\x01\n" +
 	"\x1aUpdateTaskStatusAndPromote\x128.orca.orchestration.v1.UpdateTaskStatusAndPromoteRequest\x1a9.orca.orchestration.v1.UpdateTaskStatusAndPromoteResponse\x12\x8e\x01\n" +
-	"\x19GetDispatchContextForTask\x127.orca.orchestration.v1.GetDispatchContextForTaskRequest\x1a8.orca.orchestration.v1.GetDispatchContextForTaskResponseBPZNgithub.com/stablyai/orca-go/proto/gen/go/orca/orchestration/v1;orchestrationv1b\x06proto3"
+	"\x19GetDispatchContextForTask\x127.orca.orchestration.v1.GetDispatchContextForTaskRequest\x1a8.orca.orchestration.v1.GetDispatchContextForTaskResponse\x12\xa6\x01\n" +
+	"!ListActiveDispatchContextsForUser\x12?.orca.orchestration.v1.ListActiveDispatchContextsForUserRequest\x1a@.orca.orchestration.v1.ListActiveDispatchContextsForUserResponse\x12g\n" +
+	"\fFailDispatch\x12*.orca.orchestration.v1.FailDispatchRequest\x1a+.orca.orchestration.v1.FailDispatchResponseBPZNgithub.com/stablyai/orca-go/proto/gen/go/orca/orchestration/v1;orchestrationv1b\x06proto3"
 
 var (
 	file_orca_orchestration_v1_orchestration_proto_rawDescOnce sync.Once
@@ -750,41 +1036,51 @@ func file_orca_orchestration_v1_orchestration_proto_rawDescGZIP() []byte {
 	return file_orca_orchestration_v1_orchestration_proto_rawDescData
 }
 
-var file_orca_orchestration_v1_orchestration_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_orca_orchestration_v1_orchestration_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_orca_orchestration_v1_orchestration_proto_goTypes = []any{
-	(*DispatchContext)(nil),                    // 0: orca.orchestration.v1.DispatchContext
-	(*CreateDispatchContextRequest)(nil),       // 1: orca.orchestration.v1.CreateDispatchContextRequest
-	(*CreateDispatchContextResponse)(nil),      // 2: orca.orchestration.v1.CreateDispatchContextResponse
-	(*DecisionGate)(nil),                       // 3: orca.orchestration.v1.DecisionGate
-	(*CreateGateRequest)(nil),                  // 4: orca.orchestration.v1.CreateGateRequest
-	(*CreateGateResponse)(nil),                 // 5: orca.orchestration.v1.CreateGateResponse
-	(*ResolveGateRequest)(nil),                 // 6: orca.orchestration.v1.ResolveGateRequest
-	(*ResolveGateResponse)(nil),                // 7: orca.orchestration.v1.ResolveGateResponse
-	(*UpdateTaskStatusAndPromoteRequest)(nil),  // 8: orca.orchestration.v1.UpdateTaskStatusAndPromoteRequest
-	(*UpdateTaskStatusAndPromoteResponse)(nil), // 9: orca.orchestration.v1.UpdateTaskStatusAndPromoteResponse
-	(*GetDispatchContextForTaskRequest)(nil),   // 10: orca.orchestration.v1.GetDispatchContextForTaskRequest
-	(*GetDispatchContextForTaskResponse)(nil),  // 11: orca.orchestration.v1.GetDispatchContextForTaskResponse
+	(*DispatchContext)(nil),                           // 0: orca.orchestration.v1.DispatchContext
+	(*CreateDispatchContextRequest)(nil),              // 1: orca.orchestration.v1.CreateDispatchContextRequest
+	(*CreateDispatchContextResponse)(nil),             // 2: orca.orchestration.v1.CreateDispatchContextResponse
+	(*DecisionGate)(nil),                              // 3: orca.orchestration.v1.DecisionGate
+	(*CreateGateRequest)(nil),                         // 4: orca.orchestration.v1.CreateGateRequest
+	(*CreateGateResponse)(nil),                        // 5: orca.orchestration.v1.CreateGateResponse
+	(*ResolveGateRequest)(nil),                        // 6: orca.orchestration.v1.ResolveGateRequest
+	(*ResolveGateResponse)(nil),                       // 7: orca.orchestration.v1.ResolveGateResponse
+	(*UpdateTaskStatusAndPromoteRequest)(nil),         // 8: orca.orchestration.v1.UpdateTaskStatusAndPromoteRequest
+	(*UpdateTaskStatusAndPromoteResponse)(nil),        // 9: orca.orchestration.v1.UpdateTaskStatusAndPromoteResponse
+	(*GetDispatchContextForTaskRequest)(nil),          // 10: orca.orchestration.v1.GetDispatchContextForTaskRequest
+	(*GetDispatchContextForTaskResponse)(nil),         // 11: orca.orchestration.v1.GetDispatchContextForTaskResponse
+	(*ListActiveDispatchContextsForUserRequest)(nil),  // 12: orca.orchestration.v1.ListActiveDispatchContextsForUserRequest
+	(*ListActiveDispatchContextsForUserResponse)(nil), // 13: orca.orchestration.v1.ListActiveDispatchContextsForUserResponse
+	(*FailDispatchRequest)(nil),                       // 14: orca.orchestration.v1.FailDispatchRequest
+	(*FailDispatchResponse)(nil),                      // 15: orca.orchestration.v1.FailDispatchResponse
 }
 var file_orca_orchestration_v1_orchestration_proto_depIdxs = []int32{
 	0,  // 0: orca.orchestration.v1.CreateDispatchContextResponse.context:type_name -> orca.orchestration.v1.DispatchContext
 	3,  // 1: orca.orchestration.v1.CreateGateResponse.gate:type_name -> orca.orchestration.v1.DecisionGate
 	3,  // 2: orca.orchestration.v1.ResolveGateResponse.gate:type_name -> orca.orchestration.v1.DecisionGate
 	0,  // 3: orca.orchestration.v1.GetDispatchContextForTaskResponse.dispatch:type_name -> orca.orchestration.v1.DispatchContext
-	1,  // 4: orca.orchestration.v1.OrchestrationService.CreateDispatchContext:input_type -> orca.orchestration.v1.CreateDispatchContextRequest
-	4,  // 5: orca.orchestration.v1.OrchestrationService.CreateGate:input_type -> orca.orchestration.v1.CreateGateRequest
-	6,  // 6: orca.orchestration.v1.OrchestrationService.ResolveGate:input_type -> orca.orchestration.v1.ResolveGateRequest
-	8,  // 7: orca.orchestration.v1.OrchestrationService.UpdateTaskStatusAndPromote:input_type -> orca.orchestration.v1.UpdateTaskStatusAndPromoteRequest
-	10, // 8: orca.orchestration.v1.OrchestrationService.GetDispatchContextForTask:input_type -> orca.orchestration.v1.GetDispatchContextForTaskRequest
-	2,  // 9: orca.orchestration.v1.OrchestrationService.CreateDispatchContext:output_type -> orca.orchestration.v1.CreateDispatchContextResponse
-	5,  // 10: orca.orchestration.v1.OrchestrationService.CreateGate:output_type -> orca.orchestration.v1.CreateGateResponse
-	7,  // 11: orca.orchestration.v1.OrchestrationService.ResolveGate:output_type -> orca.orchestration.v1.ResolveGateResponse
-	9,  // 12: orca.orchestration.v1.OrchestrationService.UpdateTaskStatusAndPromote:output_type -> orca.orchestration.v1.UpdateTaskStatusAndPromoteResponse
-	11, // 13: orca.orchestration.v1.OrchestrationService.GetDispatchContextForTask:output_type -> orca.orchestration.v1.GetDispatchContextForTaskResponse
-	9,  // [9:14] is the sub-list for method output_type
-	4,  // [4:9] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	0,  // 4: orca.orchestration.v1.ListActiveDispatchContextsForUserResponse.dispatch_contexts:type_name -> orca.orchestration.v1.DispatchContext
+	0,  // 5: orca.orchestration.v1.FailDispatchResponse.context:type_name -> orca.orchestration.v1.DispatchContext
+	1,  // 6: orca.orchestration.v1.OrchestrationService.CreateDispatchContext:input_type -> orca.orchestration.v1.CreateDispatchContextRequest
+	4,  // 7: orca.orchestration.v1.OrchestrationService.CreateGate:input_type -> orca.orchestration.v1.CreateGateRequest
+	6,  // 8: orca.orchestration.v1.OrchestrationService.ResolveGate:input_type -> orca.orchestration.v1.ResolveGateRequest
+	8,  // 9: orca.orchestration.v1.OrchestrationService.UpdateTaskStatusAndPromote:input_type -> orca.orchestration.v1.UpdateTaskStatusAndPromoteRequest
+	10, // 10: orca.orchestration.v1.OrchestrationService.GetDispatchContextForTask:input_type -> orca.orchestration.v1.GetDispatchContextForTaskRequest
+	12, // 11: orca.orchestration.v1.OrchestrationService.ListActiveDispatchContextsForUser:input_type -> orca.orchestration.v1.ListActiveDispatchContextsForUserRequest
+	14, // 12: orca.orchestration.v1.OrchestrationService.FailDispatch:input_type -> orca.orchestration.v1.FailDispatchRequest
+	2,  // 13: orca.orchestration.v1.OrchestrationService.CreateDispatchContext:output_type -> orca.orchestration.v1.CreateDispatchContextResponse
+	5,  // 14: orca.orchestration.v1.OrchestrationService.CreateGate:output_type -> orca.orchestration.v1.CreateGateResponse
+	7,  // 15: orca.orchestration.v1.OrchestrationService.ResolveGate:output_type -> orca.orchestration.v1.ResolveGateResponse
+	9,  // 16: orca.orchestration.v1.OrchestrationService.UpdateTaskStatusAndPromote:output_type -> orca.orchestration.v1.UpdateTaskStatusAndPromoteResponse
+	11, // 17: orca.orchestration.v1.OrchestrationService.GetDispatchContextForTask:output_type -> orca.orchestration.v1.GetDispatchContextForTaskResponse
+	13, // 18: orca.orchestration.v1.OrchestrationService.ListActiveDispatchContextsForUser:output_type -> orca.orchestration.v1.ListActiveDispatchContextsForUserResponse
+	15, // 19: orca.orchestration.v1.OrchestrationService.FailDispatch:output_type -> orca.orchestration.v1.FailDispatchResponse
+	13, // [13:20] is the sub-list for method output_type
+	6,  // [6:13] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_orca_orchestration_v1_orchestration_proto_init() }
@@ -798,7 +1094,7 @@ func file_orca_orchestration_v1_orchestration_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_orca_orchestration_v1_orchestration_proto_rawDesc), len(file_orca_orchestration_v1_orchestration_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

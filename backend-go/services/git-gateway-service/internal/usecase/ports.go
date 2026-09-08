@@ -34,6 +34,14 @@ type ResolvedConnection struct {
 	Connected    bool
 	ConnectionID string
 	RepoPath     string
+	// HiddenTargetID (TASK-BE-EVM-015) mirrors domain.RepoInfo.HiddenTargetID
+	// for the worktree-keyed resolution path (dispatchExecutor below) — see
+	// that field's doc comment. GAP: infrafleetv1.ResolveConnectionResponse
+	// has no equivalent proto field today, so grpcclient.ConnectionResolver
+	// never populates this (always ""); adding one needs a .proto change
+	// out of this task's scope (infrafleet.proto already has unrelated
+	// in-flight changes in this working tree — not touched here).
+	HiddenTargetID string
 }
 
 // ConnectionResolver resolves which host owns a worktree, by calling
@@ -304,6 +312,7 @@ type FilesystemExecutor interface {
 	WriteFile(ctx context.Context, repoPath, relPath string, content []byte, createParents bool) (bytesWritten int64, err error)
 	WriteFileChunk(ctx context.Context, repoPath, relPath string, offsetBytes int64, content []byte, isFinal bool) (bytesWritten int64, err error)
 	CreateDir(ctx context.Context, repoPath, relPath string, recursive, noClobber bool) error
+	CreateFile(ctx context.Context, repoPath, relPath string) error
 	Delete(ctx context.Context, repoPath, relPath string, recursive bool) error
 	Stat(ctx context.Context, repoPath, relPath string) (domain.FileStat, error)
 	Search(ctx context.Context, repoPath string, opts domain.SearchOptions) ([]domain.SearchMatch, error)
@@ -416,6 +425,36 @@ func DevServerIDFromContext(ctx context.Context) (string, bool) {
 	return v, v != ""
 }
 
+// hiddenTargetIDCtxKey/WithHiddenTargetID/HiddenTargetIDFromContext thread
+// domain.RepoInfo.HiddenTargetID / ResolvedConnection.HiddenTargetID
+// (TASK-BE-EVM-015, BE-SOL-EVM-004 §4's decision 3) from dispatch time
+// through to RelayExecutor.relay (grpcclient package), which needs it to
+// pick a "ViaHiddenTarget" agent method name and include hiddenTargetId in
+// the RPC params — mirrors WithDevServerID/DevServerIDFromContext's exact
+// pattern just above (same class of problem: a routing attribute
+// GitExecutor's ~20 methods don't carry in their own signatures, threaded
+// through ctx at the ONE shared dispatch chokepoint instead of widening
+// every method).
+type hiddenTargetIDCtxKey struct{}
+
+func WithHiddenTargetID(ctx context.Context, hiddenTargetID string) context.Context {
+	return context.WithValue(ctx, hiddenTargetIDCtxKey{}, hiddenTargetID)
+}
+
+func HiddenTargetIDFromContext(ctx context.Context) (string, bool) {
+	v, _ := ctx.Value(hiddenTargetIDCtxKey{}).(string)
+	return v, v != ""
+}
+
+// dispatchExecutor deliberately does NOT thread ResolvedConnection.HiddenTargetID
+// into ctx the way dispatchExecutorForRepo does below — its 3-value return
+// (executor, repoPath, err) is depended on by all ~33 worktree-keyed
+// usecases in this package, and ResolvedConnection.HiddenTargetID's own doc
+// comment already notes the real gap (infrafleetv1.ResolveConnectionResponse
+// has no such proto field yet, so conn.HiddenTargetID is always "" from
+// this path today regardless). Widening this function's signature for a
+// value that can never be non-empty yet would only churn 33 call sites for
+// no behavioral change — revisit once the proto gains the field.
 func dispatchExecutor(ctx context.Context, resolver ConnectionResolver, local, relay GitExecutor, worktreeID string) (GitExecutor, string, error) {
 	conn, err := resolver.ResolveConnection(ctx, worktreeID)
 	if err != nil {
@@ -464,7 +503,37 @@ func dispatchExecutorForRepo(ctx context.Context, reachability DevServerReachabi
 		return ctx, nil, "", err
 	}
 	if reachable {
-		return WithDevServerID(ctx, repo.DevServerID), relay, repo.URL, nil
+		relayCtx := WithDevServerID(ctx, repo.DevServerID)
+		if repo.HiddenTargetID != "" {
+			relayCtx = WithHiddenTargetID(relayCtx, repo.HiddenTargetID)
+		}
+		return relayCtx, relay, repo.URL, nil
+	}
+	return ctx, local, repo.URL, nil
+}
+
+// dispatchFilesystemExecutorForRepo is dispatchExecutorForRepo's
+// FilesystemExecutor counterpart. Needed because ReadFile lives on
+// FilesystemExecutor (implemented by localfs.Executor and RelayExecutor),
+// not GitExecutor — localgit.Executor (this service's GitExecutor "local")
+// has no ReadFile method. Same repo-scoped host dispatch logic as
+// dispatchExecutorForRepo above, parameterized on FilesystemExecutor
+// instead, for usecases like ReadEphemeralVmRecipes that need to read a
+// named file off a repo-scoped (not worktree-scoped) target.
+func dispatchFilesystemExecutorForRepo(ctx context.Context, reachability DevServerReachability, local, relay FilesystemExecutor, repo domain.RepoInfo) (context.Context, FilesystemExecutor, string, error) {
+	if repo.DevServerID == "" {
+		return ctx, local, repo.URL, nil
+	}
+	reachable, err := reachability.IsReachable(ctx, repo.DevServerID)
+	if err != nil {
+		return ctx, nil, "", err
+	}
+	if reachable {
+		relayCtx := WithDevServerID(ctx, repo.DevServerID)
+		if repo.HiddenTargetID != "" {
+			relayCtx = WithHiddenTargetID(relayCtx, repo.HiddenTargetID)
+		}
+		return relayCtx, relay, repo.URL, nil
 	}
 	return ctx, local, repo.URL, nil
 }

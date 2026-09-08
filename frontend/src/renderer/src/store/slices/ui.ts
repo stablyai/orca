@@ -120,6 +120,8 @@ import { updaterDismissNudge } from '@/runtime/runtime-updater-client'
 import { deleteRuntimePetFile } from '@/runtime/runtime-pet-client'
 
 import { uiRecordFeatureInteraction, uiSet } from '@/runtime/runtime-ui-client'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { runtimeClientState } from '@/runtime/runtime-client-state-client'
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
   behavior: 'auto' | 'smooth'
@@ -987,6 +989,11 @@ export type UISlice = {
   editorFontZoomLevel: number
   setEditorFontZoomLevel: (level: number) => void
   hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
+  /** FE-TASK-STORAGE-003: the subset of PersistedUIState worth restoring on a
+   *  different machine via backend-go (CR-STORAGE-001) — deliberately NOT
+   *  the full ~80-field PersistedUIState. See toPersistedUIState's own doc
+   *  comment for exactly what is excluded and why. */
+  toPersistedUIState: () => Partial<PersistedUIState>
   updateStatus: UpdateStatus
   setUpdateStatus: (status: UpdateStatus) => void
   // Why: cached changelog from the last 'available' status so the card still has
@@ -1017,6 +1024,99 @@ export type UISlice = {
   setBrowserDefaultZoomLevel: (level: number) => void
   browserKagiSessionLink: string | null
   setBrowserKagiSessionLink: (link: string | null) => void
+}
+
+// FE-TASK-STORAGE-003 (CR-STORAGE-001): the RPC `ui.get`/`ui.set` pipeline
+// (runtime-ui-client.ts) already mirrors the FULL PersistedUIState to
+// wherever this session's Electron main process persists it — that's still
+// one machine's local JSON file, not backend-go, so it doesn't survive
+// switching machines. This selector picks the subset worth ALSO writing to
+// backend-go ('uiLocal' via runtimeClientState) for that purpose. It is
+// deliberately not all ~80 PersistedUIState fields:
+//
+// Excluded, and why:
+// - Window/display geometry, meaningless on a different machine/monitor:
+//   windowBounds, windowMaximized, sidebarWidth, rightSidebarWidth,
+//   markdownTocPanelWidth, uiZoomLevel, editorFontZoomLevel,
+//   workspaceBoardOpacity, workspaceBoardColumnWidth.
+// - Keyed by this machine's local worktree/pane ids, meaningless elsewhere:
+//   lastActiveRepoId, lastActiveWorktreeId, showDotfilesByWorktree,
+//   acknowledgedAgentsByPaneKey, taskResumeState, workspaceCleanup,
+//   scrollToDiffCommentId.
+// - One-shot migration bookkeeping (all `_`-prefixed flags, plus
+//   setupGuideBrowserMilestoneMigrated/LegacyComplete, _sortBySmartMigrated,
+//   _inlineAgentsDefaultedFor*, _expandedWorktreeCardPropertiesDefaulted,
+//   _workspaceStatuses*Migrated/Repaired): tied to a specific past app
+//   version's migration, not a durable user preference.
+// - Version/install-scoped update & nag state: dismissedUpdateVersion,
+//   lastUpdateCheckAt, pendingUpdateNudgeId, dismissedUpdateNudgeId,
+//   notificationPermissionRequested, updateReassuranceSeen,
+//   trayMinimizeNoticeShown, usagePercentageDisplayChangeNoticeDismissed,
+//   projectOrderManualDefaultNoticeDismissed, usageEmptyStateDismissed,
+//   starNagBaselineAgents, starNagAppVersion, starNagNextThreshold,
+//   starNagCompleted, starNagDeferredUntil, starNagAgentValueMomentAppVersion.
+// - Session-scoped/legacy: browserKagiSessionLink, sidekick* (superseded by
+//   pet*), showActiveOnly/showSleepingWorkspaces legacy aliases.
+//
+// Included fields are genuine cross-machine user preferences (view/sort/
+// filter choices, dismissed one-time teaching hints, pet + status-bar +
+// keybinding-trust preferences). `collapsedGroups` is stored as a Set at
+// runtime but PersistedUIState (and the wire format) uses an array.
+function toPersistedUIState(state: AppState): Partial<PersistedUIState> {
+  return {
+    activeView: state.activeView,
+    rightSidebarOpen: state.rightSidebarOpen,
+    rightSidebarTab: state.rightSidebarTab,
+    rightSidebarExplorerView: state.rightSidebarExplorerView,
+    groupBy: state.groupBy,
+    sortBy: state.sortBy,
+    projectOrderBy: state.projectOrderBy,
+    hideSleepingWorkspaces: !state.showSleepingWorkspaces,
+    workspaceHostScope: state.workspaceHostScope,
+    visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,
+    workspaceHostOrder: state.workspaceHostOrder,
+    hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
+    hideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
+    filterRepoIds: state.filterRepoIds,
+    collapsedGroups: [...state.collapsedGroups],
+    worktreeCardProperties: state.worktreeCardProperties,
+    agentActivityDisplayMode: state.agentActivityDisplayMode,
+    workspaceStatuses: state.workspaceStatuses,
+    syncTaskStatusFromWorkspaceBoard: state.syncTaskStatusFromWorkspaceBoard,
+    statusBarItems: state.statusBarItems,
+    statusBarVisible: state.statusBarVisible,
+    usagePercentageDisplay: state.usagePercentageDisplay,
+    setupGuideSidebarDismissed: state.setupGuideSidebarDismissed,
+    browserImportHintHidden: state.browserImportHintHidden,
+    mobileEmulatorTabIntroDismissed: state.mobileEmulatorTabIntroDismissed,
+    mobileEmulatorAgentSetupDismissed: state.mobileEmulatorAgentSetupDismissed,
+    petVisible: state.petVisible,
+    petId: state.petId,
+    customPets: state.customPets,
+    petSize: state.petSize,
+    featureTipsSeenIds: state.featureTipsSeenIds,
+    featureInteractions: state.featureInteractions,
+    contextualToursSeenIds: state.contextualToursSeenIds,
+    contextualToursAutoEligible: state.contextualToursAutoEligible ?? undefined,
+    trustedOrcaHooks: state.trustedOrcaHooks,
+    setupScriptPromptDismissedRepoIds: state.setupScriptPromptDismissedRepoIds,
+    browserDefaultUrl: state.browserDefaultUrl,
+    browserDefaultSearchEngine: state.browserDefaultSearchEngine,
+    browserDefaultZoomLevel: state.browserDefaultZoomLevel
+  }
+}
+
+// Why: fire-and-forget, best-effort — a failed/slow backend-go write must
+// never delay or fail the caller's own uiSet(...) persistence. Errors surface
+// through persistenceStatus (FE-TASK-STORAGE-004/005), not here.
+function syncPersistedUIStateToBackendGo(get: () => AppState): void {
+  const target = getActiveRuntimeTarget(get().settings)
+  if (target.kind !== 'environment') {
+    return
+  }
+  void runtimeClientState.set('uiLocal', toPersistedUIState(get())).catch((error) => {
+    console.error('Failed to sync UI state to backend-go:', error)
+  })
 }
 
 export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get) => ({
@@ -2090,7 +2190,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
   collapsedGroups: new Set<string>(),
-  toggleCollapsedGroup: (key) =>
+  toggleCollapsedGroup: (key) => {
     set((s) => {
       const next = new Set(s.collapsedGroups)
       if (next.has(key)) {
@@ -2100,7 +2200,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       uiSet({ collapsedGroups: [...next] }).catch(console.error)
       return { collapsedGroups: next }
-    }),
+    })
+    // FE-TASK-STORAGE-003: parallel, non-blocking mirror to backend-go —
+    // does not replace the uiSet(...) call above (see toPersistedUIState's
+    // doc comment for why these are two separate destinations).
+    syncPersistedUIStateToBackendGo(get)
+  },
 
   worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
   _worktreeCardModeDefaulted: true,
@@ -2353,6 +2458,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setUIZoomLevel: (level) => set({ uiZoomLevel: level }),
   editorFontZoomLevel: 0,
   setEditorFontZoomLevel: (level) => set({ editorFontZoomLevel: level }),
+
+  toPersistedUIState: () => toPersistedUIState(get()),
 
   hydratePersistedUI: (ui, source = 'sync') =>
     set((s) => {

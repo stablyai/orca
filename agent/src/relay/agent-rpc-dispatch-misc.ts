@@ -1,10 +1,12 @@
 // src/relay/agent-rpc-dispatch-misc.ts
-// tools/list, tools/call, preflight.*, host.capabilities, cli.*, shell.eval,
-// shell.exec, notification.send, and accounts.* RPC methods — split out of
-// agent-rpc-dispatch.ts's giant switch to keep each file under the oxlint
-// max-lines budget.
+// tools/list, tools/call, preflight.*, host.capabilities, shell.eval,
+// shell.exec, notification.send, and connection.teardown RPC methods —
+// split out of agent-rpc-dispatch.ts's giant switch to keep each file under
+// the oxlint max-lines budget. cli.*/accounts.*/vm.* live in their own
+// dispatch-cli.ts/-accounts.ts/-vm.ts siblings for the same reason.
 
 import type WebSocket from 'ws'
+import type { WireState } from 'orca-dev-agent-transport'
 import type { ToolDefinition, ToolResult } from './agent-tool-registry'
 import type { AgentConfig } from './agent-config'
 import type { AgentLogger } from './agent-logger'
@@ -17,7 +19,13 @@ export async function dispatchMiscRpc(
   tools: ToolDefinition[],
   config: AgentConfig,
   log: AgentLogger,
-  ws: WebSocket
+  ws: WebSocket,
+  // Why unused: vm.provision (the one case here that needed WireState for
+  // its stream.chunk/stream.end frames) moved to agent-rpc-dispatch-vm.ts
+  // (max-lines split). Kept in the signature for shape-consistency with
+  // every other dispatchXxxRpc function route() calls positionally
+  // (dispatchFsRpc/dispatchBrowserRpc etc. all take the same param set).
+  _state: WireState
 ): Promise<JsonRpcResponse | null> {
   switch (rpc.method) {
     // ── MCP: tools/list ──────────────────────────────────────────────────────
@@ -155,78 +163,10 @@ export async function dispatchMiscRpc(
       }
     }
 
-    // ─── cli.* (Orca ADR — server-mode CLI install on Dev Server) ───────────
-    // Backend relays cli.* to the Dev Server Agent instead of running it on
-    // the Orca backend container — see backend/src/main/runtime/rpc/methods/cli.ts
-    // and agent-cli-handler.ts for the full rationale.
-    case 'cli.getInstallStatus': {
-      try {
-        const { handleCliGetInstallStatus } = await import('./agent-cli-handler')
-        return (await handleCliGetInstallStatus(rpc.id)) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(
-          rpc.id,
-          AgentErrorCode.ServerError,
-          `cli.getInstallStatus unavailable: ${msg}`
-        )
-      }
-    }
-
-    case 'cli.install': {
-      try {
-        const { handleCliInstall } = await import('./agent-cli-handler')
-        return (await handleCliInstall(rpc.id)) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(rpc.id, AgentErrorCode.ServerError, `cli.install unavailable: ${msg}`)
-      }
-    }
-
-    case 'cli.remove': {
-      try {
-        const { handleCliRemove } = await import('./agent-cli-handler')
-        return (await handleCliRemove(rpc.id)) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(rpc.id, AgentErrorCode.ServerError, `cli.remove unavailable: ${msg}`)
-      }
-    }
-
-    case 'cli.getWslInstallStatus': {
-      try {
-        const { handleCliGetWslInstallStatus } = await import('./agent-cli-handler')
-        return (await handleCliGetWslInstallStatus(rpc.id, rpc.params ?? {})) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(
-          rpc.id,
-          AgentErrorCode.ServerError,
-          `cli.getWslInstallStatus unavailable: ${msg}`
-        )
-      }
-    }
-
-    case 'cli.installWsl': {
-      try {
-        const { handleCliInstallWsl } = await import('./agent-cli-handler')
-        return (await handleCliInstallWsl(rpc.id, rpc.params ?? {})) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(rpc.id, AgentErrorCode.ServerError, `cli.installWsl unavailable: ${msg}`)
-      }
-    }
-
-    case 'cli.removeWsl': {
-      try {
-        const { handleCliRemoveWsl } = await import('./agent-cli-handler')
-        return (await handleCliRemoveWsl(rpc.id, rpc.params ?? {})) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(rpc.id, AgentErrorCode.ServerError, `cli.removeWsl unavailable: ${msg}`)
-      }
-    }
-    // ─── end cli.* ───────────────────────────────────────────────────────────
+    // cli.* moved to agent-rpc-dispatch-cli.ts (max-lines split).
+    // vm.exec / vm.provision / vm.cancelProvision moved to
+    // agent-rpc-dispatch-vm.ts (max-lines split). See route() in
+    // agent-rpc-dispatch.ts, which tries both dispatchers before this file.
 
     // Runs a short shell command and returns stdout/stderr.
     // Used by devServer.browseDir on the Orca server to resolve '~' on the remote.
@@ -274,83 +214,31 @@ export async function dispatchMiscRpc(
       }
     }
 
-    // ── accounts.selectClaude / accounts.selectCodex / accounts.removeClaude /
-    //    accounts.removeCodex ──────────────────────────────────────────────
-    // TASK-023: backs infra-fleet-service's Relay RPC and api-gateway's
-    // wscompat channels_accounts.go, which forward {accountId} params
-    // straight through to these methods (see accounts-handler.ts's module
-    // doc comment for the single-pseudo-account design this implements).
-    case 'accounts.selectClaude': {
-      try {
-        const { handleAccountsSelectClaude } = await import('./accounts-handler')
-        return (await handleAccountsSelectClaude(rpc.id, rpc.params ?? {})) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(
-          rpc.id,
-          AgentErrorCode.ServerError,
-          `accounts.selectClaude unavailable: ${msg}`
-        )
-      }
-    }
+    // accounts.* moved to agent-rpc-dispatch-accounts.ts (max-lines split).
 
-    case 'accounts.selectCodex': {
+    // ── connection.teardown ──────────────────────────────────────────────────
+    // CR-STORAGE-008(a) / TASK-AG-STORAGE-007: infra-fleet-service's
+    // TeardownConnection usecase (confirmed-logout path,
+    // backend-go/services/infra-fleet-service/internal/usecase/teardown_connection.go)
+    // calls this over the same live agent.Exec transport every other
+    // request/response method uses — no new wire protocol. Unlike an
+    // ordinary WS disconnect (which now arms a grace period — see
+    // agent-session.ts's stop(), CR-STORAGE-008(b)), a confirmed teardown
+    // kills every PTY immediately: both agent.spawn PTYs (cleanupAllPtys,
+    // already the immediate-kill path — see its own doc comment on why it
+    // no longer runs on every disconnect) and terminal (pty.create) PTYs,
+    // via the detached daemon's daemon.sessionTeardown (bypasses its own
+    // grace period too — see pty-daemon-server.ts).
+    case 'connection.teardown': {
       try {
-        const { handleAccountsSelectCodex } = await import('./accounts-handler')
-        return (await handleAccountsSelectCodex(rpc.id, rpc.params ?? {})) as JsonRpcResponse
+        const { cleanupAllPtys } = await import('./agent-spawner')
+        const { notifyDaemonSessionTeardown } = await import('./pty-daemon-client')
+        cleanupAllPtys(log)
+        await notifyDaemonSessionTeardown(log)
+        return { jsonrpc: '2.0', id: rpc.id, result: { ok: true } }
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
-        return makeError(
-          rpc.id,
-          AgentErrorCode.ServerError,
-          `accounts.selectCodex unavailable: ${msg}`
-        )
-      }
-    }
-
-    case 'accounts.removeClaude': {
-      try {
-        const { handleAccountsRemoveClaude } = await import('./accounts-handler')
-        return (await handleAccountsRemoveClaude(rpc.id, rpc.params ?? {})) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(
-          rpc.id,
-          AgentErrorCode.ServerError,
-          `accounts.removeClaude unavailable: ${msg}`
-        )
-      }
-    }
-
-    case 'accounts.removeCodex': {
-      try {
-        const { handleAccountsRemoveCodex } = await import('./accounts-handler')
-        return (await handleAccountsRemoveCodex(rpc.id, rpc.params ?? {})) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(
-          rpc.id,
-          AgentErrorCode.ServerError,
-          `accounts.removeCodex unavailable: ${msg}`
-        )
-      }
-    }
-
-    // ── accounts.getSnapshot ─────────────────────────────────────────────────
-    // Backs api-gateway's accounts.subscribe poll loop (BUG-005/SOL-005's
-    // session-client push bridge) — read-only, no accountId param. See
-    // accounts-handler.ts's getAccountsSnapshot doc comment.
-    case 'accounts.getSnapshot': {
-      try {
-        const { handleAccountsGetSnapshot } = await import('./accounts-handler')
-        return (await handleAccountsGetSnapshot(rpc.id)) as JsonRpcResponse
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err)
-        return makeError(
-          rpc.id,
-          AgentErrorCode.ServerError,
-          `accounts.getSnapshot unavailable: ${msg}`
-        )
+        return makeError(rpc.id, AgentErrorCode.ServerError, `connection.teardown failed: ${msg}`)
       }
     }
 

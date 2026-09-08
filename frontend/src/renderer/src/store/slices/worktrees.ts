@@ -30,7 +30,6 @@ import { findRepoForHost } from './repo-host-identity'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import { logBugFePty001 } from '@/lib/bug-fe-pty-001-diagnostic-log'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -4673,23 +4672,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         worktreeId != null &&
         tabs.length > 0 &&
         tabs.every((tab) => !tab.pendingActivationSpawn && !tabHasLivePty(s.ptyIdsByTabId, tab.id))
-      // TEMP DIAG BUG-FE-PTY-001: confirm whether setActiveWorktree re-runs for
-      // the same worktree while an earlier bump's fresh spawn is still in
-      // flight (pendingActivationSpawn true), and whether the pendingActivationSpawn
-      // exclusion above actually prevents a double bump on live repro.
-      if (worktreeId != null && tabs.length > 0) {
-        logBugFePty001(
-          `setActiveWorktree allDead-check worktreeId=${worktreeId} allDead=${allDead} tabs=${JSON.stringify(
-            tabs.map((tab) => ({
-              id: tab.id,
-              generation: tab.generation ?? 0,
-              ptyId: tab.ptyId,
-              pendingActivationSpawn: tab.pendingActivationSpawn ?? false,
-              hasLivePty: tabHasLivePty(s.ptyIdsByTabId, tab.id)
-            }))
-          )}`
-        )
-      }
       const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
       const shouldTagTabs = worktreeId != null && tabs.length > 0 && isFirstActivation
       // Why: when every PTY for the worktree's tabs is dead, the existing

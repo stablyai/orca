@@ -15,7 +15,6 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
-import { logBugFePty001 } from '../lib/bug-fe-pty-001-diagnostic-log'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
@@ -635,16 +634,6 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
   // the host owns the real pane graph. Close the host terminal first so later
   // session snapshots cannot resurrect the locally removed pane.
   const span = Tracers.uiTerminalDestroyFlow.start({ ptyId, route: 'single-tab-close' })
-  // TEMP DIAG BUG-FE-PTY-001: this is the ONLY call site of
-  // closeWebRuntimeTerminal (from TerminalPane.tsx's executeClosePane, wired
-  // to Cmd+W and the pane-header close button — both require explicit user
-  // interaction). Live repro shows terminal.close firing on a fresh
-  // createInitialPane mirror pane within ~5s of mount, with no matching
-  // "transport CREATED"/"DESTROY" log — capture the real call stack to find
-  // what's invoking this without a user click.
-  logBugFePty001(
-    `closeWebRuntimeTerminal called ptyId=${ptyId}\n${new Error('closeWebRuntimeTerminal call site').stack}`
-  )
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,

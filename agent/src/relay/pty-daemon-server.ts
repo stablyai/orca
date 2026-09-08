@@ -59,7 +59,11 @@ const PROBE_TIMEOUT_MS = 1_500
 function toDaemonOutcome(handlerResult: object): { result?: unknown; error?: { message: string } } {
   const shaped = handlerResult as { result?: unknown; error?: { message?: unknown } }
   if (shaped.error) {
-    return { error: { message: typeof shaped.error.message === 'string' ? shaped.error.message : 'Unknown error' } }
+    return {
+      error: {
+        message: typeof shaped.error.message === 'string' ? shaped.error.message : 'Unknown error'
+      }
+    }
   }
   return { result: shaped.result }
 }
@@ -91,6 +95,15 @@ async function dispatchDaemonRequest(
       return { result: { ok: true, ptys: activePtyCount() } }
     case 'daemon.sessionClosed':
       scheduleGracePeriodCleanup(log)
+      return { result: { ok: true } }
+    case 'daemon.sessionTeardown':
+      // CR-STORAGE-008(a)/TASK-AG-STORAGE-007: confirmed logout — unlike
+      // daemon.sessionClosed (arms a grace period), this kills every
+      // terminal PTY immediately, bypassing any grace timer already
+      // counting down. cleanupAgentPtys() already clears graceTimer for
+      // each entry before killing it (see pty-agent-bridge.ts), so no
+      // separate "cancel timers first" step is needed here.
+      cleanupAgentPtys(log)
       return { result: { ok: true } }
     default:
       return { error: { message: `Unknown daemon method: ${method}` } }
@@ -138,9 +151,13 @@ export async function runPtyDaemon(socketPath: string, log: AgentLogger): Promis
   }
 
   const armIdleShutdownIfEmpty = (): void => {
-    if (idleTimer) {clearTimeout(idleTimer)}
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+    }
     idleTimer = null
-    if (clients.size > 0 || activePtyCount() > 0) {return}
+    if (clients.size > 0 || activePtyCount() > 0) {
+      return
+    }
     idleTimer = setTimeout(() => {
       if (clients.size === 0 && activePtyCount() === 0) {
         log.info('pty-daemon: idle with no PTYs and no clients — shutting down')
@@ -156,7 +173,9 @@ export async function runPtyDaemon(socketPath: string, log: AgentLogger): Promis
       idleTimer = null
     }
     const decoder = new DaemonMessageDecoder((msg: DaemonMessage) => {
-      if (!isDaemonRequest(msg)) {return}
+      if (!isDaemonRequest(msg)) {
+        return
+      }
       void dispatchDaemonRequest(msg.method, msg.params ?? {}, log, broadcast)
         .then((outcome) => {
           const response: DaemonResponse = { id: msg.id, ...outcome }

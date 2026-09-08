@@ -242,6 +242,83 @@ func TestConnect_FailsWhenIssuerErrors(t *testing.T) {
 	}
 }
 
+// TestWrapClient_BuildsAWorkingConnection is TASK-BE-EVM-013's regression
+// test for sshconn.WrapClient — adapter/ephemeralsshconn dials with its own
+// (non-Vault-cert) auth and hands the resulting *ssh.Client to WrapClient,
+// which must produce a *Connection just as usable as one built by
+// Connector.Connect itself (RunCommand/SFTPClient/NewSession all work).
+func TestWrapClient_BuildsAWorkingConnection(t *testing.T) {
+	_, hostPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating host keypair: %v", err)
+	}
+	hostSigner, err := ssh.NewSignerFromSigner(hostPriv)
+	if err != nil {
+		t.Fatalf("wrapping host signer: %v", err)
+	}
+	_, clientPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating client keypair: %v", err)
+	}
+	clientSigner, err := ssh.NewSignerFromSigner(clientPriv)
+	if err != nil {
+		t.Fatalf("wrapping client signer: %v", err)
+	}
+
+	cfg := &ssh.ServerConfig{PublicKeyCallback: func(ssh.ConnMetadata, ssh.PublicKey) (*ssh.Permissions, error) {
+		return nil, nil // accept any key — this test only exercises WrapClient, not auth policy
+	}}
+	cfg.AddHostKey(hostSigner)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listening: %v", err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		rawConn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		sshConn, chans, reqs, err := ssh.NewServerConn(rawConn, cfg)
+		if err != nil {
+			return
+		}
+		defer func() { _ = sshConn.Close() }()
+		go ssh.DiscardRequests(reqs)
+		for newChannel := range chans {
+			if newChannel.ChannelType() != "session" {
+				_ = newChannel.Reject(ssh.UnknownChannelType, "only session channels supported")
+				continue
+			}
+			channel, requests, err := newChannel.Accept()
+			if err != nil {
+				continue
+			}
+			go handleSessionRequests(channel, requests)
+		}
+	}()
+
+	client, err := ssh.Dial("tcp", listener.Addr().String(), &ssh.ClientConfig{
+		User: "deploy", Auth: []ssh.AuthMethod{ssh.PublicKeys(clientSigner)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // test only
+		Timeout:         5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("dialing fake server directly: %v", err)
+	}
+
+	conn := sshconn.WrapClient(client)
+	defer func() { _ = conn.Close() }()
+
+	stdout, _, err := conn.RunCommand(context.Background(), "echo hi")
+	if err != nil {
+		t.Fatalf("RunCommand over a WrapClient-built Connection: %v", err)
+	}
+	if !strings.Contains(stdout, "echo hi") {
+		t.Errorf("stdout = %q, want it to contain the executed command", stdout)
+	}
+}
+
 func TestConnect_FailsWhenServerRejectsCert(t *testing.T) {
 	realCA := newFakeCA(t)
 	wrongCA := newFakeCA(t)

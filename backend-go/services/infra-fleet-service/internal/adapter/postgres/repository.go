@@ -60,15 +60,15 @@ func (r *Repository) Register(ctx context.Context, ds domain.DevServer) (domain.
 // specs/backend-go/services/infra-fleet-service.md §9.
 func (r *Repository) Get(ctx context.Context, tenantID, id string) (domain.DevServer, error) {
 	row := r.pool.QueryRow(ctx, `
-		SELECT id, tenant_id, host, connection_mode, ssh_target_id, approval_status, group_id, kind
+		SELECT id, tenant_id, host, connection_mode, ssh_target_id, approval_status, group_id, kind, status
 		FROM infra.dev_servers
 		WHERE tenant_id = $1 AND id = $2
 	`, tenantID, id)
 
 	var ds domain.DevServer
-	var mode, status, kind string
+	var mode, status, kind, healthStatus string
 	var sshTargetID, groupID *string
-	err := row.Scan(&ds.ID, &ds.TenantID, &ds.Host, &mode, &sshTargetID, &status, &groupID, &kind)
+	err := row.Scan(&ds.ID, &ds.TenantID, &ds.Host, &mode, &sshTargetID, &status, &groupID, &kind, &healthStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.DevServer{}, fmt.Errorf("postgres: dev server %q not found for tenant: %w", id, err)
 	}
@@ -78,6 +78,7 @@ func (r *Repository) Get(ctx context.Context, tenantID, id string) (domain.DevSe
 	ds.Mode = domain.ConnectionMode(mode)
 	ds.Status = domain.DevServerStatus(status)
 	ds.Kind = domain.AgentKind(kind)
+	ds.HealthStatus = domain.DevServerHealthStatus(healthStatus)
 	if sshTargetID != nil {
 		ds.SSHTargetID = *sshTargetID
 	}
@@ -90,7 +91,7 @@ func (r *Repository) Get(ctx context.Context, tenantID, id string) (domain.DevSe
 // List returns every dev server registered for tenantID.
 func (r *Repository) List(ctx context.Context, tenantID string) ([]domain.DevServer, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, tenant_id, host, connection_mode, ssh_target_id, approval_status, group_id, kind
+		SELECT id, tenant_id, host, connection_mode, ssh_target_id, approval_status, group_id, kind, status
 		FROM infra.dev_servers
 		WHERE tenant_id = $1
 		ORDER BY created_at DESC
@@ -103,14 +104,15 @@ func (r *Repository) List(ctx context.Context, tenantID string) ([]domain.DevSer
 	var out []domain.DevServer
 	for rows.Next() {
 		var ds domain.DevServer
-		var mode, status, kind string
+		var mode, status, kind, healthStatus string
 		var sshTargetID, groupID *string
-		if err := rows.Scan(&ds.ID, &ds.TenantID, &ds.Host, &mode, &sshTargetID, &status, &groupID, &kind); err != nil {
+		if err := rows.Scan(&ds.ID, &ds.TenantID, &ds.Host, &mode, &sshTargetID, &status, &groupID, &kind, &healthStatus); err != nil {
 			return nil, fmt.Errorf("postgres: scan dev server row: %w", err)
 		}
 		ds.Mode = domain.ConnectionMode(mode)
 		ds.Status = domain.DevServerStatus(status)
 		ds.Kind = domain.AgentKind(kind)
+		ds.HealthStatus = domain.DevServerHealthStatus(healthStatus)
 		if sshTargetID != nil {
 			ds.SSHTargetID = *sshTargetID
 		}
@@ -132,7 +134,7 @@ func (r *Repository) UpdateApprovalStatus(ctx context.Context, tenantID, devServ
 		UPDATE infra.dev_servers
 		SET approval_status = $3
 		WHERE tenant_id = $1 AND id = $2
-		RETURNING id, tenant_id, host, connection_mode, ssh_target_id, approval_status, group_id, kind
+		RETURNING id, tenant_id, host, connection_mode, ssh_target_id, approval_status, group_id, kind, status
 	`, tenantID, devServerID, string(status))
 	return scanDevServerRow(row)
 }
@@ -146,18 +148,18 @@ func (r *Repository) AssignGroup(ctx context.Context, tenantID, devServerID, gro
 		UPDATE infra.dev_servers
 		SET group_id = NULLIF($3, '')::uuid
 		WHERE tenant_id = $1 AND id = $2
-		RETURNING id, tenant_id, host, connection_mode, ssh_target_id, approval_status, group_id, kind
+		RETURNING id, tenant_id, host, connection_mode, ssh_target_id, approval_status, group_id, kind, status
 	`, tenantID, devServerID, groupID)
 	return scanDevServerRow(row)
 }
 
-// scanDevServerRow factors out the 8-column dev_servers row scan shared by
+// scanDevServerRow factors out the 9-column dev_servers row scan shared by
 // UpdateApprovalStatus/AssignGroup's RETURNING clauses.
 func scanDevServerRow(row pgx.Row) (domain.DevServer, error) {
 	var ds domain.DevServer
-	var mode, status, kind string
+	var mode, status, kind, healthStatus string
 	var sshTargetID, groupID *string
-	err := row.Scan(&ds.ID, &ds.TenantID, &ds.Host, &mode, &sshTargetID, &status, &groupID, &kind)
+	err := row.Scan(&ds.ID, &ds.TenantID, &ds.Host, &mode, &sshTargetID, &status, &groupID, &kind, &healthStatus)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.DevServer{}, fmt.Errorf("postgres: dev server not found for tenant: %w", err)
 	}
@@ -167,6 +169,7 @@ func scanDevServerRow(row pgx.Row) (domain.DevServer, error) {
 	ds.Mode = domain.ConnectionMode(mode)
 	ds.Status = domain.DevServerStatus(status)
 	ds.Kind = domain.AgentKind(kind)
+	ds.HealthStatus = domain.DevServerHealthStatus(healthStatus)
 	if sshTargetID != nil {
 		ds.SSHTargetID = *sshTargetID
 	}
@@ -364,6 +367,56 @@ func (r *Repository) GetActiveByDevServer(ctx context.Context, tenantID, devServ
 		return domain.Connection{}, false, fmt.Errorf("postgres: get active connection by dev server: %w", err)
 	}
 	return conn, true, nil
+}
+
+// UpdateStatus persists a connection's Status/DegradedSince after a domain
+// state machine transition (BE-SOL-STORAGE-003 §2, TASK-BE-STORAGE-009) —
+// scoped by tenant_id like every other mutation in this service.
+func (r *Repository) UpdateStatus(ctx context.Context, tenantID string, conn domain.Connection) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE infra.connections
+		SET status = $1, degraded_since = $2
+		WHERE id = $3 AND tenant_id = $4
+	`, conn.Status, conn.DegradedSince, conn.ID, tenantID)
+	if err != nil {
+		return fmt.Errorf("postgres: update connection status: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("postgres: update connection status: no connection %s for tenant %s", conn.ID, tenantID)
+	}
+	return nil
+}
+
+// ListConnectivitySummary returns every connection scoped to tenantID,
+// joined through dev_servers as defense-in-depth tenant scoping — backs
+// GetFleetConnectivitySummary (TASK-BE-STORAGE-006, CR-STORAGE-007).
+func (r *Repository) ListConnectivitySummary(ctx context.Context, tenantID string) ([]domain.Connection, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT c.id, c.tenant_id, c.dev_server_id, c.repo_path, c.worktree_id, c.status,
+		       c.last_activity_at, c.degraded_since, c.grace_period_seconds
+		FROM infra.connections c
+		JOIN infra.dev_servers d ON d.id = c.dev_server_id AND d.tenant_id = c.tenant_id
+		WHERE c.tenant_id = $1
+		ORDER BY c.created_at DESC
+	`, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("postgres: list connectivity summary: %w", err)
+	}
+	defer rows.Close()
+
+	var out []domain.Connection
+	for rows.Next() {
+		var conn domain.Connection
+		if err := rows.Scan(&conn.ID, &conn.TenantID, &conn.DevServerID, &conn.RepoPath, &conn.WorktreeID,
+			&conn.Status, &conn.LastActivityAt, &conn.DegradedSince, &conn.GracePeriodSeconds); err != nil {
+			return nil, fmt.Errorf("postgres: scan connectivity summary row: %w", err)
+		}
+		out = append(out, conn)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("postgres: iterate connectivity summary rows: %w", err)
+	}
+	return out, nil
 }
 
 // FindBySshTarget returns the DevServer bound to sshTargetID, if any.

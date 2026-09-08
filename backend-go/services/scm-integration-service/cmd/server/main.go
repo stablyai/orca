@@ -165,6 +165,8 @@ func run() error {
 	removePullRequestReviewersUC := usecase.NewRemovePullRequestReviewers(credentials, registry)
 	setPullRequestAutoMergeUC := usecase.NewSetPullRequestAutoMerge(credentials, registry)
 	updateIssueUC := usecase.NewUpdateIssue(credentials, registry)
+	updatePullRequestUC := usecase.NewUpdatePullRequest(credentials, registry)
+	starRepositoryUC := usecase.NewStarRepository(credentials, registry)
 	getPullRequestForBranchUC := usecase.NewGetPullRequestForBranch(credentials, registry)
 	resolveRepoSlugUC := usecase.NewResolveRepoSlug(credentials, registry)
 
@@ -204,7 +206,7 @@ func run() error {
 		listIssuesUC, createPullRequestUC, listPullRequestsUC, listWorkItemsUC, getRateLimitStatusUC,
 		getAuthStatusUC, startOAuthFlowUC, completeOAuthFlowUC, revokeAuthUC,
 		mergePullRequestUC, requestPullRequestReviewersUC, removePullRequestReviewersUC,
-		setPullRequestAutoMergeUC, updateIssueUC, getPullRequestForBranchUC, resolveRepoSlugUC,
+		setPullRequestAutoMergeUC, updateIssueUC, updatePullRequestUC, starRepositoryUC, getPullRequestForBranchUC, resolveRepoSlugUC,
 		listAccessibleProjectsUC, resolveProjectRefUC, listProjectViewsUC, viewProjectTableUC,
 		updateProjectItemFieldUC, clearProjectItemFieldUC, getWorkItemDetailsBySlugUC,
 		updateIssueBySlugUC, updatePullRequestBySlugUC, updateIssueTypeBySlugUC,

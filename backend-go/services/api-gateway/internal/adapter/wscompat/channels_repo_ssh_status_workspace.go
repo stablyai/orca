@@ -51,7 +51,7 @@ func registerRepoSshStatusWorkspaceChannels(
 	registerRepoChannels(r, project, git)
 	registerSshChannels(r, infraFleet)
 	registerStatusChannels(r)
-	registerWorkspacePortsChannels(r, infraFleet)
+	registerWorkspacePortsChannels(r, project, infraFleet)
 }
 
 // repoView/toRepoView: same camelCase-view fix as channels_tenant_project.go
@@ -784,22 +784,46 @@ func hostPlatformString() string {
 // worktree. kill calls the new KillWorkspacePort RPC (TASK-170/171),
 // following the exact same resolve-then-dispatch shape.
 //
-// Arg-shape caveat: the frontend's killWorkspacePortForTarget/scan call
-// sites pass {repoId, pid, port}/{repoId}
-// (frontend/src/renderer/src/lib/workspace-port-actions.ts), not
-// {connectionId, worktreeId} directly — repoId needs resolving to the
-// worktree's connectionId before calling these RPCs. This handler decodes
-// {connectionId, worktreeId} directly per this package's "best-effort,
-// verify against the actual call site" convention (channels.go's top-of-file
-// doc comment) — verify the exact repoId -> connectionId/worktreeId lookup
-// against the real frontend call site before shipping; likely a
-// project-service.ListWorktrees join keyed by repoId, resolved either in
-// this handler or upstream of it. Not resolved further here.
-func registerWorkspacePortsChannels(r *Registry, client infrafleetv1.InfraFleetServiceClient) {
+// BUG-016 fix: the frontend's killWorkspacePortForTarget/scan call sites
+// pass {repoId, worktreeId?, pid, port}/{repoId} (workspace-port-actions.ts),
+// never {connectionId, worktreeId} directly — repoId (and, for kill,
+// worktreeId) needs resolving to a connectionId before calling these RPCs.
+// Both handlers now resolve in this priority order:
+//  1. worktreeId, if given directly (unambiguous — resolved via
+//     resolveConnectionIDForWorktree, the same ResolveConnection(worktree_id=)
+//     helper channels_ephemeral_vm.go/channels_browser.go already use). kill's
+//     wire contract now carries worktreeId when the frontend has one at hand
+//     (WorkspacePort.owner.worktreeId is already known at every real kill call
+//     site — see workspace-port-actions.ts's workspacePortOwnerWorktreeId),
+//     which is strictly more precise than any repoId-based guess.
+//  2. otherwise, repoId — resolved server-side via
+//     resolveWorkspacePortsConnectionForRepo: GetRepo(repoId) for its
+//     project_id, then ListWorktrees(project_id) filtered to this repo's
+//     worktrees. A repo can have zero, one, or several worktrees, and
+//     ListWorktreesRequest has no repo_id filter of its own (see
+//     channels_worktree.go's worktree.list NOTE) — this handler does that
+//     filter itself. Exactly one ACTIVE worktree for the repo resolves
+//     unambiguously; zero or multiple active worktrees is genuinely
+//     ambiguous from repoId alone (no signal here says which one the
+//     caller means), so it degrades to the pre-existing safe no-op
+//     (empty connectionId) rather than guessing — matching
+//     scan_workspace_ports.go/kill_workspace_port.go's own
+//     empty-ConnectionID-is-a-valid-input contract. A single non-active
+//     worktree still resolves (mirrors workspace.refreshFileTree's
+//     "fall back to the only worktree" convention).
+//
+// Verified against ListWorktreesResponse's real Worktree.active semantics
+// (project.proto's Worktree.active, project-service's activation model) —
+// not merely assumed "at most one active worktree per repo" as this bug's
+// own filed report flagged as unverified: multiple active worktrees per repo
+// ARE possible (independent per-worktree activation), so the ambiguous case
+// above is a real, not theoretical, branch.
+func registerWorkspacePortsChannels(r *Registry, project projectv1.ProjectServiceClient, client infrafleetv1.InfraFleetServiceClient) {
 	r.Register("workspacePorts.scan", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
 		type scanArgs struct {
 			ConnectionID string `json:"connectionId"`
 			WorktreeID   string `json:"worktreeId"`
+			RepoID       string `json:"repoId"`
 		}
 		in, err := decodeArg[scanArgs](args, 0)
 		if err != nil {
@@ -808,9 +832,15 @@ func registerWorkspacePortsChannels(r *Registry, client infrafleetv1.InfraFleetS
 		ctx = gatewaygrpc.AttachIdentity(ctx, usecase.Identity{TenantID: id.TenantID, UserID: id.UserID})
 		rpcCtx, cancel := context.WithTimeout(ctx, repoSSHStatusWorkspaceRPCTimeout)
 		defer cancel()
+		connectionID, worktreeID, err := resolveWorkspacePortsConnection(
+			rpcCtx, project, client, in.ConnectionID, in.WorktreeID, in.RepoID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		resp, err := client.ScanWorkspacePorts(rpcCtx, &infrafleetv1.ScanWorkspacePortsRequest{
-			ConnectionId: in.ConnectionID,
-			WorktreeId:   in.WorktreeID,
+			ConnectionId: connectionID,
+			WorktreeId:   worktreeID,
 		})
 		if err != nil {
 			return nil, err
@@ -822,6 +852,7 @@ func registerWorkspacePortsChannels(r *Registry, client infrafleetv1.InfraFleetS
 		type killArgs struct {
 			ConnectionID string `json:"connectionId"`
 			WorktreeID   string `json:"worktreeId"`
+			RepoID       string `json:"repoId"`
 			PID          int32  `json:"pid"`
 			Port         int32  `json:"port"`
 		}
@@ -832,8 +863,14 @@ func registerWorkspacePortsChannels(r *Registry, client infrafleetv1.InfraFleetS
 		ctx = gatewaygrpc.AttachIdentity(ctx, usecase.Identity{TenantID: id.TenantID, UserID: id.UserID})
 		rpcCtx, cancel := context.WithTimeout(ctx, repoSSHStatusWorkspaceRPCTimeout)
 		defer cancel()
+		connectionID, worktreeID, err := resolveWorkspacePortsConnection(
+			rpcCtx, project, client, in.ConnectionID, in.WorktreeID, in.RepoID,
+		)
+		if err != nil {
+			return nil, err
+		}
 		resp, err := client.KillWorkspacePort(rpcCtx, &infrafleetv1.KillWorkspacePortRequest{
-			ConnectionId: in.ConnectionID, WorktreeId: in.WorktreeID, Pid: in.PID, Port: in.Port,
+			ConnectionId: connectionID, WorktreeId: worktreeID, Pid: in.PID, Port: in.Port,
 		})
 		if err != nil {
 			return nil, err
@@ -843,6 +880,85 @@ func registerWorkspacePortsChannels(r *Registry, client infrafleetv1.InfraFleetS
 		}
 		return map[string]any{"ok": true}, nil
 	})
+}
+
+// resolveWorkspacePortsConnection resolves workspacePorts.scan/kill's
+// {connectionId, worktreeId, repoId} arg trio down to a single
+// (connectionId, worktreeId) pair to send to infra-fleet-service, per
+// registerWorkspacePortsChannels' doc comment. explicitConnectionID passing
+// through unresolved (never overridden) lets an already-correct direct call
+// keep working exactly as before.
+func resolveWorkspacePortsConnection(
+	ctx context.Context,
+	project projectv1.ProjectServiceClient,
+	infra infrafleetv1.InfraFleetServiceClient,
+	explicitConnectionID, explicitWorktreeID, repoID string,
+) (connectionID, worktreeID string, err error) {
+	if explicitConnectionID != "" {
+		return explicitConnectionID, explicitWorktreeID, nil
+	}
+	if explicitWorktreeID != "" {
+		connID, err := resolveConnectionIDForWorktree(ctx, infra, explicitWorktreeID)
+		if err != nil {
+			return "", "", err
+		}
+		return connID, explicitWorktreeID, nil
+	}
+	if repoID == "" {
+		return "", "", nil
+	}
+	resolvedWorktreeID, err := resolveWorktreeIDForRepo(ctx, project, repoID)
+	if err != nil {
+		return "", "", err
+	}
+	if resolvedWorktreeID == "" {
+		return "", "", nil
+	}
+	connID, err := resolveConnectionIDForWorktree(ctx, infra, resolvedWorktreeID)
+	if err != nil {
+		return "", "", err
+	}
+	return connID, resolvedWorktreeID, nil
+}
+
+// resolveWorktreeIDForRepo finds repoID's single unambiguous worktree, or
+// "" when there isn't one (no worktrees, or the active-worktree count for
+// this repo isn't exactly one) — see registerWorkspacePortsChannels' doc
+// comment for why zero/multiple active worktrees degrades to "" rather than
+// guessing. GetRepo failing (e.g. repoID doesn't exist) is a real error,
+// propagated rather than swallowed into "".
+func resolveWorktreeIDForRepo(ctx context.Context, project projectv1.ProjectServiceClient, repoID string) (string, error) {
+	repoResp, err := project.GetRepo(ctx, &projectv1.GetRepoRequest{RepoId: repoID})
+	if err != nil {
+		return "", err
+	}
+	projectID := repoResp.GetRepo().GetProjectId()
+	if projectID == "" {
+		return "", nil
+	}
+	wtResp, err := project.ListWorktrees(ctx, &projectv1.ListWorktreesRequest{ProjectId: projectID})
+	if err != nil {
+		return "", err
+	}
+	var active, all []*projectv1.Worktree
+	for _, w := range wtResp.GetWorktrees() {
+		if w.GetRepoId() != repoID {
+			continue
+		}
+		all = append(all, w)
+		if w.GetActive() {
+			active = append(active, w)
+		}
+	}
+	if len(active) == 1 {
+		return active[0].GetId(), nil
+	}
+	if len(active) == 0 && len(all) == 1 {
+		return all[0].GetId(), nil
+	}
+	// Zero worktrees, or more than one active worktree for this repo:
+	// genuinely ambiguous from repoId alone — no-op rather than guess.
+	return "", nil
 }
 
 // toWorkspacePortScanResult maps ScanWorkspacePortsResponse's []int32 open

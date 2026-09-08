@@ -51,15 +51,20 @@ func NewConnectionResolver(client infrafleetv1.InfraFleetServiceClient) *Connect
 
 // ResolveConnection asks infra-fleet-service which host owns worktreeID.
 //
-// git-gateway-service's worktreeID IS the infra-fleet-service connectionId
-// (git-gateway-service.md §7's dependency diagram; ResolveConnectionRequest
-// has no separate worktree field, only connection_id) — so it is passed
-// through verbatim as ConnectionId, and echoed back as ResolvedConnection's
-// ConnectionID on a successful resolve rather than re-derived from
-// resp.GetDevServer().GetId() (DevServer's id identifies the *host*, not the
-// connection/worktree — see ResolvedConnection's doc comment in
-// usecase/ports.go: "Connected=true, ConnectionID populated" describes the
-// connection being resolved, which is worktreeID itself).
+// worktreeID is NOT the infra-fleet-service connectionId — infra.connections
+// has its own UUID primary key (migrations/0002_connections.up.sql), separate
+// from the TEXT worktree_id column that stores git-gateway-service's
+// "repoId::path" worktree IDs. Sending worktreeID as ConnectionId (this
+// method's prior, incorrect behavior) hits infra.connections.id's uuid
+// column type and fails with "invalid input syntax for type uuid" for every
+// non-UUID worktreeID — live-confirmed as GITGATEWAY_RESOLVE_FAILED's root
+// cause on every dev-server-backed worktree's Git panel. WorktreeId is the
+// correct request key (mirrors api-gateway's channels_browser.go), routing
+// to ResolveConnectionByWorktree's worktree_id-keyed lookup instead. The
+// resolved ConnectionID must come from the response (resp.GetConnectionId())
+// — infra.connections.id — not be echoed back as worktreeID, since
+// RelayExecutor.relay's Relay RPC also requires that real UUID as its own
+// ConnectionId (see relay_executor.go's Complete doc comment).
 func (r *ConnectionResolver) ResolveConnection(ctx context.Context, worktreeID string) (usecase.ResolvedConnection, error) {
 	ctx, err := withTenantMetadata(ctx)
 	if err != nil {
@@ -67,7 +72,7 @@ func (r *ConnectionResolver) ResolveConnection(ctx context.Context, worktreeID s
 	}
 
 	resp, err := r.client.ResolveConnection(ctx, &infrafleetv1.ResolveConnectionRequest{
-		ConnectionId: worktreeID,
+		WorktreeId: worktreeID,
 	})
 	if err != nil {
 		return usecase.ResolvedConnection{}, fmt.Errorf("grpcclient: ResolveConnection(%q): %w", worktreeID, err)
@@ -78,7 +83,7 @@ func (r *ConnectionResolver) ResolveConnection(ctx context.Context, worktreeID s
 	}
 	return usecase.ResolvedConnection{
 		Connected:    true,
-		ConnectionID: worktreeID,
+		ConnectionID: resp.GetConnectionId(),
 		RepoPath:     resp.GetRepoPath(),
 	}, nil
 }

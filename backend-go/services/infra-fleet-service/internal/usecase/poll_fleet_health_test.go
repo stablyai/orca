@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/domain"
 )
@@ -82,7 +83,7 @@ func TestPollFleetHealth_WritesReachableSampleForEachDevServer(t *testing.T) {
 	writer := &fakeFleetHealthWriter{}
 	agent := &fakeDevServerAgentClient{healthy: true}
 
-	uc := NewPollFleetHealth(repo, writer, nil, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, nil, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -103,7 +104,7 @@ func TestPollFleetHealth_RecordsUnreachableWhenHealthCheckFails(t *testing.T) {
 	writer := &fakeFleetHealthWriter{}
 	agent := &fakeDevServerAgentClient{healthErr: errors.New("dial failed")}
 
-	uc := NewPollFleetHealth(repo, writer, nil, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, nil, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestPollFleetHealth_OneDevServerWriteFailureDoesNotStopTheRest(t *testing.T
 	writer := &fakeFleetHealthWriter{upsertErr: errors.New("db down")}
 	agent := &fakeDevServerAgentClient{healthy: true}
 
-	uc := NewPollFleetHealth(repo, writer, nil, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, nil, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err != nil {
 		t.Fatalf("a per-dev-server write failure must not fail the whole poll: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestPollFleetHealth_ListFailurePropagates(t *testing.T) {
 	writer := &fakeFleetHealthWriter{}
 	agent := &fakeDevServerAgentClient{healthy: true}
 
-	uc := NewPollFleetHealth(repo, writer, nil, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, nil, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err == nil {
 		t.Fatal("expected the list failure to propagate")
 	}
@@ -153,7 +154,7 @@ func TestPollFleetHealth_ReachableToUnreachableTransition_EnqueuesOneAlert(t *te
 	outboxW := &fakeOutboxWriter{}
 	agent := &fakeDevServerAgentClient{healthErr: errors.New("dial failed")}
 
-	uc := NewPollFleetHealth(repo, writer, outboxW, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, outboxW, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -189,7 +190,7 @@ func TestPollFleetHealth_RepeatedUnreachableSamples_DoNotReAlert(t *testing.T) {
 	outboxW := &fakeOutboxWriter{}
 	agent := &fakeDevServerAgentClient{healthErr: errors.New("still down")}
 
-	uc := NewPollFleetHealth(repo, writer, outboxW, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, outboxW, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -210,7 +211,7 @@ func TestPollFleetHealth_UnreachableToReachable_DoesNotAlert(t *testing.T) {
 	outboxW := &fakeOutboxWriter{}
 	agent := &fakeDevServerAgentClient{healthy: true}
 
-	uc := NewPollFleetHealth(repo, writer, outboxW, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, outboxW, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -231,7 +232,7 @@ func TestPollFleetHealth_FirstEverPoll_NoPreviousSample_DoesNotAlert(t *testing.
 	outboxW := &fakeOutboxWriter{}
 	agent := &fakeDevServerAgentClient{healthErr: errors.New("dial failed")}
 
-	uc := NewPollFleetHealth(repo, writer, outboxW, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, outboxW, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -252,7 +253,7 @@ func TestPollFleetHealth_NilOutboxWriter_StillWritesSampleWithoutPanicking(t *te
 	}
 	agent := &fakeDevServerAgentClient{healthErr: errors.New("dial failed")}
 
-	uc := NewPollFleetHealth(repo, writer, nil, agent, slog.Default())
+	uc := NewPollFleetHealth(repo, writer, nil, agent, nil, nil, slog.Default())
 	if err := uc.Execute(context.Background()); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -260,3 +261,187 @@ func TestPollFleetHealth_NilOutboxWriter_StillWritesSampleWithoutPanicking(t *te
 		t.Fatalf("want the sample still written despite outbox being nil, got %d", len(writer.written))
 	}
 }
+
+// TestPollFleetHealth_ReachableToUnreachableTransition_MarksActiveConnectionDegraded
+// is TASK-BE-STORAGE-009's usecase-level wiring check: a dev server's
+// reachable=true -> false edge must transition its active Connection
+// established -> degraded via the domain state machine (BE-SOL-STORAGE-003
+// §2), not leave it dangling at "established" while the fleet health
+// sample already says unreachable.
+func TestPollFleetHealth_ReachableToUnreachableTransition_MarksActiveConnectionDegraded(t *testing.T) {
+	ds := devServerForPollTest(t, "ds-1")
+	repo := &fakePollerRepository{devServers: []domain.DevServer{ds}}
+	writer := &fakeFleetHealthWriter{
+		previous: map[string]domain.DevServerHealth{"ds-1": {DevServerID: "ds-1", Reachable: true}},
+	}
+	agent := &fakeDevServerAgentClient{healthErr: errors.New("dial failed")}
+	conns := &fakeConnectionRepository{
+		found:      true,
+		activeConn: domain.Connection{ID: "conn-1", TenantID: ds.TenantID, DevServerID: ds.ID, Status: domain.ConnectionStatusEstablished, GracePeriodSeconds: 300},
+	}
+
+	uc := NewPollFleetHealth(repo, writer, nil, agent, conns, nil, slog.Default())
+	if err := uc.Execute(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(conns.updated) != 1 {
+		t.Fatalf("want 1 connection status update, got %d", len(conns.updated))
+	}
+	got := conns.updated[0]
+	if got.Status != domain.ConnectionStatusDegraded {
+		t.Errorf("got status %q, want %q", got.Status, domain.ConnectionStatusDegraded)
+	}
+	if got.DegradedSince == nil {
+		t.Error("expected DegradedSince to be set")
+	}
+}
+
+// TestPollFleetHealth_UnreachableToReachable_ReestablishesActiveConnection
+// is the recovery-side counterpart: an agent coming back within its grace
+// period must return its degraded Connection to established, REUSING the
+// same connectionId (never creating a new one) — BE-SOL-STORAGE-003 §2.
+func TestPollFleetHealth_UnreachableToReachable_ReestablishesActiveConnection(t *testing.T) {
+	ds := devServerForPollTest(t, "ds-1")
+	repo := &fakePollerRepository{devServers: []domain.DevServer{ds}}
+	writer := &fakeFleetHealthWriter{
+		previous: map[string]domain.DevServerHealth{"ds-1": {DevServerID: "ds-1", Reachable: false}},
+	}
+	agent := &fakeDevServerAgentClient{healthy: true}
+	degradedAt := time.Now().Add(-30 * time.Second)
+	conns := &fakeConnectionRepository{
+		found: true,
+		activeConn: domain.Connection{
+			ID: "conn-1", TenantID: ds.TenantID, DevServerID: ds.ID,
+			Status: domain.ConnectionStatusDegraded, DegradedSince: &degradedAt, GracePeriodSeconds: 300,
+		},
+	}
+
+	uc := NewPollFleetHealth(repo, writer, nil, agent, conns, nil, slog.Default())
+	if err := uc.Execute(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(conns.updated) != 1 {
+		t.Fatalf("want 1 connection status update, got %d", len(conns.updated))
+	}
+	got := conns.updated[0]
+	if got.Status != domain.ConnectionStatusEstablished {
+		t.Errorf("got status %q, want %q", got.Status, domain.ConnectionStatusEstablished)
+	}
+	if got.ID != "conn-1" {
+		t.Errorf("expected the same connection id to be reused, got %q", got.ID)
+	}
+	if got.DegradedSince != nil {
+		t.Error("expected DegradedSince to be cleared")
+	}
+}
+
+// TestMarkDegraded_DoesNotCloseTerminalSessions is TASK-BE-STORAGE-010's
+// core regression: a reachable -> unreachable edge marks the active
+// connection degraded (TASK-BE-STORAGE-009), but must NOT touch
+// terminal_sessions at all — closed_at is only set once the connection
+// actually reaches 'closed' (BE-SOL-STORAGE-003 §3). A wired-but-unused
+// TerminalSessionRepository proves this, not merely "nil repository never
+// crashes."
+func TestMarkDegraded_DoesNotCloseTerminalSessions(t *testing.T) {
+	ds := devServerForPollTest(t, "ds-1")
+	repo := &fakePollerRepository{devServers: []domain.DevServer{ds}}
+	writer := &fakeFleetHealthWriter{
+		previous: map[string]domain.DevServerHealth{"ds-1": {DevServerID: "ds-1", Reachable: true}},
+	}
+	agent := &fakeDevServerAgentClient{healthErr: errors.New("dial failed")}
+	conns := &fakeConnectionRepository{
+		found:      true,
+		activeConn: domain.Connection{ID: "conn-1", TenantID: ds.TenantID, DevServerID: ds.ID, Status: domain.ConnectionStatusEstablished, GracePeriodSeconds: 300},
+	}
+	sessions := &fakeTerminalSessionRepository{
+		byPtyID: map[string]domain.TerminalSession{
+			"pty-1": {PtyID: "pty-1", TenantID: ds.TenantID, ConnectionID: "conn-1"},
+			"pty-2": {PtyID: "pty-2", TenantID: ds.TenantID, ConnectionID: "conn-1"},
+		},
+	}
+
+	uc := NewPollFleetHealth(repo, writer, nil, agent, conns, sessions, slog.Default())
+	if err := uc.Execute(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := conns.activeConn.Status; got != domain.ConnectionStatusDegraded {
+		t.Fatalf("want connection status %q, got %q", domain.ConnectionStatusDegraded, got)
+	}
+	if len(sessions.closeAllCalls) != 0 {
+		t.Fatalf("want CloseAllForConnection never called on a degraded transition, got %d calls", len(sessions.closeAllCalls))
+	}
+	for ptyID, s := range sessions.byPtyID {
+		if s.ClosedAt != nil {
+			t.Errorf("want terminal session %q still open after degraded transition, got closed_at=%v", ptyID, *s.ClosedAt)
+		}
+	}
+}
+
+// TestCloseAfterGracePeriodExpiry_ClosesAllTerminalSessionsForConnection is
+// the other half of TASK-BE-STORAGE-010: once the grace period has actually
+// expired and reestablishConnection closes the connection instead of
+// reestablishing it, every open terminal_sessions row for that connection
+// must be closed too (BE-SOL-STORAGE-003 §3's "(b) connections.status
+// chuyển sang closed" rule).
+func TestCloseAfterGracePeriodExpiry_ClosesAllTerminalSessionsForConnection(t *testing.T) {
+	ds := devServerForPollTest(t, "ds-1")
+	repo := &fakePollerRepository{devServers: []domain.DevServer{ds}}
+	writer := &fakeFleetHealthWriter{
+		previous: map[string]domain.DevServerHealth{"ds-1": {DevServerID: "ds-1", Reachable: false}},
+	}
+	agent := &fakeDevServerAgentClient{healthy: true}
+	degradedAt := time.Now().Add(-10 * time.Minute) // well past the 300s grace period
+	conns := &fakeConnectionRepository{
+		found: true,
+		activeConn: domain.Connection{
+			ID: "conn-1", TenantID: ds.TenantID, DevServerID: ds.ID,
+			Status: domain.ConnectionStatusDegraded, DegradedSince: &degradedAt, GracePeriodSeconds: 300,
+		},
+	}
+	sessions := &fakeTerminalSessionRepository{
+		byPtyID: map[string]domain.TerminalSession{
+			"pty-1": {PtyID: "pty-1", TenantID: ds.TenantID, ConnectionID: "conn-1"},
+			"pty-2": {PtyID: "pty-2", TenantID: ds.TenantID, ConnectionID: "conn-1"},
+			// a session on a DIFFERENT connection must be left untouched.
+			"pty-other": {PtyID: "pty-other", TenantID: ds.TenantID, ConnectionID: "conn-other"},
+		},
+	}
+
+	uc := NewPollFleetHealth(repo, writer, nil, agent, conns, sessions, slog.Default())
+	if err := uc.Execute(context.Background()); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if got := conns.activeConn.Status; got != domain.ConnectionStatusClosed {
+		t.Fatalf("want connection status %q, got %q", domain.ConnectionStatusClosed, got)
+	}
+	if len(sessions.closeAllCalls) != 1 || sessions.closeAllCalls[0] != "conn-1" {
+		t.Fatalf("want CloseAllForConnection called once with %q, got %v", "conn-1", sessions.closeAllCalls)
+	}
+	if s := sessions.byPtyID["pty-1"]; s.ClosedAt == nil {
+		t.Error("want pty-1 closed after grace period expiry")
+	}
+	if s := sessions.byPtyID["pty-2"]; s.ClosedAt == nil {
+		t.Error("want pty-2 closed after grace period expiry")
+	}
+	if s := sessions.byPtyID["pty-other"]; s.ClosedAt != nil {
+		t.Error("want pty-other (a different connection) left untouched")
+	}
+}
+
+// TestDegradedConnectionDoesNotTripCircuitBreaker (BE-SOL-STORAGE-003 §6,
+// TASK-BE-STORAGE-009's test list) intentionally has no implementation
+// here: the failure_count/circuit_broken concept it needs to assert against
+// lives on orchestration-service's DispatchContext, not on anything
+// infra-fleet-service owns (see BE-SOL-STORAGE-003 §4's "FailDispatch"
+// classification table) — it depends on TASK-BE-STORAGE-011's dispatch
+// classification landing there first, exactly as this task's own doc
+// anticipates ("có thể viết trước dạng pending/skip nếu làm task này
+// trước"). What this task DOES verify at the usecase level is the two
+// tests immediately above: a reachable<->unreachable edge really does
+// drive Connection.MarkDegraded/Reestablish, not an inline status
+// assignment — the precondition TestDegradedConnectionDoesNotTripCircuitBreaker
+// will need once orchestration-service's side exists.

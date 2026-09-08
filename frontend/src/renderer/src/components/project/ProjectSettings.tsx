@@ -1,5 +1,7 @@
 // ProjectSettings.tsx — Project settings dialog with General/Members/Repos tabs (TDD-FE-12, TASK-FE-004)
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs'
 import { MemberManager } from './MemberManager'
@@ -9,20 +11,38 @@ import { ProjectDevServerSection } from './ProjectDevServerSection'
 import { ProjectDevServerFilterSection } from './ProjectDevServerFilterSection'
 import { ProjectRepoCandidatesSection } from './ProjectRepoCandidatesSection'
 import { ProjectMobileEmulatorAgentSection } from './ProjectMobileEmulatorAgentSection'
+import { useConfirmationDialog } from '../confirmation-dialog'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { useAppStore } from '../../store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  getActiveRuntimeTarget,
+  RuntimeRpcCallError
+} from '../../runtime/runtime-rpc-client'
 import type { ProjectMember } from '../../types/workspace-types'
+
+// Same FORBIDDEN/UNAUTHENTICATED-message pattern as MemberManager.tsx/ProjectDevServerSection.tsx.
+function describeError(err: unknown, fallback: string): string {
+  const message = err instanceof RuntimeRpcCallError || err instanceof Error ? err.message : ''
+  if (/^FORBIDDEN/i.test(message) || message === 'UNAUTHENTICATED') {
+    return 'You do not have permission to do that.'
+  }
+  return message || fallback
+}
 
 type ProjectSettingsProps = {
   projectId: string
   open: boolean
   onClose: () => void
+  // Why optional: only ProjectSwitcher (the one caller that owns the project
+  // list) needs to react to a delete — it must refetch and switch away from
+  // the now-gone project. Tests/other callers can omit it.
+  onDeleted?: () => void
 }
 
 type RepoListItem = { id: string; displayName: string; url: string }
 
-export function ProjectSettings({ projectId, open, onClose }: ProjectSettingsProps) {
+export function ProjectSettings({ projectId, open, onClose, onDeleted }: ProjectSettingsProps) {
   // Why WorkspaceContext, not `useAppStore(s => s.projects)`: that field is
   // the legacy RepoSlice's own `projects` (multi-host repo grouping, an
   // unrelated concept) — casting it to OrcaProject[] never actually
@@ -33,6 +53,8 @@ export function ProjectSettings({ projectId, open, onClose }: ProjectSettingsPro
   const [repos, setRepos] = useState<RepoListItem[]>([])
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null)
   const [currentUserRole, setCurrentUserRole] = useState<ProjectMember['role'] | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const confirm = useConfirmationDialog()
   // Pure client-side filter (no RPC write) — ProjectDevServerFilterSection's
   // selection narrows ProjectRepoCandidatesSection's "repos to add" list
   // below. Empty set = no filter (every dev server's repos are candidates).
@@ -79,6 +101,34 @@ export function ProjectSettings({ projectId, open, onClose }: ProjectSettingsPro
       .catch(() => setCurrentUserRole(null))
   }, [open, projectId])
 
+  // Backend requires owner (or global admin, invisible client-side) —
+  // project-service.md §9. Gating the button on project role is a UX
+  // shortcut, not the real check: DeleteProject.Execute enforces it again
+  // server-side regardless of what this button shows.
+  const handleDelete = async (): Promise<void> => {
+    const confirmed = await confirm({
+      title: 'Delete project?',
+      description: `This permanently deletes "${project?.name ?? projectId}" and all its members, repos, and worktree bindings. This cannot be undone.`,
+      confirmLabel: 'Delete project',
+      confirmVariant: 'destructive'
+    })
+    if (!confirmed) {
+      return
+    }
+    setDeleting(true)
+    try {
+      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+      await callRuntimeRpc(target, 'project.delete', { projectId })
+      toast.success('Project deleted')
+      onDeleted?.()
+      onClose()
+    } catch (err) {
+      toast.error(describeError(err, 'Failed to delete project.'))
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl" data-testid="project-settings-dialog">
@@ -114,6 +164,25 @@ export function ProjectSettings({ projectId, open, onClose }: ProjectSettingsPro
               />
               <ProjectDevServerSection projectId={projectId} />
               <ProjectMobileEmulatorAgentSection projectId={projectId} />
+              {currentUserRole === 'owner' ? (
+                <div className="space-y-2 border-t border-destructive/30 pt-4">
+                  <p className="text-xs font-medium text-destructive">Danger zone</p>
+                  <p className="text-xs text-muted-foreground">
+                    Deleting a project removes it, its members, repos, and worktree bindings
+                    permanently. Blocked while a workflow or task is actively running.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={deleting}
+                    onClick={() => void handleDelete()}
+                    data-testid="delete-project-button"
+                  >
+                    {deleting ? 'Deleting…' : 'Delete project'}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           </TabsContent>
 

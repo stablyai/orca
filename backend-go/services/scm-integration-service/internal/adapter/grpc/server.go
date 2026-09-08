@@ -39,6 +39,8 @@ type Server struct {
 	removePullRequestReviewers  *usecase.RemovePullRequestReviewers
 	setPullRequestAutoMerge     *usecase.SetPullRequestAutoMerge
 	updateIssue                 *usecase.UpdateIssue
+	updatePullRequest           *usecase.UpdatePullRequest
+	starRepository              *usecase.StarRepository
 	getPullRequestForBranch     *usecase.GetPullRequestForBranch
 	resolveRepoSlug             *usecase.ResolveRepoSlug
 
@@ -87,6 +89,8 @@ func New(
 	removePullRequestReviewers *usecase.RemovePullRequestReviewers,
 	setPullRequestAutoMerge *usecase.SetPullRequestAutoMerge,
 	updateIssue *usecase.UpdateIssue,
+	updatePullRequest *usecase.UpdatePullRequest,
+	starRepository *usecase.StarRepository,
 	getPullRequestForBranch *usecase.GetPullRequestForBranch,
 	resolveRepoSlug *usecase.ResolveRepoSlug,
 	listAccessibleProjects *usecase.ListAccessibleProjects,
@@ -129,6 +133,8 @@ func New(
 		removePullRequestReviewers:  removePullRequestReviewers,
 		setPullRequestAutoMerge:     setPullRequestAutoMerge,
 		updateIssue:                 updateIssue,
+		updatePullRequest:           updatePullRequest,
+		starRepository:              starRepository,
 		getPullRequestForBranch:     getPullRequestForBranch,
 		resolveRepoSlug:             resolveRepoSlug,
 
@@ -362,6 +368,32 @@ func (s *Server) UpdateIssue(ctx context.Context, req *scmintegrationv1.UpdateIs
 		return nil, apperrors.ToGRPCStatus(err)
 	}
 	return toProtoIssue(issue), nil
+}
+
+func (s *Server) UpdatePullRequest(ctx context.Context, req *scmintegrationv1.UpdatePullRequestRequest) (*scmintegrationv1.PullRequest, error) {
+	patch := usecase.PullRequestPatch{}
+	if req.Title != nil {
+		v := req.GetTitle()
+		patch.Title = &v
+	}
+	pr, err := s.updatePullRequest.Execute(ctx, usecase.UpdatePullRequestParams{
+		TenantID: req.GetTenantId(), Provider: toDomainProvider(req.GetProvider()), Repo: req.GetRepo(),
+		Number: req.GetNumber(), Patch: patch,
+	})
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return toProtoPullRequest(pr), nil
+}
+
+func (s *Server) StarRepository(ctx context.Context, req *scmintegrationv1.StarRepositoryRequest) (*scmintegrationv1.StarRepositoryResponse, error) {
+	starred, err := s.starRepository.Execute(ctx, usecase.StarRepositoryParams{
+		TenantID: req.GetTenantId(), Provider: toDomainProvider(req.GetProvider()), Repo: req.GetRepo(),
+	})
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &scmintegrationv1.StarRepositoryResponse{Starred: starred}, nil
 }
 
 func (s *Server) GetPullRequestForBranch(ctx context.Context, req *scmintegrationv1.GetPullRequestForBranchRequest) (*scmintegrationv1.GetPullRequestForBranchResponse, error) {

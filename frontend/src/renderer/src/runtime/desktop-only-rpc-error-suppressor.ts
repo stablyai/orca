@@ -54,9 +54,30 @@
 // every browser client reads directly. Not the mobile-pairing bridge
 // (that's the unrelated 'mobile' namespace) and not a duplicate of
 // devServer.list ("which Dev Servers are connected" is a different concept).
+// 'speech' added 2026-09-07 (see specs/backend-go/bugs/missing-v3/solutions/
+// SOL-006-speech-models-channels.md): speech-model list/download/delete for
+// voice dictation always targets the one paired desktop process holding the
+// downloaded ONNX model files and (for OpenAI-provider entries) a dedicated
+// local speech API-key store — dictation never routes to a worktree's SSH
+// host or a repo's Dev Server (desktop/src/main/runtime/orca-runtime-mobile-dictation.ts:45-46's
+// own comment). Unlike ephemeralVm.*/browser.*, there is no dev-server/
+// worktree resolution step to port: a backend-go environment is a
+// stateless, horizontally-scaled pod fleet with no durable single-machine
+// analogue to relay this to. Remove this entry only if that verdict is
+// revisited AND a real implementation ships — see that solution doc's "If
+// this verdict is ever revisited" section for the two conditions that would
+// need to hold first.
+// 'ephemeralVm' removed 2026-09-08 (CR-EVM-002 / FE-SOL-EVM-001 §1's
+// direction (b)): 9 of 12 ephemeralVm.* methods now have a real backend-go
+// implementation (SOL-004/TASK-004/TASK-005) — an "Unknown method" for one
+// of those is a real regression again, not an expected desktop-only gap.
+// The remaining 3 (provision/cancelProvision/onProvisionEvent, see
+// EPHEMERAL_VM_METHODS in desktop/src/main/runtime/rpc/methods/ephemeral-vm.ts)
+// still have no RPC route and will surface real, expected console errors in
+// paired/web mode until FE-SOL-EVM-002 ships — accepted as a short-lived
+// cost rather than reintroducing a namespace-wide suppression.
 const DESKTOP_ONLY_NAMESPACES: ReadonlySet<string> = new Set([
   'shell',
-  'ephemeralVm',
   'mobile',
   'app',
   'updater',
@@ -68,7 +89,8 @@ const DESKTOP_ONLY_NAMESPACES: ReadonlySet<string> = new Set([
   'export',
   'localhostWorktreeLabels',
   'orcaProfiles',
-  'remoteWorkspace'
+  'remoteWorkspace',
+  'speech'
 ])
 
 const UNKNOWN_METHOD_PATTERN = /^Unknown method: ([a-zA-Z0-9_]+)\./

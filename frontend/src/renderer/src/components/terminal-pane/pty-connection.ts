@@ -30,7 +30,6 @@ import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { getConnectionId } from '@/lib/connection-context'
-import { logBugFePty001 } from '@/lib/bug-fe-pty-001-diagnostic-log'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   getCachedWindowsTerminalCapabilities,
@@ -669,14 +668,6 @@ function subscribeAgentTaskCompleteTrackingEnabled(listener: () => void): () => 
 }
 
 function recordPtyConnectDiagnostic(message: string): void {
-  // TEMP DIAG BUG-FE-PTY-001: the live repro shows a mirror transport
-  // created but never reaching any connectPanePty branch that calls
-  // transport.connect()/attach() (zero session.tabs.* RPCs in backend
-  // logs across the whole grace-close window) — persist every branch
-  // decision unconditionally (not gated by e2eConfig.exposeStore like the
-  // rest of this function) so the next repro's dump shows exactly which
-  // branch a given pane took, or that it took none at all.
-  logBugFePty001(`pty-connect ${message}`)
   if (!e2eConfig.exposeStore) {
     return
   }

@@ -273,15 +273,12 @@ func registerDevServerAccessControlChannels(r *Registry, client infrafleetv1.Inf
 	})
 
 	// devServer.listForUser — NOT admin-gated. Resolves the caller's
-	// department via tenant-service.GetUserProfile (a real, existing RPC),
-	// then calls infra-fleet-service.ListDevServersForUser.
-	//
-	// Known gap: team_ids is always empty here — tenant-service has no
-	// "list teams for user" RPC today (only ListTeams(company_id) and
-	// ListTeamMembers(team_id), an N+1 pattern this handler deliberately
-	// does not do). Department-based grants work correctly; team-based
-	// grants won't match anything until that follow-up RPC exists. See
-	// docs/crs/v2/dev-server/CR-DS-007-department-based-access-control.md.
+	// department via tenant-service.GetUserProfile and the caller's team
+	// memberships via tenant-service.ListTeamsForUser (both real RPCs), then
+	// calls infra-fleet-service.ListDevServersForUser with both populated.
+	// BUG-013's fix: team_ids used to always be empty here because
+	// tenant-service had no "list teams for user" RPC (see git blame on this
+	// comment for the old doc comment describing that gap).
 	r.Register("devServer.listForUser", func(ctx context.Context, id Identity, _ []json.RawMessage) (any, error) {
 		gwCtx := gatewaygrpc.AttachIdentity(ctx, usecase.Identity{TenantID: id.TenantID, UserID: id.UserID})
 		rpcCtx, cancel := context.WithTimeout(gwCtx, rpcTimeout)
@@ -292,9 +289,19 @@ func registerDevServerAccessControlChannels(r *Registry, client infrafleetv1.Inf
 		}
 		departmentID := profileResp.GetProfile().GetDepartmentId()
 
+		teamsRpcCtx, teamsCancel := context.WithTimeout(gwCtx, rpcTimeout)
+		defer teamsCancel()
+		teamsResp, err := tenantClient.ListTeamsForUser(teamsRpcCtx, &tenantv1.ListTeamsForUserRequest{UserId: id.UserID})
+		if err != nil {
+			return nil, err
+		}
+
 		fleetRpcCtx, fleetCancel := context.WithTimeout(gwCtx, rpcTimeout)
 		defer fleetCancel()
-		resp, err := client.ListDevServersForUser(fleetRpcCtx, &infrafleetv1.ListDevServersForUserRequest{DepartmentId: departmentID})
+		resp, err := client.ListDevServersForUser(fleetRpcCtx, &infrafleetv1.ListDevServersForUserRequest{
+			DepartmentId: departmentID,
+			TeamIds:      teamsResp.GetTeamIds(),
+		})
 		if err != nil {
 			return nil, err
 		}

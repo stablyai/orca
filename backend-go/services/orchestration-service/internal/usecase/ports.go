@@ -71,7 +71,15 @@ type DispatchContextRepository interface {
 	// failing closed with ORCH_DISPATCH_CONTEXT_NO_TASK. This single INSERT
 	// remains trivially atomic on its own (no separate task-status
 	// transition happens here).
-	CreateDispatchContext(ctx context.Context, tenantID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error)
+	//
+	// userID may be empty — a dispatch context created by a system process
+	// with no authenticated end-user caller legitimately has none (see
+	// domain.DispatchContext.UserID's doc comment).
+	//
+	// worktreeID may also be empty — an ad-hoc dispatch with no worktree
+	// association legitimately has none (see
+	// domain.DispatchContext.WorktreeID's doc comment).
+	CreateDispatchContext(ctx context.Context, tenantID, userID, worktreeID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error)
 
 	// GetLatestForTask returns the most recently created dispatch_contexts
 	// row for orchestrationTaskID, or ErrDispatchContextNotFound if none
@@ -80,6 +88,23 @@ type DispatchContextRepository interface {
 	// the current dispatch, which is what dispatchShow's "which terminal
 	// is this on" question actually needs, not full attempt history.
 	GetLatestForTask(ctx context.Context, tenantID, orchestrationTaskID string) (domain.DispatchContext, error)
+
+	// ListActiveDispatchContextsForUser returns every dispatch_contexts row
+	// for (tenantID, userID) not in a terminal status (completed/failed/
+	// circuit_broken excluded) — backs CR-STORAGE-006/007's
+	// "agentSession.listActive" hydrate. See
+	// specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
+	ListActiveDispatchContextsForUser(ctx context.Context, tenantID, userID string) ([]domain.DispatchContext, error)
+
+	// RecordDispatchFailure loads dispatchContextID (locked, tenant-scoped),
+	// applies domain.DispatchContext.RecordFailure(reason) — incrementing
+	// failure_count and tripping the circuit breaker at the threshold — and
+	// persists the result, atomically. Returns ErrDispatchContextNotFound if
+	// no such row exists for tenantID. See
+	// specs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md
+	// for why this port and its caller (usecase.FailDispatch) didn't exist
+	// before.
+	RecordDispatchFailure(ctx context.Context, tenantID, dispatchContextID, reason string) (domain.DispatchContext, error)
 }
 
 // GateRepository is the persistence port for decision gates.

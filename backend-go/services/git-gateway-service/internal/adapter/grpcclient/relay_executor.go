@@ -61,6 +61,27 @@ func NewRelayExecutor(client infrafleetv1.InfraFleetServiceClient) *RelayExecuto
 // Connected=false today) but remains a separate, still-open gap, not fixed
 // in this pass.
 func (r *RelayExecutor) relay(ctx context.Context, connectionID, method string, params map[string]any, out any) error {
+	// TASK-BE-EVM-015 (BE-SOL-EVM-004 §4's decision 3): a repo living on a
+	// ssh-type ephemeral VM's hidden target routes through a DIFFERENT
+	// agent method name (mirroring ExecViaHiddenSshTarget's
+	// "*ViaHiddenTarget" convention, TASK-BE-EVM-014) carrying hiddenTargetId
+	// as an extra param — same devServer/agent session as any other repo on
+	// this Dev Server (dispatchExecutorForRepo/dispatchFilesystemExecutorForRepo
+	// already resolved that via WithDevServerID above this call), no new
+	// transport, no new provider_registry_entries value. This is read from
+	// ctx (WithHiddenTargetID), not a new parameter, for the exact reason
+	// DevServerIDFromContext already reads from ctx here: relay is the ONE
+	// shared chokepoint every GitExecutor/FilesystemExecutor method (~52 of
+	// them) already funnels through, so this covers all of them without
+	// widening any of their signatures.
+	if hiddenTargetID, ok := usecase.HiddenTargetIDFromContext(ctx); ok {
+		method += "ViaHiddenTarget"
+		if params == nil {
+			params = map[string]any{}
+		}
+		params["hiddenTargetId"] = hiddenTargetID
+	}
+
 	ctx, err := withTenantMetadata(ctx)
 	if err != nil {
 		return err
@@ -1031,6 +1052,29 @@ func (r *RelayExecutor) CreateDir(ctx context.Context, repoPath, relPath string,
 		"path":      filepath.Join(repoPath, relPath),
 		"recursive": recursive,
 		"noClobber": noClobber,
+	}, nil)
+}
+
+// CreateFile has no dedicated Dev Server Agent method — the agent's
+// fs.writeFile (agent/src/relay/fs-agent-extensions.ts's handleFsWriteFile)
+// always overwrites, with no exclusive/no-clobber flag. Stat-then-write is
+// best-effort (a TOCTOU race remains, same class of gap the agent's own
+// fs.mkdir already accepts by silently ignoring CreateDir's noClobber
+// param) rather than a hard blocker, since the common "New File" case
+// isn't a concurrent-writer race.
+func (r *RelayExecutor) CreateFile(ctx context.Context, repoPath, relPath string) error {
+	stat, err := r.Stat(ctx, repoPath, relPath)
+	if err != nil {
+		return err
+	}
+	if stat.Exists {
+		return fmt.Errorf("relay: %s already exists", relPath)
+	}
+	return r.relay(ctx, repoPath, "fs.writeFile", map[string]any{
+		"path":          filepath.Join(repoPath, relPath),
+		"content":       "",
+		"encoding":      "utf-8",
+		"createParents": true,
 	}, nil)
 }
 

@@ -16,6 +16,7 @@ type CreateDispatchContextInput struct {
 	Handle              string
 	CoordinatorRunID    string
 	OrchestrationTaskID string // optional; see ports.go's DispatchContextRepository doc comment
+	WorktreeID          string // optional, caller-supplied — see domain.DispatchContext.WorktreeID
 }
 
 // CreateDispatchContext is routed through the HandleSerializer keyed by
@@ -41,9 +42,14 @@ func (uc *CreateDispatchContext) Execute(ctx context.Context, in CreateDispatchC
 		return domain.DispatchContext{}, apperrors.New(apperrors.KindInvalidArgument, "ORCH_EMPTY_HANDLE", "handle is required", nil)
 	}
 
+	// userID comes from the authenticated identity, never a client-supplied
+	// field — same rule as tenantID. May be empty (ok, bool) for a
+	// system-initiated dispatch with no end-user caller.
+	userID, _ := tenant.UserID(ctx)
+
 	var result domain.DispatchContext
 	err = uc.serializer.Do(ctx, in.Handle, func() error {
-		created, err := uc.repo.CreateDispatchContext(ctx, tenantID, in.Handle, in.CoordinatorRunID, in.OrchestrationTaskID)
+		created, err := uc.repo.CreateDispatchContext(ctx, tenantID, userID, in.WorktreeID, in.Handle, in.CoordinatorRunID, in.OrchestrationTaskID)
 		if err != nil {
 			return err
 		}

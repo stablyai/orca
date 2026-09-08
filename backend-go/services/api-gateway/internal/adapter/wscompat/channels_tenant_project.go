@@ -682,6 +682,31 @@ func registerProjectChannels(r *Registry, client projectv1.ProjectServiceClient)
 		}
 		return toProjectView(resp.GetProject()), nil
 	})
+
+	// Why this channel was missing: DeleteProject's usecase (owner/global-admin
+	// only, with the same workflow/task active-execution guard as
+	// RebindDevServer) and proto RPC existed, but no wscompat caller could ever
+	// reach it — same "usecase built, channel never registered" gap as
+	// project.rebindDevServer above. ProjectSettings.tsx's General tab had no
+	// way to delete a project at all.
+	r.Register("project.delete", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		type deleteArgs struct {
+			ProjectID string `json:"projectId"`
+		}
+		in, err := decodeArg[deleteArgs](args, 0)
+		if err != nil {
+			return nil, err
+		}
+		ctx = gatewaygrpc.AttachIdentity(ctx, usecase.Identity{TenantID: id.TenantID, UserID: id.UserID})
+		rpcCtx, cancel := context.WithTimeout(ctx, rpcTimeout)
+		defer cancel()
+		if _, err := client.DeleteProject(rpcCtx, &projectv1.DeleteProjectRequest{
+			ProjectId: in.ProjectID,
+		}); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"ok": true}, nil
+	})
 }
 
 // toProjectRoleArg maps the wscompat wire arg's role string ("member" |

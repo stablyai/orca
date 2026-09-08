@@ -124,7 +124,7 @@ func TestRepository_ResolveGate_CannotBeResolvedTwice(t *testing.T) {
 		t.Fatalf("creating task: %v", err)
 	}
 
-	dc, err := repo.CreateDispatchContext(ctx, tenantID, "handle-1", runID, task.ID)
+	dc, err := repo.CreateDispatchContext(ctx, tenantID, "user-1", "", "handle-1", runID, task.ID)
 	if err != nil {
 		t.Fatalf("creating dispatch context: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestRepository_CreateGate_SucceedsWhenDispatchContextHasTask(t *testing.T) 
 		t.Fatalf("creating task: %v", err)
 	}
 
-	dc, err := repo.CreateDispatchContext(ctx, tenantID, "handle-1", runID, task.ID)
+	dc, err := repo.CreateDispatchContext(ctx, tenantID, "user-1", "", "handle-1", runID, task.ID)
 	if err != nil {
 		t.Fatalf("creating dispatch context: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestRepository_CreateGate_FailsWhenDispatchContextHasNoTask(t *testing.T) {
 
 	seedCoordinatorRun(t, repo, repo.pool, tenantID, runID, "coord-4")
 
-	dc, err := repo.CreateDispatchContext(ctx, tenantID, "handle-1", runID, "")
+	dc, err := repo.CreateDispatchContext(ctx, tenantID, "user-1", "", "handle-1", runID, "")
 	if err != nil {
 		t.Fatalf("creating dispatch context: %v", err)
 	}
@@ -243,13 +243,13 @@ func TestRepository_GetLatestForTask_ReturnsMostRecentAfterRetry(t *testing.T) {
 		t.Fatalf("creating task: %v", err)
 	}
 
-	first, err := repo.CreateDispatchContext(ctx, tenantID, "handle-a", runID, task.ID)
+	first, err := repo.CreateDispatchContext(ctx, tenantID, "user-1", "", "handle-a", runID, task.ID)
 	if err != nil {
 		t.Fatalf("create first dispatch context: %v", err)
 	}
 	_ = first
 	time.Sleep(10 * time.Millisecond) // ensure created_at strictly orders the second row after the first
-	second, err := repo.CreateDispatchContext(ctx, tenantID, "handle-b", runID, task.ID)
+	second, err := repo.CreateDispatchContext(ctx, tenantID, "user-1", "", "handle-b", runID, task.ID)
 	if err != nil {
 		t.Fatalf("create second (retry) dispatch context: %v", err)
 	}
@@ -270,5 +270,64 @@ func TestRepository_GetLatestForTask_NoRows_ReturnsErrDispatchContextNotFound(t 
 	_, err := repo.GetLatestForTask(ctx, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", "cccccccc-cccc-cccc-cccc-cccccccccccc")
 	if !errors.Is(err, usecase.ErrDispatchContextNotFound) {
 		t.Fatalf("want ErrDispatchContextNotFound, got %v", err)
+	}
+}
+
+// TestRepository_ListActiveDispatchContextsForUser_ReturnsOnlyCallerNonTerminal
+// covers CR-STORAGE-006/007's real need: does the query correctly scope by
+// (tenant_id, user_id) AND exclude terminal statuses. Avoids
+// orchestration_tasks entirely (orchestrationTaskID="") since dispatch
+// contexts are legitimately task-less (ad-hoc coordinator-only dispatch,
+// per CreateDispatchContext's own doc comment) and task creation isn't
+// what this test needs to exercise.
+func TestRepository_ListActiveDispatchContextsForUser_ReturnsOnlyCallerNonTerminal(t *testing.T) {
+	repo := setupRepository(t)
+	ctx := context.Background()
+	tenantID := "11111111-1111-1111-1111-111111111111"
+	otherTenantID := "22222222-2222-2222-2222-222222222222"
+	runID := "33333333-3333-3333-3333-333333333333"
+	otherTenantRunID := "44444444-4444-4444-4444-444444444444"
+
+	seedCoordinatorRun(t, repo, repo.pool, tenantID, runID, "coord-list-1")
+	seedCoordinatorRun(t, repo, repo.pool, otherTenantID, otherTenantRunID, "coord-list-2")
+
+	// Active, this user, this tenant — should be returned.
+	active, err := repo.CreateDispatchContext(ctx, tenantID, "user-a", "", "handle-active", runID, "")
+	if err != nil {
+		t.Fatalf("create active dispatch context: %v", err)
+	}
+
+	// Completed, this user, this tenant — terminal, should be excluded.
+	completed, err := repo.CreateDispatchContext(ctx, tenantID, "user-a", "", "handle-completed", runID, "")
+	if err != nil {
+		t.Fatalf("create completed dispatch context: %v", err)
+	}
+	if _, err := repo.pool.Exec(ctx, `UPDATE orchestration.dispatch_contexts SET status = 'completed' WHERE id = $1`, completed.ID); err != nil {
+		t.Fatalf("marking dispatch context completed: %v", err)
+	}
+
+	// Active, DIFFERENT user, same tenant — should be excluded.
+	if _, err := repo.CreateDispatchContext(ctx, tenantID, "user-b", "", "handle-other-user", runID, ""); err != nil {
+		t.Fatalf("create other-user dispatch context: %v", err)
+	}
+
+	// Active, same user id string, DIFFERENT tenant — should be excluded
+	// (tenant isolation must not leak across the user_id filter alone).
+	if _, err := repo.CreateDispatchContext(ctx, otherTenantID, "user-a", "", "handle-other-tenant", otherTenantRunID, ""); err != nil {
+		t.Fatalf("create other-tenant dispatch context: %v", err)
+	}
+
+	got, err := repo.ListActiveDispatchContextsForUser(ctx, tenantID, "user-a")
+	if err != nil {
+		t.Fatalf("list active dispatch contexts for user: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("want exactly 1 active dispatch context, got %d: %+v", len(got), got)
+	}
+	if got[0].ID != active.ID {
+		t.Errorf("want the active dispatch context (id=%s), got id=%s", active.ID, got[0].ID)
+	}
+	if got[0].UserID != "user-a" {
+		t.Errorf("want UserID=user-a, got %q", got[0].UserID)
 	}
 }

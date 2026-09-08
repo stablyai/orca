@@ -171,3 +171,45 @@ stop(): void {
 ```
 
 `cleanupAgentPtys()` was pre-existing (documented in its own file header as "must be called on session termination") but had never actually been wired into `stop()` — a dormant bug. `cleanupAgentWatches()` is new alongside `fs.watch` itself. See TDD-AG-07 §9 for what each cleans up.
+
+
+---
+
+## 9. Addendum (2026-09-07) - Sections 3-4's lastConnHandshakeOk -> exit(2) narrative is superseded
+
+**Status: describes OUTDATED behavior - corrected here, per TASK-AG-STORAGE-004.**
+
+Sections 3 and 4 above describe both a pre-handshake close and a
+post-handshake close ending in `exit(2)` "for fresh token restart" (relying
+on systemd `Restart=always`). Reading the real, current
+`agent/src/relay/agent-connection-direct.ts` shows this is no longer how
+the agent behaves - see TDD-AG-03 (`03-connection-modes.md`) section 6's
+addendum for the full corrected code. Summary as it applies here:
+
+- A close **before** handshake completes (`lastHandshakeOk === false`,
+  matching this doc's `lastConnHandshakeOk` flag) now resolves to
+  `'reconnect-auth-failed'` in the real code - the agent calls
+  `tokenManager.forceRenew()` and retries the connection with backoff, it
+  does not exit.
+- A close **after** a successful handshake resolves to `'reconnect-renew'`
+  - same outcome: force-renew the token if a manager is configured, then
+    reconnect with backoff. Also does not exit.
+- The only paths that end the process are a clean `code===1000` close
+  (`exit(0)`) and `SIGINT`/`SIGTERM`.
+
+The Session Lifecycle table in section 4 should be read with this
+correction: every "Unexpected -> exit(2) after 200ms delay" row now reads
+as "Unexpected -> force-renew token if needed, reconnect after backoff
+(`RECONNECT_DELAYS_MS`), stay in the same process."
+
+This addendum does not change the handshake request/response shapes,
+`lastConnHandshakeOk`'s bookkeeping role, or sections 5-8 above (tools
+advertisement, capabilities, session cleanup on `stop()`) - only the
+"what happens after a close" narrative in sections 3-4 needed correcting.
+See
+`specs/agent/crs/v3/storage/solutions/SOL-AG-STORAGE-002-fleet-health-and-hydration-reporting.md`
+section 2 for the investigation, and
+`specs/agent/crs/v3/storage/solutions/SOL-AG-STORAGE-003-agent-spawn-pty-daemon-grace-period.md`
+for why the distinction matters for CR-STORAGE-008(b) (the transport layer
+already reconnects; the remaining gap is whether in-flight work on the
+dev server survives the gap).

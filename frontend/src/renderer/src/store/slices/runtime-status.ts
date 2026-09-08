@@ -4,8 +4,10 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-e
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import {
   clearRecentRuntimeCompatibilityFailure,
+  getActiveRuntimeTarget,
   unwrapRuntimeRpcResult
 } from '@/runtime/runtime-rpc-client'
+import { runtimeClientState } from '@/runtime/runtime-client-state-client'
 
 /** Live status for one saved runtime environment, as last observed by the
  * renderer. `status === null` records a probe that failed or timed out so the
@@ -38,6 +40,19 @@ export type RuntimeStatusSlice = {
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
 }
 
+// Why (FE-TASK-STORAGE-003): remote does not overwrite a local deletion —
+// a saved-environment removed on this machine but not yet synced from
+// another machine's backend-go copy must stay removed here. Remote only adds
+// entries local doesn't have yet (e.g. added from another machine).
+export function mergeById(
+  local: PublicKnownRuntimeEnvironment[],
+  remote: PublicKnownRuntimeEnvironment[]
+): PublicKnownRuntimeEnvironment[] {
+  const localIds = new Set(local.map((environment) => environment.id))
+  const additions = remote.filter((environment) => !localIds.has(environment.id))
+  return additions.length === 0 ? local : [...local, ...additions]
+}
+
 export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeStatusSlice> = (
   set,
   get
@@ -68,6 +83,16 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     get().retainRuntimeDetectedAgents?.(environments.map((environment) => environment.id))
     // A detached environment's mirrored SSH state must not outlive it.
     get().retainEnvironmentSshState?.(environments.map((environment) => environment.id))
+    // FE-TASK-STORAGE-003: mirror the saved-environment list to backend-go so
+    // it survives switching machines. Fire-and-forget — this is the single
+    // mutation point for the list (add/remove/pairing all funnel through
+    // here), so one call site covers every caller.
+    const target = getActiveRuntimeTarget(get().settings)
+    if (target.kind === 'environment') {
+      void runtimeClientState.set('savedRuntimeEnvironments', environments).catch((error) => {
+        console.error('Failed to persist saved runtime environments to backend-go:', error)
+      })
+    }
   },
 
   setRuntimeEnvironmentStatus: (environmentId, status) => {
@@ -135,6 +160,22 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     } catch (err) {
       console.error('Failed to list runtime environments for status hydration:', err)
       return
+    }
+    // FE-TASK-STORAGE-003: merge in anything saved to backend-go from another
+    // machine. Best-effort — a failed/unreachable backend-go must not block
+    // showing the locally-known saved environments.
+    const target = getActiveRuntimeTarget(get().settings)
+    if (target.kind === 'environment') {
+      try {
+        const remote = await runtimeClientState.get<PublicKnownRuntimeEnvironment[]>(
+          'savedRuntimeEnvironments'
+        )
+        if (remote) {
+          environments = mergeById(environments, remote)
+        }
+      } catch (err) {
+        console.error('Failed to load saved runtime environments from backend-go:', err)
+      }
     }
     get().setRuntimeEnvironments(environments)
     // Why: fire-and-forget per env; one unreachable server must not block the

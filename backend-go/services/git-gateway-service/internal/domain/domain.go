@@ -256,6 +256,35 @@ type RepoInfo struct {
 	URL         string
 	DisplayName string
 	DevServerID string
+	// HiddenTargetID (TASK-BE-EVM-015, BE-SOL-EVM-004 §4's decision 3) is a
+	// routing attribute ORTHOGONAL to DevServerID/URL — set only for a repo
+	// living on a `ssh`-type ephemeral VM's hidden target (Hướng A,
+	// TASK-BE-EVM-014), never a new "host" for ResolveConnection. Empty for
+	// every other repo (the common case), same "empty means unaffected"
+	// convention DevServerID already uses just above. GAP: nothing
+	// populates this yet — project-service's GetRepoResponse proto has no
+	// equivalent field (see usecase.dispatchExecutorForRepo's doc comment
+	// for the full audit); a repo-scoped fs/git dispatch always sees "" here
+	// until that proto gains one, same documented gap as
+	// TASK-BE-EVM-014's connectionID-return simplification.
+	HiddenTargetID string
+}
+
+// EphemeralVmRecipe mirrors frontend/src/shared/types.ts's OrcaVmRecipe — a
+// repo-authored orca.yaml `environmentRecipes[]` entry naming the shell
+// commands that provision/suspend/resume/destroy a per-workspace ephemeral
+// VM/container. This service never runs these commands itself (Group 1 is
+// read-only) — see usecase.EphemeralVmRelay (TASK-004) for the lifecycle
+// half that does.
+type EphemeralVmRecipe struct {
+	ID              string
+	Name            string
+	Description     string
+	Create          string
+	Suspend         string
+	Resume          string
+	Destroy         string
+	DestroyDisabled bool
 }
 
 // WorktreeRecord mirrors project-service's Worktree message — the

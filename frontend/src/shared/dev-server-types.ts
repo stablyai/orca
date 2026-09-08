@@ -13,6 +13,16 @@ export type DevServerConnectionType =
 
 export type DevServerStatus = 'connected' | 'disconnected' | 'connecting' | 'error'
 
+// A THIRD, distinct "status" concept from DevServerStatus (live relay
+// connection state, above) and DevServerApprovalStatus (admin approval,
+// below) — backend-go's coarse dev-server health/bootstrap state
+// (infra.dev_servers.status). "pending" is the column default (dev server
+// registered, not yet confirmed healthy) — bootstrap.ts's
+// resumeBootstrapProgressIfAny treats it as "still bootstrapping", per
+// BACKLOG-007's option 2 (reuse this coarse signal instead of adding a
+// dedicated per-step bootstrap field).
+export type DevServerHealthStatus = 'pending' | 'healthy' | 'degraded' | 'unhealthy'
+
 // CR-DS-009: distinguishes a Dev Server Agent (git/fs/pty, package `agent/`)
 // from a Mobile Emulator Agent (device.*, package `emulator/`) registered
 // through the same DevServer registry. Maps 1:1 to backend-go's
@@ -52,6 +62,10 @@ export type DevServer = {
   // treat a missing approvalStatus as 'pending_approval' (fail closed).
   approvalStatus?: DevServerApprovalStatus
   groupId?: string
+  // Absent on a backend that predates this field — callers should treat a
+  // missing healthStatus as unknown, not "pending" (unlike approvalStatus's
+  // fail-closed convention above, there is no safe default to assume here).
+  healthStatus?: DevServerHealthStatus
 }
 
 export type DevServerInput = {

@@ -165,3 +165,88 @@ func nullableString(s string) *string {
 	}
 	return &s
 }
+
+// clientStateColumn is the postgres layer's own whitelist type — never built
+// from unchecked input, only ever returned by columnNameFor's explicit
+// switch below. GetClientStateColumn/SetClientStateColumn's public
+// signatures deliberately take a plain string (not this type): the
+// usecase.ClientStateRepository port stays proto/postgres-agnostic (see
+// usecase/get_client_state.go's own ClientStateKind), and this file is the
+// one place responsible for re-validating that string before it ever
+// reaches a SQL statement.
+type clientStateColumn string
+
+const (
+	columnKeybindings              clientStateColumn = "keybindings_json"
+	columnUILocalState             clientStateColumn = "ui_local_state_json"
+	columnSavedRuntimeEnvironments clientStateColumn = "saved_runtime_environments_json"
+	columnClientSettings           clientStateColumn = "client_settings_json"
+	columnAccountsDevServerMap     clientStateColumn = "accounts_dev_server_json"
+)
+
+// columnNameFor is the ONLY place allowed to turn an external "which column"
+// string into a SQL identifier. Column names can't be bound as $N query
+// parameters, so this explicit switch — not string interpolation of the
+// input directly — is what stands between a caller and SQL injection via
+// column name (TASK-BE-STORAGE-002's non-negotiable requirement).
+func columnNameFor(column string) (clientStateColumn, bool) {
+	switch clientStateColumn(column) {
+	case columnKeybindings, columnUILocalState, columnSavedRuntimeEnvironments,
+		columnClientSettings, columnAccountsDevServerMap:
+		return clientStateColumn(column), true
+	default:
+		return "", false
+	}
+}
+
+// GetClientStateColumn reads one of the 5 opaque per-user JSON columns added
+// by 0006_client_state_and_workspace_sessions — same found=false semantics
+// as GetOnboardingState (no row OR NULL column both mean "never saved").
+// column must be one of the names columnNameFor whitelists; anything else is
+// a caller bug (usecase.GetClientState.Execute's own switch is what actually
+// prevents an unknown kind from ever reaching here), reported as an error,
+// never silently ignored or built into a query.
+func (r *UserProfileRepository) GetClientStateColumn(ctx context.Context, companyID, userID, column string) (string, bool, error) {
+	col, ok := columnNameFor(column)
+	if !ok {
+		return "", false, fmt.Errorf("postgres: unknown client state column %q", column)
+	}
+
+	query := fmt.Sprintf(`SELECT %s FROM tenant.user_profiles WHERE user_id = $1 AND company_id = $2`, col)
+	row := r.pool.QueryRow(ctx, query, userID, companyID)
+
+	var valueJSON *string
+	if err := row.Scan(&valueJSON); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("postgres: query client state column %s: %w", col, err)
+	}
+	if valueJSON == nil {
+		return "", false, nil
+	}
+	return *valueJSON, true, nil
+}
+
+// SetClientStateColumn upserts ONLY the named column, same partial-update
+// shape as SetOnboardingState (a brand-new row gets company_id from
+// companyID and leaves every other column at its default; an existing row's
+// other columns are left untouched).
+func (r *UserProfileRepository) SetClientStateColumn(ctx context.Context, companyID, userID, column, valueJSON string) error {
+	col, ok := columnNameFor(column)
+	if !ok {
+		return fmt.Errorf("postgres: unknown client state column %q", column)
+	}
+
+	query := fmt.Sprintf(`
+		INSERT INTO tenant.user_profiles (user_id, company_id, %s)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (user_id) DO UPDATE SET
+			%s        = EXCLUDED.%s,
+			updated_at = now()
+	`, col, col, col)
+	if _, err := r.pool.Exec(ctx, query, userID, companyID, valueJSON); err != nil {
+		return fmt.Errorf("postgres: set client state column %s: %w", col, err)
+	}
+	return nil
+}

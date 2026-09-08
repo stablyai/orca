@@ -23,6 +23,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 import { uiRecordFeatureInteraction, uiSet } from '@/runtime/runtime-ui-client'
+import { runtimeClientState } from '@/runtime/runtime-client-state-client'
 
 // Why: the ui slice now calls the ui wrapper (runtime-ui-client), not
 // window.api.ui directly — mock it so tests can reconfigure uiSet /
@@ -31,6 +32,13 @@ import { uiRecordFeatureInteraction, uiSet } from '@/runtime/runtime-ui-client'
 vi.mock('@/runtime/runtime-ui-client', () => ({
   uiSet: vi.fn(),
   uiRecordFeatureInteraction: vi.fn()
+}))
+
+// Why: FE-TASK-STORAGE-003's parallel backend-go mirror goes through
+// runtimeClientState, not window.api — mock it the same way runtime-ui-client
+// is mocked above so tests can assert on/reconfigure it per-test.
+vi.mock('@/runtime/runtime-client-state-client', () => ({
+  runtimeClientState: { get: vi.fn(), set: vi.fn() }
 }))
 
 const mocks = vi.hoisted(() => ({
@@ -88,6 +96,8 @@ beforeEach(() => {
   vi.mocked(uiSet).mockResolvedValue(undefined)
   vi.mocked(uiRecordFeatureInteraction).mockReset()
   vi.mocked(uiRecordFeatureInteraction).mockResolvedValue(getDefaultUIState())
+  vi.mocked(runtimeClientState.set).mockReset()
+  vi.mocked(runtimeClientState.set).mockResolvedValue(undefined)
 })
 
 function createUIStore(): StoreApi<AppState> {
@@ -3192,5 +3202,150 @@ describe('createUISlice space navigation', () => {
     store.getState().closeSpacePage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+})
+
+describe('createUISlice toPersistedUIState (FE-TASK-STORAGE-003)', () => {
+  it('returns exactly the cross-machine-portable subset of PersistedUIState', () => {
+    const store = createUIStore()
+    store.setState({
+      activeView: 'tasks',
+      rightSidebarOpen: true,
+      rightSidebarTab: 'checks',
+      rightSidebarExplorerView: 'search',
+      groupBy: 'repo',
+      sortBy: 'name',
+      projectOrderBy: 'recent',
+      showSleepingWorkspaces: false,
+      workspaceHostScope: 'all',
+      visibleWorkspaceHostIds: null,
+      workspaceHostOrder: ['host-1'],
+      hideDefaultBranchWorkspace: true,
+      hideAutomationGeneratedWorkspaces: true,
+      filterRepoIds: ['repo-1'],
+      collapsedGroups: new Set(['group-a', 'group-b']),
+      worktreeCardProperties: ['branch'],
+      agentActivityDisplayMode: 'compact',
+      workspaceStatuses: [],
+      syncTaskStatusFromWorkspaceBoard: true,
+      statusBarItems: [],
+      statusBarVisible: false,
+      usagePercentageDisplay: 'used',
+      setupGuideSidebarDismissed: true,
+      browserImportHintHidden: true,
+      mobileEmulatorTabIntroDismissed: true,
+      mobileEmulatorAgentSetupDismissed: true,
+      petVisible: false,
+      petId: 'cat',
+      customPets: [],
+      petSize: 200,
+      featureTipsSeenIds: ['tip-a'],
+      featureInteractions: { 'review-notes': { firstInteractedAt: 1, interactionCount: 1 } },
+      contextualToursSeenIds: ['tour-a'],
+      contextualToursAutoEligible: true,
+      trustedOrcaHooks: { 'repo-1': 'trusted' },
+      setupScriptPromptDismissedRepoIds: ['repo-2'],
+      browserDefaultUrl: 'https://example.com',
+      browserDefaultSearchEngine: 'kagi',
+      browserDefaultZoomLevel: 1.5,
+      // Fields that must NOT appear in toPersistedUIState's output.
+      windowBounds: { x: 0, y: 0, width: 100, height: 100 },
+      sidebarWidth: 999,
+      lastActiveWorktreeId: 'wt-1'
+    } as unknown as Partial<AppState>)
+
+    const persisted = store.getState().toPersistedUIState()
+
+    expect(persisted).toEqual({
+      activeView: 'tasks',
+      rightSidebarOpen: true,
+      rightSidebarTab: 'checks',
+      rightSidebarExplorerView: 'search',
+      groupBy: 'repo',
+      sortBy: 'name',
+      projectOrderBy: 'recent',
+      hideSleepingWorkspaces: true,
+      workspaceHostScope: 'all',
+      visibleWorkspaceHostIds: null,
+      workspaceHostOrder: ['host-1'],
+      hideDefaultBranchWorkspace: true,
+      hideAutomationGeneratedWorkspaces: true,
+      filterRepoIds: ['repo-1'],
+      collapsedGroups: ['group-a', 'group-b'],
+      worktreeCardProperties: ['branch'],
+      agentActivityDisplayMode: 'compact',
+      workspaceStatuses: [],
+      syncTaskStatusFromWorkspaceBoard: true,
+      statusBarItems: [],
+      statusBarVisible: false,
+      usagePercentageDisplay: 'used',
+      setupGuideSidebarDismissed: true,
+      browserImportHintHidden: true,
+      mobileEmulatorTabIntroDismissed: true,
+      mobileEmulatorAgentSetupDismissed: true,
+      petVisible: false,
+      petId: 'cat',
+      customPets: [],
+      petSize: 200,
+      featureTipsSeenIds: ['tip-a'],
+      featureInteractions: { 'review-notes': { firstInteractedAt: 1, interactionCount: 1 } },
+      contextualToursSeenIds: ['tour-a'],
+      contextualToursAutoEligible: true,
+      trustedOrcaHooks: { 'repo-1': 'trusted' },
+      setupScriptPromptDismissedRepoIds: ['repo-2'],
+      browserDefaultUrl: 'https://example.com',
+      browserDefaultSearchEngine: 'kagi',
+      browserDefaultZoomLevel: 1.5
+    })
+    expect(persisted).not.toHaveProperty('windowBounds')
+    expect(persisted).not.toHaveProperty('sidebarWidth')
+    expect(persisted).not.toHaveProperty('lastActiveWorktreeId')
+  })
+})
+
+describe('createUISlice toggleCollapsedGroup backend-go sync (FE-TASK-STORAGE-003)', () => {
+  it('leaves desktop-local behavior unchanged: uiSet still fires, runtimeClientState.set does not', () => {
+    const store = createUIStore()
+
+    store.getState().toggleCollapsedGroup('group-a')
+
+    expect(store.getState().collapsedGroups.has('group-a')).toBe(true)
+    expect(uiSet).toHaveBeenCalledWith({ collapsedGroups: ['group-a'] })
+    expect(runtimeClientState.set).not.toHaveBeenCalled()
+  })
+
+  it('also mirrors to backend-go via runtimeClientState.set when a runtime environment is active', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+    })
+
+    store.getState().toggleCollapsedGroup('group-a')
+
+    expect(store.getState().collapsedGroups.has('group-a')).toBe(true)
+    expect(runtimeClientState.set).toHaveBeenCalledWith(
+      'uiLocal',
+      expect.objectContaining({ collapsedGroups: ['group-a'] })
+    )
+  })
+
+  it('does not block or throw from the original action when the backend-go mirror rejects', async () => {
+    vi.mocked(runtimeClientState.set).mockRejectedValueOnce(new Error('offline'))
+    const store = createUIStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    expect(() => store.getState().toggleCollapsedGroup('group-a')).not.toThrow()
+    expect(store.getState().collapsedGroups.has('group-a')).toBe(true)
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Failed to sync UI state to backend-go:',
+      expect.any(Error)
+    )
+    errorSpy.mockRestore()
   })
 })

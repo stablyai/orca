@@ -200,6 +200,16 @@ type Connection struct {
 	client *ssh.Client
 }
 
+// WrapClient builds a Connection from an already-dialed *ssh.Client —
+// TASK-BE-EVM-013's minimal, non-invasive addition for
+// adapter/ephemeralsshconn (a different package, different auth flow:
+// recipe-provided PrivateKeyPEM/IdentityAgentSocket, never Vault-cert-based
+// like this package's own Connect). Does NOT change Connect() or anything
+// else in this file — every other sshrelay/sshconn caller is unaffected.
+func WrapClient(client *ssh.Client) *Connection {
+	return &Connection{client: client}
+}
+
 // RunCommand runs cmd in a fresh SSH session and returns its stdout/stderr —
 // the "verify this connection is actually alive and can execute something"
 // primitive a future relay-ssh deploy step (or a simple health check) would

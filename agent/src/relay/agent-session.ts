@@ -12,6 +12,11 @@
 //   - createSession() returns an AgentSession factory — one per WS connection
 //   - WireState is created inside start() — NOT at module level
 //   - stop() must be called when ws closes to clear the keepalive interval
+//
+// Split for oxlint's max-lines budget: capability detection lives in
+// agent-session-capabilities.ts, and handshake-send/keepalive/liveness setup
+// live in agent-session-handshake.ts. This file keeps the per-connection
+// state (timers, handshake flag) and the frame/message router.
 
 import type WebSocket from 'ws'
 import type { AgentConfig } from './agent-config'
@@ -20,23 +25,17 @@ import type { AgentLogger } from './agent-logger'
 import {
   createWireState,
   decodeFrame,
-  encodeDataFrame,
   encodeKeepaliveFrame,
   parseJsonPayload,
   MessageType
 } from 'orca-dev-agent-transport'
 import { createRpcDispatcher } from './agent-rpc-dispatch'
 import type { JsonRpcRequest } from './agent-rpc-dispatch'
-import {
-  AGENT_HANDSHAKE_METHOD,
-  AGENT_KEEPALIVE_INTERVAL_MS,
-  AGENT_TIMEOUT_MS
-} from '../shared/agent-wire-protocol'
 import { createTracer } from '../shared/trace'
-import { cleanupAllPtys } from './agent-spawner'
+import { scheduleAgentSpawnGracePeriod, rebindAgentSpawnConnection } from './agent-spawner'
 import { notifyDaemonSessionClosed } from './pty-daemon-client'
 import { cleanupAgentWatches } from './fs-agent-extensions'
-import { startRemoteRuntimeSocketLiveness } from '../shared/remote-runtime-socket-liveness'
+import { sendHandshake, startKeepalive, startLiveness } from './agent-session-handshake'
 
 const sessionTracer = createTracer('agent:session')
 
@@ -71,207 +70,10 @@ export function createSession(
   // (agent/src/shared/remote-runtime-client.ts's own connection, same
   // failure mode) — it calls ws.terminate() instead, which tears the socket
   // down locally without waiting on the peer.
-  let liveness: ReturnType<typeof startRemoteRuntimeSocketLiveness> | null = null
+  let liveness: ReturnType<typeof startLiveness> | null = null
   let handshakeDone = false
   const handshakeOkCallbacks: (() => void)[] = []
   const dispatcher = createRpcDispatcher(tools, config, log)
-
-  // ── WT-Issue-2: Dynamic capability detection ─────────────────────────────
-  /**
-   * checkGitAvailable — Check if git binary is accessible in toolPath or system PATH.
-   * Quick check via fs.access first, fallback to spawning git --version.
-   */
-  async function checkGitAvailable(): Promise<boolean> {
-    const { access: fsAccess, constants } = await import('node:fs/promises')
-    const { join } = await import('node:path')
-    const dirs = (config.toolPath ?? process.env['PATH'] ?? '').split(':').filter(Boolean)
-    for (const dir of dirs) {
-      try {
-        await fsAccess(join(dir, 'git'), constants.X_OK)
-        return true
-      } catch {
-        /* continue to next dir */
-      }
-    }
-    // Fallback: try running git --version (works on Windows too)
-    const { execFile } = await import('node:child_process')
-    return new Promise<boolean>((resolve) => {
-      const child = execFile('git', ['--version'], { timeout: 3000 })
-      child.on('close', (code) => resolve(code === 0))
-      child.on('error', () => resolve(false))
-    })
-  }
-
-  /**
-   * checkPtyAvailable — Check if node-pty native module loads successfully.
-   * Returns false if the native module is missing or incompatible.
-   */
-  async function checkPtyAvailable(): Promise<boolean> {
-    try {
-      await import('node-pty')
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  /**
-   * buildCapabilities — Dynamically build the capabilities list based on what is
-   * actually installed and functional on this Dev Server.
-   * Falls back to a static list if the check takes > 5 seconds.
-   */
-  async function buildCapabilities(): Promise<readonly string[]> {
-    const caps: string[] = [
-      'fs',
-      'fs.watch',
-      'preflight',
-      'ai.providers',
-      'agent.spawn',
-      'agent.exec',
-      'agent.sendInput',
-      'agent.kill'
-    ]
-
-    const [hasGit, hasPty] = await Promise.all([checkGitAvailable(), checkPtyAvailable()])
-
-    log.info(`capability check: git=${hasGit} pty=${hasPty}`)
-
-    if (hasGit) {
-      caps.push('git', 'git.exec', 'git.execStream')
-      caps.push('worktrees', 'git.worktree.list', 'git.worktree.add', 'git.worktree.remove')
-    }
-    if (hasPty) {
-      caps.push(
-        'pty',
-        'pty.create',
-        'pty.write',
-        'pty.resize',
-        'pty.destroy',
-        'pty.scrollback',
-        'pty.stream',
-        'pty.attach'
-      )
-    }
-
-    log.info(`capabilities: [${caps.join(', ')}]`)
-    return caps
-  }
-
-  // Why: this fallback is used when buildCapabilities() times out (>5 s) or
-  // throws. It must mirror what buildCapabilities() pushes when both git and
-  // node-pty are available, otherwise the server-side ptyReady gate
-  // (dev-server-provider-lifecycle.ts: `caps.includes('pty') && caps.includes('pty.stream')`)
-  // will always fail and no PTY provider is ever registered for this connection
-  // — producing "No PTY provider registered for connection 'dev-01'" on every
-  // terminal.create call.
-  const STATIC_CAPABILITIES_FALLBACK = [
-    'fs',
-    'fs.watch',
-    'git',
-    'preflight',
-    'ai.providers',
-    'agent.spawn',
-    'worktrees',
-    'git.exec',
-    'git.execStream',
-    'git.worktree.list',
-    'git.worktree.add',
-    'git.worktree.remove',
-    'pty',
-    'pty.create',
-    'pty.write',
-    'pty.resize',
-    'pty.destroy',
-    'pty.scrollback',
-    'pty.stream',
-    'pty.attach'
-  ] as const
-
-  async function sendHandshake(
-    ws: WebSocket,
-    wireState: ReturnType<typeof createWireState>
-  ): Promise<void> {
-    // WT-Issue-2: Use dynamic capabilities with 5s timeout fallback
-    // If _prebuiltCapabilities is provided (e.g. in tests), skip the async check entirely.
-    let capabilities: readonly string[]
-    if (_prebuiltCapabilities) {
-      capabilities = _prebuiltCapabilities
-    } else {
-      try {
-        capabilities = await Promise.race([
-          buildCapabilities(),
-          new Promise<readonly string[]>((_res, reject) =>
-            setTimeout(() => reject(new Error('capability check timeout')), 5000)
-          )
-        ])
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
-        log.warn(`buildCapabilities failed (${msg}) — using static fallback`)
-        capabilities = STATIC_CAPABILITIES_FALLBACK
-      }
-    }
-
-    const rpc = {
-      jsonrpc: '2.0' as const,
-      id: 1,
-      method: AGENT_HANDSHAKE_METHOD,
-      params: {
-        agentVersion: '5.0.0',
-        platform: process.platform,
-        arch: process.arch,
-        nodeVersion: process.version,
-        capabilities,
-        // agentToken is only sent in direct-websocket mode; empty string = omit.
-        // tokenOverride takes precedence so renewed tokens are used transparently.
-        ...(tokenOverride || config.agentToken
-          ? { agentToken: tokenOverride ?? config.agentToken }
-          : {}),
-        devServerId: config.devServerId,
-        tools: tools.map((t) => t.name)
-      }
-    }
-    ws.send(encodeDataFrame(wireState, JSON.stringify(rpc)))
-    log.info(
-      `Handshake sent: devServerId=${config.devServerId} tools=[${tools.map((t) => t.name).join(',')}]`
-    )
-  }
-
-  function startKeepalive(ws: WebSocket, wireState: ReturnType<typeof createWireState>): void {
-    keepaliveTimer = setInterval(() => {
-      if (ws.readyState === 1 /* WebSocket.OPEN */) {
-        ws.send(encodeKeepaliveFrame(wireState))
-      }
-    }, AGENT_KEEPALIVE_INTERVAL_MS)
-  }
-
-  function startLiveness(ws: WebSocket, span: ReturnType<typeof sessionTracer.start>): void {
-    liveness = startRemoteRuntimeSocketLiveness({
-      ping: () => {
-        if (ws.readyState === 1 /* WebSocket.OPEN */) {
-          try {
-            ws.ping()
-          } catch {
-            // socket already mid-teardown — the 'close' handler settles it
-          }
-        }
-      },
-      onDead: () => {
-        // Mirrors the old watchdog's own guard: only act while the socket
-        // still believes it's open — an already-closed/closing ws (e.g. the
-        // peer sent a clean close moments before the liveness window
-        // elapsed) needs no further action here.
-        if (ws.readyState !== 1 /* WebSocket.OPEN */) {
-          return
-        }
-        log.warn(`Idle timeout: no frame/ping/pong received — terminating connection`)
-        span.fail('idle timeout (liveness monitor)')
-        // NOT ws.close() — see the `liveness` field's doc comment above for
-        // why a real half-open socket needs terminate(), not close().
-        ws.terminate()
-      },
-      options: { pingIntervalMs: AGENT_KEEPALIVE_INTERVAL_MS, livenessTimeoutMs: AGENT_TIMEOUT_MS }
-    })
-  }
 
   return {
     start(ws: WebSocket): void {
@@ -281,11 +83,11 @@ export function createSession(
 
       // sendHandshake is async (builds dynamic capabilities) — wrap in a local helper
       const doHandshake = (): void => {
-        void sendHandshake(ws, wireState)
+        void sendHandshake(ws, wireState, config, tools, log, _prebuiltCapabilities, tokenOverride)
           .then(() => {
             span.step('handshake-sent')
-            startKeepalive(ws, wireState)
-            startLiveness(ws, span)
+            keepaliveTimer = startKeepalive(ws, wireState)
+            liveness = startLiveness(ws, span, log)
           })
           .catch((err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err)
@@ -357,6 +159,11 @@ export function createSession(
             const orcaVersion = rpc.result.orcaVersion ?? 'unknown'
             log.info(`Handshake OK: sessionId=${sessionId} orcaVersion=${orcaVersion}`)
             span.step('handshake-ok', { sessionId, orcaVersion })
+            // CR-STORAGE-008(b): rebind every still-running agent.spawn PTY
+            // (from before this reconnect) to the new connection and cancel
+            // any grace-period timers left counting down from the drop that
+            // preceded it — see agent-spawner.ts's rebindAgentSpawnConnection.
+            rebindAgentSpawnConnection(ws, wireState)
             handshakeOkCallbacks.forEach((cb) => cb())
           } else if (rpc.error) {
             log.error(`Handshake failed: code=${rpc.error.code} message=${rpc.error.message}`)
@@ -373,14 +180,20 @@ export function createSession(
           // visibility. Wrap it here so a throw is at least logged with which
           // request triggered it, in addition to the process-level handler
           // in agent-entry.ts.
-          log.info(`[DIAG BUG-FE-PTY-001] dispatch start id=${rpc.id} method=${rpc.method} t=${Date.now()}`)
+          log.info(
+            `[DIAG BUG-FE-PTY-001] dispatch start id=${rpc.id} method=${rpc.method} t=${Date.now()}`
+          )
           dispatcher
             .dispatch(ws, wireState, rpc as JsonRpcRequest)
             .then(() => {
-              log.info(`[DIAG BUG-FE-PTY-001] dispatch done id=${rpc.id} method=${rpc.method} readyState=${ws.readyState} t=${Date.now()}`)
+              log.info(
+                `[DIAG BUG-FE-PTY-001] dispatch done id=${rpc.id} method=${rpc.method} readyState=${ws.readyState} t=${Date.now()}`
+              )
             })
             .catch((err: unknown) => {
-              log.error(`[DIAG BUG-FE-PTY-001] dispatch THREW id=${rpc.id} method=${rpc.method}: ${err instanceof Error ? err.stack : String(err)}`)
+              log.error(
+                `[DIAG BUG-FE-PTY-001] dispatch THREW id=${rpc.id} method=${rpc.method}: ${err instanceof Error ? err.stack : String(err)}`
+              )
             })
         }
       })
@@ -419,10 +232,16 @@ export function createSession(
         liveness.stop()
         liveness = null
       }
-      // ORCH-011: Kill any orphaned agent-spawned (agent.spawn) PTYs — a
-      // separate PTY population from pty.create terminals, with no reattach
-      // concept, so these are still cleaned up immediately.
-      cleanupAllPtys(log)
+      // CR-STORAGE-008(b) (2026-09-07): agent-spawned (agent.spawn) PTYs used
+      // to be killed immediately here (ORCH-011) — a separate PTY population
+      // from pty.create terminals, in the agent's own process rather than the
+      // detached pty-daemon. That meant a 1s network blip killed every
+      // running AI-agent CLI session. Now mirrors pty.create terminals' own
+      // grace-period behavior instead: arm a timer per PTY, cancelled by
+      // rebindAgentSpawnConnection() on the next successful reconnect (see
+      // the handshake-ok branch above). See
+      // specs/agent/crs/v3/storage/solutions/SOL-AG-STORAGE-003-agent-spawn-pty-daemon-grace-period.md.
+      scheduleAgentSpawnGracePeriod(log)
       // Terminal (pty.create) PTYs live in the detached pty-daemon process
       // (pty-daemon-client.ts) — tell it this WS session ended so it can arm
       // grace-period timers itself (see pty-agent-bridge.ts). Best-effort and

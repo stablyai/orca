@@ -1,6 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { createTestStore, makeTab, makeWorktree, TEST_REPO } from './store-test-helpers'
+import {
+  getRuntimeSshState,
+  listRuntimeSshRemovedTargetLabels,
+  listRuntimeSshTargets
+} from '../../runtime/runtime-ssh-client'
+
+vi.mock('../../runtime/runtime-ssh-client', () => ({
+  getRuntimeSshState: vi.fn(),
+  listRuntimeSshRemovedTargetLabels: vi.fn(),
+  listRuntimeSshTargets: vi.fn()
+}))
+
+const listRuntimeSshTargetsMock = vi.mocked(listRuntimeSshTargets)
+const listRuntimeSshRemovedTargetLabelsMock = vi.mocked(listRuntimeSshRemovedTargetLabels)
+const getRuntimeSshStateMock = vi.mocked(getRuntimeSshState)
 
 describe('createSshSlice', () => {
   it('clears renderer state and deferred reconnect metadata for a removed SSH target', () => {
@@ -242,5 +257,68 @@ describe('createSshSlice', () => {
     expect(state.detectedPortsByConnection).toBe(detectedPortsByConnection)
     expect(state.sshCredentialQueue).toBe(sshCredentialQueue)
     expect(state.deferredSshSessionIdsByTabId).toBe(deferredSshSessionIdsByTabId)
+  })
+})
+
+describe('hydrateSshTargets', () => {
+  beforeEach(() => {
+    listRuntimeSshTargetsMock.mockReset()
+    listRuntimeSshRemovedTargetLabelsMock.mockReset()
+    getRuntimeSshStateMock.mockReset()
+  })
+
+  it('populates sshTargets/labels/removed-labels/connection-states on success', async () => {
+    const store = createTestStore()
+    listRuntimeSshTargetsMock.mockResolvedValue([
+      { id: 'ssh-1', label: 'devbox', host: 'dev.example.com' } as never,
+      { id: 'ssh-2', label: 'buildbox', host: 'build.example.com' } as never
+    ])
+    listRuntimeSshRemovedTargetLabelsMock.mockResolvedValue({ 'ssh-old': 'retired box' })
+    getRuntimeSshStateMock.mockImplementation(async (_settings, targetId) => {
+      if (targetId === 'ssh-1') {
+        return { targetId, status: 'connected', error: null, reconnectAttempt: 0 }
+      }
+      return null
+    })
+
+    await store.getState().hydrateSshTargets()
+
+    const state = store.getState()
+    expect(state.sshTargets.map((t) => t.id)).toEqual(['ssh-1', 'ssh-2'])
+    expect(state.sshTargetLabels.get('ssh-1')).toBe('devbox')
+    expect(state.sshTargetsHydrated).toBe(true)
+    expect(state.removedSshTargetLabels.get('ssh-old')).toBe('retired box')
+    expect(state.sshConnectionStates.get('ssh-1')?.status).toBe('connected')
+    // ssh-2 had no live state reported: absent, reads fall back to 'disconnected'.
+    expect(state.sshConnectionStates.has('ssh-2')).toBe(false)
+  })
+
+  it('does not crash and leaves state untouched when the target-list RPC fails', async () => {
+    const store = createTestStore()
+    listRuntimeSshTargetsMock.mockRejectedValue(new Error('method not found'))
+
+    await expect(store.getState().hydrateSshTargets()).resolves.toBeUndefined()
+
+    const state = store.getState()
+    expect(state.sshTargets).toEqual([])
+    expect(state.sshTargetsHydrated).toBe(false)
+    expect(listRuntimeSshRemovedTargetLabelsMock).not.toHaveBeenCalled()
+    expect(getRuntimeSshStateMock).not.toHaveBeenCalled()
+  })
+
+  it('still hydrates targets/labels when the removed-labels and per-target state RPCs fail', async () => {
+    const store = createTestStore()
+    listRuntimeSshTargetsMock.mockResolvedValue([
+      { id: 'ssh-1', label: 'devbox', host: 'dev.example.com' } as never
+    ])
+    listRuntimeSshRemovedTargetLabelsMock.mockRejectedValue(new Error('unavailable'))
+    getRuntimeSshStateMock.mockRejectedValue(new Error('unreachable'))
+
+    await expect(store.getState().hydrateSshTargets()).resolves.toBeUndefined()
+
+    const state = store.getState()
+    expect(state.sshTargetsHydrated).toBe(true)
+    expect(state.sshTargetLabels.get('ssh-1')).toBe('devbox')
+    expect(state.sshConnectionStates.has('ssh-1')).toBe(false)
   })
 })

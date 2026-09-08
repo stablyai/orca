@@ -22,6 +22,24 @@ service OrchestrationService {
   // terminal was this task dispatched to." See SOL-018 for the "not a
   // missing assignee_handle field, a missing read RPC" distinction.
   rpc GetDispatchContextForTask(GetDispatchContextForTaskRequest) returns (GetDispatchContextForTaskResponse);
+
+  // ListActiveDispatchContextsForUser: every non-terminal dispatch context
+  // for the calling user (tenant/user from identity, not a request field).
+  // Added for CR-STORAGE-006/007 — see
+  // specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
+  rpc ListActiveDispatchContextsForUser(ListActiveDispatchContextsForUserRequest) returns (ListActiveDispatchContextsForUserResponse);
+
+  // FailDispatch records a real dispatch-attempt failure against
+  // dispatch_context_id, tripping the circuit breaker at
+  // failure_count >= 3 (orchestration-service.md §4). The caller passes the
+  // gRPC status code its own failed dispatch/relay call returned so this
+  // RPC can classify transport-vs-real failure the same way
+  // ClassifyDispatchFailure does for an in-process caller — a transport
+  // failure (UNAVAILABLE/DEADLINE_EXCEEDED) is intentionally NOT recorded,
+  // matching BE-SOL-STORAGE-003 §4's "a transient network blip must not
+  // trip the circuit breaker" rule. See
+  // specs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
+  rpc FailDispatch(FailDispatchRequest) returns (FailDispatchResponse);
 }
 
 message DispatchContext {
@@ -32,6 +50,19 @@ message DispatchContext {
   // See docs/execution-plan.md Epic C: added so callers can observe the FK
   // they supplied on CreateDispatchContextRequest.
   string orchestration_task_id = 4;
+  // user_id: the caller who initiated this dispatch, from identity at
+  // creation time. Empty for a system-initiated dispatch with no end-user
+  // caller. Added for CR-STORAGE-006/007.
+  string user_id = 5;
+  string status = 6;
+  int32 failure_count = 7;
+  string last_heartbeat_at = 8; // RFC3339; empty if never heartbeated
+  // worktree_id: the frontend worktree this dispatch is running for,
+  // caller-supplied on CreateDispatchContextRequest (like handle/
+  // coordinator_run_id/orchestration_task_id, unlike user_id). Empty for a
+  // dispatch with no worktree association. See
+  // specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+  string worktree_id = 9;
 }
 
 message CreateDispatchContextRequest {
@@ -44,6 +75,11 @@ message CreateDispatchContextRequest {
   // and CreateGate could never resolve a task to block, failing closed with
   // ORCH_DISPATCH_CONTEXT_NO_TASK for every dispatch context.
   string orchestration_task_id = 3;
+  // worktree_id: the frontend worktree this dispatch is running for.
+  // Optional — an ad-hoc dispatch with no worktree association
+  // legitimately omits it. See
+  // specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+  string worktree_id = 4;
 }
 
 message CreateDispatchContextResponse {
@@ -109,4 +145,35 @@ message GetDispatchContextForTaskResponse {
   // state (the task hasn't been dispatched), not an error. Reuses the
   // existing DispatchContext message; no new message type needed.
   DispatchContext dispatch = 1;
+}
+
+message ListActiveDispatchContextsForUserRequest {}   // tenant/user from identity, not a field — same pattern as infra-fleet-service's GetFleetConnectivitySummaryRequest
+
+message ListActiveDispatchContextsForUserResponse {
+  repeated DispatchContext dispatch_contexts = 1;
+}
+
+message FailDispatchRequest {
+  string dispatch_context_id = 1;
+  // Human-readable detail from the caller's own failed dispatch/relay call —
+  // persisted verbatim as dispatch_contexts.last_failure when the failure is
+  // actually recorded (see recorded in the response).
+  string error_message = 2;
+  // The standard gRPC status code (google.golang.org/grpc/codes.Code, e.g.
+  // 14 = Unavailable, 4 = DeadlineExceeded) the caller's own failed call
+  // returned. 0 (OK) or an unrecognized code both classify as a real
+  // dispatch failure (fail-closed: count it) — only UNAVAILABLE/
+  // DEADLINE_EXCEEDED are treated as transport, mirroring
+  // usecase.ClassifyDispatchFailure exactly.
+  uint32 grpc_status_code = 3;
+}
+
+message FailDispatchResponse {
+  // The dispatch context as it stands after this call — unchanged from
+  // before the call when recorded is false.
+  DispatchContext context = 1;
+  // True when this failure was classified as real and actually counted
+  // toward failure_count/circuit_broken. False means it was classified as a
+  // transient transport failure and intentionally NOT recorded.
+  bool recorded = 2;
 }

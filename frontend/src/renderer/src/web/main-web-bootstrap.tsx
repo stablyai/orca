@@ -13,7 +13,6 @@ import {
 import {
   createSessionWebRuntimeEnvironment,
   createStoredWebRuntimeEnvironment,
-  clearStoredWebRuntimeEnvironment,
   readStoredWebRuntimeEnvironment,
   saveStoredWebRuntimeEnvironment
 } from './web-runtime-environment'
@@ -67,8 +66,17 @@ function showErrorUi(rootEl: HTMLElement): void {
  * Listen for `orca:auth-failed` events emitted by WebSessionClient / WebRuntimeClient
  * when the WebSocket closes with code 4401 (session cookie missing/expired).
  *
- * On auth failure: clear all browser-side state and redirect to /login so the
- * user can sign in again with a fresh session — no manual intervention required.
+ * On auth failure: redirect to /login so the user can sign in again — no
+ * manual intervention required.
+ *
+ * FE-SOL-STORAGE-007(a): a 401/expired-token/transient disconnect is NOT a
+ * logout intent, so this must NOT wipe localStorage/sessionStorage.
+ * workspaceSession / orca.saved-instances / accountsDevServer stay put so
+ * re-authenticating (as the SAME user) restores dev-server/agent state
+ * exactly as it was before the disconnect. A genuine user switch is instead
+ * caught after re-auth by enforceWorkspaceOwnerOnReauth() below, which does
+ * the wipe when it actually applies. Explicit logout (FE-TASK-STORAGE-016)
+ * keeps its own unconditional clear — that IS a real wipe intent.
  *
  * Guards: only runs once (redirected flag), only for session-auth environments.
  * (E2EE pairing is no longer reachable from the multi-user bootstrap path —
@@ -76,7 +84,7 @@ function showErrorUi(rootEl: HTMLElement): void {
  * because bootstrapWebApp() and main.tsx's WebRoot still share this file's
  * exported helpers with tests.)
  */
-function installAuthFailedRedirect(): void {
+export function installAuthFailedRedirect(): void {
   let redirected = false
   window.addEventListener('orca:auth-failed', () => {
     if (redirected) {
@@ -87,17 +95,7 @@ function installAuthFailedRedirect(): void {
       return
     }
     redirected = true
-    console.warn('[Orca] Auth failed — clearing session and redirecting to /login')
-    try {
-      localStorage.clear()
-    } catch {
-      /* sandboxed iframe */
-    }
-    try {
-      sessionStorage.clear()
-    } catch {
-      /* sandboxed iframe */
-    }
+    console.warn('[Orca] Auth failed — redirecting to /login (local state preserved)')
     document.cookie.split(';').forEach((c) => {
       const name = c.split('=')[0].trim()
       if (!name) {
@@ -108,9 +106,59 @@ function installAuthFailedRedirect(): void {
       document.cookie = `${name}=; ${exp}; path=/; domain=${location.hostname}`
       document.cookie = `${name}=; ${exp}; path=/; domain=.${location.hostname}`
     })
-    clearStoredWebRuntimeEnvironment()
     window.location.href = '/login'
   })
+}
+
+// Duplicated from web-preload-api.ts's (unexported) SESSION_STORAGE_KEY — kept
+// as a plain string here rather than importing that module, since pulling in
+// web-preload-api.ts's full session-hydration/remote-sync surface for one key
+// name is out of scope for FE-TASK-STORAGE-015. Must stay in sync with it.
+const WORKSPACE_SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
+
+/**
+ * FE-SOL-STORAGE-007(a) — mandatory safety check paired with the auth-failure
+ * handler above no longer wiping state: after a successful (re-)auth, compare
+ * the signed-in user's id against `ownerUserId` recorded on the persisted
+ * WorkspaceSessionState. Same user (or first-ever login, no owner recorded
+ * yet) → keep everything, just (re)stamp ownership. Different user → this is
+ * a genuine account switch, not a resume, so wipe local state exactly like
+ * logout does before stamping the new owner.
+ */
+export function enforceWorkspaceOwnerOnReauth(userId: string): void {
+  let previousOwnerId: string | undefined
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_SESSION_STORAGE_KEY)
+    if (raw) {
+      previousOwnerId = (JSON.parse(raw) as { ownerUserId?: string }).ownerUserId
+    }
+  } catch {
+    // Malformed JSON — treat as "no recorded owner" rather than blocking login.
+  }
+
+  if (previousOwnerId && previousOwnerId !== userId) {
+    try {
+      localStorage.clear()
+    } catch {
+      /* sandboxed iframe */
+    }
+    try {
+      sessionStorage.clear()
+    } catch {
+      /* sandboxed iframe */
+    }
+  }
+
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_SESSION_STORAGE_KEY)
+    const stored = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+    window.localStorage.setItem(
+      WORKSPACE_SESSION_STORAGE_KEY,
+      JSON.stringify({ ...stored, ownerUserId: userId })
+    )
+  } catch {
+    /* sandboxed iframe / storage quota */
+  }
 }
 
 // Why: banner wrapper reads from ConnectionStatusProvider context so it stays
@@ -179,6 +227,9 @@ function WebRoot({
     if (sessionUser === null) {
       return
     }
+    // FE-SOL-STORAGE-007(a): must run before anything reads persisted
+    // workspace state — a different user re-authenticating wipes it here.
+    enforceWorkspaceOwnerOnReauth(sessionUser.id)
     const store = useAppStore.getState()
     store.setCurrentUser({
       id: sessionUser.id,

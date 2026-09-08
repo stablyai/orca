@@ -50,6 +50,7 @@ const (
 	GitGatewayService_WriteFile_FullMethodName                   = "/orca.gitgateway.v1.GitGatewayService/WriteFile"
 	GitGatewayService_WriteFileChunk_FullMethodName              = "/orca.gitgateway.v1.GitGatewayService/WriteFileChunk"
 	GitGatewayService_CreateDir_FullMethodName                   = "/orca.gitgateway.v1.GitGatewayService/CreateDir"
+	GitGatewayService_CreateFile_FullMethodName                  = "/orca.gitgateway.v1.GitGatewayService/CreateFile"
 	GitGatewayService_DeleteFile_FullMethodName                  = "/orca.gitgateway.v1.GitGatewayService/DeleteFile"
 	GitGatewayService_StatFile_FullMethodName                    = "/orca.gitgateway.v1.GitGatewayService/StatFile"
 	GitGatewayService_SearchFiles_FullMethodName                 = "/orca.gitgateway.v1.GitGatewayService/SearchFiles"
@@ -65,6 +66,7 @@ const (
 	GitGatewayService_ReadIssueCommand_FullMethodName            = "/orca.gitgateway.v1.GitGatewayService/ReadIssueCommand"
 	GitGatewayService_WriteIssueCommand_FullMethodName           = "/orca.gitgateway.v1.GitGatewayService/WriteIssueCommand"
 	GitGatewayService_ScanSetupScriptImports_FullMethodName      = "/orca.gitgateway.v1.GitGatewayService/ScanSetupScriptImports"
+	GitGatewayService_ReadEphemeralVmRecipes_FullMethodName      = "/orca.gitgateway.v1.GitGatewayService/ReadEphemeralVmRecipes"
 	GitGatewayService_CreateWorktree_FullMethodName              = "/orca.gitgateway.v1.GitGatewayService/CreateWorktree"
 	GitGatewayService_RemoveWorktree_FullMethodName              = "/orca.gitgateway.v1.GitGatewayService/RemoveWorktree"
 	GitGatewayService_ForceDeleteBranch_FullMethodName           = "/orca.gitgateway.v1.GitGatewayService/ForceDeleteBranch"
@@ -148,6 +150,7 @@ type GitGatewayServiceClient interface {
 	WriteFile(ctx context.Context, in *WriteFileRequest, opts ...grpc.CallOption) (*WriteFileResponse, error)
 	WriteFileChunk(ctx context.Context, in *WriteFileChunkRequest, opts ...grpc.CallOption) (*WriteFileChunkResponse, error)
 	CreateDir(ctx context.Context, in *CreateDirRequest, opts ...grpc.CallOption) (*CreateDirResponse, error)
+	CreateFile(ctx context.Context, in *CreateFileRequest, opts ...grpc.CallOption) (*CreateFileResponse, error)
 	DeleteFile(ctx context.Context, in *DeleteFileRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	StatFile(ctx context.Context, in *StatFileRequest, opts ...grpc.CallOption) (*StatFileResponse, error)
 	SearchFiles(ctx context.Context, in *SearchFilesRequest, opts ...grpc.CallOption) (*SearchFilesResponse, error)
@@ -169,6 +172,11 @@ type GitGatewayServiceClient interface {
 	ReadIssueCommand(ctx context.Context, in *ReadIssueCommandRequest, opts ...grpc.CallOption) (*ReadIssueCommandResponse, error)
 	WriteIssueCommand(ctx context.Context, in *WriteIssueCommandRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	ScanSetupScriptImports(ctx context.Context, in *ScanSetupScriptImportsRequest, opts ...grpc.CallOption) (*ScanSetupScriptImportsResponse, error)
+	// ReadEphemeralVmRecipes reads orca.yaml's environmentRecipes section off
+	// repoId's owning host (Group 1 of SOL-004 — no new agent capability,
+	// reuses the already-existing fs.readFile relay via GitExecutor.ReadFile).
+	// See specs/backend-go/bugs/missing-v3/solutions/SOL-004-ephemeralvm-channels.md.
+	ReadEphemeralVmRecipes(ctx context.Context, in *ReadEphemeralVmRecipesRequest, opts ...grpc.CallOption) (*ReadEphemeralVmRecipesResponse, error)
 	CreateWorktree(ctx context.Context, in *CreateWorktreeRequest, opts ...grpc.CallOption) (*CreateWorktreeResponse, error)
 	RemoveWorktree(ctx context.Context, in *RemoveWorktreeRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Required on every GitExecutor implementation from day one — TASK-194
@@ -514,6 +522,16 @@ func (c *gitGatewayServiceClient) CreateDir(ctx context.Context, in *CreateDirRe
 	return out, nil
 }
 
+func (c *gitGatewayServiceClient) CreateFile(ctx context.Context, in *CreateFileRequest, opts ...grpc.CallOption) (*CreateFileResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateFileResponse)
+	err := c.cc.Invoke(ctx, GitGatewayService_CreateFile_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gitGatewayServiceClient) DeleteFile(ctx context.Context, in *DeleteFileRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(emptypb.Empty)
@@ -658,6 +676,16 @@ func (c *gitGatewayServiceClient) ScanSetupScriptImports(ctx context.Context, in
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ScanSetupScriptImportsResponse)
 	err := c.cc.Invoke(ctx, GitGatewayService_ScanSetupScriptImports_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gitGatewayServiceClient) ReadEphemeralVmRecipes(ctx context.Context, in *ReadEphemeralVmRecipesRequest, opts ...grpc.CallOption) (*ReadEphemeralVmRecipesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReadEphemeralVmRecipesResponse)
+	err := c.cc.Invoke(ctx, GitGatewayService_ReadEphemeralVmRecipes_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -898,6 +926,7 @@ type GitGatewayServiceServer interface {
 	WriteFile(context.Context, *WriteFileRequest) (*WriteFileResponse, error)
 	WriteFileChunk(context.Context, *WriteFileChunkRequest) (*WriteFileChunkResponse, error)
 	CreateDir(context.Context, *CreateDirRequest) (*CreateDirResponse, error)
+	CreateFile(context.Context, *CreateFileRequest) (*CreateFileResponse, error)
 	DeleteFile(context.Context, *DeleteFileRequest) (*emptypb.Empty, error)
 	StatFile(context.Context, *StatFileRequest) (*StatFileResponse, error)
 	SearchFiles(context.Context, *SearchFilesRequest) (*SearchFilesResponse, error)
@@ -919,6 +948,11 @@ type GitGatewayServiceServer interface {
 	ReadIssueCommand(context.Context, *ReadIssueCommandRequest) (*ReadIssueCommandResponse, error)
 	WriteIssueCommand(context.Context, *WriteIssueCommandRequest) (*emptypb.Empty, error)
 	ScanSetupScriptImports(context.Context, *ScanSetupScriptImportsRequest) (*ScanSetupScriptImportsResponse, error)
+	// ReadEphemeralVmRecipes reads orca.yaml's environmentRecipes section off
+	// repoId's owning host (Group 1 of SOL-004 — no new agent capability,
+	// reuses the already-existing fs.readFile relay via GitExecutor.ReadFile).
+	// See specs/backend-go/bugs/missing-v3/solutions/SOL-004-ephemeralvm-channels.md.
+	ReadEphemeralVmRecipes(context.Context, *ReadEphemeralVmRecipesRequest) (*ReadEphemeralVmRecipesResponse, error)
 	CreateWorktree(context.Context, *CreateWorktreeRequest) (*CreateWorktreeResponse, error)
 	RemoveWorktree(context.Context, *RemoveWorktreeRequest) (*emptypb.Empty, error)
 	// Required on every GitExecutor implementation from day one — TASK-194
@@ -1054,6 +1088,9 @@ func (UnimplementedGitGatewayServiceServer) WriteFileChunk(context.Context, *Wri
 func (UnimplementedGitGatewayServiceServer) CreateDir(context.Context, *CreateDirRequest) (*CreateDirResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateDir not implemented")
 }
+func (UnimplementedGitGatewayServiceServer) CreateFile(context.Context, *CreateFileRequest) (*CreateFileResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateFile not implemented")
+}
 func (UnimplementedGitGatewayServiceServer) DeleteFile(context.Context, *DeleteFileRequest) (*emptypb.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteFile not implemented")
 }
@@ -1098,6 +1135,9 @@ func (UnimplementedGitGatewayServiceServer) WriteIssueCommand(context.Context, *
 }
 func (UnimplementedGitGatewayServiceServer) ScanSetupScriptImports(context.Context, *ScanSetupScriptImportsRequest) (*ScanSetupScriptImportsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ScanSetupScriptImports not implemented")
+}
+func (UnimplementedGitGatewayServiceServer) ReadEphemeralVmRecipes(context.Context, *ReadEphemeralVmRecipesRequest) (*ReadEphemeralVmRecipesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReadEphemeralVmRecipes not implemented")
 }
 func (UnimplementedGitGatewayServiceServer) CreateWorktree(context.Context, *CreateWorktreeRequest) (*CreateWorktreeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateWorktree not implemented")
@@ -1711,6 +1751,24 @@ func _GitGatewayService_CreateDir_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GitGatewayService_CreateFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateFileRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitGatewayServiceServer).CreateFile(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitGatewayService_CreateFile_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitGatewayServiceServer).CreateFile(ctx, req.(*CreateFileRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GitGatewayService_DeleteFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteFileRequest)
 	if err := dec(in); err != nil {
@@ -1977,6 +2035,24 @@ func _GitGatewayService_ScanSetupScriptImports_Handler(srv interface{}, ctx cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GitGatewayServiceServer).ScanSetupScriptImports(ctx, req.(*ScanSetupScriptImportsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GitGatewayService_ReadEphemeralVmRecipes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReadEphemeralVmRecipesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GitGatewayServiceServer).ReadEphemeralVmRecipes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GitGatewayService_ReadEphemeralVmRecipes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GitGatewayServiceServer).ReadEphemeralVmRecipes(ctx, req.(*ReadEphemeralVmRecipesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -2415,6 +2491,10 @@ var GitGatewayService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _GitGatewayService_CreateDir_Handler,
 		},
 		{
+			MethodName: "CreateFile",
+			Handler:    _GitGatewayService_CreateFile_Handler,
+		},
+		{
 			MethodName: "DeleteFile",
 			Handler:    _GitGatewayService_DeleteFile_Handler,
 		},
@@ -2473,6 +2553,10 @@ var GitGatewayService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ScanSetupScriptImports",
 			Handler:    _GitGatewayService_ScanSetupScriptImports_Handler,
+		},
+		{
+			MethodName: "ReadEphemeralVmRecipes",
+			Handler:    _GitGatewayService_ReadEphemeralVmRecipes_Handler,
 		},
 		{
 			MethodName: "CreateWorktree",

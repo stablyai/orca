@@ -35,7 +35,6 @@ import {
   createRemoteRuntimeViewportBatcher
 } from './remote-runtime-pty-batching'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { logBugFePty001 } from '@/lib/bug-fe-pty-001-diagnostic-log'
 import { setFitOverride } from '@/lib/pane-manager/mobile-fit-overrides'
 import { setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from '@/runtime/web-terminal-surface-id'
@@ -73,6 +72,18 @@ function isRemoteTerminalGoneMessage(message: string): boolean {
 // error the moment the underlying WS reconnected mid-session.
 function isNoLiveAttachPtyStreamMessage(message: string): boolean {
   return message.includes('no live AttachPty stream')
+}
+
+// SOL-008 (specs/backend-go/bugs/missing-v3/): infra-fleet-service's
+// SpawnTerminalSession returns this code when a runtime:<environmentId>
+// target has no dev-server/SSH connection bound yet — a fixable
+// precondition, not a bug. AppError.ToStatus() formats the gRPC status
+// message as "<CODE>: <text>", so match on the code prefix rather than the
+// full message (the message text itself is not a stable contract).
+const NO_COMPUTE_BOUND_ERROR_CODE = 'INFRA_TERMINAL_NO_COMPUTE_BOUND'
+
+function isNoComputeBoundMessage(message: string): boolean {
+  return message.includes(NO_COMPUTE_BOUND_ERROR_CODE)
 }
 
 // FIX BUG-FE-PTY-001: a fresh local tab's connect() and its own host-session
@@ -183,12 +194,6 @@ export function createRemoteRuntimePtyTransport(
     }
     viewportClaimReadyWaiters.clear()
   }
-  // TEMP DIAG BUG-FE-PTY-001: log every transport instantiation with its
-  // tabId/leafId + call stack, to catch a second transport being created for
-  // the same tab while the first one's terminal.create is still in flight.
-  logBugFePty001(
-    `transport CREATED tabId=${tabId} leafId=${leafId} worktreeId=${worktreeId}\n${new Error('create call site').stack}`
-  )
   // Why: tab/leaf ids identify the mirrored host pane, so every paired viewer
   // shares them. The instance suffix keeps one viewer's refresh off peer records.
   const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}:${createBrowserUuid()}`
@@ -710,28 +715,13 @@ export function createRemoteRuntimePtyTransport(
       !transportClosed &&
       generation === subscriptionGeneration &&
       isCurrentRemoteTerminal(subscribedHandle, subscribedPtyId)
-    // TEMP DIAG BUG-FE-PTY-001 (double-prompt follow-up): log a short preview
-    // of the snapshot and the first few live chunks so a duplicated prompt
-    // can be traced to "server sent it twice" (both previews show the same
-    // text) vs "client wrote it twice" (only one preview shows it).
-    let diagOnDataCallCount = 0
-    const DIAG_ON_DATA_LOG_LIMIT = 5
     const subscribeCallbacks: RemoteRuntimeMultiplexedTerminalCallbacks = {
       onData: (data, meta) => {
         if (isCurrentSubscription()) {
-          if (diagOnDataCallCount < DIAG_ON_DATA_LOG_LIMIT) {
-            diagOnDataCallCount += 1
-            logBugFePty001(
-              `subscribeToHandle onData tabId=${tabId} leafId=${leafId} handle=${subscribedHandle} gen=${generation} seq=${meta?.seq} preview=${JSON.stringify(data.slice(-80))}`
-            )
-          }
           outputProcessor.processData(data, storedCallbacks, undefined, meta)
         }
       },
       onSnapshot: (data, meta) => {
-        logBugFePty001(
-          `subscribeToHandle onSnapshot tabId=${tabId} leafId=${leafId} handle=${subscribedHandle} gen=${generation} preview=${JSON.stringify(data.slice(-80))}`
-        )
         // Why: a snapshot with no body can still carry a pending mid-escape
         // tail that must be replayed so the next live chunk completes it.
         if ((data || meta?.pendingEscapeTailAnsi) && isCurrentSubscription()) {
@@ -901,9 +891,10 @@ export function createRemoteRuntimePtyTransport(
             // Why: backend-go's terminal.create (channels_terminal.go) only
             // reads connectionId, never worktree — SpawnTerminalSession takes
             // an empty ConnectionID as "spawn a host-local PTY", which the
-            // web deployment cannot do (INFRA_TERMINAL_HOST_LOCAL_UNIMPLEMENTED,
-            // found live 2026-08-30). Every dev-server-bound terminal on web
-            // rides this transport, so connectionId must travel with it.
+            // web deployment cannot do (INFRA_TERMINAL_NO_COMPUTE_BOUND,
+            // found live 2026-08-30; see isNoComputeBoundMessage above).
+            // Every dev-server-bound terminal on web rides this transport, so
+            // connectionId must travel with it.
             ...(connectionId ? { connectionId } : {}),
             ...(commandToSend !== undefined ? { command: commandToSend } : {}),
             ...(startupCommandDeliveryToSend !== undefined
@@ -924,12 +915,6 @@ export function createRemoteRuntimePtyTransport(
         )
         handle = created.terminal.handle
         if (destroyed) {
-          // TEMP DIAG BUG-FE-PTY-001: this is the exact "created then
-          // immediately destroyed" race — logs which tab/leaf raced and how
-          // long the create() round-trip took before destroy() beat it.
-          logBugFePty001(
-            `connect() found destroyed=true right after terminal.create resolved — grace-closing PTY tabId=${tabId} leafId=${leafId} worktreeId=${worktreeId} handle=${created.terminal.handle}`
-          )
           // FIX BUG-FE-PTY-001: this is USUALLY a cancelled launch (rapid
           // tab-open/tab-close) — close the server PTY so it doesn't leak.
           // But it's also exactly what happens when this same leaf's own
@@ -961,7 +946,14 @@ export function createRemoteRuntimePtyTransport(
           replay: ''
         } satisfies PtyConnectResult
       } catch (error) {
-        storedCallbacks.onError?.(runtimeTerminalErrorMessage(error))
+        const message = runtimeTerminalErrorMessage(error)
+        if (isNoComputeBoundMessage(message)) {
+          storedCallbacks.onError?.(
+            'This environment has no compute attached — attach a dev server or SSH connection to this environment before opening a terminal.'
+          )
+        } else {
+          storedCallbacks.onError?.(message)
+        }
         return undefined
       }
     },
@@ -1185,12 +1177,6 @@ export function createRemoteRuntimePtyTransport(
     },
 
     destroy() {
-      // TEMP DIAG BUG-FE-PTY-001: pairs with the "transport CREATED" log —
-      // correlate by tabId/leafId to see whether a second transport for the
-      // same tab triggered this teardown before connect() finished.
-      logBugFePty001(
-        `transport DESTROY called tabId=${tabId} leafId=${leafId} handle=${handle} connected=${connected}\n${new Error('destroy call site').stack}`
-      )
       destroyed = true
       this.disconnect()
       inputBatcher.clear()

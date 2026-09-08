@@ -66,6 +66,20 @@ type ScmProvider interface {
 	SetPullRequestAutoMerge(ctx context.Context, cred Credential, repo string, number int32, enabled bool, mergeMethod string) (domain.PullRequest, error)
 	UpdateIssue(ctx context.Context, cred Credential, repo string, number int32, patch IssuePatch) (domain.Issue, error)
 
+	// UpdatePullRequest — github.updatePRTitle (SOL-012). Plain (repo,
+	// number) address + a PullRequestPatch mirroring IssuePatch's
+	// nil-means-unchanged convention. GitHub implements it for real
+	// against PATCH /repos/{owner}/{repo}/pulls/{number}; every other
+	// adapter returns its own ErrCapabilityUnsupported, same convention as
+	// this block's other methods.
+	UpdatePullRequest(ctx context.Context, cred Credential, repo string, number int32, patch PullRequestPatch) (domain.PullRequest, error)
+
+	// StarRepository — github.starOrca (SOL-012). GitHub implements it for
+	// real against PUT /user/starred/{owner}/{repo}; every other adapter
+	// returns its own ErrCapabilityUnsupported, same convention as the
+	// block above.
+	StarRepository(ctx context.Context, cred Credential, repo string) (bool, error)
+
 	// GetPullRequestForBranch — provider-generic; backs github.prForBranch
 	// AND hostedReview.forBranch (SOL-014). found=false + zero-value
 	// PullRequest means "no open PR/MR for this branch", not an error.
@@ -97,6 +111,15 @@ type IssuePatch struct {
 	AddLabels    []string
 	RemoveLabels []string
 	Assignees    []string
+}
+
+// PullRequestPatch is UpdatePullRequest's partial-update shape — nil
+// pointer fields mean "leave unchanged", same convention as IssuePatch.
+// Title-only today (github.updatePRTitle's actual wire shape); additive
+// fields (Body, Base, State) can be added later without a breaking change,
+// mirroring how IssuePatch itself grew incrementally.
+type PullRequestPatch struct {
+	Title *string
 }
 
 // WorkItemFilter narrows a ListWorkItems call — a small, deliberately

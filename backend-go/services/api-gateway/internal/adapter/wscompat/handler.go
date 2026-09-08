@@ -98,6 +98,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// call's AttachPty stream on THIS connection — same per-connection
 	// principle as terminalStreamsContext above.
 	ctx = terminalJSONSubscribeContext(ctx, newTerminalJSONSubscribeRegistry())
+	// provisionStreamsContext attaches a fresh, connection-scoped
+	// provisionStreamRegistry (provision_stream_registry.go) so
+	// ephemeralVm.provision's StreamChannelHandler and
+	// ephemeralVm.cancelProvision can find each other's open
+	// StreamVmProvision streams on THIS connection — same per-connection
+	// principle as terminalStreamsContext above (TASK-BE-EVM-005).
+	ctx = provisionStreamsContext(ctx, newProvisionStreamRegistry())
 
 	// writeMu serializes writes to conn — coder/websocket, like most WS
 	// libraries, does not allow concurrent writers on one connection. Reads

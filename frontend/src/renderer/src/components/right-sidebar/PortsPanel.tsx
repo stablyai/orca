@@ -28,6 +28,7 @@ import {
   refreshWorkspacePortScanAfterStop,
   resolvePortOpenInOrcaBrowser,
   scanWorkspacePortsForTarget,
+  workspacePortOwnerWorktreeId,
   workspacePortRuntimeTargetKey
 } from '@/lib/workspace-port-actions'
 import {
@@ -252,6 +253,7 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
       }
       const result = await killWorkspacePortForTarget(runtimeTarget, {
         repoId: activeRepo.id,
+        worktreeId: workspacePortOwnerWorktreeId(port) ?? undefined,
         pid: port.pid,
         port: port.port
       })

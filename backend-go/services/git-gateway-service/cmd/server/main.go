@@ -163,6 +163,7 @@ func run() error {
 	writeFileUC := usecase.NewWriteFileUseCase(resolver, localFS, relayFS)
 	writeFileChunkUC := usecase.NewWriteFileChunkUseCase(resolver, localFS, relayFS)
 	createDirUC := usecase.NewCreateDirUseCase(resolver, localFS, relayFS)
+	createFileUC := usecase.NewCreateFileUseCase(resolver, localFS, relayFS)
 	deleteFileUC := usecase.NewDeleteFileUseCase(resolver, localFS, relayFS)
 	statFileUC := usecase.NewStatFileUseCase(resolver, localFS, relayFS)
 	searchFilesUC := usecase.NewSearchFilesUseCase(resolver, localFS, relayFS)
@@ -201,6 +202,11 @@ func run() error {
 	discardUC := usecase.NewDiscard(resolver, local, relay)
 	bulkDiscardUC := usecase.NewBulkDiscard(resolver, local, relay)
 
+	// SOL-004 Group 1 (TASK-001/002): readEphemeralVmRecipes dispatches a
+	// FilesystemExecutor (localFS/relayFS), not a GitExecutor (local/relay)
+	// — see usecase.ReadEphemeralVmRecipes's doc comment for why.
+	readEphemeralVmRecipesUC := usecase.NewReadEphemeralVmRecipes(devServerReachability, projectClient, localFS, relayFS)
+
 	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger))
 	gitgatewayv1.RegisterGitGatewayServiceServer(grpcServer, gitgatewaygrpc.New(
 		getStatusUC, getDiffUC, commitUC, pushUC, pullUC, generateCommitMessageUC,
@@ -210,7 +216,7 @@ func run() error {
 		remoteCommitURLUC, remoteFileURLUC, getRemoteURLUC, fetchUC,
 		generatePullRequestFieldsUC, discoverCommitMessageModelsUC,
 		readFileUC, readFileChunkUC, readFilePreviewUC, readDirUC, writeFileUC, writeFileChunkUC,
-		createDirUC, deleteFileUC, statFileUC, searchFilesUC, listAllFilesUC, listMarkdownDocumentsUC,
+		createDirUC, createFileUC, deleteFileUC, statFileUC, searchFilesUC, listAllFilesUC, listMarkdownDocumentsUC,
 		renameFileUC, copyFileUC,
 		cloneUC, initRepoUC, baseRefDefaultUC, searchRefsUC, checkHooksUC,
 		readIssueCommandUC, writeIssueCommandUC, scanSetupScriptImportsUC,
@@ -219,6 +225,7 @@ func run() error {
 		checkoutUC, listLocalBranchesUC, fastForwardUC, rebaseFromBaseUC,
 		abortRebaseUC, abortMergeUC, conflictOperationUC, resolveConflictUC,
 		discardUC, bulkDiscardUC,
+		readEphemeralVmRecipesUC,
 	))
 	reflection.Register(grpcServer) // convenient for grpcurl during local dev; keep enabled behind the mesh, not the public internet
 

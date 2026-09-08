@@ -213,6 +213,35 @@ func (c *Client) getOrProvisionSession(ctx context.Context, devServer domain.Dev
 	return sess, nil
 }
 
+// AttachTransport registers an already-established Transport as
+// devServerID's live session — the Transport-level sibling of
+// AttachInboundSession just below, for a caller that already holds a
+// devserveragent.Transport directly instead of a raw *websocket.Conn.
+//
+// Added for TASK-BE-EVM-013 (not originally in that task's file list —
+// discovered necessary during implementation): adapter/
+// backendrelaysshprovisioner calls adapter/sshrelay.Provisioner.Provision
+// directly (bypassing getOrProvisionSession/c.sshProvisioner, which is
+// wired to the SHARED, Vault-cert-based relay-ssh provisioner for
+// user-registered SSH targets — not reusable per-call with ephemeral,
+// recipe-supplied credentials) and needs a way to hand the resulting
+// Transport to this Client so later Exec/Health calls for that dev server
+// find a live session, exactly like relay-ssh's own getOrProvisionSession
+// path does internally via sess.attachTransport. Mirrors
+// AttachInboundSession's shape 1:1; only the transport's origin differs.
+func (c *Client) AttachTransport(devServerID, host string, transport Transport, info HandshakeInfo) {
+	c.mu.Lock()
+	sess, ok := c.sessions[devServerID]
+	if !ok {
+		sess = newSession(host, c.cfg, c.logger)
+		sess.managedExternally = true
+		c.sessions[devServerID] = sess
+	}
+	c.mu.Unlock()
+
+	sess.attachTransport(transport, info)
+}
+
 // AttachInboundSession registers an already-authenticated inbound
 // WebSocket connection as devServerID's live session — called by
 // adapter/agentwsserver once its handshake + token-slot validation
@@ -446,6 +475,251 @@ func screencastStartParams(p usecase.ScreencastParams) map[string]any {
 		params["deviceScaleFactor"] = *p.DeviceScaleFactor
 	}
 	return params
+}
+
+// vmProvisionParams builds vm.provision's JSON-RPC params — field names
+// match agent-ephemeral-vm-handler.ts's VmProvisionParams/
+// validateVmProvisionParams exactly (repoPath/command/recipeId/runtimeId),
+// the same wire contract vm.exec already uses (TASK-BE-EVM-001).
+func vmProvisionParams(p usecase.VmProvisionParams) map[string]any {
+	return map[string]any{
+		"repoPath":  p.RepoPath,
+		"command":   p.Command,
+		"recipeId":  p.RecipeID,
+		"runtimeId": p.RuntimeID,
+	}
+}
+
+// StreamVmProvision runs a recipe's provision command on the agent and
+// streams its stdout/stderr/result back — see
+// usecase.DevServerAgentClient.StreamVmProvision's doc comment for the wire
+// shape. session.streamCall blocks for the dispatcher's immediate
+// "stream.started" ack (or a dispatch-time error, e.g. method not found)
+// before this method returns — the same "starting IS subscribing,
+// synchronously" discipline StreamScreencast's sess.call(...,
+// "browser.screencastStart", ...) uses, so a caller's very first failure
+// mode (an agent build too old to have vm.provision) surfaces as a returned
+// error here, not silently as the channel's first event.
+func (c *Client) StreamVmProvision(ctx context.Context, devServer domain.DevServer, params usecase.VmProvisionParams) (<-chan usecase.VmProvisionEvent, func(), error) {
+	if devServer.Mode == domain.ConnectionModeRelaySSH {
+		return nil, nil, fmt.Errorf("%w: relay-ssh mode has no vm.* JSON-RPC surface (no relay.js deployed)", ErrConnectionModeNotImplemented)
+	}
+	sess, err := c.getOrCreateSession(ctx, devServer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	_, rest, complete, err := sess.streamCall(ctx, "vm.provision", vmProvisionParams(params))
+	if err != nil {
+		var rpcErr *JSONRPCError
+		if errors.As(err, &rpcErr) && rpcErr.Code == jsonrpcMethodNotFoundCode {
+			return nil, nil, fmt.Errorf("%w: %v", domain.ErrAgentMethodNotFound, err)
+		}
+		return nil, nil, err
+	}
+
+	out := make(chan usecase.VmProvisionEvent, 64)
+	done := make(chan struct{})
+	var closeOnce sync.Once
+	unsubscribe := func() {
+		closeOnce.Do(func() {
+			close(done)
+			complete()
+		})
+	}
+
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case resp, ok := <-rest:
+				if !ok {
+					return
+				}
+				if resp.Error != nil {
+					// A JSON-RPC-level error frame mid-stream (e.g.
+					// handleDisconnect's synthesized connection-lost error) —
+					// terminal, unlike a semantic error carried inside a
+					// stream.end frame's own result.error field (see
+					// decodeVmProvisionFrame).
+					select {
+					case out <- usecase.VmProvisionEvent{Type: "error", ErrorMsg: resp.Error.Error()}:
+					case <-done:
+					}
+					complete()
+					return
+				}
+				event, terminal := decodeVmProvisionFrame(resp.Result)
+				if event != nil {
+					select {
+					case out <- *event:
+					case <-done:
+						complete()
+						return
+					}
+				}
+				if terminal {
+					complete()
+					return
+				}
+			case <-done:
+				return
+			case <-ctx.Done():
+				complete()
+				return
+			}
+		}
+	}()
+
+	return out, unsubscribe, nil
+}
+
+// vmProvisionFrame is this adapter's decoding of one vm.provision response
+// frame's `result` field — see handleVmProvision's doc comment
+// (agent-ephemeral-vm-handler.ts) for the exact 3 frame shapes this mirrors.
+type vmProvisionFrame struct {
+	Type            string          `json:"type"` // "stream.started" | "stream.chunk" | "stream.end"
+	Line            string          `json:"line"`
+	Source          string          `json:"source"` // "stderr" when set, else stdout
+	ExitCode        int             `json:"exitCode"`
+	ProvisionResult json.RawMessage `json:"provisionResult"`
+	Error           string          `json:"error"`
+}
+
+// vmProvisionResultEnvelope mirrors parseEphemeralVmRecipeResult's return
+// shape ({ok:true,result:...}|{ok:false,error:string}) — the exact JSON
+// handleVmProvision puts in a stream.end frame's "provisionResult" field.
+type vmProvisionResultEnvelope struct {
+	Ok     bool            `json:"ok"`
+	Result json.RawMessage `json:"result"`
+	Error  string          `json:"error"`
+}
+
+// vmProvisionRecipeResult mirrors ephemeral-vm-recipes.ts's
+// EphemeralVmRecipeResult union permissively (Go has no discriminated
+// union): the legacy shape has pairingCode/projectRoot at the top level with
+// no "connection" field (implicitly orca-server); the new shape carries an
+// explicit "connection" object. See normalizeVmProvisionResult.
+type vmProvisionRecipeResult struct {
+	PairingCode string `json:"pairingCode"`
+	ProjectRoot string `json:"projectRoot"`
+	Connection  *struct {
+		Type        string          `json:"type"`
+		PairingCode string          `json:"pairingCode"`
+		ProjectRoot string          `json:"projectRoot"`
+		Target      json.RawMessage `json:"target"`
+	} `json:"connection"`
+}
+
+// vmProvisionSshTargetWire mirrors EphemeralVmRecipeSshTargetSchema's wire
+// fields consumed here (configHost/portForwards deliberately omitted, same
+// cross-check as infrafleet.proto's EphemeralVmRecipeSshTarget message).
+type vmProvisionSshTargetWire struct {
+	Label                   string `json:"label"`
+	Host                    string `json:"host"`
+	Port                    int32  `json:"port"`
+	Username                string `json:"username"`
+	IdentityFile            string `json:"identityFile"`
+	IdentityAgent           string `json:"identityAgent"`
+	IdentitiesOnly          bool   `json:"identitiesOnly"`
+	ProxyCommand            string `json:"proxyCommand"`
+	JumpHost                string `json:"jumpHost"`
+	RelayGracePeriodSeconds int32  `json:"relayGracePeriodSeconds"`
+}
+
+// decodeVmProvisionFrame demuxes one vm.provision response frame's `result`
+// JSON into a usecase.VmProvisionEvent. Returns (nil, false) for
+// "stream.started" (swallowed — see StreamVmProvision's doc comment);
+// terminal=true only for "stream.end", whether it resolves to a "result" or
+// an "error" event.
+func decodeVmProvisionFrame(raw json.RawMessage) (event *usecase.VmProvisionEvent, terminal bool) {
+	var f vmProvisionFrame
+	if err := json.Unmarshal(raw, &f); err != nil {
+		e := usecase.VmProvisionEvent{Type: "error", ErrorMsg: fmt.Sprintf("devserveragent: decoding vm.provision frame: %v", err)}
+		return &e, true
+	}
+	switch f.Type {
+	case "stream.started":
+		return nil, false
+	case "stream.chunk":
+		typ := "stdout"
+		if f.Source == "stderr" {
+			typ = "stderr"
+		}
+		e := usecase.VmProvisionEvent{Type: typ, Chunk: f.Line}
+		return &e, false
+	case "stream.end":
+		return decodeVmProvisionStreamEnd(f), true
+	default:
+		return nil, false
+	}
+}
+
+// decodeVmProvisionStreamEnd mirrors handleVmProvision's own precedence:
+// its catch-block "error" field (agent-side exception, e.g. abort/timeout) >
+// a non-zero exitCode (mirrors handleVmExec's convention) > provisionResult's
+// own {ok:false,error} (a syntactically-valid-JSON-RPC but semantically
+// invalid recipe result) > the normalized success result.
+func decodeVmProvisionStreamEnd(f vmProvisionFrame) *usecase.VmProvisionEvent {
+	if f.Error != "" {
+		e := usecase.VmProvisionEvent{Type: "error", ErrorMsg: f.Error}
+		return &e
+	}
+	if f.ExitCode != 0 {
+		e := usecase.VmProvisionEvent{Type: "error", ErrorMsg: fmt.Sprintf("vm.provision exited %d", f.ExitCode)}
+		return &e
+	}
+	if len(f.ProvisionResult) == 0 {
+		e := usecase.VmProvisionEvent{Type: "error", ErrorMsg: "vm.provision: agent reported success with no provisionResult"}
+		return &e
+	}
+	var env vmProvisionResultEnvelope
+	if err := json.Unmarshal(f.ProvisionResult, &env); err != nil {
+		e := usecase.VmProvisionEvent{Type: "error", ErrorMsg: fmt.Sprintf("devserveragent: decoding provisionResult: %v", err)}
+		return &e
+	}
+	if !env.Ok {
+		e := usecase.VmProvisionEvent{Type: "error", ErrorMsg: env.Error}
+		return &e
+	}
+	result, err := normalizeVmProvisionResult(env.Result)
+	if err != nil {
+		e := usecase.VmProvisionEvent{Type: "error", ErrorMsg: fmt.Sprintf("devserveragent: decoding recipe result: %v", err)}
+		return &e
+	}
+	e := usecase.VmProvisionEvent{Type: "result", Result: result}
+	return &e
+}
+
+// normalizeVmProvisionResult mirrors ephemeral-vm-recipes.ts's
+// getEphemeralVmRecipeResultConnection: the legacy result shape
+// (pairingCode/projectRoot at the top level, no "connection" field) implies
+// connection.type == "orca-server"; the new shape carries an explicit
+// "connection" object.
+func normalizeVmProvisionResult(raw json.RawMessage) (usecase.VmProvisionResult, error) {
+	var r vmProvisionRecipeResult
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return usecase.VmProvisionResult{}, err
+	}
+	if r.Connection == nil {
+		return usecase.VmProvisionResult{Type: "orca-server", PairingCode: r.PairingCode, ProjectRoot: r.ProjectRoot}, nil
+	}
+	if r.Connection.Type == "ssh" {
+		var wire vmProvisionSshTargetWire
+		if len(r.Connection.Target) > 0 {
+			if err := json.Unmarshal(r.Connection.Target, &wire); err != nil {
+				return usecase.VmProvisionResult{}, err
+			}
+		}
+		target := usecase.EphemeralVmRecipeSshTarget{
+			Label: wire.Label, Host: wire.Host, Port: wire.Port, Username: wire.Username,
+			IdentityFile: wire.IdentityFile, IdentityAgent: wire.IdentityAgent,
+			IdentitiesOnly: wire.IdentitiesOnly, ProxyCommand: wire.ProxyCommand,
+			JumpHost: wire.JumpHost, RelayGracePeriodSeconds: wire.RelayGracePeriodSeconds,
+		}
+		return usecase.VmProvisionResult{Type: "ssh", ProjectRoot: r.Connection.ProjectRoot, SshTarget: &target}, nil
+	}
+	return usecase.VmProvisionResult{Type: "orca-server", PairingCode: r.Connection.PairingCode, ProjectRoot: r.Connection.ProjectRoot}, nil
 }
 
 // Close tears down every open session — call on service shutdown.

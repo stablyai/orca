@@ -10,7 +10,6 @@ import {
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { logRemoveProjectDiagnostic } from '@/lib/remove-project-diagnostic-log'
 
 const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -39,12 +38,8 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   })
 
   const handleConfirm = useCallback(() => {
-    logRemoveProjectDiagnostic(`RemoveFolderDialog.handleConfirm repoId=${repoId || '(empty)'}`)
     if (repoId) {
-      void removeProject(repoId).then(
-        () => logRemoveProjectDiagnostic(`removeProject(${repoId}) settled`),
-        (err) => logRemoveProjectDiagnostic(`removeProject(${repoId}) rejected: ${String(err)}`)
-      )
+      void removeProject(repoId)
     }
     closeModal()
   }, [closeModal, removeProject, repoId])

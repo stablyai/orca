@@ -63,11 +63,25 @@ service InfraFleetService {
   // GetSshState is a local read (no dial) of whichever connection (if any)
   // currently binds this SSH target's dev server.
   rpc GetSshState(GetSshStateRequest) returns (GetSshStateResponse);
+  // GetFleetConnectivitySummary is CR-STORAGE-007's poll-driven health
+  // summary — a plain Postgres read (no dial) over every connections row
+  // scoped to the caller's tenant, joined with dev_servers. Request is
+  // deliberately empty: tenant/user scoping comes from gRPC metadata
+  // (identity), never a request field — see BE-SOL-STORAGE-002 §5.
+  rpc GetFleetConnectivitySummary(GetFleetConnectivitySummaryRequest) returns (GetFleetConnectivitySummaryResponse);
   // EstablishConnection performs the actual SSH + Dev Server Agent
   // handshake synchronously — it IS the connection-establishment act, not
   // a record of one requested. See usecase.EstablishConnection's doc comment.
   rpc EstablishConnection(EstablishConnectionRequest) returns (Connection);
   rpc KillWorkspacePort(KillWorkspacePortRequest) returns (KillWorkspacePortResponse);
+
+  // TeardownConnection is the confirmed-logout explicit-close path
+  // (BE-SOL-STORAGE-003 §5, TASK-BE-STORAGE-012) — transitions
+  // established|degraded -> closed immediately, bypassing
+  // grace_period_seconds entirely, and closes every open terminal_sessions
+  // row bound to the connection. tenant_id comes from the authenticated
+  // context, matching every other tenant-scoped RPC in this service.
+  rpc TeardownConnection(TeardownConnectionRequest) returns (google.protobuf.Empty);
 
   // --- Terminal/PTY lifecycle (control-plane, unary) ---
   rpc SpawnTerminalSession(SpawnTerminalSessionRequest) returns (SpawnTerminalSessionResponse);
@@ -138,6 +152,36 @@ service InfraFleetService {
   // does not exist yet (confirmed absent as of this pass) — see
   // usecase.GetHostCapabilities's doc comment.
   rpc GetHostCapabilities(GetHostCapabilitiesRequest) returns (GetHostCapabilitiesResponse);
+
+  // ListEphemeralVmRuntimes is a plain tenant-scoped Postgres read (no
+  // relay) of every non-destroyed ephemeral_vm_runtimes row — SOL-004
+  // Group 1's second read. Written to by EphemeralVmRelay (TASK-004).
+  rpc ListEphemeralVmRuntimes(ListEphemeralVmRuntimesRequest) returns (ListEphemeralVmRuntimesResponse);
+
+  // AttachEphemeralVmWorkspace is pure bookkeeping (no agent relay) — binds
+  // an already-provisioned runtime to a workspace/worktree id. See
+  // EphemeralVmRelay's doc comment for why this differs from SOL-004's own
+  // sketch (which incorrectly modeled it as a create-command exec).
+  rpc AttachEphemeralVmWorkspace(AttachEphemeralVmWorkspaceRequest) returns (EphemeralVmRuntime);
+  // SuspendEphemeralVmWorkspace/ResumeEphemeralVmWorkspace/CleanupEphemeralVmWorkspace
+  // relay `command` (the recipe's suspend/resume/destroy shell command,
+  // resolved by api-gateway's wscompat layer via git-gateway-service's
+  // ReadEphemeralVmRecipes — see TASK-005) to the repo's Dev Server via a
+  // new agent-side `vm.exec` method that does not exist today. Every call
+  // reaches a real agent and fails with a typed, permanent
+  // INFRA_EPHEMERAL_VM_UNSUPPORTED FailedPrecondition until agent/ gains
+  // one — see EmulatorRelay's identical, already-shipped pattern.
+  rpc SuspendEphemeralVmWorkspace(SuspendEphemeralVmWorkspaceRequest) returns (EphemeralVmRuntime);
+  rpc ResumeEphemeralVmWorkspace(ResumeEphemeralVmWorkspaceRequest) returns (EphemeralVmRuntime);
+  rpc CleanupEphemeralVmWorkspace(CleanupEphemeralVmWorkspaceRequest) returns (EphemeralVmRuntime);
+
+  // StreamVmProvision runs a recipe's provision command against the Dev
+  // Server Agent and streams its stdout/stderr back live, mirroring
+  // AttachScreencast/AttachPty's precedent (BE-SOL-EVM-002 §2) rather than a
+  // unary call — provisioning a real VM can take minutes. The terminal
+  // "result"-typed event carries VmProvisionResult; the "ssh" branch is
+  // pass-through only here (no dial) — see BE-SOL-EVM-004 for that.
+  rpc StreamVmProvision(StreamVmProvisionRequest) returns (stream VmProvisionEvent);
 }
 
 enum ConnectionMode {
@@ -163,6 +207,79 @@ enum AgentKind {
   AGENT_KIND_MOBILE_EMULATOR = 2;
 }
 
+// ListEphemeralVmRuntimesRequest carries no fields — tenant scoping comes
+// from the caller's gRPC metadata via tenant.RequireTenantID, the same
+// convention EmulatorRelay's methods use.
+message ListEphemeralVmRuntimesRequest {}
+message ListEphemeralVmRuntimesResponse { repeated EphemeralVmRuntime runtimes = 1; }
+message EphemeralVmRuntime {
+  string id = 1;
+  string repo_id = 2;
+  string recipe_id = 3;
+  string connection_type = 4;   // "orca-server" | "ssh" | "" (unset until create/resume's result is parsed)
+  string status = 5;            // "provisioning" | "active" | "suspended" | "error" | "destroyed"
+  string environment_id = 6;    // set once an orca-server-type recipe's pairing succeeds
+  string workspace_id = 7;      // set by AttachWorkspace (TASK-004); empty until attached
+  string last_error = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message AttachEphemeralVmWorkspaceRequest { string runtime_id = 1; string workspace_id = 2; }
+message SuspendEphemeralVmWorkspaceRequest { string connection_id = 1; string workspace_id = 2; string command = 3; }
+message ResumeEphemeralVmWorkspaceRequest { string connection_id = 1; string workspace_id = 2; string command = 3; }
+message CleanupEphemeralVmWorkspaceRequest { string connection_id = 1; string runtime_id = 2; string command = 3; }
+
+message StreamVmProvisionRequest {
+  string connection_id = 1;
+  string recipe_id = 2;
+  string runtime_id = 3;
+  // command is the recipe's resolved `create` shell command — resolved
+  // server-side by api-gateway's wscompat layer via git-gateway-service's
+  // ReadEphemeralVmRecipes (TASK-BE-EVM-005), the same pattern
+  // Suspend/Resume/CleanupEphemeralVmWorkspaceRequest already use for their
+  // own `command` field. infra-fleet-service must not gain a dependency on
+  // git-gateway-service (EphemeralVmRelay's doc comment — the existing
+  // dependency direction is the other way), so it cannot resolve this
+  // itself; added here (missing from this message's original TASK-BE-EVM-002
+  // pass) once TASK-BE-EVM-004's Provision usecase confirmed it needs one,
+  // mirroring the 3 sibling request messages' shape.
+  string command = 4;
+}
+message VmProvisionEvent {
+  string type = 1;   // "stdout" | "stderr" | "result" | "error"
+  string chunk = 2;
+  VmProvisionResult result = 3; // set only when type == "result"
+}
+message VmProvisionResult {
+  string type = 1;          // "orca-server" | "ssh"
+  string pairing_code = 2;  // set when type == "orca-server"
+  string project_root = 3;
+  EphemeralVmRecipeSshTarget ssh_target = 4; // set when type == "ssh"
+}
+// EphemeralVmRecipeSshTarget mirrors frontend/src/shared/ephemeral-vm-recipes.ts's
+// EphemeralVmRecipeSshTargetSchema field-for-field, with two deliberate
+// omissions (BE-SOL-EVM-002 §6 field cross-check):
+//  - config_host: frontend-only, display-label derived from the recipe's
+//    source ssh/config Host entry — never used as SSH dial input, so it
+//    carries nothing this pass-through result needs.
+//  - port_forwards: local port-forward config for the actual SSH dial,
+//    which is explicitly out of scope here (§5: the "ssh" branch is
+//    pass-through only, never dialed — see BE-SOL-EVM-004/CR-EVM-005).
+//    Add it to this message when that task wires a real dial.
+message EphemeralVmRecipeSshTarget {
+  string label = 1;
+  string host = 2;
+  int32 port = 3;
+  string username = 4;
+  string identity_file = 5;
+  string identity_agent = 6;
+  bool identities_only = 7;
+  string proxy_command = 8;
+  string jump_host = 9;
+  int32 relay_grace_period_seconds = 10;
+}
+
 message DevServer {
   string id = 1;
   string tenant_id = 2;
@@ -185,6 +302,15 @@ message DevServer {
   // kind — CR-DS-009 §3.1. Every row registered before this field existed
   // backfills to AGENT_KIND_DEV_SERVER (migrations/0011_dev_server_kind).
   AgentKind kind = 8;
+  // health_status is the coarse connectivity/health state named "status" in
+  // the column comment on approval_status above — read from that same
+  // pre-existing infra.dev_servers.status column, exposed here for the
+  // first time. "pending" (the column default) | "healthy" | "degraded" |
+  // "unhealthy". See
+  // specs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md
+  // (option 2: reuse this coarse status for bootstrap.ts instead of adding
+  // a dedicated per-step bootstrap field).
+  string health_status = 9;
 }
 
 message RegisterDevServerRequest {
@@ -562,6 +688,26 @@ message Connection {
   string status = 3;             // "established" | "degraded" | "closed"
   int64 established_at_unix_ms = 4;
 }
+
+// GetFleetConnectivitySummaryRequest is deliberately empty — tenant/user
+// scoping comes from gRPC metadata (identity), matching every other "list
+// of mine" RPC in this service. See TASK-BE-STORAGE-006 /
+// BE-SOL-STORAGE-002 §3.
+message GetFleetConnectivitySummaryRequest {}
+
+// ConnectionHealthEntry mirrors one infra.connections row's health-relevant
+// fields — CR-STORAGE-007's frontend poll target.
+message ConnectionHealthEntry {
+  string connection_id = 1;
+  string dev_server_id = 2;
+  string status = 3;                                   // "establishing" | "established" | "degraded" | "closed" — mirrors connections.status
+  google.protobuf.Timestamp last_activity_at = 4;       // unset if never active
+  google.protobuf.Timestamp degraded_since = 5;         // unset unless status == "degraded"
+}
+
+message GetFleetConnectivitySummaryResponse {
+  repeated ConnectionHealthEntry connections = 1;
+}
 message SpawnTerminalSessionRequest {
   string connection_id = 1;  // empty = host-local; rejected in server-deployment mode, see usecase.SpawnTerminalSession
   string cwd = 2;
@@ -581,6 +727,10 @@ message TerminalSession {
 }
 
 message ResizeTerminalSessionRequest { string pty_id = 1; int32 cols = 2; int32 rows = 3; }
+// TeardownConnectionRequest carries only connection_id — tenant scoping
+// comes from the authenticated context (BE-SOL-STORAGE-003 §5).
+message TeardownConnectionRequest { string connection_id = 1; }
+
 message KillTerminalSessionRequest   { string pty_id = 1; }
 message StopTerminalProcessRequest   { string pty_id = 1; } // sends an interrupt signal to the pty's foreground process
 message ListTerminalSessionsRequest  { string connection_id = 1; } // empty = all sessions for the caller's tenant

@@ -103,15 +103,24 @@ type fakeDispatchContextRepository struct {
 	getLatestReturns domain.DispatchContext
 	getLatestErr     error
 	getLatestFunc    func(ctx context.Context, tenantID, taskID string) (domain.DispatchContext, error)
+
+	listActiveErr  error
+	listActiveFunc func(tenantID, userID string) ([]domain.DispatchContext, error)
+
+	byID              map[string]domain.DispatchContext
+	recordFailureErr  error
+	recordFailureFunc func(tenantID, dispatchContextID, reason string) (domain.DispatchContext, error)
 }
 
-func (f *fakeDispatchContextRepository) CreateDispatchContext(_ context.Context, tenantID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error) {
+func (f *fakeDispatchContextRepository) CreateDispatchContext(_ context.Context, tenantID, userID, worktreeID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error) {
 	if f.err != nil {
 		return domain.DispatchContext{}, f.err
 	}
 	dc := domain.DispatchContext{
 		ID:                  "dc-" + handle,
 		TenantID:            tenantID,
+		UserID:              userID,
+		WorktreeID:          worktreeID,
 		Handle:              handle,
 		CoordinatorRunID:    coordinatorRunID,
 		OrchestrationTaskID: orchestrationTaskID,
@@ -129,6 +138,41 @@ func (f *fakeDispatchContextRepository) GetLatestForTask(ctx context.Context, te
 		return domain.DispatchContext{}, f.getLatestErr
 	}
 	return f.getLatestReturns, nil
+}
+
+func (f *fakeDispatchContextRepository) ListActiveDispatchContextsForUser(_ context.Context, tenantID, userID string) ([]domain.DispatchContext, error) {
+	if f.listActiveErr != nil {
+		return nil, f.listActiveErr
+	}
+	if f.listActiveFunc != nil {
+		return f.listActiveFunc(tenantID, userID)
+	}
+	var out []domain.DispatchContext
+	for _, dc := range f.created {
+		if dc.TenantID == tenantID && dc.UserID == userID {
+			out = append(out, dc)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeDispatchContextRepository) RecordDispatchFailure(_ context.Context, tenantID, dispatchContextID, reason string) (domain.DispatchContext, error) {
+	if f.recordFailureErr != nil {
+		return domain.DispatchContext{}, f.recordFailureErr
+	}
+	if f.recordFailureFunc != nil {
+		return f.recordFailureFunc(tenantID, dispatchContextID, reason)
+	}
+	dc, ok := f.byID[dispatchContextID]
+	if !ok {
+		return domain.DispatchContext{}, ErrDispatchContextNotFound
+	}
+	updated := dc.RecordFailure(reason)
+	if f.byID == nil {
+		f.byID = map[string]domain.DispatchContext{}
+	}
+	f.byID[dispatchContextID] = updated
+	return updated, nil
 }
 
 // fakeGateRepository is an in-memory GateRepository.

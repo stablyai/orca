@@ -11,88 +11,35 @@ import {
   sshConnectionStatesEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
-
-export type RemoteWorkspaceSyncStatus = {
-  phase: 'idle' | 'pulling' | 'pushing' | 'synced' | 'conflict' | 'error' | 'offline'
-  direction?: 'pull' | 'push'
-  revision?: number
-  updatedAt?: number
-  lastSyncedAt?: number
-  message?: string
-}
-
-// ─── Fleet Import Types (CR-001) ──────────────────────────────────────────────
-
-export type FleetImportPhase =
-  | 'idle'
-  | 'reading'
-  | 'validating'
-  | 'importing'
-  | 'done'
-  | 'error'
-
-export type FleetImportStatus = {
-  phase: FleetImportPhase
-  /** Total server entries found in config file */
-  totalServers: number
-  /** How many have been successfully imported so far */
-  importedServers: number
-  /** How many were skipped (already exist, duplicate, etc.) */
-  skippedServers: number
-  /** How many failed to import */
-  failedServers: number
-  /** Per-entry error messages */
-  errors: string[]
-  /** Path to the fleet config file being imported */
-  configFilePath: string
-}
-
-export type SshCredentialRequest = {
-  requestId: string
-  targetId: string
-  kind: 'passphrase' | 'password'
-  detail: string
-}
-
-// ─── Health Monitoring Types (CR-005) ─────────────────────────────────────────
-
-export type ServerHealthMetrics = {
-  serverId: string
-  lastCheckedAt: number
-  isReachable: boolean
-  uptimeSeconds: number | null
-  relayVersion: string | null
-  nodeVersion: string | null
-  diskUsagePercent: number | null
-  cpuUsagePercent: number | null
-  memUsagePercent: number | null
-}
-
-
-export type ProvisioningStatus =
-  | { phase: 'idle' }
-  | { phase: 'checking' }
-  | { phase: 'provisioning'; step: string; progress: number }
-  | { phase: 'done'; linuxUsername: string }
-  | { phase: 'error'; message: string }
-
-export type SshUserAccount = {
-  linuxUsername: string
-  provisioned: boolean
-  provisioningStatus: ProvisioningStatus
-}
-
-export type FleetAlertType = 'disconnected' | 'error' | 'relay-outdated'
-
-export type FleetAlert = {
-  id: string
-  serverId: string
-  serverLabel: string
-  type: FleetAlertType
-  message: string
-  timestamp: number
-  dismissed: boolean
-}
+import {
+  getRuntimeSshState,
+  listRuntimeSshRemovedTargetLabels,
+  listRuntimeSshTargets
+} from '../../runtime/runtime-ssh-client'
+// Domain types split into ssh-slice-types.ts to keep this file under
+// oxlint's max-lines budget; re-exported so existing `from '.../slices/ssh'`
+// imports keep working unchanged.
+export type {
+  RemoteWorkspaceSyncStatus,
+  FleetImportPhase,
+  FleetImportStatus,
+  SshCredentialRequest,
+  ServerHealthMetrics,
+  ProvisioningStatus,
+  SshUserAccount,
+  FleetAlertType,
+  FleetAlert
+} from './ssh-slice-types'
+import type {
+  RemoteWorkspaceSyncStatus,
+  FleetImportPhase,
+  FleetImportStatus,
+  SshCredentialRequest,
+  ServerHealthMetrics,
+  ProvisioningStatus,
+  SshUserAccount,
+  FleetAlert
+} from './ssh-slice-types'
 
 export type SshSlice = {
   sshUserAccounts: Map<string, SshUserAccount>
@@ -141,6 +88,16 @@ export type SshSlice = {
   /** Timestamp of the last successful fleet health poll (CR-005). */
   lastFleetHealthCheck: number | null
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
+  /** Hydrates sshTargets/sshTargetLabels/removedSshTargetLabels/
+   *  sshConnectionStates from the backend read RPCs (ListSshTargets/
+   *  GetSshState) — CR-STORAGE-006's hydrate-on-mount pattern (FE-TASK-
+   *  STORAGE-013). Additive: App.tsx/useIpcEvents.ts already run an
+   *  equivalent inline hydrate at startup/reconnect and keep doing so
+   *  unchanged; this gives the slice its own testable entry point without
+   *  replacing that live-update path. Swallows RPC failures so a caller
+   *  never crashes on a stale/unreachable target list.
+   */
+  hydrateSshTargets: () => Promise<void>
   setSshTargetLabels: (labels: Map<string, string>) => void
   setRemovedSshTargetLabels: (labels: Record<string, string>) => void
   setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
@@ -184,8 +141,7 @@ const FLEET_IMPORT_IDLE: FleetImportStatus = {
   configFilePath: ''
 }
 
-export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
-
+export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
   sshUserAccounts: new Map(),
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
@@ -221,6 +177,38 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
             : s.sshConnectedGeneration
       }
     }),
+
+  hydrateSshTargets: async () => {
+    const settings = get().settings
+    let targets: SshTarget[]
+    try {
+      targets = await listRuntimeSshTargets(settings)
+    } catch {
+      // Why: a failed RPC must not crash the caller or wipe out sshTargets
+      // state a prior successful hydrate/poll already populated.
+      return
+    }
+    get().setSshTargetsMetadata(targets)
+    get().setSshTargets(targets)
+    try {
+      const removedLabels = await listRuntimeSshRemovedTargetLabels(settings)
+      get().setRemovedSshTargetLabels(removedLabels)
+    } catch {
+      // Best-effort — ghost-host labels just fall back to the raw target id.
+    }
+    await Promise.all(
+      targets.map(async (t) => {
+        try {
+          const state = await getRuntimeSshState(settings, t.id)
+          if (state) {
+            get().setSshConnectionState(t.id, state)
+          }
+        } catch {
+          // A target this client can't currently reach just reads 'disconnected'.
+        }
+      })
+    )
+  },
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
   setRemovedSshTargetLabels: (labels) =>
@@ -311,7 +299,9 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     set((s) => {
       // Why: avoid re-render when the list reference is unchanged (e.g. same
       // targets re-emitted during periodic sync).
-      if (s.sshTargets === targets) {return s}
+      if (s.sshTargets === targets) {
+        return s
+      }
       return { sshTargets: targets }
     }),
 
@@ -348,14 +338,11 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
 
   setLastFleetHealthCheck: (ts) => set({ lastFleetHealthCheck: ts }),
 
-  addFleetAlert: (alert) =>
-    set((s) => ({ fleetAlerts: [...s.fleetAlerts, alert] })),
+  addFleetAlert: (alert) => set((s) => ({ fleetAlerts: [...s.fleetAlerts, alert] })),
 
   dismissFleetAlert: (alertId) =>
     set((s) => ({
-      fleetAlerts: s.fleetAlerts.map((a) =>
-        a.id === alertId ? { ...a, dismissed: true } : a
-      )
+      fleetAlerts: s.fleetAlerts.map((a) => (a.id === alertId ? { ...a, dismissed: true } : a))
     })),
 
   clearDismissedAlerts: () =>

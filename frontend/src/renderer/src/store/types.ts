@@ -47,6 +47,8 @@ import type { TaskSlice } from './slices/task'
 import type { WorkflowSlice } from './slices/workflow'
 import type { TraceSlice } from './slices/trace'
 import type { RemoteAgentSessionSlice } from './slices/remote-agent-sessions'
+import type { PersistenceStatusSlice } from './slices/persistence-status'
+import type { ConnectivitySlice } from './slices/connectivity-status'
 
 // ── Re-exports for cross-slice consumers (import from '@/store/types') ────────
 export type {
@@ -106,4 +108,6 @@ export type AppState = RepoSlice &
   TaskSlice &
   WorkflowSlice &
   TraceSlice &
-  RemoteAgentSessionSlice
+  RemoteAgentSessionSlice &
+  PersistenceStatusSlice &
+  ConnectivitySlice

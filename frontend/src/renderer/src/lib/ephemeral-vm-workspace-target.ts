@@ -75,6 +75,22 @@ export async function prepareEphemeralVmWorkspaceTarget(
     }
   }
 
+  // recipeResult is only optional in the shared schema for
+  // infra-fleet-service-backed runtimes (TASK-BE-EVM-010); a runtime just
+  // returned by this desktop-local provision call always has one — a
+  // missing value here means the store wrote a malformed record.
+  if (!provisioned.runtime.recipeResult) {
+    await cleanupProvisionedRuntime(provisioned.runtime.id)
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.ephemeralVmWorkspaceTarget.missingRecipeResult',
+        'The recipe-created runtime is missing its provisioning result.'
+      ),
+      stderr: provisioned.stderr
+    }
+  }
+
   let setup: ProjectHostSetupResult | null
   try {
     setup = await args.setupExistingFolder({
