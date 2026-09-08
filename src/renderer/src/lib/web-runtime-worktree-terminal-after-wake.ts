@@ -12,6 +12,7 @@ import {
 } from '@/runtime/web-runtime-wake-terminal-respawn'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 
+/** Recover retained tab rows after wake; an empty workspace is not a terminal-creation request. */
 export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): void {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
@@ -24,7 +25,6 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
-  // An empty workspace is a valid selection, not a request for a new terminal.
   if (tabs.length === 0) {
     return
   }

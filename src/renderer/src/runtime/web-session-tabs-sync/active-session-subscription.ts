@@ -87,6 +87,7 @@ export function installActiveSessionTabsSubscription({
   }
   const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
 
+  /** Reject stale recovery results before mirroring host inventory; empty snapshots never create tabs. */
   const applyActiveSnapshot = async (
     event: RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' },
     response: RuntimeRpcResponse<unknown>,

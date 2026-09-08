@@ -173,6 +173,7 @@ export function activateAndRevealFolderWorkspace(
   return { primaryTabId }
 }
 
+/** Coordinate host-owned startup and sidebar reveal without seeding an extra caller-owned surface. */
 export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: {
