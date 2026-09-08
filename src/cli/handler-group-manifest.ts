@@ -67,6 +67,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'worktree',
     keys: [
+      'worktree inventory',
       'worktree ps',
       'worktree list',
       'worktree show',

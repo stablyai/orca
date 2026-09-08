@@ -2,12 +2,18 @@ import { defineMethod, type RpcMethod } from '../core'
 import { resolveWorktreeCatalogSnapshot } from '../worktree-catalog-snapshot'
 import { supportsWorktreeVisibilitySourceDefaults } from '../worktree-visibility-client-capability'
 import {
+  WorktreeInventoryParams,
   WorktreeDetectedListParams,
   WorktreeListParams,
   WorktreePsParams
 } from './worktree-schemas'
 
 export const WORKTREE_CATALOG_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'worktree.inventory',
+    params: WorktreeInventoryParams,
+    handler: async (params, { runtime }) => runtime.inventoryManagedWorktrees(params)
+  }),
   defineMethod({
     name: 'worktree.ps',
     params: WorktreePsParams,

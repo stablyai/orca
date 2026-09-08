@@ -68,6 +68,38 @@ An Orca worktree is Orca's tracked view of a repo checkout, its metadata, termin
 
 Its id is a two-part address, `<repoId>::<worktreePath>`, such as `repo-123::/Users/me/orca/fix-login`. Copy the whole `id` field from `ORCA worktree create --json` or `ORCA worktree list --json`. `repo-123` alone names only the repo.
 
+### Complete registration inventory
+
+```text
+ORCA worktree inventory --repo id:<repoId> --repo-path <absolute-repo-path> --project <projectId> --host local --json
+```
+
+This read-only command includes hidden Git worktrees (including create preparations) and
+Orca's legacy metadata, canonical identity records, every locator alias, lineage and
+persisted session owner references. It does not import, migrate, prune or change visibility.
+`worktree list` and `worktree ps` keep their existing visibility filters.
+
+The JSON envelope carries the answering `_meta.runtimeId`. Match it and the entire returned
+`result.scope` (repo id/path, project id, host id and projectHostSetupId) to the expected target.
+Require `authoritative === true`, `truncated === false` and empty `failureReasons` before
+using absence. `worktrees` contains fresh Git rows; `records` independently preserves Orca
+registrations even when Git no longer lists the checkout. `totalCount` is the sum of those
+two arrays, not a count of unique checkouts. Canonical records without a locator and unknown
+or conflicting ownership prevent authority. Session records expose identifiers and partition
+provenance only, never terminal/editor/browser contents. Historical name retirement and other
+product history are not workspace registrations; query retired names separately where needed.
+
+There is no pagination: `--limit` and `--cursor` are rejected. A failed scan, unavailable store,
+ambiguous or changed scope, or records changing during the scan cannot produce authoritative
+empty output. `failureReasons` is machine-readable; even a successful RPC/CLI invocation may
+return `authoritative: false`. Older servers return `method_not_found`; never substitute a
+filtered list or a Git-only inventory.
+
+This version supports native local Git only. SSH, paired-runtime host ids, folder workspaces,
+WSL routing and remote environment/pairing selection are refused without local fallback.
+A point-in-time inventory is not a reservation: it does not lock concurrent creation, prove
+filesystem/ref/terminal absence or authorize cleanup. Those checks remain separate.
+
 Common commands:
 
 ```text

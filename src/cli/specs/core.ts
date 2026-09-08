@@ -1,3 +1,4 @@
+import { WORKTREE_INVENTORY_COMMAND_SPEC } from './worktree-inventory'
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
@@ -63,6 +64,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'repo', 'query', 'limit']
   },
+  WORKTREE_INVENTORY_COMMAND_SPEC,
   {
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',

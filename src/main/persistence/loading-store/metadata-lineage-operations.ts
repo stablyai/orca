@@ -1,3 +1,4 @@
+import { collectWorktreeInventoryRecords } from './worktree-inventory-records'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -84,6 +85,14 @@ export class MetadataLineageOperations {
       worktreeId,
       executionHostId,
       meta
+    )
+  }
+
+  getWorktreeInventoryRecords(repoId: string, hostId: ExecutionHostId) {
+    return collectWorktreeInventoryRecords(
+      this[metadataLineageOperationsContext].runtime.state,
+      repoId,
+      hostId
     )
   }
 
