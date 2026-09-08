@@ -1,7 +1,7 @@
 // Resolves the stable "conversation name" an agent row can show instead of the
 // live last-message preview. Sources, in the same precedence the tab bar uses
 // (tab-title-resolution.ts): manual rename → quick-command label → OpenCode's
-// semantic session title → Orca's generated title → the agent-set live title.
+// semantic session title → saved AI Vault title → Orca's generated title → live title.
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
@@ -15,7 +15,7 @@ import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'defaultTitle'
+  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
 >
 
 // Why: synthetic status titles ("Codex ready", "Cursor - action required") are
@@ -133,6 +133,11 @@ export function getAgentRowConversationName(
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
+  }
+  // A saved session title belongs to one conversation, not sibling split panes.
+  const savedTitle = paneLiveTitle === undefined ? tab.aiVaultTitle?.title.trim() : ''
+  if (savedTitle) {
+    return savedTitle
   }
   const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
   if (generatedTitle) {

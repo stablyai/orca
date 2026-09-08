@@ -31,6 +31,76 @@ describe('getAgentRowConversationName', () => {
     )
   })
 
+  it.each([
+    ['codex', true],
+    ['codex', false],
+    ['claude', true],
+    ['claude', false]
+  ] as const)('uses the saved %s conversation title with generated titles %s', (agent, enabled) => {
+    const tab = makeTab({
+      aiVaultTitle: { agent, sessionId: 'saved-session', title: '  Slack intake reliability  ' },
+      generatedTitle: 'Generated fallback',
+      title: 'Codex ready'
+    })
+    expect(getAgentRowConversationName(tab, agent, enabled)).toBe('Slack intake reliability')
+  })
+
+  it.each([
+    [{ customTitle: 'Manual rename' }, 'Manual rename'],
+    [{ quickCommandLabel: 'Run tests' }, 'Run tests'],
+    [{ title: 'OC | native session name' }, 'OC | native session name']
+  ] as const)(
+    'keeps explicit and OpenCode titles ahead of saved conversation titles: %s',
+    (override, expected) => {
+      const tab = makeTab({
+        aiVaultTitle: { agent: 'codex', sessionId: 'saved-session', title: 'Saved conversation' },
+        generatedTitle: 'Generated fallback',
+        title: 'Codex ready',
+        ...override
+      })
+      expect(getAgentRowConversationName(tab, 'codex', true)).toBe(expected)
+    }
+  )
+
+  it('falls through a blank saved title to generated and live titles', () => {
+    const tab = makeTab({
+      aiVaultTitle: { agent: 'codex', sessionId: 'saved-session', title: '   ' },
+      generatedTitle: 'Generated fallback',
+      title: 'Fix replay guard'
+    })
+    expect(getAgentRowConversationName(tab, 'codex', true)).toBe('Generated fallback')
+    expect(getAgentRowConversationName(tab, 'codex', false)).toBe('Fix replay guard')
+  })
+
+  it('never uses a tab saved-session name for split-pane rows', () => {
+    const tab = makeTab({
+      aiVaultTitle: { agent: 'codex', sessionId: 'focused-session', title: 'Focused conversation' },
+      title: 'Focused live title'
+    })
+    expect(getAgentRowConversationName(tab, 'codex', true, 'Sibling conversation')).toBe(
+      'Sibling conversation'
+    )
+    expect(getAgentRowConversationName(tab, 'codex', true, null)).toBeNull()
+    expect(getAgentRowConversationName(tab, 'codex', false, '')).toBeNull()
+    expect(getAgentRowConversationName(tab, 'codex', true, undefined)).toBe('Focused conversation')
+  })
+
+  it('preserves generated tab names when suppressing saved split-pane session names', () => {
+    const tab = makeTab({
+      aiVaultTitle: { agent: 'codex', sessionId: 'focused-session', title: 'Focused conversation' },
+      generatedTitle: 'Shared generated name',
+      title: 'Focused live title'
+    })
+    expect(getAgentRowConversationName(tab, 'codex', true, 'Sibling conversation')).toBe(
+      'Shared generated name'
+    )
+    expect(getAgentRowConversationName(tab, 'codex', true, null)).toBe('Shared generated name')
+    expect(getAgentRowConversationName(tab, 'codex', false, 'Sibling conversation')).toBe(
+      'Sibling conversation'
+    )
+    expect(getAgentRowConversationName(tab, 'codex', false, null)).toBeNull()
+  })
+
   it('uses the generated title only when generated titles are enabled', () => {
     const tab = makeTab({ generatedTitle: 'Fix intake flow', title: '✳ Investigate replay bug' })
     expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix intake flow')
