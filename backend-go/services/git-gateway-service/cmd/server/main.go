@@ -206,6 +206,10 @@ func run() error {
 	// FilesystemExecutor (localFS/relayFS), not a GitExecutor (local/relay)
 	// — see usecase.ReadEphemeralVmRecipes's doc comment for why.
 	readEphemeralVmRecipesUC := usecase.NewReadEphemeralVmRecipes(devServerReachability, projectClient, localFS, relayFS)
+	// watchWorktreeFilesUC (BACKLOG-003) — relay also satisfies
+	// usecase.FileWatchStreamer, same "one adapter, many small ports"
+	// convention relayFS's comment above documents.
+	watchWorktreeFilesUC := usecase.NewWatchWorktreeFiles(resolver, relay)
 
 	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger))
 	gitgatewayv1.RegisterGitGatewayServiceServer(grpcServer, gitgatewaygrpc.New(
@@ -226,6 +230,7 @@ func run() error {
 		abortRebaseUC, abortMergeUC, conflictOperationUC, resolveConflictUC,
 		discardUC, bulkDiscardUC,
 		readEphemeralVmRecipesUC,
+		watchWorktreeFilesUC,
 	))
 	reflection.Register(grpcServer) // convenient for grpcurl during local dev; keep enabled behind the mesh, not the public internet
 

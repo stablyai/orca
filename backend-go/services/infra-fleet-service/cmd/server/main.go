@@ -171,6 +171,10 @@ func run() error {
 	createConnectionUC := usecase.NewCreateConnection(repo)
 	relayUC := usecase.NewRelay(repo, agentClient)
 	relayByDevServerUC := usecase.NewRelayByDevServer(repo, agentClient)
+	// streamFileChangesUC (BACKLOG-003) — repo implements both
+	// ConnectionResolver and DevServerRepository, same dual-role convention
+	// relayUC/relayByDevServerUC each use separately.
+	streamFileChangesUC := usecase.NewStreamFileChanges(repo, repo, agentClient)
 	isDevServerConnectedUC := usecase.NewIsDevServerConnected(repo, agentClient)
 	listSshTargetsUC := usecase.NewListSshTargets(sshTargetStore)
 	getSshStateUC := usecase.NewGetSshState(sshTargetStore, repo, repo)
@@ -340,6 +344,7 @@ func run() error {
 		ephemeralVmRelayUC,
 		getFleetConnectivitySummaryUC,
 		teardownConnectionUC,
+		streamFileChangesUC,
 	))
 	reflection.Register(grpcServer) // convenient for grpcurl during local dev; keep enabled behind the mesh, not the public internet
 

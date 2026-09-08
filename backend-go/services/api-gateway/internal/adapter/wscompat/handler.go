@@ -105,6 +105,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// StreamVmProvision streams on THIS connection — same per-connection
 	// principle as terminalStreamsContext above (TASK-BE-EVM-005).
 	ctx = provisionStreamsContext(ctx, newProvisionStreamRegistry())
+	// fileWatchStreamsContext attaches a fresh, connection-scoped
+	// fileWatchStreamRegistry (file_watch_stream_registry.go) so
+	// files.watch's StreamChannelHandler and files.unwatch can find each
+	// other's open WatchWorktree streams on THIS connection — same
+	// per-connection principle as terminalStreamsContext above (BACKLOG-003).
+	ctx = fileWatchStreamsContext(ctx, newFileWatchStreamRegistry())
 
 	// writeMu serializes writes to conn — coder/websocket, like most WS
 	// libraries, does not allow concurrent writers on one connection. Reads

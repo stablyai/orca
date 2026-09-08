@@ -322,6 +322,33 @@ type FilesystemExecutor interface {
 	Glob(ctx context.Context, repoPath, pattern string, maxResults int) ([]string, error)
 }
 
+// FileWatchStreamer is WatchWorktreeFiles's (BACKLOG-003) transport port —
+// relays to infra-fleet-service's StreamFileChanges RPC. Unlike
+// FilesystemExecutor, there is deliberately no local-host implementation:
+// this feature is scoped to remote/environment targets only (BACKLOG-003's
+// own title) — a worktree with Connected=false gets a clear
+// FailedPrecondition, not a silent local fallback watcher.
+type FileWatchStreamer interface {
+	// StreamFileChanges subscribes to path's fs.changed notifications over
+	// connectionID's dev server. unsubscribe MUST be called exactly once by
+	// the caller (WatchWorktreeFiles.Execute, via defer) — same contract
+	// infra-fleet-service's own DevServerAgentClient.StreamFileChanges
+	// documents one layer down.
+	StreamFileChanges(ctx context.Context, connectionID, path string) (<-chan FileChangeEvent, func(), error)
+}
+
+// FileChangeEvent mirrors infra-fleet-service's usecase.FileChangeEvent
+// field-for-field (no cross-service usecase import — each service's
+// internal/usecase package is self-contained, matching this codebase's
+// per-service isolation convention). OldPath/IsDirectory are always
+// zero-valued today — see that type's doc comment for why.
+type FileChangeEvent struct {
+	Kind        string
+	Path        string
+	OldPath     string
+	IsDirectory bool
+}
+
 // LocalOnlyFilesystemExecutor covers Rename/Copy — BUG-009's known gap: the
 // Dev Server Agent's fs.* surface implements
 // stat/readDir/readFile/writeFile/mkdir/rmdir/glob/grep but not

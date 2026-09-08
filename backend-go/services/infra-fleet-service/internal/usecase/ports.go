@@ -321,6 +321,19 @@ type DevServerAgentClient interface {
 	// exactly once by the caller (usecase.AttachScreencast).
 	StreamScreencast(ctx context.Context, devServer domain.DevServer, params ScreencastParams) (<-chan ScreencastEvent, func(), error)
 
+	// --- File watching (BACKLOG-003) ---
+
+	// StreamFileChanges calls fs.watch for path and subscribes to its
+	// fs.changed notifications over devServer's persistent session — same
+	// subscribe-before-call shape as StreamScreencast (starting IS
+	// subscribing), keyed by path directly since fs.watch/fs.unwatch/
+	// fs.changed are already refcounted-by-path agent-side (no separate
+	// subscription id to correlate on the way screencast's is). unsubscribe
+	// MUST be called exactly once by the caller (usecase.WatchWorktreeFiles)
+	// — it best-effort calls fs.unwatch, same as StreamScreencast's
+	// browser.screencastStop cleanup.
+	StreamFileChanges(ctx context.Context, devServer domain.DevServer, path string) (<-chan FileChangeEvent, func(), error)
+
 	// --- Ephemeral VM provisioning (BE-SOL-EVM-002) ---
 
 	// StreamVmProvision runs a recipe's `create` command on the agent via
@@ -530,6 +543,18 @@ type ScreencastEvent struct {
 	Frame          []byte
 	Ended          bool
 	ErrorMsg       string
+}
+
+// FileChangeEvent is one fs.changed notification StreamFileChanges's
+// channel delivers, mirroring PtyEvent's "one raw struct" convention.
+// OldPath/IsDirectory always come back zero-valued today — see
+// devserveragent.rawFileWatchNotification's doc comment for why (Node's
+// fs.watch has no rename-pair or directory signal to fill them from).
+type FileChangeEvent struct {
+	Kind        string // "create" | "update" | "delete" | "rename" | "overflow"
+	Path        string // absolute path of the changed entry (watched root + filename)
+	OldPath     string // always "" today
+	IsDirectory bool   // always false today
 }
 
 // SpawnPtyInput carries pty.create's request fields.

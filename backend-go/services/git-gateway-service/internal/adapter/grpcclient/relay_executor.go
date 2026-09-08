@@ -1119,6 +1119,48 @@ func (r *RelayExecutor) Glob(ctx context.Context, repoPath, pattern string, maxR
 	return result.Paths, err
 }
 
+// StreamFileChanges implements usecase.FileWatchStreamer (BACKLOG-003) by
+// opening infra-fleet-service's StreamFileChanges RPC — the one relay()
+// call site in this file that ISN'T a Relay/RelayByDevServer unary passthrough,
+// since fs.changed is a push stream relay()'s request/response shape can't
+// carry (see infrafleetv1.InfraFleetService's StreamFileChanges doc
+// comment). Owns its own cancelable ctx, independent of the caller's —
+// unsubscribe MUST be called exactly once (mirrors every Stream* method in
+// devserveragent/client.go one layer down).
+func (r *RelayExecutor) StreamFileChanges(ctx context.Context, connectionID, path string) (<-chan usecase.FileChangeEvent, func(), error) {
+	streamCtx, cancel := context.WithCancel(ctx)
+	stream, err := r.client.StreamFileChanges(streamCtx, &infrafleetv1.StreamFileChangesRequest{
+		ConnectionId: connectionID,
+		Path:         path,
+	})
+	if err != nil {
+		cancel()
+		return nil, nil, fmt.Errorf("grpcclient: opening StreamFileChanges for path %q: %w", path, err)
+	}
+
+	out := make(chan usecase.FileChangeEvent, 64)
+	go func() {
+		defer close(out)
+		for {
+			ev, err := stream.Recv()
+			if err != nil {
+				return // stream ended — io.EOF on clean close (ctx canceled), or a real transport error
+			}
+			select {
+			case out <- usecase.FileChangeEvent{
+				Kind: ev.GetKind(), Path: ev.GetAbsolutePath(),
+				OldPath: ev.GetOldAbsolutePath(), IsDirectory: ev.GetIsDirectory(),
+			}:
+			case <-streamCtx.Done():
+				return
+			}
+		}
+	}()
+
+	unsubscribe := func() { cancel() }
+	return out, unsubscribe, nil
+}
+
 // decodeFileContent turns the agent's {content, encoding} pair into raw
 // bytes, matching WriteFile/WriteFileChunk's own base64-on-the-wire
 // convention above.

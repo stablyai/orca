@@ -56,6 +56,7 @@ const (
 	GitGatewayService_SearchFiles_FullMethodName                 = "/orca.gitgateway.v1.GitGatewayService/SearchFiles"
 	GitGatewayService_ListAllFiles_FullMethodName                = "/orca.gitgateway.v1.GitGatewayService/ListAllFiles"
 	GitGatewayService_ListMarkdownDocuments_FullMethodName       = "/orca.gitgateway.v1.GitGatewayService/ListMarkdownDocuments"
+	GitGatewayService_WatchWorktree_FullMethodName               = "/orca.gitgateway.v1.GitGatewayService/WatchWorktree"
 	GitGatewayService_RenameFile_FullMethodName                  = "/orca.gitgateway.v1.GitGatewayService/RenameFile"
 	GitGatewayService_CopyFile_FullMethodName                    = "/orca.gitgateway.v1.GitGatewayService/CopyFile"
 	GitGatewayService_Clone_FullMethodName                       = "/orca.gitgateway.v1.GitGatewayService/Clone"
@@ -156,6 +157,16 @@ type GitGatewayServiceClient interface {
 	SearchFiles(ctx context.Context, in *SearchFilesRequest, opts ...grpc.CallOption) (*SearchFilesResponse, error)
 	ListAllFiles(ctx context.Context, in *ListAllFilesRequest, opts ...grpc.CallOption) (*ListAllFilesResponse, error)
 	ListMarkdownDocuments(ctx context.Context, in *ListMarkdownDocumentsRequest, opts ...grpc.CallOption) (*ListMarkdownDocumentsResponse, error)
+	// WatchWorktree streams live fs.changed events for worktree_id's root
+	// (BACKLOG-003) — plain server-streaming, not unary: this is the one
+	// files.* RPC that pushes rather than answers once. Resolves worktree_id
+	// -> repoPath -> connection/dev server exactly like every RPC above, then
+	// opens infra-fleet-service's StreamFileChanges for that resolved path.
+	// The caller ends the subscription by canceling this call's context (see
+	// channels_files_watch.go's wscompat channel) — there is no separate
+	// Unwatch RPC; ending the stream is what tells the agent to fs.unwatch
+	// (see devserveragent.Client.StreamFileChanges's unsubscribe doc comment).
+	WatchWorktree(ctx context.Context, in *WatchWorktreeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChangeEvent], error)
 	// Known gaps carried forward from the old backend — both RPCs exist so
 	// the contract is honest, but return FAILED_PRECONDITION whenever
 	// dispatch resolves to a relay target, never a silent no-op.
@@ -582,6 +593,25 @@ func (c *gitGatewayServiceClient) ListMarkdownDocuments(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *gitGatewayServiceClient) WatchWorktree(ctx context.Context, in *WatchWorktreeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChangeEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &GitGatewayService_ServiceDesc.Streams[0], GitGatewayService_WatchWorktree_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchWorktreeRequest, FileChangeEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type GitGatewayService_WatchWorktreeClient = grpc.ServerStreamingClient[FileChangeEvent]
+
 func (c *gitGatewayServiceClient) RenameFile(ctx context.Context, in *RenameFileRequest, opts ...grpc.CallOption) (*RenameFileResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RenameFileResponse)
@@ -932,6 +962,16 @@ type GitGatewayServiceServer interface {
 	SearchFiles(context.Context, *SearchFilesRequest) (*SearchFilesResponse, error)
 	ListAllFiles(context.Context, *ListAllFilesRequest) (*ListAllFilesResponse, error)
 	ListMarkdownDocuments(context.Context, *ListMarkdownDocumentsRequest) (*ListMarkdownDocumentsResponse, error)
+	// WatchWorktree streams live fs.changed events for worktree_id's root
+	// (BACKLOG-003) — plain server-streaming, not unary: this is the one
+	// files.* RPC that pushes rather than answers once. Resolves worktree_id
+	// -> repoPath -> connection/dev server exactly like every RPC above, then
+	// opens infra-fleet-service's StreamFileChanges for that resolved path.
+	// The caller ends the subscription by canceling this call's context (see
+	// channels_files_watch.go's wscompat channel) — there is no separate
+	// Unwatch RPC; ending the stream is what tells the agent to fs.unwatch
+	// (see devserveragent.Client.StreamFileChanges's unsubscribe doc comment).
+	WatchWorktree(*WatchWorktreeRequest, grpc.ServerStreamingServer[FileChangeEvent]) error
 	// Known gaps carried forward from the old backend — both RPCs exist so
 	// the contract is honest, but return FAILED_PRECONDITION whenever
 	// dispatch resolves to a relay target, never a silent no-op.
@@ -1105,6 +1145,9 @@ func (UnimplementedGitGatewayServiceServer) ListAllFiles(context.Context, *ListA
 }
 func (UnimplementedGitGatewayServiceServer) ListMarkdownDocuments(context.Context, *ListMarkdownDocumentsRequest) (*ListMarkdownDocumentsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListMarkdownDocuments not implemented")
+}
+func (UnimplementedGitGatewayServiceServer) WatchWorktree(*WatchWorktreeRequest, grpc.ServerStreamingServer[FileChangeEvent]) error {
+	return status.Error(codes.Unimplemented, "method WatchWorktree not implemented")
 }
 func (UnimplementedGitGatewayServiceServer) RenameFile(context.Context, *RenameFileRequest) (*RenameFileResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RenameFile not implemented")
@@ -1858,6 +1901,17 @@ func _GitGatewayService_ListMarkdownDocuments_Handler(srv interface{}, ctx conte
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _GitGatewayService_WatchWorktree_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchWorktreeRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(GitGatewayServiceServer).WatchWorktree(m, &grpc.GenericServerStream[WatchWorktreeRequest, FileChangeEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type GitGatewayService_WatchWorktreeServer = grpc.ServerStreamingServer[FileChangeEvent]
 
 func _GitGatewayService_RenameFile_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RenameFileRequest)
@@ -2627,6 +2681,12 @@ var GitGatewayService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _GitGatewayService_BulkDiscard_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "WatchWorktree",
+			Handler:       _GitGatewayService_WatchWorktree_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "orca/gitgateway/v1/gitgateway.proto",
 }

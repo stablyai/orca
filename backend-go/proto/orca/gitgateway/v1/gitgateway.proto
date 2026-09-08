@@ -78,6 +78,16 @@ service GitGatewayService {
   rpc SearchFiles(SearchFilesRequest) returns (SearchFilesResponse);
   rpc ListAllFiles(ListAllFilesRequest) returns (ListAllFilesResponse);
   rpc ListMarkdownDocuments(ListMarkdownDocumentsRequest) returns (ListMarkdownDocumentsResponse);
+  // WatchWorktree streams live fs.changed events for worktree_id's root
+  // (BACKLOG-003) — plain server-streaming, not unary: this is the one
+  // files.* RPC that pushes rather than answers once. Resolves worktree_id
+  // -> repoPath -> connection/dev server exactly like every RPC above, then
+  // opens infra-fleet-service's StreamFileChanges for that resolved path.
+  // The caller ends the subscription by canceling this call's context (see
+  // channels_files_watch.go's wscompat channel) — there is no separate
+  // Unwatch RPC; ending the stream is what tells the agent to fs.unwatch
+  // (see devserveragent.Client.StreamFileChanges's unsubscribe doc comment).
+  rpc WatchWorktree(WatchWorktreeRequest) returns (stream FileChangeEvent);
   // Known gaps carried forward from the old backend — both RPCs exist so
   // the contract is honest, but return FAILED_PRECONDITION whenever
   // dispatch resolves to a relay target, never a silent no-op.
@@ -523,6 +533,22 @@ message CreateFileRequest {
   string path = 2;
 }
 message CreateFileResponse {}
+
+message WatchWorktreeRequest { string worktree_id = 1; }
+
+// FileChangeEvent mirrors infrafleet.v1.FileChangeEvent and frontend's
+// FsChangeEvent (frontend/src/shared/types.ts) field-for-field — no proto
+// cross-import between the two services (gitgateway.proto is
+// self-contained, matching every other message here), so this is a
+// deliberate parallel definition, not a divergent one. See
+// infrafleet.v1.FileChangeEvent's doc comment for why old_absolute_path/
+// is_directory are always empty/false today.
+message FileChangeEvent {
+  string kind = 1;
+  string absolute_path = 2;
+  string old_absolute_path = 3;
+  bool is_directory = 4;
+}
 
 message DeleteFileRequest {
   string worktree_id = 1;

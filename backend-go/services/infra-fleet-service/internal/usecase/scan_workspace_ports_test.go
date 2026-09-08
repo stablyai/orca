@@ -95,6 +95,13 @@ type fakeDevServerAgentClient struct {
 	readCredentialFileResult string
 	readCredentialFileErr    error
 	readCredentialFileCalls  []readCredentialFileCall
+
+	// streamFileChanges* mirror streamScreencastEvents's convention exactly,
+	// for StreamFileChanges (BACKLOG-003).
+	streamFileChangesEvents       chan FileChangeEvent
+	streamFileChangesErr          error
+	streamFileChangesUnsubscribed bool
+	streamFileChangesCalls        []string // path, per call
 }
 
 type readCredentialFileCall struct {
@@ -198,6 +205,25 @@ func (f *fakeDevServerAgentClient) StreamScreencast(ctx context.Context, devServ
 	unsubscribe := func() {
 		f.mu.Lock()
 		f.streamScreencastUnsubscribed = true
+		f.mu.Unlock()
+	}
+	return events, unsubscribe, nil
+}
+
+func (f *fakeDevServerAgentClient) StreamFileChanges(ctx context.Context, devServer domain.DevServer, path string) (<-chan FileChangeEvent, func(), error) {
+	f.mu.Lock()
+	f.streamFileChangesCalls = append(f.streamFileChangesCalls, path)
+	f.mu.Unlock()
+	if f.streamFileChangesErr != nil {
+		return nil, nil, f.streamFileChangesErr
+	}
+	events := f.streamFileChangesEvents
+	if events == nil {
+		events = make(chan FileChangeEvent)
+	}
+	unsubscribe := func() {
+		f.mu.Lock()
+		f.streamFileChangesUnsubscribed = true
 		f.mu.Unlock()
 	}
 	return events, unsubscribe, nil

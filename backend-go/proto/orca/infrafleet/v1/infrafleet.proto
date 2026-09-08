@@ -52,6 +52,18 @@ service InfraFleetService {
   // pick the first repo/worktree" needs to reach the agent BEFORE that
   // exists. Bypasses infra.connections entirely.
   rpc RelayByDevServer(RelayByDevServerRequest) returns (RelayResponse);
+  // StreamFileChanges subscribes to fs.changed push notifications for one
+  // watched path (BACKLOG-003) — Relay/RelayByDevServer above are unary
+  // request/response only, so they can carry fs.watch's initial ack but not
+  // the ongoing push stream the agent's watcher emits afterward. Same dual
+  // connection_id/dev_server_id addressing as Relay/RelayByDevServer
+  // (exactly one set); see devserveragent.Client.StreamFileChanges's doc
+  // comment for the fs.watch/fs.unwatch/fs.changed wire contract this
+  // subscribes to, and this RPC's own usecase for why it's plain
+  // server-streaming (no inbound frame needed — unlike AttachPty/
+  // AttachScreencast, there's no interactive input to send once watching
+  // starts; the caller ends the subscription by canceling this call's ctx).
+  rpc StreamFileChanges(StreamFileChangesRequest) returns (stream FileChangeEvent);
   // IsDevServerConnected answers "does this dev server have a live agent
   // session right now" — cheap, side-effect-free (never dials). Replaces
   // the hardcoded "disconnected" wscompat's devServer.list/listForUser used
@@ -603,6 +615,33 @@ message RelayByDevServerRequest {
   string method = 2;
   // params_json — same convention as RelayRequest.params_json.
   string params_json = 3;
+}
+
+// StreamFileChangesRequest — exactly one of connection_id/dev_server_id is
+// set, same convention as Relay/RelayByDevServer's twin addressing. path is
+// an ABSOLUTE path on the target host (git-gateway-service resolves
+// worktree_id -> repoPath before calling this, the same resolution every
+// other files.* method already does — see RelayExecutor.relay's doc
+// comment).
+message StreamFileChangesRequest {
+  string connection_id = 1;
+  string dev_server_id = 2;
+  string path = 3;
+}
+
+// FileChangeEvent mirrors frontend's FsChangeEvent shape (frontend/src/shared/types.ts)
+// field-for-field so wscompat can forward it with no reshaping. Only kind
+// and absolute_path are ever populated today — old_absolute_path/
+// is_directory exist for shape parity but the agent's Node fs.watch-backed
+// primitive (agent/src/relay/fs-agent-extensions.ts's handleFsWatch) has no
+// rename-pair or directory-vs-file signal to fill them from; false/empty is
+// the honest default, never fabricated (same precedent as
+// InspectProcessResult.Known=false).
+message FileChangeEvent {
+  string kind = 1;              // "create" | "update" | "delete" | "rename" | "overflow"
+  string absolute_path = 2;
+  string old_absolute_path = 3; // always empty today, see doc comment above
+  bool is_directory = 4;        // always false today, see doc comment above
 }
 
 message IsDevServerConnectedRequest {

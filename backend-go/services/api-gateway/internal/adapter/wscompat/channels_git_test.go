@@ -1044,16 +1044,23 @@ func TestFilesCommitUploadChannel_LocalNoOpAck(t *testing.T) {
 	}
 }
 
-func TestFilesUnwatchChannel_LocalNoOpAck(t *testing.T) {
+// TestFilesUnwatchChannel_UnknownSubscriptionStillAcksOK covers BACKLOG-003:
+// files.watch/files.unwatch now have real backing (WatchWorktree), but
+// files.unwatch's own doc comment keeps the OLD backend's always-succeeds
+// contract for an unknown/already-ended subscriptionId (unmount races are
+// expected, not an error condition).
+func TestFilesUnwatchChannel_UnknownSubscriptionStillAcksOK(t *testing.T) {
 	r := NewRegistry()
 	registerFilesChannels(r, &fakeGitGatewayClient{})
 
-	result, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "files.unwatch", nil)
+	ctx := fileWatchStreamsContext(context.Background(), newFileWatchStreamRegistry())
+	result, err := r.Dispatch(ctx, Identity{TenantID: "t1"}, "files.unwatch", argsJSON(t, map[string]any{"subscriptionId": "no-such-sub"}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if ok, isMap := result.(map[string]bool); !isMap || !ok["ok"] {
-		t.Errorf("expected local no-op ack {ok:true}, got %+v", result)
+	view, ok := result.(filesUnwatchResultView)
+	if !ok || !view.OK {
+		t.Errorf("expected {ok:true}, got %+v", result)
 	}
 }
 
