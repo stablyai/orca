@@ -35,6 +35,8 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   cursor: AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>
 
+/** Capability a remote host must advertise before `ensureAgentSession` may include this agent.
+ *  Cursor needs its own gate because adding it grows the host enum. */
 export function agentResumeHostAuthorityCapability(
   agent: TuiAgent | null | undefined
 ): RuntimeCapability | undefined {

@@ -142,6 +142,7 @@ function withTranscriptPath(
   return transcriptPath ? { ...metadata, transcriptPath } : metadata
 }
 
+/** True when quit/restore may inject a provider resume command into the pane. */
 export function isResumableTuiAgent(value: unknown): value is ResumableTuiAgent {
   return typeof value === 'string' && RESUMABLE_TUI_AGENT_SET.has(value)
 }
@@ -182,6 +183,8 @@ export function agentProviderSessionsEqual(
   )
 }
 
+/** Read the CLI resume locator from a hook payload. Cursor's conversation_id is stored as
+ *  session_id because `cursor-agent --resume` takes that id, the same way Claude uses `--resume`. */
 export function extractAgentProviderSession(
   source: AgentHookSource,
   payload: Record<string, unknown>
@@ -256,6 +259,7 @@ export function extractAgentProviderSession(
   }
 }
 
+/** Argv for the agent's resume CLI. Cursor is `cursor-agent --resume <id>`, matching AI Vault. */
 export function getAgentResumeArgv(
   agent: ResumableTuiAgent,
   providerSession: AgentProviderSessionMetadata,
