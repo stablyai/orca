@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { PlaneConnectDialog } from '@/components/plane-connect-dialog'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
@@ -116,6 +117,51 @@ export function JiraSetupSteps(
         />
       </ol>
       <JiraConnectDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onConnected={props.onConnected}
+      />
+    </>
+  )
+}
+
+export function PlaneSetupSteps(
+  props: ConnectStepProps & { onConnected: () => void; onOpenIntegrations: () => void }
+): React.JSX.Element {
+  const [dialogOpen, setDialogOpen] = useState(false)
+  return (
+    <>
+      <ol className="divide-y divide-border/50">
+        <TaskSourceStepRow
+          index={1}
+          state={getConnectStepState(props)}
+          title={translate('auto.components.settings.TasksPane.connectPlaneTitle', 'Connect Plane')}
+          description={translate(
+            'auto.components.settings.TasksPane.connectPlaneDescription',
+            'Add Plane Cloud or a self-hosted workspace with a personal access token.'
+          )}
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant={props.connected ? 'outline' : 'default'}
+              onClick={props.connected ? props.onOpenIntegrations : () => setDialogOpen(true)}
+            >
+              {props.connected
+                ? translate('auto.components.settings.TasksPane.managePlane', 'Manage access')
+                : translate('auto.components.settings.TasksPane.addPlane', 'Add Plane access')}
+            </Button>
+          }
+        />
+        <TaskSourceShowInTasksStep
+          index={2}
+          providerLabel="Plane"
+          visible={props.visible}
+          canHide={props.canHide}
+          onToggleVisible={props.onToggleVisible}
+        />
+      </ol>
+      <PlaneConnectDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onConnected={props.onConnected}

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  TASK_PROVIDERS,
   filterAvailableTaskProviders,
+  isTaskProvider,
   normalizeTaskProviderSettings,
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -16,7 +18,13 @@ describe('task providers', () => {
   })
 
   it('falls back to all providers when none are visible', () => {
-    expect(normalizeVisibleTaskProviders([])).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(normalizeVisibleTaskProviders([])).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'plane'
+    ])
   })
 
   it('restores a valid saved default when provider settings drifted', () => {
@@ -115,5 +123,17 @@ describe('task providers', () => {
         linearConnected: false
       })
     ).toEqual(['github'])
+  })
+
+  it('keeps disconnected Plane visible as an onboarding source', () => {
+    expect(isTaskProvider('plane')).toBe(true)
+    expect(TASK_PROVIDERS).toContain('plane')
+    expect(normalizeVisibleTaskProviders(['plane', 'github'])).toEqual(['plane', 'github'])
+    expect(
+      filterAvailableTaskProviders(['plane', 'github'], {
+        gitlabInstalled: true,
+        linearConnected: true
+      })
+    ).toEqual(['plane', 'github'])
   })
 })

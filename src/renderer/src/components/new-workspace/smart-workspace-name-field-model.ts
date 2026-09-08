@@ -7,6 +7,7 @@ import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { WorkspaceSourceSelectionKind } from '../../../../shared/new-workspace/workspace-source'
 import type { SmartNameMode, SmartWorkspaceSourceRow } from './smart-workspace-source-results'
 
 export type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
@@ -63,7 +64,9 @@ export type NormalizedSmartWorkspaceNameFieldProps = Omit<
 }
 
 export type SmartWorkspaceNameSelection = {
-  kind: 'github-pr' | 'github-issue' | 'gitlab-mr' | 'gitlab-issue' | 'branch' | 'linear' | 'jira'
+  // Mirrors buildWorkspaceSourceSelection so a new provider cannot drift into
+  // rendering another provider's icon.
+  kind: WorkspaceSourceSelectionKind
   label: string
   url?: string
 }

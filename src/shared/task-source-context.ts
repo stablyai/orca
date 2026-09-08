@@ -13,7 +13,7 @@ import {
   taskProviderIdentityCachePart,
   type TaskProviderIdentity
 } from './task-provider-identity'
-import type { TaskProvider } from './task-providers'
+import { isTaskProvider, type TaskProvider } from './task-providers'
 import type { GlobalSettings } from './global-settings-types'
 import type { Repo } from './repo-types'
 
@@ -202,16 +202,12 @@ function getRepoHostId(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): Ex
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
+// Why: this used to be a hand-written switch, which silently dropped any
+// provider added to TaskProvider without editing it here — the failure is a
+// null context rather than a type error, so nothing catches it. Delegating to
+// the shared guard keeps the two in step.
 function normalizeTaskProvider(value: unknown): TaskProvider | null {
-  switch (value) {
-    case 'github':
-    case 'gitlab':
-    case 'linear':
-    case 'jira':
-      return value
-    default:
-      return null
-  }
+  return isTaskProvider(value) ? value : null
 }
 
 function normalizeNonEmptyString(value: unknown): string | null {

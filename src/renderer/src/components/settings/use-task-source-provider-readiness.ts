@@ -6,6 +6,7 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { usePlaneConnection } from '@/hooks/usePlaneConnection'
 import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-install-commands'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
@@ -32,6 +33,7 @@ export function useTaskSourceProviderReadiness(
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const planeConnection = usePlaneConnection()
 
   const {
     installed: linearSkillInstalled,
@@ -89,6 +91,12 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      plane: {
+        connected: planeConnection.status.connected,
+        checking: planeConnection.checking,
+        unavailable: planeConnection.error !== null,
+        visible: visible.has('plane')
       }
     }
   }, [
@@ -101,6 +109,9 @@ export function useTaskSourceProviderReadiness(
     linearSkillInstalled,
     linearSkillLoading,
     linearSkillSettled,
+    planeConnection.checking,
+    planeConnection.error,
+    planeConnection.status.connected,
     reviewChecking,
     reviewUnavailable,
     visibleProvidersKey

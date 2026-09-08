@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { areWorkspaceLinkedItemsEqual } from './workspace-linked-item'
+import { areWorkspaceLinkedItemsEqual, normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import type { WorkspaceLinkedItem } from './worktree/types'
 
 const item: WorkspaceLinkedItem = {
@@ -43,5 +43,26 @@ describe('areWorkspaceLinkedItemsEqual', () => {
       false
     )
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, repoId: 'repo-2' })).toBe(false)
+  })
+})
+
+describe('plane linked items', () => {
+  const planeItem: WorkspaceLinkedItem = {
+    provider: 'plane',
+    type: 'issue',
+    number: 0,
+    title: 'Add OAuth login',
+    url: 'https://app.plane.so/acme/browse/PROJ-123/',
+    planeIdentifier: 'PROJ-123'
+  }
+
+  it('survives a persist/restore round-trip with its identifier intact', () => {
+    expect(normalizeWorkspaceLinkedItem({ ...planeItem })).toEqual(planeItem)
+  })
+
+  it('distinguishes two plane items that differ only by identifier', () => {
+    expect(
+      areWorkspaceLinkedItemsEqual(planeItem, { ...planeItem, planeIdentifier: 'PROJ-124' })
+    ).toBe(false)
   })
 })

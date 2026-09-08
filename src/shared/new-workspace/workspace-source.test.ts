@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildJiraWorkspaceSource,
   buildLinearWorkspaceSource,
+  buildPlaneWorkspaceSource,
   buildWorkspaceSourceSelection,
   getWorkspaceSourceName,
   getWorkspaceSourceProvider,
@@ -122,5 +123,52 @@ describe('workspace source policy', () => {
     expect(
       shouldApplyWorkspaceSourceAutoName({ currentName: 'my workspace', lastAutoName: 'old' })
     ).toBe(false)
+  })
+  it('builds a Plane identity keyed by its work item identifier', () => {
+    const plane = buildPlaneWorkspaceSource({
+      key: 'PROJ-123',
+      title: 'Add OAuth login',
+      url: 'https://app.plane.so/acme/browse/PROJ-123/'
+    })
+    expect(plane).toMatchObject({
+      provider: 'plane',
+      type: 'issue',
+      number: 0,
+      planeIdentifier: 'PROJ-123'
+    })
+    expect(getWorkspaceSourceProvider(plane)).toBe('plane')
+    expect(buildWorkspaceSourceSelection({ linkedWorkItem: plane })).toEqual({
+      kind: 'plane',
+      label: 'Add OAuth login',
+      url: 'https://app.plane.so/acme/browse/PROJ-123/'
+    })
+  })
+
+  it('recognises Plane items that arrive without an explicit provider', () => {
+    expect(
+      getWorkspaceSourceProvider({
+        type: 'issue',
+        number: 0,
+        title: 'Add OAuth login',
+        url: 'https://app.plane.so/acme/browse/PROJ-123/'
+      })
+    ).toBe('plane')
+  })
+
+  it('keeps a Plane selection when the repo changes, like other keyed providers', () => {
+    const plane = buildPlaneWorkspaceSource({
+      key: 'PROJ-123',
+      title: 'Add OAuth login',
+      url: 'https://app.plane.so/acme/browse/PROJ-123/'
+    })
+    expect(shouldPreserveWorkspaceSourceOnRepoChange(plane)).toBe(true)
+  })
+  it.each([
+    ['self-hosted Jira', 'http://jira.company.com:8080/jira/browse/TEAM-42', 'jira'],
+    ['Jira cloud', 'https://company.atlassian.net/browse/ORCA-123', 'jira'],
+    // Ambiguous by url alone: resolved later by matching a connected workspace.
+    ['self-hosted Plane', 'https://plane.internal/acme/browse/PROJ-123/', 'jira']
+  ])('classifies a %s url as %s', (_label, url, expected) => {
+    expect(getWorkspaceSourceProvider({ type: 'issue', number: 0, title: 'x', url })).toBe(expected)
   })
 })
