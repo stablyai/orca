@@ -75,6 +75,7 @@ export function MobileNativeChatOverlay({
         structuredActivityUi={controller.nativeChatStructured}
         workingStartedAt={controller.nativeChatWorkingStartedAt}
         settledTurns={controller.nativeChatSettledTurns}
+        sessionCommands={controller.nativeChatSessionCommands}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}

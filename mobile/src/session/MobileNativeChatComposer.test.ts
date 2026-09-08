@@ -401,6 +401,41 @@ describe('MobileNativeChatComposer', () => {
     expect(texts).not.toContain('/cost')
   })
 
+  it("serves the structured session's reported commands over every curated list", async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          structuredCommands: [],
+          sessionCommands: [
+            { name: 'clear', kind: 'command' },
+            { name: 'opsx:apply', kind: 'command' }
+          ]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    // The report is the authority: its commands show (described where the
+    // curated catalog knows the name) and neither curated-only entries nor the
+    // structured base commands resurface.
+    expect(texts).toContain('/clear')
+    expect(texts).toContain('Clear conversation history')
+    expect(texts).toContain('/opsx:apply')
+    expect(texts).not.toContain('/compact')
+    expect(texts).not.toContain('/model')
+  })
+
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()
