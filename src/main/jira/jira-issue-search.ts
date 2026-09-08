@@ -23,6 +23,12 @@ function sortAndLimitIssues(issues: JiraIssue[], limit: number): JiraIssue[] {
     .slice(0, limit)
 }
 
+/**
+ * Build the JQL for a preset issue filter.
+ * Why: `resolution` is only written by a workflow post-function, so a preset keyed on it
+ * misreports every project that has none; `statusCategory` is derived from the status
+ * itself and is always populated.
+ */
 export function filterToJql(filter: JiraIssueFilter): string {
   if (filter === 'assigned') {
     return 'assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC'
