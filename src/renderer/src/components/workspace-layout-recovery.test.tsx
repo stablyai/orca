@@ -241,7 +241,7 @@ it('visiting a pane reveals it when another pane is expanded', () => {
   state.splitWindowPane(first, 'horizontal')
   state.expandWindowPane(useAppStore.getState().windowPaneLayout!.activePaneId)
   state.focusWindowPane(first)
-  expect(useAppStore.getState().windowPaneLayout!.expandedPaneId).toBeNull()
+  expect(useAppStore.getState().windowPaneLayout!.expandedPaneId).toBe(first)
 })
 
 it('reopens the closed view at its prior position while preserving drafts and later tabs', () => {
