@@ -37,6 +37,13 @@ export function hasUnfilteredOrchestrationWaiter(
  * every remaining waiter contributes a concrete type list, and `messages.type` is TEXT with no
  * NOCASE collation — `NOT IN` is the same byte-exact test JS would repeat. Selection is synchronous
  * throughout, so no waiter can register partway through it either.
+ *
+ * A recorded heartbeat is excluded because its whole content is "nothing changed": the liveness it
+ * carries is written to `dispatch_contexts.last_heartbeat_at` on the send path, before any pointer
+ * runs, so pushing it spends a coordinator turn to convey state that `worker-list` / `worker-show`
+ * can read at any time (#14910). A REJECTED heartbeat is not liveness — someone other than the
+ * assignee claimed it, which would otherwise mask a hung assignee — so it still pushes. Neither row
+ * is hidden: both stay unread for `check` and `inbox`.
  */
 export function selectOrchestrationPointerBatch(input: {
   db: OrchestrationDb
@@ -55,6 +62,7 @@ export function selectOrchestrationPointerBatch(input: {
   }
   return input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
     excludeTypes: [...excludedTypes],
+    excludeRecordedHeartbeats: true,
     limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
   })
 }

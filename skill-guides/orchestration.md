@@ -81,7 +81,7 @@ The injected preamble is authoritative. A dispatched worker must:
    coordinator question. Never open a local question TUI the coordinator cannot
    answer. Resume the same message ID after an ask timeout.
 2. Send heartbeats only at the cadence in the preamble. A heartbeat proves
-   liveness, not completion.
+   liveness, not completion; it is state the coordinator reads, not a nudge.
 3. Read coordinator follow-ups at each natural checkpoint — before starting a
    new file, after a test run — and once more immediately before `worker_done`:
    `ORCA orchestration check --terminal <your_handle> --json`.

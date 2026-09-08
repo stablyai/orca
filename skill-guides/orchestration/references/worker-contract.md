@@ -14,7 +14,9 @@ ORCA orchestration send --from <worker_handle> --dispatch-capability <capability
 ```
 
 Use typed lifecycle flags, not a hand-written JSON payload. A heartbeat proves
-liveness, never completion.
+liveness, never completion. It is recorded as state the coordinator reads in
+`worker-list` and `worker-show`, not mail that nudges it, so send `status` when
+the coordinator has to look at something.
 
 ## Ask and resume
 
