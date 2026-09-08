@@ -118,6 +118,13 @@ __orca_osc133_epilogue() {
     __orca_ready_marker=""
   fi
 }
+# Install before array composition strands bash-preexec's scalar-only installer in a later element.
+if [[ -n "\${bash_preexec_imported:-}\${__bp_imported:-}" && -n "\${__bp_install_string:-}" && "\${PROMPT_COMMAND[*]:-}" == *"$__bp_install_string"* ]]; then
+  __bp_trap_string="$(trap -p DEBUG)"
+  trap - DEBUG
+  __bp_install
+  unset __bp_preexec_interactive_mode
+fi
 ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
 __orca_prepend_prompt_command "__orca_osc133_precmd"
 __orca_append_prompt_command '__orca_in_debug_capture=1; __orca_prompt_had_functrace=""; if [[ -o functrace ]]; then __orca_prompt_had_functrace=1; set +T; fi; __orca_outer_debug_trap_spec="$(trap -p DEBUG)"; [[ -z "$__orca_prompt_had_functrace" ]] || set -T; unset __orca_prompt_had_functrace __orca_in_debug_capture'
