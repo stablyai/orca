@@ -227,6 +227,8 @@ export type GlobalSettings = {
   sourceControlGroupOrder: SourceControlGroupOrder
   /** Compare base defaults to the branch upstream instead of the repo default; affects only the compare/diff view, not the PR/rebase target. Per-user. */
   sourceControlCompareAgainstUpstream: boolean
+  /** Whether the "Committed on Branch" section starts collapsed. Per-user, not per-workspace, so it survives a workspace switch. */
+  sourceControlBranchSectionCollapsed: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
   /** Hides the Tasks sidebar button (also removes it from keyboard navigation). */
