@@ -7,7 +7,7 @@ import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
   splitPaneWithOneShotStartup,
-  recordRuntimeCreatedTerminalPaneSplit
+  completeRuntimeCreatedTerminalPaneSplit
 } from './terminal-pane-lifecycle-primitives'
 import { applyTerminalPaneCloseRequest } from './terminal-pane-lifecycle-close'
 import {
@@ -55,19 +55,21 @@ export function installTerminalPaneMountEvents(args: {
         const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
           mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
-        recordRuntimeCreatedTerminalPaneSplit(createdPane, {
+        completeRuntimeCreatedTerminalPaneSplit(createdPane, {
           source: detail.telemetrySource ?? 'command',
-          direction: detail.direction
+          direction: detail.direction,
+          equalizeTarget: { tabId: deps.tabId, manager: mgr }
         })
       } else {
         const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         const telemetrySuppressed = createdPane
           ? consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
           : false
-        recordRuntimeCreatedTerminalPaneSplit(createdPane, {
+        completeRuntimeCreatedTerminalPaneSplit(createdPane, {
           source: detail.telemetrySource ?? 'command',
           direction: detail.direction,
-          telemetrySuppressed
+          telemetrySuppressed,
+          equalizeTarget: { tabId: deps.tabId, manager: mgr }
         })
       }
     }

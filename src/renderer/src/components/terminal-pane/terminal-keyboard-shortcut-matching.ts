@@ -8,7 +8,10 @@ import {
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
-import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+import {
+  completeCreatedTerminalPaneSplit,
+  type TerminalPaneSplitCompletion
+} from './terminal-pane-split-completion'
 
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
@@ -42,11 +45,13 @@ export function resolveTerminalKeyboardShortcutAction(
   )
 }
 
-export function recordKeyboardCreatedTerminalPaneSplit(
+export function completeKeyboardCreatedTerminalPaneSplit(
   createdPane: unknown,
-  args: { source: 'contextual_tour' | 'keyboard'; direction: 'vertical' | 'horizontal' }
+  args: Omit<TerminalPaneSplitCompletion, 'source'> & {
+    source: 'contextual_tour' | 'keyboard'
+  }
 ): boolean {
-  return recordCreatedTerminalPaneSplit(createdPane, args)
+  return completeCreatedTerminalPaneSplit(createdPane, args)
 }
 
 export function isEditableTarget(target: EventTarget | null): boolean {

@@ -6,7 +6,7 @@ import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-in
 import { createDeferred } from './pty-connection-test-async'
 
 const mocks = vi.hoisted(() => ({
-  recordCreatedTerminalPaneSplit: vi.fn(),
+  completeCreatedTerminalPaneSplit: vi.fn(),
   resolveSplitCwd: vi.fn(),
   splitWebRuntimeTerminal: vi.fn()
 }))
@@ -20,7 +20,7 @@ vi.mock('./resolve-split-cwd', () => ({
 }))
 
 vi.mock('./terminal-pane-split-completion', () => ({
-  recordCreatedTerminalPaneSplit: mocks.recordCreatedTerminalPaneSplit
+  completeCreatedTerminalPaneSplit: mocks.completeCreatedTerminalPaneSplit
 }))
 
 function makeManager(splitPane: ReturnType<typeof vi.fn>): PaneManager {
@@ -29,7 +29,7 @@ function makeManager(splitPane: ReturnType<typeof vi.fn>): PaneManager {
 
 describe('splitTerminalPaneWithInheritedCwd', () => {
   beforeEach(() => {
-    mocks.recordCreatedTerminalPaneSplit.mockReset()
+    mocks.completeCreatedTerminalPaneSplit.mockReset()
     mocks.resolveSplitCwd.mockReset()
     mocks.splitWebRuntimeTerminal.mockReset()
     mocks.splitWebRuntimeTerminal.mockReturnValue(false)
@@ -81,9 +81,10 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     })
 
     expect(splitPane).toHaveBeenCalledWith(1, 'horizontal', { cwd: '/cached' })
-    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(createdPane, {
+    expect(mocks.completeCreatedTerminalPaneSplit).toHaveBeenCalledWith(createdPane, {
       source: 'keyboard',
-      direction: 'horizontal'
+      direction: 'horizontal',
+      equalizeTarget: { tabId: 'tab-1', manager: expect.objectContaining({ splitPane }) }
     })
   })
 
@@ -126,9 +127,14 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     })
     expect(staleSplitPane).not.toHaveBeenCalled()
     expect(liveSplitPane).toHaveBeenCalledWith(1, 'vertical', { cwdPromise: cwd.promise })
-    expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(createdPane, {
+    expect(mocks.completeCreatedTerminalPaneSplit).toHaveBeenCalledWith(createdPane, {
       source: 'keyboard',
-      direction: 'vertical'
+      direction: 'vertical',
+      // Why: the live manager, not the stale one captured at call time, owns the equalize.
+      equalizeTarget: {
+        tabId: 'tab-1',
+        manager: expect.objectContaining({ splitPane: liveSplitPane })
+      }
     })
 
     const spawnHints = liveSplitPane.mock.calls[0]?.[2] as
@@ -207,6 +213,6 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
 
     expect(staleSplitPane).not.toHaveBeenCalled()
     expect(mocks.resolveSplitCwd).not.toHaveBeenCalled()
-    expect(mocks.recordCreatedTerminalPaneSplit).not.toHaveBeenCalled()
+    expect(mocks.completeCreatedTerminalPaneSplit).not.toHaveBeenCalled()
   })
 })

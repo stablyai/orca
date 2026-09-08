@@ -177,6 +177,8 @@ export type GlobalSettings = {
   /** 'auto' resolves to PowerShell 7+ when present, else falls back to inbox Windows PowerShell. */
   terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
   terminalFocusFollowsMouse: boolean
+  /** Equalizes the tab's pane sizes when a split completes; off so deliberately uneven layouts keep today's halving. */
+  terminalEqualizePanesOnSplit: boolean
   /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean
   /** Enables OSC 52 clipboard writes for TUIs (tmux/Zellij/nvim, incl. over SSH); default on. Clipboard *queries* stay blocked and payload size is capped, so this is write-only exposure. */
