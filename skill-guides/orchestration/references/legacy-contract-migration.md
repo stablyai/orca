@@ -95,9 +95,9 @@ ORCA orchestration check --run <adopted_run_id> --json
 ```
 
 `--takeover-legacy` is only valid for the automatically adopted recovery Run.
-It must be invoked by the live coordinator agent terminal it will bind; a plain
-shell or a mismatched `--from` returns `legacy_read_only` with that message.
-`--from` cannot nominate another coordinator.
+Legacy takeover must be invoked by the live coordinator agent terminal it will bind.
+A plain shell or a mismatched `--from` returns `legacy_read_only` with that
+message. `--from` cannot nominate another coordinator.
 
 Takeover binds the authenticated invoking terminal. It fences only the old
 coordinator and moves pending mail into current Run delivery. It preserves live
