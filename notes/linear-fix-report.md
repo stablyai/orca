@@ -4,7 +4,7 @@ Base: `588240043e8` (newer than the triage base). Refreshed all 19 named Linear 
 
 ## Delivered
 
-Three focused commits in one draft PR (URL recorded below):
+Draft PR: https://github.com/stablyai/orca/pull/19414 (base `main`). Three focused repair commits:
 
 - `e486911e2be`: sleeping resume checks live status, pending startup, and automatic claims across workspaces when provider identity, exact transcript path, execution host, and paired transport environment agree. Reuses the existing provider equality and route resolver. Folder owners are included; different account paths and hosts are isolated. Consecutive sweeps share the existing queued claim. This is renderer suppression, **not atomic host claiming**; legacy ID-only records retain existing behavior.
 - `f93fb796898`: offline/error/conflicting direct-SSH syncs remain `unverifiable`, including after a prior hydration. Repeated sweeps preserve the record; successful hydration/retry permits one launch. No inventory failure proves process exit.
