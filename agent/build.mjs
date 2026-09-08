@@ -43,7 +43,12 @@ const buildOptions = {
   platform: 'node',
   target: 'node22',
   format: 'cjs',
-  external: ['node-pty', 'better-sqlite3', 'keytar', '@parcel/watcher', 'electron'],
+  // cpu-features: ssh2's optional native crypto accelerator (ssh-outbound-client.ts,
+  // BACKLOG-001) — ssh2 itself already wraps the require in try/catch and
+  // falls back to pure-JS crypto when it's absent (lib/protocol/constants.js),
+  // same reasoning as every other native-binding package below; esbuild
+  // otherwise fails trying to bundle its .node binary directly.
+  external: ['node-pty', 'better-sqlite3', 'keytar', '@parcel/watcher', 'electron', 'cpu-features'],
   sourcemap: false,
   minify: false,
   define: { 'process.env.NODE_ENV': '"production"' },
