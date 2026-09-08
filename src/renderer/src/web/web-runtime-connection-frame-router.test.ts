@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { routeWebRuntimeConnectionFrame } from './web-runtime-connection-frame-router'
 
 describe('web runtime connection capability advertisement', () => {
@@ -24,6 +27,7 @@ describe('web runtime connection capability advertisement', () => {
       expect.objectContaining({
         type: 'e2ee_auth',
         clientCapabilities: expect.arrayContaining([
+          REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
           WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY
         ])
       })
