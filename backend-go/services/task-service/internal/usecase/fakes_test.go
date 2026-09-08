@@ -318,13 +318,15 @@ func (f *fakeTxRunner) RunInTx(ctx context.Context, fn func(ctx context.Context,
 }
 
 type fakeExecutor struct {
-	ref    string
-	err    error
-	called bool
+	ref       string
+	err       error
+	called    bool
+	gotPrompt string
 }
 
-func (f *fakeExecutor) Execute(ctx context.Context, tenantID, taskID, requestID string) (string, error) {
+func (f *fakeExecutor) Execute(ctx context.Context, tenantID, taskID, requestID, prompt string) (string, error) {
 	f.called = true
+	f.gotPrompt = prompt
 	if f.err != nil {
 		return "", f.err
 	}

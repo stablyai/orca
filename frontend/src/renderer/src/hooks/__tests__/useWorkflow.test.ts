@@ -9,7 +9,7 @@ vi.mock('../../runtime/runtime-rpc-client', () => ({
   getActiveRuntimeTarget: vi.fn().mockReturnValue('mock-target')
 }))
 
-const mockStore: any = {
+const mockStore: Record<string, unknown> = {
   templates: [],
   executions: [],
   addTemplate: vi.fn(),
@@ -19,7 +19,7 @@ const mockStore: any = {
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
-    (fn?: any) => fn ? fn(mockStore) : mockStore,
+    (fn?: (state: typeof mockStore) => unknown) => (fn ? fn(mockStore) : mockStore),
     { getState: () => mockStore }
   )
 }))
@@ -55,10 +55,16 @@ describe('useWorkflow', () => {
     stop()
 
     // Bug fix: signature is callRuntimeRpc(target, method, params)
-    expect(mockRpc).toHaveBeenCalledWith('mock-target', 'workflow.template.create', expect.any(Object))
+    expect(mockRpc).toHaveBeenCalledWith(
+      'mock-target',
+      'workflow.template.create',
+      expect.any(Object)
+    )
     expect(mockStore.addTemplate).toHaveBeenCalledWith({ id: 'new-id' })
 
-    const startEvent = events.find(e => e.flow === 'ui:workflow.templateSave' && e.level === 'start')
+    const startEvent = events.find(
+      (e) => e.flow === 'ui:workflow.templateSave' && e.level === 'start'
+    )
     expect(startEvent?.fields.mode).toBe('create')
   })
 
@@ -73,12 +79,18 @@ describe('useWorkflow', () => {
     })
     stop()
 
-    expect(mockRpc).toHaveBeenCalledWith('mock-target', 'workflow.template.update', expect.objectContaining({ templateId: 't1' }))
-    const startEvent = events.find(e => e.flow === 'ui:workflow.templateSave' && e.level === 'start')
+    expect(mockRpc).toHaveBeenCalledWith(
+      'mock-target',
+      'workflow.template.update',
+      expect.objectContaining({ id: 't1' })
+    )
+    const startEvent = events.find(
+      (e) => e.flow === 'ui:workflow.templateSave' && e.level === 'start'
+    )
     expect(startEvent?.fields.mode).toBe('update')
   })
 
-  it('saveTemplate with templateId → sends { templateId, name, definition: { steps }, scope, traceId } — NOT a flat spread of local (BUG-FE-RPC-006)', async () => {
+  it('saveTemplate with templateId → sends { id, name, dagJson, scope } — dagJson is a JSON-encoded string, not a nested object (BACKLOG-020)', async () => {
     mockStore.templates = [{ id: 't1', name: 'Existing', scope: 'personal', steps: [{ id: 's1' }] }]
     const { useWorkflow } = await import('../useWorkflow')
     const { result } = renderHook(() => useWorkflow('t1'))
@@ -90,34 +102,36 @@ describe('useWorkflow', () => {
     const callArgs = mockRpc.mock.calls[0]
     const params = callArgs?.[2] as Record<string, unknown>
     expect(params).toMatchObject({
-      templateId: 't1',
+      id: 't1',
       name: 'Existing',
       scope: 'personal',
-      definition: { steps: [{ id: 's1' }] },
+      dagJson: JSON.stringify({ steps: [{ id: 's1' }] })
     })
-    // The old buggy call flat-spread `local`, which would have put `id`/`scopeRefId`
-    // directly on params instead of nesting steps under `definition`.
-    expect(params.id).toBeUndefined()
-    expect(params.steps).toBeUndefined()
+    // The real RPC has no templateId/definition/traceId fields — sending them
+    // (the previous shape) silently decoded to an empty id/dagJson server-side.
+    expect(params.templateId).toBeUndefined()
+    expect(params.definition).toBeUndefined()
+    expect(params.traceId).toBeUndefined()
   })
 
-  it('saveTemplate forwards traceId: span.id into RPC params', async () => {
+  it('saveTemplate (create) sends { name, dagJson, scope } — no id/templateId/traceId field exists on the real RPC', async () => {
     mockRpc.mockResolvedValueOnce({ id: 'new-id' })
-    const { events, stop } = captureTraceEvents()
     const { useWorkflow } = await import('../useWorkflow')
     const { result } = renderHook(() => useWorkflow())
 
     await act(async () => {
       await result.current.saveTemplate()
     })
-    stop()
 
-    const startEvent = events.find(e => e.flow === 'ui:workflow.templateSave' && e.level === 'start')
     const callArgs = mockRpc.mock.calls[0]
-    expect((callArgs?.[2] as { traceId?: string }).traceId).toBe(startEvent?.id)
+    const params = callArgs?.[2] as Record<string, unknown>
+    expect(params.id).toBeUndefined()
+    expect(params.templateId).toBeUndefined()
+    expect(params.traceId).toBeUndefined()
+    expect(typeof params.dagJson).toBe('string')
   })
 
-  it('runWorkflow(templateId) calls workflow.execute with target as first arg, forwards traceId, saves rootTraceId on addExecution', async () => {
+  it('runWorkflow(templateId) calls workflow.execute with target as first arg, forwards rootTraceId/requestId, saves rootTraceId on addExecution', async () => {
     mockStore.templates = [{ id: 't1', name: 'Existing' }]
     mockRpc.mockResolvedValueOnce({ id: 'exec-1' })
     const { events, stop } = captureTraceEvents()
@@ -130,13 +144,24 @@ describe('useWorkflow', () => {
     })
     stop()
 
-    const startEvent = events.find(e => e.flow === 'ui:workflow.execute' && e.level === 'start')
-    expect(mockRpc).toHaveBeenCalledWith('mock-target', 'workflow.execute', { templateId: 't1', inputs: { foo: 'bar' }, traceId: startEvent?.id })
+    const startEvent = events.find((e) => e.flow === 'ui:workflow.execute' && e.level === 'start')
+    // BACKLOG-020: the real RPC has no `inputs`/`traceId` fields — `inputs` is
+    // accepted for API-compat but not sent (ExecuteRequest carries no per-run
+    // payload today); `traceId` needed to be `rootTraceId` to actually land.
+    expect(mockRpc).toHaveBeenCalledWith('mock-target', 'workflow.execute', {
+      templateId: 't1',
+      rootTraceId: startEvent?.id,
+      requestId: startEvent?.id
+    })
     expect(execId).toBe('exec-1')
 
-    expect(mockStore.addExecution).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'exec-1', templateId: 't1', rootTraceId: startEvent?.id
-    }))
+    expect(mockStore.addExecution).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'exec-1',
+        templateId: 't1',
+        rootTraceId: startEvent?.id
+      })
+    )
   })
 
   it('runWorkflow without templateId → no span created, returns null', async () => {
@@ -152,7 +177,7 @@ describe('useWorkflow', () => {
 
     expect(execId).toBeNull()
     expect(mockRpc).not.toHaveBeenCalled()
-    expect(events.filter(e => e.flow === 'ui:workflow.execute')).toHaveLength(0)
+    expect(events.filter((e) => e.flow === 'ui:workflow.execute')).toHaveLength(0)
   })
 
   it('runWorkflow RPC error → span.fail(err, {templateId}), returns null', async () => {
@@ -170,7 +195,7 @@ describe('useWorkflow', () => {
     stop()
 
     expect(execId).toBeNull()
-    const failEvents = events.filter(e => e.flow === 'ui:workflow.execute' && e.level === 'fail')
+    const failEvents = events.filter((e) => e.flow === 'ui:workflow.execute' && e.level === 'fail')
     expect(failEvents).toHaveLength(1)
     expect(failEvents[0]?.fields.templateId).toBe('t1')
     expect(mockStore.addExecution).not.toHaveBeenCalled()
@@ -190,7 +215,9 @@ describe('useWorkflow', () => {
     ).rejects.toThrow('save boom')
     stop()
 
-    const failEvents = events.filter(e => e.flow === 'ui:workflow.templateSave' && e.level === 'fail')
+    const failEvents = events.filter(
+      (e) => e.flow === 'ui:workflow.templateSave' && e.level === 'fail'
+    )
     expect(failEvents).toHaveLength(1)
     expect(failEvents[0]?.fields.mode).toBe('create')
   })

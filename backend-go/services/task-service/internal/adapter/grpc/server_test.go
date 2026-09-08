@@ -217,7 +217,7 @@ func (stubOPA) Decision(ctx context.Context, level domain.GrantLevel, action, te
 
 type stubExecutor struct{}
 
-func (stubExecutor) Execute(ctx context.Context, tenantID, taskID, requestID string) (string, error) {
+func (stubExecutor) Execute(ctx context.Context, tenantID, taskID, requestID, prompt string) (string, error) {
 	return "ref", nil
 }
 

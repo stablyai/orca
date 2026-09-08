@@ -129,7 +129,7 @@ type agentExecPromptResult struct {
 	TimedOut bool   `json:"timedOut"`
 }
 
-func (s *SimpleExecutor) Execute(ctx context.Context, tenantID, taskID, requestID string) (string, error) {
+func (s *SimpleExecutor) Execute(ctx context.Context, tenantID, taskID, requestID, prompt string) (string, error) {
 	task, err := s.tasks.Get(ctx, tenantID, taskID)
 	if err != nil {
 		return "", fmt.Errorf("simple_executor: load task: %w", err)
@@ -154,8 +154,12 @@ func (s *SimpleExecutor) Execute(ctx context.Context, tenantID, taskID, requestI
 		return "", apperrors.New(apperrors.KindFailedPrecondition, "TASK_EXECUTE_NO_WORKTREE_PATH", "task's connected dev server has no worktree path recorded", nil)
 	}
 
+	effectivePrompt := prompt
+	if effectivePrompt == "" {
+		effectivePrompt = buildExecutePrompt(task)
+	}
 	paramsJSON, err := json.Marshal(agentExecPromptParams{
-		Prompt:       buildExecutePrompt(task),
+		Prompt:       effectivePrompt,
 		WorktreePath: worktreePath,
 		StepID:       requestID,
 	})

@@ -11,6 +11,11 @@ import (
 type ExecuteTaskInput struct {
 	TaskID    string
 	RequestID string
+	// Prompt overrides the executor's own default prompt (built from the
+	// task's Title) when non-empty — see docs/backlog/BACKLOG-016 and
+	// SimpleExecutor.buildExecutePrompt's doc comment for the default it
+	// replaces. Not persisted onto the task.
+	Prompt string
 }
 
 // ExecuteTask is task-service's execution-dispatch usecase (§3.1). The
@@ -65,9 +70,9 @@ func (uc *ExecuteTask) Execute(ctx context.Context, in ExecuteTaskInput) (string
 
 	var ref string
 	if complex {
-		ref, err = uc.complex.Execute(ctx, tenantID, in.TaskID, in.RequestID)
+		ref, err = uc.complex.Execute(ctx, tenantID, in.TaskID, in.RequestID, in.Prompt)
 	} else {
-		ref, err = uc.simple.Execute(ctx, tenantID, in.TaskID, in.RequestID)
+		ref, err = uc.simple.Execute(ctx, tenantID, in.TaskID, in.RequestID, in.Prompt)
 	}
 	if err != nil {
 		return "", apperrors.New(apperrors.KindInternal, "TASK_EXECUTE_FAILED", "execution dispatch failed", err)

@@ -106,7 +106,7 @@ func TestSimpleExecutor_Execute_RelaysAgentExecPrompt(t *testing.T) {
 	}
 	exec := NewSimpleExecutor(tasks, resolver, relay)
 
-	ref, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1")
+	ref, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestSimpleExecutor_NotConnected_ReturnsTypedError(t *testing.T) {
 	resolver := &fakeProjectExecutionResolver{connected: false}
 	exec := NewSimpleExecutor(tasks, resolver, &fakeInfraFleetServiceClient{})
 
-	_, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1")
+	_, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1", "")
 	if err == nil {
 		t.Fatal("expected a real error for a not-connected project, not a synthesized placeholder ref")
 	}
@@ -156,7 +156,7 @@ func TestSimpleExecutor_ConnectedButNoWorktreePath_ReturnsTypedError(t *testing.
 	resolver := &fakeProjectExecutionResolver{connectionID: "conn-1", connected: true, worktreePath: ""}
 	exec := NewSimpleExecutor(tasks, resolver, &fakeInfraFleetServiceClient{})
 
-	_, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1")
+	_, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1", "")
 	if err == nil {
 		t.Fatal("expected a real error when connected but no worktreePath resolved")
 	}
@@ -168,7 +168,7 @@ func TestSimpleExecutor_ConnectedButNoWorktreePath_ReturnsTypedError(t *testing.
 
 func TestSimpleExecutor_TaskNotFound(t *testing.T) {
 	exec := NewSimpleExecutor(&fakeTaskRepository{tasks: map[string]domain.Task{}}, &fakeProjectExecutionResolver{}, &fakeInfraFleetServiceClient{})
-	if _, err := exec.Execute(context.Background(), "tenant-1", "does-not-exist", "req-1"); err == nil {
+	if _, err := exec.Execute(context.Background(), "tenant-1", "does-not-exist", "req-1", ""); err == nil {
 		t.Fatal("expected an error for a nonexistent task")
 	}
 }
@@ -179,7 +179,7 @@ func TestSimpleExecutor_RelayErrorPropagates(t *testing.T) {
 	relay := &fakeInfraFleetServiceClient{relayErr: errors.New("boom")}
 	exec := NewSimpleExecutor(tasks, resolver, relay)
 
-	if _, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1"); err == nil {
+	if _, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1", ""); err == nil {
 		t.Fatal("expected an error when the relay call fails")
 	}
 }
@@ -197,7 +197,7 @@ func TestSimpleExecutor_NonZeroExitCode_ReturnsError(t *testing.T) {
 	}
 	exec := NewSimpleExecutor(tasks, resolver, relay)
 
-	if _, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1"); err == nil {
+	if _, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1", ""); err == nil {
 		t.Fatal("expected an error for a non-zero agent.execPrompt exit code")
 	}
 }
@@ -212,7 +212,7 @@ func TestSimpleExecutor_TimedOut_ReturnsError(t *testing.T) {
 	}
 	exec := NewSimpleExecutor(tasks, resolver, relay)
 
-	if _, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1"); err == nil {
+	if _, err := exec.Execute(context.Background(), "tenant-1", "t1", "req-1", ""); err == nil {
 		t.Fatal("expected an error for a timed-out agent.execPrompt run")
 	}
 }

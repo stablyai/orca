@@ -224,12 +224,16 @@ func registerTaskCRUDChannels(r *Registry, client taskv1.TaskServiceClient) {
 		type executeArgs struct {
 			TaskID    string `json:"taskId"`
 			RequestID string `json:"requestId"`
+			// Prompt: TaskPromptEditor.tsx's user-edited override — see
+			// TaskServiceExecuteRequest.prompt's own doc comment
+			// (docs/backlog/BACKLOG-016). Empty = executor's own default.
+			Prompt string `json:"prompt"`
 		}
 		in, err := decodeArg[executeArgs](args, 0)
 		if err != nil {
 			return nil, err
 		}
-		resp, err := client.Execute(ctx, &taskv1.TaskServiceExecuteRequest{TaskId: in.TaskID, RequestId: in.RequestID})
+		resp, err := client.Execute(ctx, &taskv1.TaskServiceExecuteRequest{TaskId: in.TaskID, RequestId: in.RequestID, Prompt: in.Prompt})
 		if err != nil {
 			return nil, err
 		}
@@ -257,9 +261,10 @@ func registerTaskCRUDChannels(r *Registry, client taskv1.TaskServiceClient) {
 
 	r.Register("task.update", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
 		type updateArgs struct {
-			ID     string  `json:"id"`
-			Title  *string `json:"title"`
-			Status *string `json:"status"`
+			ID                 string  `json:"id"`
+			Title              *string `json:"title"`
+			Status             *string `json:"status"`
+			WorkflowTemplateID *string `json:"workflowTemplateId"`
 		}
 		in, err := decodeArg[updateArgs](args, 0)
 		if err != nil {
@@ -271,6 +276,9 @@ func registerTaskCRUDChannels(r *Registry, client taskv1.TaskServiceClient) {
 		}
 		if in.Status != nil {
 			req.Status = wrapperspb.String(*in.Status)
+		}
+		if in.WorkflowTemplateID != nil {
+			req.WorkflowTemplateId = wrapperspb.String(*in.WorkflowTemplateID)
 		}
 		resp, err := client.UpdateTask(ctx, req)
 		if err != nil {

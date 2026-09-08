@@ -21,12 +21,15 @@ export function TaskPromptEditor({ task }: { task: OrcaTask }) {
       promptLength: prompt.length
     })
     try {
-      // task.execute has no `prompt` param — the executor builds the agent prompt
-      // server-side from the task's own promptTemplate (TaskAgentExecutor.buildPrompt).
+      // BACKLOG-016: task.execute now accepts `prompt` — an empty value
+      // (user never edited the textarea) falls back to the executor's own
+      // default (SimpleExecutor.buildExecutePrompt, built from the task's
+      // title), same behavior as before this field existed.
       await callRuntimeRpc(target, 'task.execute', {
         taskId: task.id,
         projectId: project!.id,
         worktreePath: currentWorktree!.path,
+        prompt,
         traceId: span.id
       })
       span.ok({ taskId: task.id })

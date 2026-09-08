@@ -79,13 +79,13 @@ func (r *Repository) Create(ctx context.Context, task domain.Task) (domain.Task,
 
 func (r *Repository) Get(ctx context.Context, tenantID, id string) (domain.Task, error) {
 	row := r.db.QueryRow(ctx, `
-		SELECT id, tenant_id, title, status, COALESCE(parent_id::text, ''), COALESCE(project_id::text, '')
+		SELECT id, tenant_id, title, status, COALESCE(parent_id::text, ''), COALESCE(project_id::text, ''), COALESCE(workflow_template_id::text, '')
 		FROM task.tasks
 		WHERE tenant_id = $1 AND id = $2
 	`, tenantID, id)
 
 	var t domain.Task
-	if err := row.Scan(&t.ID, &t.TenantID, &t.Title, &t.Status, &t.ParentID, &t.ProjectID); err != nil {
+	if err := row.Scan(&t.ID, &t.TenantID, &t.Title, &t.Status, &t.ParentID, &t.ProjectID, &t.WorkflowTemplateID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Task{}, fmt.Errorf("postgres: task %s not found: %w", id, err)
 		}
@@ -105,18 +105,18 @@ func (r *Repository) GetAncestors(ctx context.Context, tenantID, id string, maxD
 
 	rows, err := r.db.Query(ctx, `
 		WITH RECURSIVE ancestors AS (
-			SELECT id, tenant_id, title, status, parent_id, project_id, 0 AS depth
+			SELECT id, tenant_id, title, status, parent_id, project_id, workflow_template_id, 0 AS depth
 			FROM task.tasks
 			WHERE tenant_id = $1 AND id = $2
 
 			UNION ALL
 
-			SELECT t.id, t.tenant_id, t.title, t.status, t.parent_id, t.project_id, a.depth + 1
+			SELECT t.id, t.tenant_id, t.title, t.status, t.parent_id, t.project_id, t.workflow_template_id, a.depth + 1
 			FROM task.tasks t
 			JOIN ancestors a ON t.id = a.parent_id
 			WHERE a.depth + 1 < $3
 		)
-		SELECT id, tenant_id, title, status, COALESCE(parent_id::text, ''), COALESCE(project_id::text, '')
+		SELECT id, tenant_id, title, status, COALESCE(parent_id::text, ''), COALESCE(project_id::text, ''), COALESCE(workflow_template_id::text, '')
 		FROM ancestors
 		ORDER BY depth
 	`, tenantID, id, maxDepth)
@@ -128,7 +128,7 @@ func (r *Repository) GetAncestors(ctx context.Context, tenantID, id string, maxD
 	var out []domain.Task
 	for rows.Next() {
 		var t domain.Task
-		if err := rows.Scan(&t.ID, &t.TenantID, &t.Title, &t.Status, &t.ParentID, &t.ProjectID); err != nil {
+		if err := rows.Scan(&t.ID, &t.TenantID, &t.Title, &t.Status, &t.ParentID, &t.ProjectID, &t.WorkflowTemplateID); err != nil {
 			return nil, fmt.Errorf("postgres: scan ancestor row: %w", err)
 		}
 		out = append(out, t)
@@ -177,7 +177,7 @@ func (r *Repository) List(ctx context.Context, tenantID, projectID, pageToken st
 		pageSize = 50
 	}
 	rows, err := r.db.Query(ctx, `
-		SELECT id, tenant_id, title, status, COALESCE(parent_id::text, ''), COALESCE(project_id::text, '')
+		SELECT id, tenant_id, title, status, COALESCE(parent_id::text, ''), COALESCE(project_id::text, ''), COALESCE(workflow_template_id::text, '')
 		FROM task.tasks
 		WHERE tenant_id = $1
 		  AND ($2 = '' OR project_id::text = $2)
@@ -193,7 +193,7 @@ func (r *Repository) List(ctx context.Context, tenantID, projectID, pageToken st
 	var out []domain.Task
 	for rows.Next() {
 		var t domain.Task
-		if err := rows.Scan(&t.ID, &t.TenantID, &t.Title, &t.Status, &t.ParentID, &t.ProjectID); err != nil {
+		if err := rows.Scan(&t.ID, &t.TenantID, &t.Title, &t.Status, &t.ParentID, &t.ProjectID, &t.WorkflowTemplateID); err != nil {
 			return nil, "", fmt.Errorf("postgres: scan task row: %w", err)
 		}
 		out = append(out, t)
@@ -208,14 +208,17 @@ func (r *Repository) List(ctx context.Context, tenantID, projectID, pageToken st
 	return out, nextToken, nil
 }
 
-// Update persists a partial (title/status) field update — the status guard
-// itself runs at the domain layer (domain.Task.SetStatus) before this is
-// ever called; this is a plain UPDATE of both columns unconditionally.
+// Update persists a partial (title/status/workflow_template_id) field
+// update — the status guard itself runs at the domain layer
+// (domain.Task.SetStatus) before this is ever called; this is a plain
+// UPDATE of all three columns unconditionally (UpdateTask usecase already
+// merged only the caller-supplied fields onto the loaded task before
+// calling this).
 func (r *Repository) Update(ctx context.Context, tenantID string, t domain.Task) error {
 	tag, err := r.db.Exec(ctx, `
-		UPDATE task.tasks SET title = $3, status = $4, updated_at = now()
+		UPDATE task.tasks SET title = $3, status = $4, workflow_template_id = NULLIF($5, '')::uuid, updated_at = now()
 		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, t.ID, t.Title, t.Status)
+	`, tenantID, t.ID, t.Title, t.Status, t.WorkflowTemplateID)
 	if err != nil {
 		return fmt.Errorf("postgres: update task: %w", err)
 	}

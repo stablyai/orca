@@ -21,6 +21,6 @@ func NewStubComplexExecutor() *StubComplexExecutor {
 	return &StubComplexExecutor{}
 }
 
-func (s *StubComplexExecutor) Execute(ctx context.Context, tenantID, taskID, requestID string) (string, error) {
+func (s *StubComplexExecutor) Execute(ctx context.Context, tenantID, taskID, requestID, prompt string) (string, error) {
 	return fmt.Sprintf("stub-orchestration-exec:%s:%s", taskID, requestID), nil
 }

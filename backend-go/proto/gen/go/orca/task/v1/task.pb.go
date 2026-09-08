@@ -131,15 +131,18 @@ func (GrantLevel) EnumDescriptor() ([]byte, []int) {
 }
 
 type Task struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	TenantId      string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	Status        string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
-	ParentId      string                 `protobuf:"bytes,5,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	ProjectId     string                 `protobuf:"bytes,6,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"` // added for Epic C's HasActiveExecutions — see that RPC's doc comment
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	TenantId  string                 `protobuf:"bytes,2,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	Title     string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
+	Status    string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	ParentId  string                 `protobuf:"bytes,5,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	ProjectId string                 `protobuf:"bytes,6,opt,name=project_id,json=projectId,proto3" json:"project_id,omitempty"` // added for Epic C's HasActiveExecutions — see that RPC's doc comment
+	// workflow_template_id: optional workflow-service template attached to
+	// this task (Engine 3). Empty = none attached. See docs/backlog/BACKLOG-016.
+	WorkflowTemplateId string `protobuf:"bytes,7,opt,name=workflow_template_id,json=workflowTemplateId,proto3" json:"workflow_template_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Task) Reset() {
@@ -210,6 +213,13 @@ func (x *Task) GetParentId() string {
 func (x *Task) GetProjectId() string {
 	if x != nil {
 		return x.ProjectId
+	}
+	return ""
+}
+
+func (x *Task) GetWorkflowTemplateId() string {
+	if x != nil {
+		return x.WorkflowTemplateId
 	}
 	return ""
 }
@@ -717,9 +727,16 @@ func (x *ResolvePermissionResponse) GetEffectiveLevel() GrantLevel {
 // Execute branches by complexity: simple tasks relay to infra-fleet-service
 // (agent.exec-equivalent), complex ones route through orchestration-service.
 type TaskServiceExecuteRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
-	RequestId     string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	TaskId    string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	RequestId string                 `protobuf:"bytes,2,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// prompt: caller-supplied override for the agent prompt (TaskPromptEditor.tsx
+	// lets the user edit it before running). Empty = fall back to the
+	// executor's own default prompt built from the task (e.g.
+	// SimpleExecutor.buildExecutePrompt's plain "Complete the following
+	// task: <title>"). Not persisted — a per-execution input, not a task
+	// field. See docs/backlog/BACKLOG-016.
+	Prompt        string `protobuf:"bytes,3,opt,name=prompt,proto3" json:"prompt,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -764,6 +781,13 @@ func (x *TaskServiceExecuteRequest) GetTaskId() string {
 func (x *TaskServiceExecuteRequest) GetRequestId() string {
 	if x != nil {
 		return x.RequestId
+	}
+	return ""
+}
+
+func (x *TaskServiceExecuteRequest) GetPrompt() string {
+	if x != nil {
+		return x.Prompt
 	}
 	return ""
 }
@@ -1018,12 +1042,17 @@ func (x *ListTasksResponse) GetNextPageToken() string {
 // "in_progress" are rejected at the domain layer (domain.Task.SetStatus) —
 // that transition is ExecuteTask's job only.
 type UpdateTaskRequest struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Id            string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Title         *wrapperspb.StringValue `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	Status        *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state  protoimpl.MessageState  `protogen:"open.v1"`
+	Id     string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Title  *wrapperspb.StringValue `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Status *wrapperspb.StringValue `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	// workflow_template_id: set (even to "") to change which workflow-service
+	// template is attached; unset (field absent) leaves it untouched — same
+	// wrapper-typed field-mask shape as title/status above. See
+	// docs/backlog/BACKLOG-016.
+	WorkflowTemplateId *wrapperspb.StringValue `protobuf:"bytes,4,opt,name=workflow_template_id,json=workflowTemplateId,proto3" json:"workflow_template_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *UpdateTaskRequest) Reset() {
@@ -1073,6 +1102,13 @@ func (x *UpdateTaskRequest) GetTitle() *wrapperspb.StringValue {
 func (x *UpdateTaskRequest) GetStatus() *wrapperspb.StringValue {
 	if x != nil {
 		return x.Status
+	}
+	return nil
+}
+
+func (x *UpdateTaskRequest) GetWorkflowTemplateId() *wrapperspb.StringValue {
+	if x != nil {
+		return x.WorkflowTemplateId
 	}
 	return nil
 }
@@ -1498,7 +1534,7 @@ var File_orca_task_v1_task_proto protoreflect.FileDescriptor
 
 const file_orca_task_v1_task_proto_rawDesc = "" +
 	"\n" +
-	"\x17orca/task/v1/task.proto\x12\forca.task.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\x9d\x01\n" +
+	"\x17orca/task/v1/task.proto\x12\forca.task.v1\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1egoogle/protobuf/wrappers.proto\"\xcf\x01\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\ttenant_id\x18\x02 \x01(\tR\btenantId\x12\x14\n" +
@@ -1506,7 +1542,8 @@ const file_orca_task_v1_task_proto_rawDesc = "" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1b\n" +
 	"\tparent_id\x18\x05 \x01(\tR\bparentId\x12\x1d\n" +
 	"\n" +
-	"project_id\x18\x06 \x01(\tR\tprojectId\"\x82\x01\n" +
+	"project_id\x18\x06 \x01(\tR\tprojectId\x120\n" +
+	"\x14workflow_template_id\x18\a \x01(\tR\x12workflowTemplateId\"\x82\x01\n" +
 	"\x11CreateTaskRequest\x12\x1b\n" +
 	"\ttenant_id\x18\x01 \x01(\tR\btenantId\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x1b\n" +
@@ -1538,11 +1575,12 @@ const file_orca_task_v1_task_proto_rawDesc = "" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\"^\n" +
 	"\x19ResolvePermissionResponse\x12A\n" +
-	"\x0feffective_level\x18\x01 \x01(\x0e2\x18.orca.task.v1.GrantLevelR\x0eeffectiveLevel\"S\n" +
+	"\x0feffective_level\x18\x01 \x01(\x0e2\x18.orca.task.v1.GrantLevelR\x0eeffectiveLevel\"k\n" +
 	"\x19TaskServiceExecuteRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x02 \x01(\tR\trequestId\"A\n" +
+	"request_id\x18\x02 \x01(\tR\trequestId\x12\x16\n" +
+	"\x06prompt\x18\x03 \x01(\tR\x06prompt\"A\n" +
 	"\x1aTaskServiceExecuteResponse\x12#\n" +
 	"\rexecution_ref\x18\x01 \x01(\tR\fexecutionRef\";\n" +
 	"\x1aHasActiveExecutionsRequest\x12\x1d\n" +
@@ -1559,11 +1597,12 @@ const file_orca_task_v1_task_proto_rawDesc = "" +
 	"\tpage_size\x18\x03 \x01(\x05R\bpageSize\"e\n" +
 	"\x11ListTasksResponse\x12(\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x12.orca.task.v1.TaskR\x05tasks\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x8d\x01\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xdd\x01\n" +
 	"\x11UpdateTaskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x122\n" +
 	"\x05title\x18\x02 \x01(\v2\x1c.google.protobuf.StringValueR\x05title\x124\n" +
-	"\x06status\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\x06status\"<\n" +
+	"\x06status\x18\x03 \x01(\v2\x1c.google.protobuf.StringValueR\x06status\x12N\n" +
+	"\x14workflow_template_id\x18\x04 \x01(\v2\x1c.google.protobuf.StringValueR\x12workflowTemplateId\"<\n" +
 	"\x12UpdateTaskResponse\x12&\n" +
 	"\x04task\x18\x01 \x01(\v2\x12.orca.task.v1.TaskR\x04task\"#\n" +
 	"\x11DeleteTaskRequest\x12\x0e\n" +
@@ -1670,42 +1709,43 @@ var file_orca_task_v1_task_proto_depIdxs = []int32{
 	2,  // 5: orca.task.v1.ListTasksResponse.tasks:type_name -> orca.task.v1.Task
 	29, // 6: orca.task.v1.UpdateTaskRequest.title:type_name -> google.protobuf.StringValue
 	29, // 7: orca.task.v1.UpdateTaskRequest.status:type_name -> google.protobuf.StringValue
-	2,  // 8: orca.task.v1.UpdateTaskResponse.task:type_name -> orca.task.v1.Task
-	2,  // 9: orca.task.v1.GetDependenciesResponse.dependencies:type_name -> orca.task.v1.Task
-	25, // 10: orca.task.v1.AIDecomposeResponse.proposals:type_name -> orca.task.v1.SubtaskProposal
-	25, // 11: orca.task.v1.AIApplyRequest.proposals:type_name -> orca.task.v1.SubtaskProposal
-	2,  // 12: orca.task.v1.AIApplyResponse.created_subtasks:type_name -> orca.task.v1.Task
-	3,  // 13: orca.task.v1.TaskService.CreateTask:input_type -> orca.task.v1.CreateTaskRequest
-	5,  // 14: orca.task.v1.TaskService.GetTask:input_type -> orca.task.v1.GetTaskRequest
-	7,  // 15: orca.task.v1.TaskService.AddEdge:input_type -> orca.task.v1.AddEdgeRequest
-	9,  // 16: orca.task.v1.TaskService.Grant:input_type -> orca.task.v1.GrantRequest
-	11, // 17: orca.task.v1.TaskService.ResolvePermission:input_type -> orca.task.v1.ResolvePermissionRequest
-	13, // 18: orca.task.v1.TaskService.Execute:input_type -> orca.task.v1.TaskServiceExecuteRequest
-	15, // 19: orca.task.v1.TaskService.HasActiveExecutions:input_type -> orca.task.v1.HasActiveExecutionsRequest
-	17, // 20: orca.task.v1.TaskService.ListTasks:input_type -> orca.task.v1.ListTasksRequest
-	19, // 21: orca.task.v1.TaskService.UpdateTask:input_type -> orca.task.v1.UpdateTaskRequest
-	21, // 22: orca.task.v1.TaskService.DeleteTask:input_type -> orca.task.v1.DeleteTaskRequest
-	22, // 23: orca.task.v1.TaskService.GetDependencies:input_type -> orca.task.v1.GetDependenciesRequest
-	24, // 24: orca.task.v1.TaskService.AIDecompose:input_type -> orca.task.v1.AIDecomposeRequest
-	27, // 25: orca.task.v1.TaskService.AIApply:input_type -> orca.task.v1.AIApplyRequest
-	4,  // 26: orca.task.v1.TaskService.CreateTask:output_type -> orca.task.v1.CreateTaskResponse
-	6,  // 27: orca.task.v1.TaskService.GetTask:output_type -> orca.task.v1.GetTaskResponse
-	8,  // 28: orca.task.v1.TaskService.AddEdge:output_type -> orca.task.v1.AddEdgeResponse
-	10, // 29: orca.task.v1.TaskService.Grant:output_type -> orca.task.v1.GrantResponse
-	12, // 30: orca.task.v1.TaskService.ResolvePermission:output_type -> orca.task.v1.ResolvePermissionResponse
-	14, // 31: orca.task.v1.TaskService.Execute:output_type -> orca.task.v1.TaskServiceExecuteResponse
-	16, // 32: orca.task.v1.TaskService.HasActiveExecutions:output_type -> orca.task.v1.HasActiveExecutionsResponse
-	18, // 33: orca.task.v1.TaskService.ListTasks:output_type -> orca.task.v1.ListTasksResponse
-	20, // 34: orca.task.v1.TaskService.UpdateTask:output_type -> orca.task.v1.UpdateTaskResponse
-	30, // 35: orca.task.v1.TaskService.DeleteTask:output_type -> google.protobuf.Empty
-	23, // 36: orca.task.v1.TaskService.GetDependencies:output_type -> orca.task.v1.GetDependenciesResponse
-	26, // 37: orca.task.v1.TaskService.AIDecompose:output_type -> orca.task.v1.AIDecomposeResponse
-	28, // 38: orca.task.v1.TaskService.AIApply:output_type -> orca.task.v1.AIApplyResponse
-	26, // [26:39] is the sub-list for method output_type
-	13, // [13:26] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	29, // 8: orca.task.v1.UpdateTaskRequest.workflow_template_id:type_name -> google.protobuf.StringValue
+	2,  // 9: orca.task.v1.UpdateTaskResponse.task:type_name -> orca.task.v1.Task
+	2,  // 10: orca.task.v1.GetDependenciesResponse.dependencies:type_name -> orca.task.v1.Task
+	25, // 11: orca.task.v1.AIDecomposeResponse.proposals:type_name -> orca.task.v1.SubtaskProposal
+	25, // 12: orca.task.v1.AIApplyRequest.proposals:type_name -> orca.task.v1.SubtaskProposal
+	2,  // 13: orca.task.v1.AIApplyResponse.created_subtasks:type_name -> orca.task.v1.Task
+	3,  // 14: orca.task.v1.TaskService.CreateTask:input_type -> orca.task.v1.CreateTaskRequest
+	5,  // 15: orca.task.v1.TaskService.GetTask:input_type -> orca.task.v1.GetTaskRequest
+	7,  // 16: orca.task.v1.TaskService.AddEdge:input_type -> orca.task.v1.AddEdgeRequest
+	9,  // 17: orca.task.v1.TaskService.Grant:input_type -> orca.task.v1.GrantRequest
+	11, // 18: orca.task.v1.TaskService.ResolvePermission:input_type -> orca.task.v1.ResolvePermissionRequest
+	13, // 19: orca.task.v1.TaskService.Execute:input_type -> orca.task.v1.TaskServiceExecuteRequest
+	15, // 20: orca.task.v1.TaskService.HasActiveExecutions:input_type -> orca.task.v1.HasActiveExecutionsRequest
+	17, // 21: orca.task.v1.TaskService.ListTasks:input_type -> orca.task.v1.ListTasksRequest
+	19, // 22: orca.task.v1.TaskService.UpdateTask:input_type -> orca.task.v1.UpdateTaskRequest
+	21, // 23: orca.task.v1.TaskService.DeleteTask:input_type -> orca.task.v1.DeleteTaskRequest
+	22, // 24: orca.task.v1.TaskService.GetDependencies:input_type -> orca.task.v1.GetDependenciesRequest
+	24, // 25: orca.task.v1.TaskService.AIDecompose:input_type -> orca.task.v1.AIDecomposeRequest
+	27, // 26: orca.task.v1.TaskService.AIApply:input_type -> orca.task.v1.AIApplyRequest
+	4,  // 27: orca.task.v1.TaskService.CreateTask:output_type -> orca.task.v1.CreateTaskResponse
+	6,  // 28: orca.task.v1.TaskService.GetTask:output_type -> orca.task.v1.GetTaskResponse
+	8,  // 29: orca.task.v1.TaskService.AddEdge:output_type -> orca.task.v1.AddEdgeResponse
+	10, // 30: orca.task.v1.TaskService.Grant:output_type -> orca.task.v1.GrantResponse
+	12, // 31: orca.task.v1.TaskService.ResolvePermission:output_type -> orca.task.v1.ResolvePermissionResponse
+	14, // 32: orca.task.v1.TaskService.Execute:output_type -> orca.task.v1.TaskServiceExecuteResponse
+	16, // 33: orca.task.v1.TaskService.HasActiveExecutions:output_type -> orca.task.v1.HasActiveExecutionsResponse
+	18, // 34: orca.task.v1.TaskService.ListTasks:output_type -> orca.task.v1.ListTasksResponse
+	20, // 35: orca.task.v1.TaskService.UpdateTask:output_type -> orca.task.v1.UpdateTaskResponse
+	30, // 36: orca.task.v1.TaskService.DeleteTask:output_type -> google.protobuf.Empty
+	23, // 37: orca.task.v1.TaskService.GetDependencies:output_type -> orca.task.v1.GetDependenciesResponse
+	26, // 38: orca.task.v1.TaskService.AIDecompose:output_type -> orca.task.v1.AIDecomposeResponse
+	28, // 39: orca.task.v1.TaskService.AIApply:output_type -> orca.task.v1.AIApplyResponse
+	27, // [27:40] is the sub-list for method output_type
+	14, // [14:27] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_orca_task_v1_task_proto_init() }

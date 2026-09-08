@@ -65,7 +65,7 @@ describe('TaskPromptEditor.runWithAgent() tracing', () => {
     expect(startEvent?.fields.promptLength).toBe('do the thing'.length)
   })
 
-  it('task.execute RPC receives taskId/projectId/worktreePath + traceId === span.id', async () => {
+  it('task.execute RPC receives taskId/projectId/worktreePath/prompt + traceId === span.id (BACKLOG-016)', async () => {
     const { events, stop } = captureTraceEvents()
     render(<TaskPromptEditor task={task} />)
     fireEvent.click(screen.getByTestId('run-agent-btn'))
@@ -74,7 +74,12 @@ describe('TaskPromptEditor.runWithAgent() tracing', () => {
       expect(mockRpc).toHaveBeenCalledWith(
         'mock-target',
         'task.execute',
-        expect.objectContaining({ taskId: 't1', projectId: 'proj-1', worktreePath: '/repo/proj-1' })
+        expect.objectContaining({
+          taskId: 't1',
+          projectId: 'proj-1',
+          worktreePath: '/repo/proj-1',
+          prompt: 'do the thing'
+        })
       )
     })
     stop()
@@ -82,7 +87,7 @@ describe('TaskPromptEditor.runWithAgent() tracing', () => {
     const startEvent = events.find((e) => e.flow === 'ui:taskGraph.execute' && e.level === 'start')
     const callArgs = mockRpc.mock.calls[0]
     expect(callArgs?.[1]).toBe('task.execute')
-    expect((callArgs?.[2] as { traceId?: string }).traceId).toBe(startEvent?.id)
+    expect((callArgs?.[2] as { traceId?: string } | undefined)?.traceId).toBe(startEvent?.id)
   })
 
   it('RPC success → span.ok({taskId})', async () => {
@@ -124,9 +129,9 @@ describe('TaskPromptEditor.runWithAgent() tracing', () => {
     stop()
     process.off('unhandledRejection', onUnhandled)
 
-    const failEvents = events.filter((e) => e.flow === 'ui:taskGraph.execute' && e.level === 'fail')
-    expect(failEvents[0]?.fields.taskId).toBe('t1')
-    expect(failEvents[0]?.fields.err).toContain('agent spawn failed')
+    const failEvent = events.find((e) => e.flow === 'ui:taskGraph.execute' && e.level === 'fail')
+    expect(failEvent?.fields.taskId).toBe('t1')
+    expect(failEvent?.fields.err).toContain('agent spawn failed')
 
     // isRunning reset back to false in `finally` → button re-enabled (not stuck "Running...")
     await waitFor(() => {

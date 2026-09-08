@@ -66,6 +66,12 @@ type Task struct {
 	// task currently in_progress" — see that usecase's doc comment for the
 	// honest limit on what "in_progress" currently means here.
 	ProjectID string
+	// WorkflowTemplateID optionally attaches a workflow-service template to
+	// this task (Engine 3, CR-FLOW-TASK-002) — set only via UpdateTask
+	// (AttachWorkflowTemplateAction.tsx), never at creation. No FK: lives in
+	// workflow-service's own database, same cross-service-reference
+	// convention as ProjectID. See docs/backlog/BACKLOG-016.
+	WorkflowTemplateID string
 }
 
 func validStatus(s string) bool {

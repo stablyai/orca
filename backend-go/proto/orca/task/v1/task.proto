@@ -53,6 +53,9 @@ message Task {
   string status = 4;
   string parent_id = 5;
   string project_id = 6; // added for Epic C's HasActiveExecutions — see that RPC's doc comment
+  // workflow_template_id: optional workflow-service template attached to
+  // this task (Engine 3). Empty = none attached. See docs/backlog/BACKLOG-016.
+  string workflow_template_id = 7;
 }
 
 message CreateTaskRequest {
@@ -124,6 +127,13 @@ message ResolvePermissionResponse {
 message TaskServiceExecuteRequest {
   string task_id = 1;
   string request_id = 2;
+  // prompt: caller-supplied override for the agent prompt (TaskPromptEditor.tsx
+  // lets the user edit it before running). Empty = fall back to the
+  // executor's own default prompt built from the task (e.g.
+  // SimpleExecutor.buildExecutePrompt's plain "Complete the following
+  // task: <title>"). Not persisted — a per-execution input, not a task
+  // field. See docs/backlog/BACKLOG-016.
+  string prompt = 3;
 }
 
 message TaskServiceExecuteResponse {
@@ -157,6 +167,11 @@ message UpdateTaskRequest {
   string id = 1;
   google.protobuf.StringValue title = 2;
   google.protobuf.StringValue status = 3;
+  // workflow_template_id: set (even to "") to change which workflow-service
+  // template is attached; unset (field absent) leaves it untouched — same
+  // wrapper-typed field-mask shape as title/status above. See
+  // docs/backlog/BACKLOG-016.
+  google.protobuf.StringValue workflow_template_id = 4;
 }
 message UpdateTaskResponse {
   Task task = 1;
