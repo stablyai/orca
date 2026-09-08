@@ -82,9 +82,21 @@ export async function getRepoUpstreamCached(
 
 function persistedUpstreamMatchesPasted(
   repo: Pick<RepoOption, 'upstream'>,
-  origin: RepoSlug,
+  origin: RepoSlug | null,
   pasted: RepoSlug
 ): boolean {
+  const upstream = repo.upstream
+  if (!upstream) {
+    return false
+  }
+  // Why: an explicit host makes persisted upstream metadata authoritative even
+  // when the origin identity is currently unavailable.
+  if (!origin) {
+    return (
+      upstream.host !== undefined &&
+      githubRepoIdentityKey(upstream) === githubRepoIdentityKey(pasted)
+    )
+  }
   return (
     repoUpstreamIdentityKey(repo, githubRepoIdentityKey(origin)) === githubRepoIdentityKey(pasted)
   )
@@ -147,12 +159,12 @@ export async function findMatchingRepoForSlug(
   let persistedMatch: RepoSlugTarget | null = null
   for (const [index, target] of targets.entries()) {
     const origin = origins[index]
-    if (!origin) {
-      continue
-    }
     if (persistedUpstreamMatchesPasted(target.repo, origin, slug)) {
       persistedMatch = target
       break
+    }
+    if (!origin) {
+      continue
     }
     if (target.repo.upstream === undefined) {
       unresolved.push({ target, origin })

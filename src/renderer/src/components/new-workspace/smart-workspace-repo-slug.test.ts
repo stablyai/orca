@@ -133,4 +133,21 @@ describe('findMatchingRepoForSlug', () => {
     gate.resolve(null)
     await expect(resultPromise).resolves.toBeNull()
   })
+
+  it('uses an explicit persisted upstream when the origin slug is unavailable', async () => {
+    repoSlug.mockResolvedValue(null)
+
+    await expect(
+      findMatchingRepoForSlug(
+        [
+          makeTarget('fork', {
+            upstream: { owner: 'acme', repo: 'widgets', host: 'github.com' }
+          })
+        ],
+        { owner: 'acme', repo: 'widgets' },
+        new Map()
+      )
+    ).resolves.toMatchObject({ repo: { id: 'fork' } })
+    expect(repoUpstream).not.toHaveBeenCalled()
+  })
 })
