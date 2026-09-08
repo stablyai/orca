@@ -84,17 +84,27 @@ function resolveSessionColumns(db: SyncDatabase): SessionColumns {
     ? 'created_at'
     : columnExists(db, 'sessions', 'session_start')
       ? 'session_start'
-      : 'NULL'
+      : columnExists(db, 'sessions', 'started_at')
+        ? 'started_at'
+        : 'NULL'
+  // Why: 0.18+ has no updated_at — last_activity_at is rarely written and ended_at
+  // only on a clean exit, so take whichever of them the row actually carries.
+  const activityCols = ['last_activity_at', 'ended_at'].filter((col) =>
+    columnExists(db, 'sessions', col)
+  )
   const updatedCol = columnExists(db, 'sessions', 'updated_at')
     ? 'updated_at'
     : columnExists(db, 'sessions', 'last_updated')
       ? 'last_updated'
-      : createdCol
+      : activityCols.length > 0
+        ? `COALESCE(${[...activityCols, createdCol].join(', ')})`
+        : createdCol
   return { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol }
 }
 
 /**
- * Builds the SQL SELECT query string used to discover Hermes sessions.
+ * Builds the predicate that drops zero-turn session shells created by CLI startup,
+ * so they do not clutter the AI Vault session list.
  */
 function buildSessionListQuery(db: SyncDatabase): string {
   const { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol } = resolveSessionColumns(db)

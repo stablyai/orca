@@ -299,4 +299,66 @@ describe('Hermes 0.19 SQLite support & legacy backwards compatibility', () => {
     const olderLegacy = hermesSessions.find((s) => s.sessionId === 'sess-older')
     expect(olderLegacy).toBeUndefined()
   })
+
+  // Why: the shipped 0.18+ schema carries none of created_at/updated_at — recency
+  // lives in started_at/ended_at/last_activity_at as REAL epoch seconds.
+  function createShippedSchemaDb(dbPath: string) {
+    const db = new SyncDatabase(dbPath)
+    db.exec(`
+      CREATE TABLE sessions (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        cwd TEXT,
+        model TEXT,
+        started_at REAL NOT NULL,
+        ended_at REAL,
+        last_activity_at REAL
+      );
+      CREATE TABLE messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT,
+        role TEXT,
+        content TEXT,
+        timestamp REAL
+      );
+    `)
+    return db
+  }
+
+  it('dates sessions from the shipped schema instead of falling back to now', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-shipped-schema-'))
+    cleanupDirs.push(dir)
+    const dbPath = join(dir, 'state.db')
+    const db = createShippedSchemaDb(dbPath)
+
+    const insertSession = db.prepare(
+      `INSERT INTO sessions (id, title, cwd, model, started_at, ended_at, last_activity_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    insertSession.run('sess-activity', 'Activity', '/tmp/hermes', 'hermes-v3', 1000, null, 5000)
+    insertSession.run('sess-ended', 'Ended', '/tmp/hermes', 'hermes-v3', 2000, 3000, null)
+    insertSession.run('sess-started', 'Started', '/tmp/hermes', 'hermes-v3', 4000, null, null)
+
+    const insertMessage = db.prepare(
+      `INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, 'user', 'msg', ?)`
+    )
+    insertMessage.run('sess-activity', 1000)
+    insertMessage.run('sess-ended', 2000)
+    insertMessage.run('sess-started', 4000)
+    db.close()
+
+    const issues: AiVaultScanIssue[] = []
+    const candidates = await listHermesSqliteSessions({ dbPaths: [dbPath], limit: 10, issues })
+
+    expect(issues).toEqual([])
+    expect(candidates.map((c) => c.file.mtimeMs)).toEqual([5_000_000, 4_000_000, 3_000_000])
+
+    const parsed = await parseHermesSqliteSession({
+      dbPath,
+      sessionId: 'sess-activity',
+      platform: 'darwin'
+    })
+    expect(parsed?.title).toBe('Activity')
+    expect(parsed?.messageCount).toBe(1)
+  })
 })
