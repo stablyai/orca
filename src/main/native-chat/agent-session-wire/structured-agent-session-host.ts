@@ -1,3 +1,5 @@
+import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
+import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
 // Structured agent-session host: where the lease, journal, and provider adapter meet.
 // Mutations share one durable admission path and serialize per session.
@@ -211,13 +213,11 @@ export class StructuredAgentSessionHost {
 
   listSessionTabs = () => listStructuredAgentSessionTabs(this.sessions)
 
-  getPersistedVisibleSessionTabIndex(): { present: boolean; sessionIds: string[] } {
-    return this.deps.store.getVisibleSessionTabIndex()
-  }
+  getPersistedVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
+    this.deps.store.getVisibleSessionTabIndex()
 
-  setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
-    return this.deps.store.setSessionTabVisibility(sessionId, visible)
-  }
+  setSessionTabVisibility = (sessionId: string, visible: boolean): Promise<void> =>
+    this.deps.store.setSessionTabVisibility(sessionId, visible)
 
   reconcileRestartLeases = async (): Promise<void> => {
     const refusal = await this.reconcileLeases('startup')
@@ -233,8 +233,7 @@ export class StructuredAgentSessionHost {
   revealSession = (sessionId: string): Promise<StructuredAgentSessionReveal> =>
     this.restore.revealSession(sessionId)
 
-  private serialize = <T>(sessionId: string, task: () => Promise<T>): Promise<T> =>
-    this.tasks.serialize(sessionId, task)
+  private serialize = this.tasks.serialize.bind(this.tasks)
 
   private restoreRenewedHandoff(sessionId: string): Promise<void> {
     return this.serialize(sessionId, async () => {
@@ -306,6 +305,9 @@ export class StructuredAgentSessionHost {
 
   readOptions = (sessionId: string): Promise<SessionWire.AgentSessionOptionsResult> =>
     readStructuredAgentSessionOptions(this.mutationContext(), sessionId)
+
+  rewind = (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
+    rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
 
   conversationCommand = (...args: Parameters<StructuredConversationCommandController['run']>) =>
     this.conversationCommands.run(...args)

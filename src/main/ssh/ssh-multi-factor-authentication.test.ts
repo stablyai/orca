@@ -186,9 +186,19 @@ function connectWithOrcaConfig(
 describe('multi-stage SSH authentication', () => {
   let tempDir: string
   let keyPaths: string[]
+  let homeEnv: { HOME?: string; USERPROFILE?: string }
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-mfa-'))
+    // Why: the cases below pass `resolved: null`, so `resolvePrivateKeys` falls through to
+    // `findDefaultKeyFile`, which reads `~/.ssh/id_*` through `homedir()`. On a developer
+    // machine that picks up a real key, and an encrypted one makes ssh2 reject with
+    // "Cannot parse privateKey" before authentication is exercised at all. Hosted CI has no
+    // key, so this only ever failed locally. Pointing home at the fixture directory keeps
+    // default-key discovery inside the test's control on every machine.
+    homeEnv = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE }
+    process.env.HOME = tempDir
+    process.env.USERPROFILE = tempDir
     keyPaths = ['id_a', 'id_b'].map((name) => {
       const path = join(tempDir, name)
       writeFileSync(path, utils.generateKeyPairSync('ecdsa', { bits: 256 }).private)
@@ -197,6 +207,14 @@ describe('multi-stage SSH authentication', () => {
   })
 
   afterEach(() => {
+    for (const key of ['HOME', 'USERPROFILE'] as const) {
+      const previous = homeEnv[key]
+      if (previous === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = previous
+      }
+    }
     rmSync(tempDir, { recursive: true, force: true })
   })
 

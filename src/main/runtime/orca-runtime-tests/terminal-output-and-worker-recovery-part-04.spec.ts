@@ -56,7 +56,10 @@ describe('OrcaRuntimeService', () => {
     )
     const db = new OrchestrationDb(':memory:')
     try {
-      const task = db.createTask({ spec: 'continue after missing worker recovery' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'continue after missing worker recovery'
+      })
       const started = db.createStartingWorkerDispatch({
         creator: { kind: 'system' },
         maxDepth: Number.MAX_SAFE_INTEGER,
@@ -163,7 +166,10 @@ describe('OrcaRuntimeService', () => {
     )
     const db = new OrchestrationDb(':memory:')
     try {
-      const task = db.createTask({ spec: 'retry missing worker recovery' })
+      const task = db.createTask({
+        runId: 'run_legacy_local',
+        spec: 'retry missing worker recovery'
+      })
       const started = db.createStartingWorkerDispatch({
         creator: { kind: 'system' },
         maxDepth: Number.MAX_SAFE_INTEGER,

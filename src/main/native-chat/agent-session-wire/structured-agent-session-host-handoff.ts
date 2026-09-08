@@ -14,6 +14,7 @@ import { recoverDeadTuiHandoffStatus } from './structured-agent-session-dead-tui
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import type { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catchup'
+import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
 type HostHandoffAccess = {
@@ -195,12 +196,21 @@ export async function acquireNativeHandoffOwner(
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
+  // Native handoff bypasses attach admission; reject before unbinding TUI ownership.
+  if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider)) {
+    throw new Error('structured_agent_session_unsupported')
+  }
   const eventSink = host.eventSink(input.sessionId)
   const priorBarrier = await eventSink.drained()
   if (!priorBarrier.ok) {
     throw priorBarrier.error
   }
   eventSink.unbind()
+  // Recheck immediately before acquisition; capability probes may drift while
+  // the old TUI event sink is draining.
+  if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider)) {
+    throw new Error('structured_agent_session_unsupported')
+  }
   const acquired = await deps.adapter.acquire({
     identity: journalIdentityFor(record, session.params),
     fence: input.fence,

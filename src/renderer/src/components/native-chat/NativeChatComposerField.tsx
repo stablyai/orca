@@ -16,6 +16,9 @@ import type { NativeChatOptionPickerRequest } from './native-chat-composer-types
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 
 export type NativeChatComposerFieldProps = {
+  /** Pane identity published to the drop pipeline so a native file drop lands
+   *  only in the composer it was dropped on. */
+  composerScopeKey: string
   textareaRef: RefObject<HTMLTextAreaElement | null>
   draft: string
   disabled: boolean
@@ -87,6 +90,7 @@ function imeComposedSegment(base: string, settled: string): string {
 }
 
 export function NativeChatComposerField({
+  composerScopeKey,
   textareaRef,
   draft,
   disabled,
@@ -180,6 +184,7 @@ export function NativeChatComposerField({
           ) : null}
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
+            data-composer-scope-key={composerScopeKey}
             className={cn(
               // Why: always-on hairline (token-level border, not focus ring) —
               // no focus/click border flash. The box is a container, not a

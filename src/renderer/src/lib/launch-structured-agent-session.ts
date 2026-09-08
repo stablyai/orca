@@ -174,17 +174,10 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
 /**
  * Only the host that will execute the session can answer whether it supports creating one there —
  * on Windows that means reading the provider child's process start time, which a client cannot
- * observe.
- *
- * Codex is absent on purpose: its answer is settled by the launch route and owned elsewhere, so
- * probing here would change Codex's wire traffic. Note that this early return is also why the
- * unresolvable-selector race above has never been able to refuse a Codex launch — the race is
- * identical for Codex, nothing asks. Whoever gives Codex a probe inherits it.
+ * observe. Both providers ask: the host classifies per agent, and Codex inherits the
+ * unresolvable-selector retry above along with the probe.
  */
 async function requireHostCreateSupport(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
-  if (intent.agent !== 'claude') {
-    return
-  }
   if (!(await hostSupportsCreate(intent))) {
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(

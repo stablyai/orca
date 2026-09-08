@@ -252,6 +252,22 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().activeBrowserTabIdByWorktree['wt-1']).toBeNull()
   })
 
+  it('creates pages cold so a deferred guest is never owed a navigation', () => {
+    const store = createTestStore()
+
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
+      activate: false
+    })
+    store.getState().createBrowserPage(tab.id, 'https://example.com/second', { activate: false })
+
+    // Why: only a live guest reports loading; a background page has none until first shown.
+    expect(store.getState().browserPagesByWorkspace[tab.id]?.map((page) => page.loading)).toEqual([
+      false,
+      false
+    ])
+    expect(tab.loading).toBe(false)
+  })
+
   it('uses local browser profile defaults for client-local fallback pages', () => {
     const store = createTestStore()
     store.setState({
@@ -405,7 +421,7 @@ describe('createBrowserSlice annotations', () => {
     expect(repaired).toMatchObject({
       title: 'Example',
       url: 'https://example.com',
-      loading: true,
+      loading: false,
       canGoBack: false,
       canGoForward: false
     })

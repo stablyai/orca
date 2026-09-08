@@ -14,7 +14,7 @@ const mockRefreshLocalStructuredSessionTabs = vi.fn()
 const mockToastError = vi.fn()
 const mockCallStructuredAgentSession = vi.fn()
 const STRUCTURED_HOST_CAPABILITIES = ['agent-session.structured.v1']
-let hostCapabilities: readonly string[] = STRUCTURED_HOST_CAPABILITIES
+let hostCapabilities: readonly string[] | null = STRUCTURED_HOST_CAPABILITIES
 
 function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1') {
   return {
@@ -113,7 +113,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
   LOCAL_STRUCTURED_SESSION_OWNER: 'local-structured-session'
 }))
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
-  readLocalRuntimeCapabilities: () => hostCapabilities
+  readLocalRuntimeCapabilitiesOrUnknown: () => hostCapabilities
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () =>
@@ -233,16 +233,19 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockToastError).not.toHaveBeenCalled()
   })
 
-  it('routes every structured launch through the shared host capability gate', async () => {
-    hostCapabilities = []
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+  it.each([[], null])(
+    'preserves terminal-backed launches with capability answer %s',
+    async (capabilities) => {
+      hostCapabilities = capabilities
+      const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+      launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
+      launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
-    expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
-    expect(mockCreateTab).toHaveBeenCalledTimes(2)
-  })
+      expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
+      expect(mockCreateTab).toHaveBeenCalledTimes(2)
+    }
+  )
 
   /** The toggle is hidden under Terminal chat but its persisted value survives, so the launch
    *  path must re-check the default view rather than trust a stale opt-in. */

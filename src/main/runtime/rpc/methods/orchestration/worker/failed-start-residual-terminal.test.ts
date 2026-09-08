@@ -131,7 +131,7 @@ describe('failed worker-start receipt for a residual terminal', () => {
 
   function failStart(residual: boolean): { recovery?: string } {
     const d = (db = new OrchestrationDb(':memory:'))
-    const task = d.createTask({ spec: 'residual receipt' })
+    const task = d.createTask({ runId: 'run_legacy_local', spec: 'residual receipt' })
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

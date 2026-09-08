@@ -1492,7 +1492,7 @@
       "Landing": {
         "76a95f7f47": "Create",
         "f05d237049": "Add a project first",
-        "f9eaa9e12d": "Add Project",
+        "f9eaa9e12d": "Add project",
         "6ca6ff404e": "ORCA",
         "520304a067": "Orca logo",
         "ce44fad849": "Missing dependencies",
@@ -5296,14 +5296,13 @@
         "SidebarHeader": {
           "projects": "Projects",
           "spaces": "Spaces",
-          "25a95899c9": "Add Project",
           "92154beb7e": "New workspace",
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
-          "ca6f729da2": "New workspace ({{value0}})",
           "a30e34eb5c": "Close workspace board",
           "views": "Sidebar view",
-          "moreActions": "More workspace actions"
+          "createMenu": "Create",
+          "addProject": "Add project"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -8685,6 +8684,15 @@
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
             "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
+          },
+          "minimumContrast": {
+            "title": "Minimum Contrast Ratio",
+            "description": "Lifts terminal foreground colors that sit too close to the background. Leave blank for automatic, or set 1 to render program colors exactly as sent.",
+            "automatic": "Automatic: {{light}} on light backgrounds, {{dark}} on dark.",
+            "disabled": "Correction off. Programs that rely on low contrast, like Powerline separators, render as sent.",
+            "pinned": "Targets {{ratio}}:1 contrast for foreground colors, where possible.",
+            "placeholder": "Auto",
+            "suffix": "blank = automatic, 1 = off"
           }
         },
         "TerminalSettingsPreview": {
@@ -10552,7 +10560,20 @@
             "agent": "agent",
             "process": "process",
             "prompt": "prompt",
-            "stop": "stop"
+            "stop": "stop",
+            "minimumContrast": {
+              "title": "Color Contrast",
+              "description": "Improve text readability or preserve the colors chosen by terminal programs.",
+              "contrast": "contrast",
+              "minimum": "minimum",
+              "ratio": "ratio",
+              "readability": "readability",
+              "wcag": "wcag",
+              "powerline": "powerline",
+              "statusline": "statusline",
+              "dim": "dim",
+              "colors": "colors"
+            }
           },
           "windows": {
             "search": {
@@ -11163,7 +11184,8 @@
           "signInAgain": "Sign in again for Relay",
           "localTitle": "LAN",
           "localDescription": "Phone must be on this Wi‑Fi or connected through Tailscale. No account needed.",
-          "retrying": "Retrying"
+          "retrying": "Retrying",
+          "relayCell": "Relay cell"
         },
         "MobilePairingSetupSection": {
           "title": "Pair a phone",
@@ -11893,6 +11915,20 @@
               "disconnectFailed": "Could not disconnect Odoo."
             }
           }
+        },
+        "contrast": {
+          "title": "Color Contrast",
+          "description": "Improve text readability or preserve the colors chosen by terminal programs.",
+          "ratio": "Contrast target",
+          "autoDescription": "Balances readability with your terminal theme. Recommended.",
+          "offDescription": "Keeps program colors unchanged, including dim text and Powerline separators.",
+          "customDescription": "Choose how much to increase contrast between text and its background.",
+          "auto": "Automatic",
+          "off": "Off",
+          "custom": "Custom",
+          "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
+          "subtle": "Subtle",
+          "strong": "Strong"
         }
       },
       "right": {
@@ -13692,7 +13728,7 @@
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
-            "addProject": "Add a new project",
+            "addProject": "Add project",
             "label": "Project",
             "browse": "Browse projects",
             "listLabel": "Projects",
@@ -16305,7 +16341,20 @@
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
           "activityOptions": "Activity options",
-          "threadListOptionsFiltered": "Thread list options, filters active"
+          "threadListOptionsFiltered": "Thread list options, filters active",
+          "showSearch": "Show search",
+          "interrupted": "Interrupted",
+          "state": {
+            "working": "Working",
+            "monitoring": "Monitoring background tasks",
+            "blocked": "Blocked",
+            "waiting": "Waiting for input",
+            "failed": "Failed",
+            "done": "Done",
+            "idle": "Idle",
+            "unverifiable": "No recent update",
+            "permission": "Needs attention"
+          }
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -17237,6 +17286,11 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "notices": {
+        "compaction": "Context compacted",
+        "details": "Details",
+        "plan": "Plan"
+      },
       "composer": {
         "imageUnsupported": "Image paste is not supported for this agent.",
         "send": "Send",
@@ -17302,10 +17356,13 @@
         "imagePreviewUnavailable": "Preview unavailable"
       },
       "tool": {
+        "exitCode": "exit {{value0}}",
+        "milliseconds": "{{value0}}ms",
         "running": "Running…",
         "result": "Result",
         "countOne": "1 tool call",
         "countN": "{{value0}} tool calls",
+        "moreCalls": "+{{value0}} more",
         "runningPreview": "Running {{preview}}",
         "runningCommand": "Running command",
         "runningNamedPreview": "Running {{toolName}} {{preview}}",
@@ -17435,6 +17492,26 @@
       "structuredSessionFellBackToTerminal": "Structured chat isn't available",
       "structuredSessionFellBackToTerminalDescription": "Orca tried to open a {{value0}} terminal instead.",
       "structuredSessionLaunchFailedDescription": "Orca could not open a structured {{value0}} chat. See the logs for details.",
+      "subagents": {
+        "state": {
+          "completed": "completed",
+          "working": "working",
+          "idle": "idle",
+          "failed": "failed",
+          "stopped": "stopped",
+          "unverifiable": "unverifiable",
+          "workingCount": "{{value0}} working",
+          "idleCount": "{{value0}} idle",
+          "failedCount": "{{value0}} failed",
+          "stoppedCount": "{{value0}} stopped",
+          "unverifiableCount": "{{value0}} unverifiable"
+        },
+        "startedOne": "Kicked off 1 subagent",
+        "startedN": "Kicked off {{value0}} subagents",
+        "ranOne": "Ran 1 subagent",
+        "ranN": "Ran {{value0}} subagents",
+        "tokens": "{{value0}} tokens"
+      },
       "conversationCommand": {
         "pendingWork": "Wait for pending work and messages to finish before using this command.",
         "unconfirmed": "Conversation operation was not confirmed."
@@ -17903,7 +17980,9 @@
       "label": "Agents",
       "dashboardLabel": "Agent Dashboard",
       "openActivity": "View activity",
-      "closeActivity": "Turn off activity view"
+      "closeActivity": "Turn off activity view",
+      "projects": "Projects",
+      "workspaces": "Workspaces"
     }
   },
   "runtimeRpc": {

@@ -9,6 +9,7 @@
 // read error or a revoked grant); 'unsupported-asset' comes from a subresource whose format the
 // host declined to send — a font, say — and never from the document itself.
 import { act } from 'react'
+import type * as WebviewRegistryModule from '../host-guest/webview-registry'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -47,7 +48,8 @@ vi.mock('@/lib/doc-preview-grants', () => ({
   }
 }))
 
-vi.mock('@/components/browser-pane/host-guest/webview-registry', () => ({
+vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof WebviewRegistryModule>()),
   moveFocusToRendererBeforeWebviewDetach: () => undefined
 }))
 

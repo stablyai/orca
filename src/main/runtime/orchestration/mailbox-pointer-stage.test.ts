@@ -59,7 +59,12 @@ function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState)
 describe('mailbox pointer staging watermark', () => {
   it('leaves no watermark when the reservation claim is lost', () => {
     const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 's' })
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 's'
+    })
     // A concurrent flight already owns the reservation, so this claim cannot succeed.
     expect(
       db.stageMailboxPointerEnter([message.id], { ptyId: 'other-pty', processIncarnation: 'inc-x' })
@@ -79,7 +84,12 @@ describe('mailbox pointer staging watermark', () => {
 
   it('leaves no watermark when the reservation write throws', () => {
     const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 's' })
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 's'
+    })
     const throwing = new Proxy(db, {
       get(target, prop, receiver) {
         if (prop === 'markMailboxPointerWriteAttempted') {
@@ -107,7 +117,12 @@ describe('mailbox pointer staging watermark', () => {
 
   it('keeps the watermark for the flight that owns the reservation', () => {
     const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 's' })
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 's'
+    })
     const state = new OrchestrationMailboxPointerState()
     const args = stageArgs(db, state)
     stageOrchestrationMailboxPointer({
@@ -122,7 +137,12 @@ describe('mailbox pointer staging watermark', () => {
 
   it('drains a delivery parked behind the watermark when the write is refused', () => {
     const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 's' })
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 's'
+    })
     const state = new OrchestrationMailboxPointerState()
     const args = stageArgs(db, state)
     const redrive = vi.fn()
@@ -148,7 +168,7 @@ describe('mailbox pointer staging watermark', () => {
 
   it('still points new mail after a delivery lost its reservation claim', async () => {
     const db = new OrchestrationDb(':memory:')
-    db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'first' })
+    db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'run:run-1', subject: 'first' })
     let stealNextClaim = true
     const contended = new Proxy(db, {
       get(target, prop, receiver) {
@@ -172,7 +192,7 @@ describe('mailbox pointer staging watermark', () => {
     expect(writePty).not.toHaveBeenCalled()
 
     // Newer mail must still reach the agent; a leaked watermark used to park it forever.
-    db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'second' })
+    db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'run:run-1', subject: 'second' })
     delivery.deliver(LEAF, { mailboxHandle: 'run:run-1', skipAbsenceProbe: true })
     await new Promise((resolve) => setImmediate(resolve))
 

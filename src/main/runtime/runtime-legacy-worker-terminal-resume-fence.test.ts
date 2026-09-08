@@ -60,7 +60,7 @@ describe('settled worker automatic-resume fence persistence', () => {
       getWorkspaceSessionHostIds: () => [LOCAL_EXECUTION_HOST_ID],
       flushOrThrow: vi.fn()
     } as unknown as RuntimeStore
-    const task = orchestrationDb.createTask({ spec: 'fence me' })
+    const task = orchestrationDb.createTask({ runId: 'run_legacy_local', spec: 'fence me' })
     const started = orchestrationDb.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

@@ -1,3 +1,4 @@
+import { ClaudeRewindAttempt, proveClaudeRewindRecovery } from './claude-structured-rewind'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionPreSpawnError
@@ -85,6 +86,7 @@ export async function acquireClaudeSession({
   const initTimeoutMs = deps.initTimeoutMs ?? CLAUDE_STRUCTURED_INIT_TIMEOUT_MS
   const initDeadline = createClaudeInitDeadline(sessionId, initTimeoutMs)
 
+  const rewind = new ClaudeRewindAttempt(input.rewind, input.rewind?.onProved)
   const onMessage = (message: Record<string, unknown>): void => {
     const init = readClaudeInit(message)
     if (readClaudeFrameString(message, 'session_id') !== expectedProviderSessionId) {
@@ -93,6 +95,11 @@ export async function acquireClaudeSession({
       if (init || (message.type === 'system' && message.subtype === 'init')) {
         initDeadline.reject(new Error('claude provider session expected'))
       }
+      return
+    }
+    const refusal = rewind.observe(message)
+    if (refusal) {
+      initDeadline.reject(refusal)
       return
     }
     if (init) {
@@ -178,6 +185,7 @@ export async function acquireClaudeSession({
           ? error
           : new AgentSessionPreSpawnError(error)
       })
+    rewind.applyLaunch(launch, deps)
     expectedProviderSessionId = launch.providerSessionId
     observedLeafUuid = launch.resumeLeafUuid
     acquisitions.assertCurrent(sessionId, attempt)
@@ -241,6 +249,9 @@ export async function acquireClaudeSession({
         diagnostic: claudeAuthDiagnostic(init, settings)
       })
     )
+    observedLeafUuid = (await rewind.prove(launch, deps)) ?? observedLeafUuid
+    observedLeafUuid =
+      (await proveClaudeRewindRecovery(input.rewindRecovery, launch, deps)) ?? observedLeafUuid
     const process = await claudeProcessIdentity(
       { ...input, pid: connection.pid },
       deps.readProcessStartTime
@@ -298,6 +309,7 @@ export async function acquireClaudeSession({
     acquisitions.deleteIfCurrent(sessionId, attempt)
     throw acquisitionError
   } finally {
+    rewind.clear()
     attempt.finish()
   }
 }

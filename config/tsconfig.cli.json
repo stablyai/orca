@@ -32,6 +32,7 @@
     "../src/main/codex/codex-app-server-capability-cache.ts",
     "../src/main/codex/codex-app-server-capability-signal.ts",
     "../src/main/codex/codex-app-server-client.ts",
+    "../src/main/codex/codex-app-server-process-tree-kill.ts",
     "../src/main/codex/codex-app-server-record-reader.ts",
     "../src/main/codex/codex-app-server-session.ts",
     "../src/main/codex/codex-config-mirror.ts",

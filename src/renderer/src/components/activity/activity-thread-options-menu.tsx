@@ -60,7 +60,8 @@ export function ActivityThreadOptionsMenu({
   onShowChildAgentsChange,
   onMarkAllThreadsRead,
   onClearCompleted,
-  onSearch,
+  showSearch = false,
+  onShowSearchChange,
   unreadOnly = false,
   onToggleUnread
 }: {
@@ -74,7 +75,8 @@ export function ActivityThreadOptionsMenu({
   onShowChildAgentsChange?: (showChildAgents: boolean) => void
   onMarkAllThreadsRead?: () => void
   onClearCompleted?: () => void
-  onSearch?: () => void
+  showSearch?: boolean
+  onShowSearchChange?: (showSearch: boolean) => void
   unreadOnly?: boolean
   onToggleUnread?: () => void
 }): React.JSX.Element {
@@ -132,20 +134,26 @@ export function ActivityThreadOptionsMenu({
           }
         }}
       >
-        {onSearch || onToggleUnread ? (
+        {onShowSearchChange || onToggleUnread ? (
           <>
-            {onSearch ? (
-              <DropdownMenuItem
-                onSelect={() => {
-                  skipCloseAutoFocusRef.current = true
-                  onSearch()
+            {onShowSearchChange ? (
+              <DropdownMenuCheckboxItem
+                checked={showSearch}
+                className={ALIGNED_CHECKBOX_ITEM_CLASS}
+                onCheckedChange={(checked) => {
+                  skipCloseAutoFocusRef.current = checked === true
+                  onShowSearchChange(checked === true)
                 }}
               >
                 <Search className="size-3.5 text-muted-foreground" />
-                <span>
-                  {translate('auto.components.activity.ActivityPrototypePage.search', 'Search')}
+                <span className="min-w-0 flex-1 truncate">
+                  {translate(
+                    'auto.components.activity.ActivityPrototypePage.showSearch',
+                    'Show search'
+                  )}
                 </span>
-              </DropdownMenuItem>
+                {showSearch ? <Check className="size-3.5" /> : null}
+              </DropdownMenuCheckboxItem>
             ) : null}
             {onToggleUnread ? (
               <Tooltip>

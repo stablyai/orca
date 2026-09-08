@@ -38,6 +38,7 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'sessionId'
   | 'resume'
   | 'resumeSessionAt'
+  | 'resumeDropsTurn'
 >
 
 /**

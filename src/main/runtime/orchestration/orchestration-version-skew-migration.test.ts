@@ -389,7 +389,10 @@ describe('OrchestrationDb version-skew migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-version-skew-v30-reset-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
-    const task = db.createTask({ spec: 'reset by an older writer' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'reset by an older writer'
+    })
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -431,7 +434,9 @@ describe('OrchestrationDb version-skew migration', () => {
 
     const raw = new Database(dbPath)
     raw.exec(
-      'DROP INDEX IF EXISTS idx_messages_pending_pointer_enter; ALTER TABLE messages DROP COLUMN pointer_enter_pending;'
+      `DROP INDEX IF EXISTS idx_messages_pending_pointer_enter;
+       DROP INDEX IF EXISTS idx_messages_pending_pointer_pty;
+       ALTER TABLE messages DROP COLUMN pointer_enter_pending;`
     )
     raw.pragma('user_version = 33')
     expect(resolveOrchestrationMigrationStartVersion(raw, 33, SCHEMA_VERSION)).toBe(6)

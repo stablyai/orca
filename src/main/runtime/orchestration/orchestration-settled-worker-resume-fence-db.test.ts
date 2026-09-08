@@ -13,7 +13,7 @@ describe('settled worker terminal resume fence rows', () => {
   function createReadyWorker(): { db: OrchestrationDb; taskId: string; dispatchId: string } {
     const d = new OrchestrationDb(':memory:')
     db = d
-    const task = d.createTask({ spec: 'settled worker' })
+    const task = d.createTask({ runId: 'run_legacy_local', spec: 'settled worker' })
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

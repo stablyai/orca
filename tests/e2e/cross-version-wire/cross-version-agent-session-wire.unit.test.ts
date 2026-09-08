@@ -24,10 +24,12 @@ import { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session-mutation-envelope'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import {
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
+import { structuredHostStub } from './structured-agent-session-host-fixture'
 import {
   loadAgentSessionWireBuild,
   WORKING_TREE,
@@ -45,6 +47,7 @@ const THREAD = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 const NOW = 1_800_000_000_000
 const CLIENT_CAPABILITY_UPDATE_METHOD = 'runtime.clientCapabilities.update'
 const STATUS_FEED_METHOD = 'agentSession.subscribeStatus'
+const REWIND_METHOD = 'agentSession.rewind'
 
 /** Every method the structured surface publishes: the host method it must reach,
  *  and the result it must hand back. A gate that hides one method and leaks
@@ -75,6 +78,11 @@ const STRUCTURED_CALLS: {
   },
   { method: 'agentSession.send', hostMethod: 'send', result: { ok: true, replayed: false } },
   { method: 'agentSession.cancel', hostMethod: 'cancel', result: { ok: true, replayed: false } },
+  {
+    method: REWIND_METHOD,
+    hostMethod: 'rewind',
+    result: { ok: true, replayed: false, value: { itemId: 'item-1', epoch: 'rewound-epoch' } }
+  },
   { method: 'agentSession.close', hostMethod: 'close', result: { ok: true } },
   {
     method: 'agentSession.respondToApproval',
@@ -226,6 +234,10 @@ function paramsFor(method: string): unknown {
     }
     case 'agentSession.send':
       return sendParams('hi', fence)
+    case REWIND_METHOD: {
+      const fields = { itemId: 'item-1', expectedEpoch: 'current-epoch' }
+      return { envelope: envelope({ method, fields, fence }), ...fields }
+    }
     case 'agentSession.cancel':
       return {
         envelope: envelope({ method: 'agentSession.cancel', fields: { turnId: 'turn-1' }, fence }),
@@ -328,47 +340,6 @@ async function callBuild(
   return replies
 }
 
-/** The host every skew installs to drive the surface: enough of the real host's
- *  shape for each handler to run, and a spy per method so "which call reached the
- *  host" is answerable per call rather than per suite. */
-function structuredHostStub(): Record<string, ReturnType<typeof vi.fn>> {
-  return {
-    attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId: SESSION } })),
-    // Attach-shaped entries take a client-supplied location, so the host is asked whether it
-    // supports creating there. A real host always answers; leaving it unstubbed made every
-    // `ensure` refuse for the harness's own reason rather than the location's.
-    supportsCreate: vi.fn(() => true),
-    conversationCommand: vi.fn(async () => ({
-      ok: true,
-      value: { command: 'compact', state: 'completed' }
-    })),
-    send: vi.fn(async () => ({ ok: true, replayed: false })),
-    cancel: vi.fn(async () => ({ ok: true, replayed: false })),
-    close: vi.fn(async () => undefined),
-    revealSession: vi.fn(async () => ({
-      sessionId: SESSION,
-      workspaceId: WORKSPACE,
-      agent: 'codex' as const,
-      readable: true
-    })),
-    hold: vi.fn(async () => undefined),
-    release: vi.fn(() => undefined),
-    respondToPrompt: vi.fn(async () => ({ ok: true, replayed: false })),
-    setOption: vi.fn(async () => ({ ok: true, replayed: false })),
-    requestHandoff: vi.fn(async () => ({ status: { owner: 'native' } })),
-    handoffStatus: vi.fn(async () => ({ owner: 'native' })),
-    readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
-    readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
-    history: vi.fn(() => ({ ok: true, page: { items: [] } })),
-    subscribe: vi.fn(() => () => undefined),
-    subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
-      subscriber.emit({ type: 'snapshot', sessions: [] })
-      return () => undefined
-    }),
-    unsubscribe: vi.fn()
-  }
-}
-
 /**
  * The one thing this suite exists to guarantee, written once and applied per
  * build: every method the manifest declares is not merely registered but reaches
@@ -436,7 +407,7 @@ describe('cross-version structured agent sessions', () => {
 
     beforeEach(() => {
       operations = 0
-      hostCalls = structuredHostStub()
+      hostCalls = structuredHostStub(SESSION, WORKSPACE)
       setStructuredAgentSessionHost(hostCalls as unknown as StructuredAgentSessionHost)
     })
 
@@ -495,6 +466,9 @@ describe('cross-version structured agent sessions', () => {
         expect(build.capabilities.includes(AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY)).toBe(
           build.methodNames.includes(STATUS_FEED_METHOD)
         )
+        expect(build.capabilities.includes(AGENT_SESSION_REWIND_RUNTIME_CAPABILITY)).toBe(
+          build.methodNames.includes(REWIND_METHOD)
+        )
       }
       // Additive surface: bumping the protocol number would strand every paired
       // device on this release rather than degrade one feature.
@@ -544,7 +518,7 @@ describe('cross-version structured agent sessions', () => {
         // anti-vacuous guard: without it every host-backed method answers
         // `structured_agent_session_unsupported`, the same words the capability
         // gate uses, and the run would read as a refusal rather than a miss.
-        const hostCalls = structuredHostStub()
+        const hostCalls = structuredHostStub(SESSION, WORKSPACE)
         await releasedCurrent.installStructuredHost(hostCalls)
         try {
           await expectDeclaredSurfaceExecutes(

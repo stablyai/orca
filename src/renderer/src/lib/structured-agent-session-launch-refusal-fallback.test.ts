@@ -58,6 +58,9 @@ type CreateReply = { ok: boolean; refusal?: { code: string; message: string } }
 function replyToCreates(...replies: CreateReply[]): void {
   let index = 0
   mocks.call.mockImplementation(async (_target: unknown, method: string, params: unknown) => {
+    if (method === 'agentSession.createSupport') {
+      return { supported: true }
+    }
     if (method !== 'agentSession.create') {
       return { ok: true, page: { fence: 1 } }
     }

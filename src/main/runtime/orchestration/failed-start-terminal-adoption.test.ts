@@ -17,7 +17,7 @@ describe('a start that fails before authority still owns the terminal it created
     adoption?: Parameters<OrchestrationDb['failWorkerStart']>[3]
   ): { db: OrchestrationDb; dispatchId: string } {
     const d = (db = new OrchestrationDb(':memory:'))
-    const task = d.createTask({ spec: 'residual terminal' })
+    const task = d.createTask({ runId: 'run_legacy_local', spec: 'residual terminal' })
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -122,7 +122,7 @@ describe('a start that fails before authority still owns the terminal it created
     const first = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: d.createTask({ spec: 'owner' }).id,
+      taskId: d.createTask({ runId: 'run_legacy_local', spec: 'owner' }).id,
       startOptions: {}
     })
     d.prepareStartingWorkerAuthority({
@@ -138,7 +138,7 @@ describe('a start that fails before authority still owns the terminal it created
     const second = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: d.createTask({ spec: 'claimant' }).id,
+      taskId: d.createTask({ runId: 'run_legacy_local', spec: 'claimant' }).id,
       startOptions: {}
     })
     d.recordWorkerStage({

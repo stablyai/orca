@@ -1514,18 +1514,16 @@ html.native-shell .app-layout {
   grid-template-rows: 1fr;
 }
 
-/* Why: must stay a compositor-driven CSS animation — a JS clock writing
-   per-element transforms blocks the renderer input thread (STA-3328: 41
-   spinners ⇒ ~490 style writes/s, keystroke p90 363ms). The component anchors
-   each animation's startTime once; steps(12) preserves the retired cadence. */
+/* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
+/* One day per iteration avoids per-second React animation events; still 12 steps/second. */
 @keyframes agent-spinner-rotate {
   to {
-    transform: rotate(360deg);
+    transform: rotate(86400turn);
   }
 }
 
 .agent-working-spinner {
-  animation: agent-spinner-rotate 1s steps(12, end) infinite;
+  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

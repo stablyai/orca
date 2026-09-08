@@ -29,6 +29,7 @@ describe('federation attach-start prompt budget', () => {
     await expect(
       method.handler(
         method.params!.parse({
+          runId: 'run-home',
           dispatchId: 'ctx_oversized_remote',
           taskId: 'task_oversized_remote',
           taskSpec: 'x'.repeat(8 * 1024 * 1024),

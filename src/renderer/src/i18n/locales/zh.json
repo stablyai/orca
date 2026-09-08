@@ -4438,11 +4438,11 @@
           "92154beb7e": "新工作区",
           "49f62c5665": "工作区板",
           "5c9c7c16aa": "添加项目以创建工作区",
-          "ca6f729da2": "新工作区 ({{value0}})",
           "a30e34eb5c": "关闭工作区板",
-          "25a95899c9": "添加项目",
           "spaces": "空间",
-          "views": "侧边栏视图"
+          "views": "侧边栏视图",
+          "createMenu": "创建",
+          "addProject": "添加项目"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -14257,12 +14257,33 @@
           "795cbf26e2": "筛选...",
           "4616ea39fd": "跳转到工作区",
           "threadListOptionsFiltered": "线程列表选项，筛选器已启用",
+          "showSearch": "显示搜索",
           "markThreadRead": "将话题标记为已读",
           "59b131fbd9": "将话题标记为未读",
           "beb2c19173": "未读",
           "5651b216c6": "未知项目",
           "22b22034bc": "独立终端在活动中不可用。",
-          "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。"
+          "afdc2139a8": "智能体终端关闭。在此工作区中打开一个新终端以继续。",
+          "compactModeDescription": "以单行标题和两行状态消息显示更短的线程行。",
+          "unreadOnlyDescription": "将活动列表筛选为仅显示有未读更新的线程。",
+          "clearCompleted": "清除已完成",
+          "none": "无",
+          "search": "搜索",
+          "showUnreadOnly": "仅显示未读",
+          "showChildAgents": "显示子智能体",
+          "activityOptions": "活动选项",
+          "interrupted": "已中断",
+          "state": {
+            "working": "工作中",
+            "monitoring": "监控后台任务",
+            "blocked": "受阻",
+            "waiting": "等待输入",
+            "failed": "失败",
+            "done": "完成",
+            "idle": "空闲",
+            "unverifiable": "暂无近期更新",
+            "permission": "需注意"
+          }
         },
         "ActivityScopeFilterControls": {
           "resetScope": "显示所有主机和项目"
@@ -14979,7 +15000,11 @@
   "dashboard": {
     "sidebar": {
       "label": "智能体",
-      "dashboardLabel": "智能体仪表盘"
+      "dashboardLabel": "智能体仪表盘",
+      "openActivity": "查看活动",
+      "closeActivity": "关闭活动视图",
+      "projects": "项目",
+      "workspaces": "工作区"
     }
   },
   "browser": {
