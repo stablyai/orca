@@ -33,6 +33,8 @@ function createHarness(
     isIdle?: () => boolean
     kind?: PiAgentKind
     processTitle?: string
+    cwdImpl?: () => string
+    sessionNameImpl?: () => string
   } = {}
 ): Harness {
   const titles: string[] = []
@@ -61,7 +63,7 @@ function createHarness(
       env: { ORCA_PANE_KEY: options.paneKey ?? 'pane-1' },
       title: options.processTitle ?? 'pi',
       argv: ['node', 'pi'],
-      cwd: () => CWD
+      cwd: options.cwdImpl ?? (() => CWD)
     },
     console: { warn: vi.fn(), error: vi.fn(), log: vi.fn() },
     Promise,
@@ -88,7 +90,7 @@ function createHarness(
     on(name: string, handler: HookHandler) {
       handlers[name] = handler
     },
-    getSessionName: () => SESSION
+    getSessionName: options.sessionNameImpl ?? (() => SESSION)
   })
 
   return {
@@ -529,6 +531,41 @@ describe('getPiTitlebarExtensionSource', () => {
     await harness.callHook('agent_start')
     await vi.advanceTimersByTimeAsync(80)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+  })
+
+  it('survives a deleted cwd instead of crashing the pi process', async () => {
+    const harness = createHarness({
+      cwdImpl: () => {
+        throw new Error('ENOENT: uv_cwd')
+      }
+    })
+
+    // Why: these run inside setInterval callbacks, where an escape is an uncaught
+    // exception and pi exits(1) through its own uncaughtException handler.
+    await expect(harness.callHook('agent_start')).resolves.toBeUndefined()
+    await expect(harness.callHook('ui_prompt_start')).resolves.toBeUndefined()
+    // Why: an unguarded throw in the interval would surface here as an unhandled error.
+    await vi.advanceTimersByTimeAsync(2000)
+    await expect(harness.callHook('ui_prompt_end')).resolves.toBeUndefined()
+    await expect(harness.callHook('agent_settled')).resolves.toBeUndefined()
+  })
+
+  it('survives a session name that throws on a stale runtime', async () => {
+    let live = true
+    const harness = createHarness({
+      sessionNameImpl: () => {
+        if (!live) {
+          throw new Error('This extension API is stale')
+        }
+        return SESSION
+      }
+    })
+
+    await harness.callHook('agent_start')
+    await harness.callHook('ui_prompt_start')
+    live = false
+    await vi.advanceTimersByTimeAsync(2000)
+    await expect(harness.callHook('ui_prompt_end')).resolves.toBeUndefined()
   })
 
   it('leaves an OMP runtime to its own approval events', () => {
