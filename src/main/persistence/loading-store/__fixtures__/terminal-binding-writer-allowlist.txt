@@ -1,0 +1,15 @@
+# Files that assign a terminal binding value (ptyIdsByLeafId, .ptyId, layout .root,
+# terminalPtyIncarnationsByPaneKey, terminalSurfaceTombstonesByPaneKey) under src/main.
+# Each one either bumps the persistence write generation in the same operation or never
+# touches the live session. Audited in orca-persistence-design-assessment.md. Only shrinks.
+src/main/orca-profiles/profile-project-session-state.ts
+src/main/orca-profiles/profile-project-session-transfer.ts
+src/main/persistence/leasing-ssh-ptys/ssh-pty-binding-cleanup.ts
+src/main/persistence/leasing-ssh-ptys/ssh-pty-lease-operations.ts
+src/main/persistence/loading-store/pty-binding-persistence.ts
+src/main/persistence/loading-store/workspace-session-terminal-binding-replay.ts
+src/main/persistence/restoring-sessions/session-owner-removal.ts
+src/main/persistence/tracking-repos/worktree-identity-migration.ts
+src/main/runtime/mobile-session-layout-projection.ts
+src/main/runtime/runtime-terminal-orphan-session-adoption.ts
+src/main/ssh/ssh-target-id-migration.ts
