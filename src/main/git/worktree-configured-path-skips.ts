@@ -46,11 +46,10 @@ function skippedEntryOverflowText(
   count: number,
   mechanism: WorktreeConfiguredPathSkip['mechanism']
 ): string | undefined {
-  const rest = count - MAX_NAMED_SKIPPED_ENTRIES
-  if (rest <= 0) {
+  if (count <= 0) {
     return undefined
   }
-  return `and ${rest.toLocaleString('en-US')} more ${mechanism} skips`
+  return `and ${count.toLocaleString('en-US')} more ${mechanism} skips`
 }
 
 function overflowWarnings(
@@ -59,7 +58,7 @@ function overflowWarnings(
   const remaining = skips.slice(MAX_NAMED_SKIPPED_ENTRIES)
   return SKIP_MECHANISMS.flatMap((mechanism) => {
     const count = remaining.filter((skip) => skip.mechanism === mechanism).length
-    const message = skippedEntryOverflowText(count + MAX_NAMED_SKIPPED_ENTRIES, mechanism)
+    const message = skippedEntryOverflowText(count, mechanism)
     return message ? [{ mechanism, message }] : []
   })
 }
