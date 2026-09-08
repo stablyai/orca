@@ -2,8 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   shouldSyncAllRuntimeSessionTabs,
   shouldApplyWebSessionTabsSnapshot,
-  shouldBootstrapInitialWebRuntimeTerminal,
-  shouldRespawnWebRuntimeTerminalAfterWake,
   shouldSyncRuntimeSessionTabs
 } from './web-session-tabs-sync'
 import {
@@ -24,7 +22,7 @@ vi.mock('../store', () => ({
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
-  it('does not bootstrap a terminal from a stale empty active-worktree snapshot', () => {
+  it('rejects a stale empty active-worktree snapshot', () => {
     const ready = makeSnapshot([
       {
         type: 'terminal',
@@ -49,72 +47,6 @@ describe('applyWebSessionTabsSnapshot', () => {
     const staleIsFresh = shouldApplyWebSessionTabsSnapshot(staleEmpty, ENV)
 
     expect(staleIsFresh).toBe(false)
-    expect(
-      shouldBootstrapInitialWebRuntimeTerminal({
-        event: { type: 'snapshot', ...staleEmpty },
-        activeWorktreeId: WT,
-        requestedInitialTerminal: false,
-        snapshotIsFresh: staleIsFresh,
-        localTerminalCount: 0
-      })
-    ).toBe(false)
-  })
-
-  it('does not bootstrap a terminal from a fresh empty snapshot when local terminals already exist', () => {
-    const freshEmpty = makeSnapshot([], {
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null
-    })
-
-    expect(
-      shouldBootstrapInitialWebRuntimeTerminal({
-        event: { type: 'snapshot', ...freshEmpty },
-        activeWorktreeId: WT,
-        requestedInitialTerminal: false,
-        snapshotIsFresh: true,
-        localTerminalCount: 1
-      })
-    ).toBe(false)
-  })
-
-  it('does not respawn after wake when activation already requested a respawn', () => {
-    const freshEmpty = makeSnapshot([], {
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null
-    })
-
-    expect(
-      shouldRespawnWebRuntimeTerminalAfterWake({
-        event: { type: 'snapshot', ...freshEmpty },
-        activeWorktreeId: WT,
-        requestedRespawnAfterWake: false,
-        snapshotIsFresh: true,
-        localTerminalCount: 1,
-        hasLiveLocalPty: false,
-        skipWakeRespawn: true
-      })
-    ).toBe(false)
-  })
-
-  it('respawns a terminal after wake when local slept tabs exist but the host snapshot is empty', () => {
-    const freshEmpty = makeSnapshot([], {
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null
-    })
-
-    expect(
-      shouldRespawnWebRuntimeTerminalAfterWake({
-        event: { type: 'snapshot', ...freshEmpty },
-        activeWorktreeId: WT,
-        requestedRespawnAfterWake: false,
-        snapshotIsFresh: true,
-        localTerminalCount: 1,
-        hasLiveLocalPty: false
-      })
-    ).toBe(true)
   })
 
   it('syncs active session tabs for desktop remote runtime clients using the worktree owner', () => {

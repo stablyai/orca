@@ -24,6 +24,10 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
+  // An empty workspace is a valid selection, not a request for a new terminal.
+  if (tabs.length === 0) {
+    return
+  }
   const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
   if (hasLivePty) {
     return
@@ -40,7 +44,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
   }
 
   const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-  if (tabs.length > 0 && renderableTabCount === 0) {
+  if (renderableTabCount === 0) {
     return
   }
 

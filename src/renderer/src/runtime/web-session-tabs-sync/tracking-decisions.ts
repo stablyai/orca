@@ -3,8 +3,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
-  VISIBILITY_INVENTORY_REMOVAL_EPOCH,
-  type SessionTabsStreamEvent
+  VISIBILITY_INVENTORY_REMOVAL_EPOCH
 } from './state'
 import {
   acceptSessionTabsRuntimeId,
@@ -127,49 +126,6 @@ export function decideWebSessionTabsSnapshot(
   // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
   queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
   return WEB_SESSION_TABS_FRAME_APPLIED
-}
-
-export function shouldBootstrapInitialWebRuntimeTerminal(args: {
-  event: SessionTabsStreamEvent
-  activeWorktreeId: string
-  requestedInitialTerminal: boolean
-  snapshotIsFresh: boolean
-  localTerminalCount: number
-}): boolean {
-  return (
-    args.snapshotIsFresh &&
-    args.event.type === 'snapshot' &&
-    args.event.tabs.length === 0 &&
-    args.localTerminalCount === 0 &&
-    !args.requestedInitialTerminal &&
-    args.activeWorktreeId === args.event.worktree
-  )
-}
-
-export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
-  event: SessionTabsStreamEvent
-  activeWorktreeId: string
-  requestedRespawnAfterWake: boolean
-  snapshotIsFresh: boolean
-  localTerminalCount: number
-  hasLiveLocalPty: boolean
-  skipWakeRespawn?: boolean
-}): boolean {
-  if (
-    !args.snapshotIsFresh ||
-    args.requestedRespawnAfterWake ||
-    args.skipWakeRespawn === true ||
-    args.localTerminalCount === 0 ||
-    args.hasLiveLocalPty ||
-    (args.event.type !== 'snapshot' && args.event.type !== 'updated')
-  ) {
-    return false
-  }
-  if (args.activeWorktreeId !== args.event.worktree) {
-    return false
-  }
-  const hostTerminalTabCount = args.event.tabs.filter((tab) => tab.type === 'terminal').length
-  return hostTerminalTabCount === 0
 }
 
 export function shouldSyncRuntimeSessionTabs(args: {

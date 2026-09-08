@@ -46,74 +46,50 @@ function makeWorktree(): Worktree {
 }
 
 describe('empty remote worktree activation', () => {
-  it('creates a host terminal when waking an empty remote workspace', async () => {
-    const worktree = makeWorktree()
-    const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({
-      ok: true,
-      result: {
-        tab: {
-          type: 'terminal',
-          id: 'host-tab-1::leaf-1',
-          parentTabId: 'host-tab-1',
-          leafId: 'leaf-1',
-          title: 'Terminal 1',
-          terminal: 'term_host',
-          status: 'ready',
-          isActive: true
-        },
-        publicationEpoch: 'epoch-1',
-        snapshotVersion: 1
-      }
-    })
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
-    vi.stubGlobal('window', {
-      api: {
-        runtimeEnvironments: {
-          call: callRuntimeEnvironment,
-          subscribe: vi.fn()
+  it.each(['unopened', 'closed-last-tab'])(
+    'keeps a %s remote workspace empty on repeated activation',
+    async (kind) => {
+      const worktree = makeWorktree()
+      const callRuntimeEnvironment = vi.fn().mockResolvedValue({ ok: true, result: {} })
+      ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+      vi.stubGlobal('window', {
+        api: {
+          runtimeEnvironments: {
+            call: callRuntimeEnvironment,
+            subscribe: vi.fn()
+          }
         }
-      }
-    })
-
-    useAppStore.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: REPO_PATH,
-          displayName: 'repo',
-          badgeColor: '#000000',
-          addedAt: 0
-        }
-      ],
-      worktreesByRepo: { 'repo-1': [worktree] },
-      tabsByWorktree: {},
-      ptyIdsByTabId: {},
-      settings: {
-        ...getDefaultSettings(ORCA_WORKSPACES_PATH),
-        activeRuntimeEnvironmentId: 'web-runtime-1'
-      },
-      reconcileWorktreeTabModel: vi.fn(() => ({
-        renderableTabCount: 0,
-        activeRenderableTabId: null
-      }))
-    })
-
-    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
-    await vi.waitFor(() => {
-      expect(callRuntimeEnvironment).toHaveBeenCalled()
-    })
-
-    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selector: 'web-runtime-1',
-        method: 'session.tabs.createTerminal',
-        params: expect.objectContaining({
-          worktree: `id:${worktree.id}`,
-          activate: false,
-          select: true,
-          navigation: 'caller'
-        })
       })
-    )
-  })
+
+      useAppStore.setState({
+        repos: [
+          {
+            id: 'repo-1',
+            path: REPO_PATH,
+            displayName: 'repo',
+            badgeColor: '#000000',
+            addedAt: 0
+          }
+        ],
+        worktreesByRepo: { 'repo-1': [worktree] },
+        tabsByWorktree: kind === 'closed-last-tab' ? { [worktree.id]: [] } : {},
+        ptyIdsByTabId: {},
+        settings: {
+          ...getDefaultSettings(ORCA_WORKSPACES_PATH),
+          activeRuntimeEnvironmentId: 'web-runtime-1'
+        },
+        reconcileWorktreeTabModel: vi.fn(() => ({
+          renderableTabCount: 0,
+          activeRenderableTabId: null
+        }))
+      })
+
+      ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
+      ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+
+      expect(callRuntimeEnvironment).not.toHaveBeenCalled()
+      expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toEqual([])
+    }
+  )
 })
