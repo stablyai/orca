@@ -13,6 +13,9 @@ import { parseWslUncPath } from '../shared/wsl-paths'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import { resolveTerminalSelector } from './terminal-selector'
+
+export { resolveTerminalSelector } from './terminal-selector'
 
 export type BrowserCliTarget = {
   worktree?: string
@@ -219,49 +222,6 @@ export async function getTerminalHandle(
     ...(options.requireUnambiguous ? { requireUnambiguous: true } : {})
   })
   return response.result.handle
-}
-
-/**
- * Resolve `pty:<ptyId>` to the current handle. Handles rotate across restarts;
- * ptyId is the stable field on terminal list (#13206).
- */
-export async function resolveTerminalSelector(
-  selector: string,
-  client: RuntimeClient
-): Promise<string> {
-  const trimmed = selector.trim()
-  if (!trimmed.toLowerCase().startsWith('pty:')) {
-    return trimmed
-  }
-  const ptyId = trimmed.slice(trimmed.indexOf(':') + 1).trim()
-  if (!ptyId) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Empty pty id after pty:. Use a ptyId from `orca terminal list --json`.'
-    )
-  }
-  // Why: layouts are ~30% of large listings and unused for id resolve; only
-  // explicit false opts out of the pre-flag include default.
-  const listed = await client.call<{
-    terminals: { handle: string; ptyId: string | null }[]
-    totalCount?: number
-    truncated?: boolean
-  }>('terminal.list', { limit: 5000, includeVisualLayouts: false })
-  const match = listed.result.terminals.find((terminal) => terminal.ptyId === ptyId)
-  if (!match) {
-    if (listed.result.truncated) {
-      const total = listed.result.totalCount ?? listed.result.terminals.length
-      throw new RuntimeClientError(
-        'terminal_not_found',
-        `No terminal with ptyId ${ptyId} in the first ${listed.result.terminals.length} of ${total} terminals (list truncated). Re-list with a worktree filter if the fleet is large.`
-      )
-    }
-    throw new RuntimeClientError(
-      'terminal_not_found',
-      `No live terminal with ptyId ${ptyId}. Re-run terminal list after restart or rehydration.`
-    )
-  }
-  return match.handle
 }
 
 export async function getBrowserCommandTarget(

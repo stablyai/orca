@@ -34,7 +34,9 @@ export const TerminalListParams = z.object({
   requireFreshPtyLiveness: z.boolean().optional(),
   // Why: layouts are ~31% of a large listing and only the human CLI formatter
   // reads them. Absent means "include" so pre-flag clients keep rendering them.
-  includeVisualLayouts: z.boolean().optional()
+  includeVisualLayouts: z.boolean().optional(),
+  // Why: pty: selectors need a targeted page so large fleets do not miss the id (#13219).
+  ptyId: requiredString('Missing PTY ID').pipe(z.string().max(512)).optional()
 })
 
 export const TerminalResolveActive = z.object({

@@ -13,8 +13,8 @@ describe('resolveTerminalSelector', () => {
     const call = vi.fn().mockResolvedValue({
       result: {
         terminals: [
-          { handle: 'term_new', ptyId: 'pty-stable-1' },
-          { handle: 'term_other', ptyId: 'pty-2' }
+          { handle: 'term_new', ptyId: 'pty-stable-1', connected: true },
+          { handle: 'term_other', ptyId: 'pty-2', connected: true }
         ],
         truncated: false,
         totalCount: 2
@@ -23,7 +23,106 @@ describe('resolveTerminalSelector', () => {
     const client = { call } as unknown as RuntimeClient
     await expect(resolveTerminalSelector('pty:pty-stable-1', client)).resolves.toBe('term_new')
     expect(call).toHaveBeenCalledWith('terminal.list', {
-      limit: 5000,
+      limit: 200,
+      ptyId: 'pty-stable-1',
+      requireFreshPtyLiveness: true,
+      includeVisualLayouts: false
+    })
+  })
+
+  it('supports a bounded old-host response that ignores the ptyId filter', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        terminals: [
+          { handle: 'term_other', ptyId: 'pty-2', connected: true },
+          { handle: 'term_new', ptyId: 'pty-stable-1', connected: true }
+        ],
+        truncated: false,
+        totalCount: 2
+      }
+    })
+    const client = { call } as unknown as RuntimeClient
+
+    await expect(resolveTerminalSelector('pty:pty-stable-1', client)).resolves.toBe('term_new')
+  })
+
+  it('ignores disconnected records that reuse the requested ptyId', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        terminals: [
+          { handle: 'term_stale', ptyId: 'pty-stable-1', connected: false },
+          { handle: 'term_live', ptyId: 'pty-stable-1', connected: true }
+        ],
+        truncated: false,
+        totalCount: 2
+      }
+    })
+    const client = { call } as unknown as RuntimeClient
+
+    await expect(resolveTerminalSelector('pty:pty-stable-1', client)).resolves.toBe('term_live')
+  })
+
+  it('rejects a disconnected-only match', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        terminals: [{ handle: 'term_stale', ptyId: 'pty-stable-1', connected: false }],
+        truncated: false,
+        totalCount: 1
+      }
+    })
+    const client = { call } as unknown as RuntimeClient
+
+    await expect(resolveTerminalSelector('pty:pty-stable-1', client)).rejects.toMatchObject({
+      code: 'terminal_not_found'
+    })
+  })
+
+  it('falls back to cached connected state when fresh liveness is unavailable', async () => {
+    const call = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('terminal_liveness_unavailable'))
+      .mockResolvedValueOnce({
+        result: {
+          terminals: [{ handle: 'term_cached', ptyId: 'pty-stable-1', connected: true }],
+          truncated: false,
+          totalCount: 1
+        }
+      })
+    const client = { call } as unknown as RuntimeClient
+
+    await expect(resolveTerminalSelector('pty:pty-stable-1', client)).resolves.toBe('term_cached')
+    expect(call).toHaveBeenNthCalledWith(2, 'terminal.list', {
+      limit: 200,
+      ptyId: 'pty-stable-1',
+      includeVisualLayouts: false
+    })
+  })
+
+  it('falls back when fresh liveness omits the requested SSH host', async () => {
+    const ptyId = 'ssh:box-1@@pty-7'
+    const call = vi
+      .fn()
+      .mockResolvedValueOnce({
+        result: {
+          terminals: [],
+          hostScope: { hostIds: ['local'], omittedHostIds: ['ssh:box-1'] },
+          truncated: false,
+          totalCount: 0
+        }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          terminals: [{ handle: 'term_cached', ptyId, connected: true }],
+          truncated: false,
+          totalCount: 1
+        }
+      })
+    const client = { call } as unknown as RuntimeClient
+
+    await expect(resolveTerminalSelector(`pty:${ptyId}`, client)).resolves.toBe('term_cached')
+    expect(call).toHaveBeenNthCalledWith(2, 'terminal.list', {
+      limit: 200,
+      ptyId,
       includeVisualLayouts: false
     })
   })
@@ -39,7 +138,7 @@ describe('resolveTerminalSelector', () => {
   it('rejects unknown pty ids with terminal_not_found', async () => {
     const call = vi.fn().mockResolvedValue({
       result: {
-        terminals: [{ handle: 'term_only', ptyId: 'pty-1' }],
+        terminals: [{ handle: 'term_only', ptyId: 'pty-1', connected: true }],
         truncated: false,
         totalCount: 1
       }
@@ -53,7 +152,7 @@ describe('resolveTerminalSelector', () => {
   it('mentions truncation when the list page misses the ptyId', async () => {
     const call = vi.fn().mockResolvedValue({
       result: {
-        terminals: [{ handle: 'term_only', ptyId: 'pty-1' }],
+        terminals: [{ handle: 'term_only', ptyId: 'pty-1', connected: true }],
         truncated: true,
         totalCount: 900
       }
