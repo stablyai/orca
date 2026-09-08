@@ -522,4 +522,42 @@ describe('StructuredAgentSessionStatusFeed', () => {
       session: expect.objectContaining({ status: 'idle', latestPrompt: 'hello' })
     })
   })
+  it('bounds retention by explicit visibility without suppressing hidden runtime observations', async () => {
+    const journal = await openJournal()
+    const sessions = new Map<string, ReturnType<typeof indexed>>()
+    const visible = new Set<string>()
+    const observed: string[] = []
+    const feed = new StructuredAgentSessionStatusFeed({
+      sessions,
+      getRecord: () => null,
+      now: () => 1,
+      isVisible: (id) => visible.has(id),
+      catalog: () => ({ complete: true, sessionIds: [...visible] }),
+      onStatusChanged: (summary) => observed.push(summary.sessionId)
+    })
+    for (let i = 0; i < 3000; i++) {
+      const id = String(i)
+      sessions.set(id, indexed({ journal }))
+      visible.add(id)
+      feed.visibilityChanged(id, true)
+      visible.delete(id)
+      feed.visibilityChanged(id, false)
+      feed.publish(id)
+      sessions.delete(id)
+    }
+    const events: AgentSessionStatusEvent[] = []
+    feed.subscribe({ id: 'late', emit: (event) => events.push(event) })
+    expect(events).toEqual([
+      {
+        type: 'snapshot',
+        sessions: [],
+        catalog: {
+          complete: true,
+          epoch: expect.any(String),
+          sessionIds: []
+        }
+      }
+    ])
+    expect(observed.length).toBeGreaterThan(0)
+  })
 })

@@ -1,3 +1,4 @@
+import { invalidateStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RuntimeStatusSlice } from './runtime-status-types'
@@ -76,6 +77,12 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     const removedIds = get()
       .runtimeEnvironments.map((environment) => environment.id)
       .filter((id) => !nextIds.has(id))
+    for (const id of removedIds) {
+      invalidateStructuredAgentSessionStatusFeed(id, true)
+    }
+    for (const id of replacedEnvironmentIds) {
+      invalidateStructuredAgentSessionStatusFeed(id, false)
+    }
     runtimeStatusRecheck.cancelRuntimeStatusRechecks([...removedIds, ...replacedEnvironmentIds])
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))

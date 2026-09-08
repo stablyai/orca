@@ -21,6 +21,7 @@ vi.mock('./runtime-rpc-client', () => ({
 
 import {
   getStructuredAgentSessionStatusFeed,
+  invalidateStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
 } from './structured-agent-session-status-feed'
 
@@ -136,5 +137,58 @@ describe('structured agent session status feed', () => {
     expect(vi.getTimerCount()).toBe(0)
     await vi.advanceTimersByTimeAsync(10_000)
     expect(mocks.subscribeStatus).toHaveBeenCalledOnce()
+  })
+  it('retracts only complete catalog absences and explicit removals', async () => {
+    const feed = getStructuredAgentSessionStatusFeed(LOCAL)
+    feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    hostEmit()({ type: 'snapshot', sessions: [summary('a'), summary('b'), summary('c')] })
+    hostEmit()({
+      type: 'snapshot',
+      sessions: [],
+      catalog: { epoch: 'one', complete: false, sessionIds: [] }
+    })
+    expect(feed.getSnapshot().size).toBe(3)
+    hostEmit()({
+      type: 'snapshot',
+      sessions: [],
+      catalog: { epoch: 'two', complete: true, sessionIds: ['a', 'b'] }
+    })
+    expect([...feed.getSnapshot().keys()]).toEqual(['a', 'b'])
+    hostEmit()({ type: 'snapshot', sessions: [], removedSessionIds: ['a'] })
+    expect([...feed.getSnapshot().keys()]).toEqual(['b'])
+  })
+
+  it('fences closed streams immediately and keeps retained counts bounded under churn', async () => {
+    const feed = getStructuredAgentSessionStatusFeed(LOCAL)
+    feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    const emit = hostEmit()
+    for (let i = 0; i < 3000; i++) {
+      emit({ type: 'status', session: summary(String(i)) })
+      emit({ type: 'snapshot', sessions: [], removedSessionIds: [String(i)] })
+    }
+    expect(feed.getSnapshot().size).toBe(0)
+    emit({ type: 'end' })
+    emit({ type: 'status', session: summary('late') })
+    expect(feed.getSnapshot().size).toBe(0)
+  })
+
+  it('disposes removed runtime owners and clears paired identity state before reopening', async () => {
+    const feed = getStructuredAgentSessionStatusFeed(REMOTE)
+    feed.activate()
+    await vi.advanceTimersByTimeAsync(0)
+    const emit = hostEmit()
+    emit({ type: 'status', session: summary('old-account') })
+    invalidateStructuredAgentSessionStatusFeed('env-1', false)
+    expect(feed.getSnapshot().size).toBe(0)
+    emit({ type: 'status', session: summary('stale-account') })
+    expect(feed.getSnapshot().size).toBe(0)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2)
+    invalidateStructuredAgentSessionStatusFeed('env-1', true)
+    hostEmit(1)({ type: 'status', session: summary('late') })
+    expect(feed.getSnapshot().size).toBe(0)
+    expect(getStructuredAgentSessionStatusFeed(REMOTE)).not.toBe(feed)
   })
 })

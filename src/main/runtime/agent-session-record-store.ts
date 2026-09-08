@@ -1,4 +1,4 @@
-import { setVisibleSessionId } from './agent-session-visible-tab-index'
+import * as visibleTabs from './agent-session-visible-tab-index'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 /** Durable single-writer session records and their operation ledger. */
 
@@ -117,17 +117,15 @@ export class AgentSessionRecordStore {
 
   listRecords = (): AgentSessionRecord[] => [...this.state.records.values()]
 
-  listVisibleSessionIds = (): string[] =>
-    [...this.state.visibleSessionIds].filter((sessionId) => this.state.records.has(sessionId))
+  isSessionTabVisible = (id: string) => visibleTabs.isSessionTabVisible(this.state, id)
 
-  getVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } => ({
-    present: this.state.visibleSessionIdsIndexPresent,
-    sessionIds: this.listVisibleSessionIds()
-  })
+  listVisibleSessionIds = () => visibleTabs.listVisibleSessionIds(this.state)
+
+  getVisibleSessionTabIndex = () => visibleTabs.visibleSessionTabIndex(this.state)
 
   /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
   setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
-    return this.transact(() => setVisibleSessionId(this.state, sessionId, visible))
+    return this.transact(() => visibleTabs.setVisibleSessionId(this.state, sessionId, visible))
   }
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {

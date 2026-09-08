@@ -54,7 +54,8 @@ import type {
   StructuredAgentSessionHostSession,
   StructuredAgentSessionReveal
 } from './structured-agent-session-host-types'
-import { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
+import { createHostStatusFeed } from './structured-agent-session-status-catalog'
+import type { StructuredAgentSessionStatusFeed } from './structured-agent-session-status-feed'
 import { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel } from './structured-agent-session-background-task-channel'
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -65,12 +66,7 @@ export class StructuredAgentSessionHost {
     this
   )
   private readonly sessions = new Map<string, StructuredAgentSessionHostSession>()
-  private readonly statusFeed = new StructuredAgentSessionStatusFeed({
-    sessions: this.sessions,
-    getRecord: (sessionId) => this.deps.store.getRecord(sessionId),
-    now: () => this.now(),
-    onStatusChanged: (summary, options) => this.deps.onSessionStatusChanged?.(summary, options)
-  })
+  private readonly statusFeed: StructuredAgentSessionStatusFeed
   private readonly subscribers = new AgentSessionSubscribers({
     readCommands: (sessionId) => this.deps.adapter.readCommands?.(sessionId),
     onJournalPublished: (sessionId, journal) => this.statusFeed.publish(sessionId, journal)
@@ -87,6 +83,7 @@ export class StructuredAgentSessionHost {
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
 
   constructor(readonly deps: StructuredAgentSessionHostDeps) {
+    this.statusFeed = createHostStatusFeed(deps, this.sessions, () => this.now())
     this.backgroundTasks = new StructuredAgentSessionBackgroundTaskChannel(
       deps,
       this.sessions,
@@ -216,8 +213,10 @@ export class StructuredAgentSessionHost {
   getPersistedVisibleSessionTabIndex = (): { present: boolean; sessionIds: string[] } =>
     this.deps.store.getVisibleSessionTabIndex()
 
-  setSessionTabVisibility = (sessionId: string, visible: boolean): Promise<void> =>
-    this.deps.store.setSessionTabVisibility(sessionId, visible)
+  setSessionTabVisibility = async (sessionId: string, visible: boolean): Promise<void> => {
+    await this.deps.store.setSessionTabVisibility(sessionId, visible)
+    this.statusFeed.visibilityChanged(sessionId, visible)
+  }
 
   reconcileRestartLeases = async (): Promise<void> => {
     const refusal = await this.reconcileLeases('startup')

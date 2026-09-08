@@ -208,10 +208,16 @@ export type AgentSessionStatusSummary = {
   updatedAt: number
 }
 
-/** A summary outlives its provider child: an evicted idle session is still idle, so the host
- *  keeps the last projection and never retracts one. Tabs, not this feed, decide what is listed. */
+/** A summary outlives its provider child; the durable visible-tab catalog owns retraction. */
 export type AgentSessionStatusEvent =
-  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[] }
+  | {
+      type: 'snapshot'
+      sessions: AgentSessionStatusSummary[]
+      /** Absent on older hosts; only complete inventories authorize retraction. */
+      catalog?: { epoch: string; complete: boolean; sessionIds: string[] }
+      /** Explicit tab removals remain authoritative during a partial restore. */
+      removedSessionIds?: string[]
+    }
   | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
 

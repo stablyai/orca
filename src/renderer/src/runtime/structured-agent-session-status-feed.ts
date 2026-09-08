@@ -2,8 +2,7 @@
 //
 // The feed is a read-only mirror: the host projects each session's status from its journal and
 // this owner keeps the latest summary per session while anyone is looking. Losing the stream
-// keeps the cached summaries and reconnects; a fresh snapshot merges over them.
-// Which sessions are listed is the tab map's decision, so the feed never retracts a summary.
+// keeps cached summaries and reconnects; only complete catalogs or explicit removals retract.
 
 import type {
   AgentSessionStatusEvent,
@@ -27,7 +26,10 @@ export type StructuredAgentSessionStatusFeedOwner = {
 const RECONNECT_MAX_DELAY_MS = 5_000
 
 /** `stop` is the map's own teardown, not part of the owner contract callers hold. */
-type OwnedStatusFeed = StructuredAgentSessionStatusFeedOwner & { stop: () => void }
+type OwnedStatusFeed = StructuredAgentSessionStatusFeedOwner & {
+  stop: () => void
+  invalidate: (removed: boolean) => void
+}
 
 const owners = new Map<string, OwnedStatusFeed>()
 
@@ -40,6 +42,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   const listeners = new Set<() => void>()
   const activations = new Set<symbol>()
   let generation = 0
+  let disposed = false
   let handle: { unsubscribe: () => void } | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let reconnectAttempt = 0
@@ -56,9 +59,12 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
   const applyEvent = (event: AgentSessionStatusEvent): void => {
     if (event.type === 'snapshot') {
       reconnectAttempt = 0
-      // Merged, not replaced: a restarted host restores its readable sessions asynchronously, so
-      // the first snapshot can be empty and dropping those rows flickers every one to no-status.
-      const next = new Map(snapshot)
+      // An empty projection during restore is not an empty catalog.
+      const visible = event.catalog?.complete ? new Set(event.catalog.sessionIds) : null
+      const next = new Map([...snapshot].filter(([id]) => !visible || visible.has(id)))
+      for (const id of event.removedSessionIds ?? []) {
+        next.delete(id)
+      }
       for (const session of event.sessions) {
         next.set(session.sessionId, session)
       }
@@ -104,22 +110,25 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
           return
         }
         if (event.type === 'end') {
+          generation += 1
           dropHandle()
-          scheduleReconnect(candidate)
+          scheduleReconnect(generation)
           return
         }
         applyEvent(event)
       },
       () => {
         if (active(candidate)) {
+          generation += 1
           dropHandle()
-          scheduleReconnect(candidate)
+          scheduleReconnect(generation)
         }
       },
       () => {
         if (active(candidate)) {
+          generation += 1
           dropHandle()
-          scheduleReconnect(candidate)
+          scheduleReconnect(generation)
         }
       }
     )
@@ -168,6 +177,9 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
 
   return {
     activate: () => {
+      if (disposed) {
+        return () => {}
+      }
       const token = Symbol('status-feed')
       activations.add(token)
       if (activations.size === 1) {
@@ -185,7 +197,15 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
-    stop
+    stop,
+    invalidate: (removed) => {
+      stop()
+      disposed = removed
+      setSnapshot(new Map())
+      if (!removed && activations.size > 0) {
+        open()
+      }
+    }
   }
 }
 
@@ -199,6 +219,21 @@ export function getStructuredAgentSessionStatusFeed(
     owners.set(key, owner)
   }
   return owner
+}
+
+export function invalidateStructuredAgentSessionStatusFeed(
+  environmentId: string,
+  removed: boolean
+): void {
+  const key = structuredAgentSessionStatusFeedKey({ kind: 'environment', environmentId })
+  const owner = owners.get(key)
+  if (!owner) {
+    return
+  }
+  if (removed) {
+    owners.delete(key)
+  }
+  owner.invalidate(removed)
 }
 
 export function resetStructuredAgentSessionStatusFeedsForTests(): void {

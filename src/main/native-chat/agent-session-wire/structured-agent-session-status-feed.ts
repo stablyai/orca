@@ -8,8 +8,9 @@
 // The last projection is kept after the session's provider child is evicted: an idle session is
 // still idle without a process, and a renderer that reloads must not lose every settled row until
 // each chat is reopened. Restart is the one boundary that forgets, and restoring readable sessions
-// republishes them.
+// republishes them. Explicit tab removal retracts only the catalog projection.
 
+import { randomUUID } from 'node:crypto'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
@@ -36,6 +37,8 @@ export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   now: () => number
+  catalog?: () => { complete: boolean; sessionIds: string[] }
+  isVisible?: (sessionId: string) => boolean
   /** Every projection change, whether or not anyone is subscribed. `replay` marks a re-projection
    *  of state the host already knew (restore, an arriving subscriber) rather than a journal edge. */
   onStatusChanged?: (summary: AgentSessionStatusSummary, options: { replay: boolean }) => void
@@ -62,6 +65,9 @@ export class StructuredAgentSessionStatusFeed {
   private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
   private readonly published = new Map<string, AgentSessionStatusSummary>()
 
+  private readonly epoch = randomUUID()
+  private readonly lastProjection = new WeakMap<AgentSessionJournal, AgentSessionStatusSummary>()
+
   constructor(private readonly deps: StructuredAgentSessionStatusFeedDeps) {}
 
   /** Opens with every session this host has projected, live ones re-read, then only changes. */
@@ -72,7 +78,7 @@ export class StructuredAgentSessionStatusFeed {
       this.publish(sessionId, undefined, { replay: true })
     }
     this.subscribers.set(subscriber.id, subscriber)
-    this.emit(subscriber, { type: 'snapshot', sessions: [...this.published.values()] })
+    this.emit(subscriber, this.snapshot())
     return () => this.unsubscribe(subscriber.id)
   }
 
@@ -95,18 +101,51 @@ export class StructuredAgentSessionStatusFeed {
     if (!session) {
       return
     }
-    const summary = this.summaryFor(sessionId, session, journal ?? session.journal)
-    const previous = this.published.get(sessionId)
+    const source = journal ?? session.journal
+    const summary = this.summaryFor(sessionId, session, source)
+    const previous = this.lastProjection.get(source) ?? this.published.get(sessionId)
+    const retained = this.published.get(sessionId)
+    if (this.deps.isVisible?.(sessionId) !== false) {
+      if (!retained || !summariesEqual(retained, summary)) {
+        this.published.set(sessionId, summary)
+        this.broadcast({ type: 'status', session: summary })
+      }
+    }
+    this.lastProjection.set(source, summary)
     if (previous && summariesEqual(previous, summary)) {
       return
     }
-    this.published.set(sessionId, summary)
-    this.broadcast({ type: 'status', session: summary })
     try {
       this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
     } catch (error) {
       // An observer must never cost the subscribers their status event.
       console.warn('[structured-session-status] status observer failed', error)
+    }
+  }
+
+  visibilityChanged(sessionId: string, visible: boolean): void {
+    if (visible) {
+      this.publish(sessionId, undefined, { replay: true })
+    } else {
+      this.published.delete(sessionId)
+      this.broadcast({ type: 'snapshot', sessions: [], removedSessionIds: [sessionId] })
+    }
+  }
+
+  private snapshot(): AgentSessionStatusEvent {
+    const catalog = this.deps.catalog?.()
+    if (catalog?.complete) {
+      const visible = new Set(catalog.sessionIds)
+      for (const id of this.published.keys()) {
+        if (!visible.has(id)) {
+          this.published.delete(id)
+        }
+      }
+    }
+    return {
+      type: 'snapshot',
+      sessions: [...this.published.values()],
+      ...(catalog ? { catalog: { ...catalog, epoch: this.epoch } } : {})
     }
   }
 

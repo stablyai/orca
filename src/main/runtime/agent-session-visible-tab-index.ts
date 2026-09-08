@@ -36,3 +36,21 @@ export function setVisibleSessionId(
   }
   state.visibleSessionIdsIndexPresent = true
 }
+
+export function isSessionTabVisible(state: AgentSessionStoreState, sessionId: string): boolean {
+  return !state.visibleSessionIdsIndexPresent || state.visibleSessionIds.has(sessionId)
+}
+
+export function visibleSessionTabIndex(state: AgentSessionStoreState): {
+  present: boolean
+  sessionIds: string[]
+} {
+  return {
+    present: state.visibleSessionIdsIndexPresent,
+    sessionIds: listVisibleSessionIds(state)
+  }
+}
+
+export function listVisibleSessionIds(state: AgentSessionStoreState): string[] {
+  return [...state.visibleSessionIds].filter((id) => state.records.has(id))
+}
