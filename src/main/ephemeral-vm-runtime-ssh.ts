@@ -1,6 +1,4 @@
-import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
-import { getSshGitProvider } from './providers/ssh-git-dispatch'
-import { getSshPtyProvider } from './ipc/pty/provider/registry'
+import { areSshRelayProvidersRegistered } from './providers/ssh-relay-provider-readiness'
 import { connectRegisteredSshTarget, getSshConnectionStore } from './ipc/ssh'
 import {
   disconnectRegisteredSshTarget,
@@ -23,7 +21,7 @@ export type RuntimeOwnedSshConnectionResult = {
 }
 
 /**
- * `attached`: connected with the PTY provider registered. `reconnecting`: the relay is
+ * `attached`: connected with every relay provider registered. `reconnecting`: the relay is
  * recovering on its own and a fresh dial would tear that down. `detached`: nothing in
  * this process serves the target — the state after an app restart, or the moment
  * between a connect and the relay registering its providers.
@@ -53,7 +51,7 @@ export async function connectRuntimeOwnedSshTarget(args: {
 
 export function getRuntimeOwnedSshRelayState(targetId: string): RuntimeOwnedSshRelayState {
   const status = getRegisteredSshState(targetId)?.status
-  if (status === 'connected' && getSshPtyProvider(targetId)) {
+  if (status === 'connected' && areSshRelayProvidersRegistered(targetId)) {
     return 'attached'
   }
   return status === 'reconnecting' ? 'reconnecting' : 'detached'
@@ -134,13 +132,7 @@ async function waitForRuntimeSshProviders(targetId: string, signal?: AbortSignal
     if (signal?.aborted) {
       throw new Error(`SSH provider wait aborted for target "${targetId}".`)
     }
-    // Why the PTY provider too: a terminal spawn right after connect otherwise races
-    // the relay's provider registration and fails with "No PTY provider".
-    if (
-      getSshGitProvider(targetId) &&
-      getSshFilesystemProvider(targetId) &&
-      getSshPtyProvider(targetId)
-    ) {
+    if (areSshRelayProvidersRegistered(targetId)) {
       return
     }
     await new Promise((resolve) => setTimeout(resolve, SSH_PROVIDER_READY_INTERVAL_MS))

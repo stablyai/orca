@@ -119,6 +119,21 @@ describe('getRuntimeOwnedSshRelayState', () => {
   })
 })
 
+describe('getRuntimeOwnedSshRelayState: half-attached relays', () => {
+  // Why every provider counts: the relay serves PTY, git, and filesystem from one session,
+  // so a partial set is half-attached. Reporting it attached is what strands it — the owner
+  // skips the re-attach and nothing else redials, so the absent provider never comes back.
+  it.each([
+    ['git', () => mocks.getSshGitProvider.mockReturnValue(undefined)],
+    ['filesystem', () => mocks.getSshFilesystemProvider.mockReturnValue(undefined)],
+    ['PTY', () => mocks.getSshPtyProvider.mockReturnValue(undefined)]
+  ])('is detached, not attached, when only the %s provider is missing', (_label, absent) => {
+    mocks.getRegisteredSshState.mockReturnValue({ status: 'connected' })
+    absent()
+    expect(getRuntimeOwnedSshRelayState(TARGET_ID)).toBe('detached')
+  })
+})
+
 describe('reattachRuntimeOwnedSshTarget', () => {
   it('re-upserts the target row from the recipe result and dials it when detached', async () => {
     mocks.getRegisteredSshState.mockReturnValue(undefined)
@@ -167,6 +182,23 @@ describe('reattachRuntimeOwnedSshTarget', () => {
       return { targetId: TARGET_ID, status: 'connected' }
     })
     mocks.getSshPtyProvider.mockImplementation(() => (dialed ? {} : undefined))
+
+    await reattachRuntimeOwnedSshTarget(runtime)
+
+    expect(mocks.connectRegisteredSshTarget).toHaveBeenCalledWith(TARGET_ID)
+  })
+
+  it('repairs a half-attached relay whose PTY provider is present but git is missing', async () => {
+    // The reported shape: PTY present made the relay look attached, so the re-attach was
+    // skipped and every git operation kept failing on the missing provider.
+    mocks.getRegisteredSshState.mockReturnValue({ status: 'connected' })
+    mocks.getSshPtyProvider.mockReturnValue({})
+    let dialed = false
+    mocks.getSshGitProvider.mockImplementation(() => (dialed ? {} : undefined))
+    mocks.connectRegisteredSshTarget.mockImplementation(async () => {
+      dialed = true
+      return { targetId: TARGET_ID, status: 'connected' }
+    })
 
     await reattachRuntimeOwnedSshTarget(runtime)
 
