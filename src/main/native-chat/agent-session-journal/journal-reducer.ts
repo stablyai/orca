@@ -19,6 +19,7 @@ import {
 } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import type { JournalRow } from './journal-row-schema'
+import { JournalStatusProjection } from './journal-status-projection'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
@@ -30,6 +31,7 @@ export type JournalReducerState = {
   /** Lowest sequence still individually replayable; rows below it were compacted. */
   oldestSequence: number
   highestFence: number
+  statusProjection: JournalStatusProjection
   items: Map<string, AgentJournalRenderItem>
   /** Revision of a removed item, so a late lower revision cannot resurrect it. */
   tombstones: Map<string, number>
@@ -49,6 +51,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     lastActivityAt: 0,
     oldestSequence: 1,
     highestFence: 0,
+    statusProjection: new JournalStatusProjection(),
     items: new Map(),
     tombstones: new Map(),
     submissions: new Map(),
@@ -185,6 +188,7 @@ function upsertItem(
   }
   if (!existing) {
     state.items.set(itemId, next)
+    state.statusProjection.changed(next, itemId)
     state.tombstones.delete(itemId)
     return
   }
@@ -204,6 +208,7 @@ function upsertItem(
     sequence: existing.sequence,
     observedAt: existing.observedAt
   })
+  state.statusProjection.changed(state.items.get(itemId), itemId)
   state.tombstones.delete(itemId)
 }
 
@@ -218,6 +223,7 @@ function removeItem(state: JournalReducerState, itemId: string, revision: number
   }
   state.tombstones.set(itemId, revision)
   state.items.delete(itemId)
+  state.statusProjection.changed(undefined, itemId)
 }
 
 function applySubmission(

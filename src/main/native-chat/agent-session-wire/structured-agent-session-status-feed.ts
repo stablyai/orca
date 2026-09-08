@@ -116,7 +116,9 @@ export class StructuredAgentSessionStatusFeed {
     journal: AgentSessionJournal
   ): AgentSessionStatusSummary {
     // An unreadable journal projects as "no turn": the chat itself shows the reset.
-    const items = journal.isReadOnly ? [] : journal.snapshot().items
+    const projection = journal.isReadOnly
+      ? projectStructuredAgentSessionStatusSummary([])
+      : journal.statusSummary()
     const record = this.deps.getRecord(sessionId)
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
     // The journal has no model: the record's acknowledged options are where an owner
@@ -126,7 +128,7 @@ export class StructuredAgentSessionStatusFeed {
       sessionId,
       workspaceId: session.params.location.workspaceId,
       agent: session.params.provider,
-      ...projectStructuredAgentSessionStatusSummary(items),
+      ...projection,
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),
