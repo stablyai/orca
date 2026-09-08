@@ -133,7 +133,7 @@ export function WorktreeSymlinksSection({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
-              'When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.'
+              'When a new worktree is created, each path listed here is clone-copied when the filesystem supports it (APFS on macOS, reflink on Linux for btrfs, XFS and OpenZFS), otherwise symlinked from the primary checkout.'
             )}
           </p>
         </div>
