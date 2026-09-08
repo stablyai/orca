@@ -1,6 +1,7 @@
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { layoutContainsLeafId } from '../restoring-sessions/terminal-layout-normalization'
+import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 
 /**
  * Why a reattach can be ineligible. `not_durable` alone means memory already matched but the
@@ -56,12 +57,14 @@ export function evaluatePtyBindingFastLane(
   const tab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
     (candidate) => candidate.id === args.tabId
   )
+  const layout = session.terminalLayoutsByTabId?.[args.tabId]
   if (!tab) {
     misses.push('tab_missing')
-  } else if (tab.ptyId !== args.ptyId) {
+  } else if (
+    tab.ptyId !== tabRowPtyIdAfterLeafBinding(tab, layout?.ptyIdsByLeafId, args.leafId, args.ptyId)
+  ) {
     misses.push('tab_pty')
   }
-  const layout = session.terminalLayoutsByTabId?.[args.tabId]
   if (!layout || !layout.root) {
     misses.push('layout_missing')
   } else {

@@ -100,6 +100,33 @@ describe('evaluatePtyBindingFastLane', () => {
     ).toEqual(['tombstone'])
   })
 
+  it('accepts a sibling pane whose tab row names the first pane', () => {
+    const LEAF_B = '22222222-2222-4222-8222-222222222222'
+    const state = session({
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: LEAF },
+            second: { type: 'leaf', leafId: LEAF_B }
+          },
+          activeLeafId: LEAF_B,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF]: 'pty-1', [LEAF_B]: 'pty-2' }
+        }
+      }
+    })
+    expect(
+      evaluatePtyBindingFastLane(
+        { ...request, leafId: LEAF_B, ptyId: 'pty-2' },
+        state,
+        WORKTREE,
+        true
+      )
+    ).toEqual({ eligible: true, misses: [] })
+  })
+
   it('accepts a matching incarnation and a reconciled-to-same expected binding', () => {
     const state = session({ terminalPtyIncarnationsByPaneKey: { [paneKey]: 'a' } })
     expect(

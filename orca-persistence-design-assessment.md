@@ -16,8 +16,6 @@ The binding write now has one flush and rollback boundary. Session mutation does
 - Validation: 931 tests passed and one opt-in metadata benchmark skipped; a subsequent targeted run passed 80 tests, including SSH reattach and terminal-close continuity. Node typecheck, targeted lint, formatting, and whitespace checks passed.
 - Coverage: host partition behavior is tested for local, SSH, and paired runtimes; folder-workspace and binding-recovery tests are included in the persistence suite. PTY I/O, WSL process execution, platform launch policy, and wire formats are unchanged by the review fixes. No live platform matrix or before/after typing-latency measurement was collected.
 
-Concurrent edits began adding call-origin instrumentation after this validation. That work is separate from these review fixes; implementation descriptions below about omitted origin metadata need reconciliation when those edits settle.
-
 ## Problem
 
 Every terminal pane that mounts or remounts calls `Store.persistPtyBinding`, which clones the workspace session, mutates it, and calls `flushOrThrow`. The flush serializes the whole persisted state (9.2 MB on the measured install) on the Electron main thread, then compares its hash to the last written hash and usually skips the disk write. The serialization is paid whether or not the write happens.
@@ -38,19 +36,25 @@ The check runs after the four existing refusal checks (`expectedSourceBinding`, 
 
 All of the following must hold. Any miss falls through to the existing code unchanged.
 
-| Condition                                                                                                                            | Why                                                                                |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `args.expectedSourceBinding === undefined`                                                                                           | The split path always changes membership and arms the topology fence.              |
-| `isTerminalLeafId(args.leafId)`                                                                                                      | Legacy leaf ids take the early flush branch and never write layout state.          |
-| Tab exists in `session.tabsByWorktree[bindingWorktreeId]` with `tab.id === args.tabId` and `tab.ptyId === args.ptyId`                | Otherwise the call mints a tab.                                                    |
-| `session.terminalLayoutsByTabId[args.tabId]` exists, `layout.root` is non-null, and `layoutContainsLeafId(layout.root, args.leafId)` | Otherwise the call mints or splits the layout.                                     |
-| `layout.ptyIdsByLeafId?.[args.leafId] === args.ptyId`                                                                                | The load-bearing binding.                                                          |
-| `session.terminalPtyIncarnationsByPaneKey?.[paneKey] === args.incarnationId`                                                         | Strict equality: undefined on both sides is a match; undefined on one side is not. |
-| `args.expectedBinding === undefined \|\| args.expectedBinding.incarnationId === args.incarnationId`                                  | A reconciled incarnation must still bump the topology fence.                       |
-| `!session.terminalSurfaceTombstonesByPaneKey?.[paneKey]`                                                                             | A tombstone is cleared by the write path; it is state the call would change.       |
-| Binding is durable (next section)                                                                                                    | In-memory equality alone can match a binding still waiting in the debounced save.  |
+| Condition                                                                                                                                                             | Why                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `args.expectedSourceBinding === undefined`                                                                                                                            | The split path always changes membership and arms the topology fence.              |
+| `isTerminalLeafId(args.leafId)`                                                                                                                                       | Legacy leaf ids take the early flush branch and never write layout state.          |
+| Tab exists in `session.tabsByWorktree[bindingWorktreeId]` with `tab.id === args.tabId`, and `tab.ptyId` already equals what `tabRowPtyIdAfterLeafBinding` would write | Otherwise the call mints a tab or rewrites the row. See "The tab row" below.       |
+| `session.terminalLayoutsByTabId[args.tabId]` exists, `layout.root` is non-null, and `layoutContainsLeafId(layout.root, args.leafId)`                                  | Otherwise the call mints or splits the layout.                                     |
+| `layout.ptyIdsByLeafId?.[args.leafId] === args.ptyId`                                                                                                                 | The load-bearing binding.                                                          |
+| `session.terminalPtyIncarnationsByPaneKey?.[paneKey] === args.incarnationId`                                                                                          | Strict equality: undefined on both sides is a match; undefined on one side is not. |
+| `args.expectedBinding === undefined \|\| args.expectedBinding.incarnationId === args.incarnationId`                                                                   | A reconciled incarnation must still bump the topology fence.                       |
+| `!session.terminalSurfaceTombstonesByPaneKey?.[paneKey]`                                                                                                              | A tombstone is cleared by the write path; it is state the call would change.       |
+| Binding is durable (next section)                                                                                                                                     | In-memory equality alone can match a binding still waiting in the debounced save.  |
 
 When the predicate holds, `return true`. The `true` return matters: `persistAdmittedStablePaneBinding` in `src/main/ipc/pty/pane/stable-owner.ts` throws `terminal_pane_owner_changed` on `false`, and `spawn-commit-persist.ts` uses the `true` result to suppress its second binding write.
+
+### The tab row
+
+A tab row names one PTY, but a split tab holds several panes. The renderer keeps the row on the first pane and refuses to let later split-pane spawns steal it, because a remount reattaches the tab to whatever the row says. Until this change the main-process write path overwrote the row with whichever pane was binding, and the renderer's next session publish put the first pane back. On the dev profile that ping-pong was the sole reason all four reattach-shaped calls in the first 22-span capture fell through: they matched on layout, leaf PTY, and incarnation and missed only on `tab_pty`. On the real profile 310 of 1,424 terminal tabs are split, holding 674 of 1,764 panes, so 38% of remounts could never have hit the fast lane.
+
+`terminal-tab-pty-ownership.ts` holds the rule both sides now follow. The row is rewritten only when it names nothing useful: it is null, it points at the PTY this leaf is replacing, or it names a PTY no leaf of the layout holds. A sibling pane's bind leaves it alone. The predicate compares the row against what that rule would write, so a sibling reattach counts as a match. Every main-process reader of the row already falls back to the per-leaf map, so none depends on it naming the most recent pane. The two existing tests that pin a null row being filled stay valid.
 
 ### Durability check
 

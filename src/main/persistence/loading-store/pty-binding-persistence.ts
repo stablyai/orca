@@ -19,6 +19,7 @@ import { resolveHostId } from './session-host-partitions'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
 import { startPtyBindingSpan, type PtyBindingOrigin } from './pty-binding-span'
+import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
 
 type PtyBindingPersistenceOperationsRuntime = Pick<
   StoreRuntimeState,
@@ -188,7 +189,12 @@ function applyPtyBinding(
   const tabs = session.tabsByWorktree?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)
   if (tab) {
-    tab.ptyId = args.ptyId
+    tab.ptyId = tabRowPtyIdAfterLeafBinding(
+      tab,
+      session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId,
+      args.leafId,
+      args.ptyId
+    )
   } else {
     terminalMembershipChanged = true
     hostAdmittedTabCreated = args.hostAdmittedMembership === true

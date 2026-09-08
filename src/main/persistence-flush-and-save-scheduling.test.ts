@@ -14,7 +14,7 @@ import {
   makeRepo,
   makeTerminalTab
 } from './persistence-test-harness'
-import { TEST_LEAF_1 } from './persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../shared/constants'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import { _resetTracerForTests, setActiveSink } from './observability/tracer'
@@ -580,6 +580,40 @@ describe('Store', () => {
         expect(store.persistPtyBinding(refusal)).toBe(false)
       }
       expect(flushSpy).not.toHaveBeenCalled()
+    })
+
+    it('lets every pane of a split tab hit the fast lane', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(
+        boundSession({
+          terminalLayoutsByTabId: {
+            tab1: {
+              root: {
+                type: 'split',
+                direction: 'vertical',
+                first: { type: 'leaf', leafId: TEST_LEAF_1 },
+                second: { type: 'leaf', leafId: TEST_LEAF_2 }
+              },
+              activeLeafId: TEST_LEAF_2,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1', [TEST_LEAF_2]: 'pty-2' }
+            }
+          }
+        })
+      )
+      const sibling = { ...binding, leafId: TEST_LEAF_2, ptyId: 'pty-2' }
+      // First remount after a cold park: both panes reattach back to back.
+      expect(store.persistPtyBinding(binding)).toBe(true)
+      expect(store.persistPtyBinding(sibling)).toBe(true)
+      expect(store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]?.[0]?.ptyId).toBe('pty-1')
+      const flushSpy = vi.spyOn(store, 'flushOrThrow')
+
+      // Second remount: neither pane may rewrite the tab row, so neither flushes.
+      expect(store.persistPtyBinding(sibling)).toBe(true)
+      expect(store.persistPtyBinding(binding)).toBe(true)
+
+      expect(flushSpy).not.toHaveBeenCalled()
+      expect(store.getWorkspaceSession().tabsByWorktree?.[WORKTREE]?.[0]?.ptyId).toBe('pty-1')
     })
 
     it('resolves the SSH partition without re-pointing it', async () => {
