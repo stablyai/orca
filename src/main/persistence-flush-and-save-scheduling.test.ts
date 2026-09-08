@@ -424,21 +424,24 @@ describe('Store', () => {
       _resetTracerForTests()
     })
 
-    it('skips the clone and the flush when the binding is already durable', async () => {
-      const store = await createStore()
-      store.setWorkspaceSession(boundSession())
-      expect(store.persistPtyBinding(binding)).toBe(true)
-      const inoBefore = statSync(dataFile()).ino
-      const flushSpy = vi.spyOn(store, 'flushOrThrow')
-      const cloneSpy = vi.spyOn(globalThis, 'structuredClone')
+    it.each([undefined, 'ssh:ssh-1', 'runtime:runtime-1'])(
+      'skips the clone and the flush when the binding is already durable on %s',
+      async (hostId) => {
+        const store = await createStore()
+        store.setWorkspaceSession(boundSession(), hostId)
+        expect(store.persistPtyBinding(binding, hostId)).toBe(true)
+        const inoBefore = statSync(dataFile()).ino
+        const flushSpy = vi.spyOn(store, 'flushOrThrow')
+        const cloneSpy = vi.spyOn(globalThis, 'structuredClone')
 
-      expect(store.persistPtyBinding(binding)).toBe(true)
+        expect(store.persistPtyBinding(binding, hostId)).toBe(true)
 
-      expect(flushSpy).not.toHaveBeenCalled()
-      expect(cloneSpy).not.toHaveBeenCalled()
-      expect(statSync(dataFile()).ino).toBe(inoBefore)
-      cloneSpy.mockRestore()
-    })
+        expect(flushSpy).not.toHaveBeenCalled()
+        expect(cloneSpy).not.toHaveBeenCalled()
+        expect(statSync(dataFile()).ino).toBe(inoBefore)
+        cloneSpy.mockRestore()
+      }
+    )
 
     it('flushes while a save is pending, and the sync hash match makes the next call durable', async () => {
       const store = await createStore()
@@ -470,6 +473,25 @@ describe('Store', () => {
       expect(flushSpy).toHaveBeenCalledTimes(1)
       const persisted = readDataFile() as { workspaceSession: WorkspaceSessionState }
       expect(persisted.workspaceSession.terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe('b')
+    })
+
+    it('does not acknowledge an unpersisted binding published after the final flush', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      store.persistPtyBinding(binding)
+      await store.flushAsync()
+
+      const next = boundSession()
+      next.tabsByWorktree[WORKTREE][0].ptyId = 'pty-after-quit'
+      next.terminalLayoutsByTabId.tab1.ptyIdsByLeafId = { [TEST_LEAF_1]: 'pty-after-quit' }
+      store.setWorkspaceSession(next)
+      expect(store.getWorkspaceSession().tabsByWorktree[WORKTREE][0].ptyId).toBe('pty-after-quit')
+
+      expect(() => store.persistPtyBinding({ ...binding, ptyId: 'pty-after-quit' })).toThrow(
+        'Cannot synchronously flush after final persistence has started'
+      )
+      const persisted = readDataFile() as { workspaceSession: WorkspaceSessionState }
+      expect(persisted.workspaceSession.tabsByWorktree[WORKTREE][0].ptyId).toBe('pty-1')
     })
 
     it('treats an undefined incarnation against a recorded one as a miss', async () => {
@@ -617,7 +639,6 @@ describe('Store', () => {
       ])
       expect(spans[0]?.attributes['binding.eligible']).toBe(false)
       expect(spans[0]?.attributes['binding.misses']).toBe('not_durable')
-      expect(spans[0]?.attributes['binding.flushed']).toBe(true)
       expect(spans[1]?.attributes['binding.eligible']).toBe(true)
       expect(spans[1]?.attributes['binding.generation_gap']).toBe(0)
       expect(spans[1]?.attributes['binding.host']).toBe('local')

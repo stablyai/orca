@@ -43,9 +43,13 @@ export async function connectOrcaMainInspector(expectedPid, rendererId = 1) {
     }
     return result.result.value
   }
-  if ((await evaluateMain('process.pid')) !== expectedPid) {
+  try {
+    if ((await evaluateMain('process.pid')) !== expectedPid) {
+      throw new Error('Inspector belongs to a different main process')
+    }
+  } catch (error) {
     socket.close()
-    throw new Error('Inspector belongs to a different main process')
+    throw error
   }
   const contents = `process.getBuiltinModule('module').createRequire(process.execPath)('electron').webContents.fromId(${rendererId})`
   return {

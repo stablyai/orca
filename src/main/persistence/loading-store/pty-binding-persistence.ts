@@ -18,13 +18,14 @@ import type { SessionHostPartitionOperations } from './session-host-partitions'
 import { resolveHostId } from './session-host-partitions'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
-import { startPtyBindingSpan, type PtyBindingSpan } from './pty-binding-span'
+import { startPtyBindingSpan, type PtyBindingOrigin } from './pty-binding-span'
 
 type PtyBindingPersistenceOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'flushOrThrow'
   | 'lastDurableWriteGeneration'
   | 'pendingWrite'
+  | 'quitFlushStarted'
   | 'state'
   | 'writeGeneration'
   | 'writeTimer'
@@ -50,6 +51,8 @@ type PersistPtyBindingArgs = {
   mayCreate?: boolean
   /** Reattach must not revive a surface a prior build durably recorded as retired. */
   mayReviveRetiredSurface?: boolean
+  /** Span metadata only; see `PtyBindingOrigin`. The write path never reads it. */
+  origin?: PtyBindingOrigin
 }
 
 const ptyBindingPersistenceOperationsContext = Symbol('PtyBindingPersistenceOperations')
@@ -77,6 +80,7 @@ export class PtyBindingPersistenceOperations {
     const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
     const span = startPtyBindingSpan({
       hostKind: parseExecutionHostId(resolvedHostId)?.kind ?? 'local',
+      origin: args.origin ?? 'unknown',
       savePending: runtime.writeTimer !== null || runtime.pendingWrite !== null,
       generationGap: runtime.writeGeneration - runtime.lastDurableWriteGeneration
     })
@@ -84,13 +88,12 @@ export class PtyBindingPersistenceOperations {
       span.finish('refused')
       return false
     }
-    // Why: a remount of a parked pane re-asserts a binding that is already durable; the clone and
-    // the whole-document serialization in flushOrThrow are pure main-thread cost on that path.
+    // A durable reattach needs neither a session clone nor whole-state serialization.
     const verdict = evaluatePtyBindingFastLane(
       args,
       session,
       bindingWorktreeId,
-      runtime.lastDurableWriteGeneration >= runtime.writeGeneration
+      !runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
     )
     span.setEligibility(verdict)
     if (verdict.eligible) {
@@ -98,7 +101,7 @@ export class PtyBindingPersistenceOperations {
       return true
     }
     try {
-      writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey, span)
+      writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey)
     } catch (err) {
       span.finish('threw', err)
       throw err
@@ -114,16 +117,38 @@ function writePtyBinding(
   session: WorkspaceSessionState,
   resolvedHostId: ReturnType<typeof resolveHostId>,
   bindingWorktreeId: string,
-  paneKey: string,
-  span: PtyBindingSpan
+  paneKey: string
 ): void {
-  if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
-    owner[ptyBindingPersistenceOperationsContext].runtime.state.workspaceSessionsByHostId = {
-      ...owner[ptyBindingPersistenceOperationsContext].runtime.state.workspaceSessionsByHostId,
-      [resolvedHostId]: session
-    }
-  }
+  const runtime = owner[ptyBindingPersistenceOperationsContext].runtime
   const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+  try {
+    if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
+      runtime.state.workspaceSessionsByHostId = {
+        ...runtime.state.workspaceSessionsByHostId,
+        [resolvedHostId]: session
+      }
+    }
+    applyPtyBinding(args, session, bindingWorktreeId, paneKey)
+    runtime.flushOrThrow()
+  } catch (err) {
+    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+      runtime.state.workspaceSession = sessionBeforeBinding
+    } else {
+      runtime.state.workspaceSessionsByHostId = {
+        ...runtime.state.workspaceSessionsByHostId,
+        [resolvedHostId]: sessionBeforeBinding
+      }
+    }
+    throw err
+  }
+}
+
+function applyPtyBinding(
+  args: PersistPtyBindingArgs,
+  session: WorkspaceSessionState,
+  bindingWorktreeId: string,
+  paneKey: string
+): void {
   const reconciledIncarnation =
     args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
   let terminalMembershipChanged = false
@@ -146,17 +171,6 @@ function writePtyBinding(
     session.terminalTopologyRevisionByRepoId = {
       ...session.terminalTopologyRevisionByRepoId,
       [repoId]: currentRevision + 1
-    }
-  }
-  const restoreSession = (): void => {
-    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
-      owner[ptyBindingPersistenceOperationsContext].runtime.state.workspaceSession =
-        sessionBeforeBinding
-    } else {
-      owner[ptyBindingPersistenceOperationsContext].runtime.state.workspaceSessionsByHostId = {
-        ...owner[ptyBindingPersistenceOperationsContext].runtime.state.workspaceSessionsByHostId,
-        [resolvedHostId]: sessionBeforeBinding
-      }
     }
   }
   if (args.incarnationId) {
@@ -201,13 +215,6 @@ function writePtyBinding(
   if (!isTerminalLeafId(args.leafId)) {
     // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
     advanceTopologyFence()
-    span.setFlushed(true)
-    try {
-      owner[ptyBindingPersistenceOperationsContext].runtime.flushOrThrow()
-    } catch (err) {
-      restoreSession()
-      throw err
-    }
     return
   }
   const layout = session.terminalLayoutsByTabId?.[args.tabId]
@@ -250,13 +257,6 @@ function writePtyBinding(
     }
   }
   advanceTopologyFence()
-  span.setFlushed(true)
-  try {
-    owner[ptyBindingPersistenceOperationsContext].runtime.flushOrThrow()
-  } catch (err) {
-    restoreSession()
-    throw err
-  }
 }
 
 export function installPtyBindingPersistenceOperationsContext(

@@ -387,7 +387,8 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-renderer',
-      startupCwd: '/tmp'
+      startupCwd: '/tmp',
+      origin: 'spawn'
     })
   })
   it.each([

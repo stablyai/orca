@@ -2,7 +2,21 @@
 
 Date: September 7, 2026
 
-Status: Implementation spec for fix 1, revised after review, with a measurement section describing how eligibility is recorded on the user's machine. Fixes 2 and 3 are deferred with their constraints recorded at the end. No product code has been changed on this branch.
+Status: Fix 1 is implemented on this branch. This document describes its durability boundary and local measurements. Fixes 2 and 3 remain proposals; no live before/after validation of the implementation has been performed.
+
+## Review evidence (September 7)
+
+The review found a false durability acknowledgement after `flushAsync`: late session writes do not advance the generation once shutdown begins. The fast path now excludes `quitFlushStarted`, preserving the existing synchronous-flush error. A regression failed before that guard and passed afterward.
+
+The binding write now has one flush and rollback boundary. Session mutation does not depend on tracing. Trace sampling uses the existing recorder's decision hook without a per-call dropped flag or a separate flushed flag. Diagnostic scripts reuse one inspector connector and close it when process verification fails.
+
+- Invariant: `persistPtyBinding` cannot acknowledge an unpersisted late-shutdown binding; unchanged durable bindings avoid cloning and synchronous flushing.
+- Oracle: disk contents and the thrown shutdown error, plus zero clone/flush counts on repeated local, SSH, and runtime bindings.
+- Gates: the persistence suite and affected deterministic coverage from `terminal-session.explicit-close-retirement`; its live Electron journeys were not run.
+- Validation: 931 tests passed and one opt-in metadata benchmark skipped; a subsequent targeted run passed 80 tests, including SSH reattach and terminal-close continuity. Node typecheck, targeted lint, formatting, and whitespace checks passed.
+- Coverage: host partition behavior is tested for local, SSH, and paired runtimes; folder-workspace and binding-recovery tests are included in the persistence suite. PTY I/O, WSL process execution, platform launch policy, and wire formats are unchanged by the review fixes. No live platform matrix or before/after typing-latency measurement was collected.
+
+Concurrent edits began adding call-origin instrumentation after this validation. That work is separate from these review fixes; implementation descriptions below about omitted origin metadata need reconciliation when those edits settle.
 
 ## Problem
 
@@ -14,64 +28,64 @@ The trigger is the renderer's cold-park policy in `src/renderer/src/components/t
 
 ## Change
 
-Add an early return to `persistPtyBinding` in `src/main/persistence/loading-store/pty-binding-persistence.ts` that fires when the requested binding is already in memory and already on disk. Nothing is cloned and nothing is serialized on that path.
+The implementation adds an early return to `persistPtyBinding` in `src/main/persistence/loading-store/pty-binding-persistence.ts` that fires when the requested binding is already in memory and already on disk. Nothing is cloned and nothing is serialized on that path.
 
 ### Placement
 
-Insert after the four existing refusal checks (`expectedSourceBinding`, `expectedBinding`, `mayReviveRetiredSurface`, `mayCreate`) and before the non-local partition re-point and `cloneWorkspaceSessionState`. Refusal semantics stay exactly as they are: every `return false` today still returns `false` first.
+The check runs after the four existing refusal checks (`expectedSourceBinding`, `expectedBinding`, `mayReviveRetiredSurface`, `mayCreate`) and before the non-local partition re-point and `cloneWorkspaceSessionState`. Refusal semantics stay exactly as they are: every `return false` today still returns `false` first.
 
 ### No-op predicate
 
 All of the following must hold. Any miss falls through to the existing code unchanged.
 
-| Condition | Why |
-| --- | --- |
-| `args.expectedSourceBinding === undefined` | The split path always changes membership and arms the topology fence. |
-| `isTerminalLeafId(args.leafId)` | Legacy leaf ids take the early flush branch and never write layout state. |
-| Tab exists in `session.tabsByWorktree[bindingWorktreeId]` with `tab.id === args.tabId` and `tab.ptyId === args.ptyId` | Otherwise the call mints a tab. |
-| `session.terminalLayoutsByTabId[args.tabId]` exists, `layout.root` is non-null, and `layoutContainsLeafId(layout.root, args.leafId)` | Otherwise the call mints or splits the layout. |
-| `layout.ptyIdsByLeafId?.[args.leafId] === args.ptyId` | The load-bearing binding. |
-| `session.terminalPtyIncarnationsByPaneKey?.[paneKey] === args.incarnationId` | Strict equality: undefined on both sides is a match; undefined on one side is not. |
-| `args.expectedBinding === undefined \|\| args.expectedBinding.incarnationId === args.incarnationId` | A reconciled incarnation must still bump the topology fence. |
-| `!session.terminalSurfaceTombstonesByPaneKey?.[paneKey]` | A tombstone is cleared by the write path; it is state the call would change. |
-| Binding is durable (next section) | In-memory equality alone can match a binding still waiting in the debounced save. |
+| Condition                                                                                                                            | Why                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `args.expectedSourceBinding === undefined`                                                                                           | The split path always changes membership and arms the topology fence.              |
+| `isTerminalLeafId(args.leafId)`                                                                                                      | Legacy leaf ids take the early flush branch and never write layout state.          |
+| Tab exists in `session.tabsByWorktree[bindingWorktreeId]` with `tab.id === args.tabId` and `tab.ptyId === args.ptyId`                | Otherwise the call mints a tab.                                                    |
+| `session.terminalLayoutsByTabId[args.tabId]` exists, `layout.root` is non-null, and `layoutContainsLeafId(layout.root, args.leafId)` | Otherwise the call mints or splits the layout.                                     |
+| `layout.ptyIdsByLeafId?.[args.leafId] === args.ptyId`                                                                                | The load-bearing binding.                                                          |
+| `session.terminalPtyIncarnationsByPaneKey?.[paneKey] === args.incarnationId`                                                         | Strict equality: undefined on both sides is a match; undefined on one side is not. |
+| `args.expectedBinding === undefined \|\| args.expectedBinding.incarnationId === args.incarnationId`                                  | A reconciled incarnation must still bump the topology fence.                       |
+| `!session.terminalSurfaceTombstonesByPaneKey?.[paneKey]`                                                                             | A tombstone is cleared by the write path; it is state the call would change.       |
+| Binding is durable (next section)                                                                                                    | In-memory equality alone can match a binding still waiting in the debounced save.  |
 
 When the predicate holds, `return true`. The `true` return matters: `persistAdmittedStablePaneBinding` in `src/main/ipc/pty/pane/stable-owner.ts` throws `terminal_pane_owner_changed` on `false`, and `spawn-commit-persist.ts` uses the `true` result to suppress its second binding write.
 
 ### Durability check
 
 ```ts
-runtime.lastDurableWriteGeneration >= runtime.writeGeneration
+!runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
 ```
 
-`scheduleSave` bumps `writeGeneration` before it arms the timer. `writeToDiskAsync` raises `lastDurableWriteGeneration` after the file is durably renamed or proven byte-identical by the hash comparison. A scheduled, in-flight, or failed write therefore always leaves the durable generation behind, so no separate timer or in-flight check is needed.
+`scheduleSave` bumps `writeGeneration` before it arms the timer. `writeToDiskAsync` raises `lastDurableWriteGeneration` after the file is durably renamed or proven byte-identical by the hash comparison. A pending mutation leaves the durable generation behind. A synchronous flush can close that gap while an older async promise is still pending: it first removes the in-flight temporary file, so a parked async rename fails instead of overwriting the newer snapshot; if the rename already completed, the sync write wins. Thus no additional pending-write guard is needed. The existing async-write syscall test covers the parked-rename race.
 
-`writeToDiskSync` today raises the counter only after a real rename. On a hash match with `force` unset it returns without touching it, while `flushOrThrow` has already bumped `writeGeneration`. Left alone, every sync flush that nets to unchanged state parks the counter one behind and also clears the debounce timer, so nothing heals it until unrelated state schedules an async write. The fast path would fall through on the next reattach, hit the same hash match, and stay disabled. This change therefore includes a one-line fix in `writeToDiskSync`: on the unforced hash-match return, set `lastDurableWriteGeneration = max(lastDurableWriteGeneration, writeGeneration)`, mirroring the async branch. A matching hash means the file already holds this state, which is exactly what the counter records. The `force` path is excluded on purpose: it exists because an async rename may be racing past the generation check, so the file's contents are not yet proven.
+Before this change, `writeToDiskSync` raised the counter only after a real rename. On a hash match with `force` unset it returned without touching it, while `flushOrThrow` had already bumped `writeGeneration`. Left alone, every sync flush that nets to unchanged state parks the counter one behind and also clears the debounce timer, so nothing heals it until unrelated state schedules an async write. The fast path would fall through on the next reattach, hit the same hash match, and stay disabled. This change therefore includes a one-line fix in `writeToDiskSync`: on the unforced hash-match return, set `lastDurableWriteGeneration = max(lastDurableWriteGeneration, writeGeneration)`, mirroring the async branch. A matching hash means the file already holds this state, which is exactly what the counter records. The `force` path is excluded on purpose: it exists because an async rename may be racing past the generation check, so the file's contents are not yet proven.
 
-`PtyBindingPersistenceOperationsRuntime` is currently `Pick<StoreRuntimeState, 'flushOrThrow' | 'state'>`. Widen it to include `writeGeneration` and `lastDurableWriteGeneration`. No new tracking state is introduced.
+`PtyBindingPersistenceOperationsRuntime` reads the existing generation counters and quit state for eligibility, plus pending-write and timer state for trace metadata. No new durability tracking state is introduced.
 
-The check asks only whether this binding is on disk, not whether all state is. Unrelated dirty state keeps its own save and its own crash window; skipping this flush does not widen it.
+The generation check covers the entire persisted state. Unrelated scheduled changes also block the fast path until a successful save closes the generation gap. This is conservative: there is no separate binding durability cache.
 
-One behavior delta to name in the PR: a no-op reattach after the quit flush has started currently throws from `flushOrThrow` and `spawn-commit-persist.ts` tears down the fresh spawn. With the fast path it returns `true`. The binding is durable in that case, so the new result is the correct one.
+The fast path must preserve the persistence lifecycle: once the final quit flush has started, a matching binding still reaches the existing refusal to synchronously flush. Durable equality does not authorize a late binding acknowledgement during shutdown.
 
 ### Why the counter is trustworthy
 
 The counter would lie only if some code set a binding value to the requested value without bumping the generation, leaving memory matching while disk holds an older value. Every writer of binding values under `src/main` was enumerated for this spec, including writers that reach the fields through an alias rather than by property name:
 
-| Writer | Mutates live session? | Saves? |
-| --- | --- | --- |
-| `loading-store/pty-binding-persistence.ts` | Yes | `flushOrThrow` in the same call. |
-| `loading-store/workspace-session-terminal-binding-replay.ts` | No, the incoming replacement | Called only from `setWorkspaceSession` paths, which `scheduleSave`. |
-| `leasing-ssh-ptys/ssh-pty-binding-cleanup.ts` | Yes | Calls `scheduleSave` itself when any binding changed. Also only clears bindings to `null` or removes keys, which cannot match a request. |
-| `leasing-ssh-ptys/ssh-pty-pane-supersession.ts` | Via the cleanup module | `flush()` after. |
-| `ssh/ssh-target-id-migration.ts` | Yes, in place, through a `record` alias for `ptyIdsByLeafId` and directly on `tab.ptyId` | Sole caller `leasing-ssh-ptys/ssh-target-reassignment.ts` calls `scheduleSave` when anything changed. |
-| `runtime/runtime-terminal-orphan-session-adoption.ts` | No, a `structuredClone` | Result handed to `setWorkspaceSession`. |
-| `restoring-sessions/session-owner-removal.ts` | No | New session object handed to `setWorkspaceSession`. |
-| `tracking-repos/worktree-identity-migration.ts` | Yes, tombstone worktree ids | Caller in `metadata-lineage-operations.ts` calls `scheduleSave` when changed. |
-| `orca-profiles/profile-project-session-state.ts`, `profile-project-session-transfer.ts` | No, copies for transfer and removal | Results land through `setWorkspaceSession` or a state replace that saves. |
-| `runtime/mobile-session-layout-projection.ts` | No, a projection for the mobile client | Never persisted. |
-| `leasing-ssh-ptys/ssh-pty-lease-operations.ts` | Assigns `.ptyId` on a lease row, not a binding | Not a binding writer; listed because the ratchet regex matches it. |
-| Everything else outside `src/main/persistence` | Spreads into a new object and calls `setWorkspaceSession`; verified for every non-test `getWorkspaceSession` caller. | |
+| Writer                                                                                  | Mutates live session?                                                                                                | Saves?                                                                                                                                   |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `loading-store/pty-binding-persistence.ts`                                              | Yes                                                                                                                  | `flushOrThrow` in the same call.                                                                                                         |
+| `loading-store/workspace-session-terminal-binding-replay.ts`                            | No, the incoming replacement                                                                                         | Called only from `setWorkspaceSession` paths, which `scheduleSave`.                                                                      |
+| `leasing-ssh-ptys/ssh-pty-binding-cleanup.ts`                                           | Yes                                                                                                                  | Calls `scheduleSave` itself when any binding changed. Also only clears bindings to `null` or removes keys, which cannot match a request. |
+| `leasing-ssh-ptys/ssh-pty-pane-supersession.ts`                                         | Via the cleanup module                                                                                               | `flush()` after.                                                                                                                         |
+| `ssh/ssh-target-id-migration.ts`                                                        | Yes, in place, through a `record` alias for `ptyIdsByLeafId` and directly on `tab.ptyId`                             | Sole caller `leasing-ssh-ptys/ssh-target-reassignment.ts` calls `scheduleSave` when anything changed.                                    |
+| `runtime/runtime-terminal-orphan-session-adoption.ts`                                   | No, a `structuredClone`                                                                                              | Result handed to `setWorkspaceSession`.                                                                                                  |
+| `restoring-sessions/session-owner-removal.ts`                                           | No                                                                                                                   | New session object handed to `setWorkspaceSession`.                                                                                      |
+| `tracking-repos/worktree-identity-migration.ts`                                         | Yes, tombstone worktree ids                                                                                          | Caller in `metadata-lineage-operations.ts` calls `scheduleSave` when changed.                                                            |
+| `orca-profiles/profile-project-session-state.ts`, `profile-project-session-transfer.ts` | No, copies for transfer and removal                                                                                  | Results land through `setWorkspaceSession` or a state replace that saves.                                                                |
+| `runtime/mobile-session-layout-projection.ts`                                           | No, a projection for the mobile client                                                                               | Never persisted.                                                                                                                         |
+| `leasing-ssh-ptys/ssh-pty-lease-operations.ts`                                          | Assigns `.ptyId` on a lease row, not a binding                                                                       | Not a binding writer; listed because the ratchet regex matches it.                                                                       |
+| Everything else outside `src/main/persistence`                                          | Spreads into a new object and calls `setWorkspaceSession`; verified for every non-test `getWorkspaceSession` caller. |                                                                                                                                          |
 
 Other code mutates non-binding live state without a bump (SSH lease shutdown marking, lease tombstone retention, the deferred scrollback snapshot migration, load-time diff-comment relocation). None writes a binding value, so none can defeat this predicate. They are out of scope.
 
@@ -98,6 +112,7 @@ Keep the table above true without relying on memory. Add `src/main/persistence/l
   ```
 
   `ssh-pty-pane-supersession.ts` assigns no binding field itself and is not matched. Pin at the count the first run prints.
+
 - Failure message: "New writer of a terminal binding value. It must bump the persistence write generation (scheduleSave, flushOrThrow, or setWorkspaceSession) in the same operation, or persistPtyBinding's fast path can skip a flush it needed. See orca-persistence-design-assessment.md."
 
 The ratchet catches new files that name the fields. It cannot see a writer that reaches a binding record through an alias, as `ssh-target-id-migration.ts` does with its `record` parameter; that file is caught only because it also assigns `tab.ptyId` directly. The regex is therefore a tripwire for the common case, and the table above is the actual audit. A harness-wide serialization invariant or a frozen session view would defend a stronger property than the fast path needs and were considered and dropped.
@@ -122,84 +137,44 @@ The tests that actually execute `persistPtyBinding` are the ones built on a real
 
 Run `pnpm tc:node` and `pnpm test src/main/persistence-flush-and-save-scheduling.test.ts src/main/persistence/loading-store`, then the eleven real-store files above.
 
-See "Measuring the fast-lane rate" below for how eligibility is recorded on the user's machine so the rate can be sampled before the change lands and re-sampled at any later date.
+See "Measuring eligibility" below for how eligibility is recorded on the user's machine so the rate can be measured with this build.
 
 Then measure on the real install after a day of accumulated state, using the probe through the inspector connection in `config/scripts/orca-main-inspector-connection.mjs`:
 
 - Target: zero `buildStateToSave` calls whose stack includes `persistPtyBinding` during a sequence of workspace switches between parked workspaces, on calls the span recorded as `fast_lane`.
 - Then a typing capture with `config/scripts/capture-live-input-lag.mjs`. Report the keystroke queue-delay distribution before and after. Do not claim the lag is fixed from the persistence numbers alone; the unattributed remainder of the 117 ms needs its own capture.
 
-## Measuring the fast-lane rate
+## Measuring eligibility
 
-The inspector probe answers the question once, on one machine, with a debugger attached. The rate has to be sampled repeatedly: before the change to size it, after to confirm it, and months later when the parking policy or the renderer's write cadence moves. That needs a durable record on the user's machine, written by the app itself, readable without a debugger, and collectable in a diagnostic bundle.
+Each call emits a `persistence.pty-binding` span through the existing local trace sink. It records `binding.outcome` (`fast_lane`, `flushed`, `refused`, or `threw`), host kind (`local`, `ssh`, or `runtime`), save-pending state, and the generation gap at entry. Calls reaching the predicate also record `binding.eligible` and comma-separated `binding.misses`. Refused calls do not evaluate eligibility. `flushed` means the write path completed; it does not mean bytes changed or a rename was necessary.
 
-### Vehicle: a span in the existing trace sink
+The sink already provides rotation, consent gating, redaction, and diagnostic-bundle collection. No extra persistence file or network sink is introduced. The attributes contain no pane, PTY, worktree, path, or host identifiers.
 
-Do not add a file. The observability lane already has everything required: `startSpan` in `src/main/observability/tracer.ts` writes NDJSON to `main.trace.ndjson` under the logs directory, rotated at 10 MB × 10 files by `local-file-sink.ts`, redacted on serialization, gated by `resolveObservabilityConsent` so `ORCA_DIAGNOSTICS_DISABLED` and CI turn it off, and swept into the diagnostic bundle by `bundle.ts`. Persistence emits no spans today; this is the first.
+Successful fast-path spans have a budget of 200 per 60-second window. Further fast-path spans in that window are dropped; there is no separate sampling flag. Other outcomes are not budgeted. A saturated window therefore cannot supply an exact hit rate: report its count as a lower bound or exclude it from a rate calculation. The budget alone cannot reconstruct dropped calls.
 
-Emit one `persistence.pty-binding` span per `persistPtyBinding` call, opened at entry and ended in a `finally` so it covers the clone and the flush. `durationMs` comes for free. Attributes, all low-cardinality so nothing user-authored or host-identifying lands in the file:
+For an unsaturated window, report outcomes, eligibility among evaluated calls, the miss histogram, calls whose only miss is `not_durable`, and the time range covered. The generation gap is global, so `not_durable` can reflect unrelated dirty state as well as a pending binding write. Include duration totals to assess main-thread cost. Rotated logs and bundle size limits can truncate the available time range.
 
-| Attribute | Values | Why |
-| --- | --- | --- |
-| `binding.outcome` | `fast_lane`, `flushed`, `refused`, `threw` | The one field the rate is computed from. |
-| `binding.eligible` | boolean | The predicate's verdict, independent of whether the fast path is enabled. This is what makes phase 1 measurable before the code path exists. |
-| `binding.misses` | comma-joined subset of `split`, `legacy_leaf`, `tab_missing`, `tab_pty`, `layout_missing`, `leaf_absent`, `leaf_pty`, `incarnation`, `reconciled`, `tombstone`, `not_durable` | Why an ineligible call fell through. `not_durable` alone means the binding matched but a save was pending, which is the bucket that decides whether fix 1 is enough. |
-| `binding.save_pending` | boolean | `writeTimer !== null || pendingWrite !== null` at entry. |
-| `binding.generation_gap` | integer | `writeGeneration - lastDurableWriteGeneration` at entry. Zero is durable. |
-| `binding.origin` | `reattach`, `spawn`, `relay_reattach`, `split`, `unknown` | Who asked. Without it the rate is over all binds, and fresh spawns always flush, so the headline number understates the reattach rate. See the next section. |
-| `binding.host` | `local`, `ssh` | Partition kind only. Never the target id. |
-| `binding.flushed` | boolean | Whether `flushOrThrow` ran. |
-| `binding.serialized_bytes` | integer or absent | Payload size when a flush ran, for the cost side of the rate. Requires the flush to report it; if that plumbing is out of scope, omit the attribute rather than approximate it. |
+### Reattach hit rate
 
-No tab id, leaf id, PTY id, worktree id, or path. The pane key would let a reader correlate across spans but is not needed for a rate and is exactly the kind of identifier the redactor cannot recognize.
+`persistPtyBinding` cannot tell a fresh spawn from a warm remount: both arrive with a PTY id and an incarnation. Fresh spawns always flush, so a rate over all calls is diluted by however many terminals the user opened. Every caller does know, so each passes an optional `origin` in the args and the span records it as `binding.origin`:
 
-### The question the rate must answer
+| Call site                                               | Origin                                                           |
+| ------------------------------------------------------- | ---------------------------------------------------------------- |
+| `persistAdmittedStablePaneBinding` in `stable-owner.ts` | `result.isReattach === true` gives `reattach`, else `spawn`.     |
+| Unfenced write in `spawn-commit-persist.ts`             | Same rule.                                                       |
+| Unfenced write in `runtime/spawn-commit.ts`             | `split` when `expectedSourceBinding` is set, else the same rule. |
+| Reattach bind in `ssh-relay-session.ts`                 | `relay_reattach`.                                                |
+| Anything else                                           | `unknown`, the default.                                          |
 
-"What percentage of reattaches hit the fast lane" is the number that decides phase 2, and the span cannot compute it from its own inputs. `persistPtyBinding` does not know why it was called. A fresh spawn and a warm remount look identical inside the function: both carry a PTY id and an incarnation. Fresh spawns always fall through, so a rate over all binds is diluted by however many terminals the user opened, and a session with many new tabs would read as a poor fast-lane rate even if every reattach hit it.
+`origin` is span metadata only. `persistPtyBinding` does not branch on it, and the predicate and ratchet ignore it.
 
-The caller does know. Every site that reaches `persistPtyBinding` has the answer in hand:
+The headline is fast-lane spans divided by spans with `origin` in `{reattach, relay_reattach}`, reported with the per-origin split. The second number is the count of reattaches whose only miss is `not_durable`; if it dominates, the fast path is correct but a pending save is what blocks it, and the renderer's switch-time write cadence is the next target. `isReattach` means the provider reused a live PTY, so it does not separate a parking-policy remount from an app-restart reattach. Both count. Isolating the parking case would need the renderer to send a reason with the spawn request, which is out of scope.
 
-| Call site | Origin |
-| --- | --- |
-| `persistAdmittedStablePaneBinding` in `stable-owner.ts`, from both `spawn-commit-persist.ts` and `runtime/spawn-commit.ts` | `result.isReattach === true` gives `reattach`, else `spawn`. |
-| The unfenced second write in `spawn-commit-persist.ts` and `runtime/spawn-commit.ts` | Same `result.isReattach`. When `expectedSourceBinding` is set, `split`. |
-| `ssh-relay-session.ts` reattach bind | `relay_reattach` by construction. |
+A first read of 22 spans from the running dev instance, before `origin` existed, found zero fast-lane hits. Four calls at one timestamp were durable with a zero generation gap and matched on layout, leaf PTY, and incarnation, but every one missed on `tab_pty` alone: a tab row holds a single `ptyId` while a tab can hold several panes, so sibling panes in a multi-leaf tab overwrite each other's `tab.ptyId` on every remount and can never converge. That install has seven such tabs. Whether the `tab_pty` check should compare against the pane's own binding rather than the tab's last-written PTY is the open question the origin-tagged rate will size.
 
-Add an optional `origin` field to the `persistPtyBinding` args, typed as the union above, defaulting to `unknown`. It is metadata only: the function must not branch on it, and the ratchet and predicate ignore it. Each caller passes what it knows. The relay call is a single site; the stable-owner path is a single function that already receives `result`; the two unfenced writes each have `ctx.result` in scope.
+The implementation does not record serialized payload size or a `binding.flushed` boolean. The reader script and a separate instrumentation-only release are deferred.
 
-With that field, the reader computes the headline as fast-lane spans divided by spans with `origin` in `{reattach, relay_reattach}`, and reports the per-origin split alongside. A reattach that is ineligible only for `not_durable` is the second number to read; if it is large, phase 2 alone will not move the reattach rate.
-
-Note that `isReattach` reports whether the provider reused a live PTY, which is the same event as a pane remount reattaching to its daemon session. It does not distinguish a remount caused by the parking policy from one caused by an app restart. Both are reattaches and both should be counted; if the parking case specifically ever needs isolating, the renderer would have to send a reason with the spawn request, which is out of scope here.
-
-### Sampling
-
-Fast-lane hits are the frequent, cheap case and the one most likely to flood the file during a reattach storm. Reuse the budget pattern from `shouldRecordGitSpan` in `instrumentation.ts`: always record `flushed`, `refused`, and `threw`; record `fast_lane` up to a fixed budget per 60-second window, then drop. The rate is then computed from the flushed count and the sampled fast-lane count with the budget known, or more simply the budget is set high enough (200 per minute) that a real session never hits it and every call is recorded. Prefer the second; a span line is about 400 bytes, and a heavy switching session produces tens of binds per minute, not hundreds. State the budget as a constant next to the span so the reader script can detect saturation from a `sampled` attribute if it ever triggers.
-
-### Two phases, one predicate
-
-Write the predicate once, as a pure function that takes the args and the session and runtime counters and returns `{ eligible, misses }`. Phase 1 ships the span and calls the predicate only to populate `binding.eligible` and `binding.misses`; the call then proceeds exactly as today. Phase 2 adds the early return when `eligible` is true. The same test suite covers the predicate in both phases, and the phase 1 field is what the before-and-after comparison reads.
-
-Phase 1 is a pure instrumentation change with no behavior delta, so it can ship on its own release and accumulate a baseline across real installs before phase 2 is decided.
-
-### Reading it back
-
-Specify, do not yet build, a small reader under `config/scripts/` that takes a logs directory or a diagnostic bundle, walks the rotated `main.trace.ndjson` family via `listRotatedFiles`, filters spans by name, and prints:
-
-- calls, and the split by `binding.outcome`
-- **the headline: fast-lane count over reattach-origin count**, with the per-origin breakdown so a session heavy in fresh spawns is not misread
-- eligible count and rate over all binds, for the total main-thread picture
-- among ineligible, the count whose only miss is `not_durable`
-- miss histogram
-- main-thread milliseconds in eligible calls versus total, which is the ceiling phase 2 can reclaim
-- time range covered, so a 100 MB family is not mistaken for a day when it rolled over in an hour
-
-The same reader works on a bundle uploaded from a user's machine, which is how the rate gets sampled on installs that are not the developer's. Because the bundle collector keeps the newest spans first under its 4 MiB cap, a bundle from a long session may truncate; the reader prints the covered window so that is visible.
-
-### What this deliberately does not do
-
-- It does not record to `orca-stats.json`. That file is product usage stats with its own schema and UI; persistence timing does not belong there.
-- It does not use the `ORCA_MAIN_THREAD_DIAGNOSTICS` opt-in probe. That probe is off by default and measures timer lateness, not this call.
-- It does not ship to PostHog or any network sink. The trace lane is local-only unless the user submits a bundle.
+The inspector probe in `config/scripts/persistence-call-probe.mjs` remains a separate historical investigation tool: it records memory equality and call timings, not generation counters. Its captures alone cannot establish fast-path eligibility.
 
 ## Safety constraints
 
@@ -208,7 +183,6 @@ The same reader works on a bundle uploaded from a user's machine, which is how t
 - Do not change the return value or exception of `persistPtyBinding` for any input the fast path does not accept. The SSH relay reattach in `ssh-relay-session.ts` expires the lease on `false`.
 - Do not widen the fast path to the automation, lease, or layout-publish paths; they have their own semantics.
 - The `persistence.pty-binding` span carries no pane key, PTY id, worktree id, path, or SSH target id. If a future attribute needs an identifier, hash it or drop it.
-- The `origin` argument is metadata for the span only. `persistPtyBinding` must not branch on it.
 - Preserve host partition behavior: resolve the session for the requested host id and never assume local.
 - Keep all Windows, WSL, SSH, and relay coverage as it is; the change is host-agnostic and adds no platform branch.
 
