@@ -8466,7 +8466,7 @@
           "ab40b8a5f1": "Aucun résultat. Continuez à saisir pour ajouter un chemin personnalisé.",
           "4cd2a4c077": "Saisissez un chemin (ex. .env ou node_modules)…",
           "241325302c": "Ajouter un chemin",
-          "7ff265071d": "Lors de la création d'un nouveau worktree, chaque chemin listé ici est copié par clone quand le système de fichiers le permet (APFS sur macOS, reflink sur Linux pour btrfs, XFS et OpenZFS), sinon créé en lien symbolique depuis le checkout principal.",
+          "7ff265071d": "Lors de la création d'un nouveau worktree, chaque chemin listé ici est copié par clone quand le système de fichiers le permet (APFS clone-copy sur macOS ; reflink sur Linux pour btrfs, XFS et OpenZFS block cloning), sinon créé en lien symbolique depuis le checkout principal.",
           "4755f120b6": "Chemins partagés des worktrees",
           "b07ef5a8b6": "Chemins à matérialiser depuis le checkout principal vers les nouveaux worktrees.",
           "d72ba8dc68": "{{value0}} chemins",
