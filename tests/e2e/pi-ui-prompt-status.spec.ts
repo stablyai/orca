@@ -43,12 +43,21 @@ test('Pi modal hooks show the existing waiting-for-input indicator', async ({
     expect(response.status).toBe(204)
   }
 
-  const waiting = orcaPage.locator('[aria-label="Waiting for input"]')
+  // Terminal tabs present both waiting and blocked as "Needs attention".
+  const waiting = orcaPage.locator('[aria-label="Needs attention"]')
   await emit({ hook_event_name: 'before_agent_start', prompt: 'Pi modal status check' })
   await expect(orcaPage.locator('[aria-label="Working"]').first()).toBeVisible()
   await orcaPage.screenshot({ path: testInfo.outputPath('before-working.png') })
 
   await emit({ hook_event_name: 'ui_prompt_start', ui_prompt_active: true })
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(
+        (key) => window.__store?.getState().agentStatusByPaneKey[key]?.state,
+        paneKey
+      )
+    )
+    .toBe('waiting')
   await expect(waiting.first()).toBeVisible()
   await orcaPage.screenshot({ path: testInfo.outputPath('after-waiting.png') })
   await emit({ hook_event_name: 'tool_execution_end', tool_name: 'bash', ui_prompt_active: true })
