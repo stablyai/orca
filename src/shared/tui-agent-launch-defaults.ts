@@ -1,5 +1,10 @@
 import { isTuiAgent } from './tui-agent-config'
-import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
+import {
+  resolveAgentPermissionModeSummary,
+  type AgentPermissionMode,
+  YOLO_TUI_AGENT_ARGS,
+  YOLO_TUI_AGENT_ENV
+} from './tui-agent-permissions'
 import type { TuiAgent } from './tui-agent'
 
 const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
@@ -101,4 +106,14 @@ export function resolveTuiAgentLaunchEnv(
     return { ...configuredEnv[agent] }
   }
   return getTuiAgentDefaultEnv(agent)
+}
+
+export function resolveAgentLaunchPermissionModeSummary(args: {
+  agentDefaultArgs?: Partial<Record<TuiAgent, string>> | null
+  agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>> | null
+}): AgentPermissionMode {
+  return resolveAgentPermissionModeSummary({
+    agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS, ...args.agentDefaultArgs },
+    agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV, ...args.agentDefaultEnv }
+  })
 }

@@ -5541,7 +5541,14 @@
           "03e1a5081a": "{{value0}} 上",
           "25a41a9aad": "アクティブなサーバーにインストールされている Agent を再検出",
           "remoteDetectionFailed": "インストールされている Agent を検出できませんでした。ホストへの接続を確認して、もう一度お試しください。",
-          "retryDetection": "再試行"
+          "retryDetection": "再試行",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsModesDescription": "Manual は承認を求めます。Auto はAgentの保護付き承認モードを使用します。Auto 非対応のAgentは Manual を使用します。Yolo は権限チェックをスキップします。",
+          "agentPermissionsCustom": "カスタム設定です。プリセットを選択すると標準モードを更新します。カスタムの起動引数と環境変数の値は保持されます。",
+          "agentPermissionsPreserveCustom": "すべてのAgentに適用します。カスタムの起動引数と環境変数の値は保持されます。",
+          "agentPermissionsEditCustom": "カスタム設定です。権限プリセットを使用するには、以下の起動引数と環境変数を編集またはリセットしてください。",
+          "collapseLaunchSettings": "起動設定を折りたたむ",
+          "expandLaunchSettings": "起動設定を展開"
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -7810,10 +7817,12 @@
             "a79d266f71": "セッション",
             "afbf35be68": "安定したセッション",
             "agentPermissions": "Agent の権限",
-            "agentPermissionsDescription": "Agent の権限の既定値を Yolo と Manual で切り替えます。",
+            "agentPermissionsDescription": "Agentの既定の権限を Manual、Auto、Yolo から選択します。",
             "agentRuntime": "Agent のランタイム",
-            "agentRuntimeDescription": "デフォルトで Agent を Windows または WSL のどちらで検出および起動するかを選択します。"
-          }
+            "agentRuntimeDescription": "デフォルトで Agent を Windows または WSL のどちらで検出および起動するかを選択します。",
+            "auto": "自動"
+          },
+          "agentSettingsServerChanged": "アクティブなサーバーが変更されました。Agent 設定の変更を再試行してください。"
         },
         "appearance": {
           "search": {

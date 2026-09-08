@@ -101,10 +101,10 @@ export function AgentDefaultArgsInput({
               event.currentTarget.blur()
             }
           }}
-          placeholder={
-            defaultArgs ||
-            translate('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
-          }
+          placeholder={translate(
+            'auto.components.settings.AgentsPane.6f99bf5dd0',
+            'No default arguments'
+          )}
           spellCheck={false}
           className="h-7 flex-1 font-mono text-xs"
         />
@@ -175,10 +175,10 @@ export function AgentDefaultEnvInput({
               event.currentTarget.blur()
             }
           }}
-          placeholder={
-            defaultEnvText ||
-            translate('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
-          }
+          placeholder={translate(
+            'auto.components.settings.AgentsPane.2d133152fa',
+            'No default environment'
+          )}
           spellCheck={false}
           aria-invalid={envDraftTooLarge || undefined}
           aria-describedby={envDraftTooLarge ? envDraftErrorId : undefined}

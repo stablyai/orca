@@ -1,3 +1,4 @@
+import { resolveAgentLaunchPermissionModeSummary } from '../../../../shared/tui-agent-launch-defaults'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
@@ -12,7 +13,7 @@ import { STEPS } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
 import { translate } from '@/i18n/i18n'
-import { resolveAgentPermissionModeSummary } from '../../../../shared/tui-agent-permissions'
+import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import {
   isSkippedStepIndex,
@@ -32,7 +33,7 @@ export function useOnboardingFlow(
   onOnboardingChange: (state: OnboardingState) => void
 ) {
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateSettings = useAppStore((s) => s.updateSettingsOrThrow)
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const isDetectingAgents = useAppStore((s) => s.isDetectingAgents || s.isRefreshingAgents)
@@ -66,12 +67,16 @@ export function useOnboardingFlow(
       ? settings.defaultTuiAgent
       : null
   )
-  const [yoloPermissions, setYoloPermissions] = useState(
-    resolveAgentPermissionModeSummary({
+  const [permissionModeSelection, setPermissionModeSelection] = useState<Exclude<
+    AgentPermissionMode,
+    'mixed'
+  > | null>(null)
+  const permissionMode =
+    permissionModeSelection ??
+    resolveAgentLaunchPermissionModeSummary({
       agentDefaultArgs: settings?.agentDefaultArgs,
       agentDefaultEnv: settings?.agentDefaultEnv
-    }) !== 'manual'
-  )
+    })
   // Why: hydrate theme from saved settings so users who already chose one see it preselected.
   const [theme, setTheme] = useState<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
@@ -80,7 +85,6 @@ export function useOnboardingFlow(
   // Why: settings hydrate async after the lazy initializers run; re-sync once before commit unless the user edited the field.
   const themeInteractedRef = useRef(false)
   const agentInteractedRef = useRef(false)
-  const yoloPermissionsInteractedRef = useRef(false)
   const [settingsHydrated, setSettingsHydrated] = useState(settings != null)
   const settingsHydration = resolveOnboardingSettingsHydration({
     settings,
@@ -99,17 +103,6 @@ export function useOnboardingFlow(
       setSelectedAgent(settingsHydration.selectedAgent)
     }
   }
-  if (settings && !yoloPermissionsInteractedRef.current) {
-    const nextYoloPermissions =
-      resolveAgentPermissionModeSummary({
-        agentDefaultArgs: settings.agentDefaultArgs,
-        agentDefaultEnv: settings.agentDefaultEnv
-      }) !== 'manual'
-    if (nextYoloPermissions !== yoloPermissions) {
-      setYoloPermissions(nextYoloPermissions)
-    }
-  }
-
   // Why: track interaction so async settings hydration doesn't overwrite a value the user chose.
   const setThemeInteractive = useCallback((value: GlobalSettings['theme']) => {
     themeInteractedRef.current = true
@@ -152,11 +145,6 @@ export function useOnboardingFlow(
     },
     []
   )
-  const setYoloPermissionsInteractive = useCallback((enabled: boolean) => {
-    yoloPermissionsInteractedRef.current = true
-    setYoloPermissions(enabled)
-  }, [])
-
   const detectedSet = useMemo(() => new Set(detectedAgentIds ?? []), [detectedAgentIds])
   const currentStep = STEPS[stepIndex]
   // Why: the stepper shows only steps the user will land on; skipped optional steps are dropped, not rendered as dead dots.
@@ -278,7 +266,7 @@ export function useOnboardingFlow(
   const persistCurrentStep = usePersistCurrentStep({
     currentStepId: currentStep.id,
     selectedAgent,
-    yoloPermissions,
+    permissionModeSelection,
     theme,
     settings,
     updateSettings,
@@ -318,8 +306,8 @@ export function useOnboardingFlow(
     currentStep,
     selectedAgent,
     setSelectedAgent: setSelectedAgentInteractive,
-    yoloPermissions,
-    setYoloPermissions: setYoloPermissionsInteractive,
+    permissionMode,
+    setPermissionMode: setPermissionModeSelection,
     theme,
     setTheme: setThemeInteractive,
     busyLabel,

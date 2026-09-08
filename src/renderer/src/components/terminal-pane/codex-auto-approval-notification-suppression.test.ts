@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
+import { AUTO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
 import { createTestStore, makeTab } from '../../store/slices/store-test-helpers'
 import type { AppState } from '../../store/types'
 import {
@@ -101,6 +101,28 @@ describe('Codex auto-approval status suppression', () => {
       )
     ).toBe(false)
   })
+
+  it.each(['waiting', 'blocked'] as const)(
+    'preserves Auto %s attention, including user questions',
+    (state) => {
+      registerCodexLaunchConfig({ agentArgs: AUTO_TUI_AGENT_ARGS.codex ?? '', launchToken })
+      for (const toolName of [undefined, 'request_user_input']) {
+        expect(
+          shouldSuppressCodexAutoApprovalStatus(
+            { state, prompt: 'needs attention', agentType: 'codex', toolName },
+            { paneKey, tabId: 'tab-1', launchToken }
+          )
+        ).toBe(false)
+      }
+      expect(
+        shouldSuppressCodexAutoApprovalSyntheticTitle('Codex - action required', {
+          paneKey,
+          tabId: 'tab-1',
+          launchToken
+        })
+      ).toBe(false)
+    }
+  )
 
   it('preserves manual Codex permission attention', () => {
     registerCodexLaunchConfig({ agentArgs: '', launchToken })

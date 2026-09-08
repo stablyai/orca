@@ -6582,7 +6582,14 @@
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
-          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsModesDescription": "Manual asks for approval. Auto uses the agent’s guarded approval mode; agents without Auto use Manual. Yolo skips permission checks.",
+          "agentPermissionsCustom": "Custom configuration. Choose a preset to update standard modes; custom launch arguments and environment values are preserved.",
+          "agentPermissionsPreserveCustom": "Applies to all agents. Custom launch arguments and environment values are preserved.",
+          "agentPermissionsEditCustom": "Custom configuration. Edit or reset the launch arguments and environment below to use a permission preset.",
+          "collapseLaunchSettings": "Collapse launch settings",
+          "expandLaunchSettings": "Expand launch settings"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -8943,7 +8950,7 @@
             "a79d266f71": "session",
             "afbf35be68": "stable session",
             "agentPermissions": "Agent Permissions",
-            "agentPermissionsDescription": "Switch agent permission defaults between Yolo and Manual.",
+            "agentPermissionsDescription": "Switch agent permission defaults between Manual, Auto, and Yolo.",
             "agentRuntime": "Agent Runtime",
             "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default.",
             "runtime": "runtime",
@@ -8954,8 +8961,10 @@
             "yolo": "yolo",
             "manual": "manual",
             "skip": "skip",
-            "checks": "checks"
-          }
+            "checks": "checks",
+            "auto": "auto"
+          },
+          "agentSettingsServerChanged": "The active server changed. Retry the agent settings change."
         },
         "appearance": {
           "search": {

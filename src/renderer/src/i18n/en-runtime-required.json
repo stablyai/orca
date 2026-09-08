@@ -645,6 +645,11 @@
         }
       },
       "onboarding": {
+        "AgentStep": {
+          "yoloPermissionsInfo": "Agent permission info",
+          "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
+        },
         "IntegrationsStep": {
           "93f0c49ad1": "not-authenticated",
           "a3bcf13694": "connected",
@@ -1085,8 +1090,13 @@
         },
         "AgentsPane": {
           "9b175d0f5e": "Pre-selected agent when opening a new workspace.",
+          "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
+          "agentPermissionsInfo": "Agent permissions info",
+          "agentPermissionsTooltip": "Doesn't apply to agents where you've overridden launch arguments.",
           "c8794e622e": "Detected",
+          "cea7d97be1": "Collapse command override",
           "db9e9e5887": "Customize command",
+          "dc4a2ffdc0": "Expand command override",
           "df123171d1": "Not installed"
         },
         "AppearancePane": {

@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Check, ExternalLink, Info } from 'lucide-react'
+import { Check, ExternalLink } from 'lucide-react'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { AgentPermissionsSetting } from '../settings/AgentPermissionsSetting'
+import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 
@@ -18,8 +18,8 @@ type AgentStepProps = {
   onSelect: (agent: TuiAgent, fromCollapsedSection: boolean) => void
   detectedSet: Set<TuiAgent>
   isDetecting: boolean
-  yoloPermissions?: boolean
-  onYoloPermissionsChange?: (enabled: boolean) => void
+  permissionMode?: AgentPermissionMode
+  onPermissionModeChange?: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
 }
 
 function useAgentGridScrollMaxHeight(
@@ -64,8 +64,8 @@ export function AgentStep({
   onSelect,
   detectedSet,
   isDetecting,
-  yoloPermissions = true,
-  onYoloPermissionsChange
+  permissionMode,
+  onPermissionModeChange
 }: AgentStepProps) {
   const agentCatalog = getAgentCatalog()
   const detected = agentCatalog.filter((agent) => detectedSet.has(agent.id))
@@ -190,62 +190,12 @@ export function AgentStep({
           </div>
         </div>
       </section>
-      <YoloPermissionsControl
-        yoloPermissions={yoloPermissions}
-        onYoloPermissionsChange={onYoloPermissionsChange}
-      />
+      {permissionMode && onPermissionModeChange && (
+        <div className="mt-auto shrink-0 rounded-lg border border-border bg-muted/25 px-4 py-3">
+          <AgentPermissionsSetting mode={permissionMode} onChange={onPermissionModeChange} />
+        </div>
+      )}
     </div>
-  )
-}
-
-function YoloPermissionsControl({
-  yoloPermissions,
-  onYoloPermissionsChange
-}: {
-  yoloPermissions: boolean
-  onYoloPermissionsChange?: (enabled: boolean) => void
-}): React.JSX.Element {
-  return (
-    <label className="mt-auto flex shrink-0 cursor-pointer items-center justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3 transition-colors hover:bg-muted/40">
-      <span className="flex min-w-0 items-center gap-3">
-        <Checkbox
-          checked={yoloPermissions}
-          onCheckedChange={(checked) => onYoloPermissionsChange?.(checked === true)}
-          className="border-border bg-card data-[state=checked]:border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-          aria-label={translate(
-            'auto.components.onboarding.AgentStep.yoloPermissionsLabel',
-            'Yolo / Dangerously skip permissions'
-          )}
-        />
-        <span className="min-w-0 text-sm font-medium text-foreground">
-          {translate(
-            'auto.components.onboarding.AgentStep.yoloPermissionsLabel',
-            'Yolo / Dangerously skip permissions'
-          )}
-        </span>
-      </span>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            aria-label={translate(
-              'auto.components.onboarding.AgentStep.yoloPermissionsInfo',
-              'Agent permission info'
-            )}
-            onPointerDown={(event) => event.preventDefault()}
-            className="grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <Info className="size-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={6} style={{ zIndex: 120 }}>
-          {translate(
-            'auto.components.onboarding.AgentStep.yoloPermissionsTooltip',
-            'Skip permission checks for agents for less interruptions'
-          )}
-        </TooltipContent>
-      </Tooltip>
-    </label>
   )
 }
 

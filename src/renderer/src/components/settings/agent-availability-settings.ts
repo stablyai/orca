@@ -1,3 +1,4 @@
+import { createAgentSettingsUpdateQueue } from './agent-settings-update-queue'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
@@ -31,17 +32,12 @@ export function buildAgentAvailabilitySettingsUpdate(
 export function createAgentAvailabilityUpdateQueue(): (
   options: AgentAvailabilityUpdateQueueOptions
 ) => Promise<void> {
-  let pendingUpdate: Promise<unknown> = Promise.resolve()
-
-  return ({ getSettings, fallbackSettings, updateSettings, agentId, enabled }) => {
-    // Why: serialize full-array replacements so each write sees the reconciled store.
-    pendingUpdate = pendingUpdate
-      .catch(() => {})
-      .then(() =>
-        updateSettings(
-          buildAgentAvailabilitySettingsUpdate(getSettings() ?? fallbackSettings, agentId, enabled)
-        )
-      )
-    return pendingUpdate.then(() => undefined)
-  }
+  const enqueue = createAgentSettingsUpdateQueue()
+  return ({ getSettings, fallbackSettings, updateSettings, agentId, enabled }) =>
+    enqueue({
+      getSettings,
+      fallbackSettings,
+      updateSettings,
+      buildUpdate: (settings) => buildAgentAvailabilitySettingsUpdate(settings, agentId, enabled)
+    })
 }

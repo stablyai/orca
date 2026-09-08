@@ -6298,7 +6298,14 @@
           "codexSessionSourceInfo": "À propos de l'import de l'historique Codex",
           "codexSessionSourceTooltip": "Orca exécute Codex dans un home isolé. Pointez ceci vers votre home Codex existant pour en importer l'historique de sessions. Si vide, ~/.codex est utilisé.",
           "storedDefaultUndetected": "Enregistré par défaut, mais non détecté actuellement",
-          "noAgentsDetected": "Aucun agent détecté. Si un agent est installé, la détection a peut-être expiré."
+          "noAgentsDetected": "Aucun agent détecté. Si un agent est installé, la détection a peut-être expiré.",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsModesDescription": "Manual demande une approbation. Auto utilise le mode d’approbation protégé de l’agent ; les agents sans Auto utilisent Manual. Yolo ignore les vérifications de permissions.",
+          "agentPermissionsCustom": "Configuration personnalisée. Choisissez un préréglage pour modifier les modes standard ; les arguments de lancement et les valeurs d’environnement personnalisés sont conservés.",
+          "agentPermissionsPreserveCustom": "S’applique à tous les agents. Les arguments de lancement et les valeurs d’environnement personnalisés sont conservés.",
+          "agentPermissionsEditCustom": "Configuration personnalisée. Modifiez ou réinitialisez les arguments de lancement et l’environnement ci-dessous pour utiliser un préréglage de permissions.",
+          "collapseLaunchSettings": "Réduire les paramètres de lancement",
+          "expandLaunchSettings": "Développer les paramètres de lancement"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icône suivante",
@@ -8629,10 +8636,12 @@
             "a79d266f71": "session",
             "afbf35be68": "session stable",
             "agentPermissions": "Permissions des agents",
-            "agentPermissionsDescription": "Basculer les autorisations d'agent par défaut entre Yolo et Manuelle.",
+            "agentPermissionsDescription": "Choisissez les permissions par défaut des agents : Manual, Auto ou Yolo.",
             "agentRuntime": "Runtime des agents",
-            "agentRuntimeDescription": "Choisissez si les agents sont détectés et lancés par défaut sous Windows ou dans WSL."
-          }
+            "agentRuntimeDescription": "Choisissez si les agents sont détectés et lancés par défaut sous Windows ou dans WSL.",
+            "auto": "automatique"
+          },
+          "agentSettingsServerChanged": "Le serveur actif a changé. Réessayez de modifier les paramètres de l’agent."
         },
         "appearance": {
           "search": {

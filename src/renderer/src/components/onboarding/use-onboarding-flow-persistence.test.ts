@@ -3,7 +3,7 @@
 import { createElement, useEffect, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultOnboardingState } from '../../../../shared/constants'
+import { getDefaultOnboardingState, getDefaultSettings } from '../../../../shared/constants'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 
 const trackMock = vi.hoisted(() => vi.fn())
@@ -16,6 +16,7 @@ import {
   buildCompletedOnboardingNotificationSettings,
   buildOnboardingDismissedPayload,
   useCloseWith,
+  usePersistCurrentStep,
   type DismissedExtras,
   trackOnboardingDismissed
 } from './use-onboarding-flow-persistence'
@@ -88,6 +89,85 @@ describe('onboarding flow persistence', () => {
     root = null
     container = null
     vi.useRealTimers()
+  })
+
+  it.each([null, 'auto'] as const)(
+    'preserves permissions unless a preset is explicitly selected (%s)',
+    async (selection) => {
+      const settings = getDefaultSettings('/tmp')
+      settings.agentDefaultArgs = {
+        ...settings.agentDefaultArgs,
+        claude: '',
+        codex: '--model custom'
+      }
+      const updateSettings = vi.fn()
+      let persist: (() => Promise<{ ok: boolean }>) | undefined
+      function Probe(): null {
+        persist = usePersistCurrentStep({
+          currentStepId: 'agent',
+          selectedAgent: 'claude',
+          permissionModeSelection: selection,
+          theme: settings.theme,
+          settings,
+          updateSettings,
+          onboardingChecklist: getDefaultOnboardingState().checklist,
+          onOnboardingChange: vi.fn(),
+          setError: vi.fn()
+        })
+        return null
+      }
+      container = document.createElement('div')
+      root = createRoot(container)
+      act(() => root?.render(createElement(Probe)))
+      await act(async () => {
+        await persist?.()
+      })
+      const update = updateSettings.mock.calls[0][0]
+      if (selection === null) {
+        expect(update).toEqual({ defaultTuiAgent: 'claude' })
+      } else {
+        expect(update.agentDefaultArgs.claude).toBe('--permission-mode auto')
+        expect(update.agentDefaultArgs.codex).toBe('--model custom')
+        expect(update.agentDefaultArgs.aider).toBe('')
+      }
+    }
+  )
+
+  it('does not advance onboarding when saving Auto fails and permits a retry', async () => {
+    const updateSettings = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection lost'))
+      .mockResolvedValue(undefined)
+    const onOnboardingChange = vi.fn()
+    const setError = vi.fn()
+    let persist: (() => Promise<{ ok: boolean }>) | undefined
+    function Probe() {
+      persist = usePersistCurrentStep({
+        currentStepId: 'agent',
+        selectedAgent: 'claude',
+        permissionModeSelection: 'auto',
+        theme: 'dark',
+        settings: getDefaultSettings('test-home'),
+        updateSettings,
+        onboardingChecklist: getDefaultOnboardingState().checklist,
+        onOnboardingChange,
+        setError
+      })
+      return null
+    }
+    container = document.createElement('div')
+    root = createRoot(container)
+    act(() => root?.render(createElement(Probe)))
+    await act(async () => {
+      expect(await persist?.()).toEqual({ ok: false })
+    })
+    expect(window.api.onboarding.update).not.toHaveBeenCalled()
+    expect(onOnboardingChange).not.toHaveBeenCalled()
+    expect(setError).toHaveBeenCalledWith('connection lost')
+    await act(async () => {
+      expect(await persist?.()).toEqual({ ok: true })
+    })
+    expect(window.api.onboarding.update).toHaveBeenCalledTimes(1)
   })
 
   it('builds dismissed telemetry with the triggering advance path', () => {

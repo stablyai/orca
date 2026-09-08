@@ -5556,7 +5556,14 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsModesDescription": "Manual pide aprobación. Auto usa el modo de aprobación protegido del agente; los agentes sin Auto usan Manual. Yolo omite las comprobaciones de permisos.",
+          "agentPermissionsCustom": "Configuración personalizada. Elige un ajuste para actualizar los modos estándar; se conservan los argumentos de inicio y las variables de entorno personalizados.",
+          "agentPermissionsPreserveCustom": "Se aplica a todos los agentes. Se conservan los argumentos de inicio y las variables de entorno personalizados.",
+          "agentPermissionsEditCustom": "Configuración personalizada. Edita o restablece los argumentos de inicio y el entorno de abajo para usar un ajuste de permisos.",
+          "collapseLaunchSettings": "Contraer ajustes de inicio",
+          "expandLaunchSettings": "Expandir ajustes de inicio"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -7788,10 +7795,12 @@
             "a79d266f71": "sesión",
             "afbf35be68": "sesión estable",
             "agentPermissions": "Permisos de agentes",
-            "agentPermissionsDescription": "Cambia los permisos predeterminados de los agentes entre Yolo y Manual.",
+            "agentPermissionsDescription": "Cambia los permisos predeterminados de los agentes entre Manual, Auto y Yolo.",
             "agentRuntime": "Runtime del agente",
-            "agentRuntimeDescription": "Elige si los agentes se detectan y ejecutan en Windows o en WSL de forma predeterminada."
-          }
+            "agentRuntimeDescription": "Elige si los agentes se detectan y ejecutan en Windows o en WSL de forma predeterminada.",
+            "auto": "automático"
+          },
+          "agentSettingsServerChanged": "El servidor activo ha cambiado. Vuelve a intentar cambiar la configuración del agente."
         },
         "appearance": {
           "search": {

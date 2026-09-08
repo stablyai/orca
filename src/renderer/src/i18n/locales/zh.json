@@ -5607,7 +5607,14 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "重新检测活动服务器上安装的智能体",
           "remoteDetectionFailed": "无法检测已安装的智能体。请检查主机连接后重试。",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsModesDescription": "Manual 会请求批准。Auto 使用智能体带保护机制的审批模式；不支持 Auto 的智能体使用 Manual。Yolo 会跳过权限检查。",
+          "agentPermissionsCustom": "自定义配置。选择预设以更新标准模式；自定义启动参数和环境变量值会保留。",
+          "agentPermissionsPreserveCustom": "应用于所有智能体。自定义启动参数和环境变量值会保留。",
+          "agentPermissionsEditCustom": "自定义配置。编辑或重置下方的启动参数和环境变量以使用权限预设。",
+          "collapseLaunchSettings": "收起启动设置",
+          "expandLaunchSettings": "展开启动设置"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -7843,10 +7850,12 @@
             "a79d266f71": "会话",
             "afbf35be68": "稳定会话",
             "agentPermissions": "智能体权限",
-            "agentPermissionsDescription": "在 Yolo 和手动之间切换智能体权限默认值。",
+            "agentPermissionsDescription": "在 Manual、Auto 和 Yolo 之间切换智能体的默认权限。",
             "agentRuntime": "智能体运行时",
-            "agentRuntimeDescription": "选择默认在 Windows 还是 WSL 中检测并启动智能体。"
-          }
+            "agentRuntimeDescription": "选择默认在 Windows 还是 WSL 中检测并启动智能体。",
+            "auto": "自动"
+          },
+          "agentSettingsServerChanged": "活动服务器已更改。请重试更改代理设置。"
         },
         "appearance": {
           "search": {

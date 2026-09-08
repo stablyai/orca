@@ -247,3 +247,17 @@ predicate. It is unobservable today — the host publishes neither field for a c
 all, so a mirror has nothing to take either way. If the capability-gated publish this section
 anticipates ever lands, narrow them the same way rather than by placement kind: a mirror should
 take a failure it cannot otherwise see, and only the hosting client should refuse it.
+
+## Auto permission presets on paired settings
+
+`settings.agent-permission-auto.v1` identifies clients that understand Auto launch
+argument and environment presets. New hosts project those presets as manual in every
+settings response to older clients: their onboarding otherwise treats Auto as a custom
+mixed profile and can apply bypass to the remaining harnesses. When the host contains
+an Auto preset, unchanged legacy permission-map roundtrips are ignored, and changed
+permission maps are rejected with a client-upgrade message. Unrelated settings remain
+editable. Capable clients receive and edit the actual presets.
+
+New clients can store Auto presets on older hosts because their existing argument and
+environment normalizers preserve these strings. Such hosts cannot protect the profile
+from a second, older client changing settings; that protection requires the host upgrade.

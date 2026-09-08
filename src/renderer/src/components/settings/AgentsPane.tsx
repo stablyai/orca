@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
-import { Info } from 'lucide-react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { createAgentSettingsUpdateQueue } from './agent-settings-update-queue'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getAgentCatalog } from '@/lib/agent-catalog'
@@ -14,11 +16,7 @@ import {
   getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
-import {
-  SettingsSegmentedControl,
-  SettingsSubsectionHeader,
-  SettingsSwitchRow
-} from './SettingsFormControls'
+import { SettingsSwitchRow } from './SettingsFormControls'
 import {
   isTuiAgentEnabled,
   normalizeDisabledTuiAgents
@@ -27,16 +25,15 @@ import {
   getTuiAgentDefaultArgs,
   getTuiAgentDefaultEnv,
   resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
+  resolveTuiAgentLaunchEnv,
+  resolveAgentLaunchPermissionModeSummary
 } from '../../../../shared/tui-agent-launch-defaults'
 import {
   applyAgentPermissionMode,
-  resolveAgentPermissionModeSummary,
-  type AgentPermissionMode
+  applyTuiAgentPermissionMode,
+  resolveTuiAgentPermissionMode
 } from '../../../../shared/tui-agent-permissions'
 import { getSettingOwnershipSummary } from './setting-ownership'
-import { translate } from '@/i18n/i18n'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { getAgentsPaneSearchEntries } from './agents-search'
 import {
@@ -44,6 +41,8 @@ import {
   createAgentAvailabilityUpdateQueue
 } from './agent-availability-settings'
 import { AgentAvailabilityControl, type AgentCatalogRowProps } from './AgentCatalogRow'
+import { AgentPermissionsSetting } from './AgentPermissionsSetting'
+export { AgentPermissionsSetting } from './AgentPermissionsSetting'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
 
@@ -57,6 +56,7 @@ export {
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  updateLaunchSettings?: (updates: Partial<GlobalSettings>) => void | Promise<void>
   wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
@@ -64,83 +64,12 @@ type AgentsPaneProps = {
 }
 
 const enqueueAgentAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
-
-export function AgentPermissionsSetting({
-  mode,
-  onChange
-}: {
-  mode: AgentPermissionMode
-  onChange: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
-}): React.JSX.Element {
-  const visibleMode: Exclude<AgentPermissionMode, 'mixed'> = mode === 'manual' ? 'manual' : 'yolo'
-  return (
-    <section className="space-y-3">
-      <SettingsSubsectionHeader
-        title={
-          <span className="flex items-center gap-2">
-            {translate('auto.components.settings.AgentsPane.agentPermissions', 'Agent Permissions')}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={translate(
-                    'auto.components.settings.AgentsPane.agentPermissionsInfo',
-                    'Agent permissions info'
-                  )}
-                  className="grid size-5 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                >
-                  <Info className="size-3.5" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6}>
-                {translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsTooltip',
-                  "Doesn't apply to agents where you've overridden launch arguments."
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </span>
-        }
-        description={translate(
-          'auto.components.settings.AgentsPane.agentPermissionsDescription',
-          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
-        )}
-        action={
-          <SettingsSegmentedControl<AgentPermissionMode>
-            value={visibleMode}
-            onChange={(nextMode) => {
-              if (nextMode !== 'mixed') {
-                onChange(nextMode)
-              }
-            }}
-            ariaLabel={translate(
-              'auto.components.settings.AgentsPane.agentPermissions',
-              'Agent Permissions'
-            )}
-            size="sm"
-            options={[
-              {
-                value: 'yolo',
-                label: translate('auto.components.settings.AgentsPane.agentPermissionsYolo', 'Yolo')
-              },
-              {
-                value: 'manual',
-                label: translate(
-                  'auto.components.settings.AgentsPane.agentPermissionsManual',
-                  'Manual'
-                )
-              }
-            ]}
-          />
-        }
-      />
-    </section>
-  )
-}
+const enqueueAgentLaunchUpdate = createAgentSettingsUpdateQueue()
 
 export function AgentsPane({
   settings,
   updateSettings,
+  updateLaunchSettings = updateSettings,
   wslSupportedPlatform,
   wslAvailable,
   wslDistros,
@@ -187,6 +116,30 @@ export function AgentsPane({
     (agent) => detectedIds !== null && !detectedIds.has(agent.id)
   )
 
+  const saveLaunchUpdate = (
+    buildUpdate: (latest: GlobalSettings) => Partial<GlobalSettings>
+  ): void => {
+    void enqueueAgentLaunchUpdate({
+      getSettings: () => useAppStore.getState().settings,
+      fallbackSettings: settings,
+      updateSettings: updateLaunchSettings,
+      buildUpdate: (latest) => {
+        if (
+          (latest.activeRuntimeEnvironmentId ?? null) !==
+          (settings.activeRuntimeEnvironmentId ?? null)
+        ) {
+          throw new Error(
+            translate(
+              'auto.components.settings.agents.agentSettingsServerChanged',
+              'The active server changed. Retry the agent settings change.'
+            )
+          )
+        }
+        return buildUpdate(latest)
+      }
+    }).catch((error: unknown) => toast.error(String(error)))
+  }
+
   const setAgentEnabled = (id: TuiAgent, enabled: boolean): void => {
     void enqueueAgentAvailabilityUpdate({
       getSettings: () => useAppStore.getState().settings,
@@ -212,6 +165,24 @@ export function AgentsPane({
     cmdOverride: isDetected ? cmdOverrides[agent.id] : undefined,
     argsOverride: resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs),
     envOverride: resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv),
+    permissionMode: resolveTuiAgentPermissionMode({
+      agent: agent.id,
+      agentArgs: resolveTuiAgentLaunchArgs(agent.id, agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(agent.id, agentDefaultEnv)
+    }),
+    onSetPermissionMode: (mode) =>
+      saveLaunchUpdate((latest) => {
+        const next = applyTuiAgentPermissionMode({
+          agent: agent.id,
+          mode,
+          agentArgs: resolveTuiAgentLaunchArgs(agent.id, latest.agentDefaultArgs),
+          agentEnv: resolveTuiAgentLaunchEnv(agent.id, latest.agentDefaultEnv)
+        })
+        return {
+          agentDefaultArgs: { ...latest.agentDefaultArgs, [agent.id]: next.agentArgs },
+          agentDefaultEnv: { ...latest.agentDefaultEnv, [agent.id]: next.agentEnv }
+        }
+      }),
     onSetDefault: isDetected ? () => updateSettings({ defaultTuiAgent: agent.id }) : () => {},
     onSetEnabled: (enabled) => setAgentEnabled(agent.id, enabled),
     onSaveOverride: isDetected
@@ -226,9 +197,13 @@ export function AgentsPane({
         }
       : () => {},
     onSaveArgs: (value) =>
-      updateSettings({ agentDefaultArgs: { ...agentDefaultArgs, [agent.id]: value } }),
+      saveLaunchUpdate((latest) => ({
+        agentDefaultArgs: { ...latest.agentDefaultArgs, [agent.id]: value }
+      })),
     onSaveEnv: (value) =>
-      updateSettings({ agentDefaultEnv: { ...agentDefaultEnv, [agent.id]: value } }),
+      saveLaunchUpdate((latest) => ({
+        agentDefaultEnv: { ...latest.agentDefaultEnv, [agent.id]: value }
+      })),
     sessionSourceHome:
       isDetected && agent.id === 'codex'
         ? buildCodexSessionSourceHomeControl(settings, updateSettings)
@@ -261,9 +236,15 @@ export function AgentsPane({
       ) : null}
       <AgentCacheTimerSection settings={settings} updateSettings={updateSettings} />
       <AgentPermissionsSetting
-        mode={resolveAgentPermissionModeSummary({ agentDefaultArgs, agentDefaultEnv })}
+        mode={resolveAgentLaunchPermissionModeSummary({ agentDefaultArgs, agentDefaultEnv })}
         onChange={(mode) =>
-          updateSettings(applyAgentPermissionMode({ mode, agentDefaultArgs, agentDefaultEnv }))
+          saveLaunchUpdate((latest) =>
+            applyAgentPermissionMode({
+              mode,
+              agentDefaultArgs: latest.agentDefaultArgs,
+              agentDefaultEnv: latest.agentDefaultEnv
+            })
+          )
         }
       />
       <AgentDetectionCatalog

@@ -5546,7 +5546,14 @@
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Re-detect agents installed on the active server",
           "remoteDetectionFailed": "Couldn’t detect installed agents. Check the host connection and try again.",
-          "retryDetection": "Retry"
+          "retryDetection": "Retry",
+          "agentPermissionsAuto": "Auto",
+          "agentPermissionsModesDescription": "Manual은 승인을 요청합니다. Auto는 에이전트의 보호된 승인 모드를 사용하며, Auto를 지원하지 않는 에이전트는 Manual을 사용합니다. Yolo는 권한 검사를 건너뜁니다.",
+          "agentPermissionsCustom": "사용자 지정 설정입니다. 프리셋을 선택하면 표준 모드가 변경되며, 사용자 지정 실행 인수와 환경 변수 값은 유지됩니다.",
+          "agentPermissionsPreserveCustom": "모든 에이전트에 적용됩니다. 사용자 지정 실행 인수와 환경 변수 값은 유지됩니다.",
+          "agentPermissionsEditCustom": "사용자 지정 설정입니다. 권한 프리셋을 사용하려면 아래 실행 인수와 환경 변수를 편집하거나 초기화하세요.",
+          "collapseLaunchSettings": "실행 설정 접기",
+          "expandLaunchSettings": "실행 설정 펼치기"
         },
         "AppIconSelector": {
           "d5a112dc9b": "다음 아이콘",
@@ -7778,10 +7785,12 @@
             "a79d266f71": "세션",
             "afbf35be68": "안정적인 세션",
             "agentPermissions": "Agent 권한",
-            "agentPermissionsDescription": "agent 권한 기본값을 Yolo와 수동 사이에서 전환합니다.",
+            "agentPermissionsDescription": "agent의 기본 권한을 Manual, Auto, Yolo 중에서 선택합니다.",
             "agentRuntime": "Agent 런타임",
-            "agentRuntimeDescription": "기본적으로 Windows 또는 WSL에서 agents를 감지하고 시작할지 선택합니다."
-          }
+            "agentRuntimeDescription": "기본적으로 Windows 또는 WSL에서 agents를 감지하고 시작할지 선택합니다.",
+            "auto": "자동"
+          },
+          "agentSettingsServerChanged": "활성 서버가 변경되었습니다. 에이전트 설정 변경을 다시 시도하세요."
         },
         "appearance": {
           "search": {

@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Check, ChevronDown, ExternalLink } from 'lucide-react'
+import { AgentPermissionModeControl } from './AgentPermissionsSetting'
+import type { AgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -68,6 +70,8 @@ export type AgentCatalogRowProps = {
   cmdOverride: string | undefined
   argsOverride: string
   envOverride: Record<string, string>
+  permissionMode?: AgentPermissionMode
+  onSetPermissionMode?: (mode: Exclude<AgentPermissionMode, 'mixed'>) => void
   onSetDefault: () => void
   onSetEnabled: (enabled: boolean) => void
   onSaveOverride: (value: string) => void
@@ -89,6 +93,8 @@ export function AgentCatalogRow({
   cmdOverride,
   argsOverride,
   envOverride,
+  permissionMode,
+  onSetPermissionMode,
   onSetDefault,
   onSetEnabled,
   onSaveOverride,
@@ -98,9 +104,7 @@ export function AgentCatalogRow({
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
-  const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) || argsOverride !== defaultArgs || envSummary !== defaultEnvSummary
-  )
+  const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride) || permissionMode === 'mixed')
 
   return (
     <div className={cn('py-3', !isDetected && 'opacity-70')}>
@@ -181,12 +185,12 @@ export function AgentCatalogRow({
                 aria-label={
                   cmdOpen
                     ? translate(
-                        'auto.components.settings.AgentsPane.cea7d97be1',
-                        'Collapse command override'
+                        'auto.components.settings.AgentsPane.collapseLaunchSettings',
+                        'Collapse launch settings'
                       )
                     : translate(
-                        'auto.components.settings.AgentsPane.dc4a2ffdc0',
-                        'Expand command override'
+                        'auto.components.settings.AgentsPane.expandLaunchSettings',
+                        'Expand launch settings'
                       )
                 }
                 className="size-7 text-muted-foreground hover:text-foreground"
@@ -202,6 +206,31 @@ export function AgentCatalogRow({
 
       {isDetected && cmdOpen && (
         <div className="mt-3 pl-10">
+          {permissionMode && onSetPermissionMode && (
+            <div className="mb-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-medium">
+                  {translate(
+                    'auto.components.settings.AgentsPane.agentPermissions',
+                    'Agent Permissions'
+                  )}
+                </span>
+                <AgentPermissionModeControl
+                  mode={permissionMode}
+                  onChange={onSetPermissionMode}
+                  agent={agentId}
+                />
+              </div>
+              {permissionMode === 'mixed' && (
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.AgentsPane.agentPermissionsEditCustom',
+                    'Custom configuration. Edit or reset the launch arguments and environment below to use a permission preset.'
+                  )}
+                </p>
+              )}
+            </div>
+          )}
           <AgentCommandOverrideInput
             key={cmdOverride ?? defaultCmd}
             defaultCmd={defaultCmd}
