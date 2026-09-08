@@ -88,6 +88,7 @@ export function hasUnsafeProviderSessionIdChars(value: string): boolean {
   return false
 }
 
+/** Reject empty, over-long, dashed, or control-character session ids before they become argv. */
 function normalizeSessionId(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
