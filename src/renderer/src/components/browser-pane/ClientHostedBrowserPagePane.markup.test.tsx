@@ -235,7 +235,14 @@ describe('client-hosted screenshot markup', () => {
         pane.update({ isActive: true })
       }
       expect(overlay()).toBeNull()
-      expect(pane.webview.style.display).toBe('flex')
+      if (action === 'loss') {
+        // Guest loss clears the ref and detaches it; stale element styles aren't the UI contract.
+        expect(drawButton().disabled).toBe(true)
+        expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()
+        expect(mocks.attach.mock.results[0].value.detach).toHaveBeenCalled()
+      } else {
+        expect(pane.webview.style.display).toBe('flex')
+      }
       expect(mocks.clipboard).not.toHaveBeenCalled()
     }
   )
