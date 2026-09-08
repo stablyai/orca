@@ -716,7 +716,7 @@ describe('ClaudeHookService.installRemote', () => {
       script!.indexOf('#!/bin/sh') + '#!/bin/sh\n'.length
     )
     // Why: payload stays on stdin, while metadata headers avoid URL-encoded IDS signatures.
-    expect(script).toContain('printf \'%s\' "$payload" | curl')
+    expect(script).toContain('printf \'%s\' "$payload" | LC_NUMERIC=C curl')
     expect(script).toContain('-H "Content-Type: application/json"')
     expect(script).toContain('orca_hook_metadata=$(printf')
     expect(script).toContain('unset ORCA_AGENT_HOOK_TRANSPORT')
