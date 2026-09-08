@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
-import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
@@ -12,9 +11,6 @@ import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-sea
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { mobileNativeChatStreamPreview } from './mobile-native-chat-streaming-gate'
 import { useMobileNativeChatSessionOptionController } from './use-mobile-native-chat-session-option-controller'
-
-// Stable empty report for the send bridge's callback deps (identity never churns).
-const NO_SESSION_COMMANDS: readonly AgentSessionSlashCommand[] = []
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
@@ -248,7 +244,7 @@ export function useMobileNativeChatController(args: {
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent === 'claude' ? 'claude' : 'codex',
     sendStructured: structuredNativeChat.sendWithOutcome,
-    reportedCommands: structuredNativeChat.sessionCommands ?? NO_SESSION_COMMANDS,
+    reportedCommands: structuredNativeChat.sessionCommands,
     captureSendOrigin,
     clearDraftForSend,
     acceptSend,

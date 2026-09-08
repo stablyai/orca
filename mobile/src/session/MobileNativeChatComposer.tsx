@@ -136,7 +136,7 @@ export function MobileNativeChatComposer({
           ? { sessionCommands, conversationCommands: structuredCommands }
           : undefined
       )
-      const skillNames = new Set(catalog.sessionSkillNames ?? [])
+      const commandNames = new Set(catalog.agentCommands.map((command) => command.name))
       // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
       // (~5 rows visible), so an uncapped `/` would mount every row and
       // re-reconcile them on each streaming tick right above the transcript.
@@ -145,9 +145,9 @@ export function MobileNativeChatComposer({
         trigger.query,
         12
       ).map((entry) =>
-        skillNames.has(entry.name)
-          ? { kind: 'skill' as const, skill: entry }
-          : { kind: 'command' as const, command: entry }
+        commandNames.has(entry.name)
+          ? { kind: 'command' as const, command: entry }
+          : { kind: 'skill' as const, skill: entry }
       )
     }
     return rankSuggestions(filePaths, trigger.query).map((path) => ({

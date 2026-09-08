@@ -21,7 +21,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
   ) => Promise<MobileNativeChatSendOutcome>
   /** The structured session's self-reported command surface; reported commands
    *  and skills are control sends, so they must not echo as optimistic bubbles. */
-  reportedCommands: readonly AgentSessionSlashCommand[]
+  reportedCommands?: readonly AgentSessionSlashCommand[]
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
