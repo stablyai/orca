@@ -49,3 +49,16 @@ export function nativeChatComposerCatalog(
     sessionSkillNames: undefined
   }
 }
+
+/** The mobile `/` menu renders one ranked list: commands first, then the
+ *  reported skills (deduped against command names — a collision keeps the
+ *  command and its curated description), under one shared cap. Desktop does
+ *  not use this: it renders skills in the picker's own group instead. */
+export function mobileComposerSlashEntries(
+  catalog: NativeChatComposerCatalog
+): readonly SlashCommandSuggestion[] {
+  const skills = (catalog.sessionSkillNames ?? [])
+    .filter((name) => !catalog.agentCommands.some((command) => command.name === name))
+    .map((name) => ({ name }))
+  return [...catalog.agentCommands, ...skills]
+}

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { nativeChatComposerCatalog } from './native-chat-composer-catalog'
+import {
+  mobileComposerSlashEntries,
+  nativeChatComposerCatalog
+} from './native-chat-composer-catalog'
 import { getVerifiedNativeChatCommands } from './native-chat-agent-profiles'
 
 describe('nativeChatComposerCatalog lane selection', () => {
@@ -64,6 +67,30 @@ describe('nativeChatComposerCatalog report authority', () => {
     })
     expect(catalog.agentCommands).toEqual([
       { name: 'clear', description: 'Clear conversation history', kindUnspecified: true }
+    ])
+  })
+})
+
+describe('mobileComposerSlashEntries', () => {
+  it('appends reported skills after commands, deduped against command names', () => {
+    const catalog = nativeChatComposerCatalog('claude', {
+      sessionCommands: [
+        { name: 'clear', kind: 'command' },
+        { name: 'clear', kind: 'skill' },
+        { name: 'to-spec', kind: 'skill' }
+      ]
+    })
+    expect(mobileComposerSlashEntries(catalog).map((entry) => entry.name)).toEqual([
+      'clear',
+      'to-spec'
+    ])
+  })
+
+  it('returns the command tier alone while no skills were reported', () => {
+    const catalog = nativeChatComposerCatalog('claude', { conversationCommands: [] })
+    expect(mobileComposerSlashEntries(catalog).map((entry) => entry.name)).toEqual([
+      'model',
+      'effort'
     ])
   })
 })
