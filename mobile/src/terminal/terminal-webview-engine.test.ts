@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
 import { Script } from 'node:vm'
 import { parse } from 'acorn'
 import { describe, expect, it, vi } from 'vitest'
-import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
+import {
+  TERMINAL_NERD_FONT_CSS,
+  XTERM_ENGINE_CSS,
+  XTERM_ENGINE_JS
+} from './terminal-webview-engine.generated'
 import { XTERM_HTML } from './terminal-webview-html'
 import { readTerminalWebViewHtmlSource } from './terminal-webview-html-source.test-support'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
@@ -97,6 +102,24 @@ describe('terminal WebView bundled engine', () => {
     expect(XTERM_HTML).not.toContain('rel="stylesheet" href=')
   })
 
+  it('bundles the Nerd Font symbol fallback into the terminal document', () => {
+    expect(TERMINAL_NERD_FONT_CSS).toContain("font-family:'Orca Nerd Font Symbols'")
+    expect(TERMINAL_NERD_FONT_CSS).toContain("url('data:font/woff2;base64,")
+    expect(TERMINAL_NERD_FONT_CSS).toContain(
+      'unicode-range:U+E000-F8FF,U+F0000-FFFFD,U+100000-10FFFD'
+    )
+    expect(XTERM_HTML).toContain(`<style>${TERMINAL_NERD_FONT_CSS}</style>`)
+    expect(XTERM_HTML).toContain(
+      '"Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono"'
+    )
+
+    const encodedFont = TERMINAL_NERD_FONT_CSS.match(/base64,([^']+)'/)?.[1]
+    expect(encodedFont).toBeTruthy()
+    expect(Buffer.from(encodedFont!, 'base64')).toEqual(
+      readFileSync(new URL('../../assets/fonts/SymbolsNerdFontMono-Regular.woff2', import.meta.url))
+    )
+  })
+
   it('parses the bundled engine at the Chrome 74 syntax floor', () => {
     expect(() => parse(XTERM_ENGINE_JS, { ecmaVersion: 2019 })).not.toThrow()
   })
@@ -150,6 +173,7 @@ describe('terminal WebView bundled engine', () => {
     expect(XTERM_ENGINE_JS).not.toMatch(/<script/i)
     expect(XTERM_ENGINE_JS).not.toContain('<!--')
     expect(XTERM_ENGINE_CSS).not.toMatch(/<\/style/i)
+    expect(TERMINAL_NERD_FONT_CSS).not.toMatch(/<\/style/i)
   })
 
   it('reports WebView message handler failures instead of swallowing them', () => {
