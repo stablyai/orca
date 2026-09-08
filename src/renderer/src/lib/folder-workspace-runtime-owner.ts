@@ -38,15 +38,12 @@ function getPreferredFolderExecutionHostId(
     : undefined
 }
 
-export function findFolderWorkspaceOwner(
-  state: FolderWorkspaceRuntimeOwnerState,
+export function findFolderWorkspaceOwner<T extends FolderWorkspaceRuntimeOwnerState>(
+  state: T,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): Pick<
-  FolderWorkspace,
-  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
-> | null {
-  return findIndexedFolderWorkspaceOwner(
+): NonNullable<T['folderWorkspaces']>[number] | null {
+  return findIndexedFolderWorkspaceOwner<NonNullable<T['folderWorkspaces']>[number]>(
     state.folderWorkspaces,
     folderWorkspaceId,
     getPreferredFolderExecutionHostId(state, folderWorkspaceId, executionHostId)

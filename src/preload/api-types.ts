@@ -1,3 +1,4 @@
+import type { KaneoDesktopApi } from '../shared/kaneo-types'
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   ClaudeAccountsApi,
@@ -89,6 +90,7 @@ export type PreloadApi = {
   gl: GitLabApi
   bitbucket: BitbucketApi
   linear: LinearApi
+  kaneo: KaneoDesktopApi
   jira: JiraApi
   starNag: StarNagApi
   telemetryTrack: TelemetryApi['telemetryTrack']

@@ -6259,7 +6259,6 @@
           "a565377c38": "no instalado",
           "15cf990798": "No autenticado",
           "f7eb5f0b24": "No instalado",
-          "3ba07f933b": "Conecta issue trackers que Orca puede usar para explorar tareas e iniciar espacios de trabajo con contexto vinculado.",
           "70e885705b": "Proveedores de tareas",
           "1683acbac4": "Conecta los hosts de código que Orca puede usar para pull requests, merge requests, checks y estado de revisión.",
           "298c65ecac": "Proveedores de revisión"

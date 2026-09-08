@@ -279,11 +279,11 @@ export function findIndexedRepoOwnerForHost<T extends RepoOwnerRecord>(
   return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
-export function findIndexedFolderWorkspaceOwner(
-  folderWorkspaces: readonly FolderWorkspaceOwnerRecord[] | undefined,
+export function findIndexedFolderWorkspaceOwner<T extends FolderWorkspaceOwnerRecord>(
+  folderWorkspaces: readonly T[] | undefined,
   folderWorkspaceId: string,
   executionHostId?: ExecutionHostId
-): FolderWorkspaceOwnerRecord | null {
+): T | null {
   if (!folderWorkspaces) {
     return null
   }
@@ -295,7 +295,8 @@ export function findIndexedFolderWorkspaceOwner(
   const resolution = index.get(
     executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
   )
-  return resolution?.kind === 'resolved' ? resolution.owner : null
+  // The cache is keyed by this exact array, so its owner retains the caller's row type.
+  return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
 
 export function findIndexedProjectGroupOwner(

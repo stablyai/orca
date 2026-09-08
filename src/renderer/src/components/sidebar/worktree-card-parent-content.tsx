@@ -1,3 +1,4 @@
+import { KaneoTaskDetails } from './KaneoTaskDetails'
 import React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -88,7 +89,10 @@ export function WorktreeCardParentContent({
         workspaceTitle={hoverWorkspaceTitle}
         workspaceTitleRenameDisabled={isDeleting || affiliateListMode}
         detailsAfter={
-          workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null
+          <>
+            <KaneoTaskDetails item={card.worktree.linkedWorkItem} />
+            {workspacePorts.length > 0 ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+          </>
         }
         openDelay={100}
         hoverControl={detailsHoverControl}
