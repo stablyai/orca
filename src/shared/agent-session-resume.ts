@@ -239,8 +239,7 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
-    // Why: Cursor's hook conversation_id (also session_id / camelCase) is the
-    // CLI `--resume` locator, matching the AI Vault scanner.
+    // Why: Cursor hook conversation_id (also session_id / camelCase) is the CLI --resume locator.
     case 'cursor': {
       const id = readSessionId(payload, [
         'conversation_id',

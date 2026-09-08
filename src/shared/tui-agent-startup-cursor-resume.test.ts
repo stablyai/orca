@@ -28,4 +28,15 @@ describe('Cursor resume startup plan', () => {
 
     expect(plan?.launchCommand).toBe(`cursor-agent "--yolo" "--resume" "${SESSION.id}"`)
   })
+
+  it('honors a command override', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'cursor',
+      providerSession: SESSION,
+      cmdOverrides: { cursor: 'cursor-agent --banner' },
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe(`cursor-agent --banner '--resume' '${SESSION.id}'`)
+  })
 })
