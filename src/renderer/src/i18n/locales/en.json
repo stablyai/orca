@@ -7189,7 +7189,9 @@
           "externalWorktrees": "External worktrees",
           "externalWorktreesDescription": "Choose whether worktrees created outside Orca appear by default.",
           "show": "Show",
-          "hide": "Hide"
+          "hide": "Hide",
+          "askBeforeRemovingProjects": "Ask Before Removing Projects",
+          "askBeforeRemovingProjectsDescription": "Show a confirmation before removing a project from Orca. VM projects always ask because their files may be deleted."
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
