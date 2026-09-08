@@ -6,12 +6,17 @@ import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 import { withManagedHookInstallLock } from './managed-hook-install-lock'
+import { resolveCodexCommand } from '../codex-cli/command'
+import { runCodexAppServerSession } from '../codex/codex-app-server-session'
+import { getSpawnArgsForWindows } from '../win32-utils'
 import {
   readManagedHookHostIdentity,
   scopeManagedHookHostIdentity
 } from './managed-hook-owner-identity'
 
 const execFileAsync = promisify(execFile)
+const CODEX_HOME_MAX_LENGTH = 4096
+const CODEX_HOME_PROBE_TIMEOUT_MS = 8_000
 const GROK_HOME_MAX_LENGTH = 4096
 const GROK_HOME_PROBE_TIMEOUT_MS = 8_000
 
@@ -22,6 +27,10 @@ export type ManagedHookInstallSummary = {
 
 function defaultGrokHome(home: string): string {
   return `${home.replace(/\/+$/, '') || home}/.grok`
+}
+
+function defaultCodexHome(home: string): string {
+  return `${home.replace(/\/+$/, '') || home}/.codex`
 }
 
 function hasControlCharacter(value: string): boolean {
@@ -35,6 +44,21 @@ function normalizeGrokHome(candidate: string): string | null {
   if (
     candidate.length === 0 ||
     candidate.length > GROK_HOME_MAX_LENGTH ||
+    candidate !== candidate.trim() ||
+    !candidate.startsWith('/') ||
+    candidate.includes('\\') ||
+    hasControlCharacter(candidate)
+  ) {
+    return null
+  }
+  return candidate.replace(/\/+$/, '') || '/'
+}
+
+function normalizeCodexHome(candidate: unknown): string | null {
+  if (
+    typeof candidate !== 'string' ||
+    candidate.length === 0 ||
+    candidate.length > CODEX_HOME_MAX_LENGTH ||
     candidate !== candidate.trim() ||
     !candidate.startsWith('/') ||
     candidate.includes('\\') ||
@@ -73,6 +97,34 @@ export async function resolveRelayGrokHome(home: string, signal?: AbortSignal): 
   }
 }
 
+export async function resolveRelayCodexHome(home: string, signal?: AbortSignal): Promise<string> {
+  const fallback = defaultCodexHome(home)
+  try {
+    signal?.throwIfAborted()
+    const command = resolveCodexCommand()
+    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, ['app-server'])
+    const resolvedHome = await runCodexAppServerSession(
+      {
+        command: spawnCmd,
+        args: spawnArgs,
+        cliPath: command,
+        timeoutMs: CODEX_HOME_PROBE_TIMEOUT_MS
+      },
+      async (_rpc, initializeResult) =>
+        normalizeCodexHome(
+          initializeResult && typeof initializeResult === 'object'
+            ? (initializeResult as { codexHome?: unknown }).codexHome
+            : undefined
+        )
+    )
+    signal?.throwIfAborted()
+    return resolvedHome ?? fallback
+  } catch {
+    signal?.throwIfAborted()
+    return fallback
+  }
+}
+
 export async function installManagedHooks(options?: {
   signal?: AbortSignal
   hostKeyFingerprint?: string
@@ -85,6 +137,13 @@ export async function installManagedHooks(options?: {
     return { installers: 0, errors: 0 }
   }
   const home = homedir()
+  const resolvedCodexHome = agents.includes('codex')
+    ? await resolveRelayCodexHome(home, options?.signal)
+    : undefined
+  // Why: an explicit dir changes the remote hook script layout. Keep the
+  // legacy ~/.codex contract when the probe confirms or falls back to it.
+  const codexHomeDir = resolvedCodexHome === defaultCodexHome(home) ? undefined : resolvedCodexHome
+  options?.signal?.throwIfAborted()
   const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
   options?.signal?.throwIfAborted()
   const hostIdentity = scopeManagedHookHostIdentity(
@@ -99,6 +158,7 @@ export async function installManagedHooks(options?: {
         createManagedHookLocalFilesystem(),
         home,
         {
+          codexHomeDir,
           grokHomeDir,
           signal: options?.signal,
           agents

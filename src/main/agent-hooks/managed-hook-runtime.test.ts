@@ -1,8 +1,18 @@
-import { chmod, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeChildProcess from 'node:child_process'
+
+const { resolveCodexCommandMock, runCodexAppServerSessionMock } = vi.hoisted(() => ({
+  resolveCodexCommandMock: vi.fn(() => '/stub/codex'),
+  runCodexAppServerSessionMock: vi.fn()
+}))
+
+vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
+vi.mock('../codex/codex-app-server-session', () => ({
+  runCodexAppServerSession: runCodexAppServerSessionMock
+}))
 
 // Why: the probe spawns a real login shell, and `resolveRelayGrokHome` swallows every
 // spawn failure into its fallback. Left unmocked this asserts the runner's scheduling
@@ -17,7 +27,8 @@ const { execFile } = await import('node:child_process')
 const execFileMock = vi.mocked(execFile)
 const { execFile: actualExecFile } =
   await vi.importActual<typeof NodeChildProcess>('node:child_process')
-const { installManagedHooks, resolveRelayGrokHome } = await import('./managed-hook-runtime')
+const { installManagedHooks, resolveRelayCodexHome, resolveRelayGrokHome } =
+  await import('./managed-hook-runtime')
 
 type ExecFileCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void
 
@@ -37,6 +48,9 @@ function stubProbeFailure(error: Error): void {
 
 beforeEach(() => {
   execFileMock.mockReset()
+  resolveCodexCommandMock.mockReset()
+  resolveCodexCommandMock.mockReturnValue('/stub/codex')
+  runCodexAppServerSessionMock.mockReset()
   // Why: `installManagedHooks` proves a skipped probe through the login-shell run log, so the
   // probe must really spawn unless a case above stubs it. The mock loses `promisify.custom`,
   // so the real `(error, stdout, stderr)` callback is reshaped into the `{ stdout, stderr }`
@@ -49,6 +63,15 @@ beforeEach(() => {
     )
   }) as unknown as typeof execFile)
 })
+
+function stubCodexHomeProbe(codexHome: unknown): void {
+  runCodexAppServerSessionMock.mockImplementation(
+    async (
+      _invocation: unknown,
+      body: (_rpc: unknown, initializeResult: unknown) => Promise<unknown>
+    ) => body({}, { codexHome })
+  )
+}
 
 const tempHomes: string[] = []
 const tempRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
@@ -120,6 +143,38 @@ describe.runIf(process.platform !== 'win32')('resolveRelayGrokHome', () => {
   })
 })
 
+describe.runIf(process.platform !== 'win32')('resolveRelayCodexHome', () => {
+  it('uses the wrapper-aware home reported by Codex app-server', async () => {
+    stubCodexHomeProbe('/srv/codex///')
+
+    await expect(resolveRelayCodexHome('/home/orca')).resolves.toBe('/srv/codex')
+    expect(runCodexAppServerSessionMock).toHaveBeenCalledWith(
+      {
+        command: '/stub/codex',
+        args: ['app-server'],
+        cliPath: '/stub/codex',
+        timeoutMs: 8_000
+      },
+      expect.any(Function)
+    )
+  })
+
+  it.each([undefined, '', 'relative/home', '/valid\nsecond-line', 'C:\\Users\\me\\.codex'])(
+    'falls back when app-server reports an invalid home: %s',
+    async (codexHome) => {
+      stubCodexHomeProbe(codexHome)
+
+      await expect(resolveRelayCodexHome('/home/orca')).resolves.toBe('/home/orca/.codex')
+    }
+  )
+
+  it('falls back when the app-server probe fails or times out', async () => {
+    runCodexAppServerSessionMock.mockRejectedValue(new Error('probe timed out'))
+
+    await expect(resolveRelayCodexHome('/home/orca')).resolves.toBe('/home/orca/.codex')
+  })
+})
+
 describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
   it.each([
     ['omitted', undefined],
@@ -156,5 +211,23 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
     })
 
     expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
+    expect(runCodexAppServerSessionMock).not.toHaveBeenCalled()
+  })
+
+  it('installs Codex hooks into the home reported by the launcher-aware probe', async () => {
+    const home = await createTempHome()
+    const codexHome = join(home, '.codex-openai')
+    await stubLoginShell(home)
+    stubCodexHomeProbe(codexHome)
+
+    await expect(installManagedHooks({ agents: ['codex'] })).resolves.toEqual({
+      installers: 1,
+      errors: 0
+    })
+
+    await expect(readFile(join(codexHome, 'hooks.json'), 'utf8')).resolves.toContain(
+      'codex-hook.sh'
+    )
+    await expect(stat(join(home, '.codex', 'hooks.json'))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 })

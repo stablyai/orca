@@ -12,6 +12,30 @@ afterEach(() => {
 })
 
 describe('runCodexAppServerSession environment', () => {
+  it('exposes the initialize result to the session body', async () => {
+    const server = String.raw`
+      const readline = require('node:readline')
+      readline.createInterface({ input: process.stdin }).on('line', (line) => {
+        const message = JSON.parse(line)
+        if (message.method === 'initialize') {
+          process.stdout.write(JSON.stringify({ id: message.id, result: { codexHome: '/tmp/wrapper-home' } }) + '\n')
+        }
+      })
+    `
+
+    const result = await runCodexAppServerSession(
+      {
+        command: process.execPath,
+        cliPath: null,
+        args: ['-e', server],
+        timeoutMs: 5_000
+      },
+      async (_rpc, initializeResult) => initializeResult
+    )
+
+    expect(result).toEqual({ codexHome: '/tmp/wrapper-home' })
+  })
+
   it('removes inherited variables requested by a default-home invocation', async () => {
     process.env.CODEX_HOME = '/tmp/inherited-managed-home'
     const server = String.raw`
