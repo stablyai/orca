@@ -127,6 +127,25 @@ type ConnectionRepository interface {
 	// bound to devServerID, if any — backs ssh.getState's local read.
 	// found=false, err=nil means "no active connection", not an error.
 	GetActiveByDevServer(ctx context.Context, tenantID, devServerID string) (conn domain.Connection, found bool, err error)
+	// UpdateStatus persists conn's Status/DegradedSince after a domain state
+	// machine transition (MarkDegraded/Reestablish/CloseAfterGracePeriodExpiry/
+	// CloseExplicitly, see internal/domain/connection.go) — the usecase layer
+	// computes the transition, this port only writes its result. Scoped by
+	// tenantID, matching every other mutation in this service.
+	UpdateStatus(ctx context.Context, tenantID string, conn domain.Connection) error
+}
+
+// FleetConnectivityRepository is the read port GetFleetConnectivitySummary
+// uses (TASK-BE-STORAGE-006, CR-STORAGE-007) — deliberately a separate,
+// narrow port from ConnectionRepository (not an added method on it), the
+// same reasoning FleetHealthPollerRepository's doc comment gives: only this
+// one usecase (and its own test fakes) needs it.
+type FleetConnectivityRepository interface {
+	// ListConnectivitySummary returns every connection scoped to tenantID —
+	// joined through dev_servers as defense-in-depth tenant scoping (per
+	// specs/backend-go/services/infra-fleet-service.md §9), even though
+	// connections.tenant_id already scopes correctly on its own.
+	ListConnectivitySummary(ctx context.Context, tenantID string) ([]domain.Connection, error)
 }
 
 // ConnectionResolver is THE core coordination/execution dispatch primitive
@@ -301,6 +320,169 @@ type DevServerAgentClient interface {
 	// exists before StreamPty attaches to it). unsubscribe MUST be called
 	// exactly once by the caller (usecase.AttachScreencast).
 	StreamScreencast(ctx context.Context, devServer domain.DevServer, params ScreencastParams) (<-chan ScreencastEvent, func(), error)
+
+	// --- Ephemeral VM provisioning (BE-SOL-EVM-002) ---
+
+	// StreamVmProvision runs a recipe's `create` command on the agent via
+	// vm.provision and streams its stdout/stderr/result back — TASK-BE-EVM-003.
+	// Unlike StreamPty/StreamScreencast (a notification-keyed demux over an
+	// already-established subscription), vm.provision's wire shape is a
+	// SEQUENCE OF RESPONSE FRAMES sharing the original request's id: an
+	// immediate dispatcher-level "stream.started" ack (mirroring
+	// git.execStream's confirmed precedent, agent-git-handler.ts's
+	// handleGitExecStream), then zero-or-more "stream.chunk" frames, then
+	// exactly one terminal "stream.end" frame carrying either the parsed
+	// recipe result or an error — see
+	// devserveragent.session.streamCall's doc comment for the transport-level
+	// half of this. "stream.started" itself is swallowed by the adapter (not
+	// surfaced as a distinct VmProvisionEvent) — it only confirms the agent
+	// accepted the call and the stream is open. unsubscribe MUST be called
+	// exactly once by the caller (usecase.EphemeralVmRelay.Provision,
+	// TASK-BE-EVM-004).
+	StreamVmProvision(ctx context.Context, devServer domain.DevServer, params VmProvisionParams) (<-chan VmProvisionEvent, func(), error)
+
+	// --- Hidden-target SSH dial (TASK-BE-EVM-014, Hướng A) ---
+
+	// DialHiddenSshTarget calls a new agent RPC (vm.sshDial —
+	// BE-SOL-EVM-004 §3 / "Quyết định đã chốt" mục 1) telling devServer's
+	// agent to dial target directly (SOL-AG-EVM-003's outbound SSH client)
+	// and keep the resulting session in its own in-memory hidden-target
+	// registry, keyed by runtimeID — NOT a new infra.connections row on
+	// this side (see EphemeralVmSshProvisioner's doc comment for how
+	// AgentOutboundSshProvisioner.Provision uses this). Returns the
+	// agent-confirmed hiddenTargetID (by convention == runtimeID, per
+	// BE-SOL-EVM-004 §4: "hiddenTargetID (= ephemeral VM runtimeID)" — the
+	// agent's own ack is still surfaced here rather than assumed). target's
+	// credential fields are sent BY VALUE, exactly once, over this same
+	// agent<->Orca channel vm.exec already uses (same RPC-param mechanism,
+	// not a second channel) — never persisted here or expected to be
+	// persisted agent-side (SOL-AG-EVM-003 §2a/§2b, "Quyết định đã chốt"
+	// mục 1).
+	DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (hiddenTargetID string, err error)
+}
+
+// VmProvisionParams carries vm.provision's request fields — field names on
+// the wire (repoPath/command/recipeId/runtimeId) mirror vm.exec's existing
+// params contract 1:1 (TASK-BE-EVM-001), built by the adapter from this
+// struct, not proto (same ScreencastParams/PtyEvent convention: this
+// package's ports stay proto-agnostic, the grpc/wscompat layers translate).
+type VmProvisionParams struct {
+	RepoPath  string
+	Command   string
+	RecipeID  string
+	RuntimeID string
+}
+
+// VmProvisionEvent is one event StreamVmProvision's channel delivers — the
+// demuxed form of handleVmProvision's stream.chunk/stream.end wire frames.
+// Exactly one of Chunk/Result/ErrorMsg is meaningfully populated per value,
+// narrowed by Type, matching ScreencastEvent/PtyEvent's "one raw struct"
+// convention:
+//   - Type "stdout"/"stderr": Chunk carries one output line.
+//   - Type "result": the terminal, successful frame — Result is populated.
+//   - Type "error": the terminal, failed frame (non-zero exit, a malformed
+//     recipe result, or an agent-side exception) — ErrorMsg is populated.
+type VmProvisionEvent struct {
+	Type     string // "stdout" | "stderr" | "result" | "error"
+	Chunk    string
+	Result   VmProvisionResult
+	ErrorMsg string
+}
+
+// VmProvisionResult mirrors proto's VmProvisionResult message field-for-field
+// (BE-SOL-EVM-002 §6) — normalized here from
+// ephemeral-vm-recipes.ts's EphemeralVmRecipeResult union (both the legacy
+// pairingCode/projectRoot-at-top-level shape and the new explicit
+// `connection` shape collapse to this one flattened form, mirroring
+// getEphemeralVmRecipeResultConnection's own fallback-to-legacy logic).
+type VmProvisionResult struct {
+	Type        string // "orca-server" | "ssh"
+	PairingCode string // set when Type == "orca-server"
+	ProjectRoot string
+	SshTarget   *EphemeralVmRecipeSshTarget // set when Type == "ssh"
+}
+
+// EphemeralVmSshProvisioner is TASK-BE-EVM-012/013's abstraction over the 2
+// parallel strategies for reaching an ephemeral VM whose recipe result is
+// `ssh`-type (BE-SOL-EVM-004 §5a): Hướng A (agent-outbound,
+// TASK-BE-EVM-014) and Hướng B (backend-relay-deploy,
+// adapter/backendrelaysshprovisioner, TASK-BE-EVM-013) both implement this
+// same interface — EphemeralVmRelay.applyProvisionResult dispatches through
+// it without knowing which strategy is configured (see config.go's
+// EphemeralVmSshMode). Provision dials the target, gets a reachable Dev
+// Server Agent connection established for it (however the strategy achieves
+// that), and returns the resulting connectionID — a real infra.connections
+// row, ready for ResolveConnection like any other dev server.
+//
+// target is domain.EphemeralVmSshTarget, not the usecase-local
+// EphemeralVmRecipeSshTarget below — see that type's doc comment for why a
+// separate, non-persisted type exists.
+type EphemeralVmSshProvisioner interface {
+	Provision(ctx context.Context, tenantID, runtimeID string, target domain.EphemeralVmSshTarget) (connectionID string, err error)
+}
+
+// EphemeralVmSshTargetRepository persists infra.ephemeral_vm_ssh_targets
+// (migrations/0015) — TASK-BE-EVM-014's Hướng A audit/at-rest record of
+// what host + Vault PATH (never raw material) was used to dial a
+// ssh-type ephemeral VM runtime's hidden target. Written by
+// AgentOutboundSshProvisioner.Provision on every successful dial (Upsert,
+// not Create-only — Provision can legitimately re-run for the same
+// runtime, e.g. after an agent restart drops the agent-local in-memory
+// hidden-target session per SOL-AG-EVM-003 §2b).
+type EphemeralVmSshTargetRepository interface {
+	Upsert(ctx context.Context, record domain.EphemeralVmSshTargetRecord) (domain.EphemeralVmSshTargetRecord, error)
+	Get(ctx context.Context, tenantID, runtimeID string) (record domain.EphemeralVmSshTargetRecord, found bool, err error)
+}
+
+// EphemeralVmSshDevServerResolver resolves which EXISTING domain.DevServer's
+// agent session should receive DialHiddenSshTarget's RPC for runtimeID —
+// per BE-SOL-EVM-004 §4's decision 3, Hướng A never creates a new dev
+// server/host at the connections layer; the SAME Dev Server that ran this
+// runtime's vm.provision is the one whose agent dials outbound SSH.
+//
+// KNOWN GAP (TASK-BE-EVM-014, confirmed by reading TASK-BE-EVM-012's real,
+// landed ephemeral_vm_relay.go): neither domain.EphemeralVmRuntime nor
+// EphemeralVmRuntimeRepository persists a dial-origin devServerID today.
+// EphemeralVmRelay.Provision resolves a devServer from connectionID
+// (resolveDevServerAndRepoPath) but never threads it into
+// applySshProvisionResult/EphemeralVmSshProvisioner.Provision, whose fixed
+// signature (tenantID, runtimeID, target) carries no connectionID either.
+// Closing this gap for real needs either a new domain.EphemeralVmRuntime
+// field (persisted at the same point resolveDevServerAndRepoPath already
+// resolves a devServer in Provision) or a signature change to
+// EphemeralVmSshProvisioner.Provision (shared with Hướng B, out of this
+// task's unilateral authority — see TASK-BE-EVM-014.md's "Kết quả thực
+// tế"). main.go wires a fail-closed resolver for this pass — see
+// unimplementedEphemeralVmSshDevServerResolver below.
+type EphemeralVmSshDevServerResolver interface {
+	ResolveDevServer(ctx context.Context, tenantID, runtimeID string) (domain.DevServer, error)
+}
+
+// EphemeralVmSshVaultResolver is the narrow Vault port
+// AgentOutboundSshProvisioner needs — defined here (consumer-side), not in
+// common/secrets, mirroring sshconn.SSHCertIssuer's identical Dependency
+// Inversion convention in this same codebase. A *secrets.Client's KVRead
+// method (common/secrets/vault.go) satisfies this directly — no new method
+// was needed there, see TASK-BE-EVM-014.md's "Kết quả thực tế" for why.
+type EphemeralVmSshVaultResolver interface {
+	KVRead(ctx context.Context, mount, path string) (map[string]any, error)
+}
+
+// EphemeralVmRecipeSshTarget mirrors frontend/src/shared/ephemeral-vm-recipes.ts's
+// EphemeralVmRecipeSshTargetSchema field-for-field (BE-SOL-EVM-002 §6's
+// cross-check — configHost/portForwards deliberately omitted, see
+// infrafleet.proto's EphemeralVmRecipeSshTarget message doc comment).
+type EphemeralVmRecipeSshTarget struct {
+	Label                   string
+	Host                    string
+	Port                    int32
+	Username                string
+	IdentityFile            string
+	IdentityAgent           string
+	IdentitiesOnly          bool
+	ProxyCommand            string
+	JumpHost                string
+	RelayGracePeriodSeconds int32
 }
 
 // ScreencastParams carries browser.screencastStart's request fields —
@@ -414,4 +596,12 @@ type TerminalSessionRepository interface {
 	// session already closed simply gets a newer closed_at, not an error, so
 	// a duplicate/racing close request never fails the caller.
 	Close(ctx context.Context, tenantID, ptyID string, closedAt time.Time) error
+	// CloseAllForConnection sets closed_at for every OPEN session bound to
+	// connectionID — called by usecase.CloseTerminalSessionsForConnection
+	// ONLY when connections.status has genuinely transitioned to closed
+	// (grace-period expiry or explicit teardown), never for a merely
+	// degraded connection (BE-SOL-STORAGE-003 §3, TASK-BE-STORAGE-010).
+	// Idempotent: a connection with no open sessions closes zero rows, not
+	// an error.
+	CloseAllForConnection(ctx context.Context, tenantID, connectionID string, closedAt time.Time) error
 }

@@ -1136,6 +1136,14 @@ export type WorkspaceSessionState = {
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
   /** Provider-session resume records captured when workspaces sleep. */
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
+  /** FE-SOL-STORAGE-007(a): id of the user this persisted session belongs to.
+   *  Stamped on re-auth in main-web-bootstrap.tsx; a mismatch on the next
+   *  re-auth means a different user signed in and the stored state (this
+   *  field lives on, plus orca.saved-instances/accountsDevServer) must be
+   *  wiped instead of resumed. Chosen over OrcaInstance because
+   *  WorkspaceSessionState is the type written most centrally
+   *  (web-preload-api.ts), not because OrcaInstance couldn't also carry it. */
+  ownerUserId?: string
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

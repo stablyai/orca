@@ -45,6 +45,7 @@ type Server struct {
 	updateDepartment   *usecase.UpdateDepartment
 	updateUserProfile  *usecase.UpdateUserProfile
 	listTeams          *usecase.ListTeams
+	listTeamsForUser   *usecase.ListTeamsForUser
 	removeTeamMember   *usecase.RemoveTeamMember
 	getOnboardingState *usecase.GetOnboardingState
 	setOnboardingState *usecase.SetOnboardingState
@@ -53,6 +54,22 @@ type Server struct {
 	removeCompanyEmailDomain    *usecase.RemoveCompanyEmailDomain
 	listCompanyEmailDomains     *usecase.ListCompanyEmailDomains
 	resolveCompanyByEmailDomain *usecase.ResolveCompanyByEmailDomain
+
+	getClientState        *usecase.GetClientState
+	setClientState        *usecase.SetClientState
+	getWorkspaceSession   *usecase.GetWorkspaceSession
+	setWorkspaceSession   *usecase.SetWorkspaceSession
+	patchWorkspaceSession *usecase.PatchWorkspaceSession
+
+	deferStarNag                        *usecase.DeferStarNag
+	completeStarNag                     *usecase.CompleteStarNag
+	disableStarNag                      *usecase.DisableStarNag
+	forceShowStarNag                    *usecase.ForceShowStarNag
+	notifyStarNagOnboardingCompleted    *usecase.NotifyStarNagOnboardingCompleted
+	openWebStarNag                      *usecase.OpenWebStarNag
+	starOrcaFromNag                     *usecase.StarOrcaFromNag
+	prepareStarNagAgentValueMoment      *usecase.PrepareStarNagAgentValueMoment
+	showPreparedStarNagAgentValueMoment *usecase.ShowPreparedStarNagAgentValueMoment
 }
 
 func New(
@@ -72,6 +89,7 @@ func New(
 	updateDepartment *usecase.UpdateDepartment,
 	updateUserProfile *usecase.UpdateUserProfile,
 	listTeams *usecase.ListTeams,
+	listTeamsForUser *usecase.ListTeamsForUser,
 	removeTeamMember *usecase.RemoveTeamMember,
 	getOnboardingState *usecase.GetOnboardingState,
 	setOnboardingState *usecase.SetOnboardingState,
@@ -79,6 +97,20 @@ func New(
 	removeCompanyEmailDomain *usecase.RemoveCompanyEmailDomain,
 	listCompanyEmailDomains *usecase.ListCompanyEmailDomains,
 	resolveCompanyByEmailDomain *usecase.ResolveCompanyByEmailDomain,
+	getClientState *usecase.GetClientState,
+	setClientState *usecase.SetClientState,
+	getWorkspaceSession *usecase.GetWorkspaceSession,
+	setWorkspaceSession *usecase.SetWorkspaceSession,
+	patchWorkspaceSession *usecase.PatchWorkspaceSession,
+	deferStarNag *usecase.DeferStarNag,
+	completeStarNag *usecase.CompleteStarNag,
+	disableStarNag *usecase.DisableStarNag,
+	forceShowStarNag *usecase.ForceShowStarNag,
+	notifyStarNagOnboardingCompleted *usecase.NotifyStarNagOnboardingCompleted,
+	openWebStarNag *usecase.OpenWebStarNag,
+	starOrcaFromNag *usecase.StarOrcaFromNag,
+	prepareStarNagAgentValueMoment *usecase.PrepareStarNagAgentValueMoment,
+	showPreparedStarNagAgentValueMoment *usecase.ShowPreparedStarNagAgentValueMoment,
 ) *Server {
 	return &Server{
 		createCompany:      createCompany,
@@ -97,6 +129,7 @@ func New(
 		updateDepartment:   updateDepartment,
 		updateUserProfile:  updateUserProfile,
 		listTeams:          listTeams,
+		listTeamsForUser:   listTeamsForUser,
 		removeTeamMember:   removeTeamMember,
 		getOnboardingState: getOnboardingState,
 		setOnboardingState: setOnboardingState,
@@ -105,6 +138,22 @@ func New(
 		removeCompanyEmailDomain:    removeCompanyEmailDomain,
 		listCompanyEmailDomains:     listCompanyEmailDomains,
 		resolveCompanyByEmailDomain: resolveCompanyByEmailDomain,
+
+		getClientState:        getClientState,
+		setClientState:        setClientState,
+		getWorkspaceSession:   getWorkspaceSession,
+		setWorkspaceSession:   setWorkspaceSession,
+		patchWorkspaceSession: patchWorkspaceSession,
+
+		deferStarNag:                        deferStarNag,
+		completeStarNag:                     completeStarNag,
+		disableStarNag:                      disableStarNag,
+		forceShowStarNag:                    forceShowStarNag,
+		notifyStarNagOnboardingCompleted:    notifyStarNagOnboardingCompleted,
+		openWebStarNag:                      openWebStarNag,
+		starOrcaFromNag:                     starOrcaFromNag,
+		prepareStarNagAgentValueMoment:      prepareStarNagAgentValueMoment,
+		showPreparedStarNagAgentValueMoment: showPreparedStarNagAgentValueMoment,
 	}
 }
 
@@ -160,6 +209,88 @@ func (s *Server) SetOnboardingState(ctx context.Context, req *tenantv1.SetOnboar
 	err := s.setOnboardingState.Execute(ctx, usecase.SetOnboardingStateInput{
 		UserID:    req.GetUserId(),
 		StateJSON: req.GetStateJson(),
+	})
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+// ── Client-local state / workspace session handlers (CR-STORAGE-001/003/
+// 004a,b) ──────────────────────────────────────────────────────────────
+//
+// Security note: every handler below scopes by req.GetUserId() exactly as
+// GetOnboardingState/SetOnboardingState above already do — company_id is
+// NEVER read from the request (there is no such field), only from
+// tenant.RequireTenantID(ctx) inside the usecase, populated by the gRPC
+// tenant-extraction interceptor from the authenticated caller's identity.
+
+func clientStateKindFromProto(kind tenantv1.ClientStateKind) usecase.ClientStateKind {
+	switch kind {
+	case tenantv1.ClientStateKind_CLIENT_STATE_KIND_KEYBINDINGS:
+		return usecase.ClientStateKindKeybindings
+	case tenantv1.ClientStateKind_CLIENT_STATE_KIND_UI_LOCAL:
+		return usecase.ClientStateKindUILocal
+	case tenantv1.ClientStateKind_CLIENT_STATE_KIND_SAVED_RUNTIME_ENVIRONMENTS:
+		return usecase.ClientStateKindSavedRuntimeEnvironments
+	case tenantv1.ClientStateKind_CLIENT_STATE_KIND_SETTINGS:
+		return usecase.ClientStateKindSettings
+	case tenantv1.ClientStateKind_CLIENT_STATE_KIND_ACCOUNTS_DEV_SERVER_MAP:
+		return usecase.ClientStateKindAccountsDevServerMap
+	default:
+		// Deliberately not a real kind — GetClientState/SetClientState's own
+		// columnForKind switch rejects this as TENANT_UNKNOWN_CLIENT_STATE_KIND,
+		// same defense-in-depth double-whitelist as adapter/postgres's
+		// columnNameFor.
+		return usecase.ClientStateKind("")
+	}
+}
+
+func (s *Server) GetClientState(ctx context.Context, req *tenantv1.GetClientStateRequest) (*tenantv1.GetClientStateResponse, error) {
+	result, err := s.getClientState.Execute(ctx, req.GetUserId(), clientStateKindFromProto(req.GetKind()))
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &tenantv1.GetClientStateResponse{StateJson: result.StateJSON, Found: result.Found}, nil
+}
+
+func (s *Server) SetClientState(ctx context.Context, req *tenantv1.SetClientStateRequest) (*emptypb.Empty, error) {
+	err := s.setClientState.Execute(ctx, usecase.SetClientStateInput{
+		UserID:    req.GetUserId(),
+		Kind:      clientStateKindFromProto(req.GetKind()),
+		StateJSON: req.GetStateJson(),
+	})
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) GetWorkspaceSession(ctx context.Context, req *tenantv1.GetWorkspaceSessionRequest) (*tenantv1.GetWorkspaceSessionResponse, error) {
+	result, err := s.getWorkspaceSession.Execute(ctx, req.GetUserId(), req.GetHostId())
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &tenantv1.GetWorkspaceSessionResponse{SessionJson: result.SessionJSON, Found: result.Found}, nil
+}
+
+func (s *Server) SetWorkspaceSession(ctx context.Context, req *tenantv1.SetWorkspaceSessionRequest) (*emptypb.Empty, error) {
+	err := s.setWorkspaceSession.Execute(ctx, usecase.SetWorkspaceSessionInput{
+		UserID:      req.GetUserId(),
+		HostID:      req.GetHostId(),
+		SessionJSON: req.GetSessionJson(),
+	})
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) PatchWorkspaceSession(ctx context.Context, req *tenantv1.PatchWorkspaceSessionRequest) (*emptypb.Empty, error) {
+	err := s.patchWorkspaceSession.Execute(ctx, usecase.PatchWorkspaceSessionInput{
+		UserID:    req.GetUserId(),
+		HostID:    req.GetHostId(),
+		PatchJSON: req.GetPatchJson(),
 	})
 	if err != nil {
 		return nil, apperrors.ToGRPCStatus(err)
@@ -362,6 +493,14 @@ func (s *Server) ListTeams(ctx context.Context, req *tenantv1.ListTeamsRequest) 
 	return &tenantv1.ListTeamsResponse{Teams: out}, nil
 }
 
+func (s *Server) ListTeamsForUser(ctx context.Context, req *tenantv1.ListTeamsForUserRequest) (*tenantv1.ListTeamsForUserResponse, error) {
+	teamIDs, err := s.listTeamsForUser.Execute(ctx, usecase.ListTeamsForUserInput{UserID: req.GetUserId()})
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &tenantv1.ListTeamsForUserResponse{TeamIds: teamIDs}, nil
+}
+
 func (s *Server) RemoveTeamMember(ctx context.Context, req *tenantv1.RemoveTeamMemberRequest) (*emptypb.Empty, error) {
 	err := s.removeTeamMember.Execute(ctx, usecase.RemoveTeamMemberInput{
 		TeamID: req.GetTeamId(),
@@ -406,6 +545,80 @@ func (s *Server) ResolveCompanyByEmailDomain(ctx context.Context, req *tenantv1.
 		return nil, apperrors.ToGRPCStatus(err)
 	}
 	return &tenantv1.ResolveCompanyByEmailDomainResponse{CompanyId: result.CompanyID, Found: result.Found}, nil
+}
+
+// ── starNag.* handlers (BUG-005/SOL-005) ──────────────────────────────────
+
+func (s *Server) DismissStarNag(ctx context.Context, req *tenantv1.DismissStarNagRequest) (*emptypb.Empty, error) {
+	if err := s.deferStarNag.Execute(ctx, req.GetUserId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) DeferStarNag(ctx context.Context, req *tenantv1.DeferStarNagRequest) (*emptypb.Empty, error) {
+	if err := s.deferStarNag.Execute(ctx, req.GetUserId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) CompleteStarNag(ctx context.Context, req *tenantv1.CompleteStarNagRequest) (*emptypb.Empty, error) {
+	if err := s.completeStarNag.Execute(ctx, req.GetUserId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) DisableStarNag(ctx context.Context, req *tenantv1.DisableStarNagRequest) (*emptypb.Empty, error) {
+	if err := s.disableStarNag.Execute(ctx, req.GetUserId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) ForceShowStarNag(ctx context.Context, req *tenantv1.ForceShowStarNagRequest) (*emptypb.Empty, error) {
+	if err := s.forceShowStarNag.Execute(ctx, req.GetUserId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) NotifyStarNagOnboardingCompleted(ctx context.Context, req *tenantv1.NotifyStarNagOnboardingCompletedRequest) (*emptypb.Empty, error) {
+	if err := s.notifyStarNagOnboardingCompleted.Execute(ctx, req.GetUserId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) OpenWebStarNag(ctx context.Context, req *tenantv1.OpenWebStarNagRequest) (*emptypb.Empty, error) {
+	if err := s.openWebStarNag.Execute(ctx, req.GetUserId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) StarOrcaFromNag(ctx context.Context, req *tenantv1.StarOrcaFromNagRequest) (*tenantv1.StarOrcaFromNagResponse, error) {
+	starred, err := s.starOrcaFromNag.Execute(ctx, req.GetUserId())
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &tenantv1.StarOrcaFromNagResponse{Starred: starred}, nil
+}
+
+func (s *Server) PrepareStarNagAgentValueMoment(ctx context.Context, req *tenantv1.PrepareStarNagAgentValueMomentRequest) (*tenantv1.StarNagAgentValueMomentPreparation, error) {
+	result, err := s.prepareStarNagAgentValueMoment.Execute(ctx, req.GetUserId(), req.GetAppVersion())
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &tenantv1.StarNagAgentValueMomentPreparation{Status: result.Status, Mode: result.Mode}, nil
+}
+
+func (s *Server) ShowPreparedStarNagAgentValueMoment(ctx context.Context, req *tenantv1.ShowPreparedStarNagAgentValueMomentRequest) (*emptypb.Empty, error) {
+	if err := s.showPreparedStarNagAgentValueMoment.Execute(ctx, req.GetUserId()); err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	return &emptypb.Empty{}, nil
 }
 
 func toProtoUserProfile(p domain.UserProfile) (*tenantv1.UserProfile, error) {

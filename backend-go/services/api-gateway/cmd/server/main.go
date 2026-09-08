@@ -254,6 +254,11 @@ func run() error {
 	// request/response ChannelHandlers, see channels_push.go's doc comment.
 	clientEventBus := wscompat.NewClientEventBus()
 	wscompat.RegisterPushChannels(wsCompatRegistry, wscompat.NotificationStreamOpener(notificationStreamOpener), clientEventBus)
+	// clientState.*/workspaceSession.* (CR-STORAGE-001/003/004a,b) — same
+	// "separate call, not folded into RegisterRealChannels" pattern as
+	// RegisterPushChannels above, so this addition doesn't collide with
+	// other parallel edits to RegisterRealChannels's own signature.
+	wscompat.RegisterClientStateChannels(wsCompatRegistry, tenantClient)
 	wsCompatHandler := wscompat.New(logger, sessionValidator, wsCompatRegistry)
 
 	// agentProxyHandler raw-proxies the Dev Server Agent's /agent (WS) and

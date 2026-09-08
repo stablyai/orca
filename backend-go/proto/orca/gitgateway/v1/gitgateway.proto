@@ -72,6 +72,7 @@ service GitGatewayService {
   rpc WriteFile(WriteFileRequest) returns (WriteFileResponse);
   rpc WriteFileChunk(WriteFileChunkRequest) returns (WriteFileChunkResponse);
   rpc CreateDir(CreateDirRequest) returns (CreateDirResponse);
+  rpc CreateFile(CreateFileRequest) returns (CreateFileResponse);
   rpc DeleteFile(DeleteFileRequest) returns (google.protobuf.Empty);
   rpc StatFile(StatFileRequest) returns (StatFileResponse);
   rpc SearchFiles(SearchFilesRequest) returns (SearchFilesResponse);
@@ -93,6 +94,11 @@ service GitGatewayService {
   rpc ReadIssueCommand(ReadIssueCommandRequest) returns (ReadIssueCommandResponse);
   rpc WriteIssueCommand(WriteIssueCommandRequest) returns (google.protobuf.Empty);
   rpc ScanSetupScriptImports(ScanSetupScriptImportsRequest) returns (ScanSetupScriptImportsResponse);
+  // ReadEphemeralVmRecipes reads orca.yaml's environmentRecipes section off
+  // repoId's owning host (Group 1 of SOL-004 — no new agent capability,
+  // reuses the already-existing fs.readFile relay via GitExecutor.ReadFile).
+  // See specs/backend-go/bugs/missing-v3/solutions/SOL-004-ephemeralvm-channels.md.
+  rpc ReadEphemeralVmRecipes(ReadEphemeralVmRecipesRequest) returns (ReadEphemeralVmRecipesResponse);
   rpc CreateWorktree(CreateWorktreeRequest) returns (CreateWorktreeResponse);
   rpc RemoveWorktree(RemoveWorktreeRequest) returns (google.protobuf.Empty);
   // Required on every GitExecutor implementation from day one — TASK-194
@@ -507,6 +513,17 @@ message CreateDirRequest {
 }
 message CreateDirResponse {}
 
+// files.createFile has no noClobber-equivalent flag on the frontend side
+// (frontend/src/renderer/src/runtime/runtime-file-client.ts:395-414 sends
+// only worktreeId+path) — unlike CreateDir, creating an already-existing
+// file is always an error, matching desktop's local 'wx'-flag semantics
+// (desktop/src/main/ipc/filesystem-mutations.ts).
+message CreateFileRequest {
+  string worktree_id = 1;
+  string path = 2;
+}
+message CreateFileResponse {}
+
 message DeleteFileRequest {
   string worktree_id = 1;
   string path = 2;
@@ -620,6 +637,25 @@ message InitRepoResponse {
 // preferred when both are set.
 message CheckHooksRequest { string worktree_id = 1; string repo_id = 2; }
 message CheckHooksResponse { repeated string installed_hooks = 1; bool orca_hooks_current = 2; }
+
+// ReadEphemeralVmRecipes is called from repo-scoped contexts, same as
+// CheckHooks — no worktree_id variant needed.
+message ReadEphemeralVmRecipesRequest { string repo_id = 1; }
+message ReadEphemeralVmRecipesResponse {
+  string repo_path = 1;
+  repeated EphemeralVmRecipe recipes = 2;
+  repeated string diagnostics = 3;
+}
+message EphemeralVmRecipe {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string create = 4;
+  string suspend = 5;
+  string resume = 6;
+  string destroy = 7;
+  bool destroy_disabled = 8;
+}
 
 // See CheckHooksRequest's doc comment — same repo_id addition, same reason.
 message ReadIssueCommandRequest { string worktree_id = 1; string repo_id = 2; }

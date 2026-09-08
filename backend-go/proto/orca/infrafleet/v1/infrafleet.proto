@@ -234,6 +234,17 @@ message StreamVmProvisionRequest {
   string connection_id = 1;
   string recipe_id = 2;
   string runtime_id = 3;
+  // command is the recipe's resolved `create` shell command — resolved
+  // server-side by api-gateway's wscompat layer via git-gateway-service's
+  // ReadEphemeralVmRecipes (TASK-BE-EVM-005), the same pattern
+  // Suspend/Resume/CleanupEphemeralVmWorkspaceRequest already use for their
+  // own `command` field. infra-fleet-service must not gain a dependency on
+  // git-gateway-service (EphemeralVmRelay's doc comment — the existing
+  // dependency direction is the other way), so it cannot resolve this
+  // itself; added here (missing from this message's original TASK-BE-EVM-002
+  // pass) once TASK-BE-EVM-004's Provision usecase confirmed it needs one,
+  // mirroring the 3 sibling request messages' shape.
+  string command = 4;
 }
 message VmProvisionEvent {
   string type = 1;   // "stdout" | "stderr" | "result" | "error"

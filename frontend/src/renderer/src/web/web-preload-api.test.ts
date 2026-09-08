@@ -105,6 +105,18 @@ async function writeStoredRuntimeEnvironment(storage: Storage): Promise<void> {
   )
 }
 
+// FE-TASK-STORAGE-006/007 added a parallel `clientState.get`/`clientState.set`
+// full-settings sync alongside the legacy 5-field `settings.get`/
+// `settings.update` path (see web-preload-api.ts's settings.get/settings.set
+// and ensureFullSettingsSeeded). Pre-existing tests below assert the exact
+// legacy RPC call sequence; ensureFullSettingsSeeded runs fire-and-forget, so
+// exactly when its clientState.get/clientState.set calls land relative to a
+// later awaited call is a race, not a contract — filter them out so these
+// assertions test what they were written to test, not that race.
+function excludeClientStateCalls<T extends { method: string }>(calls: T[]): T[] {
+  return calls.filter((call) => !call.method.startsWith('clientState.'))
+}
+
 function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
   let settled = false
   void promise.then(
@@ -382,7 +394,9 @@ describe('web settings preload API', () => {
 
     expect(settings.compactWorktreeCards).toBe(true)
     expect(stored.compactWorktreeCards).toBe(true)
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(excludeClientStateCalls(runtimeCalls)).toEqual([
+      { method: 'settings.get', params: undefined }
+    ])
   }, 15_000)
 
   it('hydrates new worktree card style from a paired runtime', async () => {
@@ -415,7 +429,9 @@ describe('web settings preload API', () => {
 
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
     expect(stored.experimentalNewWorktreeCardStyle).toBe(true)
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(excludeClientStateCalls(runtimeCalls)).toEqual([
+      { method: 'settings.get', params: undefined }
+    ])
   })
 
   it('hydrates MiniMax usage settings from a paired runtime', async () => {
@@ -456,7 +472,9 @@ describe('web settings preload API', () => {
     expect(settings.minimaxUsageModels).toBe('general,abab6.5')
     expect(stored.minimaxGroupId).toBe('group-42')
     expect(stored.minimaxUsageModels).toBe('general,abab6.5')
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(excludeClientStateCalls(runtimeCalls)).toEqual([
+      { method: 'settings.get', params: undefined }
+    ])
   })
 
   it('hydrates bot-author overrides from paired runtime settings', async () => {
@@ -485,7 +503,9 @@ describe('web settings preload API', () => {
     const settings = await globals.window.api.settings.get()
 
     expect(settings.prBotAuthorOverrides).toEqual(['gretelflux'])
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
+    expect(excludeClientStateCalls(runtimeCalls)).toEqual([
+      { method: 'settings.get', params: undefined }
+    ])
   })
 
   it('forwards compact worktree card updates to a paired runtime', async () => {
@@ -519,7 +539,7 @@ describe('web settings preload API', () => {
 
     expect(settings.compactWorktreeCards).toBe(true)
     expect(stored.compactWorktreeCards).toBe(true)
-    expect(runtimeCalls).toEqual([
+    expect(excludeClientStateCalls(runtimeCalls)).toEqual([
       { method: 'settings.update', params: { compactWorktreeCards: true } }
     ])
   }, 15_000)
@@ -552,7 +572,7 @@ describe('web settings preload API', () => {
     })
 
     expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
-    expect(runtimeCalls).toEqual([
+    expect(excludeClientStateCalls(runtimeCalls)).toEqual([
       { method: 'settings.update', params: { experimentalNewWorktreeCardStyle: true } }
     ])
   })
@@ -599,7 +619,7 @@ describe('web settings preload API', () => {
     expect(settings.minimaxUsageModels).toBe('general,abab6.5')
     expect(stored.minimaxGroupId).toBe('group-42')
     expect(stored.minimaxUsageModels).toBe('general,abab6.5')
-    expect(runtimeCalls).toEqual([
+    expect(excludeClientStateCalls(runtimeCalls)).toEqual([
       {
         method: 'settings.update',
         params: {
@@ -638,7 +658,7 @@ describe('web settings preload API', () => {
     })
 
     expect(settings.prBotAuthorOverrides).toEqual(['gretelflux'])
-    expect(runtimeCalls).toEqual([
+    expect(excludeClientStateCalls(runtimeCalls)).toEqual([
       { method: 'settings.update', params: { prBotAuthorOverrides: ['gretelflux'] } }
     ])
   })
@@ -710,6 +730,278 @@ describe('web settings preload API', () => {
   })
 })
 
+// FE-TASK-STORAGE-006/007: full-GlobalSettings sync (clientState.get/set,
+// kind: 'settings') alongside the legacy 5-field path, plus one-time seeding.
+describe('web full-settings sync preload API (FE-TASK-STORAGE-006/007)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  function mockClientStateStore(): {
+    calls: { method: string; params: unknown }[]
+    store: Map<string, string>
+  } {
+    const calls: { method: string; params: unknown }[] = []
+    const store = new Map<string, string>()
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push({ method, params })
+          if (method === 'clientState.get') {
+            const { kind } = params as { kind: string }
+            const stateJson = store.get(kind)
+            return Promise.resolve({
+              id: `call-${calls.length}`,
+              ok: true,
+              result: stateJson ? { found: true, stateJson } : { found: false },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'clientState.set') {
+            const { kind, stateJson } = params as { kind: string; stateJson: string }
+            store.set(kind, stateJson)
+            return Promise.resolve({
+              id: `call-${calls.length}`,
+              ok: true,
+              result: undefined,
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          // Why: the legacy 5-field settings.get/settings.update path is not
+          // under test here — respond with an empty settings object so it
+          // resolves without affecting the full-settings assertions.
+          return Promise.resolve({
+            id: `call-${calls.length}`,
+            ok: true,
+            result: { settings: {} },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    return { calls, store }
+  }
+
+  it('settings.set calls both syncRuntimeBackedSettings and syncFullClientSettings, even when one rejects', async () => {
+    const calls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push({ method, params })
+          if (method === 'settings.update') {
+            return Promise.reject(new Error('legacy path unavailable'))
+          }
+          return Promise.resolve({
+            id: `call-${calls.length}`,
+            ok: true,
+            result: undefined,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await globals.window.api.settings.set({ compactWorktreeCards: true })
+
+    const methods = calls.map((call) => call.method)
+    expect(methods).toContain('settings.update')
+    expect(methods).toContain('clientState.set')
+    consoleError.mockRestore()
+  })
+
+  it('settings.set routes the full-settings sync through enqueueWrite/withRetryAndErrorStatus, reporting a visible error status on permanent failure (FE-TASK-STORAGE-005)', async () => {
+    vi.useFakeTimers()
+    let clientStateSetCalls = 0
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'clientState.set') {
+            clientStateSetCalls += 1
+            return Promise.reject(new Error('backend-go unreachable'))
+          }
+          return Promise.resolve({
+            id: `call-${clientStateSetCalls}`,
+            ok: true,
+            result: { settings: {} },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { registerPersistenceStatusSetter } = await import('../store/backend-go-storage')
+    const statusSetter = vi.fn()
+    registerPersistenceStatusSetter(statusSetter)
+    installWebPreloadApi()
+
+    // settings.set itself must not block on the retry sequence (fire-and-
+    // forget) — this await should resolve immediately, well before the
+    // 2s/4s/8s backoff below runs.
+    await globals.window.api.settings.set({ compactWorktreeCards: true })
+    expect(statusSetter).toHaveBeenCalledWith('settings', 'pending')
+
+    // Drain the 3 retries (2s/4s/8s) queued by withRetryAndErrorStatus.
+    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(4_000)
+    await vi.advanceTimersByTimeAsync(8_000)
+
+    expect(clientStateSetCalls).toBe(4) // 1 initial attempt + 3 retries
+    expect(statusSetter).toHaveBeenLastCalledWith('settings', 'error', 'backend-go unreachable')
+
+    registerPersistenceStatusSetter(() => {})
+    vi.useRealTimers()
+  })
+
+  it('settings.get returns the full record from clientState.get when present, without calling the legacy path', async () => {
+    const { calls, store } = mockClientStateStore()
+    // Why a bare partial object, not a full GlobalSettings literal:
+    // getFullClientSettings() only JSON.parses whatever backend-go stored —
+    // it does not validate shape — and this test only reads
+    // compactWorktreeCards back, so a minimal fixture is enough.
+    store.set('settings', JSON.stringify({ compactWorktreeCards: true }))
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+
+    expect(settings.compactWorktreeCards).toBe(true)
+    expect(calls.map((call) => call.method)).toEqual(['clientState.get'])
+  })
+
+  it('settings.get falls back to the legacy path when clientState.get finds no record', async () => {
+    const { calls } = mockClientStateStore()
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+
+    expect(settings).toBeTruthy()
+    // First call: getFullClientSettings's clientState.get (miss). Then the
+    // legacy settings.get path runs. ensureFullSettingsSeeded's own
+    // clientState.get + clientState.set run fire-and-forget after that.
+    expect(calls[0]).toEqual({ method: 'clientState.get', params: { kind: 'settings' } })
+    expect(calls.some((call) => call.method === 'settings.get')).toBe(true)
+  })
+
+  it('ensureFullSettingsSeeded seeds once on a cold clientState, then reuses the seeded record on a second settings.get()', async () => {
+    const { calls, store } = mockClientStateStore()
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.get()
+    // ensureFullSettingsSeeded() runs fire-and-forget after settings.get()
+    // returns — wait for its clientState.set write to land rather than
+    // counting microtask ticks (fragile: depends on how many async hops
+    // callRuntimeResult's own plumbing happens to take).
+    await vi.waitFor(() => {
+      expect(store.has('settings')).toBe(true)
+    })
+    const setCallsAfterFirstGet = calls.filter((call) => call.method === 'clientState.set').length
+    expect(setCallsAfterFirstGet).toBe(1)
+
+    // Second settings.get() (simulated re-mount): clientState.get now finds
+    // the seeded record, so ensureFullSettingsSeeded's write path is never
+    // reached again.
+    await globals.window.api.settings.get()
+    await vi.waitFor(() => {
+      expect(
+        calls.filter((call) => call.method === 'clientState.get').length
+      ).toBeGreaterThanOrEqual(2)
+    })
+
+    const setCallsAfterSecondGet = calls.filter((call) => call.method === 'clientState.set').length
+    expect(setCallsAfterSecondGet).toBe(1)
+  })
+
+  it('stripSecretFields removes vapidKeys/webPushSubscriptions/codexManagedAccounts/claudeManagedAccounts before syncFullClientSettings, without dropping unrelated fields', async () => {
+    const { calls } = mockClientStateStore()
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.settings.set({
+      compactWorktreeCards: true,
+      vapidKeys: { publicKey: 'pub', privateKey: 'SUPER-SECRET-PRIVATE-KEY' },
+      webPushSubscriptions: [
+        {
+          id: 'sub-1',
+          endpoint: 'https://push.example.com/very-secret-endpoint',
+          keys: { auth: 'auth-secret', p256dh: 'p256dh-secret' },
+          addedAt: 1
+        }
+      ],
+      codexManagedAccounts: [
+        {
+          id: 'codex-1',
+          email: 'a@example.com',
+          managedHomePath: '/home/alice/.codex-managed',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      claudeManagedAccounts: [
+        {
+          id: 'claude-1',
+          email: 'a@example.com',
+          managedAuthPath: '/home/alice/.claude-managed',
+          authMethod: 'subscription-oauth',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ]
+    })
+
+    const setCall = calls.find((call) => call.method === 'clientState.set')
+    expect(setCall).toBeTruthy()
+    const { stateJson } = setCall!.params as { kind: string; stateJson: string }
+    const synced = JSON.parse(stateJson) as Record<string, unknown>
+
+    expect(synced.vapidKeys).toBeFalsy()
+    expect(JSON.stringify(synced)).not.toContain('SUPER-SECRET-PRIVATE-KEY')
+    expect(JSON.stringify(synced)).not.toContain('very-secret-endpoint')
+    expect(JSON.stringify(synced)).not.toContain('auth-secret')
+    expect(JSON.stringify(synced)).not.toContain('p256dh-secret')
+    expect(synced.webPushSubscriptions).toEqual([])
+    expect(synced.codexManagedAccounts).toEqual([])
+    expect(synced.claudeManagedAccounts).toEqual([])
+    // Not a secret field — must survive stripSecretFields untouched.
+    expect(synced.compactWorktreeCards).toBe(true)
+  })
+})
+
 describe('web MiniMax preload API', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -725,6 +1017,123 @@ describe('web MiniMax preload API', () => {
     await expect(api.minimaxCredentials.getStatus()).resolves.toEqual({ configured: false })
     await expect(api.minimaxCredentials.saveCookie('_token=abc')).rejects.toThrow(/desktop app/i)
     await expect(api.minimaxCredentials.clearCookie()).resolves.toEqual({ configured: false })
+  })
+})
+
+// FE-TASK-STORAGE-008: orca.web.workspaceSession.v1 — debounce + RPC + hydrate
+// fallback (session.set/patch mirror to backend-go's workspaceSession.*).
+describe('web workspace session preload API (FE-TASK-STORAGE-008)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  function mockWorkspaceSessionRpc(): { calls: { method: string; params: unknown }[] } {
+    const calls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push({ method, params })
+          if (method === 'workspaceSession.get') {
+            return Promise.resolve({
+              id: `call-${calls.length}`,
+              ok: true,
+              result: { found: false },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${calls.length}`,
+            ok: true,
+            result: undefined,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    return { calls }
+  }
+
+  it('collapses 5 session.patch calls within 500ms into a single workspaceSession.set RPC after the debounce window', async () => {
+    vi.useFakeTimers()
+    const { calls } = mockWorkspaceSessionRpc()
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    for (let i = 0; i < 5; i++) {
+      await globals.window.api.session.patch({ activeRepoId: `repo-${i}` })
+      await vi.advanceTimersByTimeAsync(100)
+    }
+    // 5 * 100ms = 500ms elapsed; the 1s trailing debounce has not fired yet.
+    expect(calls.filter((c) => c.method === 'workspaceSession.set')).toHaveLength(0)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(calls.filter((c) => c.method === 'workspaceSession.set')).toHaveLength(1)
+  })
+
+  it('session.setSync never calls the workspaceSession RPC (beforeunload has no time to wait on network)', async () => {
+    vi.useFakeTimers()
+    const { calls } = mockWorkspaceSessionRpc()
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const session = await globals.window.api.session.get()
+    globals.window.api.session.setSync({ ...session, activeRepoId: 'repo-x' })
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    expect(calls.filter((c) => c.method === 'workspaceSession.set')).toHaveLength(0)
+  })
+
+  it('a debounce burst that never stops still flushes once maxWait (5s) elapses', async () => {
+    vi.useFakeTimers()
+    const { calls } = mockWorkspaceSessionRpc()
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    // Patch every 400ms, continuously — each call resets the 1s trailing
+    // timer, so without a maxWait ceiling this would never flush.
+    for (let i = 0; i < 13; i++) {
+      await globals.window.api.session.patch({ activeRepoId: `repo-${i}` })
+      await vi.advanceTimersByTimeAsync(400)
+    }
+    // 13 * 400ms = 5200ms of continuous, never-idle patching.
+    expect(calls.filter((c) => c.method === 'workspaceSession.set').length).toBeGreaterThanOrEqual(
+      1
+    )
+  })
+
+  it('getStoredWorkspaceSession returns the default immediately when localStorage is empty, and hydrates in the background', async () => {
+    const { calls } = mockWorkspaceSessionRpc()
+
+    const globals = installBrowserGlobals('Linux')
+    await writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const session = await globals.window.api.session.get()
+
+    expect(session).toBeTruthy()
+    await vi.waitFor(() => {
+      expect(calls.some((c) => c.method === 'workspaceSession.get')).toBe(true)
+    })
   })
 })
 
@@ -1355,7 +1764,10 @@ describe('web UI preload API', () => {
     expect(ui.worktreeCardProperties).toEqual(['status', 'unread'])
     expect(ui.worktreeCardProperties).not.toContain('ports')
     expect(ui.worktreeCardProperties).not.toContain('inline-agents')
-    expect(runtimeCalls.map((call) => call.method)).toEqual(['settings.get', 'ui.get'])
+    expect(excludeClientStateCalls(runtimeCalls).map((call) => call.method)).toEqual([
+      'settings.get',
+      'ui.get'
+    ])
   })
 
   it('preserves explicit local card display properties when compact fallback settings are present', async () => {
@@ -1399,7 +1811,10 @@ describe('web UI preload API', () => {
     expect(ui.worktreeCardProperties).toEqual(['status', 'unread', 'pr'])
     expect(ui.worktreeCardProperties).not.toContain('ports')
     expect(ui.worktreeCardProperties).not.toContain('inline-agents')
-    expect(runtimeCalls.map((call) => call.method)).toEqual(['settings.get', 'ui.get'])
+    expect(excludeClientStateCalls(runtimeCalls).map((call) => call.method)).toEqual([
+      'settings.get',
+      'ui.get'
+    ])
   })
 
   it('keeps newer feature interaction counts when runtime responses resolve out of order', async () => {

@@ -18,6 +18,11 @@ type fakeConnectionRepository struct {
 	found      bool
 	activeConn domain.Connection
 	activeErr  error
+
+	// updated/updateErr drive UpdateStatus's fake behavior — used by
+	// poll_fleet_health_test.go's degraded/reestablish coverage.
+	updated   []domain.Connection
+	updateErr error
 }
 
 func (f *fakeConnectionRepository) CreateConnection(ctx context.Context, conn domain.Connection) (domain.Connection, error) {
@@ -37,6 +42,16 @@ func (f *fakeConnectionRepository) GetActiveByDevServer(ctx context.Context, ten
 		return domain.Connection{}, false, nil
 	}
 	return f.activeConn, true, nil
+}
+
+// UpdateStatus implements usecase.ConnectionRepository.UpdateStatus.
+func (f *fakeConnectionRepository) UpdateStatus(ctx context.Context, tenantID string, conn domain.Connection) error {
+	if f.updateErr != nil {
+		return f.updateErr
+	}
+	f.updated = append(f.updated, conn)
+	f.activeConn = conn
+	return nil
 }
 
 func TestCreateConnection_RequiresTenantContext(t *testing.T) {

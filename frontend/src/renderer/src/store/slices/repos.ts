@@ -92,7 +92,6 @@ import {
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
-import { logRemoveProjectDiagnostic } from '@/lib/remove-project-diagnostic-log'
 import { isWebClientLocation } from '@/lib/web-client-location'
 
 const ERROR_TOAST_DURATION = 60_000
@@ -3450,9 +3449,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   removeProject: async (projectId, options) => {
-    logRemoveProjectDiagnostic(
-      `removeProject ENTER projectId=${projectId} hostId=${options?.hostId ?? 'none'}`
-    )
     try {
       // Why: pass an explicit hostId (e.g. when removing an SSH host's root repo)
       // so a duplicate id across hosts resolves to the intended row instead of
@@ -3512,18 +3508,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const idExistsOnOtherHost = get().repos.some(
         (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
       )
-      logRemoveProjectDiagnostic(
-        `removeProject(${projectId}) resolved ownerHostId=${ownerHostId} targetKind=${target.kind} ` +
-          `${target.kind === 'environment' ? `environmentId=${target.environmentId} ` : ''}idExistsOnOtherHost=${idExistsOnOtherHost}`
-      )
       await (target.kind === 'local'
         ? idExistsOnOtherHost
           ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
           : window.api.repos.remove({ repoId: projectId })
         : callRuntimeRpc(target, 'repo.rm', { repoId: projectId }, { timeoutMs: 15_000 }))
-      logRemoveProjectDiagnostic(
-        `removeProject(${projectId}) removal call resolved without throwing`
-      )
 
       get().clearOrcaHookTrustForRepo(projectId)
       const repoPath = get().repos.find((repo) =>
@@ -3678,14 +3667,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             : {})
         }
       })
-      logRemoveProjectDiagnostic(
-        `removeProject(${projectId}) local set() applied, repos.length now=${get().repos.length}`
-      )
     } catch (err) {
       // Why: previously swallowed entirely — a failed repo.rm (e.g. RPC timeout,
       // unauthenticated runtime session) left the project visibly unremoved with
       // no feedback that anything had gone wrong.
-      logRemoveProjectDiagnostic(`removeProject(${projectId}) CAUGHT: ${String(err)}`)
       console.error('Failed to remove repo:', err)
       toast.error(
         translate('auto.store.slices.repos.removeProjectFailed', 'Failed to remove project'),

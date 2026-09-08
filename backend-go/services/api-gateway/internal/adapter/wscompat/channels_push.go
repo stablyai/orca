@@ -32,6 +32,7 @@ type NotificationStreamOpener func(ctx context.Context, userID string) (notifica
 // alongside (not instead of) RegisterRealChannels.
 func RegisterPushChannels(r *Registry, notificationStreamOpener NotificationStreamOpener, bus *ClientEventBus) {
 	registerNotificationStreamChannel(r, notificationStreamOpener)
+	registerStarNagVisibilityStreamChannel(r, notificationStreamOpener)
 	registerClientEventsChannel(r, bus)
 }
 

@@ -30,7 +30,10 @@ const CONNECT_TIMEOUT_MS = 2_000
 const SPAWN_WAIT_TIMEOUT_MS = 5_000
 const SPAWN_WAIT_POLL_MS = 100
 
-type PendingRequest = { resolve: (v: { result?: unknown; error?: { message: string } }) => void; reject: (err: Error) => void }
+type PendingRequest = {
+  resolve: (v: { result?: unknown; error?: { message: string } }) => void
+  reject: (err: Error) => void
+}
 type NotifyFn = (method: string, params: Record<string, unknown>) => void
 
 let socket: net.Socket | null = null
@@ -105,10 +108,15 @@ function wireSocket(sock: net.Socket): void {
   const decoder = new DaemonMessageDecoder((msg: DaemonMessage) => {
     if (isDaemonResponse(msg)) {
       const pending = pendingRequests.get(msg.id)
-      if (!pending) {return}
+      if (!pending) {
+        return
+      }
       pendingRequests.delete(msg.id)
-      if (msg.error) {pending.reject(new Error(msg.error.message))}
-      else {pending.resolve({ result: msg.result })}
+      if (msg.error) {
+        pending.reject(new Error(msg.error.message))
+      } else {
+        pending.resolve({ result: msg.result })
+      }
       return
     }
     // Notification: { method, params }, no id.
@@ -118,7 +126,9 @@ function wireSocket(sock: net.Socket): void {
   })
   sock.on('data', (chunk) => decoder.feed(chunk.toString('utf8')))
   const onDrop = (): void => {
-    if (socket === sock) {socket = null}
+    if (socket === sock) {
+      socket = null
+    }
     for (const [id, pending] of pendingRequests) {
       pending.reject(new Error('pty-daemon connection lost'))
       pendingRequests.delete(id)
@@ -129,8 +139,12 @@ function wireSocket(sock: net.Socket): void {
 }
 
 async function ensureConnection(log: AgentLogger): Promise<net.Socket> {
-  if (socket && !socket.destroyed) {return socket}
-  if (connectingPromise) {return connectingPromise}
+  if (socket && !socket.destroyed) {
+    return socket
+  }
+  if (connectingPromise) {
+    return connectingPromise
+  }
   connectingPromise = (async () => {
     const socketPath = getDaemonSocketPath()
     let sock: net.Socket
@@ -164,8 +178,14 @@ async function sendRequest(
       reject(new Error(`pty-daemon request '${method}' timed out after ${REQUEST_TIMEOUT_MS}ms`))
     }, REQUEST_TIMEOUT_MS)
     pendingRequests.set(id, {
-      resolve: (v) => { clearTimeout(timer); resolve(v) },
-      reject: (err) => { clearTimeout(timer); reject(err) }
+      resolve: (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      reject: (err) => {
+        clearTimeout(timer)
+        reject(err)
+      }
     })
     sock.write(encodeDaemonMessage({ id, method, params }))
   })
@@ -178,7 +198,9 @@ async function forward(
   log: AgentLogger,
   notify?: NotifyFn
 ): Promise<object> {
-  if (notify) {currentNotify = notify}
+  if (notify) {
+    currentNotify = notify
+  }
   try {
     const outcome = await sendRequest(method, params, log)
     if (outcome.error) {
@@ -273,6 +295,23 @@ export async function handlePtyListProcesses(
 export async function notifyDaemonSessionClosed(log: AgentLogger): Promise<void> {
   try {
     await sendRequest('daemon.sessionClosed', {}, log)
+  } catch {
+    // best effort — a dead daemon has no PTYs to protect anyway
+  }
+}
+
+/**
+ * notifyDaemonSessionTeardown — CR-STORAGE-008(a)/TASK-AG-STORAGE-007's
+ * confirmed-logout path. Tells the daemon to kill every terminal PTY NOW,
+ * bypassing any grace period already counting down — the one case where
+ * immediate cleanup (not "wait and see if the client reconnects") is
+ * correct, because the caller has already confirmed this is intentional.
+ * Best-effort like notifyDaemonSessionClosed: a dead daemon has nothing
+ * left to tear down.
+ */
+export async function notifyDaemonSessionTeardown(log: AgentLogger): Promise<void> {
+  try {
+    await sendRequest('daemon.sessionTeardown', {}, log)
   } catch {
     // best effort — a dead daemon has no PTYs to protect anyway
   }

@@ -34,6 +34,10 @@ import { dispatchAgentExecRpc } from './agent-rpc-dispatch-agent-exec'
 import { dispatchPtyRpc } from './agent-rpc-dispatch-pty'
 import { dispatchBrowserRpc } from './agent-rpc-dispatch-browser'
 import { dispatchMiscRpc } from './agent-rpc-dispatch-misc'
+import { dispatchCliRpc } from './agent-rpc-dispatch-cli'
+import { dispatchAccountsRpc } from './agent-rpc-dispatch-accounts'
+import { dispatchVmRpc } from './agent-rpc-dispatch-vm'
+import { dispatchHiddenTargetRpc } from './agent-rpc-dispatch-hidden-target'
 
 const rpcTracer = createTracer('agent:rpc')
 
@@ -342,9 +346,29 @@ async function route(
     return fromBrowser
   }
 
-  const fromMisc = await dispatchMiscRpc(rpc, tools, config, log, ws)
+  const fromMisc = await dispatchMiscRpc(rpc, tools, config, log, ws, state)
   if (fromMisc !== null) {
     return fromMisc
+  }
+
+  const fromCli = await dispatchCliRpc(rpc)
+  if (fromCli !== null) {
+    return fromCli
+  }
+
+  const fromAccounts = await dispatchAccountsRpc(rpc)
+  if (fromAccounts !== null) {
+    return fromAccounts
+  }
+
+  const fromVm = await dispatchVmRpc(rpc, ws, state)
+  if (fromVm !== null) {
+    return fromVm
+  }
+
+  const fromHiddenTarget = await dispatchHiddenTargetRpc(rpc)
+  if (fromHiddenTarget !== null) {
+    return fromHiddenTarget
   }
 
   // ── Unknown method ───────────────────────────────────────────────────────

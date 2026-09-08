@@ -56,6 +56,11 @@ export type WorkspacePortAdvertisedUrlChangedEvent = {
 
 export type WorkspacePortKillRequest = {
   repoId?: string
+  // Precise alternative to repoId: a repo can have several worktrees, so
+  // repoId alone is ambiguous server-side (see BUG-016). The caller usually
+  // already knows the exact worktree a port belongs to (WorkspacePortOwner.
+  // worktreeId) — pass it whenever available.
+  worktreeId?: string
   pid: number
   port: number
 }

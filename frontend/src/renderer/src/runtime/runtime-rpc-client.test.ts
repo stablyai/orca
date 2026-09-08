@@ -20,15 +20,17 @@ import {
 
 const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentSubscribe = vi.fn()
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   runtimeCall.mockReset()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentSubscribe.mockReset()
   vi.stubGlobal('window', {
     api: {
       runtime: { call: runtimeCall },
-      runtimeEnvironments: { call: runtimeEnvironmentCall }
+      runtimeEnvironments: { call: runtimeEnvironmentCall, subscribe: runtimeEnvironmentSubscribe }
     }
   })
 })

@@ -140,6 +140,8 @@ func (fakeExecutor) WriteFileChunk(context.Context, string, string, int64, []byt
 }
 
 func (fakeExecutor) CreateDir(context.Context, string, string, bool, bool) error { return nil }
+
+func (fakeExecutor) CreateFile(context.Context, string, string) error { return nil }
 func (fakeExecutor) Delete(context.Context, string, string, bool) error          { return nil }
 
 func (fakeExecutor) Stat(context.Context, string, string) (domain.FileStat, error) {
@@ -343,6 +345,7 @@ func newTestServerWithResolver(resolver *fakeResolver) *Server {
 		usecase.NewWriteFileUseCase(resolver, exec, exec),
 		usecase.NewWriteFileChunkUseCase(resolver, exec, exec),
 		usecase.NewCreateDirUseCase(resolver, exec, exec),
+		usecase.NewCreateFileUseCase(resolver, exec, exec),
 		usecase.NewDeleteFileUseCase(resolver, exec, exec),
 		usecase.NewStatFileUseCase(resolver, exec, exec),
 		usecase.NewSearchFilesUseCase(resolver, exec, exec),
@@ -375,6 +378,7 @@ func newTestServerWithResolver(resolver *fakeResolver) *Server {
 		usecase.NewResolveConflict(resolver, exec, exec),
 		usecase.NewDiscard(resolver, exec, exec),
 		usecase.NewBulkDiscard(resolver, exec, exec),
+		usecase.NewReadEphemeralVmRecipes(reachability, projects, exec, exec),
 	)
 }
 
@@ -597,6 +601,17 @@ func TestServer_WriteFile_TranslatesResult(t *testing.T) {
 	}
 	if resp.GetBytesWritten() != 7 {
 		t.Errorf("unexpected bytes written: %d", resp.GetBytesWritten())
+	}
+}
+
+func TestServer_CreateFile_Success(t *testing.T) {
+	s := newTestServer()
+	resp, err := s.CreateFile(context.Background(), &gitgatewayv1.CreateFileRequest{WorktreeId: "wt-1", Path: "new.txt"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp == nil {
+		t.Fatal("expected non-nil response")
 	}
 }
 

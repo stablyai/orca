@@ -42,6 +42,27 @@ service ScmIntegrationService {
   rpc SetPullRequestAutoMerge(SetPullRequestAutoMergeRequest) returns (PullRequest);
   rpc UpdateIssue(UpdateIssueRequest) returns (Issue);
 
+  // UpdatePullRequest — github.updatePRTitle. Plain (repo, number) address,
+  // mirroring UpdateIssueRequest's shape immediately above (title-only for
+  // now, additive-ready for body/base/state later) — NOT
+  // UpdatePullRequestBySlug's Projects-v2-item addressing (this file, see
+  // UpdatePullRequestBySlugRequest below): a PR not added to any Projects
+  // v2 board has no slug, and github.updatePRTitle's actual callers have no
+  // dependency on GitHub Projects at all.
+  rpc UpdatePullRequest(UpdatePullRequestRequest) returns (PullRequest);
+
+  // StarRepository — github.starOrca. Routes through the same per-tenant
+  // OAuth client every other RPC on this service uses (no fixed-app-token
+  // shortcut — see SOL-012's routing-decision section): GitHub's star
+  // endpoint (PUT /user/starred/{owner}/{repo}) stars the repo on behalf of
+  // whichever identity authenticated the call, so there is no "star this
+  // repo as the Orca app" concept separate from an actual connected GitHub
+  // account. The natural backing RPC for github.checkOrcaStarred's existing
+  // honest nil,nil no-op (channels_scm.go:59-70) too, though a
+  // CheckRepositoryStarred sibling isn't added here — out of this task's
+  // scope, a low-cost follow-up once this lands.
+  rpc StarRepository(StarRepositoryRequest) returns (StarRepositoryResponse);
+
   // GetPullRequestForBranch — github.prForBranch AND hostedReview.forBranch's
   // branch-filtered case (SOL-014). Provider-generic: parameterized by
   // ScmProvider like every other RPC here, not a GitHub-only addition.
@@ -324,6 +345,43 @@ message UpdateIssueRequest {
   repeated string add_labels = 8;
   repeated string remove_labels = 9;
   repeated string assignees = 10;
+}
+
+message UpdatePullRequestRequest {
+  string tenant_id = 1;
+  ScmProvider provider = 2;
+  string repo = 3;
+  int32 number = 4;
+  // Only field github.updatePRTitle's actual wire shape sends today
+  // (frontend/src/preload/api-types.ts:1605-1610) — optional + additional
+  // PATCH-able fields (body, base, state) can be added later the same way
+  // UpdateIssueRequest grew its own optional fields incrementally, without
+  // a breaking change.
+  optional string title = 5;
+}
+
+message StarRepositoryRequest {
+  string tenant_id = 1;
+  // GitHub-only today (starOrca's only caller), but parameterized like
+  // every other RPC on this service rather than hardcoded, per this
+  // proto's existing convention (e.g. GetRateLimitStatusRequest).
+  ScmProvider provider = 2;
+  string repo = 3; // "owner/name" slug — always the Orca repo for this
+                    // call site's actual use, but not hardcoded
+                    // server-side: the usecase takes whatever repo the
+                    // caller resolved, consistent with every other
+                    // repo-addressed RPC on this service never baking in a
+                    // specific repo name.
+}
+
+message StarRepositoryResponse {
+  // true once the API call succeeds — GitHub's star endpoint is
+  // idempotent (starring an already-starred repo still 204s), so this is
+  // always true on success, never meaningfully false; kept as an explicit
+  // field (rather than google.protobuf.Empty) so a future provider
+  // without a star concept could return false instead of erroring,
+  // without a wire-shape change.
+  bool starred = 1;
 }
 
 message GetPullRequestForBranchRequest {

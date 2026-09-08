@@ -16,7 +16,7 @@ import (
 
 func newTestIssuer(secret string) (*TokenIssuer, *Registry) {
 	registry := NewRegistry(time.Hour)
-	issuer := NewTokenIssuer(registry, Config{APISecret: secret, OrcaVersion: "test-version", Port: 6768}, nil, nil)
+	issuer := NewTokenIssuer(registry, Config{APISecret: secret, OrcaVersion: "test-version", Port: 6768}, nil, nil, nil)
 	return issuer, registry
 }
 
@@ -227,7 +227,7 @@ func TestTokenEndpoint_WithResolver_RegistrySlotKeyIsResolvedUUIDNotRawDevServer
 	t.Cleanup(registry.Stop)
 	repo := &fakeResolverRepo{}
 	resolver := usecase.NewResolveDirectWebSocketDevServer(repo)
-	issuer := NewTokenIssuer(registry, Config{APISecret: "s3cr3t", OrcaVersion: "test-version", Port: 6768, DefaultTenantID: "tenant-1"}, nil, resolver)
+	issuer := NewTokenIssuer(registry, Config{APISecret: "s3cr3t", OrcaVersion: "test-version", Port: 6768, DefaultTenantID: "tenant-1"}, nil, resolver, nil)
 
 	rec := doRequest(t, issuer, http.MethodPost, `{"devServerId":"ds-42"}`, "s3cr3t")
 	body := decodeJSON(t, rec)
@@ -253,6 +253,105 @@ func TestTokenEndpoint_WithResolver_RegistrySlotKeyIsResolvedUUIDNotRawDevServer
 	}
 	if slotKey != registeredID {
 		t.Errorf("registry slot key = %q, want the resolved row's UUID %q — AttachInboundSession would key devserveragent.Client.sessions by the wrong value", slotKey, registeredID)
+	}
+}
+
+// fakeEphemeralVmRuntimeRepo is a minimal usecase.EphemeralVmRuntimeRepository
+// double — only SetEnvironmentID is exercised by TokenIssuer, the rest exist
+// solely to satisfy the interface.
+type fakeEphemeralVmRuntimeRepo struct {
+	// existingRuntimeIDs is the set of ephemeral_vm_runtimes.id values this
+	// fake pretends exist for the test's tenant — mirrors the real
+	// postgres implementation's "UPDATE ... WHERE id = $2" matching 0 rows
+	// when runtimeID isn't one of these (the common case: most devServerID
+	// values passed to /api/agent-token are not ephemeral VM runtimes).
+	existingRuntimeIDs map[string]bool
+	setCalls           []setEnvironmentIDCall
+}
+
+type setEnvironmentIDCall struct {
+	tenantID, runtimeID, environmentID string
+}
+
+func (f *fakeEphemeralVmRuntimeRepo) SetEnvironmentID(_ context.Context, tenantID, runtimeID, environmentID string) (domain.EphemeralVmRuntime, error) {
+	f.setCalls = append(f.setCalls, setEnvironmentIDCall{tenantID, runtimeID, environmentID})
+	if !f.existingRuntimeIDs[runtimeID] {
+		return domain.EphemeralVmRuntime{}, domain.ErrEphemeralVmRuntimeNotFound
+	}
+	return domain.EphemeralVmRuntime{ID: runtimeID, EnvironmentID: environmentID}, nil
+}
+func (f *fakeEphemeralVmRuntimeRepo) List(context.Context, string) ([]domain.EphemeralVmRuntime, error) {
+	return nil, nil
+}
+func (f *fakeEphemeralVmRuntimeRepo) Get(context.Context, string, string) (domain.EphemeralVmRuntime, error) {
+	return domain.EphemeralVmRuntime{}, nil
+}
+func (f *fakeEphemeralVmRuntimeRepo) GetByWorkspaceID(context.Context, string, string) (domain.EphemeralVmRuntime, error) {
+	return domain.EphemeralVmRuntime{}, nil
+}
+func (f *fakeEphemeralVmRuntimeRepo) UpdateStatus(context.Context, string, string, string, string, string) (domain.EphemeralVmRuntime, error) {
+	return domain.EphemeralVmRuntime{}, nil
+}
+func (f *fakeEphemeralVmRuntimeRepo) UpdateProvisionResult(context.Context, string, string, string, string, string) (domain.EphemeralVmRuntime, error) {
+	return domain.EphemeralVmRuntime{}, nil
+}
+func (f *fakeEphemeralVmRuntimeRepo) FindDevServerByEnvironmentID(context.Context, string, string) (string, bool, error) {
+	return "", false, nil
+}
+
+// TestTokenEndpoint_WithResolverAndRuntimes_LinksMatchingEphemeralVmRuntime
+// covers TASK-BE-EVM-011's decision: when the caller's devServerID happens
+// to match a live ephemeral_vm_runtimes.id (the recipe/VM's agent opted into
+// the DEV_SERVER_ID=<runtimeID> contract), handlePost writes the newly
+// resolved dev_servers.id onto that runtime's environment_id — the only
+// place the real UUID exists, since EphemeralVmRelay.Provision's own
+// "orca-server" event never carries a dev_server_id.
+func TestTokenEndpoint_WithResolverAndRuntimes_LinksMatchingEphemeralVmRuntime(t *testing.T) {
+	registry := NewRegistry(time.Hour)
+	t.Cleanup(registry.Stop)
+	devServerRepo := &fakeResolverRepo{}
+	resolver := usecase.NewResolveDirectWebSocketDevServer(devServerRepo)
+	runtimes := &fakeEphemeralVmRuntimeRepo{existingRuntimeIDs: map[string]bool{"runtime-abc": true}}
+	issuer := NewTokenIssuer(registry, Config{APISecret: "s3cr3t", OrcaVersion: "test-version", Port: 6768, DefaultTenantID: "tenant-1"}, nil, resolver, runtimes)
+
+	doRequest(t, issuer, http.MethodPost, `{"devServerId":"runtime-abc"}`, "s3cr3t")
+
+	if len(runtimes.setCalls) != 1 {
+		t.Fatalf("want exactly 1 SetEnvironmentID call, got %d", len(runtimes.setCalls))
+	}
+	call := runtimes.setCalls[0]
+	if call.tenantID != "tenant-1" {
+		t.Errorf("tenantID = %q, want tenant-1", call.tenantID)
+	}
+	if call.runtimeID != "runtime-abc" {
+		t.Errorf("runtimeID = %q, want runtime-abc (the caller's devServerID)", call.runtimeID)
+	}
+	registeredID := devServerRepo.registered[0].ID
+	if call.environmentID != registeredID {
+		t.Errorf("environmentID = %q, want the resolved dev_servers.id %q", call.environmentID, registeredID)
+	}
+}
+
+// TestTokenEndpoint_WithResolverAndRuntimes_NoMatchingRuntimeIsSilent covers
+// the common case (a regular, non-ephemeral agent's devServerID) — a
+// not-found SetEnvironmentID result must not surface as a request error or
+// get logged as one; token issuance succeeds exactly as without the
+// EphemeralVmRuntimes dependency wired at all.
+func TestTokenEndpoint_WithResolverAndRuntimes_NoMatchingRuntimeIsSilent(t *testing.T) {
+	registry := NewRegistry(time.Hour)
+	t.Cleanup(registry.Stop)
+	devServerRepo := &fakeResolverRepo{}
+	resolver := usecase.NewResolveDirectWebSocketDevServer(devServerRepo)
+	runtimes := &fakeEphemeralVmRuntimeRepo{existingRuntimeIDs: map[string]bool{}}
+	issuer := NewTokenIssuer(registry, Config{APISecret: "s3cr3t", OrcaVersion: "test-version", Port: 6768, DefaultTenantID: "tenant-1"}, nil, resolver, runtimes)
+
+	rec := doRequest(t, issuer, http.MethodPost, `{"devServerId":"dev-01"}`, "s3cr3t")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 — a not-found SetEnvironmentID result must not fail token issuance", rec.Code)
+	}
+	if len(runtimes.setCalls) != 1 {
+		t.Fatalf("want SetEnvironmentID still attempted once, got %d calls", len(runtimes.setCalls))
 	}
 }
 

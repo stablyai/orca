@@ -137,6 +137,29 @@ func (e *Executor) CreateDir(ctx context.Context, repoPath, relPath string, recu
 	return os.Mkdir(full, 0o755)
 }
 
+// CreateFile creates an empty file at relPath, always erroring if it
+// already exists (files.createFile has no noClobber-equivalent flag —
+// see CreateFileRequest's doc comment in gitgateway.proto). O_EXCL makes
+// the existence check atomic, avoiding the TOCTOU race a separate
+// os.Stat+os.Create pair would have.
+func (e *Executor) CreateFile(ctx context.Context, repoPath, relPath string) error {
+	full, err := resolve(repoPath, relPath)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(full, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		if errors.Is(err, os.ErrExist) {
+			return fmt.Errorf("localfs: %s already exists", relPath)
+		}
+		return err
+	}
+	return f.Close()
+}
+
 func (e *Executor) Delete(ctx context.Context, repoPath, relPath string, recursive bool) error {
 	full, err := resolve(repoPath, relPath)
 	if err != nil {

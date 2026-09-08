@@ -17,6 +17,7 @@ type fakeFilesystemExecutor struct {
 	calledWriteFile      bool
 	calledWriteFileChunk bool
 	calledCreateDir      bool
+	calledCreateFile     bool
 	calledDelete         bool
 	calledStat           bool
 	calledRename         bool
@@ -64,6 +65,12 @@ func (f *fakeFilesystemExecutor) WriteFileChunk(ctx context.Context, repoPath, r
 
 func (f *fakeFilesystemExecutor) CreateDir(ctx context.Context, repoPath, relPath string, recursive, noClobber bool) error {
 	f.calledCreateDir = true
+	f.gotRepoPath = repoPath
+	return nil
+}
+
+func (f *fakeFilesystemExecutor) CreateFile(ctx context.Context, repoPath, relPath string) error {
+	f.calledCreateFile = true
 	f.gotRepoPath = repoPath
 	return nil
 }
@@ -310,6 +317,32 @@ func TestCreateDirUseCase_NotConnected_CallsLocal(t *testing.T) {
 	}
 	if !local.calledCreateDir || relay.calledCreateDir {
 		t.Error("expected CreateDir to route to local when Connected=false")
+	}
+}
+
+func TestCreateFileUseCase_RoutesByConnectionState(t *testing.T) {
+	local := &fakeFilesystemExecutor{}
+	relay := &fakeFilesystemExecutor{}
+	uc := NewCreateFileUseCase(&fakeConnectionResolver{conn: ResolvedConnection{Connected: true, RepoPath: "/repo"}}, local, relay)
+
+	if err := uc.Execute(context.Background(), "wt1", "newfile.txt"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !relay.calledCreateFile || local.calledCreateFile {
+		t.Error("expected CreateFile to route to relay when Connected=true")
+	}
+}
+
+func TestCreateFileUseCase_NotConnected_CallsLocal(t *testing.T) {
+	local := &fakeFilesystemExecutor{}
+	relay := &fakeFilesystemExecutor{}
+	uc := NewCreateFileUseCase(&fakeConnectionResolver{conn: ResolvedConnection{Connected: false, RepoPath: "/repo"}}, local, relay)
+
+	if err := uc.Execute(context.Background(), "wt1", "newfile.txt"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !local.calledCreateFile || relay.calledCreateFile {
+		t.Error("expected CreateFile to route to local when Connected=false")
 	}
 }
 

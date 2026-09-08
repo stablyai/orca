@@ -751,3 +751,73 @@ func (c *Client) BranchExists(ctx context.Context, cred usecase.Credential, repo
 		return false, fmt.Errorf("github: branch exists: unexpected status %d", resp.StatusCode)
 	}
 }
+
+// githubUpdatePullRequestBody is the PATCH request body —
+// https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request.
+// Only Title is set today, matching PullRequestPatch's current scope.
+type githubUpdatePullRequestBody struct {
+	Title *string `json:"title,omitempty"`
+}
+
+// UpdatePullRequest PATCHes repo's pull request number with patch's
+// non-nil fields.
+func (c *Client) UpdatePullRequest(ctx context.Context, cred usecase.Credential, repo string, number int32, patch usecase.PullRequestPatch) (domain.PullRequest, error) {
+	body, err := json.Marshal(githubUpdatePullRequestBody{Title: patch.Title})
+	if err != nil {
+		return domain.PullRequest{}, fmt.Errorf("github: encode update pull request body: %w", err)
+	}
+	reqURL := fmt.Sprintf("%s/repos/%s/pulls/%d", c.baseURL, repo, number)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, reqURL, bytes.NewReader(body))
+	if err != nil {
+		return domain.PullRequest{}, fmt.Errorf("github: build update pull request request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+cred.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return domain.PullRequest{}, fmt.Errorf("github: update pull request request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return domain.PullRequest{}, fmt.Errorf("github: update pull request: unexpected status %d", resp.StatusCode)
+	}
+	var raw githubPullRequest
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return domain.PullRequest{}, fmt.Errorf("github: decode update pull request response: %w", err)
+	}
+	pr, err := toDomainPullRequest(repo, raw)
+	if err != nil {
+		return domain.PullRequest{}, fmt.Errorf("github: invalid pull request in update response: %w", err)
+	}
+	return pr, nil
+}
+
+// StarRepository stars repo (an "owner/name" slug) on behalf of cred's
+// connected GitHub account, via PUT /user/starred/{owner}/{repo}
+// (https://docs.github.com/en/rest/activity/starring#star-a-repository-for-the-authenticated-user).
+// Idempotent on GitHub's side (starring an already-starred repo still
+// 204s) — this method has no separate "already starred" branch.
+func (c *Client) StarRepository(ctx context.Context, cred usecase.Credential, repo string) (bool, error) {
+	reqURL := fmt.Sprintf("%s/user/starred/%s", c.baseURL, repo)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, reqURL, nil)
+	if err != nil {
+		return false, fmt.Errorf("github: build star repository request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+cred.Token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.ContentLength = 0
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("github: star repository request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusNoContent {
+		return false, fmt.Errorf("github: star repository: unexpected status %d", resp.StatusCode)
+	}
+	return true, nil
+}

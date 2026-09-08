@@ -4,7 +4,12 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import type { AgentLogger } from './agent-logger'
-import { DaemonMessageDecoder, encodeDaemonMessage, isDaemonRequest, type DaemonMessage } from './pty-daemon-protocol'
+import {
+  DaemonMessageDecoder,
+  encodeDaemonMessage,
+  isDaemonRequest,
+  type DaemonMessage
+} from './pty-daemon-protocol'
 
 const spawnChildMock = vi.fn()
 vi.mock('node:child_process', () => ({ spawn: spawnChildMock }))
@@ -29,14 +34,19 @@ function socketPathUnderHome(): string {
 function startFakeDaemon(
   socketPath: string,
   handler: (method: string, params: Record<string, unknown> | undefined) => unknown
-): { server: net.Server; pushNotification: (method: string, params: Record<string, unknown>) => void } {
+): {
+  server: net.Server
+  pushNotification: (method: string, params: Record<string, unknown>) => void
+} {
   fs.mkdirSync(path.dirname(socketPath), { recursive: true })
   const sockets = new Set<net.Socket>()
   const server = net.createServer((socket) => {
     sockets.add(socket)
     acceptedSockets.push(socket)
     const decoder = new DaemonMessageDecoder((msg: DaemonMessage) => {
-      if (!isDaemonRequest(msg)) {return}
+      if (!isDaemonRequest(msg)) {
+        return
+      }
       const result = handler(msg.method, msg.params)
       socket.write(encodeDaemonMessage({ id: msg.id, result }))
     })
@@ -49,7 +59,9 @@ function startFakeDaemon(
     server,
     pushNotification: (method, params) => {
       const line = encodeDaemonMessage({ method, params })
-      for (const s of sockets) {s.write(line)}
+      for (const s of sockets) {
+        s.write(line)
+      }
     }
   }
 }
@@ -66,7 +78,9 @@ beforeEach(() => {
 
 afterEach(async () => {
   process.env['HOME'] = originalHome
-  for (const socket of acceptedSockets) {socket.destroy()}
+  for (const socket of acceptedSockets) {
+    socket.destroy()
+  }
   acceptedSockets = []
   await Promise.all(servers.map((s) => new Promise<void>((resolve) => s.close(() => resolve()))))
   servers = []
@@ -102,7 +116,11 @@ describe('pty-daemon-client', () => {
     const response = await handlePtyCreate(1, {}, log, vi.fn())
 
     expect(spawnChildMock).toHaveBeenCalledTimes(1)
-    const [command, args, opts] = spawnChildMock.mock.calls[0] as [string, string[], { env: Record<string, string>; detached: boolean }]
+    const [command, args, opts] = spawnChildMock.mock.calls[0] as [
+      string,
+      string[],
+      { env: Record<string, string>; detached: boolean }
+    ]
     expect(command).toBe(process.execPath)
     expect(args).toEqual([process.argv[1]])
     expect(opts.detached).toBe(true)
@@ -142,7 +160,9 @@ describe('pty-daemon-client', () => {
 
     pushNotification('pty.data', { id: 'agent-pty-1', data: 'hello' })
     await vi.waitFor(() => {
-      if (secondNotify.mock.calls.length === 0) {throw new Error('not yet notified')}
+      if (secondNotify.mock.calls.length === 0) {
+        throw new Error('not yet notified')
+      }
     })
     expect(secondNotify).toHaveBeenCalledWith('pty.data', { id: 'agent-pty-1', data: 'hello' })
     expect(firstNotify).not.toHaveBeenCalled()
@@ -157,5 +177,29 @@ describe('pty-daemon-client', () => {
 
     const { notifyDaemonSessionClosed } = await import('./pty-daemon-client')
     await expect(notifyDaemonSessionClosed(log)).resolves.toBeUndefined()
+  })
+
+  // CR-STORAGE-008(a)/TASK-AG-STORAGE-007
+  it('notifyDaemonSessionTeardown swallows a failure to reach the daemon', async () => {
+    spawnChildMock.mockImplementation(() => {
+      throw new Error('spawn EPERM (simulated)')
+    })
+
+    const { notifyDaemonSessionTeardown } = await import('./pty-daemon-client')
+    await expect(notifyDaemonSessionTeardown(log)).resolves.toBeUndefined()
+  })
+
+  it('notifyDaemonSessionTeardown sends daemon.sessionTeardown to a live daemon', async () => {
+    const socketPath = socketPathUnderHome()
+    let seenMethod: string | undefined
+    startFakeDaemon(socketPath, (method) => {
+      seenMethod = method
+      return { ok: true }
+    })
+
+    const { notifyDaemonSessionTeardown } = await import('./pty-daemon-client')
+    await notifyDaemonSessionTeardown(log)
+
+    expect(seenMethod).toBe('daemon.sessionTeardown')
   })
 })

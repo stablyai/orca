@@ -47,6 +47,12 @@ type fakeProvider struct {
 	branchExists    bool
 	branchExistsErr error
 
+	starRepositoryResult bool
+	starRepositoryErr    error
+
+	updatedPR   domain.PullRequest
+	updatePRErr error
+
 	lastCred Credential
 	lastRepo string
 	calls    int
@@ -137,6 +143,24 @@ func (f *fakeProvider) BranchExists(ctx context.Context, cred Credential, repo, 
 		return false, f.branchExistsErr
 	}
 	return f.branchExists, nil
+}
+
+func (f *fakeProvider) StarRepository(ctx context.Context, cred Credential, repo string) (bool, error) {
+	f.lastCred, f.lastRepo = cred, repo
+	f.calls++
+	if f.starRepositoryErr != nil {
+		return false, f.starRepositoryErr
+	}
+	return f.starRepositoryResult, nil
+}
+
+func (f *fakeProvider) UpdatePullRequest(ctx context.Context, cred Credential, repo string, number int32, patch PullRequestPatch) (domain.PullRequest, error) {
+	f.lastCred, f.lastRepo = cred, repo
+	f.calls++
+	if f.updatePRErr != nil {
+		return domain.PullRequest{}, f.updatePRErr
+	}
+	return f.updatedPR, nil
 }
 
 func (f *fakeProvider) ListIssues(ctx context.Context, cred Credential, repo string, filter IssueFilter) ([]domain.Issue, error) {

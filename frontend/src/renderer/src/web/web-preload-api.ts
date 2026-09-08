@@ -82,6 +82,8 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
+import { debounce } from '../lib/debounce'
+import { enqueueWrite, withRetryAndErrorStatus } from '../store/backend-go-storage'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import {
   normalizeTuiAgentArgsRecord,
@@ -594,9 +596,29 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getConfig: () => createE2EConfig({})
     },
     settings: {
-      get: async () => getRuntimeBackedStoredSettings(),
+      // FE-TASK-STORAGE-006: prefer the full GlobalSettings mirror once
+      // backend-go has one; only the legacy 5-field path (which never has
+      // more than those 5 keys) falls back to getRuntimeBackedStoredSettings.
+      get: async () => {
+        const full = await getFullClientSettings()
+        if (full !== null) {
+          writeJson(SETTINGS_STORAGE_KEY, full) // keep localStorage cache in sync
+          return full
+        }
+        const legacy = await getRuntimeBackedStoredSettings()
+        // FE-TASK-STORAGE-007: seed the full-settings backend-go record once,
+        // from whatever's authoritative today, so an existing user's
+        // preferences aren't silently reset to defaults the first time this
+        // rolls out. Fire-and-forget — settings.get must not block on this
+        // write; ensureFullSettingsSeeded re-checks for a remote record
+        // itself, so a second concurrent settings.get() call won't double-seed.
+        void ensureFullSettingsSeeded()
+        return legacy
+      },
       // Why: localStorage-backed settings are synchronous in the web client,
       // so the pre-hydration kill-switch read works the same as desktop.
+      // FE-TASK-STORAGE-006: intentionally UNCHANGED — no RPC is synchronous,
+      // so this still reads the localStorage cache directly.
       getSync: () => getStoredSettings(),
       set: async (updates) => {
         if (updates.activeRuntimeEnvironmentId === null) {
@@ -610,7 +632,25 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
         writeJson(SETTINGS_STORAGE_KEY, next)
-        return syncRuntimeBackedSettings(sanitizedUpdates, next)
+        // FE-TASK-STORAGE-005 (finishing what FE-TASK-STORAGE-006 deferred):
+        // persistence-status.ts (FE-TASK-STORAGE-004) has landed now, so the
+        // full-settings backend-go sync goes through the same
+        // enqueueWrite/withRetryAndErrorStatus machinery keybindings.ts uses
+        // — 3 retries (2s/4s/8s) then a visible 'error' status via
+        // PersistenceStatusBanner, instead of a single console.error.
+        // Fire-and-forget (void, not awaited): the retry sequence can take
+        // up to ~14s on repeated failure, and settings.set's caller
+        // (store/slices/settings.ts's updateSettings) must not block the UI
+        // for that — same reasoning as persistKeybindingsToBackendGo's
+        // `void enqueueWrite(...)`.
+        void enqueueWrite('settings', () =>
+          withRetryAndErrorStatus('settings', () => syncFullClientSettings(next))
+        )
+        // The legacy 5-field sync is independent (no shared transaction with
+        // the write above) and never rejects (it catches internally and
+        // resolves with `next`) — awaited directly since its result feeds
+        // this handler's own return value below.
+        return await syncRuntimeBackedSettings(sanitizedUpdates, next)
       },
       updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
       listFonts: () => Promise.resolve([]),
@@ -657,6 +697,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       get: (hostId) => Promise.resolve(getStoredWorkspaceSession(hostId)),
       set: async (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
+        // FE-TASK-STORAGE-008: fire-and-forget, debounced — see
+        // flushWorkspaceSessionRemote's own comment for why this never blocks.
+        void flushWorkspaceSessionRemote(hostId ?? undefined)
       },
       patch: async (patch: WorkspaceSessionPatch, hostId) => {
         writeJson(
@@ -666,8 +709,16 @@ function createWebPreloadApi(): Partial<PreloadApi> {
             ...patch
           })
         )
+        void flushWorkspaceSessionRemote(hostId ?? undefined)
       },
       readTerminalScrollback: () => null,
+      // Why setSync never calls flushWorkspaceSessionRemote: this is used from
+      // beforeunload, which gives no time to wait on a network RPC (and the
+      // debounce below wouldn't fire before the tab closes anyway). The most
+      // recent change may lag backend-go by up to `wait`/`maxWait` if the tab
+      // closes before a pending debounce fires — accepted, documented gap
+      // (FE-SOL-STORAGE-004 "Rủi ro"), not a bug: localStorage already has the
+      // correct value for this device.
       setSync: (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
       }
@@ -3677,6 +3728,102 @@ async function syncRuntimeBackedSettings(
   }
 }
 
+// ── FE-TASK-STORAGE-006: full GlobalSettings sync via clientState.*
+// (backend-go), parallel to the 5-field legacy path above ─────────────────
+//
+// ⚠️ Security-review gate (see FE-TASK-STORAGE-006 task doc / CR-STORAGE-003):
+// a formal security review of vapidKeys/webPushSubscriptions/
+// codexManagedAccounts/claudeManagedAccounts has NOT happened — no human
+// reviewer signed off in this session. stripSecretFields() below is a
+// DEFENSIVE MITIGATION applied unconditionally before every outbound sync,
+// not a substitute for that review. It was written by reading the field
+// definitions directly (frontend/src/shared/types.ts) and redacting anything
+// that is, or plausibly contains, raw secret/credential/push-endpoint
+// material:
+//   - vapidKeys: the VAPID keypair's privateKey signs every Web Push message
+//     this server sends — a server-wide signing secret, not per-client
+//     preference data, and never safe to mirror into a shared multi-tenant
+//     JSON blob.
+//   - webPushSubscriptions: each entry carries `endpoint` (a bearer-like URL:
+//     anyone holding it can push-send to that browser) and `keys.auth`/
+//     `keys.p256dh` (the subscription's encryption secrets) — device
+//     credentials, not settings.
+//   - codexManagedAccounts / claudeManagedAccounts: `managedHomePath`/
+//     `managedAuthPath` (+ their wsl* variants) point at THIS machine's
+//     on-disk managed-account auth material and can leak local
+//     usernames/paths; they are not portable across devices and have no
+//     legitimate reason to leave this machine via a synced settings blob.
+// Still needed: an actual security review sign-off confirming this list is
+// complete and that redacting (vs. omitting the sync entirely) is the right
+// call for each field — flagged explicitly in this task's status update, do
+// not treat this comment as closing that requirement.
+function stripSecretFields(settings: GlobalSettings): GlobalSettings {
+  return {
+    ...settings,
+    vapidKeys: null,
+    webPushSubscriptions: [],
+    codexManagedAccounts: [],
+    claudeManagedAccounts: []
+  }
+}
+
+async function getFullClientSettings(): Promise<GlobalSettings | null> {
+  if (!requireActiveEnvironmentOrNull()) {
+    return null
+  }
+  try {
+    const result = await callRuntimeResult<{ found: boolean; stateJson?: string }>(
+      'clientState.get',
+      { kind: 'settings' },
+      15_000
+    )
+    return result.found && result.stateJson
+      ? (JSON.parse(result.stateJson) as GlobalSettings)
+      : null
+  } catch {
+    // Why: unpaired/offline/pre-rollout backend-go keeps this a soft miss —
+    // callers fall back to the legacy 5-field/local path, same as every
+    // other RPC helper in this file.
+    return null
+  }
+}
+
+async function syncFullClientSettings(next: GlobalSettings): Promise<void> {
+  if (!requireActiveEnvironmentOrNull()) {
+    return
+  }
+  const safe = stripSecretFields(next)
+  await callRuntimeResult(
+    'clientState.set',
+    { kind: 'settings', stateJson: JSON.stringify(safe) },
+    15_000
+  )
+}
+
+// FE-TASK-STORAGE-007: seed backend-go's full-settings record exactly once
+// from today's local settings, so an existing user's preferences survive the
+// CR-STORAGE-003 rollout instead of resetting to defaults on first read.
+// Re-checks getFullClientSettings() itself (rather than trusting a caller's
+// already-null result) so it is safe to call from multiple call sites/re-
+// mounts without double-seeding.
+async function ensureFullSettingsSeeded(): Promise<GlobalSettings> {
+  const remote = await getFullClientSettings()
+  if (remote !== null) {
+    return remote
+  }
+  const local = getStoredSettings()
+  try {
+    await syncFullClientSettings(local)
+  } catch (error) {
+    // Why: this runs fire-and-forget from settings.get() — an unhandled
+    // rejection here must not surface as an unrelated crash. A failed seed
+    // just means the next settings.get() call retries it (getFullClientSettings
+    // will still see no remote record).
+    console.error('Failed to seed full client settings to backend-go:', error)
+  }
+  return local
+}
+
 async function updateRuntimePRBotAuthorOverride(args: {
   author: string
   isBot: boolean
@@ -3736,10 +3883,19 @@ function sessionStorageKeyForHost(hostId?: string | null): string {
 
 function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSessionState {
   const resolvedHostId = normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
+  const storageKey = sessionStorageKeyForHost(resolvedHostId)
+  // FE-TASK-STORAGE-008: localStorage never written for this partition (new
+  // browser/profile, or cleared site data) — return the default immediately
+  // (no blocking on a network round trip) and kick off a background hydrate
+  // from backend-go to repopulate localStorage for the NEXT read. An existing
+  // record — even one that happens to equal the default shape — takes the
+  // unchanged paths below instead of re-triggering this every call.
+  if (window.localStorage.getItem(storageKey) === null) {
+    void hydrateWorkspaceSessionFromRemote(hostId ?? undefined)
+    return getDefaultWorkspaceSession()
+  }
   if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
-    return sanitizeWebRuntimeWorkspaceSession(
-      readJson(sessionStorageKeyForHost(resolvedHostId), getDefaultWorkspaceSession())
-    )
+    return sanitizeWebRuntimeWorkspaceSession(readJson(storageKey, getDefaultWorkspaceSession()))
   }
   const localSession = sanitizeWebRuntimeWorkspaceSession(
     readJson(SESSION_STORAGE_KEY, getDefaultWorkspaceSession())
@@ -3756,6 +3912,77 @@ function getStoredWorkspaceSession(hostId?: string | null): WorkspaceSessionStat
     activeWorktreeId: ui.lastActiveWorktreeId,
     lastVisitedAtByWorktreeId: localSession.lastVisitedAtByWorktreeId
   })
+}
+
+// FE-TASK-STORAGE-008: debounced remote mirror of session.set/patch. 1s
+// trailing / 5s max-wait matches desktop's orca-data.json writer cadence
+// (see ui-settings-session-hybrid.md's session section) — session.patch fires
+// on every tab/layout change, so this collapses a burst into one RPC instead
+// of flooding backend-go.
+const flushWorkspaceSessionRemote = debounce(
+  async (hostId?: string) => {
+    if (!requireActiveEnvironmentOrNull()) {
+      return
+    }
+    try {
+      const session = getStoredWorkspaceSession(hostId)
+      await callRuntimeResult(
+        'workspaceSession.set',
+        { hostId: hostId ?? 'local', sessionJson: JSON.stringify(session) },
+        15_000
+      )
+    } catch {
+      // Why: best-effort background sync — localStorage already has the
+      // correct value for this device; a failed remote mirror just means a
+      // fresh-install/cleared-cache restore on another device would miss it
+      // until the next successful flush.
+    }
+  },
+  { wait: 1_000, maxWait: 5_000 }
+)
+
+// Decision (FE-TASK-STORAGE-008 "Rủi ro cần xác nhận" — how to notify the
+// store after a background hydrate completes): no existing PreloadApi
+// channel exists for this (unlike remoteWorkspace.onChanged) and adding one
+// would mean extending preload/api-types.ts's `session` shape, which is
+// outside this task's file scope. Chosen instead: dispatch a plain
+// `CustomEvent('orca:workspaceSessionHydrated', { detail: { hostId } })` on
+// `window` — zero new IPC surface, no store coupling from this file. This is
+// a hook, not a wired-up fix: nothing currently listens for it, so a hydrate
+// that lands after the UI already read the default session will not repaint
+// until the next natural session.get() call. Flagged as follow-up, not
+// silently "solved".
+function notifyWorkspaceSessionHydrated(hostId?: string): void {
+  try {
+    window.dispatchEvent(
+      new CustomEvent('orca:workspaceSessionHydrated', { detail: { hostId: hostId ?? null } })
+    )
+  } catch {
+    // Why: a test/runtime environment without CustomEvent support must not
+    // crash a background hydrate over a notification nicety.
+  }
+}
+
+async function hydrateWorkspaceSessionFromRemote(hostId?: string): Promise<void> {
+  if (!requireActiveEnvironmentOrNull()) {
+    return
+  }
+  try {
+    const resp = await callRuntimeResult<{ found: boolean; sessionJson?: string }>(
+      'workspaceSession.get',
+      { hostId: hostId ?? 'local' },
+      15_000
+    )
+    if (resp.found && resp.sessionJson) {
+      writeJson(sessionStorageKeyForHost(hostId), JSON.parse(resp.sessionJson))
+      notifyWorkspaceSessionHydrated(hostId)
+    }
+  } catch {
+    // Why: best-effort background hydrate — the caller already returned the
+    // default session synchronously; a failure here just means the device
+    // keeps using defaults until the next getStoredWorkspaceSession() call
+    // (localStorage is still empty, so it retries).
+  }
 }
 
 function closeWebOnboarding(base: OnboardingState): OnboardingState {

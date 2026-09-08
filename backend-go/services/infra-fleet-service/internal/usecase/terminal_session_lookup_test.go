@@ -18,15 +18,17 @@ type fakeTerminalSessionRepository struct {
 
 	byPtyID map[string]domain.TerminalSession
 
-	createErr error
-	getErr    error
-	listErr   error
-	touchErr  error
-	closeErr  error
+	createErr   error
+	getErr      error
+	listErr     error
+	touchErr    error
+	closeErr    error
+	closeAllErr error
 
-	createCalls []domain.TerminalSession
-	touchCalls  []string
-	closeCalls  []string
+	createCalls   []domain.TerminalSession
+	touchCalls    []string
+	closeCalls    []string
+	closeAllCalls []string // connectionIDs CloseAllForConnection was called with
 }
 
 func (f *fakeTerminalSessionRepository) Create(ctx context.Context, session domain.TerminalSession) (domain.TerminalSession, error) {
@@ -105,5 +107,26 @@ func (f *fakeTerminalSessionRepository) Close(ctx context.Context, tenantID, pty
 	t := closedAt
 	s.ClosedAt = &t
 	f.byPtyID[ptyID] = s
+	return nil
+}
+
+// CloseAllForConnection implements usecase.TerminalSessionRepository.
+// CloseAllForConnection — closes every open session bound to connectionID,
+// mirroring the real store's WHERE connection_id = ... AND closed_at IS NULL.
+func (f *fakeTerminalSessionRepository) CloseAllForConnection(ctx context.Context, tenantID, connectionID string, closedAt time.Time) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closeAllCalls = append(f.closeAllCalls, connectionID)
+	if f.closeAllErr != nil {
+		return f.closeAllErr
+	}
+	for ptyID, s := range f.byPtyID {
+		if s.TenantID != tenantID || s.ConnectionID != connectionID || s.ClosedAt != nil {
+			continue
+		}
+		t := closedAt
+		s.ClosedAt = &t
+		f.byPtyID[ptyID] = s
+	}
 	return nil
 }

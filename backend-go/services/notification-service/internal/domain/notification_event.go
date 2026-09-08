@@ -122,6 +122,18 @@ var subjectRules = map[string]subjectRule{
 		Type: "decision_gate_opened", Title: "Needs your decision", Body: "A workflow is waiting on your decision.",
 		Severity: SeverityWarning, Channels: []DeliveryChannel{ChannelDeliveryWS, ChannelDeliveryPush},
 	},
+	// starNag.subscribe's cross-replica visibility push (TASK-014, SOL-005)
+	// — WS-only (no push notification for a UI-prompt-visibility toggle),
+	// empty Title/Body: payload.Body always carries the real
+	// {event,mode,surface} JSON triple (tenant-service's
+	// starNagVisibilityBody), which the payload.Body != "" override below
+	// passes through unchanged — no schema change needed here, per
+	// notification-service.md §3's "a new subject can be added without a
+	// schema change" design.
+	"orca.tenant.star_nag.visibility_changed": {
+		Type: "star_nag_visibility", Title: "", Body: "",
+		Severity: SeverityInfo, Channels: []DeliveryChannel{ChannelDeliveryWS},
+	},
 }
 
 // defaultRule is used for any subject not in subjectRules — WS-only,

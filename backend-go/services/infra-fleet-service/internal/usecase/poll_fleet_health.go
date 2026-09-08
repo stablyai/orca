@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -42,17 +43,26 @@ type PollFleetHealth struct {
 	writer     FleetHealthWriter
 	outbox     OutboxWriter
 	agent      DevServerAgentClient
+	conns      ConnectionRepository
+	sessions   TerminalSessionRepository
 	logger     *slog.Logger
 }
 
 // outbox may be nil — see Execute's "alerting is best-effort" doc comment;
 // a nil outbox just means the transition still gets logged, never enqueued
 // (used by the few tests/composition paths with no eventbus configured).
-func NewPollFleetHealth(devServers FleetHealthPollerRepository, writer FleetHealthWriter, outbox OutboxWriter, agent DevServerAgentClient, logger *slog.Logger) *PollFleetHealth {
+// conns may also be nil — a poll with no ConnectionRepository configured
+// simply skips the connections degraded/reestablish state machine below
+// (BE-SOL-STORAGE-003 §2) and behaves exactly as it did before that state
+// machine existed. sessions may also be nil — a poll with no
+// TerminalSessionRepository configured simply skips closing
+// terminal_sessions on the degraded -> closed edge (TASK-BE-STORAGE-010);
+// it never affects the degraded/reestablish transitions themselves.
+func NewPollFleetHealth(devServers FleetHealthPollerRepository, writer FleetHealthWriter, outbox OutboxWriter, agent DevServerAgentClient, conns ConnectionRepository, sessions TerminalSessionRepository, logger *slog.Logger) *PollFleetHealth {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &PollFleetHealth{devServers: devServers, writer: writer, outbox: outbox, agent: agent, logger: logger}
+	return &PollFleetHealth{devServers: devServers, writer: writer, outbox: outbox, agent: agent, conns: conns, sessions: sessions, logger: logger}
 }
 
 // Execute polls every registered dev server once and persists its sample.
@@ -109,10 +119,115 @@ func (uc *PollFleetHealth) Execute(ctx context.Context) error {
 
 		if hadPrevious && previous.Reachable && !sample.Reachable {
 			uc.alertDevServerDisconnected(ctx, ds)
+			uc.markConnectionDegraded(ctx, ds)
+		}
+		if hadPrevious && !previous.Reachable && sample.Reachable {
+			uc.reestablishConnection(ctx, ds)
 		}
 	}
 
 	return nil
+}
+
+// markConnectionDegraded transitions ds's active Connection (if any)
+// established -> degraded via the domain state machine
+// (BE-SOL-STORAGE-003 §2) — called on a reachable=true -> false edge, the
+// same edge alertDevServerDisconnected already fires on. A connection that
+// is already degraded/closed, or that doesn't exist, is left untouched
+// (MarkDegraded's own guard handles the "wrong status" case; this is not an
+// error, just nothing to do).
+func (uc *PollFleetHealth) markConnectionDegraded(ctx context.Context, ds domain.DevServer) {
+	if uc.conns == nil {
+		return
+	}
+	conn, found, err := uc.conns.GetActiveByDevServer(ctx, ds.TenantID, ds.ID)
+	if err != nil {
+		uc.logger.WarnContext(ctx, "poll_fleet_health: looking up active connection failed, skipping degraded transition",
+			slog.String("devServerId", ds.ID), slog.Any("error", err))
+		return
+	}
+	if !found {
+		return
+	}
+	if err := conn.MarkDegraded(time.Now()); err != nil {
+		// Already degraded/closed — nothing to do, not an error worth logging
+		// at WARN (this is the expected steady state for a still-down dev
+		// server whose connection was already marked degraded on a prior poll).
+		return
+	}
+	if err := uc.conns.UpdateStatus(ctx, ds.TenantID, conn); err != nil {
+		uc.logger.WarnContext(ctx, "poll_fleet_health: persisting degraded connection status failed",
+			slog.String("devServerId", ds.ID), slog.String("connectionId", conn.ID), slog.Any("error", err))
+	}
+}
+
+// reestablishConnection transitions ds's active Connection (if any) back to
+// established when the agent reconnects within its grace period — or, if
+// the grace period already expired, closes it instead (BE-SOL-STORAGE-003
+// §2's "degraded -> closed" edge). Either way this is a health-poll-driven
+// transition, never an inline status assignment — see domain.Connection's
+// MarkDegraded/Reestablish/CloseAfterGracePeriodExpiry doc comments.
+func (uc *PollFleetHealth) reestablishConnection(ctx context.Context, ds domain.DevServer) {
+	if uc.conns == nil {
+		return
+	}
+	conn, found, err := uc.conns.GetActiveByDevServer(ctx, ds.TenantID, ds.ID)
+	if err != nil {
+		uc.logger.WarnContext(ctx, "poll_fleet_health: looking up active connection failed, skipping reestablish",
+			slog.String("devServerId", ds.ID), slog.Any("error", err))
+		return
+	}
+	if !found || conn.Status != domain.ConnectionStatusDegraded {
+		return
+	}
+
+	now := time.Now()
+	transitionedToClosed := false
+	if err := conn.Reestablish(now); err != nil {
+		if !errors.Is(err, domain.ErrGracePeriodExpired) {
+			uc.logger.WarnContext(ctx, "poll_fleet_health: reestablish failed",
+				slog.String("devServerId", ds.ID), slog.String("connectionId", conn.ID), slog.Any("error", err))
+			return
+		}
+		// Grace period already expired before the agent came back — this is
+		// a real failure, not a transient blip; close it instead (§2's
+		// "degraded -> closed" edge). See BE-SOL-STORAGE-003 §4: a caller
+		// observing this closed transition is what should trigger
+		// FailDispatch downstream, not the earlier degraded transition.
+		if closeErr := conn.CloseAfterGracePeriodExpiry(now); closeErr != nil {
+			uc.logger.WarnContext(ctx, "poll_fleet_health: closing connection after grace period expiry failed",
+				slog.String("devServerId", ds.ID), slog.String("connectionId", conn.ID), slog.Any("error", closeErr))
+			return
+		}
+		transitionedToClosed = true
+	}
+	if err := uc.conns.UpdateStatus(ctx, ds.TenantID, conn); err != nil {
+		uc.logger.WarnContext(ctx, "poll_fleet_health: persisting reestablished/closed connection status failed",
+			slog.String("devServerId", ds.ID), slog.String("connectionId", conn.ID), slog.Any("error", err))
+		return
+	}
+	// Only close terminal_sessions once the connection has genuinely
+	// transitioned to closed (grace period truly expired) — NOT on the
+	// earlier degraded transition (markConnectionDegraded never calls this),
+	// per BE-SOL-STORAGE-003 §3/TASK-BE-STORAGE-010.
+	if transitionedToClosed {
+		uc.closeTerminalSessions(ctx, ds, conn)
+	}
+}
+
+// closeTerminalSessions closes every terminal_sessions row bound to conn's
+// ID — called ONLY after conn has genuinely transitioned to closed
+// (CloseAfterGracePeriodExpiry), never on a merely degraded connection.
+// uc.sessions may be nil (no TerminalSessionRepository wired), in which case
+// this is a no-op, same nil-safety convention as uc.conns.
+func (uc *PollFleetHealth) closeTerminalSessions(ctx context.Context, ds domain.DevServer, conn domain.Connection) {
+	if uc.sessions == nil {
+		return
+	}
+	if err := NewCloseTerminalSessionsForConnection(uc.sessions).Execute(ctx, ds.TenantID, conn.ID); err != nil {
+		uc.logger.WarnContext(ctx, "poll_fleet_health: closing terminal sessions for connection failed",
+			slog.String("devServerId", ds.ID), slog.String("connectionId", conn.ID), slog.Any("error", err))
+	}
 }
 
 // alertDevServerDisconnected fires exactly once per true->false edge (never

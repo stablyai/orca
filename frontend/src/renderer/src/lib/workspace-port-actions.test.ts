@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { mergeWorkspacePortScans } from './workspace-port-actions'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { killWorkspacePortForTarget, mergeWorkspacePortScans } from './workspace-port-actions'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import {
+  clearRuntimeCompatibilityCache,
+  markRuntimeEnvironmentCompatible
+} from '@/runtime/runtime-rpc-client'
 
 function makePort(id: string, port: number): WorkspacePort {
   return {
@@ -49,5 +53,68 @@ describe('mergeWorkspacePortScans', () => {
       broken: brokenScan
     })
     expect(result?.ports.map((p) => p.id)).toEqual(['local:tcp:3000'])
+  })
+})
+
+// BUG-016: killWorkspacePortForTarget must carry worktreeId on the wire
+// whenever the caller has one (WorkspacePortOwner.worktreeId), alongside
+// repoId — a repo can own several worktrees, so repoId alone is ambiguous
+// for the backend's connectionId resolution.
+describe('killWorkspacePortForTarget', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    clearRuntimeCompatibilityCache()
+  })
+
+  it('sends worktreeId alongside repoId for a local target', async () => {
+    const kill = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('window', {
+      api: { workspacePorts: { kill } }
+    })
+
+    const result = await killWorkspacePortForTarget(
+      { kind: 'local' },
+      { repoId: 'repo-1', worktreeId: 'wt-1', pid: 123, port: 3000 }
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(kill).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      worktreeId: 'wt-1',
+      pid: 123,
+      port: 3000
+    })
+  })
+
+  it('sends worktreeId alongside repoId for a remote environment target', async () => {
+    const runtimeEnvironmentCall = vi.fn().mockResolvedValue({ ok: true, result: { ok: true } })
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: runtimeEnvironmentCall } }
+    })
+    markRuntimeEnvironmentCompatible('env-1')
+
+    const result = await killWorkspacePortForTarget(
+      { kind: 'environment', environmentId: 'env-1' },
+      { repoId: 'repo-1', worktreeId: 'wt-1', pid: 123, port: 3000 }
+    )
+
+    expect(result).toEqual({ ok: true })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'workspacePorts.kill',
+      params: { repoId: 'repo-1', worktreeId: 'wt-1', pid: 123, port: 3000 },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('omits worktreeId when the caller does not have one', async () => {
+    const kill = vi.fn().mockResolvedValue({ ok: true })
+    vi.stubGlobal('window', {
+      api: { workspacePorts: { kill } }
+    })
+
+    await killWorkspacePortForTarget({ kind: 'local' }, { repoId: 'repo-1', pid: 123, port: 3000 })
+
+    expect(kill).toHaveBeenCalledWith({ repoId: 'repo-1', pid: 123, port: 3000 })
   })
 })

@@ -30,10 +30,12 @@ type SpawnTerminalSessionInput struct {
 // exactly that. Outside server-deployment mode this service STILL cannot
 // spawn a host-local PTY itself: there is no local-pty adapter in
 // backend-go (PTYs only exist inside the agent's detached pty-daemon
-// process, see adapter/devserveragent's package doc comment) — so a
-// host-local request always fails today, with a distinct error explaining
-// why, rather than silently no-opping. Tracked as a known gap, not
-// implemented by this pass.
+// process, see adapter/devserveragent's package doc comment), and per
+// infra-fleet-service.md's Hard Boundary table, adding one is out of
+// scope permanently, not a TODO — so this request fails with
+// INFRA_TERMINAL_NO_COMPUTE_BOUND, a precondition the caller can fix by
+// binding a dev server/SSH connection to the environment first (see
+// SOL-008, specs/backend-go/bugs/missing-v3/), not a bug to fix here.
 //
 // ConnectionID resolution falls back to treating it as a devServerId
 // directly (via DevServerRepository) when ResolveConnection finds no
@@ -41,15 +43,16 @@ type SpawnTerminalSessionInput struct {
 // pre-project ephemeral terminal (CLI install, agent-skill setup) has no
 // connections row to resolve, the same gap RelayByDevServer closes for Relay.
 type SpawnTerminalSession struct {
-	resolver         ConnectionResolver
-	devServers       DevServerRepository
-	agent            DevServerAgentClient
-	sessions         TerminalSessionRepository
-	serverDeployment bool
+	resolver            ConnectionResolver
+	devServers          DevServerRepository
+	agent               DevServerAgentClient
+	sessions            TerminalSessionRepository
+	ephemeralVmRuntimes EphemeralVmRuntimeRepository
+	serverDeployment    bool
 }
 
-func NewSpawnTerminalSession(resolver ConnectionResolver, devServers DevServerRepository, agent DevServerAgentClient, sessions TerminalSessionRepository, serverDeployment bool) *SpawnTerminalSession {
-	return &SpawnTerminalSession{resolver: resolver, devServers: devServers, agent: agent, sessions: sessions, serverDeployment: serverDeployment}
+func NewSpawnTerminalSession(resolver ConnectionResolver, devServers DevServerRepository, agent DevServerAgentClient, sessions TerminalSessionRepository, ephemeralVmRuntimes EphemeralVmRuntimeRepository, serverDeployment bool) *SpawnTerminalSession {
+	return &SpawnTerminalSession{resolver: resolver, devServers: devServers, agent: agent, sessions: sessions, ephemeralVmRuntimes: ephemeralVmRuntimes, serverDeployment: serverDeployment}
 }
 
 func (uc *SpawnTerminalSession) Execute(ctx context.Context, in SpawnTerminalSessionInput) (domain.TerminalSession, error) {
@@ -62,7 +65,17 @@ func (uc *SpawnTerminalSession) Execute(ctx context.Context, in SpawnTerminalSes
 		if uc.serverDeployment {
 			return domain.TerminalSession{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_TERMINAL_HOST_LOCAL_DISABLED", "host-local terminal sessions are disabled in server-deployment mode", nil)
 		}
-		return domain.TerminalSession{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_TERMINAL_HOST_LOCAL_UNIMPLEMENTED", "host-local terminal sessions are not implemented — every PTY this service can spawn today must go through a connectionId-bound dev server agent", nil)
+		// Every real caller reaching this branch is a runtime:<environmentId>
+		// target with no dev-server/SSH binding (see SOL-008's frontend
+		// trace, specs/backend-go/bugs/missing-v3/solutions/SOL-008-*.md) —
+		// never a genuine desktop-local request, which never reaches this
+		// RPC. KindFailedPrecondition + a stable code the frontend can
+		// switch on, so this renders as a fixable state ("bind a dev server
+		// to this environment") rather than a bug report. Renamed from
+		// INFRA_TERMINAL_HOST_LOCAL_UNIMPLEMENTED, which implied a TODO this
+		// service will one day fix in-process — it will not (see the Hard
+		// Boundary table this service's own package doc cites).
+		return domain.TerminalSession{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_TERMINAL_NO_COMPUTE_BOUND", "this environment has no dev server or SSH connection bound — attach compute before opening a terminal", nil)
 	}
 
 	connected, devServer, _, err := uc.resolver.ResolveConnection(ctx, tenantID, in.ConnectionID)
@@ -80,7 +93,28 @@ func (uc *SpawnTerminalSession) Execute(ctx context.Context, in SpawnTerminalSes
 		// given a dev-server binding at all — try it directly before failing.
 		devServerByID, devErr := uc.devServers.Get(ctx, tenantID, in.ConnectionID)
 		if devErr != nil {
-			return domain.TerminalSession{}, apperrors.New(apperrors.KindNotFound, "INFRA_CONNECTION_NOT_FOUND", "no dev server owns this connectionId", nil)
+			// Second fallback: in.ConnectionID may actually be an ephemeral
+			// VM's environmentId (TASK-BE-EVM-007, BE-SOL-EVM-003 §2) —
+			// resolve via ephemeral_vm_runtimes.environment_id before giving
+			// up. Same "no compute bound" error the empty-ConnectionID branch
+			// above returns (not INFRA_CONNECTION_NOT_FOUND) — an
+			// unresolvable environmentId is the same user-facing state as
+			// never having provisioned one at all, per
+			// TestSpawnTerminalSession_UnresolvableEnvironmentIdReturnsNoComputeBound's
+			// contract: this must NOT regress dev servers'/SSH connections'
+			// existing INFRA_CONNECTION_NOT_FOUND behavior when
+			// ephemeralVmRuntimes finds nothing.
+			devServerID, found, envErr := uc.ephemeralVmRuntimes.FindDevServerByEnvironmentID(ctx, tenantID, in.ConnectionID)
+			if envErr != nil {
+				return domain.TerminalSession{}, apperrors.New(apperrors.KindInternal, "INFRA_RESOLVE_FAILED", "failed to resolve environmentId", envErr)
+			}
+			if !found {
+				return domain.TerminalSession{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_TERMINAL_NO_COMPUTE_BOUND", "this environment has no dev server or SSH connection bound — attach compute before opening a terminal", nil)
+			}
+			devServerByID, devErr = uc.devServers.Get(ctx, tenantID, devServerID)
+			if devErr != nil {
+				return domain.TerminalSession{}, apperrors.New(apperrors.KindNotFound, "INFRA_CONNECTION_NOT_FOUND", "no dev server owns this connectionId", nil)
+			}
 		}
 		if !uc.agent.IsConnected(devServerByID.ID) {
 			return domain.TerminalSession{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_DEV_SERVER_NOT_CONNECTED", "this dev server has no live agent connection right now", nil)

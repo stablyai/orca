@@ -18,35 +18,37 @@ import (
 type fakeGitGatewayClient struct {
 	gitgatewayv1.GitGatewayServiceClient
 
-	getDiffFunc                        func(ctx context.Context, in *gitgatewayv1.GetDiffRequest) (*gitgatewayv1.GetDiffResponse, error)
-	commitFunc                         func(ctx context.Context, in *gitgatewayv1.CommitRequest) (*gitgatewayv1.CommitResponse, error)
-	pushFunc                           func(ctx context.Context, in *gitgatewayv1.PushRequest) (*gitgatewayv1.PushResponse, error)
-	pullFunc                           func(ctx context.Context, in *gitgatewayv1.PullRequest) (*gitgatewayv1.PullResponse, error)
-	generateCommitMessageFunc          func(ctx context.Context, in *gitgatewayv1.GenerateCommitMessageRequest) (*gitgatewayv1.GenerateCommitMessageResponse, error)
-	stageFunc                          func(ctx context.Context, in *gitgatewayv1.StageRequest) (*gitgatewayv1.StageResponse, error)
-	unstageFunc                        func(ctx context.Context, in *gitgatewayv1.UnstageRequest) (*gitgatewayv1.UnstageResponse, error)
-	historyFunc                        func(ctx context.Context, in *gitgatewayv1.HistoryRequest) (*gitgatewayv1.HistoryResponse, error)
-	checkIgnoredFunc                   func(ctx context.Context, in *gitgatewayv1.CheckIgnoredRequest) (*gitgatewayv1.CheckIgnoredResponse, error)
-	forkSyncFunc                       func(ctx context.Context, in *gitgatewayv1.ForkSyncRequest) (*gitgatewayv1.ForkSyncResponse, error)
-	upstreamStatusFunc                 func(ctx context.Context, in *gitgatewayv1.UpstreamStatusRequest) (*gitgatewayv1.UpstreamStatusResponse, error)
-	remoteCommitURLFunc                func(ctx context.Context, in *gitgatewayv1.RemoteCommitUrlRequest) (*gitgatewayv1.RemoteUrlResponse, error)
-	remoteFileURLFunc                  func(ctx context.Context, in *gitgatewayv1.RemoteFileUrlRequest) (*gitgatewayv1.RemoteUrlResponse, error)
-	generatePullRequestFieldsFunc      func(ctx context.Context, in *gitgatewayv1.GeneratePullRequestFieldsRequest) (*gitgatewayv1.GeneratePullRequestFieldsResponse, error)
-	discoverCommitMessageModelsFunc    func(ctx context.Context, in *gitgatewayv1.DiscoverCommitMessageModelsRequest) (*gitgatewayv1.DiscoverCommitMessageModelsResponse, error)
-	readFileFunc                       func(ctx context.Context, in *gitgatewayv1.ReadFileRequest) (*gitgatewayv1.ReadFileResponse, error)
-	writeFileFunc                      func(ctx context.Context, in *gitgatewayv1.WriteFileRequest) (*gitgatewayv1.WriteFileResponse, error)
-	renameFileFunc                     func(ctx context.Context, in *gitgatewayv1.RenameFileRequest) (*gitgatewayv1.RenameFileResponse, error)
-	statFileFunc                       func(ctx context.Context, in *gitgatewayv1.StatFileRequest) (*gitgatewayv1.StatFileResponse, error)
-	readDirFunc                        func(ctx context.Context, in *gitgatewayv1.ReadDirRequest) (*gitgatewayv1.ReadDirResponse, error)
-	readFileChunkFunc                  func(ctx context.Context, in *gitgatewayv1.ReadFileChunkRequest) (*gitgatewayv1.ReadFileChunkResponse, error)
-	readFilePreviewFunc                func(ctx context.Context, in *gitgatewayv1.ReadFilePreviewRequest) (*gitgatewayv1.ReadFilePreviewResponse, error)
-	writeFileChunkFunc                 func(ctx context.Context, in *gitgatewayv1.WriteFileChunkRequest) (*gitgatewayv1.WriteFileChunkResponse, error)
-	createDirFunc                      func(ctx context.Context, in *gitgatewayv1.CreateDirRequest) (*gitgatewayv1.CreateDirResponse, error)
-	deleteFileFunc                     func(ctx context.Context, in *gitgatewayv1.DeleteFileRequest) (*emptypb.Empty, error)
-	searchFilesFunc                    func(ctx context.Context, in *gitgatewayv1.SearchFilesRequest) (*gitgatewayv1.SearchFilesResponse, error)
-	listAllFilesFunc                   func(ctx context.Context, in *gitgatewayv1.ListAllFilesRequest) (*gitgatewayv1.ListAllFilesResponse, error)
-	listMarkdownDocumentsFunc          func(ctx context.Context, in *gitgatewayv1.ListMarkdownDocumentsRequest) (*gitgatewayv1.ListMarkdownDocumentsResponse, error)
-	copyFileFunc                       func(ctx context.Context, in *gitgatewayv1.CopyFileRequest) (*gitgatewayv1.CopyFileResponse, error)
+	getDiffFunc                     func(ctx context.Context, in *gitgatewayv1.GetDiffRequest) (*gitgatewayv1.GetDiffResponse, error)
+	commitFunc                      func(ctx context.Context, in *gitgatewayv1.CommitRequest) (*gitgatewayv1.CommitResponse, error)
+	pushFunc                        func(ctx context.Context, in *gitgatewayv1.PushRequest) (*gitgatewayv1.PushResponse, error)
+	pullFunc                        func(ctx context.Context, in *gitgatewayv1.PullRequest) (*gitgatewayv1.PullResponse, error)
+	generateCommitMessageFunc       func(ctx context.Context, in *gitgatewayv1.GenerateCommitMessageRequest) (*gitgatewayv1.GenerateCommitMessageResponse, error)
+	stageFunc                       func(ctx context.Context, in *gitgatewayv1.StageRequest) (*gitgatewayv1.StageResponse, error)
+	unstageFunc                     func(ctx context.Context, in *gitgatewayv1.UnstageRequest) (*gitgatewayv1.UnstageResponse, error)
+	historyFunc                     func(ctx context.Context, in *gitgatewayv1.HistoryRequest) (*gitgatewayv1.HistoryResponse, error)
+	checkIgnoredFunc                func(ctx context.Context, in *gitgatewayv1.CheckIgnoredRequest) (*gitgatewayv1.CheckIgnoredResponse, error)
+	forkSyncFunc                    func(ctx context.Context, in *gitgatewayv1.ForkSyncRequest) (*gitgatewayv1.ForkSyncResponse, error)
+	upstreamStatusFunc              func(ctx context.Context, in *gitgatewayv1.UpstreamStatusRequest) (*gitgatewayv1.UpstreamStatusResponse, error)
+	remoteCommitURLFunc             func(ctx context.Context, in *gitgatewayv1.RemoteCommitUrlRequest) (*gitgatewayv1.RemoteUrlResponse, error)
+	remoteFileURLFunc               func(ctx context.Context, in *gitgatewayv1.RemoteFileUrlRequest) (*gitgatewayv1.RemoteUrlResponse, error)
+	generatePullRequestFieldsFunc   func(ctx context.Context, in *gitgatewayv1.GeneratePullRequestFieldsRequest) (*gitgatewayv1.GeneratePullRequestFieldsResponse, error)
+	discoverCommitMessageModelsFunc func(ctx context.Context, in *gitgatewayv1.DiscoverCommitMessageModelsRequest) (*gitgatewayv1.DiscoverCommitMessageModelsResponse, error)
+	readFileFunc                    func(ctx context.Context, in *gitgatewayv1.ReadFileRequest) (*gitgatewayv1.ReadFileResponse, error)
+	writeFileFunc                   func(ctx context.Context, in *gitgatewayv1.WriteFileRequest) (*gitgatewayv1.WriteFileResponse, error)
+	renameFileFunc                  func(ctx context.Context, in *gitgatewayv1.RenameFileRequest) (*gitgatewayv1.RenameFileResponse, error)
+	statFileFunc                    func(ctx context.Context, in *gitgatewayv1.StatFileRequest) (*gitgatewayv1.StatFileResponse, error)
+	readDirFunc                     func(ctx context.Context, in *gitgatewayv1.ReadDirRequest) (*gitgatewayv1.ReadDirResponse, error)
+	readFileChunkFunc               func(ctx context.Context, in *gitgatewayv1.ReadFileChunkRequest) (*gitgatewayv1.ReadFileChunkResponse, error)
+	readFilePreviewFunc             func(ctx context.Context, in *gitgatewayv1.ReadFilePreviewRequest) (*gitgatewayv1.ReadFilePreviewResponse, error)
+	writeFileChunkFunc              func(ctx context.Context, in *gitgatewayv1.WriteFileChunkRequest) (*gitgatewayv1.WriteFileChunkResponse, error)
+	createDirFunc                   func(ctx context.Context, in *gitgatewayv1.CreateDirRequest) (*gitgatewayv1.CreateDirResponse, error)
+	createFileFunc                  func(ctx context.Context, in *gitgatewayv1.CreateFileRequest) (*gitgatewayv1.CreateFileResponse, error)
+	deleteFileFunc                  func(ctx context.Context, in *gitgatewayv1.DeleteFileRequest) (*emptypb.Empty, error)
+	searchFilesFunc                 func(ctx context.Context, in *gitgatewayv1.SearchFilesRequest) (*gitgatewayv1.SearchFilesResponse, error)
+	listAllFilesFunc                func(ctx context.Context, in *gitgatewayv1.ListAllFilesRequest) (*gitgatewayv1.ListAllFilesResponse, error)
+	listMarkdownDocumentsFunc       func(ctx context.Context, in *gitgatewayv1.ListMarkdownDocumentsRequest) (*gitgatewayv1.ListMarkdownDocumentsResponse, error)
+	copyFileFunc                    func(ctx context.Context, in *gitgatewayv1.CopyFileRequest) (*gitgatewayv1.CopyFileResponse, error)
+	getRemoteUrlFunc                func(ctx context.Context, in *gitgatewayv1.GetRemoteUrlRequest) (*gitgatewayv1.GetRemoteUrlResponse, error)
 
 	checkoutFunc          func(ctx context.Context, in *gitgatewayv1.CheckoutRequest) (*gitgatewayv1.CheckoutResponse, error)
 	listLocalBranchesFunc func(ctx context.Context, in *gitgatewayv1.ListLocalBranchesRequest) (*gitgatewayv1.ListLocalBranchesResponse, error)
@@ -162,6 +164,9 @@ func (f *fakeGitGatewayClient) WriteFileChunk(ctx context.Context, in *gitgatewa
 func (f *fakeGitGatewayClient) CreateDir(ctx context.Context, in *gitgatewayv1.CreateDirRequest, _ ...grpc.CallOption) (*gitgatewayv1.CreateDirResponse, error) {
 	return f.createDirFunc(ctx, in)
 }
+func (f *fakeGitGatewayClient) CreateFile(ctx context.Context, in *gitgatewayv1.CreateFileRequest, _ ...grpc.CallOption) (*gitgatewayv1.CreateFileResponse, error) {
+	return f.createFileFunc(ctx, in)
+}
 func (f *fakeGitGatewayClient) DeleteFile(ctx context.Context, in *gitgatewayv1.DeleteFileRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
 	return f.deleteFileFunc(ctx, in)
 }
@@ -176,6 +181,9 @@ func (f *fakeGitGatewayClient) ListMarkdownDocuments(ctx context.Context, in *gi
 }
 func (f *fakeGitGatewayClient) CopyFile(ctx context.Context, in *gitgatewayv1.CopyFileRequest, _ ...grpc.CallOption) (*gitgatewayv1.CopyFileResponse, error) {
 	return f.copyFileFunc(ctx, in)
+}
+func (f *fakeGitGatewayClient) GetRemoteUrl(ctx context.Context, in *gitgatewayv1.GetRemoteUrlRequest, _ ...grpc.CallOption) (*gitgatewayv1.GetRemoteUrlResponse, error) {
+	return f.getRemoteUrlFunc(ctx, in)
 }
 func (f *fakeGitGatewayClient) Checkout(ctx context.Context, in *gitgatewayv1.CheckoutRequest, _ ...grpc.CallOption) (*gitgatewayv1.CheckoutResponse, error) {
 	return f.checkoutFunc(ctx, in)
@@ -1264,6 +1272,43 @@ func TestFilesCreateDirChannels_BothResolveToCreateDirRPC(t *testing.T) {
 	}
 }
 
+func TestFilesCreateFileChannel_Success(t *testing.T) {
+	var got *gitgatewayv1.CreateFileRequest
+	fake := &fakeGitGatewayClient{
+		createFileFunc: func(ctx context.Context, in *gitgatewayv1.CreateFileRequest) (*gitgatewayv1.CreateFileResponse, error) {
+			got = in
+			return &gitgatewayv1.CreateFileResponse{}, nil
+		},
+	}
+	r := NewRegistry()
+	registerFilesChannels(r, fake)
+
+	if _, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "files.createFile",
+		argsJSON(t, map[string]any{"worktreeId": "wt-1", "path": "new.txt"})); err != nil {
+		t.Fatal(err)
+	}
+	if got.GetWorktreeId() != "wt-1" || got.GetPath() != "new.txt" {
+		t.Errorf("unexpected request: %+v", got)
+	}
+}
+
+func TestFilesCreateFileChannel_ErrorPassesThrough(t *testing.T) {
+	wantErr := errors.New("already exists")
+	fake := &fakeGitGatewayClient{
+		createFileFunc: func(ctx context.Context, in *gitgatewayv1.CreateFileRequest) (*gitgatewayv1.CreateFileResponse, error) {
+			return nil, wantErr
+		},
+	}
+	r := NewRegistry()
+	registerFilesChannels(r, fake)
+
+	_, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "files.createFile",
+		argsJSON(t, map[string]any{"worktreeId": "wt-1", "path": "new.txt"}))
+	if !errors.Is(err, wantErr) {
+		t.Fatalf("expected error to pass through, got %v", err)
+	}
+}
+
 func TestFilesDeleteChannel_Success(t *testing.T) {
 	var got *gitgatewayv1.DeleteFileRequest
 	fake := &fakeGitGatewayClient{
@@ -1415,5 +1460,83 @@ func TestGitStatusChannel_DecodesWorktreeSelector(t *testing.T) {
 	}
 	if gotReq.GetWorktreeId() != "wt-1" {
 		t.Errorf("WorktreeId = %q, want %q (expected the id: prefix stripped)", gotReq.GetWorktreeId(), "wt-1")
+	}
+}
+
+// ── TASK-032: git.cancelGenerateCommitMessage / cancelGeneratePullRequestFields ──
+
+func TestGitCancelGenerateCommitMessage_CancelsInFlightCall(t *testing.T) {
+	started := make(chan struct{})
+	fake := &fakeGitGatewayClient{
+		generateCommitMessageFunc: func(ctx context.Context, in *gitgatewayv1.GenerateCommitMessageRequest) (*gitgatewayv1.GenerateCommitMessageResponse, error) {
+			close(started)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	r := NewRegistry()
+	registerGitDeepChannels(r, fake)
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := r.Dispatch(context.Background(), Identity{}, "git.generateCommitMessage", argsJSON(t, map[string]any{"worktreeId": "wt-1"}))
+		errCh <- err
+	}()
+	<-started
+
+	_, err := r.Dispatch(context.Background(), Identity{}, "git.cancelGenerateCommitMessage", argsJSON(t, map[string]any{"worktreeId": "wt-1"}))
+	if err != nil {
+		t.Fatalf("unexpected error from cancel: %v", err)
+	}
+
+	if genErr := <-errCh; genErr == nil {
+		t.Fatal("want the in-flight generate call to fail once cancelled")
+	}
+
+	// A second cancel for the same, now-finished worktree must be a clean no-op.
+	_, err = r.Dispatch(context.Background(), Identity{}, "git.cancelGenerateCommitMessage", argsJSON(t, map[string]any{"worktreeId": "wt-1"}))
+	if err != nil {
+		t.Fatalf("second cancel: unexpected error: %v", err)
+	}
+}
+
+func TestGitCancelGenerateCommitMessage_NoInFlightCallIsCleanNoOp(t *testing.T) {
+	r := NewRegistry()
+	registerGitDeepChannels(r, &fakeGitGatewayClient{})
+
+	_, err := r.Dispatch(context.Background(), Identity{}, "git.cancelGenerateCommitMessage", argsJSON(t, map[string]any{"worktreeId": "no-such-worktree"}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestGitCancelGeneratePullRequestFields_DoesNotCancelCommitMessage(t *testing.T) {
+	commitStarted := make(chan struct{})
+	commitCtx := make(chan context.Context, 1)
+	fake := &fakeGitGatewayClient{
+		generateCommitMessageFunc: func(ctx context.Context, in *gitgatewayv1.GenerateCommitMessageRequest) (*gitgatewayv1.GenerateCommitMessageResponse, error) {
+			commitCtx <- ctx
+			close(commitStarted)
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	}
+	r := NewRegistry()
+	registerGitDeepChannels(r, fake)
+
+	go r.Dispatch(context.Background(), Identity{}, "git.generateCommitMessage", argsJSON(t, map[string]any{"worktreeId": "wt-1"}))
+	<-commitStarted
+
+	// Cancelling pullRequestFields for the SAME worktree must not touch the
+	// independent commitMessage in-flight call.
+	_, _ = r.Dispatch(context.Background(), Identity{}, "git.cancelGeneratePullRequestFields", argsJSON(t, map[string]any{"worktreeId": "wt-1"}))
+
+	select {
+	case ctx := <-commitCtx:
+		if ctx.Err() != nil {
+			t.Fatal("want commitMessage's context still live — pullRequestFields cancel must not affect it")
+		}
+	default:
+		t.Fatal("expected to have captured the in-flight commitMessage context")
 	}
 }

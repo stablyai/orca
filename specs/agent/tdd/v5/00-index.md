@@ -390,3 +390,45 @@ Read flow (khi spawn agent):
 | F37 Task Graph | TaskService (grant, plan) | **ProfileAwareAgentSpawner + AI Agent CLIs** |
 | F38 Project Workspace | WorkspaceContext | FsEngine + GitEngine |
 | F39 Remote Git UI | — (proxy) | **GitEngine (gh CLI → GitHub/GitLab API)** |
+
+
+---
+
+## Addendum B (2026-09-07) - Corrections found during CR-STORAGE-00x agent-side audit
+
+Two claims in section A.1/A.2 above do not match the real, current
+`agent/src/relay/` source. Found and verified while executing
+`specs/agent/crs/v3/storage/tasks/TASK-AG-STORAGE-002-verify-health-reporter-cadence.md`;
+full detail in
+`specs/agent/crs/v3/storage/solutions/SOL-AG-STORAGE-002-fleet-health-and-hydration-reporting.md`.
+
+1. **"Health Reporter" (A.1's role table, A.2 step 7, A.7's reference) does
+   not exist as an agent-push mechanism.** Two independent
+   `codegraph_explore` sweeps of all of `agent/src/` found no module that
+   periodically collects/emits CPU/RAM/disk/latency. The real mechanism,
+   confirmed via `backend-go/services/infra-fleet-service/internal/usecase/get_fleet_health.go`
+   (`GetFleetHealth`, `NewPollFleetHealth`), is backend-go **polling** the
+   dev server (consistent with `infra-fleet-service.md` section 8's "30s
+   per dev server" - there is no 60-vs-30 mismatch, because there is no
+   agent-side 60s emitter to compare against). Read A.1/A.2/A.7's "Health
+   Reporter" language as historical/aspirational, not current behavior.
+
+2. **A.2 step 8's "ReconnectManager: exponential backoff 5s -> 60s max" has
+   the wrong numbers.** The real constant, `agent/src/relay/agent-connection-direct.ts`'s
+   `RECONNECT_DELAYS_MS`, is `[1000, 2000, 5000, 15000, 30000]` (1s, capped
+   at 30s) - not 5s-to-60s. See `03-connection-modes.md` section 6 and
+   `04-handshake-session.md` section 9 for the full corrected reconnect
+   behavior (this part of A.2 was directionally right - a reconnect loop
+   really does exist - just with different numbers than stated).
+
+Also relevant, not a correction but a gap this audit closed: `dev_servers.bootstrap_status`
+and a `BootstrapFleetTarget` streaming RPC, implied by this doc's framing
+of "Dev Server Onboard" (A.12) and by `specs/backend-go/tdd/services/infra-fleet-service.md`,
+**do not exist in real backend-go code** - confirmed by grep across
+`backend-go/services/infra-fleet-service/`. What does exist is
+`infra.dev_servers.status` (`pending|healthy|degraded|unhealthy`) plus
+`platform`/`arch`/`node_version`/`agent_version` columns (migration
+`0007_dev_server_health_status.up.sql`), which map directly onto fields
+`agent.handshake` already sends today - no agent change needed, only a
+backend-go one (persist those handshake fields onto the real columns).
+See `TASK-AG-STORAGE-003`'s completion notes for the full citation trail.

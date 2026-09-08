@@ -1,48 +1,32 @@
 import type { GlobalSettings } from '../../../shared/types'
-import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../shared/runtime-rpc-feature-interaction-source'
-import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
+import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { ensureRuntimeEnvironmentCompatible } from './runtime-compatibility-cache'
+
+// Why split across 3 files (max-lines budget): runtime-rpc-result.ts has no
+// dependency on the rest of this module (RuntimeRpcCallError/
+// unwrapRuntimeRpcResult), so runtime-compatibility-cache.ts can depend on
+// it without an import cycle back to this file — callRuntimeRpc below still
+// calls ensureRuntimeEnvironmentCompatible. Every symbol external callers
+// used to import from here is re-exported unchanged, so no call site needs
+// to change its import path.
+export {
+  RuntimeRpcCallError,
+  isRuntimeScopeForbiddenError,
+  unwrapRuntimeRpcResult
+} from './runtime-rpc-result'
+export {
+  clearRecentRuntimeCompatibilityFailure,
+  clearRuntimeCompatibilityCache,
+  clearRuntimeCompatibilityCacheForTests,
+  markRuntimeEnvironmentCompatible,
+  getRuntimeEnvironmentStatus,
+  runtimeEnvironmentSupportsCapability,
+  assertRuntimeEnvironmentCapability
+} from './runtime-compatibility-cache'
 
 export type RuntimeClientTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
-
-const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
-const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
-// Why: a saved environment can restart into a different Orca version without
-// changing ids; capability verdicts must eventually follow that version change.
-const RUNTIME_CAPABILITY_STATUS_TTL_MS = 60_000
-
-type RuntimeCompatibilityCacheEntry = {
-  check: Promise<void>
-  failedAt: number | null
-  // True only once status.get settled and proved compatible. Stays false while
-  // the probe is in flight, so a recovery clear can drop a doomed pending probe.
-  provenCompatible: boolean
-  status: RuntimeStatus | null
-  statusCheckedAt: number | null
-}
-
-const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
-
-export class RuntimeRpcCallError extends Error {
-  readonly code: string
-  readonly response: RuntimeRpcFailure
-
-  constructor(response: RuntimeRpcFailure) {
-    super(response.error.message)
-    this.name = 'RuntimeRpcCallError'
-    this.code = response.error.code
-    this.response = response
-  }
-}
-
-// Why: mobile-scope device tokens are denied non-allowlisted runtime methods
-// with code 'forbidden'. Callers use this to surface one scope-mismatch banner
-// instead of silently swallowing the failure into empty/retry-looping UI.
-export function isRuntimeScopeForbiddenError(error: unknown): boolean {
-  return error instanceof RuntimeRpcCallError && error.code === 'forbidden'
-}
 
 export function getActiveRuntimeTarget(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
@@ -91,6 +75,112 @@ export async function callRuntimeRpc<TResult>(
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }
 
+// Why: the desktop path (target.kind === 'local') keeps its existing
+// per-channel window.api.* broadcast (e.g. window.api.ephemeralVm.provision)
+// unchanged — see FE-SOL-EVM-002 §2/§3 "Không thuộc phạm vi solution này".
+// This generic function only ever runs for target.kind === 'environment';
+// a caller reaching it with 'local' is a wiring bug, not a runtime case to
+// degrade gracefully — surfacing it loudly here is cheaper to debug than a
+// promise that never settles.
+const SUBSCRIBE_RUNTIME_STREAM_CHANNEL_LOCAL_TARGET_MESSAGE =
+  "subscribeRuntimeStreamChannel does not support target.kind === 'local' (desktop) — " +
+  'route the desktop path through its existing window.api.* channel-specific method instead.'
+
+/**
+ * Generic client for a backend-go `Registry.StreamChannelHandler` channel
+ * (registry.go) — one that acks an `invoke` AND opens a push subscription on
+ * the same call (e.g. `terminal.subscribe`, and `ephemeralVm.provision` once
+ * TASK-BE-EVM-005 ships). Audited before writing this (FE-SOL-EVM-002 §1):
+ * `window.api.runtimeEnvironments.subscribe` (backed by WebRuntimeClient/
+ * WebSessionClient, both negotiating wscompat's dialectSessionClient — see
+ * session_dialect.go) is the existing, working push-by-request-id hook for
+ * this dialect; PushEvent.Channel-keyed routing (push_bridge.go's pipePush,
+ * rpc-client.ts's `on(channel, handler)`) is dialectNative-only and unused by
+ * any current window.api implementation, so this reuses the former rather
+ * than adding a second, parallel push mechanism.
+ *
+ * The subscription's very FIRST response is the `ack`; every response after
+ * that is a push event routed to `onEvent`.
+ */
+export function subscribeRuntimeStreamChannel<TAck, TEvent>(
+  target: RuntimeClientTarget,
+  method: string,
+  params: unknown,
+  onEvent: (event: TEvent) => void
+): Promise<{ ack: TAck; unsubscribe: () => void }> {
+  if (target.kind === 'local') {
+    return Promise.reject(new Error(SUBSCRIBE_RUNTIME_STREAM_CHANNEL_LOCAL_TARGET_MESSAGE))
+  }
+  const environmentId = target.environmentId
+  return new Promise((resolve, reject) => {
+    let settled = false
+    // Why: don't rely solely on the transport reaping the subscription
+    // asynchronously — a caller's own unsubscribe() must stop onEvent
+    // deliveries immediately, even if a push frame is already in flight when
+    // it's called (matches subscribeSharedFileWatch's own `stopped` guard,
+    // web-runtime-client.ts).
+    let stopped = false
+    let handle: { unsubscribe: () => void } | null = null
+    const unsubscribe = (): void => {
+      if (stopped) {
+        return
+      }
+      stopped = true
+      handle?.unsubscribe()
+    }
+
+    window.api.runtimeEnvironments
+      .subscribe(
+        { selector: environmentId, method, params },
+        {
+          onResponse: (response: RuntimeRpcResponse<unknown>) => {
+            if (stopped) {
+              return
+            }
+            if (!response.ok) {
+              if (!settled) {
+                settled = true
+                reject(new RuntimeRpcCallError(response))
+              }
+              return
+            }
+            if (!settled) {
+              settled = true
+              resolve({ ack: response.result as TAck, unsubscribe })
+              return
+            }
+            onEvent(response.result as TEvent)
+          },
+          onError: (error) => {
+            if (!settled) {
+              settled = true
+              reject(new Error(error.message))
+            }
+            // Why: an error arriving after the ack has no `onEvent`-shaped
+            // slot in this generic contract (only ack/events, no onError) —
+            // the connection layer's own onClose still fires so callers see
+            // the subscription end, matching subscribeSharedFileWatch's own
+            // "swallow late errors, let onClose signal teardown" precedent
+            // (web-runtime-client.ts).
+          }
+        }
+      )
+      .then((h) => {
+        if (stopped) {
+          h.unsubscribe()
+          return
+        }
+        handle = h
+      })
+      .catch((error: unknown) => {
+        if (!settled) {
+          settled = true
+          reject(error instanceof Error ? error : new Error(String(error)))
+        }
+      })
+  })
+}
+
 function addFeatureInteractionSource(
   params: unknown,
   options: { suppressFeatureInteraction?: boolean }
@@ -99,239 +189,4 @@ function addFeatureInteractionSource(
     return params
   }
   return withBrowserPaneUiRuntimeRpcSource(params)
-}
-
-async function ensureRuntimeEnvironmentCompatible(
-  environmentId: string,
-  options: { timeoutMs?: number; reuseRecentCompatibilityFailure?: boolean } = {}
-): Promise<void> {
-  const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
-  if (cached) {
-    await cached.check
-    return
-  }
-  const entry: RuntimeCompatibilityCacheEntry = {
-    check: Promise.resolve(),
-    failedAt: null,
-    provenCompatible: false,
-    status: null,
-    statusCheckedAt: null
-  }
-  const check = (async () => {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method: 'status.get',
-      timeoutMs: options.timeoutMs
-    })
-    const status = unwrapRuntimeRpcResult<RuntimeStatus>(
-      response as RuntimeRpcResponse<RuntimeStatus>
-    )
-    assertRuntimeStatusCompatible(status)
-    entry.status = status
-    entry.statusCheckedAt = Date.now()
-  })()
-  entry.check = check
-  rememberRuntimeEnvironmentCompatibility(environmentId, entry)
-  try {
-    await check
-    if (runtimeCompatibilityChecks.get(environmentId) === entry) {
-      entry.provenCompatible = true
-    }
-  } catch (error) {
-    if (runtimeCompatibilityChecks.get(environmentId) === entry) {
-      // Why: startup asks each remote for repos, groups, then folders; an
-      // offline runtime should pay one timeout during that burst, not three.
-      entry.failedAt = Date.now()
-    }
-    throw error
-  }
-}
-
-function getCachedRuntimeCompatibilityCheck(
-  environmentId: string,
-  options: { reuseRecentCompatibilityFailure?: boolean }
-): RuntimeCompatibilityCacheEntry | null {
-  const cached = runtimeCompatibilityChecks.get(environmentId)
-  if (!cached) {
-    return null
-  }
-  if (
-    cached.failedAt !== null &&
-    Date.now() - cached.failedAt >= RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS
-  ) {
-    runtimeCompatibilityChecks.delete(environmentId)
-    return null
-  }
-  if (cached.failedAt !== null && options.reuseRecentCompatibilityFailure !== true) {
-    return null
-  }
-  runtimeCompatibilityChecks.delete(environmentId)
-  runtimeCompatibilityChecks.set(environmentId, cached)
-  return cached
-}
-
-function rememberRuntimeEnvironmentCompatibility(
-  environmentId: string,
-  entry: RuntimeCompatibilityCacheEntry
-): void {
-  // Why: saved/removed remote runtimes can churn through unique ids in long
-  // renderer sessions; compatibility cache entries should not grow forever.
-  runtimeCompatibilityChecks.delete(environmentId)
-  runtimeCompatibilityChecks.set(environmentId, entry)
-  while (runtimeCompatibilityChecks.size > RUNTIME_COMPATIBILITY_CACHE_MAX) {
-    const oldest = runtimeCompatibilityChecks.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    runtimeCompatibilityChecks.delete(oldest)
-  }
-}
-
-// Why: a live status.get answer proves any cached compatibility verdict that is
-// not a settled success is stale. Drop settled failures AND still-pending probes
-// (a probe queued on the dropped connection is doomed, and a reachability-
-// triggered refresh must not coalesce onto it) so the refresh re-probes. Only
-// proven-compatible successes stay cached.
-export function clearRecentRuntimeCompatibilityFailure(environmentId: string): void {
-  const trimmed = environmentId.trim()
-  if (!trimmed) {
-    return
-  }
-  const cached = runtimeCompatibilityChecks.get(trimmed)
-  if (cached && !cached.provenCompatible) {
-    runtimeCompatibilityChecks.delete(trimmed)
-  }
-}
-
-export function clearRuntimeCompatibilityCache(environmentId?: string | null): void {
-  const trimmed = environmentId?.trim()
-  if (trimmed) {
-    runtimeCompatibilityChecks.delete(trimmed)
-    return
-  }
-  runtimeCompatibilityChecks.clear()
-}
-
-export function markRuntimeEnvironmentCompatible(environmentId: string): void {
-  const trimmed = environmentId.trim()
-  if (!trimmed) {
-    return
-  }
-  rememberRuntimeEnvironmentCompatibility(trimmed, {
-    check: Promise.resolve(),
-    failedAt: null,
-    provenCompatible: true,
-    status: null,
-    statusCheckedAt: null
-  })
-}
-
-export async function getRuntimeEnvironmentStatus(
-  environmentId: string,
-  timeoutMs?: number
-): Promise<RuntimeStatus> {
-  const trimmed = environmentId.trim()
-  const entry: RuntimeCompatibilityCacheEntry = {
-    check: Promise.resolve(),
-    failedAt: null,
-    provenCompatible: false,
-    status: null,
-    statusCheckedAt: null
-  }
-  // Why: publish the in-flight probe before awaiting so concurrent cold-cache
-  // capability lookups coalesce onto this one status.get (via the cache-hit path
-  // in runtimeEnvironmentSupportsCapability) instead of each firing their own.
-  const check = (async () => {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: trimmed,
-      method: 'status.get',
-      timeoutMs
-    })
-    const status = unwrapRuntimeRpcResult<RuntimeStatus>(
-      response as RuntimeRpcResponse<RuntimeStatus>
-    )
-    assertRuntimeStatusCompatible(status)
-    entry.status = status
-    entry.statusCheckedAt = Date.now()
-    entry.provenCompatible = true
-  })()
-  entry.check = check
-  rememberRuntimeEnvironmentCompatibility(trimmed, entry)
-  try {
-    await check
-  } catch (error) {
-    // Why: this probe always re-fetches, so a failure must not linger as a
-    // cached verdict; drop the entry so the next call re-probes cleanly.
-    if (runtimeCompatibilityChecks.get(trimmed) === entry) {
-      runtimeCompatibilityChecks.delete(trimmed)
-    }
-    throw error
-  }
-  if (!entry.status) {
-    // Unreachable: a resolved probe always assigns status; narrows the type.
-    throw new Error('Runtime status probe resolved without a status.')
-  }
-  return entry.status
-}
-
-export async function runtimeEnvironmentSupportsCapability(
-  environmentId: string,
-  capability: RuntimeCapability,
-  timeoutMs?: number
-): Promise<boolean> {
-  const trimmed = environmentId.trim()
-  const cached = runtimeCompatibilityChecks.get(trimmed)
-  // Why: callRuntimeRpc re-probes after failed status checks by default. Capability
-  // lookups must not pin to a rejected cache promise or they block recovery for
-  // the full failure TTL even though the next RPC would re-probe successfully.
-  if (cached && cached.failedAt === null) {
-    try {
-      await cached.check
-      if (
-        runtimeCompatibilityChecks.get(trimmed) === cached &&
-        cached.status &&
-        cached.statusCheckedAt !== null &&
-        Date.now() - cached.statusCheckedAt < RUNTIME_CAPABILITY_STATUS_TTL_MS
-      ) {
-        const supported = cached.status.capabilities?.includes(capability) === true
-        if (!supported) {
-          // Why: an unsupported verdict must not survive a remote upgrade. The
-          // next explicit retry re-probes instead of pinning the old capability set.
-          runtimeCompatibilityChecks.delete(trimmed)
-        }
-        return supported
-      }
-    } catch {
-      // Fall through to a fresh status.get that refreshes the cache.
-    }
-  }
-  const status = await getRuntimeEnvironmentStatus(trimmed, timeoutMs)
-  const supported = status.capabilities?.includes(capability) === true
-  if (!supported && runtimeCompatibilityChecks.get(trimmed)?.status === status) {
-    runtimeCompatibilityChecks.delete(trimmed)
-  }
-  return supported
-}
-
-export async function assertRuntimeEnvironmentCapability(
-  environmentId: string,
-  capability: RuntimeCapability,
-  message: string,
-  timeoutMs?: number
-): Promise<void> {
-  const status = await getRuntimeEnvironmentStatus(environmentId, timeoutMs)
-  if (!status.capabilities?.includes(capability)) {
-    throw new Error(message)
-  }
-}
-
-export function clearRuntimeCompatibilityCacheForTests(): void {
-  clearRuntimeCompatibilityCache()
-}
-
-export function unwrapRuntimeRpcResult<TResult>(response: RuntimeRpcResponse<TResult>): TResult {
-  if (response.ok === false) {
-    throw new RuntimeRpcCallError(response)
-  }
-  return response.result
 }

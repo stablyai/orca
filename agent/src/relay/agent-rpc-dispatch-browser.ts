@@ -203,6 +203,42 @@ export async function dispatchBrowserRpc(
       }
     }
 
+    case 'browser.profileClearDefaultCookies': {
+      try {
+        const { handleBrowserProfileClearDefaultCookies } = await import('./browser-handler')
+        return (await handleBrowserProfileClearDefaultCookies(
+          rpc.id,
+          rpc.params ?? {},
+          log
+        )) as JsonRpcResponse
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return makeError(
+          rpc.id,
+          AgentErrorCode.ServerError,
+          `browser.profileClearDefaultCookies unavailable: ${msg}`
+        )
+      }
+    }
+
+    case 'browser.profileDetectBrowsers': {
+      try {
+        const { handleBrowserProfileDetectBrowsers } = await import('./browser-handler')
+        return (await handleBrowserProfileDetectBrowsers(
+          rpc.id,
+          rpc.params ?? {},
+          log
+        )) as JsonRpcResponse
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return makeError(
+          rpc.id,
+          AgentErrorCode.ServerError,
+          `browser.profileDetectBrowsers unavailable: ${msg}`
+        )
+      }
+    }
+
     default:
       return null
   }

@@ -6,6 +6,7 @@ import type {
   SshTarget
 } from '../../../../shared/ssh-types'
 import { sshConnectionStatesEqual, sshTargetLabelsEqual } from './ssh-target-cleanup'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 
 /**
  * SSH state of one remote Orca server's own SSH targets, mirrored on this
@@ -52,6 +53,17 @@ export type RuntimeEnvironmentSshSlice = {
   removeEnvironmentSshState: (environmentId: string) => void
   /** Drops buckets for environments no longer in the saved set. */
   retainEnvironmentSshState: (environmentIds: Iterable<string>) => void
+  /** Hydrates one environment's SSH bucket (targets, removal tombstones, and
+   *  per-target connection states) from its own ssh.listTargets/ssh.getState
+   *  RPCs — CR-STORAGE-006's hydrate-on-mount pattern (FE-TASK-STORAGE-013).
+   *  Additive: `hydrateRuntimeEnvironmentSshState` in
+   *  `runtime/runtime-environment-ssh-state.ts` already performs this same
+   *  fetch (wired at TerminalPane mount and reachability transitions in
+   *  useIpcEvents.ts) and keeps doing so unchanged; this gives the slice its
+   *  own testable entry point without replacing that mechanism. Swallows RPC
+   *  failures so a caller never crashes on an unreachable environment.
+   */
+  hydrateEnvironmentSshState: (environmentId: string) => Promise<void>
 }
 
 const EMPTY_BUCKET: RuntimeEnvironmentSshBucket = {
@@ -90,7 +102,7 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
   [],
   [],
   RuntimeEnvironmentSshSlice
-> = (set) => ({
+> = (set, get) => ({
   sshStateByEnvironment: new Map(),
 
   setEnvironmentSshConnectionState: (environmentId, targetId, state) =>
@@ -170,7 +182,46 @@ export const createRuntimeEnvironmentSshSlice: StateCreator<
         }
       }
       return changed ? { sshStateByEnvironment: next } : s
-    })
+    }),
+
+  hydrateEnvironmentSshState: async (environmentId) => {
+    const target = { kind: 'environment' as const, environmentId }
+    let targets: SshTarget[]
+    try {
+      const result = await callRuntimeRpc<{ targets: SshTarget[] }>(target, 'ssh.listTargets')
+      targets = result.targets
+    } catch {
+      // Why: an unreachable/incompatible environment must not crash the
+      // caller or discard whatever bucket state already exists.
+      return
+    }
+    get().setEnvironmentSshTargetsMetadata(environmentId, targets)
+    try {
+      const { labels } = await callRuntimeRpc<{ labels: Record<string, string> }>(
+        target,
+        'ssh.listRemovedTargetLabels'
+      )
+      get().setEnvironmentRemovedSshTargetLabels(environmentId, labels)
+    } catch {
+      // Best-effort — ghost-host labels just fall back to the raw target id.
+    }
+    await Promise.all(
+      targets.map(async (t) => {
+        try {
+          const { state } = await callRuntimeRpc<{ state: SshConnectionState | null }>(
+            target,
+            'ssh.getState',
+            { targetId: t.id }
+          )
+          if (state) {
+            get().setEnvironmentSshConnectionState(environmentId, t.id, state)
+          }
+        } catch {
+          // A target the environment can't currently reach reads 'disconnected'.
+        }
+      })
+    )
+  }
 })
 
 type RuntimeAwareSshReadState = Pick<

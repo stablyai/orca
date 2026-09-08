@@ -1,6 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import type { DevServer } from '../../../../../shared/dev-server-types'
 import { createDevServerSlice, type DevServerSlice } from './dev-servers'
+import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+
+vi.mock('../../runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: vi.fn()
+}))
+
+const callRuntimeRpcMock = vi.mocked(callRuntimeRpc)
 
 // ─── Minimal in-memory store for unit tests ───────────────────────────────────
 
@@ -13,8 +20,11 @@ function makeStore(): DevServerSlice {
     removeDevServer: () => {},
     setActiveDevServerId: () => {},
     updateDevServerStatus: () => {},
+    hydrateDevServers: async () => {}
   }
-  const set = (patch: Partial<DevServerSlice> | ((prev: DevServerSlice) => Partial<DevServerSlice>)) => {
+  const set = (
+    patch: Partial<DevServerSlice> | ((prev: DevServerSlice) => Partial<DevServerSlice>)
+  ) => {
     const next = typeof patch === 'function' ? patch(state) : patch
     Object.assign(state, next)
   }
@@ -37,7 +47,7 @@ function makeServer(overrides: Partial<DevServer> = {}): DevServer {
     lastError: null,
     workspaceDir: '/home/user',
     addedAt: Date.now(),
-    ...overrides,
+    ...overrides
   }
 }
 
@@ -96,7 +106,10 @@ describe('dev-servers slice', () => {
   })
 
   it('updateDevServerStatus() only changes the targeted server', () => {
-    store.setDevServers([makeServer({ id: 'ds-1', status: 'connected' }), makeServer({ id: 'ds-2', status: 'connected' })])
+    store.setDevServers([
+      makeServer({ id: 'ds-1', status: 'connected' }),
+      makeServer({ id: 'ds-2', status: 'connected' })
+    ])
     store.updateDevServerStatus('ds-1', 'error')
     expect(store.devServers.find((ds) => ds.id === 'ds-1')?.status).toBe('error')
     expect(store.devServers.find((ds) => ds.id === 'ds-2')?.status).toBe('connected')
@@ -107,5 +120,33 @@ describe('dev-servers slice', () => {
     store.updateDevServerStatus('ds-1', 'connected', { platform: 'darwin', lastError: null })
     expect(store.devServers[0].platform).toBe('darwin')
     expect(store.devServers[0].status).toBe('connected')
+  })
+})
+
+describe('hydrateDevServers', () => {
+  let store: DevServerSlice
+
+  beforeEach(() => {
+    store = makeStore()
+    callRuntimeRpcMock.mockReset()
+  })
+
+  it('sets devServers from devServer.listForUser on success', async () => {
+    const servers = [makeServer({ id: 'ds-1' }), makeServer({ id: 'ds-2' })]
+    callRuntimeRpcMock.mockResolvedValue({ devServers: servers })
+
+    await store.hydrateDevServers({ kind: 'local' })
+
+    expect(callRuntimeRpcMock).toHaveBeenCalledWith({ kind: 'local' }, 'devServer.listForUser', {})
+    expect(store.devServers.map((s) => s.id)).toEqual(['ds-1', 'ds-2'])
+  })
+
+  it('does not crash and leaves devServers untouched when the RPC fails', async () => {
+    store.setDevServers([makeServer({ id: 'ds-existing' })])
+    callRuntimeRpcMock.mockRejectedValue(new Error('unreachable'))
+
+    await expect(store.hydrateDevServers({ kind: 'local' })).resolves.toBeUndefined()
+
+    expect(store.devServers.map((s) => s.id)).toEqual(['ds-existing'])
   })
 })

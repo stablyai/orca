@@ -264,6 +264,14 @@ func (c *Client) UpdateIssue(_ context.Context, _ usecase.Credential, _ string, 
 	return domain.Issue{}, ErrCapabilityUnsupported
 }
 
+func (c *Client) UpdatePullRequest(_ context.Context, _ usecase.Credential, _ string, _ int32, _ usecase.PullRequestPatch) (domain.PullRequest, error) {
+	return domain.PullRequest{}, ErrCapabilityUnsupported
+}
+
+func (c *Client) StarRepository(_ context.Context, _ usecase.Credential, _ string) (bool, error) {
+	return false, ErrCapabilityUnsupported
+}
+
 func (c *Client) GetPullRequestForBranch(_ context.Context, _ usecase.Credential, _, _ string) (domain.PullRequest, bool, error) {
 	return domain.PullRequest{}, false, ErrCapabilityUnsupported
 }

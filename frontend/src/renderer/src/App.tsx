@@ -187,6 +187,8 @@ import {
 } from './components/terminal/background-terminal-worktree-mount'
 
 import { uiGet, uiSet } from '@/runtime/runtime-ui-client'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { installConnectivityPolling } from '@/store/slices/connectivity-status'
 // Why: agents alive during a hard kill (crash, forced update install) need a
 // reasonably fresh resume record on disk; one minute bounds the lost window
 // without measurable per-tick cost (the capture skips unchanged records).
@@ -1420,6 +1422,21 @@ function App(): React.JSX.Element {
       useAppStore.getState().captureAllSleepingAgentSessions()
     }, SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS)
     return () => window.clearInterval(timer)
+  }, [])
+
+  // FE-TASK-STORAGE-014 (CR-STORAGE-007): connectivity.getSummary poll —
+  // every 30s while the app is open, plus an immediate re-run whenever the
+  // window regains foreground. See installConnectivityPolling's own doc
+  // comment for why it reuses installWindowVisibilityInterval instead of a
+  // 2nd hand-rolled visibilitychange listener. The 3rd CR-STORAGE-007
+  // trigger (poll right after a connectivity-looking RPC write failure) is
+  // `maybeTriggerConnectivityPollAfterRpcFailure`, called directly from call
+  // sites' catch blocks, not from this effect.
+  useEffect(() => {
+    return installConnectivityPolling({
+      getTarget: () => getActiveRuntimeTarget(useAppStore.getState().settings),
+      pollConnectivitySummary: (target) => useAppStore.getState().pollConnectivitySummary(target)
+    })
   }, [])
 
   // Own the single window-close-request subscription at the always-mounted App

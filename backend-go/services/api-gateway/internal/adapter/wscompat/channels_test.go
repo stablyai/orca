@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/stablyai/orca-go/common/grpcmw"
 	infrafleetv1 "github.com/stablyai/orca-go/proto/gen/go/orca/infrafleet/v1"
@@ -40,6 +41,29 @@ type fakeInfraFleetClient struct {
 	createAccessRequestFunc     func(ctx context.Context, in *infrafleetv1.CreateAccessRequestRequest) (*infrafleetv1.CreateAccessRequestResponse, error)
 	lastListDevServersForUserIn *infrafleetv1.ListDevServersForUserRequest
 	lastCreateAccessRequestIn   *infrafleetv1.CreateAccessRequestRequest
+
+	// TASK-BE-STORAGE-008: connectivity.getSummary.
+	getFleetConnectivitySummaryFunc    func(ctx context.Context, in *infrafleetv1.GetFleetConnectivitySummaryRequest) (*infrafleetv1.GetFleetConnectivitySummaryResponse, error)
+	lastGetFleetConnectivitySummaryCtx context.Context
+
+	// connection.teardown (TASK-BE-STORAGE-012 wscompat follow-up).
+	teardownConnectionFunc    func(ctx context.Context, in *infrafleetv1.TeardownConnectionRequest) (*emptypb.Empty, error)
+	lastTeardownConnectionCtx context.Context
+	lastTeardownConnectionIn  *infrafleetv1.TeardownConnectionRequest
+}
+
+func (f *fakeInfraFleetClient) TeardownConnection(ctx context.Context, in *infrafleetv1.TeardownConnectionRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	f.lastTeardownConnectionCtx = ctx
+	f.lastTeardownConnectionIn = in
+	if f.teardownConnectionFunc != nil {
+		return f.teardownConnectionFunc(ctx, in)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (f *fakeInfraFleetClient) GetFleetConnectivitySummary(ctx context.Context, in *infrafleetv1.GetFleetConnectivitySummaryRequest, _ ...grpc.CallOption) (*infrafleetv1.GetFleetConnectivitySummaryResponse, error) {
+	f.lastGetFleetConnectivitySummaryCtx = ctx
+	return f.getFleetConnectivitySummaryFunc(ctx, in)
 }
 
 func (f *fakeInfraFleetClient) ListDevServerGroups(ctx context.Context, in *infrafleetv1.ListDevServerGroupsRequest, _ ...grpc.CallOption) (*infrafleetv1.ListDevServerGroupsResponse, error) {

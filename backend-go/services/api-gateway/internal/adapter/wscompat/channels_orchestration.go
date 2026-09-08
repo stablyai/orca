@@ -50,7 +50,53 @@ func registerOrchestrationChannels(r *Registry, client orchestrationv1.Orchestra
 			ID:                  dc.GetId(),
 			OrchestrationTaskID: dc.GetOrchestrationTaskId(),
 			AssigneeHandle:      dc.GetHandle(),
-			Status:              "", // DispatchContext proto has no status field yet — adjacent gap, out of BUG-018's scope; not fixed here
+			// DispatchContext.status now exists for real (added alongside
+			// ListActiveDispatchContextsForUser, CR-STORAGE-006/007) —
+			// the "no status field yet" gap this comment used to flag is
+			// closed.
+			Status: dc.GetStatus(),
 		}}, nil
 	})
+
+	// agentSession.listActive: every active dispatch context for the
+	// calling user (identity, never a request field) — CR-STORAGE-006/007's
+	// hydrate for "which of my AI-agent sessions are currently running."
+	// See specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
+	// for why this filters DispatchContext.user_id directly rather than
+	// resolving through a coordinator_run (no RPC creates one yet).
+	r.Register("agentSession.listActive", func(ctx context.Context, id Identity, _ []json.RawMessage) (any, error) {
+		ctx = attachIdentity(ctx, id)
+		rpcCtx, cancel := context.WithTimeout(ctx, groupRPCTimeout)
+		defer cancel()
+		resp, err := client.ListActiveDispatchContextsForUser(rpcCtx, &orchestrationv1.ListActiveDispatchContextsForUserRequest{})
+		if err != nil {
+			return nil, err
+		}
+		views := make([]agentSessionView, 0, len(resp.GetDispatchContexts()))
+		for _, dc := range resp.GetDispatchContexts() {
+			views = append(views, agentSessionView{
+				ID:                  dc.GetId(),
+				OrchestrationTaskID: dc.GetOrchestrationTaskId(),
+				AssigneeHandle:      dc.GetHandle(),
+				Status:              dc.GetStatus(),
+				FailureCount:        dc.GetFailureCount(),
+				LastHeartbeatAt:     dc.GetLastHeartbeatAt(),
+			})
+		}
+		return map[string]any{"agentSessions": views}, nil
+	})
+}
+
+// agentSessionView is agentSession.listActive's wire shape — camelCase,
+// explicit struct rather than the raw proto message (per BE-SOL-001's
+// documented finding: protoc-gen-go's plain encoding/json struct tags are
+// snake_case, and this wscompat envelope serializes via plain
+// encoding/json, not protojson).
+type agentSessionView struct {
+	ID                  string `json:"id"`
+	OrchestrationTaskID string `json:"orchestrationTaskId"`
+	AssigneeHandle      string `json:"assigneeHandle"`
+	Status              string `json:"status"`
+	FailureCount        int32  `json:"failureCount"`
+	LastHeartbeatAt     string `json:"lastHeartbeatAt"` // RFC3339; "" if never heartbeated
 }

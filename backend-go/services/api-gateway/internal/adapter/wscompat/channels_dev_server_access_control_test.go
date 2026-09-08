@@ -2,6 +2,7 @@ package wscompat
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	infrafleetv1 "github.com/stablyai/orca-go/proto/gen/go/orca/infrafleet/v1"
@@ -24,6 +25,12 @@ func TestDevServerListForUserChannel_ResolvesDepartmentThenLists(t *testing.T) {
 				Profile: &tenantv1.UserProfile{UserId: "user-1", DepartmentId: "dept-1"},
 			}, nil
 		},
+		listTeamsForUserFunc: func(ctx context.Context, in *tenantv1.ListTeamsForUserRequest) (*tenantv1.ListTeamsForUserResponse, error) {
+			if in.GetUserId() != "user-1" {
+				t.Errorf("want user_id=user-1, got %q", in.GetUserId())
+			}
+			return &tenantv1.ListTeamsForUserResponse{TeamIds: []string{"team-1", "team-2"}}, nil
+		},
 	}
 	infraClient := &fakeInfraFleetClient{
 		listDevServersForUserFunc: func(ctx context.Context, in *infrafleetv1.ListDevServersForUserRequest) (*infrafleetv1.ListDevServersForUserResponse, error) {
@@ -43,6 +50,13 @@ func TestDevServerListForUserChannel_ResolvesDepartmentThenLists(t *testing.T) {
 	if infraClient.lastListDevServersForUserIn.GetDepartmentId() != "dept-1" {
 		t.Errorf("want department_id=dept-1 threaded through, got %q", infraClient.lastListDevServersForUserIn.GetDepartmentId())
 	}
+	// This is the actual BUG-013 regression assertion: team_ids resolved
+	// via ListTeamsForUser must reach the downstream fleet request, not be
+	// silently dropped as empty.
+	gotTeamIDs := infraClient.lastListDevServersForUserIn.GetTeamIds()
+	if len(gotTeamIDs) != 2 || gotTeamIDs[0] != "team-1" || gotTeamIDs[1] != "team-2" {
+		t.Errorf("want team_ids=[team-1 team-2] threaded through, got %v", gotTeamIDs)
+	}
 	wrapped, ok := result.(map[string]any)
 	if !ok {
 		t.Fatalf("unexpected result type %T", result)
@@ -50,6 +64,35 @@ func TestDevServerListForUserChannel_ResolvesDepartmentThenLists(t *testing.T) {
 	servers, ok := wrapped["devServers"].([]devServerView)
 	if !ok || len(servers) != 1 {
 		t.Errorf("unexpected devServers: %v", wrapped["devServers"])
+	}
+}
+
+// TestDevServerListForUserChannel_ListTeamsForUserErrorFailsTheCall guards
+// SOL-013's deliberate choice: a ListTeamsForUser error must fail the whole
+// call rather than silently degrade to department-only (which would
+// reproduce BUG-013's under-provisioning under a new trigger).
+func TestDevServerListForUserChannel_ListTeamsForUserErrorFailsTheCall(t *testing.T) {
+	tenantClient := &fakeTenantServiceClient{
+		getUserProfileFunc: func(ctx context.Context, in *tenantv1.GetUserProfileRequest) (*tenantv1.GetUserProfileResponse, error) {
+			return &tenantv1.GetUserProfileResponse{Profile: &tenantv1.UserProfile{UserId: "user-1", DepartmentId: "dept-1"}}, nil
+		},
+		listTeamsForUserFunc: func(ctx context.Context, in *tenantv1.ListTeamsForUserRequest) (*tenantv1.ListTeamsForUserResponse, error) {
+			return nil, errors.New("tenant-service unavailable")
+		},
+	}
+	infraClient := &fakeInfraFleetClient{
+		listDevServersForUserFunc: func(ctx context.Context, in *infrafleetv1.ListDevServersForUserRequest) (*infrafleetv1.ListDevServersForUserResponse, error) {
+			t.Fatal("ListDevServersForUser must not be called when ListTeamsForUser fails")
+			return nil, nil
+		},
+	}
+
+	r := NewRegistry()
+	registerDevServerAccessControlChannels(r, infraClient, tenantClient)
+
+	_, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1"}, "devServer.listForUser", nil)
+	if err == nil {
+		t.Fatal("expected an error when ListTeamsForUser fails")
 	}
 }
 

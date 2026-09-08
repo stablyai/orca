@@ -153,6 +153,7 @@ func RegisterRealChannels(
 	registerSCMChannels(r, scmClient, gitClient)
 	registerBrowserChannels(r, infraFleetClient)
 	registerEphemeralVmChannels(r, gitClient, projectClient, infraFleetClient)
+	registerFilesBrowseServerDirChannel(r, infraFleetClient)
 	registerBrowserScreencastChannel(r, infraFleetClient)
 	registerBrowserProfileChannels(r, infraFleetClient)
 	// registerGitDeepChannels must be called after registerGitChannels:

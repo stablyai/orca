@@ -27,6 +27,12 @@ service TenantService {
   rpc CreateTeam(CreateTeamRequest) returns (CreateTeamResponse);
   rpc AddTeamMember(AddTeamMemberRequest) returns (AddTeamMemberResponse);
   rpc ListTeamMembers(ListTeamMembersRequest) returns (ListTeamMembersResponse);
+  // ListTeamsForUser answers "which teams is this user a member of" without
+  // the ListTeams(company)+ListTeamMembers(team) N+1 fan-out
+  // devServer.listForUser's handler doc comment deliberately avoids — added
+  // to unblock team-based dev-server access grants (BUG-013,
+  // CR-DS-007 §3's recorded "Known gap ghi nhận khi triển khai").
+  rpc ListTeamsForUser(ListTeamsForUserRequest) returns (ListTeamsForUserResponse);
 
   // ── profile.* surface (tenant-service.md §3) ──────────────────────────
   rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
@@ -51,6 +57,27 @@ service TenantService {
   rpc GetOnboardingState(GetOnboardingStateRequest) returns (GetOnboardingStateResponse);
   rpc SetOnboardingState(SetOnboardingStateRequest) returns (google.protobuf.Empty);
 
+  // ── Client-local state (CR-STORAGE-001/003/004a,b) ────────────────────
+  // GetClientState/SetClientState — 5 opaque per-user JSON blobs
+  // (keybindings/UI local state/saved runtime environments/settings/
+  // accounts->dev-server map) parameterized by ClientStateKind rather than
+  // 5 near-identical RPC pairs — see
+  // specs/backend-go/crs/v3/storage/solutions/
+  // BE-SOL-STORAGE-001-user-profile-json-columns.md §5 for why. user_id is
+  // NOT trusted as the scoping identity by itself — the caller
+  // (api-gateway) always sends the authenticated caller's own user_id, same
+  // convention as GetOnboardingStateRequest.
+  rpc GetClientState(GetClientStateRequest) returns (GetClientStateResponse);
+  rpc SetClientState(SetClientStateRequest) returns (google.protobuf.Empty);
+
+  // GetWorkspaceSession/SetWorkspaceSession/PatchWorkspaceSession
+  // (CR-STORAGE-004a) — a separate table keyed by (user_id, host_id), not a
+  // 6th ClientStateKind: one user can have N sessions, one per host/
+  // environment (BE-SOL-STORAGE-001 §3).
+  rpc GetWorkspaceSession(GetWorkspaceSessionRequest) returns (GetWorkspaceSessionResponse);
+  rpc SetWorkspaceSession(SetWorkspaceSessionRequest) returns (google.protobuf.Empty);
+  rpc PatchWorkspaceSession(PatchWorkspaceSessionRequest) returns (google.protobuf.Empty);
+
   // ── Multi-tenant SSO follow-up (CR-LOGIN-001) ─────────────────────────
   // Add/Remove/ListCompanyEmailDomains are admin-console operations (caller
   // MUST admin-gate — see AddCompanyEmailDomain's doc comment).
@@ -61,6 +88,29 @@ service TenantService {
   rpc RemoveCompanyEmailDomain(RemoveCompanyEmailDomainRequest) returns (google.protobuf.Empty);
   rpc ListCompanyEmailDomains(ListCompanyEmailDomainsRequest) returns (ListCompanyEmailDomainsResponse);
   rpc ResolveCompanyByEmailDomain(ResolveCompanyByEmailDomainRequest) returns (ResolveCompanyByEmailDomainResponse);
+
+  // ── starNag.* surface (BUG-005/SOL-005) ───────────────────────────────
+  // Per-user "star Orca on GitHub" nag state — dismissal/cooldown/threshold/
+  // completion — folded into tenant-service per SOL-005's "small per-user
+  // preference state, no natural owning service" verdict, same shape as
+  // GetOnboardingState/SetOnboardingState above. Every request carries only
+  // user_id (never company_id — same convention as GetOnboardingStateRequest:
+  // the scoping company comes from tenant.RequireTenantID(ctx), not a
+  // message field).
+  rpc DismissStarNag(DismissStarNagRequest) returns (google.protobuf.Empty);
+  rpc DeferStarNag(DeferStarNagRequest) returns (google.protobuf.Empty); // "later"
+  rpc CompleteStarNag(CompleteStarNagRequest) returns (google.protobuf.Empty);
+  rpc DisableStarNag(DisableStarNagRequest) returns (google.protobuf.Empty);
+  rpc ForceShowStarNag(ForceShowStarNagRequest) returns (google.protobuf.Empty);
+  rpc NotifyStarNagOnboardingCompleted(NotifyStarNagOnboardingCompletedRequest) returns (google.protobuf.Empty);
+  rpc OpenWebStarNag(OpenWebStarNagRequest) returns (google.protobuf.Empty);
+  // StarOrcaFromNag performs (or attempts) the actual GitHub star action.
+  // starred=false + ok=false (see StarOrcaFromNagResponse) means "unable to
+  // determine/perform" — not an error — same shape as
+  // github.checkOrcaStarred's null today (channels_scm.go:56-70).
+  rpc StarOrcaFromNag(StarOrcaFromNagRequest) returns (StarOrcaFromNagResponse);
+  rpc PrepareStarNagAgentValueMoment(PrepareStarNagAgentValueMomentRequest) returns (StarNagAgentValueMomentPreparation);
+  rpc ShowPreparedStarNagAgentValueMoment(ShowPreparedStarNagAgentValueMomentRequest) returns (google.protobuf.Empty);
 }
 
 message Company {
@@ -168,6 +218,18 @@ message ListTeamMembersResponse {
   repeated TeamMember members = 1;
 }
 
+message ListTeamsForUserRequest {
+  string user_id = 1;
+  // company_id intentionally omitted — same pattern as ListTeamsRequest/
+  // AddTeamMemberRequest: the scoping company comes from the validated
+  // request context (tenant.RequireTenantID), never a client-supplied
+  // field, per tenant-service.md §9.
+}
+
+message ListTeamsForUserResponse {
+  repeated string team_ids = 1;
+}
+
 // UserProfile is the wire shape of tenant.user_profiles — mirrors
 // domain.UserProfile.
 message UserProfile {
@@ -262,6 +324,61 @@ message SetOnboardingStateRequest {
   string state_json = 2;
 }
 
+// ── Client-local state messages (CR-STORAGE-001/003/004a,b) ────────────
+enum ClientStateKind {
+  CLIENT_STATE_KIND_UNSPECIFIED = 0;
+  CLIENT_STATE_KIND_KEYBINDINGS = 1;
+  CLIENT_STATE_KIND_UI_LOCAL = 2;
+  CLIENT_STATE_KIND_SAVED_RUNTIME_ENVIRONMENTS = 3;
+  CLIENT_STATE_KIND_SETTINGS = 4;
+  CLIENT_STATE_KIND_ACCOUNTS_DEV_SERVER_MAP = 5;
+}
+
+message GetClientStateRequest {
+  string user_id = 1;
+  // kind selects exactly 1 of the 5 single-blob columns (not
+  // workspace_session — see GetWorkspaceSession) — avoids 5 nearly
+  // identical RPC pairs.
+  ClientStateKind kind = 2;
+}
+
+message GetClientStateResponse {
+  // state_json empty + found=false means "never saved" — same convention
+  // as GetOnboardingStateResponse, not an error.
+  string state_json = 1;
+  bool found = 2;
+}
+
+message SetClientStateRequest {
+  string user_id = 1;
+  ClientStateKind kind = 2;
+  string state_json = 3;
+}
+
+// ── Workspace session messages (CR-STORAGE-004a) — separate table, keyed
+// additionally by host_id ───────────────────────────────────────────────
+message GetWorkspaceSessionRequest {
+  string user_id = 1;
+  string host_id = 2; // empty = the default/local host
+}
+
+message GetWorkspaceSessionResponse {
+  string session_json = 1;
+  bool found = 2;
+}
+
+message SetWorkspaceSessionRequest {
+  string user_id = 1;
+  string host_id = 2;
+  string session_json = 3;
+}
+
+message PatchWorkspaceSessionRequest {
+  string user_id = 1;
+  string host_id = 2;
+  string patch_json = 3; // shallow-merged into the existing record, server-side
+}
+
 // ── Multi-tenant SSO follow-up (CR-LOGIN-001) ───────────────────────────
 message AddCompanyEmailDomainRequest {
   string company_id = 1;
@@ -291,4 +408,61 @@ message ResolveCompanyByEmailDomainResponse {
   // (auth-service) surfaces this as "SSO isn't set up for this
   // organization yet", never guesses a fallback tenant.
   bool found = 2;
+}
+
+// ── starNag.* messages (BUG-005/SOL-005) ────────────────────────────────
+message DismissStarNagRequest {
+  string user_id = 1;
+}
+
+message DeferStarNagRequest {
+  string user_id = 1;
+}
+
+message CompleteStarNagRequest {
+  string user_id = 1;
+}
+
+message DisableStarNagRequest {
+  string user_id = 1;
+}
+
+message ForceShowStarNagRequest {
+  string user_id = 1;
+}
+
+message NotifyStarNagOnboardingCompletedRequest {
+  string user_id = 1;
+}
+
+message OpenWebStarNagRequest {
+  string user_id = 1;
+}
+
+message StarOrcaFromNagRequest {
+  string user_id = 1;
+}
+
+message StarOrcaFromNagResponse {
+  bool starred = 1;
+}
+
+message PrepareStarNagAgentValueMomentRequest {
+  string user_id = 1;
+  // app_version gates "one attempt per app version" — see
+  // domain.StarNagState.AgentValueMomentAppVersion; without this field the
+  // usecase's skip/ready gate is unimplementable (TASK-012's own
+  // correction over its initial user_id-only sketch).
+  string app_version = 2;
+}
+
+// StarNagAgentValueMomentPreparation mirrors the old TS backend's
+// AgentValueMomentPreparation wire shape (agent-value-moment.ts).
+message StarNagAgentValueMomentPreparation {
+  string status = 1; // "ready" | "skipped"
+  string mode = 2;   // "gh" | "web" — only meaningful when status == "ready"
+}
+
+message ShowPreparedStarNagAgentValueMomentRequest {
+  string user_id = 1;
 }

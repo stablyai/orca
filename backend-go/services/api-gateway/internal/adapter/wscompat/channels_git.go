@@ -30,6 +30,15 @@ import (
 	"github.com/stablyai/orca-go/services/api-gateway/internal/usecase"
 )
 
+// cancelGenerateArgs mirrors cancelRuntimeGenerateCommitMessage/
+// cancelRuntimeGeneratePullRequestFields's exact wire shape
+// (runtime-git-client.ts: {worktree: toRuntimeWorktreeSelector(...)}) —
+// same field-name convention the generate calls' own genArgs/genPRFieldsArgs
+// already use.
+type cancelGenerateArgs struct {
+	WorktreeID string `json:"worktreeId"`
+}
+
 // registerGitDeepChannels wires every git.* channel this scope's tasks
 // (TASK-206/207/208/209/210/211/212/213) back with a real git-gateway-service
 // RPC. TASK-207's Group A (branch/ref operations) is implemented and wired
@@ -107,11 +116,33 @@ func registerGitDeepChannels(r *Registry, client gitgatewayv1.GitGatewayServiceC
 		if err != nil {
 			return nil, err
 		}
-		resp, err := client.GenerateCommitMessage(ctx, &gitgatewayv1.GenerateCommitMessageRequest{WorktreeId: in.WorktreeID})
+		// genCtx is independently cancellable via
+		// git.cancelGenerateCommitMessage (a second, independent WS
+		// request/goroutine) — see git_generate_cancellation.go (TASK-031).
+		// dispatchRPCTimeout (registry.go's 60s outer bound) still applies as
+		// the upper bound; this WithCancel narrows further via explicit
+		// cancel, it doesn't replace that deadline.
+		genCtx, cancel := context.WithCancel(ctx)
+		key := gitGenerateCancelKey{WorktreeID: in.WorktreeID, Kind: gitGenerateCancelKindCommitMessage}
+		cleanup := gitGenerateCancels.start(key, cancel)
+		defer cleanup()
+		defer cancel() // release resources if genCtx's parent finishes normally, not via explicit cancel
+
+		resp, err := client.GenerateCommitMessage(genCtx, &gitgatewayv1.GenerateCommitMessageRequest{WorktreeId: in.WorktreeID})
 		if err != nil {
 			return nil, err
 		}
 		return resp, nil
+	})
+
+	r.Register("git.cancelGenerateCommitMessage", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		in, err := decodeArg[cancelGenerateArgs](args, 0)
+		if err != nil {
+			return nil, err
+		}
+		key := gitGenerateCancelKey{WorktreeID: in.WorktreeID, Kind: gitGenerateCancelKindCommitMessage}
+		gitGenerateCancels.cancel(key) // return value ignored — "nothing in flight" is not an error, see cancel()'s doc comment
+		return nil, nil
 	})
 
 	// ── TASK-228: git.diff, corrected to thread filePath through — this
@@ -649,13 +680,29 @@ func registerGitDeepChannels(r *Registry, client gitgatewayv1.GitGatewayServiceC
 		if err != nil {
 			return nil, err
 		}
-		resp, err := client.GeneratePullRequestFields(ctx, &gitgatewayv1.GeneratePullRequestFieldsRequest{
+		genCtx, cancel := context.WithCancel(ctx)
+		key := gitGenerateCancelKey{WorktreeID: in.WorktreeID, Kind: gitGenerateCancelKindPullRequestFields}
+		cleanup := gitGenerateCancels.start(key, cancel)
+		defer cleanup()
+		defer cancel()
+
+		resp, err := client.GeneratePullRequestFields(genCtx, &gitgatewayv1.GeneratePullRequestFieldsRequest{
 			WorktreeId: in.WorktreeID, BaseBranch: in.BaseBranch,
 		})
 		if err != nil {
 			return nil, err
 		}
 		return resp, nil
+	})
+
+	r.Register("git.cancelGeneratePullRequestFields", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		in, err := decodeArg[cancelGenerateArgs](args, 0)
+		if err != nil {
+			return nil, err
+		}
+		key := gitGenerateCancelKey{WorktreeID: in.WorktreeID, Kind: gitGenerateCancelKindPullRequestFields}
+		gitGenerateCancels.cancel(key)
+		return nil, nil
 	})
 
 	// git.discoverCommitMessageModels reads from Identity (id.TenantID/
@@ -825,6 +872,18 @@ func registerFilesChannels(r *Registry, client gitgatewayv1.GitGatewayServiceCli
 	}
 	simpleFileOp(r, "files.createDir", createDirHandler)
 	simpleFileOp(r, "files.createDirNoClobber", createDirHandler)
+
+	// files.createFile has no noClobber-equivalent param — the frontend's
+	// createRuntimePath (runtime-file-client.ts:395-414) never sends one for
+	// the file case, so creating an already-existing file is always an
+	// error (see CreateFileRequest's doc comment in gitgateway.proto).
+	simpleFileOp(r, "files.createFile", func(ctx context.Context, in readArgs) (any, error) {
+		resp, err := client.CreateFile(ctx, &gitgatewayv1.CreateFileRequest{WorktreeId: in.WorktreeID, Path: in.Path})
+		if err != nil {
+			return nil, err
+		}
+		return resp, nil
+	})
 
 	type deleteArgs struct {
 		WorktreeID string `json:"worktreeId"`

@@ -132,6 +132,46 @@ func TestCreateDir_NoClobber_RejectsExisting(t *testing.T) {
 	}
 }
 
+func TestCreateFile_CreatesEmptyFile(t *testing.T) {
+	dir := t.TempDir()
+	e := New()
+
+	if err := e.CreateFile(context.Background(), dir, "a.txt"); err != nil {
+		t.Fatalf("CreateFile: %v", err)
+	}
+	info, err := os.Stat(filepath.Join(dir, "a.txt"))
+	if err != nil {
+		t.Fatalf("expected file to exist: %v", err)
+	}
+	if info.Size() != 0 {
+		t.Errorf("expected empty file, got size %d", info.Size())
+	}
+}
+
+func TestCreateFile_CreatesParentDirs(t *testing.T) {
+	dir := t.TempDir()
+	e := New()
+
+	if err := e.CreateFile(context.Background(), dir, "sub/dir/a.txt"); err != nil {
+		t.Fatalf("CreateFile: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "sub/dir/a.txt")); err != nil {
+		t.Errorf("expected file to exist: %v", err)
+	}
+}
+
+func TestCreateFile_RejectsExisting(t *testing.T) {
+	dir := t.TempDir()
+	e := New()
+	if err := e.CreateFile(context.Background(), dir, "a.txt"); err != nil {
+		t.Fatalf("first CreateFile: %v", err)
+	}
+
+	if err := e.CreateFile(context.Background(), dir, "a.txt"); err == nil {
+		t.Fatal("expected error when file already exists")
+	}
+}
+
 func TestGlob_EmptyPattern_MatchesEverything(t *testing.T) {
 	dir := t.TempDir()
 	e := New()

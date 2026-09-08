@@ -39,6 +39,11 @@ type fakeRepoProjectClient struct {
 	listSparsePresetsFunc  func(ctx context.Context, in *projectv1.ListSparsePresetsRequest) (*projectv1.ListSparsePresetsResponse, error)
 	saveSparsePresetFunc   func(ctx context.Context, in *projectv1.SaveSparsePresetRequest) (*projectv1.SaveSparsePresetResponse, error)
 	removeSparsePresetFunc func(ctx context.Context, in *projectv1.RemoveSparsePresetRequest) (*projectv1.RemoveSparsePresetResponse, error)
+
+	// getRepoFunc/listWorktreesFunc: BUG-016's repoId -> worktreeId
+	// resolution (resolveWorktreeIDForRepo) in registerWorkspacePortsChannels.
+	getRepoFunc       func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error)
+	listWorktreesFunc func(ctx context.Context, in *projectv1.ListWorktreesRequest) (*projectv1.ListWorktreesResponse, error)
 }
 
 func (f *fakeRepoProjectClient) AddRepo(ctx context.Context, in *projectv1.AddRepoRequest, _ ...grpc.CallOption) (*projectv1.AddRepoResponse, error) {
@@ -82,6 +87,12 @@ func (f *fakeRepoProjectClient) SaveSparsePreset(ctx context.Context, in *projec
 }
 func (f *fakeRepoProjectClient) RemoveSparsePreset(ctx context.Context, in *projectv1.RemoveSparsePresetRequest, _ ...grpc.CallOption) (*projectv1.RemoveSparsePresetResponse, error) {
 	return f.removeSparsePresetFunc(ctx, in)
+}
+func (f *fakeRepoProjectClient) GetRepo(ctx context.Context, in *projectv1.GetRepoRequest, _ ...grpc.CallOption) (*projectv1.GetRepoResponse, error) {
+	return f.getRepoFunc(ctx, in)
+}
+func (f *fakeRepoProjectClient) ListWorktrees(ctx context.Context, in *projectv1.ListWorktreesRequest, _ ...grpc.CallOption) (*projectv1.ListWorktreesResponse, error) {
+	return f.listWorktreesFunc(ctx, in)
 }
 
 // fakeRepoGitGatewayClient is a minimal test double for
@@ -141,6 +152,9 @@ type fakeRepoSshStatusWorkspaceInfraFleetClient struct {
 	establishConnectionFunc func(ctx context.Context, in *infrafleetv1.EstablishConnectionRequest) (*infrafleetv1.Connection, error)
 	scanWorkspacePortsFunc  func(ctx context.Context, in *infrafleetv1.ScanWorkspacePortsRequest) (*infrafleetv1.ScanWorkspacePortsResponse, error)
 	killWorkspacePortFunc   func(ctx context.Context, in *infrafleetv1.KillWorkspacePortRequest) (*infrafleetv1.KillWorkspacePortResponse, error)
+	// resolveConnectionFunc: BUG-016's worktreeId -> connectionId resolution
+	// (resolveConnectionIDForWorktree), reused by registerWorkspacePortsChannels.
+	resolveConnectionFunc func(ctx context.Context, in *infrafleetv1.ResolveConnectionRequest) (*infrafleetv1.ResolveConnectionResponse, error)
 }
 
 func (f *fakeRepoSshStatusWorkspaceInfraFleetClient) ListSshTargets(ctx context.Context, in *infrafleetv1.ListSshTargetsRequest, _ ...grpc.CallOption) (*infrafleetv1.ListSshTargetsResponse, error) {
@@ -157,6 +171,9 @@ func (f *fakeRepoSshStatusWorkspaceInfraFleetClient) ScanWorkspacePorts(ctx cont
 }
 func (f *fakeRepoSshStatusWorkspaceInfraFleetClient) KillWorkspacePort(ctx context.Context, in *infrafleetv1.KillWorkspacePortRequest, _ ...grpc.CallOption) (*infrafleetv1.KillWorkspacePortResponse, error) {
 	return f.killWorkspacePortFunc(ctx, in)
+}
+func (f *fakeRepoSshStatusWorkspaceInfraFleetClient) ResolveConnection(ctx context.Context, in *infrafleetv1.ResolveConnectionRequest, _ ...grpc.CallOption) (*infrafleetv1.ResolveConnectionResponse, error) {
+	return f.resolveConnectionFunc(ctx, in)
 }
 
 // ── repo.* ───────────────────────────────────────────────────────────────
@@ -802,15 +819,18 @@ func TestStatusGet_ReturnsHostPlatformAndHonestZeroValues(t *testing.T) {
 
 func TestRegisterWorkspacePortsChannels(t *testing.T) {
 	fake := &fakeRepoSshStatusWorkspaceInfraFleetClient{}
+	project := &fakeRepoProjectClient{}
 	r := NewRegistry()
-	registerWorkspacePortsChannels(r, fake)
+	registerWorkspacePortsChannels(r, project, fake)
 
-	t.Run("workspacePorts.scan", func(t *testing.T) {
+	t.Run("workspacePorts.scan with an explicit connectionId passes it straight through, no resolution calls", func(t *testing.T) {
 		var gotReq *infrafleetv1.ScanWorkspacePortsRequest
 		fake.scanWorkspacePortsFunc = func(ctx context.Context, in *infrafleetv1.ScanWorkspacePortsRequest) (*infrafleetv1.ScanWorkspacePortsResponse, error) {
 			gotReq = in
 			return &infrafleetv1.ScanWorkspacePortsResponse{OpenPorts: []int32{3000, 8080}}, nil
 		}
+		// resolveConnectionFunc/getRepoFunc deliberately left nil — a set
+		// connectionId must short-circuit before either would be called.
 		result, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "workspacePorts.scan",
 			argsJSON(t, map[string]any{"connectionId": "c1", "worktreeId": "wt1"}))
 		if err != nil {
@@ -825,7 +845,7 @@ func TestRegisterWorkspacePortsChannels(t *testing.T) {
 		}
 	})
 
-	t.Run("workspacePorts.kill success", func(t *testing.T) {
+	t.Run("workspacePorts.kill success with an explicit connectionId", func(t *testing.T) {
 		var gotReq *infrafleetv1.KillWorkspacePortRequest
 		fake.killWorkspacePortFunc = func(ctx context.Context, in *infrafleetv1.KillWorkspacePortRequest) (*infrafleetv1.KillWorkspacePortResponse, error) {
 			gotReq = in
@@ -845,12 +865,21 @@ func TestRegisterWorkspacePortsChannels(t *testing.T) {
 		}
 	})
 
-	t.Run("workspacePorts.kill failure passes through reason", func(t *testing.T) {
+	t.Run("workspacePorts.kill resolves worktreeId to a connectionId, then passes through the reason on failure", func(t *testing.T) {
+		fake.resolveConnectionFunc = func(ctx context.Context, in *infrafleetv1.ResolveConnectionRequest) (*infrafleetv1.ResolveConnectionResponse, error) {
+			if in.GetWorktreeId() != "wt1" {
+				t.Fatalf("expected ResolveConnectionRequest.worktreeId=wt1, got %+v", in)
+			}
+			return &infrafleetv1.ResolveConnectionResponse{Connected: false}, nil
+		}
 		fake.killWorkspacePortFunc = func(ctx context.Context, in *infrafleetv1.KillWorkspacePortRequest) (*infrafleetv1.KillWorkspacePortResponse, error) {
+			if in.GetConnectionId() != "" {
+				t.Fatalf("expected empty connectionId for an unconnected worktree, got %q", in.GetConnectionId())
+			}
 			return &infrafleetv1.KillWorkspacePortResponse{Ok: false, Reason: "not implemented"}, nil
 		}
 		result, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "workspacePorts.kill",
-			argsJSON(t, map[string]any{"connectionId": "", "worktreeId": "wt1"}))
+			argsJSON(t, map[string]any{"worktreeId": "wt1"}))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -860,12 +889,215 @@ func TestRegisterWorkspacePortsChannels(t *testing.T) {
 		}
 	})
 
+	// BUG-016: the real frontend caller sends {repoId} (scan) / {repoId, pid,
+	// port} (kill), never {connectionId, worktreeId} — these two cases are
+	// the actual reported bug, resolved via GetRepo+ListWorktrees+
+	// ResolveConnection.
+	t.Run("workspacePorts.scan resolves a real repoId to its single active worktree's connectionId", func(t *testing.T) {
+		project.getRepoFunc = func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+			if in.GetRepoId() != "repo-1" {
+				t.Fatalf("expected GetRepoRequest.repoId=repo-1, got %q", in.GetRepoId())
+			}
+			return &projectv1.GetRepoResponse{Repo: &projectv1.Repo{Id: "repo-1", ProjectId: "proj-1"}}, nil
+		}
+		project.listWorktreesFunc = func(ctx context.Context, in *projectv1.ListWorktreesRequest) (*projectv1.ListWorktreesResponse, error) {
+			if in.GetProjectId() != "proj-1" {
+				t.Fatalf("expected ListWorktreesRequest.projectId=proj-1, got %q", in.GetProjectId())
+			}
+			return &projectv1.ListWorktreesResponse{Worktrees: []*projectv1.Worktree{
+				{Id: "wt-other-repo", RepoId: "repo-2", Active: true},
+				{Id: "wt-inactive", RepoId: "repo-1", Active: false},
+				{Id: "wt-active", RepoId: "repo-1", Active: true},
+			}}, nil
+		}
+		fake.resolveConnectionFunc = func(ctx context.Context, in *infrafleetv1.ResolveConnectionRequest) (*infrafleetv1.ResolveConnectionResponse, error) {
+			if in.GetWorktreeId() != "wt-active" {
+				t.Fatalf("expected ResolveConnectionRequest.worktreeId=wt-active, got %+v", in)
+			}
+			return &infrafleetv1.ResolveConnectionResponse{Connected: true, ConnectionId: "conn-1"}, nil
+		}
+		var gotReq *infrafleetv1.ScanWorkspacePortsRequest
+		fake.scanWorkspacePortsFunc = func(ctx context.Context, in *infrafleetv1.ScanWorkspacePortsRequest) (*infrafleetv1.ScanWorkspacePortsResponse, error) {
+			gotReq = in
+			return &infrafleetv1.ScanWorkspacePortsResponse{OpenPorts: []int32{4000}}, nil
+		}
+		_, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "workspacePorts.scan",
+			argsJSON(t, map[string]any{"repoId": "repo-1"}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotReq.GetConnectionId() != "conn-1" || gotReq.GetWorktreeId() != "wt-active" {
+			t.Errorf("unexpected ScanWorkspacePortsRequest: %+v", gotReq)
+		}
+	})
+
+	t.Run("workspacePorts.kill: an explicit worktreeId wins over repoId (never calls GetRepo)", func(t *testing.T) {
+		project.getRepoFunc = func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+			t.Fatal("GetRepo should not be called when worktreeId is already given")
+			return nil, nil
+		}
+		fake.resolveConnectionFunc = func(ctx context.Context, in *infrafleetv1.ResolveConnectionRequest) (*infrafleetv1.ResolveConnectionResponse, error) {
+			if in.GetWorktreeId() != "wt-direct" {
+				t.Fatalf("expected worktreeId=wt-direct, got %+v", in)
+			}
+			return &infrafleetv1.ResolveConnectionResponse{Connected: true, ConnectionId: "conn-direct"}, nil
+		}
+		var gotReq *infrafleetv1.KillWorkspacePortRequest
+		fake.killWorkspacePortFunc = func(ctx context.Context, in *infrafleetv1.KillWorkspacePortRequest) (*infrafleetv1.KillWorkspacePortResponse, error) {
+			gotReq = in
+			return &infrafleetv1.KillWorkspacePortResponse{Ok: true}, nil
+		}
+		_, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "workspacePorts.kill",
+			argsJSON(t, map[string]any{"repoId": "repo-1", "worktreeId": "wt-direct", "pid": 1, "port": 2}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotReq.GetConnectionId() != "conn-direct" {
+			t.Errorf("unexpected KillWorkspacePortRequest: %+v", gotReq)
+		}
+	})
+
+	t.Run("workspacePorts.scan: a repoId with zero worktrees degrades to the pre-existing empty-connectionId no-op", func(t *testing.T) {
+		project.getRepoFunc = func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+			return &projectv1.GetRepoResponse{Repo: &projectv1.Repo{Id: "repo-lonely", ProjectId: "proj-2"}}, nil
+		}
+		project.listWorktreesFunc = func(ctx context.Context, in *projectv1.ListWorktreesRequest) (*projectv1.ListWorktreesResponse, error) {
+			return &projectv1.ListWorktreesResponse{}, nil
+		}
+		var gotReq *infrafleetv1.ScanWorkspacePortsRequest
+		fake.scanWorkspacePortsFunc = func(ctx context.Context, in *infrafleetv1.ScanWorkspacePortsRequest) (*infrafleetv1.ScanWorkspacePortsResponse, error) {
+			gotReq = in
+			return &infrafleetv1.ScanWorkspacePortsResponse{}, nil
+		}
+		// resolveConnectionFunc deliberately left unset (from the previous
+		// subtest) to prove it's never reached — zero worktrees must short
+		// circuit before any ResolveConnection call.
+		fake.resolveConnectionFunc = func(ctx context.Context, in *infrafleetv1.ResolveConnectionRequest) (*infrafleetv1.ResolveConnectionResponse, error) {
+			t.Fatal("ResolveConnection should not be called when the repo has zero worktrees")
+			return nil, nil
+		}
+		result, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "workspacePorts.scan",
+			argsJSON(t, map[string]any{"repoId": "repo-lonely"}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotReq.GetConnectionId() != "" || gotReq.GetWorktreeId() != "" {
+			t.Errorf("expected empty connectionId/worktreeId, got %+v", gotReq)
+		}
+		view, ok := result.(map[string]any)
+		if !ok || view["platform"] != "unknown" {
+			t.Errorf("unexpected result: %+v", result)
+		}
+	})
+
+	t.Run("workspacePorts.kill: multiple active worktrees for a repoId is ambiguous, degrades to the no-op rather than guessing", func(t *testing.T) {
+		project.getRepoFunc = func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+			return &projectv1.GetRepoResponse{Repo: &projectv1.Repo{Id: "repo-multi", ProjectId: "proj-3"}}, nil
+		}
+		project.listWorktreesFunc = func(ctx context.Context, in *projectv1.ListWorktreesRequest) (*projectv1.ListWorktreesResponse, error) {
+			return &projectv1.ListWorktreesResponse{Worktrees: []*projectv1.Worktree{
+				{Id: "wt-a", RepoId: "repo-multi", Active: true},
+				{Id: "wt-b", RepoId: "repo-multi", Active: true},
+			}}, nil
+		}
+		var gotReq *infrafleetv1.KillWorkspacePortRequest
+		fake.killWorkspacePortFunc = func(ctx context.Context, in *infrafleetv1.KillWorkspacePortRequest) (*infrafleetv1.KillWorkspacePortResponse, error) {
+			gotReq = in
+			return &infrafleetv1.KillWorkspacePortResponse{Ok: false, Reason: "not implemented"}, nil
+		}
+		_, err := r.Dispatch(context.Background(), Identity{TenantID: "t1"}, "workspacePorts.kill",
+			argsJSON(t, map[string]any{"repoId": "repo-multi", "pid": 1, "port": 2}))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if gotReq.GetConnectionId() != "" || gotReq.GetWorktreeId() != "" {
+			t.Errorf("expected empty connectionId/worktreeId for an ambiguous repo, got %+v", gotReq)
+		}
+	})
+
 	if _, ok := r.handlers["workspacePorts.scan"]; !ok {
 		t.Error("expected workspacePorts.scan to be registered")
 	}
 	if _, ok := r.handlers["workspacePorts.kill"]; !ok {
 		t.Error("expected workspacePorts.kill to be registered")
 	}
+}
+
+// ── resolveWorktreeIDForRepo / resolveWorkspacePortsConnection ────────────
+//
+// Direct unit coverage of the resolution helper's edge cases, complementing
+// TestRegisterWorkspacePortsChannels' end-to-end Dispatch cases above.
+
+func TestResolveWorktreeIDForRepo(t *testing.T) {
+	t.Run("single worktree, none active, falls back to it", func(t *testing.T) {
+		project := &fakeRepoProjectClient{
+			getRepoFunc: func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+				return &projectv1.GetRepoResponse{Repo: &projectv1.Repo{Id: "r1", ProjectId: "p1"}}, nil
+			},
+			listWorktreesFunc: func(ctx context.Context, in *projectv1.ListWorktreesRequest) (*projectv1.ListWorktreesResponse, error) {
+				return &projectv1.ListWorktreesResponse{Worktrees: []*projectv1.Worktree{{Id: "wt1", RepoId: "r1", Active: false}}}, nil
+			},
+		}
+		got, err := resolveWorktreeIDForRepo(context.Background(), project, "r1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "wt1" {
+			t.Errorf("want wt1, got %q", got)
+		}
+	})
+
+	t.Run("repo has no project (not found / never assigned) -> empty, no ListWorktrees call", func(t *testing.T) {
+		project := &fakeRepoProjectClient{
+			getRepoFunc: func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+				return &projectv1.GetRepoResponse{Repo: &projectv1.Repo{Id: "r1"}}, nil
+			},
+			listWorktreesFunc: func(ctx context.Context, in *projectv1.ListWorktreesRequest) (*projectv1.ListWorktreesResponse, error) {
+				t.Fatal("ListWorktrees should not be called when the repo has no projectId")
+				return nil, nil
+			},
+		}
+		got, err := resolveWorktreeIDForRepo(context.Background(), project, "r1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("want empty, got %q", got)
+		}
+	})
+
+	t.Run("GetRepo failure propagates", func(t *testing.T) {
+		wantErr := errors.New("boom")
+		project := &fakeRepoProjectClient{
+			getRepoFunc: func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+				return nil, wantErr
+			},
+		}
+		_, err := resolveWorktreeIDForRepo(context.Background(), project, "r1")
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("expected GetRepo's error to propagate, got %v", err)
+		}
+	})
+
+	t.Run("worktrees from other repos in the same project are ignored", func(t *testing.T) {
+		project := &fakeRepoProjectClient{
+			getRepoFunc: func(ctx context.Context, in *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+				return &projectv1.GetRepoResponse{Repo: &projectv1.Repo{Id: "r1", ProjectId: "p1"}}, nil
+			},
+			listWorktreesFunc: func(ctx context.Context, in *projectv1.ListWorktreesRequest) (*projectv1.ListWorktreesResponse, error) {
+				return &projectv1.ListWorktreesResponse{Worktrees: []*projectv1.Worktree{
+					{Id: "wt-other", RepoId: "r2", Active: true},
+				}}, nil
+			},
+		}
+		got, err := resolveWorktreeIDForRepo(context.Background(), project, "r1")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got != "" {
+			t.Errorf("want empty (no worktrees belong to r1), got %q", got)
+		}
+	})
 }
 
 // ── umbrella wiring ──────────────────────────────────────────────────────

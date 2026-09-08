@@ -210,6 +210,47 @@ func (c *Client) AgentStatus(ctx context.Context, devServer domain.DevServer, pt
 	return usecase.AgentStatusResult{AgentRunning: running, AgentKind: kind, ReadyForInput: running}, nil
 }
 
+// DialHiddenSshTarget calls vm.sshDial (BE-SOL-EVM-004 §3 / "Quyết định đã
+// chốt" mục 1) — credential material in target is sent as ordinary RPC
+// params over the SAME agent<->Orca channel vm.exec already uses (Exec,
+// not a new streaming/session mechanism), mirroring how vm.exec's
+// recipeId/runtimeId params already travel (TASK-BE-EVM-001). The agent
+// method itself does not exist yet as of this pass (TASK-AG-EVM-006,
+// running in parallel) — a real agent build without it answers with the
+// standard JSON-RPC "method not found", which Exec already turns into
+// domain.ErrAgentMethodNotFound (see Exec's own doc comment), letting
+// usecase.AgentOutboundSshProvisioner.Provision surface a clear
+// FailedPrecondition instead of a raw transport error.
+func (c *Client) DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (string, error) {
+	params := map[string]any{
+		"runtimeId": runtimeID,
+		"target": map[string]any{
+			"host":                target.Host,
+			"port":                target.Port,
+			"username":            target.Username,
+			"privateKeyPem":       target.PrivateKeyPEM,
+			"identityAgentSocket": target.IdentityAgentSocket,
+			"jumpHost":            target.JumpHost,
+			"proxyCommand":        target.ProxyCommand,
+		},
+	}
+
+	result, err := c.Exec(ctx, devServer, "vm.sshDial", params)
+	if err != nil {
+		return "", err
+	}
+
+	hiddenTargetID, _ := result["hiddenTargetId"].(string)
+	if hiddenTargetID == "" {
+		// Convention: hiddenTargetID == runtimeID (BE-SOL-EVM-004 §4) — an
+		// agent build that acks without echoing one back still counts as a
+		// successful dial, just falls back to the convention value rather
+		// than treating a missing echo as an error.
+		hiddenTargetID = runtimeID
+	}
+	return hiddenTargetID, nil
+}
+
 func agentKindFromTitle(title string) string {
 	lower := strings.ToLower(title)
 	for _, k := range knownAgentTitles {

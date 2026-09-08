@@ -26,6 +26,19 @@ type fakeTenantServiceClient struct {
 	removeTeamMemberFunc func(ctx context.Context, in *tenantv1.RemoveTeamMemberRequest) (*emptypb.Empty, error)
 	listTeamMembersFunc  func(ctx context.Context, in *tenantv1.ListTeamMembersRequest) (*tenantv1.ListTeamMembersResponse, error)
 	getUserProfileFunc   func(ctx context.Context, in *tenantv1.GetUserProfileRequest) (*tenantv1.GetUserProfileResponse, error)
+	listTeamsForUserFunc func(ctx context.Context, in *tenantv1.ListTeamsForUserRequest) (*tenantv1.ListTeamsForUserResponse, error)
+
+	// starNag.* (TASK-011/012) — see channels_star_nag_test.go.
+	dismissStarNagFunc                          func(ctx context.Context, in *tenantv1.DismissStarNagRequest) (*emptypb.Empty, error)
+	deferStarNagFunc                             func(ctx context.Context, in *tenantv1.DeferStarNagRequest) (*emptypb.Empty, error)
+	completeStarNagFunc                          func(ctx context.Context, in *tenantv1.CompleteStarNagRequest) (*emptypb.Empty, error)
+	disableStarNagFunc                           func(ctx context.Context, in *tenantv1.DisableStarNagRequest) (*emptypb.Empty, error)
+	forceShowStarNagFunc                         func(ctx context.Context, in *tenantv1.ForceShowStarNagRequest) (*emptypb.Empty, error)
+	notifyStarNagOnboardingCompletedFunc         func(ctx context.Context, in *tenantv1.NotifyStarNagOnboardingCompletedRequest) (*emptypb.Empty, error)
+	openWebStarNagFunc                           func(ctx context.Context, in *tenantv1.OpenWebStarNagRequest) (*emptypb.Empty, error)
+	starOrcaFromNagFunc                          func(ctx context.Context, in *tenantv1.StarOrcaFromNagRequest) (*tenantv1.StarOrcaFromNagResponse, error)
+	prepareStarNagAgentValueMomentFunc           func(ctx context.Context, in *tenantv1.PrepareStarNagAgentValueMomentRequest) (*tenantv1.StarNagAgentValueMomentPreparation, error)
+	showPreparedStarNagAgentValueMomentFunc      func(ctx context.Context, in *tenantv1.ShowPreparedStarNagAgentValueMomentRequest) (*emptypb.Empty, error)
 }
 
 // GetUserProfile — CR-DS-007/CR-DS-008's devServer.listForUser/
@@ -52,6 +65,53 @@ func (f *fakeTenantServiceClient) RemoveTeamMember(ctx context.Context, in *tena
 
 func (f *fakeTenantServiceClient) ListTeamMembers(ctx context.Context, in *tenantv1.ListTeamMembersRequest, _ ...grpc.CallOption) (*tenantv1.ListTeamMembersResponse, error) {
 	return f.listTeamMembersFunc(ctx, in)
+}
+
+// ListTeamsForUser — BUG-013's fix: devServer.listForUser
+// (channels_dev_server_access_control.go) calls this to resolve the
+// caller's team-based access grants.
+func (f *fakeTenantServiceClient) ListTeamsForUser(ctx context.Context, in *tenantv1.ListTeamsForUserRequest, _ ...grpc.CallOption) (*tenantv1.ListTeamsForUserResponse, error) {
+	return f.listTeamsForUserFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) DismissStarNag(ctx context.Context, in *tenantv1.DismissStarNagRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	return f.dismissStarNagFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) DeferStarNag(ctx context.Context, in *tenantv1.DeferStarNagRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	return f.deferStarNagFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) CompleteStarNag(ctx context.Context, in *tenantv1.CompleteStarNagRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	return f.completeStarNagFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) DisableStarNag(ctx context.Context, in *tenantv1.DisableStarNagRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	return f.disableStarNagFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) ForceShowStarNag(ctx context.Context, in *tenantv1.ForceShowStarNagRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	return f.forceShowStarNagFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) NotifyStarNagOnboardingCompleted(ctx context.Context, in *tenantv1.NotifyStarNagOnboardingCompletedRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	return f.notifyStarNagOnboardingCompletedFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) OpenWebStarNag(ctx context.Context, in *tenantv1.OpenWebStarNagRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	return f.openWebStarNagFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) StarOrcaFromNag(ctx context.Context, in *tenantv1.StarOrcaFromNagRequest, _ ...grpc.CallOption) (*tenantv1.StarOrcaFromNagResponse, error) {
+	return f.starOrcaFromNagFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) PrepareStarNagAgentValueMoment(ctx context.Context, in *tenantv1.PrepareStarNagAgentValueMomentRequest, _ ...grpc.CallOption) (*tenantv1.StarNagAgentValueMomentPreparation, error) {
+	return f.prepareStarNagAgentValueMomentFunc(ctx, in)
+}
+
+func (f *fakeTenantServiceClient) ShowPreparedStarNagAgentValueMoment(ctx context.Context, in *tenantv1.ShowPreparedStarNagAgentValueMomentRequest, _ ...grpc.CallOption) (*emptypb.Empty, error) {
+	return f.showPreparedStarNagAgentValueMomentFunc(ctx, in)
 }
 
 func TestTeamCreateChannel_Success(t *testing.T) {

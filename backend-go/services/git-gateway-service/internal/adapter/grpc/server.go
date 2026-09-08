@@ -59,6 +59,7 @@ type Server struct {
 	writeFile             *usecase.WriteFileUseCase
 	writeFileChunk        *usecase.WriteFileChunkUseCase
 	createDir             *usecase.CreateDirUseCase
+	createFile            *usecase.CreateFileUseCase
 	deleteFile            *usecase.DeleteFileUseCase
 	statFile              *usecase.StatFileUseCase
 	searchFiles           *usecase.SearchFilesUseCase
@@ -72,6 +73,7 @@ type Server struct {
 	baseRefDefault         *usecase.BaseRefDefault
 	searchRefs             *usecase.SearchRefs
 	checkHooks             *usecase.CheckHooks
+	readEphemeralVmRecipes *usecase.ReadEphemeralVmRecipes
 	readIssueCommand       *usecase.ReadIssueCommand
 	writeIssueCommand      *usecase.WriteIssueCommand
 	scanSetupScriptImports *usecase.ScanSetupScriptImports
@@ -132,6 +134,7 @@ func New(
 	writeFile *usecase.WriteFileUseCase,
 	writeFileChunk *usecase.WriteFileChunkUseCase,
 	createDir *usecase.CreateDirUseCase,
+	createFile *usecase.CreateFileUseCase,
 	deleteFile *usecase.DeleteFileUseCase,
 	statFile *usecase.StatFileUseCase,
 	searchFiles *usecase.SearchFilesUseCase,
@@ -164,6 +167,7 @@ func New(
 	resolveConflict *usecase.ResolveConflict,
 	discard *usecase.Discard,
 	bulkDiscard *usecase.BulkDiscard,
+	readEphemeralVmRecipes *usecase.ReadEphemeralVmRecipes,
 ) *Server {
 	return &Server{
 		getStatus:                   getStatus,
@@ -196,6 +200,7 @@ func New(
 		writeFile:                   writeFile,
 		writeFileChunk:              writeFileChunk,
 		createDir:                   createDir,
+		createFile:                  createFile,
 		deleteFile:                  deleteFile,
 		statFile:                    statFile,
 		searchFiles:                 searchFiles,
@@ -231,6 +236,8 @@ func New(
 		resolveConflict:   resolveConflict,
 		discard:           discard,
 		bulkDiscard:       bulkDiscard,
+
+		readEphemeralVmRecipes: readEphemeralVmRecipes,
 	}
 }
 
@@ -565,6 +572,13 @@ func (s *Server) CreateDir(ctx context.Context, req *gitgatewayv1.CreateDirReque
 	return &gitgatewayv1.CreateDirResponse{}, nil
 }
 
+func (s *Server) CreateFile(ctx context.Context, req *gitgatewayv1.CreateFileRequest) (*gitgatewayv1.CreateFileResponse, error) {
+	if err := s.createFile.Execute(ctx, req.GetWorktreeId(), req.GetPath()); err != nil {
+		return nil, toFileGRPCStatus(err)
+	}
+	return &gitgatewayv1.CreateFileResponse{}, nil
+}
+
 func (s *Server) DeleteFile(ctx context.Context, req *gitgatewayv1.DeleteFileRequest) (*emptypb.Empty, error) {
 	if err := s.deleteFile.Execute(ctx, req.GetWorktreeId(), req.GetPath(), req.GetRecursive()); err != nil {
 		return nil, toFileGRPCStatus(err)
@@ -659,6 +673,24 @@ func (s *Server) CheckHooks(ctx context.Context, req *gitgatewayv1.CheckHooksReq
 		return nil, apperrors.ToGRPCStatus(err)
 	}
 	return &gitgatewayv1.CheckHooksResponse{InstalledHooks: result.InstalledHooks, OrcaHooksCurrent: result.OrcaHooksCurrent}, nil
+}
+
+func (s *Server) ReadEphemeralVmRecipes(ctx context.Context, req *gitgatewayv1.ReadEphemeralVmRecipesRequest) (*gitgatewayv1.ReadEphemeralVmRecipesResponse, error) {
+	result, err := s.readEphemeralVmRecipes.Execute(ctx, usecase.ReadEphemeralVmRecipesInput{RepoID: req.GetRepoId()})
+	if err != nil {
+		return nil, apperrors.ToGRPCStatus(err)
+	}
+	recipes := make([]*gitgatewayv1.EphemeralVmRecipe, 0, len(result.Recipes))
+	for _, r := range result.Recipes {
+		recipes = append(recipes, &gitgatewayv1.EphemeralVmRecipe{
+			Id: r.ID, Name: r.Name, Description: r.Description,
+			Create: r.Create, Suspend: r.Suspend, Resume: r.Resume,
+			Destroy: r.Destroy, DestroyDisabled: r.DestroyDisabled,
+		})
+	}
+	return &gitgatewayv1.ReadEphemeralVmRecipesResponse{
+		RepoPath: result.RepoPath, Recipes: recipes, Diagnostics: result.Diagnostics,
+	}, nil
 }
 
 func (s *Server) ReadIssueCommand(ctx context.Context, req *gitgatewayv1.ReadIssueCommandRequest) (*gitgatewayv1.ReadIssueCommandResponse, error) {

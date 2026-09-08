@@ -325,7 +325,7 @@ export async function scanWorkspacePortsForTarget(
 
 export async function killWorkspacePortForTarget(
   target: RuntimeClientTarget,
-  args: { repoId: string; pid: number; port: number }
+  args: { repoId: string; worktreeId?: string; pid: number; port: number }
 ): Promise<WorkspacePortKillResult> {
   if (target.kind === 'local') {
     return window.api.workspacePorts.kill(args)

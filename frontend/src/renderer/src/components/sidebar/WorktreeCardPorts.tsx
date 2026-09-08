@@ -191,6 +191,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       const run = async (): Promise<void> => {
         const result = await killWorkspacePortForTarget(runtimeTarget, {
           repoId: port.owner.repoId,
+          worktreeId: port.owner.worktreeId,
           pid: port.pid,
           port: port.port
         })

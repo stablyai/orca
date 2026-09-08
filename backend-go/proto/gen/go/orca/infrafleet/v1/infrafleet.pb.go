@@ -667,10 +667,21 @@ func (x *CleanupEphemeralVmWorkspaceRequest) GetCommand() string {
 }
 
 type StreamVmProvisionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ConnectionId  string                 `protobuf:"bytes,1,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
-	RecipeId      string                 `protobuf:"bytes,2,opt,name=recipe_id,json=recipeId,proto3" json:"recipe_id,omitempty"`
-	RuntimeId     string                 `protobuf:"bytes,3,opt,name=runtime_id,json=runtimeId,proto3" json:"runtime_id,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	ConnectionId string                 `protobuf:"bytes,1,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	RecipeId     string                 `protobuf:"bytes,2,opt,name=recipe_id,json=recipeId,proto3" json:"recipe_id,omitempty"`
+	RuntimeId    string                 `protobuf:"bytes,3,opt,name=runtime_id,json=runtimeId,proto3" json:"runtime_id,omitempty"`
+	// command is the recipe's resolved `create` shell command — resolved
+	// server-side by api-gateway's wscompat layer via git-gateway-service's
+	// ReadEphemeralVmRecipes (TASK-BE-EVM-005), the same pattern
+	// Suspend/Resume/CleanupEphemeralVmWorkspaceRequest already use for their
+	// own `command` field. infra-fleet-service must not gain a dependency on
+	// git-gateway-service (EphemeralVmRelay's doc comment — the existing
+	// dependency direction is the other way), so it cannot resolve this
+	// itself; added here (missing from this message's original TASK-BE-EVM-002
+	// pass) once TASK-BE-EVM-004's Provision usecase confirmed it needs one,
+	// mirroring the 3 sibling request messages' shape.
+	Command       string `protobuf:"bytes,4,opt,name=command,proto3" json:"command,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -722,6 +733,13 @@ func (x *StreamVmProvisionRequest) GetRecipeId() string {
 func (x *StreamVmProvisionRequest) GetRuntimeId() string {
 	if x != nil {
 		return x.RuntimeId
+	}
+	return ""
+}
+
+func (x *StreamVmProvisionRequest) GetCommand() string {
+	if x != nil {
+		return x.Command
 	}
 	return ""
 }
@@ -7297,12 +7315,13 @@ const file_orca_infrafleet_v1_infrafleet_proto_rawDesc = "" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x1d\n" +
 	"\n" +
 	"runtime_id\x18\x02 \x01(\tR\truntimeId\x12\x18\n" +
-	"\acommand\x18\x03 \x01(\tR\acommand\"{\n" +
+	"\acommand\x18\x03 \x01(\tR\acommand\"\x95\x01\n" +
 	"\x18StreamVmProvisionRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\x1b\n" +
 	"\trecipe_id\x18\x02 \x01(\tR\brecipeId\x12\x1d\n" +
 	"\n" +
-	"runtime_id\x18\x03 \x01(\tR\truntimeId\"{\n" +
+	"runtime_id\x18\x03 \x01(\tR\truntimeId\x12\x18\n" +
+	"\acommand\x18\x04 \x01(\tR\acommand\"{\n" +
 	"\x10VmProvisionEvent\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x14\n" +
 	"\x05chunk\x18\x02 \x01(\tR\x05chunk\x12=\n" +
