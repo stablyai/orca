@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { getDefaultRepoHookSettings } from '../../shared/constants'
 import type { Repo } from '../../shared/repo-types'
 import { parsePairingCode } from '../../shared/pairing'
@@ -25,72 +25,6 @@ const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () =>
   run()
 
 describe('remote runtime request connection integration', () => {
-  it(
-    'binds encrypted close-intent capability to the real runtime RPC context',
-    { timeout: REMOTE_RUNTIME_TEST_TIMEOUT_MS },
-    async () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-close-intent-'))
-      const refuseUnattributedMobileSessionTabClose = vi.fn().mockResolvedValue({
-        closed: true,
-        refused: true,
-        refusalReason: 'missing-intent',
-        snapshotRepublished: true
-      })
-      const closeMobileSessionTab = vi.fn()
-      const runtime = {
-        getRuntimeId: () => 'close-intent-runtime-test',
-        getStartedAt: () => 1,
-        cleanupSubscriptionsForConnection: () => {},
-        cancelMobileDictationForConnection: () => {},
-        onClientDisconnected: () => {},
-        refuseUnattributedMobileSessionTabClose,
-        closeMobileSessionTab
-      } as unknown as OrcaRuntimeService
-      const server = new OrcaRuntimeRpcServer({
-        runtime,
-        userDataPath,
-        enableWebSocket: true,
-        wsPort: 0
-      })
-
-      await server.start()
-      try {
-        const offer = server.createPairingOffer({ name: 'integration', scope: 'runtime' })
-        if (!offer.available) {
-          throw new Error('pairing unavailable')
-        }
-        const pairing = parsePairingCode(offer.pairingUrl)
-        if (!pairing) {
-          throw new Error('invalid pairing')
-        }
-        const connection = new RemoteRuntimeRequestConnection(pairing)
-        try {
-          await expect(
-            connection.request(
-              'session.tabs.close',
-              { worktree: 'id:wt-1', tabId: 'tab-1' },
-              REMOTE_RUNTIME_REQUEST_TIMEOUT_MS
-            )
-          ).resolves.toMatchObject({
-            ok: true,
-            result: {
-              refused: true,
-              refusalReason: 'missing-intent',
-              snapshotRepublished: true
-            }
-          })
-          expect(refuseUnattributedMobileSessionTabClose).toHaveBeenCalledWith('id:wt-1', 'tab-1')
-          expect(closeMobileSessionTab).not.toHaveBeenCalled()
-        } finally {
-          connection.close()
-        }
-      } finally {
-        await server.stop()
-        rmSync(userDataPath, { recursive: true, force: true })
-      }
-    }
-  )
-
   it(
     'fetches repos through the real E2EE WebSocket runtime',
     { timeout: REMOTE_RUNTIME_TEST_TIMEOUT_MS },

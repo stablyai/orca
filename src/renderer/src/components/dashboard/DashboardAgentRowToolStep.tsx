@@ -3,18 +3,21 @@ import { cn } from '@/lib/utils'
 
 type DashboardAgentRowToolStepProps = {
   expanded: boolean
-  isWorking: boolean
+  showsTool: boolean
+  /** Hold the slot open while tool metadata is still in flight — see the empty branch below. */
+  reservesHeight: boolean
   toolName: string
   toolInput: string
 }
 
 export function DashboardAgentRowToolStep({
   expanded,
-  isWorking,
+  showsTool,
+  reservesHeight,
   toolName,
   toolInput
 }: DashboardAgentRowToolStepProps): React.JSX.Element | null {
-  if (!isWorking) {
+  if (!showsTool || (!toolName && !reservesHeight)) {
     return null
   }
 

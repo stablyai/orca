@@ -1,6 +1,8 @@
 import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
 import { DASHBOARD_MAX_LABEL_LENGTH } from '../../../../shared/dashboard-snapshot'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
 import type { DashboardAgentRow } from './useDashboardData'
 
 export function rowTask(row: DashboardAgentRow): string {
@@ -28,7 +30,9 @@ export function boundedLabelOrUndefined(value: string | undefined): string | und
  *  same agent with the same name. */
 export function rowConversationName(
   row: DashboardAgentRow,
-  generatedTitlesEnabled: boolean
+  generatedTitlesEnabled: boolean,
+  layout: TerminalLayoutSnapshot | undefined,
+  paneTitles: Record<number, string> | undefined
 ): string | undefined {
   const parentPaneKey = row.entry.orchestration?.parentPaneKey
   // Why: a child row rendered on its parent's tab does not own that tab's name.
@@ -39,5 +43,13 @@ export function rowConversationName(
   ) {
     return undefined
   }
-  return getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled) ?? undefined
+  const paneLiveTitle = resolveAgentRowPaneLiveTitle(
+    layout,
+    paneTitles,
+    parsePaneKey(row.paneKey)?.leafId
+  )
+  return (
+    getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled, paneLiveTitle) ??
+    undefined
+  )
 }

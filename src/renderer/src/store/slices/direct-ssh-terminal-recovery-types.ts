@@ -1,6 +1,6 @@
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { CodexRestartNotice } from './terminals'
+import type { CodexRestartNotice } from '../terminals/terminal-contracts'
 
 export type DirectSshPaneRetryAttemptId = string & {
   readonly __directSshPaneRetryAttemptId: unique symbol

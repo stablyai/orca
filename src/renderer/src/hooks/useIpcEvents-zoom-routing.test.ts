@@ -1,6 +1,6 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveZoomTarget } from './useIpcEvents'
+import { resolveZoomTarget } from './resolve-zoom-target'
 
 function makeTarget(args: { hasXtermClass?: boolean; editorClosest?: boolean }): {
   classList: { contains: (token: string) => boolean }
@@ -91,6 +91,16 @@ describe('useIpcEvents zoom routing', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
+    // Zoom routing never renders toast UI; keep Sonner's DOM style injector out of this synthetic-document harness.
+    vi.doMock('sonner', () => ({
+      toast: {
+        dismiss: vi.fn(),
+        error: vi.fn(),
+        info: vi.fn(),
+        success: vi.fn(),
+        warning: vi.fn()
+      }
+    }))
   })
 
   it('applies app zoom for an active browser tab', async () => {
@@ -186,6 +196,7 @@ describe('useIpcEvents zoom routing', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: makeEvents(),
+        automations: makeEvents(),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),
@@ -216,7 +227,9 @@ describe('useIpcEvents zoom routing', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} },
         ui: makeEvents({
@@ -329,6 +342,7 @@ describe('useIpcEvents zoom routing', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: makeEvents(),
+        automations: makeEvents(),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),
@@ -359,7 +373,9 @@ describe('useIpcEvents zoom routing', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} },
         ui: makeEvents({

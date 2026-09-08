@@ -41,6 +41,7 @@ vi.mock('child_process', async () => {
 })
 
 import { COMMAND_SPECS, main } from './index'
+import { formatFlagHelp } from './help'
 import { GLOBAL_FLAGS, specPaths } from './args'
 import { okFixture, queueFixtures } from './test-fixtures'
 
@@ -88,25 +89,50 @@ describe('command aliases dispatch to the canonical handler', () => {
   })
 
   it('runs `worktree remove` as the canonical `worktree rm` (the incident)', async () => {
-    queueFixtures(callMock, okFixture('req', { removed: true }))
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
+      okFixture('req', { removed: true })
+    )
 
     await main(['worktree', 'remove', '--worktree', 'id:wt-1', '--force', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith(
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
       'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1', force: true })
+      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'local', force: true })
     )
   })
 
   it('runs `worktree delete` as the canonical `worktree rm`', async () => {
-    queueFixtures(callMock, okFixture('req', { removed: true }))
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'runtime:env-1' } }),
+      okFixture('req', { removed: true })
+    )
 
     await main(['worktree', 'delete', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith(
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
       'worktree.rm',
-      expect.objectContaining({ worktree: 'id:wt-1' })
+      expect.objectContaining({ worktree: 'id:wt-1', hostId: 'runtime:env-1' })
     )
+  })
+
+  it('fails closed when worktree removal cannot resolve a host', async () => {
+    queueFixtures(callMock, okFixture('req_show', { worktree: { id: 'wt-1' } }))
+    const priorExitCode = process.exitCode
+
+    try {
+      await main(['worktree', 'rm', '--worktree', 'id:wt-1', '--json'], '/tmp/repo')
+
+      expect(process.exitCode).toBe(1)
+      expect(callMock).toHaveBeenCalledTimes(1)
+      expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: 'id:wt-1' })
+    } finally {
+      process.exitCode = priorExitCode
+    }
   })
 
   it('still runs `terminal focus` after the handler de-duplication', async () => {
@@ -202,6 +228,29 @@ describe('unknown command surfaces a suggestion', () => {
     expect(stderr).toContain('--json')
   })
 
+  it('names the offending --worktree value and the valid forms on selector_not_found', async () => {
+    const { RuntimeRpcFailureError } = await import('./runtime/types.js')
+    callMock.mockRejectedValue(
+      new RuntimeRpcFailureError({
+        id: 'req_selector',
+        ok: false,
+        error: { code: 'selector_not_found', message: 'selector_not_found' },
+        _meta: { runtimeId: 'runtime_local' }
+      })
+    )
+
+    await main(
+      ['orchestration', 'worker-start', '--task', 't1', '--worktree', 'repo-1', '--agent', 'codex'],
+      '/tmp/repo'
+    )
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('No Orca workspace matched the worktree selector "repo-1"')
+    expect(stderr).toContain('id:repo-1::<absolute-path>')
+    expect(stderr).toContain('Valid selector forms:')
+  })
+
   it('reports a pre-command flag that belongs to another command', async () => {
     await main(['--workspace', 'worktree', 'list'], '/tmp/repo')
 
@@ -279,6 +328,23 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('labels retired coordinator scheduler commands at the root', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    const output = String(logSpy.mock.calls[0]?.[0])
+    expect(output).toContain(
+      'orchestration coordinator-start Retired: load the current orchestration skill'
+    )
+    expect(output).toContain(
+      'orchestration coordinator-stop Retired: load the current orchestration skill'
+    )
+    expect(output).not.toContain('Start the legacy automatic coordinator loop')
+    expect(output).not.toContain('Stop the legacy automatic coordinator loop')
+    logSpy.mockRestore()
+  })
+
   it('advertises computer-use capabilities discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -330,6 +396,7 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'orchestration worker-list Report worker terminal resource accounting'
     )
+    expect(logSpy.mock.calls[0][0]).not.toContain('orchestration worker-cleanup')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -378,9 +445,13 @@ describe('orca root help', () => {
 
     const listIssuesHelp = String(logSpy.mock.calls[0][0])
     expect(listIssuesHelp).toContain(
-      '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+      '--cursor <cursor>      Opaque cursor from a previous list-issues page; issued cursors bind the workspace, raw Linear cursors need --workspace'
     )
     expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
+    expect(listIssuesHelp).toContain('0=none, 1=urgent, 2=high, 3=medium, 4=low')
+    expect(listIssuesHelp).toContain(
+      '--limit <n>            Max issues to return; omit to return every match'
+    )
     expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })
@@ -408,6 +479,21 @@ describe('orca root help', () => {
     expect(help).toContain(
       '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
     )
+    expect(help).not.toContain('Line cursor from a previous read')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('describes worker-list cursors as opaque page cursors', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['orchestration', 'worker-list', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('[--cursor <cursor>]')
+    expect(help).toContain('--cursor <cursor>      Opaque page cursor copied from page.nextCursor')
+    expect(help).toContain('Continue with the opaque page.nextCursor value unchanged.')
+    expect(help).not.toContain('--cursor <dispatch_id>')
     expect(help).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })
@@ -451,6 +537,7 @@ describe('orca root help', () => {
     const rootHelp = String(logSpy.mock.calls[0][0])
     expect(rootHelp).not.toContain('--parent-workspace')
     expect(rootHelp).toContain('[--parent-worktree <selector>] [--no-parent]')
+    expect(rootHelp).toContain('identity:<identity>')
 
     logSpy.mockClear()
     await main(['worktree', 'create', '--help'], '/tmp/repo')
@@ -475,6 +562,7 @@ describe('orca root help', () => {
     const setHelp = String(logSpy.mock.calls[0][0])
     expect(setHelp).not.toContain('--parent-workspace')
     expect(setHelp).not.toContain('folder:<id>')
+    expect(formatFlagHelp('parent-worktree')).toContain('identity:<identity>')
     expect(setHelp).not.toContain('worktree:<id>')
     expect(callMock).not.toHaveBeenCalled()
   })

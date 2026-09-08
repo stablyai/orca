@@ -1,5 +1,4 @@
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 
 export function formatVanishedSelectionNotice(count: number): string {
   return count === 1
@@ -14,17 +13,18 @@ export function formatVanishedSelectionNotice(count: number): string {
       )
 }
 
-export function getDefaultSelectedWorkspaceCleanupIds(
-  candidates: readonly WorkspaceCleanupCandidate[],
-  deletingWorktreeIds: ReadonlySet<string> = new Set()
-): Set<string> {
-  return new Set(
-    candidates
-      .filter(
-        (candidate) => candidate.selectedByDefault && !deletingWorktreeIds.has(candidate.worktreeId)
+/** Explains selection removed when a facet filter hides rows. */
+export function formatWithheldSelectionNotice(count: number): string {
+  return count === 1
+    ? translate(
+        'components.workspace.cleanup.browse.selectionWithheldOne',
+        '1 selected workspace is hidden by the current filters and was deselected.'
       )
-      .map((candidate) => candidate.worktreeId)
-  )
+    : translate(
+        'components.workspace.cleanup.browse.selectionWithheld',
+        '{{value0}} selected workspaces are hidden by the current filters and were deselected.',
+        { value0: count }
+      )
 }
 
 export function toggleSetMember(current: Set<string>, value: string): Set<string> {

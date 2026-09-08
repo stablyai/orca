@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+const { appMetricsMock } = vi.hoisted(() => ({
+  appMetricsMock: vi.fn((): unknown[] => [])
+}))
+
 vi.mock('electron', () => ({
   app: {
     getVersion: () => '1.2.3-test',
-    getAppMetrics: () => []
+    getAppMetrics: appMetricsMock
   }
 }))
 
@@ -14,6 +18,7 @@ import {
 } from './crash-breadcrumb-store'
 import { ProcessGoneDedupe } from './process-gone-dedupe'
 import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-gone-recorder'
+import { resetProcessGoneSiblingCorrelationForTest } from './process-gone-sibling-correlation'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../observability/tracer'
 
 type CapturingSink = TracerSink & { records: unknown[]; flushMock: ReturnType<typeof vi.fn> }
@@ -52,12 +57,15 @@ beforeEach(() => {
   sink = capturingSink()
   setActiveSink(sink)
   clearCrashBreadcrumbsForTest()
+  resetProcessGoneSiblingCorrelationForTest()
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   _resetTracerForTests()
   clearCrashBreadcrumbsForTest()
+  resetProcessGoneSiblingCorrelationForTest()
 })
 
 describe('recordProcessGoneCrash', () => {
@@ -107,6 +115,57 @@ describe('recordProcessGoneCrash', () => {
       })
     ])
     expect(sink.flushMock).toHaveBeenCalledOnce()
+  })
+
+  it('durably suppresses a Linux namespace-encoded renderer SIGTERM', () => {
+    const record = vi.fn()
+
+    withStubbedPlatform('linux', () => {
+      recordProcessGoneCrash(
+        { record } as never,
+        event({ reason: 'killed', exitCode: 61696 }),
+        new ProcessGoneDedupe()
+      )
+    })
+
+    expect(record).not.toHaveBeenCalled()
+    expect(getCrashBreadcrumbSnapshot()).toEqual([
+      expect.objectContaining({
+        name: 'process_gone_suppressed',
+        data: expect.objectContaining({
+          source: 'renderer',
+          reason: 'killed',
+          exitCode: 61696,
+          expectedTeardown: 'none'
+        })
+      })
+    ])
+    expect(sink.records).toEqual([
+      expect.objectContaining({
+        name: 'crash.breadcrumb',
+        attributes: expect.objectContaining({
+          'breadcrumb.name': 'process_gone_suppressed',
+          'breadcrumb.data': expect.objectContaining({ exitCode: 61696 })
+        })
+      })
+    ])
+    expect(sink.flushMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps suppressed renderer evidence scoped to its renderer', () => {
+    const dedupe = new ProcessGoneDedupe()
+    const suppressed = (webContentsId: number) =>
+      event({ reason: 'killed', exitCode: 1, expectedTeardown: 'renderer-reload', webContentsId })
+
+    recordProcessGoneCrash({ record: vi.fn() } as never, suppressed(11), dedupe)
+    recordProcessGoneCrash({ record: vi.fn() } as never, suppressed(22), dedupe)
+
+    expect(getCrashBreadcrumbSnapshot('renderer:11')).toEqual([
+      expect.objectContaining({ origin: 'renderer:11' })
+    ])
+    expect(getCrashBreadcrumbSnapshot('renderer:22')).toEqual([
+      expect.objectContaining({ origin: 'renderer:22' })
+    ])
   })
 
   it('coalesces a recoverable-service crash loop instead of flushing every event', () => {
@@ -161,6 +220,7 @@ describe('recordProcessGoneCrash', () => {
   })
 
   it('reports how many repeats a coalesced suppression stands for', () => {
+    vi.useFakeTimers()
     const dedupe = new ProcessGoneDedupe()
     const utilityCrash = event({
       source: 'child',
@@ -168,13 +228,11 @@ describe('recordProcessGoneCrash', () => {
       reason: 'crashed',
       details: { serviceName: 'network.mojom.NetworkService' }
     })
-    const nowSpy = vi.spyOn(Date, 'now')
 
-    nowSpy.mockReturnValue(0)
     for (let i = 0; i < 700; i++) {
       recordProcessGoneCrash({ record: vi.fn() } as never, utilityCrash, dedupe)
     }
-    nowSpy.mockReturnValue(30_000)
+    vi.advanceTimersByTime(30_000)
     recordProcessGoneCrash({ record: vi.fn() } as never, utilityCrash, dedupe)
 
     expect(getCrashBreadcrumbSnapshot()).toEqual([
@@ -244,6 +302,35 @@ describe('recordProcessGoneCrash', () => {
     ])
   })
 
+  it('derives the crashed-process-absent flag from the crashed process type', async () => {
+    // Binds event.processType through to the diagnostics bucket check: a live
+    // Utility survivor clears the flag for a Utility crash but not a renderer one.
+    appMetricsMock.mockReturnValue([
+      { pid: 77, type: 'Utility', memory: { workingSetSize: 1024 * 50 } }
+    ])
+
+    const rendererRecord = vi.fn().mockResolvedValue({ id: 'report-r' })
+    recordProcessGoneCrash({ record: rendererRecord } as never, event(), new ProcessGoneDedupe())
+    await vi.waitFor(() => expect(rendererRecord).toHaveBeenCalledOnce())
+    expect(rendererRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ processMetricsCrashedProcessAbsent: true })
+      })
+    )
+
+    const utilityRecord = vi.fn().mockResolvedValue({ id: 'report-u' })
+    recordProcessGoneCrash(
+      { record: utilityRecord } as never,
+      event({ source: 'child', processType: 'Utility', details: { type: 'Utility' } }),
+      new ProcessGoneDedupe()
+    )
+    await vi.waitFor(() => expect(utilityRecord).toHaveBeenCalledOnce())
+    const utilityDetails = (utilityRecord.mock.calls[0][0] as { details: Record<string, unknown> })
+      .details
+    expect(utilityDetails.processMetricsUtilityCount).toBe(1)
+    expect(utilityDetails.processMetricsCrashedProcessAbsent).toBeUndefined()
+  })
+
   it('persists a report and flushes the process-gone trace before recovery', async () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
 
@@ -279,6 +366,26 @@ describe('recordProcessGoneCrash', () => {
       })
     ])
     expect(sink.flushMock).toHaveBeenCalledOnce()
+  })
+
+  it('keeps simultaneous renderer reports distinct by webContents identity', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+    const dedupe = new ProcessGoneDedupe()
+
+    recordProcessGoneCrash(
+      { record, attachDetails } as never,
+      event({ webContentsId: 11 }),
+      dedupe,
+      noMinidump
+    )
+    recordProcessGoneCrash(
+      { record, attachDetails } as never,
+      event({ webContentsId: 22 }),
+      dedupe,
+      noMinidump
+    )
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(2))
   })
 
   it('still persists the report when the forced trace flush fails', async () => {
@@ -391,6 +498,84 @@ describe('recordProcessGoneCrash', () => {
     recordProcessGoneCrash({ record, attachDetails } as never, event(), dedupe, noMinidump)
 
     await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(2))
+  })
+
+  function withStubbedPlatform(platform: NodeJS.Platform, run: () => void): void {
+    const original = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+    try {
+      run()
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: original })
+    }
+  }
+
+  // Why child exits: the decode gate is source-agnostic and reads
+  // process.platform synchronously at record time, so the platform stub is
+  // still in force when it runs.
+  const nonRecoverableChildExit = (
+    overrides: Partial<ProcessGoneCrashEvent>
+  ): ProcessGoneCrashEvent =>
+    event({
+      source: 'child',
+      processType: 'Utility',
+      details: { serviceName: 'node.mojom.NodeService', type: 'Utility' },
+      ...overrides
+    })
+
+  it('names the decoded POSIX wait status on the span and keeps the stored code raw', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+
+    withStubbedPlatform('linux', () => {
+      recordProcessGoneCrash(
+        { record } as never,
+        nonRecoverableChildExit({ reason: 'abnormal-exit', exitCode: 61696 }),
+        new ProcessGoneDedupe()
+      )
+    })
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ exitCode: 61696 }))
+    expect(sink.records).toEqual([
+      expect.objectContaining({
+        name: 'electron.process_gone',
+        attributes: expect.objectContaining({
+          'crash.exit_code': 61696,
+          'crash.exit_code_decoded': 'exit status 241'
+        })
+      })
+    ])
+  })
+
+  it('leaves Windows exit codes and launch-failed codes undecoded', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+
+    withStubbedPlatform('win32', () => {
+      recordProcessGoneCrash(
+        { record } as never,
+        nonRecoverableChildExit({ reason: 'killed', exitCode: 1 }),
+        new ProcessGoneDedupe()
+      )
+    })
+    withStubbedPlatform('linux', () => {
+      recordProcessGoneCrash(
+        { record } as never,
+        nonRecoverableChildExit({ reason: 'launch-failed', exitCode: 18 }),
+        new ProcessGoneDedupe()
+      )
+    })
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(2))
+    expect(sink.records).toHaveLength(2)
+    for (const span of sink.records) {
+      expect(span).toEqual(
+        expect.objectContaining({
+          attributes: expect.not.objectContaining({
+            'crash.exit_code_decoded': expect.anything()
+          })
+        })
+      )
+    }
   })
 })
 

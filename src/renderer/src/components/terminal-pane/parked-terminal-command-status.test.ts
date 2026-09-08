@@ -101,7 +101,13 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
     expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
       PANE_KEY,
-      { state: 'working', prompt: 'Fix the spinner', agentType: 'command-code' },
+      {
+        state: 'working',
+        prompt: 'Fix the spinner',
+        agentType: 'command-code',
+        // Why: the row is read off the pane's own output, not a provider signal (STA-4293).
+        observation: expect.objectContaining({ origin: 'process', kind: 'transition' })
+      },
       '✳ Build feature',
       undefined,
       ROUTING
@@ -184,7 +190,8 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
       {
         state: 'working',
         prompt: 'New Command Code prompt',
-        agentType: 'command-code'
+        agentType: 'command-code',
+        observation: expect.objectContaining({ origin: 'process', kind: 'transition' })
       },
       '✳ Build feature',
       undefined,
@@ -222,7 +229,12 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
     expect(mockStoreState.setAgentStatus).toHaveBeenCalledWith(
       PANE_KEY,
-      { state: 'done', prompt: 'Fix the spinner', agentType: 'command-code' },
+      {
+        state: 'done',
+        prompt: 'Fix the spinner',
+        agentType: 'command-code',
+        observation: expect.objectContaining({ origin: 'process', kind: 'transition' })
+      },
       '✳ Build feature',
       undefined,
       ROUTING

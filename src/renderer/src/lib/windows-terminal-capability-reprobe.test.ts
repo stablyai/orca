@@ -40,6 +40,36 @@ afterEach(() => {
 })
 
 describe('windows terminal capability re-probe', () => {
+  it('reprobes usable WSL until Windows process identity is proved', async () => {
+    vi.useFakeTimers()
+    let current: WindowsTerminalCapabilities = USABLE_WSL
+    const probe = vi.fn(async () => {
+      current = { ...current, windowsProcessStartTimeAvailable: true }
+      return current
+    })
+    const readCached = () => current
+    startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(probe).toHaveBeenCalledTimes(1)
+    expect(readCached().windowsProcessStartTimeAvailable).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(30 * 60_000)
+    expect(probe).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets the backoff when only process identity capability changes', async () => {
+    vi.useFakeTimers()
+    const identityAvailable = { ...ABSENT_WSL, windowsProcessStartTimeAvailable: true }
+    const { probe, readCached } = createWatcher([identityAvailable, identityAvailable])
+    startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(probe).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(probe).toHaveBeenCalledTimes(2)
+  })
+
   it('backs off to a five-minute ceiling on a stable answer', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()
@@ -55,7 +85,9 @@ describe('windows terminal capability re-probe', () => {
 
   it('still re-checks a transient absent answer, then stops once WSL answers', async () => {
     vi.useFakeTimers()
-    const { probe, readCached } = createWatcher([USABLE_WSL])
+    const { probe, readCached } = createWatcher([
+      { ...USABLE_WSL, windowsProcessStartTimeAvailable: true }
+    ])
     startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
 
     await vi.advanceTimersByTimeAsync(30_000)

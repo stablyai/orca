@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -154,7 +155,7 @@ describe('terminal multiplex RPC', () => {
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -172,9 +173,8 @@ describe('terminal multiplex RPC', () => {
         rows: 20
       }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'phone-1' }),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
@@ -247,7 +247,7 @@ describe('terminal multiplex RPC', () => {
     )
 
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
-    cleanups.get('terminal-multiplex:conn-locked')?.()
+    registry.cleanupSubscription('terminal-multiplex:conn-locked')
     await dispatchPromise
   })
 
@@ -257,7 +257,7 @@ describe('terminal multiplex RPC', () => {
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -271,14 +271,9 @@ describe('terminal multiplex RPC', () => {
       subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
       getTerminalFitOverride: vi.fn().mockReturnValue(null),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        const cleanup = cleanups.get(id)
-        cleanups.delete(id)
-        cleanup?.()
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
@@ -349,7 +344,7 @@ describe('terminal multiplex RPC', () => {
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -361,14 +356,9 @@ describe('terminal multiplex RPC', () => {
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        const cleanup = cleanups.get(id)
-        cleanups.delete(id)
-        cleanup?.()
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
@@ -431,7 +421,7 @@ describe('terminal multiplex RPC', () => {
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const sendTerminal = vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -444,10 +434,9 @@ describe('terminal multiplex RPC', () => {
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => cleanups.get(id)?.()),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: sendTerminal as unknown as OrcaRuntimeService['sendTerminal'],
       updateDesktopViewport: vi.fn().mockResolvedValue(true)
@@ -506,7 +495,7 @@ describe('terminal multiplex RPC', () => {
     // nothing past 12, so an unsolicited 17 is an unknown opcode on that wire.
     // A capable desktop subscriber shares the runtime and is driven second, so
     // its frame proves the rejection had already been processed for both.
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const sendTerminal = vi.fn().mockRejectedValue(new Error('terminal_not_writable'))
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -519,10 +508,9 @@ describe('terminal multiplex RPC', () => {
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => cleanups.get(id)?.()),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: sendTerminal as unknown as OrcaRuntimeService['sendTerminal'],
       updateDesktopViewport: vi.fn().mockResolvedValue(true),

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_FRENCH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
@@ -18,10 +19,11 @@ describe('normalizeUiLanguage', () => {
     expect(normalizeUiLanguage(UI_LANGUAGE_KOREAN)).toBe('ko')
     expect(normalizeUiLanguage(UI_LANGUAGE_JAPANESE)).toBe('ja')
     expect(normalizeUiLanguage(UI_LANGUAGE_SPANISH)).toBe('es')
+    expect(normalizeUiLanguage(UI_LANGUAGE_FRENCH)).toBe('fr')
   })
 
   it('falls back unknown values to system', () => {
-    expect(normalizeUiLanguage('fr')).toBe('system')
+    expect(normalizeUiLanguage('de')).toBe('system')
     expect(normalizeUiLanguage(null)).toBe('system')
   })
 })

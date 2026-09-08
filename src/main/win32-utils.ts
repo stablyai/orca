@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs'
 export {
   getCmdExePath,
   getSpawnArgsForWindows,
+  wrapWindowsStartWait,
   isWindowsBatchScript,
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL,

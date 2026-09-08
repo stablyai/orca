@@ -146,7 +146,7 @@ async function terminateUpload(root: string, boundary: string): Promise<string> 
 async function completeFreshTransfer(uploadRoot: string): Promise<void> {
   const service = new SkillUploadSessionService(uploadRoot)
   const begun = await service.begin({ package: identity(), transferId: 'operation-fresh' })
-  expect(await readdir(uploadRoot)).toEqual([`${begun.uploadId}.tar.gz`])
+  expect(await stagedArchiveNames(uploadRoot)).toEqual([`${begun.uploadId}.tar.gz`])
   await service.append({
     uploadId: begun.uploadId,
     offset: 0,
@@ -156,7 +156,22 @@ async function completeFreshTransfer(uploadRoot: string): Promise<void> {
   const taken = await service.take(begun.uploadId, identity())
   expect(await readFile(taken.archivePath)).toEqual(bytes)
   await taken.cleanup()
+  expect(await stagedArchiveNames(uploadRoot)).toEqual([])
+  await service.dispose()
   expect(await readdir(uploadRoot)).toEqual([])
+}
+
+async function stagedArchiveNames(uploadRoot: string): Promise<string[]> {
+  const owners = await readdir(uploadRoot, { withFileTypes: true })
+  const names = await Promise.all(
+    owners
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => readdir(join(uploadRoot, entry.name)))
+  )
+  return names
+    .flat()
+    .filter((name) => name.endsWith('.tar.gz'))
+    .sort()
 }
 
 afterEach(async () => {
@@ -177,7 +192,7 @@ describe.runIf(RUN_REAL_PROCESS)('skill upload process restart recovery', () => 
       const uploadRoot = join(root, 'uploads')
       const abandonedId = await terminateUpload(root, boundary)
 
-      expect(await readdir(uploadRoot)).toEqual([`${abandonedId}.tar.gz`])
+      expect(await stagedArchiveNames(uploadRoot)).toEqual([`${abandonedId}.tar.gz`])
       await completeFreshTransfer(uploadRoot)
     },
     30_000

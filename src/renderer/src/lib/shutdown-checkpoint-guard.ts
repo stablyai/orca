@@ -1,14 +1,31 @@
 import {
+  clearShutdownCheckpointFailureReason,
+  formatShutdownCheckpointFailureReason,
   ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
-  ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
+  ORCA_RENDERER_UNLOAD_PREVENTED_EVENT,
+  publishShutdownCheckpointFailureReason
 } from '../../../shared/renderer-shutdown-events'
+import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 
 export type ShutdownCheckpointGuard = {
   persistOnce: () => boolean
-  reset: () => void
+  abortAfterCheckpointFailure: () => void
+  abandonAttempt: () => void
 }
 
-export function createShutdownCheckpointGuard(persist: () => void): ShutdownCheckpointGuard {
+// Why: without this, a reproducible checkpoint failure strands the user on an old
+// build behind an error that names the symptom while the cause is swallowed (STA-5505).
+function reportShutdownCheckpointFailure(error: unknown): void {
+  console.error('[app] Shutdown checkpoint persist failed:', error)
+  const message = formatShutdownCheckpointFailureReason(error)
+  publishShutdownCheckpointFailureReason(message)
+  recordRendererCrashBreadcrumb('renderer_shutdown_checkpoint_failed', { message })
+}
+
+export function createShutdownCheckpointGuard(
+  persist: () => void,
+  abandonPersistAttempt?: () => void
+): ShutdownCheckpointGuard {
   let persisted = false
   return {
     persistOnce(): boolean {
@@ -17,16 +34,22 @@ export function createShutdownCheckpointGuard(persist: () => void): ShutdownChec
       }
       try {
         persist()
-      } catch {
+      } catch (error) {
         // Why: browser event targets swallow listener exceptions. Returning a
         // failure lets the caller cancel unload and keep this attempt retryable.
+        reportShutdownCheckpointFailure(error)
         return false
       }
       persisted = true
+      clearShutdownCheckpointFailureReason()
       return true
     },
-    reset(): void {
+    abortAfterCheckpointFailure(): void {
       persisted = false
+    },
+    abandonAttempt(): void {
+      persisted = false
+      abandonPersistAttempt?.()
     }
   }
 }

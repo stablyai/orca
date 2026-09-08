@@ -2,9 +2,11 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+  POST_REPLAY_DEAD_TUI_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
+  RESET_GRAPHIC_RENDITION,
   RESET_KITTY_KEYBOARD_PROTOCOL,
   RESET_TERMINAL_CURSOR_STYLE
 } from '../../../../shared/terminal-mode-reset-profiles'
@@ -379,6 +381,45 @@ describe('connectPanePty', () => {
     })
   })
 
+  it('lets fresh host shell proof outrank stale live-agent metadata on reattach', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          snapshot: '\x1b[?1049h\x1b[?1003hstale agent snapshot',
+          isAlternateScreen: true,
+          snapshotTerminalOwner: 'shell' as const
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    setReattachPaneTitle('Cursor Agent')
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    connectPanePty(
+      pane as never,
+      manager as never,
+      createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+      }) as never
+    )
+    await flushAsyncTicks(20)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      POST_REPLAY_DEAD_TUI_RESET,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
+      expect.any(Function)
+    )
+  })
+
   it('ignores the stale agent signal on a cold restore and applies the fresh-shell reset', async () => {
     // Why: pane status and title are persisted, so after a cold restore they still
     // describe the process that died and make the pane look agent-owned. Preserving
@@ -414,6 +455,9 @@ describe('connectPanePty', () => {
 
       const writes = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.map(
         ([data]) => data as string
+      )
+      expect(writes).toContain(
+        `${RESET_GRAPHIC_RENDITION}\x1b[?1003h\x1b[?1006h\x1b[?2004huser@host ~ $ `
       )
       expect(writes).toContain(POST_REPLAY_MODE_RESET)
       expect(writes).not.toContain(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)

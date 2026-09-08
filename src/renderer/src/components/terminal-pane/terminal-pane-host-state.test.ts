@@ -32,6 +32,7 @@ describe('selectTerminalPaneHostState', () => {
     expect(selectTerminalPaneHostState(localState, 'wt-local')).toEqual({
       nativeChatTranscriptIsLocalReadable: true,
       sshReconnectEnvironmentId: null,
+      sshReconnectError: null,
       sshReconnectStatus: null,
       sshReconnectTargetId: null,
       sshReconnectTargetLabel: '',
@@ -52,6 +53,7 @@ describe('selectTerminalPaneHostState', () => {
     expect(selectTerminalPaneHostState(sshState, 'wt-ssh')).toEqual({
       nativeChatTranscriptIsLocalReadable: false,
       sshReconnectEnvironmentId: null,
+      sshReconnectError: null,
       sshReconnectStatus: 'connected',
       sshReconnectTargetId: 'ssh-a',
       sshReconnectTargetLabel: 'devbox',
@@ -107,11 +109,38 @@ describe('selectTerminalPaneHostState', () => {
     expect(selectTerminalPaneHostState(state, 'wt-runtime')).toEqual({
       nativeChatTranscriptIsLocalReadable: false,
       sshReconnectEnvironmentId: 'env-a',
+      sshReconnectError: null,
       sshReconnectStatus: 'disconnected',
       sshReconnectTargetId: 'ssh-nested',
       sshReconnectTargetLabel: 'build box',
       sshReconnectTargetRemoved: false
     })
+  })
+
+  // Without this the terminal overlay shows only a canned sentence, so a host key rejection — whose
+  // remedy is the last clause of the message — is invisible to anyone working in a terminal.
+  it('carries the failure detail alongside the status', () => {
+    const state = makeState({
+      repos: [{ id: 'repo-ssh', connectionId: 'ssh-a' }],
+      sshConnectionStates: new Map([
+        [
+          'ssh-a',
+          {
+            targetId: 'ssh-a',
+            status: 'error',
+            error: 'Host key verification failed for devbox. Run: ssh-keygen -R devbox',
+            reconnectAttempt: 0
+          }
+        ]
+      ]),
+      sshTargetLabels: new Map([['ssh-a', 'devbox']]),
+      worktreesByRepo: { 'repo-ssh': [{ id: 'wt-ssh', repoId: 'repo-ssh' }] }
+    })
+
+    const host = selectTerminalPaneHostState(state, 'wt-ssh')
+
+    expect(host.sshReconnectStatus).toBe('error')
+    expect(host.sshReconnectError).toContain('ssh-keygen -R devbox')
   })
 
   it('keeps runtime-owned SSH plumbing out of reconnect UI', () => {
@@ -125,6 +154,7 @@ describe('selectTerminalPaneHostState', () => {
     expect(selectTerminalPaneHostState(state, 'wt-ephemeral')).toEqual({
       nativeChatTranscriptIsLocalReadable: true,
       sshReconnectEnvironmentId: null,
+      sshReconnectError: null,
       sshReconnectStatus: null,
       sshReconnectTargetId: null,
       sshReconnectTargetLabel: '',

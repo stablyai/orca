@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
+}))
+
 // Regression test for the child-worktrees <-> agent-list expansion coupling:
 // in a worktree card that shows BOTH inline agent rows (with orchestration
 // lineage) AND a "N children" child-worktrees chip, toggling the child-worktrees
@@ -424,7 +428,7 @@ function compactAgentSummary(container: HTMLElement): HTMLButtonElement | null {
 }
 
 function childWorktreeCardPresent(container: HTMLElement): boolean {
-  return container.querySelector('[id="worktree-list-option-all%3Achild"]') !== null
+  return container.querySelector('[id="worktree-list-option-all%3A%7Cchild"]') !== null
 }
 
 function parentVirtualRowKey(container: HTMLElement): string | null {
@@ -523,7 +527,7 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
 
     // The remount still happens: the parent moved to a standalone 'item' render
     // row with a DIFFERENT React key, and the child card is gone.
-    expect(parentVirtualRowKey(container)).toBe('wt:all:parent')
+    expect(parentVirtualRowKey(container)).toBe('wt:all:|parent')
     expect(childWorktreeCardPresent(container)).toBe(false)
 
     // FIXED: the card remounted, but the durable expansion cache means the

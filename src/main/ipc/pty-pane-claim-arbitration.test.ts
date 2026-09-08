@@ -158,7 +158,8 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-headless',
       leafId,
       ptyId: expect.any(String),
-      incarnationId: expect.any(String)
+      incarnationId: expect.any(String),
+      hostAdmittedMembership: true
     })
   })
   it('shuts down a split PTY when its expected source binding was retired', async () => {
@@ -178,12 +179,19 @@ describe('registerPtyHandlers', () => {
         }
       }): Promise<{ id: string }>
     }
+    let exitCallback: ((event: { exitCode: number }) => void) | undefined
+    const killSpy = vi.fn(() => {
+      exitCallback?.({ exitCode: 0 })
+    })
     const proc = {
       onData: vi.fn(),
-      onExit: vi.fn(),
+      onExit: vi.fn((cb) => {
+        exitCallback = cb
+        return { dispose: () => {} }
+      }),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn(),
+      kill: killSpy,
       process: 'zsh',
       pid: 12345
     }
@@ -238,7 +246,7 @@ describe('registerPtyHandlers', () => {
     expect(store.persistPtyBinding).toHaveBeenCalledWith(
       expect.objectContaining({ expectedSourceBinding })
     )
-    expect(proc.kill).toHaveBeenCalledOnce()
+    expect(killSpy).toHaveBeenCalledOnce()
   })
   it('reports lower-owner commit before rejecting an early-exited runtime incarnation', async () => {
     const persistPtyBinding = vi.fn()
@@ -497,9 +505,7 @@ describe('registerPtyHandlers', () => {
         ORCA_WORKTREE_ID: 'repo-1::/tmp'
       }
     }) as Promise<{ id: string }>
-    await Promise.resolve()
-
-    expect(providerSpawn).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledTimes(1))
     resolveSpawn({ id: 'pty-shared' })
     await expect(Promise.all([runtimeSpawn, rendererSpawn])).resolves.toEqual([
       { id: 'pty-shared' },
@@ -511,7 +517,8 @@ describe('registerPtyHandlers', () => {
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-shared',
-      startupCwd: '/tmp'
+      startupCwd: '/tmp',
+      hostAdmittedMembership: true
     })
   })
 })

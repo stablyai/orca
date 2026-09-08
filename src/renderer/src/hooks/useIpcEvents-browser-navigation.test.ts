@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveBrowserSessionTabTarget } from './useIpcEvents'
+import { resolveBrowserSessionTabTarget } from './ipc-events/browser-session-tab-target'
 import { createHarnessStoreState, loadIpcEventsHarness } from './ipc-events-test-harness'
 
 describe('browser navigation updates', () => {
@@ -17,7 +17,7 @@ describe('browser navigation updates', () => {
     })
     const harness = await loadIpcEventsHarness(storeState)
     const { clearLiveBrowserUrl, getLiveBrowserUrl } =
-      await import('@/components/browser-pane/browser-runtime')
+      await import('@/components/browser-pane/describe-page/live-browser-url-registry')
     readLiveUrl = getLiveBrowserUrl
     harness.useIpcEvents()
 

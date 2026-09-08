@@ -19,6 +19,12 @@ function ownsSkill(source: SkillDiscoverySource, skill: DiscoveredSkill): boolea
 }
 
 function sourceStatus(source: SkillDiscoverySource): SkillSourceStatus {
+  // Why before `exists`: an unanswered root reports `exists: true` because the
+  // host could not prove otherwise. Reading that as `scanned` presented a root
+  // nobody walked as a successful scan, and its retained skills as its full count.
+  if (source.skippedReason === 'unavailable') {
+    return 'unavailable'
+  }
   if (source.exists) {
     return 'scanned'
   }

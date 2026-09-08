@@ -23,6 +23,7 @@ import { useSkillInstallProgress } from './skill-install-progress-state'
 import { translate } from '@/i18n/i18n'
 import { checklistItemsFromVersion } from './skill-package-checklist-items'
 import { summarizeSkillInstallRisk } from './skill-package-install-risk'
+import { retryableSkillIds } from './skill-bundle-retry-selection'
 
 type BundleVersion = SkillCloudVersion & {
   manifest: Extract<SkillCloudVersion['manifest'], { skills: unknown }>
@@ -125,7 +126,11 @@ export function SkillBundleInstallFlow(props: {
   ): Promise<void> => {
     const target = destination()
     if (!target || requestedIds.size === 0) {
-      setError(target ? 'Select at least one skill.' : 'Choose a workspace.')
+      setError(
+        target
+          ? translate('auto.components.skills.install.selectSkill', 'Select at least one skill.')
+          : translate('auto.components.skills.install.chooseWorkspace', 'Choose a workspace.')
+      )
       return
     }
     setBusy(true)
@@ -188,7 +193,10 @@ export function SkillBundleInstallFlow(props: {
       } else if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? 'Reconnect your Orca account before installing.'
+            ? translate(
+                'auto.components.skills.install.reconnectBeforeInstalling',
+                'Reconnect your Orca account before installing.'
+              )
             : operation.message
         )
       } else {
@@ -203,7 +211,12 @@ export function SkillBundleInstallFlow(props: {
       }
     } catch (cause) {
       console.warn('[skills] bundle install failed:', cause)
-      setError('Installation failed before Orca could verify the requested bundle.')
+      setError(
+        translate(
+          'auto.components.skills.install.bundleVerificationFailed',
+          'Installation failed before Orca could verify the requested bundle.'
+        )
+      )
     } finally {
       installProgress.finish()
       setBusy(false)
@@ -220,15 +233,16 @@ export function SkillBundleInstallFlow(props: {
       ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
     })
     if (!cancelled.cancelled) {
-      setError('The destination had already finished this installation.')
+      setError(
+        translate(
+          'auto.components.skills.install.destinationAlreadyFinished',
+          'The destination had already finished this installation.'
+        )
+      )
     }
   }
 
-  const retryIds = new Set(
-    result?.skills
-      .filter((skill) => skill.status === 'failed' || skill.status === 'cancelled')
-      .map((skill) => skill.skillId) ?? []
-  )
+  const retryIds = retryableSkillIds(result)
 
   return (
     <>

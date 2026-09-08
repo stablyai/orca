@@ -1,3 +1,4 @@
+import type { CommandTemplateBackslash } from './commit-message-prompt'
 import {
   getCommitMessageAgentSpec,
   getCommitMessageModel,
@@ -14,6 +15,10 @@ import type { TuiAgent } from './tui-agent'
 
 export type CommitMessagePlanInput = {
   agentId: TuiAgent | 'custom'
+  /** How to read `\` in the user's command override / args / custom command.
+   *  Defaults to POSIX escaping; pass `'literal'` only when the command is known
+   *  to run on native Windows, where `\` is the path separator (#11375). */
+  backslash?: CommandTemplateBackslash
   model: string
   thinkingLevel?: string
   customAgentCommand?: string
@@ -36,14 +41,15 @@ export type CommitMessagePlanResult =
 
 export function planAgentBinary(
   defaultBinary: string,
-  commandOverride: string | undefined
+  commandOverride: string | undefined,
+  backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; binary: string; prefixArgs: string[] } | { ok: false; error: string } {
   const command = commandOverride?.trim()
   if (!command) {
     return { ok: true, binary: defaultBinary, prefixArgs: [] }
   }
 
-  const tokenized = tokenizeCustomCommandTemplate(command)
+  const tokenized = tokenizeCustomCommandTemplate(command, backslash)
   if (!tokenized.ok) {
     return { ok: false, error: `Agent command override is invalid: ${tokenized.error}` }
   }
@@ -55,13 +61,14 @@ export function planAgentBinary(
 }
 
 function planAdditionalAgentArgs(
-  agentArgs: string | null | undefined
+  agentArgs: string | null | undefined,
+  backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; args: string[] } | { ok: false; error: string } {
   const trimmed = agentArgs?.trim()
   if (!trimmed) {
     return { ok: true, args: [] }
   }
-  const tokenized = tokenizeCustomCommandTemplate(trimmed)
+  const tokenized = tokenizeCustomCommandTemplate(trimmed, backslash)
   if (!tokenized.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
   }
@@ -239,11 +246,11 @@ export function planCommitMessageGeneration(
         error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
       }
     }
-    const planned = planCustomCommand(command, prompt)
+    const planned = planCustomCommand(command, prompt, input.backslash)
     if (!planned.ok) {
       return { ok: false, error: planned.error }
     }
-    const agentArgs = planAdditionalAgentArgs(input.agentArgs)
+    const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
     if (!agentArgs.ok) {
       return agentArgs
     }
@@ -294,11 +301,11 @@ export function planCommitMessageGeneration(
     model: input.model,
     thinkingLevel: input.thinkingLevel
   })
-  const agentArgs = planAdditionalAgentArgs(input.agentArgs)
+  const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
   if (!agentArgs.ok) {
     return agentArgs
   }
-  const command = planAgentBinary(spec.binary, input.agentCommandOverride)
+  const command = planAgentBinary(spec.binary, input.agentCommandOverride, input.backslash)
   if (!command.ok) {
     return { ok: false, error: command.error }
   }

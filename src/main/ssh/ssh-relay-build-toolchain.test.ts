@@ -3,7 +3,9 @@ import {
   buildToolchainProbeCommand,
   parseBuildToolchainProbe,
   formatMissingToolchainError,
+  formatNodeHeadersDownloadError,
   formatSkippedNodePtyWarning,
+  isNodeHeadersDownloadFailure,
   shouldProbeBuildToolchainAfterNativeDepsFailure
 } from './ssh-relay-build-toolchain'
 
@@ -123,5 +125,73 @@ describe('formatSkippedNodePtyWarning', () => {
     const warning = formatSkippedNodePtyWarning(parseBuildToolchainProbe(''))
     expect(warning).not.toContain('apt-get')
     expect(warning).toContain('install a C/C++ toolchain')
+  })
+})
+
+// Verbatim shape of the STA-6674 failure: node-gyp on a host whose nodejs.org is refused.
+const HEADERS_REFUSED =
+  'npm error gyp http GET https://nodejs.org/download/release/v24.12.0/node-v24.12.0-headers.tar.gz\n' +
+  'npm error gyp http fetch GET https://nodejs.org/download/release/v24.12.0/node-v24.12.0-headers.tar.gz attempt 1 failed with ECONNREFUSED\n' +
+  'npm error gyp ERR! configure error\n' +
+  'npm error gyp ERR! stack FetchError: request to https://nodejs.org/download/release/v24.12.0/node-v24.12.0-headers.tar.gz failed, reason: connect ECONNREFUSED 127.0.0.1:443'
+
+describe('isNodeHeadersDownloadFailure', () => {
+  it('matches node-gyp failing to fetch the Node headers tarball', () => {
+    expect(isNodeHeadersDownloadFailure(HEADERS_REFUSED)).toBe(true)
+    expect(
+      isNodeHeadersDownloadFailure(
+        'gyp http fetch GET https://nodejs.org/download/release/v20.19.0/node-v20.19.0-headers.tar.gz attempt 1 failed with ENOTFOUND\ngyp ERR! configure error'
+      )
+    ).toBe(true)
+  })
+
+  it('is not the toolchain diagnosis, and does not fire on other network failures', () => {
+    expect(shouldProbeBuildToolchainAfterNativeDepsFailure(HEADERS_REFUSED)).toBe(false)
+    // The registry, not nodejs.org: a different remedy.
+    expect(
+      isNodeHeadersDownloadFailure(
+        'npm error network request to https://registry.npmjs.org/node-pty failed, reason: connect ECONNREFUSED'
+      )
+    ).toBe(false)
+    // Headers named but the build failed for another reason.
+    expect(
+      isNodeHeadersDownloadFailure(
+        'gyp info using node-v24.12.0-headers.tar.gz\ngyp ERR! build error make failed with exit code: 2'
+      )
+    ).toBe(false)
+    // A retried attempt that recovered, then a compile failure: not a download failure.
+    expect(
+      isNodeHeadersDownloadFailure(
+        'gyp http fetch GET https://nodejs.org/download/release/v24.12.0/node-v24.12.0-headers.tar.gz attempt 1 failed with ECONNRESET\n' +
+          'gyp http 200 https://nodejs.org/download/release/v24.12.0/node-v24.12.0-headers.tar.gz\n' +
+          'gyp ERR! build error\ngyp ERR! stack Error: `make` failed with exit code: 2'
+      )
+    ).toBe(false)
+    // A mirror answering non-2xx is a FetchError without a network code: a different remedy.
+    expect(
+      isNodeHeadersDownloadFailure(
+        'gyp ERR! configure error\ngyp ERR! stack FetchError: 404 Not Found https://mirror/dist/v24.12.0/node-v24.12.0-headers.tar.gz'
+      )
+    ).toBe(false)
+  })
+})
+
+describe('formatNodeHeadersDownloadError', () => {
+  it('names both host remedies when the host ships no headers', () => {
+    const msg = formatNodeHeadersDownloadError(HEADERS_REFUSED, null)
+    expect(msg).toContain('no local headers matching its own version')
+    expect(msg).toContain('<prefix>/include/node')
+    expect(msg).toContain('nvm, fnm, volta, n')
+    expect(msg).toContain('disturl')
+    expect(msg).toContain('ECONNREFUSED')
+  })
+
+  it('reports an Orca defect, not a host problem, when headers were exported and ignored', () => {
+    const msg = formatNodeHeadersDownloadError(HEADERS_REFUSED, '/usr/local')
+    expect(msg).toContain('/usr/local/include/node')
+    expect(msg).toContain('Orca defect')
+    expect(msg).not.toContain('no local headers matching its own version')
+    expect(msg).not.toContain('nvm, fnm, volta, n')
+    expect(msg).toContain('ECONNREFUSED')
   })
 })

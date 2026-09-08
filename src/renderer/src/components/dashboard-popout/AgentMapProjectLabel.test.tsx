@@ -84,6 +84,7 @@ describe('AgentMapScene project labels', () => {
               agents: [],
               statusCounts: {
                 working: 0,
+                monitoring: 0,
                 blocked: 0,
                 waiting: 0,
                 done: 0,

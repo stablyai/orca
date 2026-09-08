@@ -55,6 +55,7 @@ function agentDiscoveries(
       issues,
       extensions: [...source.extensions],
       filePredicate: source.filePredicate,
+      contentDependencyPath: source.contentDependencyPath,
       directoryPredicate: source.directoryPredicate
     })
   return source.mergeRootDiscoveries

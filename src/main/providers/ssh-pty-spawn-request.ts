@@ -22,6 +22,10 @@ export function buildSshPtySpawnRequest(args: {
     // Why: the relay needs launch identity for plugin env overlays and provider-side delivery.
     ...(options.command ? { command: options.command } : {}),
     ...(options.launchAgent ? { launchAgent: options.launchAgent } : {}),
+    ...(options.worktreeId ? { worktreeId: options.worktreeId } : {}),
+    ...(options.historyIsolationEnabled !== undefined
+      ? { historyIsolationEnabled: options.historyIsolationEnabled }
+      : {}),
     ...(options.shellOverride !== undefined ? { shellOverride: options.shellOverride } : {}),
     ...(options.terminalWindowsWslDistro !== undefined
       ? { terminalWindowsWslDistro: options.terminalWindowsWslDistro }

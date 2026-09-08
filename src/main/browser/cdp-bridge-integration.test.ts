@@ -1,4 +1,6 @@
 import { mkdtempSync } from 'node:fs'
+import { RuntimeBrowserCommands } from '../runtime/orca-runtime-browser'
+import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection } from 'node:net'
@@ -280,6 +282,10 @@ describe('Browser automation pipeline (integration)', () => {
   const RENDERER_WC_ID = 1
 
   beforeEach(async () => {
+    // Why: constructing the browser commands is what pulls the Chromium cluster in, so
+    // production installs this at the Electron entry. Suites that exercise browser
+    // automation install it too; a Node host installs none and the RPCs reject.
+    setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
     activeGuestHarness = createMockGuest(GUEST_WC_ID, 'https://example.com', 'Example Domain')
     const { guest } = activeGuestHarness
     activeGuest = guest

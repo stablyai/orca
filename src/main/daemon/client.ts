@@ -2,8 +2,14 @@ import type { Socket } from 'node:net'
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { encodeNdjson } from './ndjson'
-import { PROTOCOL_VERSION, NOTIFY_PREFIX, DaemonProtocolError } from './types'
-import type { DaemonEndpointIdentity } from './types'
+import {
+  PROTOCOL_VERSION,
+  NOTIFY_PREFIX,
+  DaemonConnectionLostError,
+  DaemonProtocolError,
+  type DaemonEndpointIdentity
+} from './types'
+import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settlement'
 import {
   armDaemonSocketCloseHandlers,
   connectDaemonSocket,
@@ -202,7 +208,9 @@ export class DaemonClient {
     signal?: AbortSignal
   ): Promise<T> {
     if (!this.connected || !this.controlSocket) {
-      throw new DaemonProtocolError('Not connected')
+      // Why: there is no socket to talk on, so this is a transport failure, not a
+      // refusal by the daemon — see settleCreateCancellation's caller.
+      throw new DaemonConnectionLostError('Not connected')
     }
     const generation = this.connectionGeneration
 
@@ -214,6 +222,7 @@ export class DaemonClient {
       payload,
       timeoutMs,
       ...(signal ? { signal } : {}),
+      unmatchedCancelGraceMs: NOTIFY_SETTLEMENT_TIMEOUT_MS,
       onCreateCancellationFailure: () => this.handleDisconnect(generation),
       settleCreateCancellation: (sessionId, requestId) =>
         this.request<{ canceled: boolean }>(
@@ -245,18 +254,17 @@ export class DaemonClient {
     type: string,
     payload: unknown,
     timeoutMs = NOTIFY_SETTLEMENT_TIMEOUT_MS
-  ): Promise<boolean> {
+  ): Promise<WriteSettlement> {
     if (!this.connected || !this.controlSocket) {
-      return false
+      return writeRefused('endpoint_disconnected')
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
-    const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
     const socket = this.controlSocket
     const generation = this.connectionGeneration
     return await writeNotifyWithSettlement({
       socket,
-      message: msg,
+      message: { id, type, ...(payload !== undefined ? { payload } : {}) },
       timeoutMs,
       onUndeliverable: () => {
         if (this.controlSocket === socket && this.connectionGeneration === generation) {

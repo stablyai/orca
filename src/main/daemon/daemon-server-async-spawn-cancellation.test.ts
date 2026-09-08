@@ -6,6 +6,12 @@ import { DaemonClient } from './client'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
+type DaemonServerInternals = {
+  preparations: {
+    pending: Map<string, Set<{ canceled: boolean }>>
+  }
+  host: { listSessions: () => unknown[] }
+}
 
 describe('daemon async spawn cancellation', () => {
   let directory: string
@@ -82,14 +88,11 @@ describe('daemon async spawn cancellation', () => {
     await spawnStarted
 
     client.disconnect()
-    const daemon = server as unknown as {
-      pendingPtySpawnPreparations: Map<string, Set<{ canceled: boolean }>>
-      host: { listSessions: () => unknown[] }
-    }
+    const daemon = server as unknown as DaemonServerInternals
     await vi.waitFor(() =>
-      expect(
-        [...(daemon.pendingPtySpawnPreparations.get('disconnected-spawn') ?? [])][0]?.canceled
-      ).toBe(true)
+      expect([...(daemon.preparations.pending.get('disconnected-spawn') ?? [])][0]?.canceled).toBe(
+        true
+      )
     )
     releaseSpawn()
     await create
@@ -130,6 +133,33 @@ describe('daemon async spawn cancellation', () => {
     await expect(client.request('listSessions', undefined)).resolves.toEqual({ sessions: [] })
   })
 
+  it('matches a cancel for an attach-only request queued behind a hung create', async () => {
+    const create = client.request('createOrAttach', {
+      sessionId: 'shared-session',
+      cols: 80,
+      rows: 24
+    })
+    // Only queues behind the create once that create is actually in flight.
+    await spawnStarted
+    const abort = new AbortController()
+    const attach = client.request(
+      'createOrAttach',
+      { sessionId: 'shared-session', cols: 80, rows: 24, attachOnly: true },
+      30_000,
+      abort.signal
+    )
+    const daemon = server as unknown as DaemonServerInternals
+    // Attach-only used to register nothing, so the daemon could not match the
+    // cancel and the client dropped its only timeout.
+    await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
+
+    abort.abort()
+    await expect(attach).rejects.toThrow('client_disconnected')
+
+    releaseSpawn()
+    await expect(create).resolves.toMatchObject({ isNew: true })
+  })
+
   it('does not cancel a sibling request for the same session id', async () => {
     const first = client.request('createOrAttach', {
       sessionId: 'shared-session',
@@ -144,12 +174,8 @@ describe('daemon async spawn cancellation', () => {
       abort.signal
     )
     await spawnStarted
-    const daemon = server as unknown as {
-      pendingPtySpawnPreparations: Map<string, Set<unknown>>
-    }
-    await vi.waitFor(() =>
-      expect(daemon.pendingPtySpawnPreparations.get('shared-session')?.size).toBe(2)
-    )
+    const daemon = server as unknown as DaemonServerInternals
+    await vi.waitFor(() => expect(daemon.preparations.pending.get('shared-session')?.size).toBe(2))
 
     abort.abort()
     await expect(second).rejects.toThrow('client_disconnected')

@@ -111,6 +111,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const primaryActive = usePrimaryActiveWorktreeRow({
     rows,
     activeWorktreeId,
+    activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
     onImmediateWorktreeActivate: props.onImmediateWorktreeActivate
   })
@@ -185,6 +186,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     rows,
     renderRows,
     activeWorktreeId,
+    activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
     virtualizer: virtualization.virtualizer,
     scrollRef,
@@ -333,10 +335,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         aria-multiselectable="true"
         aria-activedescendant={getActiveDescendantOptionId({
           activeWorktreeId,
-          primaryActiveRowKey:
-            primaryActive.primaryActiveWorktreeRow?.worktreeId === activeWorktreeId
-              ? primaryActive.primaryActiveWorktreeRow.rowKey
-              : undefined,
+          activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
+          primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
           renderRows,
           virtualItems

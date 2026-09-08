@@ -11,10 +11,17 @@ import {
   canQueueWorkspaceCleanupCandidate,
   type WorkspaceCleanupCandidate
 } from '../../../../shared/workspace-cleanup'
-import type { WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
+import {
+  getWorkspaceCleanupCandidateIdentity,
+  resolveWorkspaceCleanupRemovalHostId
+} from '../../../../shared/workspace-cleanup-host-identity'
 import { WorkspaceCleanupBrowseToolbar } from './workspace-cleanup-browse-toolbar'
 import { WorkspaceCleanupConfirmRemove } from './workspace-cleanup-confirm-remove'
 import { WorkspaceCleanupDialogHeader } from './workspace-cleanup-dialog-header'
+import {
+  getWorkspaceCleanupDeletionPhaseByIdentity,
+  selectWorkspaceCleanupDeletionPhases
+} from './workspace-cleanup-deletion-phases'
 import {
   WorkspaceCleanupInitialScanBanner,
   WorkspaceCleanupNotice,
@@ -22,10 +29,7 @@ import {
 } from './workspace-cleanup-dialog-notices'
 import { WorkspaceCleanupRowList } from './workspace-cleanup-row-list'
 import { formatWorkspaceCleanupScanNotice } from './workspace-cleanup-scan-notice'
-import {
-  applyWorkspaceCleanupGitEvidence,
-  needsWorkspaceCleanupGitEvidence
-} from './workspace-cleanup-git-evidence'
+import { applyWorkspaceCleanupGitEvidence } from './workspace-cleanup-git-evidence'
 import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-state'
 import {
   useWorkspaceCleanupDialogLifecycle,
@@ -34,13 +38,13 @@ import {
 import { useWorkspaceCleanupFacetRows } from './use-workspace-cleanup-facet-rows'
 import { useWorkspaceCleanupGitEvidence } from './use-workspace-cleanup-git-evidence'
 import { useWorkspaceCleanupRowOrder } from './use-workspace-cleanup-row-order'
+import { openWorkspaceCleanupForgetLocally } from './workspace-cleanup-forget-locally-button'
 import {
   formatVanishedSelectionNotice,
-  getDefaultSelectedWorkspaceCleanupIds,
+  formatWithheldSelectionNotice,
   toggleSetMember
 } from './workspace-cleanup-selection-model'
 
-/** One filterable list of every workspace Orca knows about. */
 export default function WorkspaceCleanupDialog(): React.JSX.Element | null {
   const lifecycle = useWorkspaceCleanupDialogLifecycle()
   if (!lifecycle.mountedContent) {
@@ -68,34 +72,14 @@ function WorkspaceCleanupDialogContent({
   const refreshWorkspaceSpace = useAppStore((s) => s.refreshWorkspaceSpace)
   const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
   const workspaceSpaceProgress = useAppStore((s) => s.workspaceSpaceScanProgress)
-  const deletionPhaseByWorktreeId = useAppStore(
-    useShallow((s) => {
-      const phases: Record<string, WorkspaceCleanupDeletionPhase> = {}
-      for (const [worktreeId, state] of Object.entries(s.deleteStateByWorktreeId)) {
-        if (state.isDeleting) {
-          phases[worktreeId] = state.phase ?? 'deleting'
-        }
-      }
-      return phases
-    })
+  const genericDeletionPhaseByWorktreeId = useAppStore(
+    useShallow(selectWorkspaceCleanupDeletionPhases)
   )
-  const deletingWorktreeIds = useMemo(
-    () => new Set(Object.keys(deletionPhaseByWorktreeId)),
-    [deletionPhaseByWorktreeId]
-  )
-
   const browse = useWorkspaceCleanupBrowseState()
-  // Why: facet counts/options are only rendered inside the filter popover;
-  // tracking its open state lets their O(N) passes skip while it is closed.
   const [facetPanelOpen, setFacetPanelOpen] = useState(false)
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(() => new Set())
   const [rowsScrollElement, setRowsScrollElement] = useState<HTMLDivElement | null>(null)
-  const selectedDefaultsScanAtRef = useRef<number | null>(null)
   const wasOpenRef = useRef(open)
-  // Why: a refresh completing mid-open must not clobber a selection the user
-  // already made (or was given) for this open — defaults apply at most once.
-  const defaultsAppliedForOpenRef = useRef(false)
-  const selectionTouchedRef = useRef(false)
   const mountedRef = useMountedRef()
 
   // Why: the facet clock must be stable across renders but never older than
@@ -105,25 +89,38 @@ function WorkspaceCleanupDialogContent({
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
-      defaultsAppliedForOpenRef.current = false
-      selectionTouchedRef.current = false
       setOpenedAt(Date.now())
     }
     wasOpenRef.current = open
   }, [open])
 
   const { removalInFlightRef } = removal
+  const deletionPhaseByIdentity = useMemo(
+    () =>
+      getWorkspaceCleanupDeletionPhaseByIdentity(
+        scan?.candidates ?? [],
+        removal.deletionPhaseByIdentity,
+        genericDeletionPhaseByWorktreeId
+      ),
+    [genericDeletionPhaseByWorktreeId, removal.deletionPhaseByIdentity, scan?.candidates]
+  )
+  const deletingIdentities = useMemo(
+    () => new Set(Object.keys(deletionPhaseByIdentity)),
+    [deletionPhaseByIdentity]
+  )
 
   const candidates = useMemo(() => scan?.candidates ?? [], [scan?.candidates])
-  const gitEvidenceNeeded = open && needsWorkspaceCleanupGitEvidence(browse.filters, browse.sort)
+  // The browse view promises Git facts for every row. The broad scan defers
+  // some reads for performance, so fill those gaps while the modal is open.
+  const gitEvidenceNeeded = open
   const gitEvidence = useWorkspaceCleanupGitEvidence({
     enabled: gitEvidenceNeeded,
     candidates,
     scannedAt: scan?.scannedAt ?? null
   })
   const evidencedCandidates = useMemo(
-    () => applyWorkspaceCleanupGitEvidence(candidates, gitEvidence.evidenceByWorktreeId),
-    [candidates, gitEvidence.evidenceByWorktreeId]
+    () => applyWorkspaceCleanupGitEvidence(candidates, gitEvidence.evidenceByIdentity),
+    [candidates, gitEvidence.evidenceByIdentity]
   )
   // Why: a live clock would re-run every facet on each render; the newer of
   // scan time and open time is the honest stable "as of" moment — a fresh scan
@@ -141,8 +138,11 @@ function WorkspaceCleanupDialogContent({
     streaming: loading,
     sort: browse.sort
   })
-  const candidateIds = useMemo(
-    () => new Set(candidates.map((candidate) => candidate.worktreeId)),
+  // Why (STA-4343): rows are keyed by host-qualified identity, not by
+  // `worktreeId` — two hosts can list the same `repoId::path` workspace, and an
+  // id-keyed selection would confirm one host's row and delete the other's.
+  const candidateIdentities = useMemo(
+    () => new Set(candidates.map((candidate) => getWorkspaceCleanupCandidateIdentity(candidate))),
     [candidates]
   )
 
@@ -165,48 +165,40 @@ function WorkspaceCleanupDialogContent({
           'components.workspace.cleanup.browse.measureSizesFailed',
           'Could not scan workspace sizes'
         ),
-        { description: scanError instanceof Error ? scanError.message : String(scanError) }
+        {
+          description: scanError instanceof Error ? scanError.message : String(scanError)
+        }
       )
     })
   }, [mountedRef, refreshWorkspaceSpace])
 
   const selectedCandidates = useMemo(() => {
-    const byId = new Map(rows.map((row) => [row.worktreeId, row.candidate]))
+    const byIdentity = new Map(rows.map((row) => [row.identity, row.candidate]))
     return [...selectedIds]
-      .map((id) => byId.get(id))
+      .map((identity) => byIdentity.get(identity))
       .filter(
         (candidate): candidate is WorkspaceCleanupCandidate =>
           candidate != null &&
           canQueueWorkspaceCleanupCandidate(candidate) &&
-          !deletingWorktreeIds.has(candidate.worktreeId)
+          !deletingIdentities.has(getWorkspaceCleanupCandidateIdentity(candidate))
       )
-  }, [deletingWorktreeIds, rows, selectedIds])
+  }, [deletingIdentities, rows, selectedIds])
   const selectedCount = selectedCandidates.length
 
-  useEffect(() => {
-    if (loading || !scan || selectedDefaultsScanAtRef.current === scan.scannedAt) {
-      return
-    }
-    selectedDefaultsScanAtRef.current = scan.scannedAt
-    if (removalInFlightRef.current) {
-      return
-    }
-    if (defaultsAppliedForOpenRef.current || selectionTouchedRef.current) {
-      return
-    }
-    defaultsAppliedForOpenRef.current = true
-    setSelectedIds(getDefaultSelectedWorkspaceCleanupIds(scan.candidates, deletingWorktreeIds))
-  }, [deletingWorktreeIds, loading, removalInFlightRef, scan, setSelectedIds])
+  // A destructive dialog leaves selection to the user.
 
   const pruneSelectionToVisibleRows = useEffectEvent(() => {
-    setSelectedIds((current) => {
-      const next = new Set(
-        [...current].filter(
-          (id) => facetRows.facetMatchedWorktreeIds.has(id) && !deletingWorktreeIds.has(id)
-        )
+    const next = new Set(
+      [...selectedIds].filter(
+        (identity) =>
+          facetRows.facetMatchedIdentities.has(identity) && !deletingIdentities.has(identity)
       )
-      return next.size === current.size ? current : next
-    })
+    )
+    if (next.size === selectedIds.size) {
+      return
+    }
+    setSelectedIds(next)
+    toast.info(formatWithheldSelectionNotice(selectedIds.size - next.size))
   })
 
   useEffect(() => {
@@ -221,14 +213,15 @@ function WorkspaceCleanupDialogContent({
   }, [browse.filters, open, removal.confirming])
 
   const pruneVanishedSelections = useEffectEvent(() => {
+    const isDeleting = (identity: string): boolean => deletingIdentities.has(identity)
     const kept = [...selectedIds].filter(
-      (id) => candidateIds.has(id) && !deletingWorktreeIds.has(id)
+      (identity) => candidateIdentities.has(identity) && !isDeleting(identity)
     )
     if (kept.length === selectedIds.size) {
       return
     }
     const vanishedCount = [...selectedIds].filter(
-      (id) => !candidateIds.has(id) && !deletingWorktreeIds.has(id)
+      (identity) => !candidateIdentities.has(identity) && !isDeleting(identity)
     ).length
     setSelectedIds(new Set(kept))
     if (vanishedCount > 0) {
@@ -240,10 +233,8 @@ function WorkspaceCleanupDialogContent({
     if (loading) {
       return
     }
-    // Why: a settled refresh reconciles by worktreeId — selections survive it,
-    // and only rows that truly no longer exist drop (with a visible reason).
     pruneVanishedSelections()
-  }, [candidateIds, deletingWorktreeIds, loading])
+  }, [candidateIdentities, deletingIdentities, loading])
 
   const ignoreCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
@@ -252,7 +243,7 @@ function WorkspaceCleanupDialogContent({
           if (mountedRef.current) {
             setSelectedIds((current) => {
               const next = new Set(current)
-              next.delete(candidate.worktreeId)
+              next.delete(getWorkspaceCleanupCandidateIdentity(candidate))
               return next
             })
           }
@@ -272,55 +263,71 @@ function WorkspaceCleanupDialogContent({
     [dismissCandidates, mountedRef, setSelectedIds]
   )
 
-  const toggleExpandedRow = useCallback((worktreeId: string) => {
-    setExpandedRowIds((current) => toggleSetMember(current, worktreeId))
+  const toggleExpandedRow = useCallback((identity: string) => {
+    setExpandedRowIds((current) => toggleSetMember(current, identity))
   }, [])
 
   const toggleSelectedRow = useCallback(
-    (worktreeId: string) => {
-      selectionTouchedRef.current = true
-      setSelectedIds((current) => toggleSetMember(current, worktreeId))
+    (identity: string) => {
+      setSelectedIds((current) => toggleSetMember(current, identity))
     },
     [setSelectedIds]
   )
 
-  const selectableWorktreeIds = useMemo(
+  const selectableIdentities = useMemo(
     () =>
       removal.removalInFlight
         ? []
-        : facetRows.selectableWorktreeIds.filter((id) => !deletingWorktreeIds.has(id)),
-    [deletingWorktreeIds, facetRows.selectableWorktreeIds, removal.removalInFlight]
+        : facetRows.selectableIdentities.filter((identity) => !deletingIdentities.has(identity)),
+    [deletingIdentities, facetRows.selectableIdentities, removal.removalInFlight]
   )
+  // Header state is scoped to the same rows the header action controls.
+  const selectedSelectableCount = useMemo(() => {
+    let count = 0
+    for (const identity of selectableIdentities) {
+      if (selectedIds.has(identity)) {
+        count += 1
+      }
+    }
+    return count
+  }, [selectableIdentities, selectedIds])
+
   const toggleSelectAll = useCallback(
     (selectAll: boolean) => {
-      selectionTouchedRef.current = true
-      setSelectedIds(selectAll ? new Set(selectableWorktreeIds) : new Set())
+      setSelectedIds((current) => {
+        const next = new Set(current)
+        for (const identity of selectableIdentities) {
+          if (selectAll) {
+            next.add(identity)
+          } else {
+            next.delete(identity)
+          }
+        }
+        return next
+      })
     },
-    [selectableWorktreeIds, setSelectedIds]
+    [selectableIdentities, setSelectedIds]
   )
 
-  // Why: stable per-row handlers so React.memo keeps unchanged CandidateRow
-  // instances from re-rendering on scan stream-in and selection changes.
   const openConfirmRemove = removal.openConfirmRemove
   const handleRemoveRow = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
-      // Why: rows stay actionable while a rescan streams; the confirm-time
-      // preflight is the safety gate, not the scan state.
       if (removalInFlightRef.current) {
         return
       }
-      selectionTouchedRef.current = true
-      setSelectedIds(new Set([candidate.worktreeId]))
+      setSelectedIds(new Set([getWorkspaceCleanupCandidateIdentity(candidate)]))
       openConfirmRemove([candidate])
     },
     [openConfirmRemove, removalInFlightRef, setSelectedIds]
   )
-
   const handleViewCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
       markCandidateViewed(candidate)
       closeModal()
-      activateAndRevealWorktree(candidate.worktreeId)
+      const executionHostId = resolveWorkspaceCleanupRemovalHostId(candidate)
+      activateAndRevealWorktree(candidate.worktreeId, {
+        executionHostId: executionHostId ?? undefined
+      })
     },
     [closeModal, markCandidateViewed]
   )
@@ -347,9 +354,6 @@ function WorkspaceCleanupDialogContent({
               loading={loading}
               scannedAt={scan?.scannedAt ?? null}
               scanProgress={scanProgress}
-              // Why: leaving the progress view no longer closes the dialog, so the
-              // list is reachable mid-batch; a second batch would silently no-op.
-              // A streaming rescan does NOT gate deletion — preflight does.
               deleteDisabled={
                 selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
               }
@@ -372,8 +376,8 @@ function WorkspaceCleanupDialogContent({
               facetRows={facetRows}
               facetPanelOpen={facetPanelOpen}
               onFacetPanelOpenChange={setFacetPanelOpen}
-              selectableCount={selectableWorktreeIds.length}
-              selectedCount={selectedCount}
+              selectableCount={selectableIdentities.length}
+              selectedCount={selectedSelectableCount}
               spaceScanning={workspaceSpaceScanning}
               spaceProgress={workspaceSpaceProgress}
               gitPendingCount={gitEvidence.pendingWorktreeIds.size}
@@ -391,13 +395,12 @@ function WorkspaceCleanupDialogContent({
                   scannedCount={candidates.length}
                   hasScanned={scan != null}
                   loading={loading}
-                  deletionPhaseByWorktreeId={deletionPhaseByWorktreeId}
-                  deletingWorktreeIds={deletingWorktreeIds}
+                  deletionPhaseByIdentity={deletionPhaseByIdentity}
+                  deletingIdentities={deletingIdentities}
                   expandedRowIds={expandedRowIds}
                   selectedIds={selectedIds}
                   gitPendingWorktreeIds={gitEvidence.pendingWorktreeIds}
                   rowFailures={removal.rowFailures}
-                  removalInFlight={removal.removalInFlight}
                   scrollElement={rowsScrollElement}
                   onClearFilters={browse.clearFilters}
                   onToggleExpanded={toggleExpandedRow}
@@ -405,6 +408,8 @@ function WorkspaceCleanupDialogContent({
                   onView={handleViewCandidate}
                   onIgnore={ignoreCandidate}
                   onRemove={handleRemoveRow}
+                  onForgetLocally={openWorkspaceCleanupForgetLocally}
+                  onDeleteAnyway={removal.confirmUnverifiedRemoval}
                 />
               </div>
             </ScrollArea>

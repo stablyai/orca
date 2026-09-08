@@ -66,6 +66,20 @@ describe('summarizeSkillSources', () => {
     expect(scannedSkillSourceCount(entries)).toBe(0)
   })
 
+  it('reports an unanswered root as unavailable even though it claims to exist', () => {
+    // Why: the host cannot prove a stalled root is gone, so it reports exists:true
+    // and carries the uncertainty in skippedReason. Reading exists first counted a
+    // root nobody walked as scanned, and its retained skills as its full contents.
+    const entries = summarizeSkillSources(
+      result({
+        sources: [source({ id: 'stalled', exists: true, skippedReason: 'unavailable' })],
+        skills: [skill()]
+      })
+    )
+    expect(entries.map((entry) => entry.status)).toEqual(['unavailable'])
+    expect(scannedSkillSourceCount(entries)).toBe(0)
+  })
+
   it('counts only roots that were actually scanned', () => {
     const entries = summarizeSkillSources(
       result({ sources: [source(), source({ id: 'gone', exists: false })] })

@@ -30,6 +30,11 @@ const {
   mergePersistedWindowsPathMock: vi.fn()
 }))
 
+const runWslProcessMock = vi.hoisted(() => vi.fn())
+// Why the runner and not child_process: WSL agent detection goes through
+// runWslProcess now, so a child_process mock never sees it.
+vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock
@@ -91,6 +96,7 @@ describe('preflight', () => {
   const handlers: HandlerMap = {}
 
   beforeEach(() => {
+    runWslProcessMock.mockReset()
     resetPreflightMocks(
       {
         handleMock,
@@ -122,13 +128,15 @@ describe('preflight', () => {
       configurable: true,
       value: 'win32'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'wsl.exe') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      const script = String(args[5])
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes("'claude'")) {
-        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -181,7 +189,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'opencode') {
-        return { stdout: '/Users/test/.opencode/bin/opencode\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.opencode/bin/opencode\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -217,7 +231,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })

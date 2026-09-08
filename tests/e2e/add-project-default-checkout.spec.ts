@@ -1,3 +1,4 @@
+import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -86,10 +87,7 @@ test.describe('Add project default checkout', () => {
     await waitForSessionReady(orcaPage)
     const fixture = await createCloneFixture()
 
-    await orcaPage
-      .getByRole('button', { name: /Add Project/i })
-      .first()
-      .click()
+    await openSidebarProjectDialog(orcaPage)
     const addDialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
     await expect(addDialog).toBeVisible()
     await addDialog.getByRole('button', { name: /Clone from URL/i }).click()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDevInstanceIdentity } from './dev-instance-identity'
+import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
 
 describe('dev-instance-identity', () => {
   it('keeps packaged identity stable', () => {
@@ -23,6 +23,17 @@ describe('dev-instance-identity', () => {
     expect(a.appName).toBe('Orca Dev')
     expect(b.appName).toBe('Orca Dev')
     expect(a.appName).not.toBe('Orca')
+  })
+
+  it('never renames a packaged build before ready', () => {
+    // Packaged builds must keep deriving the safeStorage key from their own CFBundleName;
+    // a pre-ready rename would repoint forks ("Orca ALab Edition") at Orca's key.
+    expect(shouldApplyPreReadyAppName(getDevInstanceIdentity(false, {}))).toBe(false)
+    expect(shouldApplyPreReadyAppName({ isDev: false })).toBe(false)
+  })
+
+  it('applies the dev name before ready so safeStorage sees it', () => {
+    expect(shouldApplyPreReadyAppName(getDevInstanceIdentity(true, {}))).toBe(true)
   })
 
   it('derives a readable dev label from worktree and branch env', () => {

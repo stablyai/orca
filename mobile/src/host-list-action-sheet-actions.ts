@@ -1,9 +1,9 @@
-import { Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
+import { Activity, Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
 import type { ActionSheetAction } from './components/ActionSheetModal'
 import type { ConnectionState, HostProfile } from './transport/types'
 
-/** Builds the home-screen host long-press menu. Edit and Remove open a second
- *  drawer, so both must defer until this sheet's native Modal has unmounted —
+/** Builds the home-screen host long-press menu. Navigation and second drawers
+ *  defer until this sheet's native Modal has unmounted —
  *  presenting into a live one freezes the whole screen on iOS (issue #8791). */
 export function getHostListActionSheetActions(args: {
   host: HostProfile | null
@@ -13,6 +13,7 @@ export function getHostListActionSheetActions(args: {
   onDismiss: () => void
   onReconnect: (hostId: string) => void
   onDisconnect: (hostId: string) => void
+  onDiagnostics: (hostId: string) => void
   onEdit: (hostId: string) => void
   onRemove: (host: HostProfile) => void
 }): ActionSheetAction[] {
@@ -47,6 +48,14 @@ export function getHostListActionSheetActions(args: {
           }
         ]
       : []),
+    {
+      label: 'Network diagnostics',
+      icon: Activity,
+      closeBeforePress: true,
+      onPress: () => {
+        args.onDiagnostics(host.id)
+      }
+    },
     {
       label: 'Edit host',
       icon: Edit3,

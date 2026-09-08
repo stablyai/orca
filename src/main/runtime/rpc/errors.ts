@@ -21,6 +21,8 @@ import {
   classifySkillInstallFailureCode
 } from '../../../shared/skill-install-failure'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
+import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
+import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -61,10 +63,13 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_tab_close_timeout',
   'terminal_tab_not_found',
   'terminal_tab_pinned',
+  'agent_prompt_blocked',
+  'agent_prompt_stalled',
   'no_active_terminal',
   'repo_not_found',
   'timeout',
   'invalid_limit',
+  'request_aborted',
   'remote_update_manual_required',
   'remote_update_not_available',
   'remote_update_not_downloaded',
@@ -81,8 +86,15 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'consumer_fenced',
   'task_not_found',
   'task_not_startable',
+  'inject_rejected',
   'dispatch_not_found',
   'dispatch_run_mismatch',
+  'terminal_not_found',
+  // A handle that names a live agent session with no terminal. Distinct from
+  // `terminal_handle_stale`, which claims the handle went dead — nothing went stale here.
+  'terminal_unsupported_for_agent_session',
+  'recipient_ambiguous',
+  'recipient_run_mismatch',
   'dispatch_inactive',
   'worker_identity_changed',
   'cursor_invalid',
@@ -100,7 +112,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'relay_quota_exceeded',
   'dispatch_capability_invalid',
   'agent_unconfigured',
+  'worker_prompt_too_large',
   'terminal_worktree_mismatch',
+  'terminal_is_coordinator',
   'request_mismatch',
   'mutation_ledger_full',
   'legacy_read_only',
@@ -111,6 +125,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'stale_delivery',
   'waiter_exists',
   'invalid_argument',
+  NESTED_WORKER_DEPTH_EXCEEDED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,
@@ -119,7 +134,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
   AGENT_SKILL_SHARING_BUSY_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
-  SKILL_INSTALL_RPC_ERROR_CODE
+  SKILL_INSTALL_RPC_ERROR_CODE,
+  // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
+  // stop offering the action) — flattened to runtime_error it can only be guessed at.
+  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES)
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

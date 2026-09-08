@@ -14,6 +14,7 @@ function createClaimedSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(),
     signal: vi.fn(),
     onData: (listener) => {
@@ -87,6 +88,49 @@ describe('TerminalHost agent-session claims', () => {
       owner: { ptyId: 'session-claimed-first', surface }
     })
     expect(spawnSubprocess).toHaveBeenCalledOnce()
+  })
+
+  it('cannot adopt a live session that predates provider-session claims', async () => {
+    const subprocesses: ReturnType<typeof createClaimedSubprocess>[] = []
+    host = new TerminalHost({
+      spawnSubprocess: () => {
+        const handle = createClaimedSubprocess()
+        subprocesses.push(handle)
+        return handle
+      }
+    })
+    await host.createOrAttach({
+      sessionId: 'renderer-owned-live-session',
+      cols: 80,
+      rows: 24,
+      launchAgent: 'codex',
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+
+    const resumed = await host.createOrAttach({
+      sessionId: 'replacement-resume-session',
+      cols: 80,
+      rows: 24,
+      launchAgent: 'codex',
+      streamClient: { onData: vi.fn(), onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface }
+    })
+
+    expect(resumed.agentSessionEnsure?.disposition).toBe('created')
+    expect(
+      host
+        .listSessions()
+        .map(({ sessionId }) => sessionId)
+        .sort()
+    ).toEqual(['renderer-owned-live-session', 'replacement-resume-session'])
+    expect(subprocesses).toHaveLength(2)
+    host.write('renderer-owned-live-session', 'original-writer')
+    host.write('replacement-resume-session', 'replacement-writer')
+    expect(subprocesses[0]?.write).toHaveBeenCalledWith('original-writer')
+    expect(subprocesses[1]?.write).toHaveBeenCalledWith('replacement-writer')
+    for (const handle of subprocesses) {
+      handle.exit()
+    }
   })
 
   it('rejects a competing claim without replacing the winning stream', async () => {

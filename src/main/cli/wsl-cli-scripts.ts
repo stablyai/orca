@@ -88,7 +88,8 @@ try {
   } else {
     $env:ORCA_CLI_CWD = $WslCwd
   }
-  Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
+  $LauncherDirectory = Split-Path -Parent $OrcaLauncher
+  Push-Location -LiteralPath $LauncherDirectory
   # Why: Windows PowerShell 5.1 cannot losslessly splat strings to native argv.
   $StartInfo = [System.Diagnostics.ProcessStartInfo]::new()
   $StartInfo.FileName = $OrcaLauncher
@@ -96,6 +97,13 @@ try {
     ConvertTo-NativeCommandLineArgument $_
   }) -join ' ')
   $StartInfo.UseShellExecute = $false
+  # Why (#16463): Push-Location moves the PowerShell provider location, not the
+  # Win32 current directory, and an empty WorkingDirectory with UseShellExecute
+  # disabled means "inherit the caller's". Launched from a WSL shell that is the
+  # user's worktree on the 9P share, so without this the app stands in a
+  # directory Linux can delete -- after which every CreateProcessW it makes
+  # fails ERROR_PATH_NOT_FOUND, reported as: spawn wsl.exe ENOENT.
+  $StartInfo.WorkingDirectory = $LauncherDirectory
   $Process = [System.Diagnostics.Process]::Start($StartInfo)
   if ($null -eq $Process) {
     throw 'Unable to start the Orca Windows CLI launcher.'
@@ -152,7 +160,9 @@ export function buildManagedLegacyRemoveCommand(quotedLegacyCommandPath: string)
 export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: string): string {
   const bridgePath = getBridgePathFromCommandPath(commandPath)
   return [
-    'set -euo pipefail',
+    // Why -eu not -euo pipefail: this script runs via runWslProcess's `sh -s`,
+    // and no pipe here needs pipefail -- dash on Ubuntu 20.04 lacks the option.
+    'set -eu',
     buildRegistrationLockPrelude(commandPath),
     buildSafeReplaceGuard(commandPath, MANAGED_MARKER),
     buildSafeReplaceGuard(bridgePath, BRIDGE_MANAGED_MARKER),

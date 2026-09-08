@@ -104,7 +104,7 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows.map((row) => [row.agentType, row.state, row.entry.terminalTitle])).toEqual([
-      ['omp', 'working', '\u280b OMP']
+      ['omp', 'working', '\u280b OMP: tmp']
     ])
   })
 

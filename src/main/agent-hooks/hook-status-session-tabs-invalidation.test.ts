@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
+import type { AgentHookEventPayload } from '../../shared/agent-hook-listener/listener-event'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import { createHookStatusSessionTabsInvalidator } from './hook-status-session-tabs-invalidation'
 
@@ -29,8 +29,16 @@ describe('createHookStatusSessionTabsInvalidator', () => {
     expect(changed(working())).toBe(false)
   })
 
+  it('invalidates when a restored row is confirmed by live activity', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+    changed(working({ restoredUnconfirmed: true }))
+
+    expect(changed(working())).toBe(true)
+  })
+
   it.each([
     ['state', { state: 'waiting' as const }],
+    ['workingMode', { workingMode: 'monitoring' as const }],
     ['prompt', { prompt: 'ship it' }],
     ['agentType', { agentType: 'codex' }],
     ['toolName', { toolName: 'Bash' }],
@@ -41,6 +49,22 @@ describe('createHookStatusSessionTabsInvalidator', () => {
     changed(working())
 
     expect(changed(working({}, payload))).toBe(true)
+  })
+
+  it('invalidates when the completion stamp is added, changed, or removed', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+    changed(working())
+
+    expect(changed(working({}, { turnCompletedAt: 100 }))).toBe(true)
+    expect(changed(working({}, { turnCompletedAt: 200 }))).toBe(true)
+    expect(changed(working())).toBe(true)
+  })
+
+  it('invalidates when the assistant body changes', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+    changed(working({}, { lastAssistantMessage: 'First answer' }))
+
+    expect(changed(working({}, { lastAssistantMessage: 'Corrected answer' }))).toBe(true)
   })
 
   it('ignores resume-identity rows, which the provider-session path owns', () => {

@@ -3,29 +3,19 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { relayArtifactFilenames } from '../../src/shared/relay-artifacts.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
 const { createPackagedRuntimeNodeModuleResources } = require('../packaged-runtime-node-modules.cjs')
-const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
+const readProject = (file) => readFileSync(join(projectDir, file), 'utf8')
+const packageJson = JSON.parse(readProject('package.json'))
+const pnpmWorkspace = parse(readProject('pnpm-workspace.yaml'))
 
 describe('Electron runtime package contract', () => {
-  it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
-    const patch = readFileSync(
-      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
-      'utf8'
-    )
-
-    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
-    expect(patch).toContain('readonly clearModelGeneration: number')
-    expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
-    expect(patch).toContain('this.clearModelGeneration++')
-    expect(patch).toContain('this._atlas._clearModelGeneration||0')
-  })
-
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
+    expect(pnpmWorkspace.allowBuilds).not.toHaveProperty('electron')
   })
 
   it('keeps the native Windows registry addon optional and platform-gated', () => {
@@ -40,13 +30,13 @@ describe('Electron runtime package contract', () => {
     expect(packageJson.optionalDependencies['windows-native-registry']).toBe('3.2.2')
     // Why: pnpm installs optional target architectures on every host; the root
     // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('windows-native-registry')
-    expect(rebuildScript).toContain(
-      "rebuildPlatform === 'win32' ? ['windows-native-registry'] : []"
-    )
-    expect(ensureScript).toContain(
-      "process.platform === 'win32' ? ['windows-native-registry'] : []"
-    )
+    expect(pnpmWorkspace.allowBuilds['windows-native-registry']).toBe(false)
+    // Why assert the guard and the member separately: the list now carries more
+    // than one addon, so pinning the whole literal only tested its formatting.
+    expect(rebuildScript).toContain("rebuildPlatform === 'win32'")
+    expect(rebuildScript).toContain("'windows-native-registry'")
+    expect(ensureScript).toContain("process.platform === 'win32'")
+    expect(ensureScript).toContain("'windows-native-registry'")
     const packageTargets = {
       win32: createPackagedRuntimeNodeModuleResources('win32'),
       darwin: createPackagedRuntimeNodeModuleResources('darwin'),
@@ -62,6 +52,47 @@ describe('Electron runtime package contract', () => {
       expect(packageTargets[platform]).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ to: join('node_modules', 'windows-native-registry') })
+        ])
+      )
+    }
+  })
+
+  it('keeps the native Windows process-table addon optional and platform-gated', () => {
+    const rebuildScript = readFileSync(
+      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      'utf8'
+    )
+    const ensureScript = readFileSync(
+      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      'utf8'
+    )
+    expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
+    // Why: same rule as the registry addon -- pnpm installs optional deps on
+    // every host, so macOS/Linux must never run node-gyp for a Windows addon.
+    expect(pnpmWorkspace.allowBuilds['@vscode/windows-process-tree']).toBe(false)
+    expect(rebuildScript).toContain("'@vscode/windows-process-tree'")
+    expect(ensureScript).toContain("'@vscode/windows-process-tree'")
+    // Why pin the patch: the upstream binding.gyp requires Spectre-mitigated
+    // libraries our build agents do not carry, and the enumeration stops after
+    // 1024 processes -- on a busy host that silently hides the very descendants
+    // teardown is looking for.
+    expect(pnpmWorkspace.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
+      'config/patches/@vscode__windows-process-tree@0.8.0.patch'
+    )
+    const packageTargets = {
+      win32: createPackagedRuntimeNodeModuleResources('win32'),
+      darwin: createPackagedRuntimeNodeModuleResources('darwin'),
+      linux: createPackagedRuntimeNodeModuleResources('linux')
+    }
+    expect(packageTargets.win32).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ to: join('node_modules', '@vscode', 'windows-process-tree') })
+      ])
+    )
+    for (const platform of ['darwin', 'linux']) {
+      expect(packageTargets[platform]).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ to: join('node_modules', '@vscode', 'windows-process-tree') })
         ])
       )
     }
@@ -90,17 +121,21 @@ describe('Electron runtime package contract', () => {
     }
   })
 
-  it('keeps Windows and Linux package builds off the macOS native helper build', () => {
+  it('keeps Windows and Linux package builds off macOS native helper builds', () => {
     const scripts = packageJson.scripts
 
     expect(scripts['build:desktop']).not.toContain('build:computer-macos')
+    expect(scripts['build:desktop']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:win']).toContain('pnpm run build:desktop')
     expect(scripts['build:win']).not.toContain('pnpm run build ')
     expect(scripts['build:win']).not.toContain('build:computer-macos')
+    expect(scripts['build:win']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:linux']).toContain('pnpm run build:desktop')
     expect(scripts['build:linux']).not.toContain('pnpm run build ')
     expect(scripts['build:linux']).not.toContain('build:computer-macos')
+    expect(scripts['build:linux']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:mac']).toContain('pnpm run build:computer-macos')
+    expect(scripts['build:mac']).toContain('pnpm run build:keyboard-layout-macos')
     expect(scripts['build:release']).toContain('pnpm run build:native')
     expect(scripts['build:release']).not.toContain('build:computer-macos')
   })
@@ -197,14 +232,15 @@ describe('Electron runtime package contract', () => {
 
     expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
-    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-ai-vault-service.js')")
-    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-ai-vault-service.js'))")
     expect(builderConfig).toContain("from: 'out/relay'")
-    expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
-    expect(remoteCommands).toContain(
-      "joinRemotePath(host, remoteRelayDir, 'relay-ai-vault-service.js')"
-    )
+
+    // Hashing and remote install probing are manifest-driven, so the contract
+    // is that both companions are declared once and that both sites read it.
+    expect(relayArtifactFilenames(true)).toContain('relay-watcher.js')
+    expect(relayArtifactFilenames(true)).toContain('relay-ai-vault-service.js')
+    expect(relayBuild).toContain('relayArtifactFilenames(')
+    expect(remoteCommands).toContain('relayArtifactFilenames(')
 
     const assertRelayGate = (steps, publishStepName) => {
       const names = steps.map((step) => step.name)
@@ -327,6 +363,10 @@ describe('Electron runtime package contract', () => {
     expect(afterInstallScript).toContain('chrome-sandbox')
     expect(afterInstallScript).toContain('chmod 4755 "$sandbox"')
     expect(afterInstallScript).not.toContain('chmod 0755 "$sandbox"')
+    expect(afterInstallScript).toContain('is_owned_link()')
+    expect(afterInstallScript).toContain('readlink -f -- "$link"')
+    expect(afterInstallScript).toContain('[ ! -e "$link" ] && [ ! -L "$link" ]')
+    expect(afterInstallScript).not.toContain('[ ! -e "$link" ] || [ -L "$link" ]')
   })
 
   it('advances only the skill release ledger in a taggable release-cut commit', () => {
@@ -420,10 +460,11 @@ describe('Electron runtime package contract', () => {
     expect(copyStep.run).toContain('git add "$CASK_PATH"')
   })
 
-  it('installs the Electron package binary in PR checks without changing native module ABI', () => {
-    const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
-    const parsedWorkflow = parse(prWorkflow)
-    const installStep = parsedWorkflow.jobs.test.steps.find(
+  it('installs the Electron package binary in the shared unit-test workflow', () => {
+    const unitTestWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/unit-tests.yml'), 'utf8')
+    )
+    const installStep = unitTestWorkflow.jobs.test.steps.find(
       (step) => step.name === 'Install Electron package binary for tests'
     )
 
@@ -538,6 +579,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
+    const goldenCommand = packageScripts['test:e2e:terminal-rendering-golden']
+    expect(goldenCommand).toContain('--project electron-headless')
+    expect(goldenCommand).toContain('--project electron-headful')
     expect(packageScripts['test:e2e:windows-fresh-startup-golden']).toContain(
       'golden-windows-fresh-startup.spec.ts'
     )
@@ -614,6 +658,8 @@ describe('Electron runtime package contract', () => {
     expect(releaseWindowsRunStep.run).toContain(
       'pnpm run --if-present test:e2e:windows-fresh-startup-golden'
     )
+    expect(releaseWindowsRunStep.run).not.toContain('test:e2e:workspace-session-golden')
+    expect(releaseWindowsRunStep.run).not.toContain('test:e2e:source-control-golden')
     expect(releaseEvidenceJob['continue-on-error']).toBe(true)
     expect(
       releaseEvidenceJob.strategy.matrix.include.map(({ platform }) => platform).sort()

@@ -1,10 +1,9 @@
-export type BulkTabCloseMode = 'others' | 'left' | 'right'
+export type BulkTabCloseMode = 'others' | 'left'
 
 /** Long-press sheet entries, in display order. */
 export const BULK_TAB_CLOSE_ACTIONS: { mode: BulkTabCloseMode; label: string }[] = [
   { mode: 'others', label: 'Close Other Tabs' },
-  { mode: 'left', label: 'Close Tabs to the Left' },
-  { mode: 'right', label: 'Close Tabs to the Right' }
+  { mode: 'left', label: 'Close Tabs to the Left' }
 ]
 
 type BulkClosableTab = {
@@ -15,7 +14,7 @@ type BulkClosableTab = {
 
 /**
  * Pick the tabs a long-press bulk close ("Close Other Tabs" / "Close Tabs to
- * the Left/Right") should target, in strip order relative to the pressed tab.
+ * the Left") should target, in strip order relative to the pressed tab.
  * Dirty documents are skipped — mobile has no save prompt on close, so bulk
  * closing must never silently discard unsaved edits.
  */
@@ -31,8 +30,6 @@ export function selectBulkCloseTabs<T extends BulkClosableTab>(
   const candidates =
     mode === 'others'
       ? tabs.filter((_, index) => index !== anchorIndex)
-      : mode === 'left'
-        ? tabs.slice(0, anchorIndex)
-        : tabs.slice(anchorIndex + 1)
+      : tabs.slice(0, anchorIndex)
   return candidates.filter((tab) => tab.isDirty !== true && tab.isPinned !== true)
 }

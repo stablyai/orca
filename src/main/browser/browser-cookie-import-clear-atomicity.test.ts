@@ -6,6 +6,7 @@ import {
   type CookieClearIdentity,
   type CookieClearSession
 } from './browser-cookie-import-clear'
+import { importedDomainScope } from './browser-cookie-import-policy'
 
 function cookie(domain: string, name: string, path = '/', secure = true): Cookie {
   return {
@@ -49,15 +50,15 @@ function createJarSession(
         jar = jar.filter((entry) => entry.name !== name)
       }
     },
-    clearData: async () => {
-      // Why: a cookie the user creates mid-clear lands before the rejection surfaces.
+    // Why: the snapshot runs after the plan is frozen and before the first removal, which is
+    // exactly where a cookie the user creates mid-clear lands. Injecting the arrival here is what
+    // makes a re-read of the jar visible: a widened plan would sweep it up.
+    snapshotClearIdentities: async (items) => {
       if (options.arrivalDuringClear) {
         jar.push(options.arrivalDuringClear)
       }
-      throw new Error('storage busy')
+      return options.snapshot ? await options.snapshot(items) : identitiesFromClearCookies(items)
     },
-    snapshotClearIdentities:
-      options.snapshot ?? (async (items) => identitiesFromClearCookies(items)),
     restoreClearIdentities: async (identities) => {
       restoredNames.push(...identities.map((identity) => identity.name))
       if (options.restoreError) {
@@ -85,9 +86,15 @@ describe('STA-4090 failed full cookie clear', () => {
       cookie('.other.test', 'stale', '/two')
     ])
 
-    await expect(removeTransplantableCookies(session)).rejects.toThrow(
-      /existing cookies were restored/
-    )
+    await expect(
+      removeTransplantableCookies(
+        session,
+        new Set(),
+        // google.com is in the import scope on purpose: the non-transplantable exemption, not the
+        // scope, has to be what keeps SID out of the removal plan.
+        importedDomainScope(['google.com', 'example.com', 'other.test'])
+      )
+    ).rejects.toThrow(/existing cookies were restored/)
 
     expect(session.removedNames()).toEqual(['removed-first'])
     expect(session.names()).toEqual(['SID', 'removed-first', 'stale'])
@@ -102,9 +109,13 @@ describe('STA-4090 failed full cookie clear', () => {
       }
     )
 
-    await expect(removeTransplantableCookies(session)).rejects.toThrow(
-      /the session was left unchanged/
-    )
+    await expect(
+      removeTransplantableCookies(
+        session,
+        new Set(),
+        importedDomainScope(['example.com', 'other.test'])
+      )
+    ).rejects.toThrow(/the session was left unchanged/)
     expect(session.removedNames()).toEqual([])
     expect(session.names()).toEqual(['removed-first', 'stale'])
   })
@@ -115,9 +126,13 @@ describe('STA-4090 failed full cookie clear', () => {
       { restoreError: new Error('restore rejected') }
     )
 
-    await expect(removeTransplantableCookies(session)).rejects.toThrow(
-      /the session was left partially cleared/
-    )
+    await expect(
+      removeTransplantableCookies(
+        session,
+        new Set(),
+        importedDomainScope(['example.com', 'other.test'])
+      )
+    ).rejects.toThrow(/the session was left partially cleared/)
     expect(session.names()).toEqual(['stale'])
   })
 
@@ -131,9 +146,6 @@ describe('STA-4090 failed full cookie clear', () => {
             throw new Error('cookie store unavailable')
           }
         }
-      },
-      clearData: async () => {
-        throw new Error('storage busy')
       },
       snapshotClearIdentities: async (items) =>
         identitiesFromClearCookies(items).map((identity) =>
@@ -149,9 +161,13 @@ describe('STA-4090 failed full cookie clear', () => {
       }
     }
 
-    await expect(removeTransplantableCookies(session)).rejects.toThrow(
-      /existing cookies were restored/
-    )
+    await expect(
+      removeTransplantableCookies(
+        session,
+        new Set(),
+        importedDomainScope(['example.com', 'other.test'])
+      )
+    ).rejects.toThrow(/existing cookies were restored/)
     expect(identities).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -171,9 +187,15 @@ describe('STA-4090 failed full cookie clear', () => {
       { arrivalDuringClear: cookie('.arrived.test', 'fresh-login') }
     )
 
-    await expect(removeTransplantableCookies(session)).rejects.toThrow(
-      /existing cookies were restored/
-    )
+    await expect(
+      removeTransplantableCookies(
+        session,
+        new Set(),
+        // arrived.test is inside the import scope, so only the frozen plan can be what spares the
+        // login — being out of scope must not stand in for it.
+        importedDomainScope(['example.com', 'other.test', 'arrived.test'])
+      )
+    ).rejects.toThrow(/existing cookies were restored/)
 
     expect(session.removedNames()).toEqual(['removed-first'])
     expect(session.names()).toEqual(['fresh-login', 'removed-first', 'stale'])
@@ -197,13 +219,14 @@ describe('STA-4090 failed full cookie clear', () => {
           jar = jar.filter((entry) => entry.name !== name)
         }
       },
-      clearData: async () => {
-        // The site re-sets the same cookie while the bulk clear is failing.
+      snapshotClearIdentities: async (items) => {
+        const identities = identitiesFromClearCookies(items)
+        // The site re-sets the same cookie after the plan is frozen but before its coordinate is
+        // emptied.
         jar = jar.filter((entry) => entry.name !== 'session')
         jar.push(valueCookie('.example.com', 'session', 'mid-clear'))
-        throw new Error('storage busy')
+        return identities
       },
-      snapshotClearIdentities: async (items) => identitiesFromClearCookies(items),
       restoreClearIdentities: async (identities) => {
         restored.push(...identities)
         for (const identity of identities) {
@@ -215,9 +238,13 @@ describe('STA-4090 failed full cookie clear', () => {
       }
     }
 
-    await expect(removeTransplantableCookies(session)).rejects.toThrow(
-      /existing cookies were restored/
-    )
+    await expect(
+      removeTransplantableCookies(
+        session,
+        new Set(),
+        importedDomainScope(['example.com', 'other.test'])
+      )
+    ).rejects.toThrow(/existing cookies were restored/)
 
     expect(jar.map((entry) => [entry.name, entry.value])).toEqual([
       ['stale', 'stale-value'],
@@ -239,14 +266,15 @@ describe('STA-4090 failed full cookie clear', () => {
           inClear -= 1
         }
       },
-      clearData: async () => {
-        throw new Error('storage busy')
-      },
       snapshotClearIdentities: async (items) => identitiesFromClearCookies(items),
       restoreClearIdentities: async () => undefined
     }
 
-    await Promise.all([removeTransplantableCookies(session), removeTransplantableCookies(session)])
+    const scope = importedDomainScope(['example.com'])
+    await Promise.all([
+      removeTransplantableCookies(session, new Set(), scope),
+      removeTransplantableCookies(session, new Set(), scope)
+    ])
 
     expect(activeClears).toEqual([1, 1])
   })

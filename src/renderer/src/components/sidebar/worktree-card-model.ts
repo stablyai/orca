@@ -37,7 +37,7 @@ export type WorktreeCardProps = {
   isLineageDropTarget?: boolean
   onActivate?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
-  onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onContextMenuSelect?: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree

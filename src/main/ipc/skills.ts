@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
@@ -21,6 +21,7 @@ import {
   resolveSkillDiscoveryTarget
 } from '../skills/skill-discovery-target'
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
+import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
 export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const discover = async (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {
@@ -63,7 +64,7 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
     }
   })
 
-  ipcMain.handle(
+  handleMainWindowSkillIpc(
     'skills:discover',
     async (_event, target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => discover(target)
   )
@@ -72,26 +73,29 @@ export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeServic
     registerSkillCloudIpcHandlers(runtime, discover)
   }
 
-  ipcMain.handle('skills:freshnessInventory', async (): Promise<SkillFreshnessInventory> => {
-    return scanInventory()
-  })
+  handleMainWindowSkillIpc(
+    'skills:freshnessInventory',
+    async (): Promise<SkillFreshnessInventory> => {
+      return scanInventory()
+    }
+  )
 
-  ipcMain.handle(
+  handleMainWindowSkillIpc(
     'skills:startUpdateRun',
     async (_event, names: string[]): Promise<SkillUpdateStartResult> => {
       return runner.start(Array.isArray(names) ? names : [])
     }
   )
 
-  ipcMain.handle('skills:cancelUpdateRun', async (): Promise<void> => {
+  handleMainWindowSkillIpc('skills:cancelUpdateRun', async (): Promise<void> => {
     runner.cancel()
   })
 
-  ipcMain.handle('skills:acknowledgeUpdateRun', async (): Promise<void> => {
+  handleMainWindowSkillIpc('skills:acknowledgeUpdateRun', async (): Promise<void> => {
     runner.acknowledge()
   })
 
-  ipcMain.handle('skills:getUpdateRun', async (): Promise<SkillUpdateRun> => {
+  handleMainWindowSkillIpc('skills:getUpdateRun', async (): Promise<SkillUpdateRun> => {
     return runner.getState()
   })
 }

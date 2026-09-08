@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skills'
+import type {
+  DiscoveredSkill,
+  SkillDiscoveryResult,
+  SkillDiscoverySource
+} from '../../../shared/skills'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   _installedAgentSkillDiscoveryInternalsForTests,
   hasInstalledAgentSkill,
   hasInstalledAgentSkillNamed,
+  hasUnreadableAgentSkillSource,
   notifyInstalledAgentSkillsRefreshed
 } from './useInstalledAgentSkills'
 
@@ -154,6 +159,44 @@ describe('hasInstalledAgentSkill', () => {
 
   it('keeps aliases opt-in for unrelated single-name checks', () => {
     expect(hasInstalledAgentSkill([skill({ name: 'linear-tickets' })], 'orca-linear')).toBe(false)
+  })
+})
+
+describe('hasUnreadableAgentSkillSource', () => {
+  function source(overrides: Partial<SkillDiscoverySource>): SkillDiscoverySource {
+    return {
+      id: 'home',
+      label: 'Agent skills home',
+      path: '/Users/test/.agents/skills',
+      sourceKind: 'home',
+      providers: ['agent-skills'],
+      owner: null,
+      // An unread root reports `exists`: the host could not prove otherwise.
+      exists: true,
+      ...overrides
+    }
+  }
+
+  it('flags a root that did not answer even though it reports as present', () => {
+    expect(hasUnreadableAgentSkillSource([source({ skippedReason: 'unavailable' })])).toBe(true)
+  })
+
+  it('ignores roots that were scanned or are genuinely absent', () => {
+    expect(
+      hasUnreadableAgentSkillSource([
+        source({}),
+        source({ id: 'gone', exists: false, skippedReason: 'missing' })
+      ])
+    ).toBe(false)
+  })
+
+  it('ignores an unread root outside the scopes the caller asked about', () => {
+    expect(
+      hasUnreadableAgentSkillSource(
+        [source({ id: 'repo', sourceKind: 'repo', skippedReason: 'unavailable' })],
+        GLOBAL_AGENT_SKILL_SOURCE_KINDS
+      )
+    ).toBe(false)
   })
 })
 

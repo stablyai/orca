@@ -33,11 +33,13 @@ export default function MobilePage(): React.JSX.Element {
   const [iosChannel, setIosChannel] = useState<IosChannel>('preview')
 
   const [pairQrDataUrl, setPairQrDataUrl] = useState<string | null>(null)
+  const [pairQrSize, setPairQrSize] = useState<number | null>(null)
   const [pairingUrl, setPairingUrl] = useState<string | null>(null)
   const [pairingQrError, setPairingQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
   const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const refreshAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
@@ -75,7 +77,10 @@ export default function MobilePage(): React.JSX.Element {
     stage
   } = useMobilePagePairedDevices({ stepIdx, setStepIdx })
   const installQrUrl = useMobileInstallQr(stage, platform, iosChannel)
-  const { copyInstallUrl, openInstallUrl } = useMobileInstallActions(platform, iosChannel)
+  const { copyInstallUrl, openAndroidInstallGuide, openInstallUrl } = useMobileInstallActions(
+    platform,
+    iosChannel
+  )
 
   const { generatePairing } = useMobilePairingGeneration({
     connectionMode,
@@ -85,10 +90,12 @@ export default function MobilePage(): React.JSX.Element {
     hasGeneratedRef,
     pairingRequestIdRef,
     setPairQrDataUrl,
+    setPairQrSize,
     setPairingUrl,
     setPairingQrError,
     setPairLoading,
-    setRelayMintFailure
+    setRelayMintFailure,
+    refreshAuthStatus
   })
   useLayoutEffect(() => {
     pairingAddressChangeRef.current = ({ address, source }) => {
@@ -109,6 +116,7 @@ export default function MobilePage(): React.JSX.Element {
       pairingRequestIdRef.current += 1
       hasGeneratedRef.current = false
       setPairQrDataUrl(null)
+      setPairQrSize(null)
       setPairingUrl(null)
       setPairingQrError(false)
       setRelayMintFailure(null)
@@ -171,6 +179,7 @@ export default function MobilePage(): React.JSX.Element {
     hasGeneratedRef,
     pairingRequestIdRef,
     setPairQrDataUrl,
+    setPairQrSize,
     setPairingUrl,
     setPairingQrError,
     setPairLoading,
@@ -262,6 +271,7 @@ export default function MobilePage(): React.JSX.Element {
   const enterFlow = (): void => {
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
+    setPairQrSize(null)
     setPairingUrl(null)
     setPairingQrError(false)
     setRelayMintFailure(null)
@@ -273,6 +283,7 @@ export default function MobilePage(): React.JSX.Element {
   const pairAnotherDevice = (): void => {
     hasGeneratedRef.current = false
     setPairQrDataUrl(null)
+    setPairQrSize(null)
     setPairingUrl(null)
     setPairingQrError(false)
     setRelayMintFailure(null)
@@ -322,12 +333,14 @@ export default function MobilePage(): React.JSX.Element {
       setIosChannel={setIosChannel}
       loadNetworkInterfaces={() => void loadNetworkInterfaces()}
       networkInterfaces={networkInterfaces}
+      openAndroidInstallGuide={openAndroidInstallGuide}
       openInstallUrl={openInstallUrl}
       pairAnotherDevice={pairAnotherDevice}
       pairLoading={pairLoading}
       connectionMode={connectionMode}
       handleConnectionModeChange={handleConnectionModeChange}
       pairQrDataUrl={pairQrDataUrl}
+      pairQrSize={pairQrSize}
       pairingUrl={pairingUrl}
       pairingQrError={pairingQrError}
       relayMintFailure={

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planCommitMessageGeneration } from './commit-message-plan'
+import { planCommitMessageGeneration, planAgentBinary } from './commit-message-plan'
 
 describe('planCommitMessageGeneration', () => {
   it('plans Claude non-interactive generation with the prompt on stdin only', () => {
@@ -582,5 +582,49 @@ describe('planCommitMessageGeneration', () => {
       ok: false,
       error: 'Agent command override is invalid: Unclosed quote in command template.'
     })
+  })
+})
+
+describe('backslash mode reaches every command the user can type (#11375)', () => {
+  const WINDOWS_BINARY = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+  it('keeps an agent command override intact in literal mode', () => {
+    const posix = planAgentBinary('claude', WINDOWS_BINARY)
+    const literal = planAgentBinary('claude', WINDOWS_BINARY, 'literal')
+
+    // The bug: POSIX escaping eats every separator, so the binary is not found.
+    expect(posix.ok && posix.binary).toBe('C:WindowsSystem32WindowsPowerShellv1.0powershell.exe')
+    expect(literal.ok && literal.binary).toBe(WINDOWS_BINARY)
+  })
+
+  it('keeps a quoted path containing spaces intact in literal mode', () => {
+    const literal = planAgentBinary('claude', '"C:\\Program Files\\nodejs\\node.exe"', 'literal')
+
+    expect(literal.ok && literal.binary).toBe('C:\\Program Files\\nodejs\\node.exe')
+  })
+
+  it('keeps extra CLI args intact through planCommitMessageGeneration', () => {
+    const plan = planCommitMessageGeneration(
+      {
+        agentId: 'claude',
+        model: 'sonnet',
+        agentCommandOverride: WINDOWS_BINARY,
+        agentArgs: '--config C:\\Users\\me\\.claude.json',
+        backslash: 'literal'
+      },
+      'prompt'
+    )
+
+    expect(plan.ok && plan.plan.binary).toBe(WINDOWS_BINARY)
+    expect(plan.ok && plan.plan.args).toContain('C:\\Users\\me\\.claude.json')
+  })
+
+  it('defaults to POSIX escaping when no mode is given', () => {
+    const plan = planCommitMessageGeneration(
+      { agentId: 'claude', model: 'sonnet', agentArgs: '--dir /my\\ dir' },
+      'prompt'
+    )
+
+    expect(plan.ok && plan.plan.args).toContain('/my dir')
   })
 })

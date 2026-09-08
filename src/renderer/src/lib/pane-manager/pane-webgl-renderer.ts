@@ -1,8 +1,7 @@
-import { WebglAddon } from '@xterm/addon-webgl'
+import type { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
 import { getLivePaneCensus } from './pane-manager-registry'
-import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
 import {
   getTerminalWebglAutoDecision,
   resetTerminalWebglAutoDecision
@@ -10,6 +9,21 @@ import {
 import { safeFit, safeFitAndThen } from './pane-fit'
 import { setPaneFitWebglAttachHook } from './pane-fit-webgl-attach-signal'
 import { repairPaneWebglCanvasDprMismatch } from './terminal-canvas-dpr-repair'
+import { recordPaneWebglContextLoss } from './pane-webgl-context-loss-policy'
+import { presentPaneViewport } from './pane-viewport-present'
+
+export {
+  presentPaneViewport,
+  presentPaneViewportPreservingSynchronizedOutput
+} from './pane-viewport-present'
+import {
+  getTerminalWebglAddonConstructor,
+  primeTerminalWebglAddon,
+  rearmTerminalWebglAddonLoad,
+  setTerminalWebglAddonLoadHandlers
+} from './terminal-webgl-addon-loader'
+
+export { primeTerminalWebglAddon } from './terminal-webgl-addon-loader'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined
@@ -33,11 +47,38 @@ type XtermWebglAddonInternals = {
   }
 }
 
+const panesAwaitingWebglAddon = new Set<ManagedPaneInternal>()
+
+setTerminalWebglAddonLoadHandlers({
+  onLoaded: () => {
+    // A pane that opened between priming and resolution is still on the DOM
+    // renderer, and its grid was measured by the initial fit under DOM cell
+    // metrics — so it needs the same attach+refit pairing as the fit-anchored
+    // path, not a bare attach. attachWebgl deletes the pane it handles, which
+    // is the entry the iterator is on: safe to drop mid-iteration.
+    for (const pane of panesAwaitingWebglAddon) {
+      attachWebglAndRefit(pane, 'webgl-deferred-attach')
+    }
+  },
+  onFailed: () => {
+    // Latch exactly as a failed construction does, so these panes retry at a
+    // recovery boundary instead of on every frame.
+    for (const pane of panesAwaitingWebglAddon) {
+      pane.webglAttachFailedSinceRecovery = true
+    }
+    panesAwaitingWebglAddon.clear()
+  }
+})
+
 export function resetTerminalWebglSuggestion(): void {
   // Why: toggling GPU settings should let "auto" retry WebGL after an earlier
   // attach failure suggested DOM rendering for this app session. Per-pane
   // failure latches are cleared by the callers that iterate panes.
   suggestedRendererType = undefined
+  // Why here too: a failed addon load is the other thing that strands panes on
+  // the DOM renderer, and this is the recovery boundary, so it has to re-arm
+  // the load rather than only the auto decision.
+  rearmTerminalWebglAddonLoad()
   resetTerminalWebglAutoDecision()
 }
 
@@ -89,6 +130,7 @@ export function disposeWebgl(
   options?: { refreshDimensions?: boolean }
 ): void {
   cancelPendingWebglRefresh(pane)
+  panesAwaitingWebglAddon.delete(pane)
   if (!pane.webglAddon) {
     return
   }
@@ -137,7 +179,7 @@ export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
   pane.hasComplexScriptOutput = true
 }
 
-export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
+export function clearWebglTextureAtlas(pane: ManagedPaneInternal): void {
   if (pane.webglDisabledAfterContextLoss) {
     return
   }
@@ -146,27 +188,24 @@ export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
     // context-loss event. Clearing the atlas preserves GPU rendering and forces
     // a fresh paint when the pane becomes visible/focused again.
     pane.webglAddon?.clearTextureAtlas()
-    // Why: on reveal xterm's IntersectionObserver can still report the pane as
-    // not intersecting, so a plain refresh() is swallowed by RenderService's
-    // paused-render gate and the cleared model never repaints (stale bottom rows
-    // until a drag-select forces a redraw). Force the paused render through
-    // first; only fall back to refresh() when the terminal was not gated.
-    if (!forceRepaintThroughRenderPause(pane.terminal)) {
-      // Why: refresh even without a WebGL addon so recovery never silently
-      // no-ops — a DOM-rendered pane can hold stale pixels after reveal too.
-      pane.terminal.refresh(0, pane.terminal.rows - 1)
-    }
   } catch {
     /* ignore — pane may have been disposed in the meantime */
   }
 }
 
-function refitAfterFitAnchoredWebglAttach(pane: ManagedPaneInternal): void {
-  // Why: the fit that triggered this attach measured DOM cell metrics, but WebGL
-  // floors the device cell width — keeping that grid leaves an unpainted right
-  // gutter and a PTY narrower than the pane. Refit on the next frame (mirroring
-  // the dispose-side refreshDimensions) so xterm has re-measured against the new
-  // renderer, and so the running fit is never re-entered.
+export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
+  clearWebglTextureAtlas(pane)
+  presentPaneViewport(pane)
+}
+
+function refitAfterLateWebglAttach(pane: ManagedPaneInternal): void {
+  // Why: the grid this pane is running was measured under DOM cell metrics —
+  // by the fit that triggered the attach, or by the initial fit that ran while
+  // the addon was still loading — but WebGL floors the device cell width.
+  // Keeping that grid leaves an unpainted right gutter and a PTY narrower than
+  // the pane. Refit on the next frame (mirroring the dispose-side
+  // refreshDimensions) so xterm has re-measured against the new renderer, and
+  // so the running fit is never re-entered.
   if (typeof globalThis.requestAnimationFrame !== 'function') {
     return
   }
@@ -178,6 +217,16 @@ function refitAfterFitAnchoredWebglAttach(pane: ManagedPaneInternal): void {
       /* ignore — pane may have been disposed in the meantime */
     }
   })
+}
+
+/** Single pairing for every late attach: without the refit the pane keeps a
+ *  grid measured under the DOM renderer. */
+function attachWebglAndRefit(pane: ManagedPaneInternal, diagnosticKind: string): void {
+  attachWebgl(pane)
+  if (pane.webglAddon) {
+    recordTerminalWebglDiagnostic(diagnosticKind, { paneId: pane.id })
+    refitAfterLateWebglAttach(pane)
+  }
 }
 
 export function attachWebglAfterFitIfMissing(pane: ManagedPaneInternal): void {
@@ -195,11 +244,7 @@ export function attachWebglAfterFitIfMissing(pane: ManagedPaneInternal): void {
     !pane.webglAttachFailedSinceRecovery &&
     shouldUseTerminalWebgl(pane)
   ) {
-    attachWebgl(pane)
-    if (pane.webglAddon) {
-      recordTerminalWebglDiagnostic('webgl-fit-attach', { paneId: pane.id })
-      refitAfterFitAnchoredWebglAttach(pane)
-    }
+    attachWebglAndRefit(pane, 'webgl-fit-attach')
   }
 }
 
@@ -229,9 +274,18 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
   }
   // Single-addon invariant: never stack a second addon on a live one.
   disposeWebgl(pane)
+  const WebglAddonConstructor = getTerminalWebglAddonConstructor()
+  if (!WebglAddonConstructor) {
+    // Only reachable if a pane opens before the primed load resolves; the
+    // continuation in primeTerminalWebglAddon attaches this pane the moment it
+    // does, and the fit hook is the later backstop.
+    panesAwaitingWebglAddon.add(pane)
+    void primeTerminalWebglAddon()
+    return
+  }
   let webglAddon: WebglAddon | null = null
   try {
-    webglAddon = new WebglAddon()
+    webglAddon = new WebglAddonConstructor()
     const addon = webglAddon
     addon.onContextLoss(() => {
       console.warn(
@@ -246,15 +300,15 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
       // once, and the crash-report ring coalesces repeats, so the count has to
       // be in the payload rather than in the number of crumbs.
       const census = getLivePaneCensus()
+      const lossesInWindow = recordPaneWebglContextLoss(pane)
       recordTerminalWebglDiagnostic('webgl-context-loss', {
         paneId: pane.id,
+        lossesInWindow,
         livePanes: census.panes,
         livePaneManagers: census.managers
       })
-      // Why: Chromium starts reclaiming terminal contexts under pressure.
-      // Recreating WebGL for this pane can loop context loss and leave xterm
-      // visually blank, so keep the pane on the DOM renderer until the next
-      // rendering resume (worktree foreground / window wake) retries it.
+      // Why: context loss switches this pane to DOM until the next resume or
+      // settled reveal; the bounded loss window refuses unstable retries.
       pane.webglDisabledAfterContextLoss = true
       disposeWebgl(pane, { refreshDimensions: true })
     })

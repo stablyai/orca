@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type { AgentSkillShareRequest } from '../../shared/agent-skill-sharing-contract'
 import { getDefaultSettings } from '../../shared/constants'
 import type { DiscoveredSkill } from '../../shared/skills'
@@ -120,6 +121,7 @@ function runtimeWithCloud(options: {
 }
 
 beforeEach(async () => {
+  installFakeAppEnvironment({ getPath: () => mocks.userDataPath })
   testRoot = await mkdtemp(join(tmpdir(), 'orca-agent-skill-share-'))
   mocks.userDataPath = testRoot
 })
@@ -220,6 +222,27 @@ describe('agent skill sharing runtime', () => {
     controller.abort()
 
     await expect(publishing).rejects.toThrow('upload-aborted')
+    expect(await operationDirectories()).toEqual([])
+  })
+
+  it('honors cancellation that arrives while preparation is completing', async () => {
+    const alpha = await createSkill('alpha-id', 'alpha')
+    const { runtime, publishVersion } = runtimeWithCloud({ isEnabled: () => true })
+    let abortedReads = 0
+    const signal = {
+      get aborted() {
+        abortedReads += 1
+        return abortedReads > 1
+      },
+      reason: new Error('skill-share-cancelled'),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn()
+    } as unknown as AbortSignal
+
+    await expect(
+      runtime.publishDiscoveredSkillsFromAgent(request(['alpha-id']), [alpha], signal)
+    ).rejects.toThrow('skill-share-cancelled')
+    expect(publishVersion).not.toHaveBeenCalled()
     expect(await operationDirectories()).toEqual([])
   })
 })

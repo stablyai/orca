@@ -9,6 +9,7 @@ import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/s
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { useAppStore } from '@/store'
 import SkillsPage from './SkillsPage'
 
@@ -39,7 +40,11 @@ function discoveryResult(names: string[]): SkillDiscoveryResult {
 }
 
 function skillsApi(discover: ReturnType<typeof vi.fn>) {
-  return { discover, onInstallProgress: () => () => undefined }
+  return {
+    discover,
+    deleteSupported: () => Promise.resolve(true),
+    onInstallProgress: () => () => undefined
+  }
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -65,7 +70,9 @@ async function renderPage(): Promise<void> {
   await act(async () => {
     root?.render(
       <TooltipProvider>
-        <SkillsPage />
+        <ConfirmationDialogProvider>
+          <SkillsPage />
+        </ConfirmationDialogProvider>
       </TooltipProvider>
     )
   })

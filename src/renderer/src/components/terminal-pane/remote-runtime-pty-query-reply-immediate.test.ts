@@ -78,11 +78,13 @@ describe('remote transport sendInputImmediate (#7329)', () => {
       expect(transport.sendInputImmediate('\x1b]11;rgb:2828/2c2c/3434\x1b\\')).toBe(true)
       await Promise.resolve()
 
-      // The immediate send flushed pending typed input ahead of the reply
-      // (preserving byte order) in a single send, without advancing timers.
+      // The immediate send preserves byte order without hiding the reply inside
+      // ordinary input, so the host can order it behind an earlier held reply.
       const sends = terminalSendCalls() as { params: { text: string } }[]
-      expect(sends).toHaveLength(1)
-      expect(sends[0]?.params.text).toBe('yes\x1b]11;rgb:2828/2c2c/3434\x1b\\')
+      expect(sends.map((send) => send.params.text)).toEqual([
+        'yes',
+        '\x1b]11;rgb:2828/2c2c/3434\x1b\\'
+      ])
     } finally {
       vi.useRealTimers()
     }
@@ -140,16 +142,22 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     expect(transport.sendInput(paste)).toBe(true)
     // Immediately (validation still pending) a TUI emits a CPR reply.
     expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true)
+    expect(transport.sendInput('z')).toBe(true)
 
     // Wait until the reply is actually flushed instead of sleeping a fixed
     // interval: the reply legitimately trails the paste's async validation plus
     // one debounce tick, and a fixed sleep raced that chain under CI load.
     const combined = (): string =>
       (terminalSendCalls() as { params: { text: string } }[]).map((s) => s.params.text).join('')
-    await expect.poll(combined, { timeout: 5000, interval: 5 }).toContain('\x1b[3;1R')
+    await expect.poll(combined, { timeout: 5000, interval: 5 }).toContain('\x1b[3;1Rz')
 
     // The paste bytes must come before the reply — no reordering.
     expect(combined().indexOf('p')).toBeLessThan(combined().indexOf('\x1b[3;1R'))
-    expect(combined()).toContain(`${paste}\x1b[3;1R`)
+    expect(combined()).toContain(`${paste}\x1b[3;1Rz`)
+    const sends = terminalSendCalls() as { params: { text: string } }[]
+    const texts = sends.map((send) => send.params.text)
+    expect(texts.pop()).toBe('z')
+    expect(texts.pop()).toBe('\x1b[3;1R')
+    expect(texts.join('')).toBe(paste)
   })
 })

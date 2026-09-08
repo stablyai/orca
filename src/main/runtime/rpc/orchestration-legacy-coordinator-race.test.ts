@@ -11,6 +11,7 @@ import { OrchestrationDb } from '../orchestration/db'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const COORDINATOR_HANDLE = 'term_legacy_coord'
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
@@ -45,7 +46,7 @@ function createHarness(): Harness {
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
-  const dispatch = before.createDispatchContext(task.id, WORKER_HANDLE, WORKER_PANE)
+  const dispatch = createRootDispatch(before, task.id, WORKER_HANDLE, WORKER_PANE)
   before.close()
 
   const raw = new Database(dbPath)
@@ -67,6 +68,9 @@ function createHarness(): Harness {
   runtime.setOrchestrationDb(db)
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === COORDINATOR_HANDLE ? COORDINATOR_PANE : handle === WORKER_HANDLE ? WORKER_PANE : null
+  )
+  vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+    runtime.getTerminalPaneKey(handle)
   )
   vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockImplementation(
     (compatibilityEvidence) => {
@@ -199,7 +203,7 @@ describe('legacy coordinator takeover races', () => {
         result: {
           message: {
             run_id: harness.adoptedRunId,
-            to_handle: WORKER_HANDLE,
+            to_handle: `dispatch:${harness.dispatchId}`,
             delivery_contract: 'legacy_direct'
           }
         }
@@ -310,6 +314,15 @@ describe('legacy coordinator takeover races', () => {
 
   it('partitions a coordinator group send by legacy recipient contract', async () => {
     const harness = createHarness()
+    vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === COORDINATOR_HANDLE
+        ? COORDINATOR_PANE
+        : handle === WORKER_HANDLE
+          ? WORKER_PANE
+          : handle === 'term_current_worker'
+            ? 'tab_current_worker:leaf_current_worker'
+            : null
+    )
     vi.spyOn(harness.runtime, 'listTerminals').mockResolvedValue({
       terminals: [
         { handle: COORDINATOR_HANDLE },
@@ -336,7 +349,7 @@ describe('legacy coordinator takeover races', () => {
       expect.arrayContaining([
         expect.objectContaining({
           run_id: harness.adoptedRunId,
-          to_handle: WORKER_HANDLE,
+          to_handle: `dispatch:${harness.dispatchId}`,
           delivery_contract: 'legacy_direct'
         }),
         expect.objectContaining({
@@ -643,9 +656,21 @@ describe('legacy coordinator takeover races', () => {
     const detectionStarted = new Promise<void>((resolve) => {
       signalDetectionStarted = resolve
     })
+    let detectionCalls = 0
     vi.spyOn(harness.runtime, 'isTerminalRunningAgent').mockImplementation(
       () =>
-        new Promise<boolean>((resolve) => {
+        new Promise<boolean>((resolve, reject) => {
+          detectionCalls += 1
+          // Why reject instead of re-arming: a second call would overwrite resolveDetection and
+          // strand the first promise, hanging to a timeout instead of naming what changed.
+          if (detectionCalls > 1) {
+            reject(
+              new Error(
+                `isTerminalRunningAgent was called ${detectionCalls} times; this test drives exactly one detection.`
+              )
+            )
+            return
+          }
           resolveDetection = resolve
           signalDetectionStarted?.()
         })

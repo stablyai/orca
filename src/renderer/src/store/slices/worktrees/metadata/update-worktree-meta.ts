@@ -2,9 +2,10 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { translate } from '@/i18n/i18n'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
+import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { getHostedReviewCacheKey } from '../../hosted-review'
+import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../github-cache-key'
 import {
   applyDetectedWorktreeUpdates,
@@ -13,10 +14,11 @@ import {
 } from '../listing/detected-worktree-meta'
 import {
   bumpHostedReviewLinkMutationGeneration,
-  clearOlderHostedReviewLinksForReplacement,
   getHostedReviewLinkForMetaRefresh,
+  hasChangedHostedReviewLinkUpdates,
   hasHostedReviewLinkUpdates
 } from './hosted-review-link-mutation'
+import { normalizeHostedReviewLinkReplacementUpdates } from './hosted-review-link-update-normalization'
 import {
   getHostedReviewPushTargetLookup,
   resolveGitHubReviewPushTarget
@@ -28,13 +30,19 @@ import {
   trySettingsForWorktreeOwner
 } from '../listing/worktree-owner-settings'
 
+import { findRepoForHost } from '../../repo-host-identity'
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['updateWorktreeMeta'] {
   return async (worktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
-    const existingWorktree = get().getKnownWorktreeById(worktreeId)
+    const requestedHostId = options?.executionHostId
+    const existingWorktree = findKnownWorktreeById(get(), worktreeId, requestedHostId)
+    const executionHostId =
+      requestedHostId ??
+      existingWorktree?.hostId ??
+      (get().settings?.activeRuntimeEnvironmentId ? undefined : 'local')
     if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
       return { ok: true }
     }
@@ -65,9 +73,7 @@ export function createUpdateWorktreeMeta(
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     }
-    const normalizedUpdates = existingWorktree
-      ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
-      : updates
+    const normalizedUpdates = normalizeHostedReviewLinkReplacementUpdates(updates, existingWorktree)
     // Why: manual PR linking supplies only the number; resolve the head branch so Push targets the review branch.
     const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
       ? normalizedUpdates.linkedPR
@@ -78,7 +84,7 @@ export function createUpdateWorktreeMeta(
       normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
       !existingWorktree.pushTarget
-        ? trySettingsForWorktreeOwner(get(), worktreeId)
+        ? trySettingsForWorktreeOwner(get(), worktreeId, executionHostId)
         : null
     const resolvedPushTarget =
       pushTargetOwnerSettings && existingWorktree && linkedPrForPushTarget !== null
@@ -101,31 +107,31 @@ export function createUpdateWorktreeMeta(
       resolvedPushTarget === undefined &&
       existingHostedReviewPushTargetLookup !== null &&
       existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
-    const worktreeForUpdate = get().getKnownWorktreeById(worktreeId)
+    const worktreeForUpdate = get().getKnownWorktreeById(worktreeId, executionHostId)
     if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
       return { ok: true }
     }
-    const shouldRefreshHostedReview =
-      (normalizedUpdates.linkedPR === null && (worktreeForUpdate?.linkedPR ?? null) !== null) ||
-      (normalizedUpdates.linkedGitLabMR === null &&
-        (worktreeForUpdate?.linkedGitLabMR ?? null) !== null) ||
-      (normalizedUpdates.linkedBitbucketPR === null &&
-        (worktreeForUpdate?.linkedBitbucketPR ?? null) !== null) ||
-      (normalizedUpdates.linkedAzureDevOpsPR === null &&
-        (worktreeForUpdate?.linkedAzureDevOpsPR ?? null) !== null) ||
-      (normalizedUpdates.linkedGiteaPR === null &&
-        (worktreeForUpdate?.linkedGiteaPR ?? null) !== null)
+    const shouldRefreshHostedReview = Boolean(
+      worktreeForUpdate && hasChangedHostedReviewLinkUpdates(normalizedUpdates, worktreeForUpdate)
+    )
     const reviewRepo = shouldRefreshHostedReview
-      ? get().repos.find((repo) => repo.id === worktreeForUpdate?.repoId)
+      ? (findRepoForHost(get().repos, worktreeForUpdate?.repoId ?? '', {
+          hostId: executionHostId,
+          settings: get().settings
+        }) ?? undefined)
       : undefined
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
+    const displayNameProvenance =
+      'displayName' in normalizedUpdates
+        ? { displayNameIsPinned: displayNameUpdatePinsLabel(normalizedUpdates.displayName) }
+        : {}
     const targetEnriched = resolvedPushTarget
-      ? { ...normalizedUpdates, pushTarget: resolvedPushTarget }
+      ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: resolvedPushTarget }
       : shouldClearStaleHostedReviewPushTarget
-        ? { ...normalizedUpdates, pushTarget: undefined }
-        : normalizedUpdates
+        ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: undefined }
+        : { ...normalizedUpdates, ...displayNameProvenance }
     const renameCleared =
       'displayName' in targetEnriched
         ? {
@@ -139,15 +145,24 @@ export function createUpdateWorktreeMeta(
 
     let didApply = false
     set((s) => {
-      if (shouldApplyUpdate && !shouldApplyUpdate(findKnownWorktreeById(s, worktreeId))) {
+      if (
+        shouldApplyUpdate &&
+        !shouldApplyUpdate(findKnownWorktreeById(s, worktreeId, executionHostId))
+      ) {
         return {}
       }
       didApply = true
-      const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, enriched)
+      const nextWorktrees = applyWorktreeUpdates(
+        s.worktreesByRepo,
+        worktreeId,
+        enriched,
+        executionHostId
+      )
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
-        enriched
+        enriched,
+        executionHostId
       )
       const cacheKey =
         reviewRepo && reviewBranch
@@ -231,7 +246,13 @@ export function createUpdateWorktreeMeta(
     }
 
     try {
-      await persistWorktreeMeta(settingsForWorktreeOwner(get(), worktreeId), worktreeId, enriched)
+      await persistWorktreeMeta(
+        settingsForWorktreeOwner(get(), worktreeId, executionHostId),
+        worktreeId,
+        enriched,
+        executionHostId ?? existingWorktree?.hostId,
+        worktreeForUpdate?.identity?.key
+      )
       if (
         !options?.suppressHostedReviewRefresh &&
         reviewRepo &&
@@ -241,6 +262,7 @@ export function createUpdateWorktreeMeta(
         // Why: refetch against post-update links so a cache entry from the previous provider link can't keep showing the removed review.
         void get().fetchHostedReviewForBranch(reviewRepo.path, reviewBranch, {
           repoId: reviewRepo.id,
+          repoOwnerExecutionHostId: executionHostId ?? worktreeForUpdate?.hostId,
           linkedGitHubPR: getHostedReviewLinkForMetaRefresh(
             targetEnriched,
             worktreeForUpdate,

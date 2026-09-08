@@ -1,4 +1,5 @@
-import type { GitWorktreeInfo } from './types'
+import type { ExecutionHostId } from '../execution-host'
+import type { GitWorktreeInfo, Worktree } from './types'
 
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
@@ -14,6 +15,7 @@ export type WorktreeForceDeleteReason =
   | 'orphan-directory'
   | 'missing-registration'
   | 'unstopped-pty'
+  | 'running-agent-session'
 
 // Why: everything before this separator is the worktree id — a user-chosen filesystem path.
 // Only the detail after it is Orca's own wording, so verdict matchers anchor on the boundary
@@ -30,6 +32,17 @@ export const UNSTOPPED_PTY_LIVE_DETAIL_PREFIX = 'still live:'
 // be proven, and the waiver clears both — but this error carries different words, so without
 // its own matcher the force affordance stayed hidden for the very case it was added for.
 export const WORKTREE_TEARDOWN_TIMEOUT_PREFIX = 'Timed out waiting for physical PTY teardown:'
+
+// Why (#11960 again): a running agent SESSION blocks removal for the same reason an unstopped PTY
+// does, and it needs its own prefix for the same reason the timeout above needed one — the desktop
+// force affordance comes only from the classifier below, so a refusal with no matcher shows raw
+// CLI wording and hides the Force Delete button. Matcher and hint stay in this file together.
+export const RUNNING_AGENT_SESSION_REMOVAL_PREFIX =
+  'Refusing to remove worktree with running agent sessions:'
+
+export function isRunningAgentSessionRemovalError(error: string): boolean {
+  return error.includes(RUNNING_AGENT_SESSION_REMOVAL_PREFIX)
+}
 
 export function isUnstoppedPtyRemovalError(error: string): boolean {
   return (
@@ -102,6 +115,12 @@ export function classifyWorktreeForceDeleteReason(
   if (isUnstoppedPtyRemovalError(error)) {
     return allowUnverifiedPtyStop ? null : 'unstopped-pty'
   }
+  // Same placement and the same reason: decided BEFORE the `force` guard, because an ordinary
+  // desktop delete already passes force:true to skip the dirty-file prompt and that says nothing
+  // about whether the user has waived closing a live agent session. Only the waiver itself does.
+  if (isRunningAgentSessionRemovalError(error)) {
+    return allowUnverifiedPtyStop ? null : 'running-agent-session'
+  }
   if (force) {
     return null
   }
@@ -121,4 +140,34 @@ export function classifyWorktreeForceDeleteReason(
     return 'dirty'
   }
   return null
+}
+
+// ─── Host qualification (STA-4343) ───────────────────────────────────
+//
+// A workspace id is `repoId::path` with no host component, so the local host, an
+// SSH host and a paired runtime can all publish the SAME id. The same repo at the
+// same path on two hosts is TWO workspaces, never one — removing by that id alone
+// destroys whichever checkout routing happens to pick, and routing prefers the
+// ACTIVE workspace's host, which is usually not the row the user confirmed.
+//
+// So a destructive removal travels as a host-qualified target and is ROUTED to
+// the confirmed host. Making the field required (not optional) is the point: a
+// future delete entry point cannot be written unguarded without a type error.
+
+/**
+ * Identity for a destructive workspace removal.
+ *
+ * `executionHostId` is required but nullable on purpose: `null` states that the
+ * confirmed row itself declares no host (a pre-host-qualified snapshot row), so
+ * a caller has to make that claim deliberately instead of omitting the field.
+ */
+export type WorktreeRemovalTarget = {
+  id: string
+  executionHostId: ExecutionHostId | null
+}
+
+export function toWorktreeRemovalTarget(
+  worktree: Pick<Worktree, 'id' | 'hostId'>
+): WorktreeRemovalTarget {
+  return { id: worktree.id, executionHostId: worktree.hostId ?? null }
 }

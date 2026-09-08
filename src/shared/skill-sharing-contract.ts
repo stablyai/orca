@@ -77,7 +77,7 @@ export type SkillInstallProgress = {
 export type SkillShareInstallInput = {
   shareId: string
   operationId?: string
-  versionId?: string
+  versionId: string
   environmentId?: string
   destination: SkillInstallDestination
   /** Agents to place the skill for; omitted means every detected agent. */
@@ -99,7 +99,7 @@ export type SkillShareInstallOperation =
 export type SkillBundleShareInstallInput = {
   shareId: string
   operationId?: string
-  versionId?: string
+  versionId: string
   environmentId?: string
   selectedSkillIds: string[]
   destination: SkillInstallDestination

@@ -4,6 +4,7 @@ import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  agentStatusEvidenceObservedAt,
   type AgentStatusEntry,
   type AgentStatusState,
   type AgentType
@@ -15,12 +16,17 @@ import {
 // (Moved here from agent-status.ts so the evidence resolvers below and the
 // aggregate consumers share one gate without an import cycle.)
 export function isExplicitAgentStatusFresh(
-  entry: Pick<AgentStatusEntry, 'updatedAt' | 'restoredUnconfirmed'>,
+  entry: Pick<
+    AgentStatusEntry,
+    'updatedAt' | 'evidenceObservedAt' | 'mirroredEvidenceReceivedAt' | 'restoredUnconfirmed'
+  >,
   now: number,
   staleAfterMs: number
 ): boolean {
   // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
-  return entry.restoredUnconfirmed !== true && now - entry.updatedAt <= staleAfterMs
+  return (
+    entry.restoredUnconfirmed !== true && now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs
+  )
 }
 
 /**
@@ -115,8 +121,3 @@ export function resolvePaneAgentActivity(
     livePtyRequired: false
   }
 }
-
-// Deliberately absent: a resolvePaneAgentOwner precedence resolver. The only
-// Phase 2 identity consumer (native-chat toggle) reads hook identity without a
-// freshness gate, so a gated owner resolver would change its behavior; the
-// owner resolver lands with its first real consumer in a later slice.

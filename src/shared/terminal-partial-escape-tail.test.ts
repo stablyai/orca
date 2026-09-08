@@ -50,6 +50,26 @@ describe('extractPartialEscapeTail', () => {
     expect(extractPartialEscapeTail('\x1b\x18\x1b[3')).toBe('\x1b[3')
   })
 
+  it('aborts to ground on CAN/SUB inside a string sequence', () => {
+    // ESC inside DCS/SOS/PM/APC parks in stringEsc; a CAN/SUB there aborts to ground rather
+    // than being re-read as the byte after an ESC (which used to leave a bogus `\x1b\x18…` tail
+    // and broke the fold, since extract() of the prefix drops to ground).
+    expect(extractPartialEscapeTail('\x1bPx\x1b\x18X0abc')).toBe('')
+    expect(extractPartialEscapeTail('\x1bPx\x1b\x1aX0abc')).toBe('')
+    // Same state reached through OSC (oscEsc).
+    expect(extractPartialEscapeTail('\x1b]0;t\x1b\x18rest')).toBe('')
+    // A fresh sequence after the abort is still tracked.
+    expect(extractPartialEscapeTail('\x1bPx\x1b\x18\x1b[3')).toBe('\x1b[3')
+  })
+
+  it('starts the new sequence at the second ESC inside OSC/DCS', () => {
+    // ESC ESC in oscEsc/stringEsc: the second ESC opens its own sequence at itself, not one
+    // byte earlier — matching xterm, and required for the fold to agree at that boundary.
+    expect(extractPartialEscapeTail('\x1b] \x1b\x1b^')).toBe('\x1b^')
+    expect(extractPartialEscapeTail('\x1bPq\x1b\x1b[3')).toBe('\x1b[3')
+    expect(extractPartialEscapeTail('\x1b]0;t\x1b\x1b')).toBe('\x1b')
+  })
+
   it('is fold-safe across chunk boundaries', () => {
     // extract(a + b) === extract(extract(a) + b) — the invariant ingest relies on.
     const cases: [string, string][] = [
@@ -59,7 +79,12 @@ describe('extractPartialEscapeTail', () => {
       ['clean', '\x1b[1'],
       // Fold-safety must hold across the CAN abort too.
       ['\x1b', '\x18after'],
-      ['\x1b ', '\x18after']
+      ['\x1b ', '\x18after'],
+      // Boundary landing inside stringEsc/oscEsc — the two states that used to break the fold.
+      ['\x1bPx\x1b\x18', 'X0abc'],
+      ['\x1b]0;t\x1b\x1a', 'X0abc'],
+      ['\x1b] \x1b\x1b', '^'],
+      ['\x1bPq\x1b\x1b', '[3']
     ]
     for (const [a, b] of cases) {
       expect(extractPartialEscapeTail(extractPartialEscapeTail(a) + b)).toBe(
@@ -82,5 +107,45 @@ describe('advancePartialEscapeTail', () => {
     // An unterminated OSC longer than the cap degrades to pre-fix behavior.
     const huge = `\x1b]0;${'x'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH + 10)}`
     expect(advancePartialEscapeTail('', huge)).toBe('')
+  })
+})
+
+describe('advancePartialEscapeTail ESC-free fast path', () => {
+  // Every pending-tail state the scanner can be left in x every chunk shape, asserted
+  // indistinguishable from the unconditional fold the gate sits in front of.
+  const pieces = [
+    '',
+    'plain output\n',
+    '\x1b[32mgreen\x1b[0m',
+    '\x1b[3',
+    '\x1b]0;title\x07',
+    '\x1b]0;partial',
+    '\x1bP dcs payload',
+    '\x1b',
+    '\x18',
+    '\x1a',
+    '\x1b]8;;https://example.com\x1b\\',
+    '\x1b(',
+    '\x1b[1;2;3'
+  ]
+
+  it('matches an unconditional fold for every pending-tail and chunk pairing', () => {
+    for (const pending of pieces.map((piece) => extractPartialEscapeTail(piece))) {
+      for (const chunk of pieces) {
+        // The cap belongs in the expectation: `advancePartialEscapeTail` abandons a tail over
+        // MAX_PARTIAL_ESCAPE_TAIL_LENGTH, so comparing it against an uncapped extract would stop
+        // modelling the function the moment a pairing crossed the cap.
+        const unguarded = extractPartialEscapeTail(pending + chunk)
+        expect(advancePartialEscapeTail(pending, chunk), JSON.stringify({ pending, chunk })).toBe(
+          unguarded.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : unguarded
+        )
+      }
+    }
+  })
+
+  it('still carries a pending tail through an ESC-free chunk', () => {
+    expect(advancePartialEscapeTail('\x1b]0;my-title', ' still in the OSC')).toBe(
+      '\x1b]0;my-title still in the OSC'
+    )
   })
 })

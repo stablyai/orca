@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
-import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
+import { createHookListenerState } from '../../../shared/agent-hook-listener/listener-state'
+import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
 const dispatchAgentHookTerminalLifecycle = vi.fn()
@@ -167,9 +168,7 @@ describe('agent hook completion notifications', () => {
     }
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  afterEach(() => vi.useRealTimers())
 
   it('requires fresh working after notifications start disabled and later re-enable', async () => {
     mockStoreState.settings.notifications.agentTaskComplete = false
@@ -178,6 +177,7 @@ describe('agent hook completion notifications', () => {
       syncAgentHookCompletionNotificationSettings
     } = await import('./agent-hook-completion-notifications')
 
+    syncAgentHookCompletionNotificationSettings()
     mockStoreState.settings.notifications.agentTaskComplete = true
     syncAgentHookCompletionNotificationSettings()
 

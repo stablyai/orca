@@ -10,10 +10,11 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
-import { getLineageGroupKey } from '../grouping/group-keys'
+import { getWorktreeLineageGroupKey } from '../grouping/group-keys'
 import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
 import { getGroupKeysForWorktree } from '../grouping/worktree-group-keys'
+import { isPinnedSectionWorktree } from '../../pinned-section-worktrees'
 import { getWorktreeLineageAncestors } from '../../worktree-lineage-projection'
 import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
 import { getPinnedWorktreeRevealCollapsedGroupKeys } from './reveal-ancestors'
@@ -53,12 +54,18 @@ export type PendingSidebarRevealArgs = {
 // Expand whatever collapsed section hides the reveal target, then scroll to it.
 export function expandGroupsForWorktreeReveal(
   args: PendingSidebarRevealArgs,
-  worktreeId: string
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
 ): void {
   const folderGroupKeys = getFolderWorkspaceRevealGroupKeys(
     worktreeId,
     args.folderWorkspaces,
-    args.projectGroups
+    args.projectGroups,
+    {
+      groupBy: args.groupBy,
+      workspaceStatuses: args.workspaceStatuses,
+      defaultHostId: args.defaultHostId
+    }
   )
   if (folderGroupKeys.length > 0) {
     for (const groupKey of folderGroupKeys) {
@@ -68,7 +75,11 @@ export function expandGroupsForWorktreeReveal(
     }
     return
   }
-  const targetWorktree = args.worktrees.find((w) => w.id === worktreeId)
+  const targetWorktree = args.worktrees.find(
+    (worktree) =>
+      worktree.id === worktreeId &&
+      (!executionHostId || !worktree.hostId || worktree.hostId === executionHostId)
+  )
   if (!targetWorktree) {
     return
   }
@@ -78,22 +89,43 @@ export function expandGroupsForWorktreeReveal(
     args.toggleGroup(hostGroupKey)
   }
 
+  const hostWorktreeMap = new Map<string, Worktree>()
+  const hostLineageById: Record<string, WorktreeLineage> = {}
+  for (const worktree of args.worktrees) {
+    if (executionHostId && worktree.hostId && worktree.hostId !== executionHostId) {
+      continue
+    }
+    hostWorktreeMap.set(worktree.id, worktree)
+    const projected = args.worktreeLineageById[worktree.id]
+    const inline = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
+    const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
+    if (lineage) {
+      hostLineageById[worktree.id] = lineage
+    }
+  }
   for (const parent of getWorktreeLineageAncestors(
     targetWorktree,
-    args.worktreeLineageById,
-    args.worktreeMap
+    hostLineageById,
+    hostWorktreeMap
   )) {
-    const lineageGroupKey = getLineageGroupKey(parent.id)
+    const lineageGroupKey = getWorktreeLineageGroupKey(parent)
     if (args.collapsedGroups.has(lineageGroupKey)) {
       args.toggleGroup(lineageGroupKey)
     }
   }
 
   const groupKeys =
-    targetWorktree.isPinned && args.pinnedDisplayPolicy === 'single-location'
+    args.pinnedDisplayPolicy === 'single-location' &&
+    isPinnedSectionWorktree(
+      targetWorktree,
+      args.worktrees,
+      args.worktreeLineageById,
+      args.worktreeMap
+    )
       ? getPinnedWorktreeRevealCollapsedGroupKeys({
           worktree: targetWorktree,
-          collapsedGroups: args.collapsedGroups
+          collapsedGroups: args.collapsedGroups,
+          inPinnedSection: true
         })
       : getGroupKeysForWorktree(
           args.groupBy,

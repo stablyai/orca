@@ -12,11 +12,17 @@ const providers = ['codex', 'claude']
 describe('skill cloud install IPC schemas', () => {
   it('accepts provider selection for every install entry point', () => {
     expect(
-      skillCloudShareInstallSchema.parse({ shareId: 'share-1', destination, providers })
+      skillCloudShareInstallSchema.parse({
+        shareId: 'share-1',
+        versionId: 'version-1',
+        destination,
+        providers
+      })
     ).toMatchObject({ providers })
     expect(
       skillCloudBundleShareInstallSchema.parse({
         shareId: 'share-1',
+        versionId: 'version-1',
         selectedSkillIds: ['skill-1'],
         destination,
         providers
@@ -45,9 +51,21 @@ describe('skill cloud install IPC schemas', () => {
     expect(() =>
       skillCloudBundleShareInstallSchema.parse({
         shareId: 'share-1',
+        versionId: 'version-1',
         selectedSkillIds: ['skill-1'],
         destination,
         providers: Array.from({ length: 65 }, (_, index) => `provider-${index}`)
+      })
+    ).toThrow()
+  })
+
+  it('requires the reviewed version for share-link installs', () => {
+    expect(() => skillCloudShareInstallSchema.parse({ shareId: 'share-1', destination })).toThrow()
+    expect(() =>
+      skillCloudBundleShareInstallSchema.parse({
+        shareId: 'share-1',
+        selectedSkillIds: ['skill-1'],
+        destination
       })
     ).toThrow()
   })

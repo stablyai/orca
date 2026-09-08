@@ -6,7 +6,7 @@ import {
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
-import { answerEachCookedEchoSafeQueryReply } from './terminal-query-reply'
+import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'
 import {
   combinePtyIngressSourceSpans,
   slicePtyIngressSourceSpan,
@@ -55,7 +55,7 @@ export class PtyStartupIngress {
   constructor(options: PtyStartupIngressOptions) {
     this.intent = options.intent
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
-    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write, options.echoProbe)
+    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write)
     this.onEmission = options.onEmission
     this.queryOpen = options.intent !== undefined
     if (options.intent) {
@@ -93,10 +93,10 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
-  // Live color replies reuse startup's cooked-echo containment (#13137).
+  // Query replies stay ordered when an earlier cooked-echo-risk reply is held (#13137, #13892).
   answerLiveQueryReply(reply: string): boolean {
     return !this.closed && reply.length > 0
-      ? answerEachCookedEchoSafeQueryReply(reply, (part) => this.delivery.answer(part))
+      ? deliverTerminalQueryReplyPayload(reply, this.delivery)
       : false
   }
 
@@ -308,7 +308,7 @@ export class PtyStartupIngress {
       // deferred write that fails after reporting success invalidates only its own
       // claim. Dropping every claim would let a slot that did land be answered a
       // second time, and a duplicate reply corrupts a parser already mid-read.
-      if (!this.delivery.answer(reply, () => this.answeredSlots.delete(slot))) {
+      if (!this.delivery.answer(reply)) {
         this.answeredSlots.delete(slot)
         return wroteAny
       }
@@ -322,12 +322,11 @@ export class PtyStartupIngress {
   }
 
   private releaseQueryPending(): void {
-    if (!this.queryPending) {
-      return
-    }
     const pending = this.queryPending
     this.queryPending = null
-    this.emit(pending, false)
+    if (pending) {
+      this.emit(pending, false)
+    }
   }
 
   /**
@@ -368,19 +367,11 @@ export class PtyStartupIngress {
   }
 
   private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {
-    this.onEmission({
-      data,
-      rawStartSeq: span.rawStartSeq,
-      rawEndSeq: span.rawEndSeq,
-      transformed
-    })
+    this.onEmission({ data, rawStartSeq: span.rawStartSeq, rawEndSeq: span.rawEndSeq, transformed })
   }
 
   private clearDeadline(): void {
-    if (!this.deadlineTimer) {
-      return
-    }
-    clearTimeout(this.deadlineTimer)
+    clearTimeout(this.deadlineTimer ?? undefined)
     this.deadlineTimer = null
   }
 }

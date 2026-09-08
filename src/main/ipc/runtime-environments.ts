@@ -20,6 +20,9 @@ import {
   subscribeRuntimeEnvironment
 } from './runtime-environment-transport-routing'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
+import { retirePairedRuntimeBrowserClientHostEnvironment } from '../browser/paired-runtime-browser-client-host-runtime'
+import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
+import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
 
 type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
   environmentId: string
@@ -55,12 +58,23 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
     }
   }
 }
-export function invalidateRuntimeEnvironmentTransport(environmentId: string): void {
+/** Returns once the environment's client-hosted browser pages have been released. */
+export function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
   // Why: a same-id re-pair must retire every transport that still authenticates as the old peer.
+  advanceRuntimeEnvironmentCapabilityIncarnation(environmentId)
   advanceRuntimeEnvironmentTransportGeneration(environmentId)
   closeRemoteRuntimeRequestConnection(environmentId)
   clearSharedControlSupport(environmentId)
   closeSubscriptionsForEnvironment(environmentId)
+  return retirePairedRuntimeBrowserClientHostEnvironment(
+    environmentId,
+    new Error('Runtime environment transport was invalidated')
+  ).then(
+    () => undefined,
+    (error) => {
+      console.warn('[runtime-environments] browser client host retirement failed:', error)
+    }
+  )
 }
 
 export function registerRuntimeEnvironmentHandlers(store: Store): void {
@@ -76,6 +90,10 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     store,
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
+  })
+  registerRuntimeEnvironmentBrowserClientHostHandler({
+    getUserDataPath,
+    getSettings: () => store.getSettings()
   })
   registerRuntimeEnvironmentRecoveryHandler()
   registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
@@ -180,7 +198,8 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
               retained?.removeDestroyedListener()
               remoteRuntimeSubscriptions.delete(subscriptionId)
             }
-          }
+          },
+          transportIsCurrent
         )
       } catch (error) {
         removeDestroyedListener()

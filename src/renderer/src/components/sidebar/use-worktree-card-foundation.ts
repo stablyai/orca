@@ -17,6 +17,7 @@ import {
   selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/runtime-environment-ssh'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
+import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
 export function useWorktreeCardFoundation({
   worktree,
@@ -49,6 +50,7 @@ export function useWorktreeCardFoundation({
         // Why: the same workspace ID can exist under two hosts. Naming the owner
         // keeps the dialog on the clicked row instead of the ambiguous lookup.
         repoId: worktree.repoId,
+        executionHostId: worktree.hostId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -65,6 +67,7 @@ export function useWorktreeCardFoundation({
       openModal('edit-meta', {
         worktreeId: worktree.id,
         repoId: worktree.repoId,
+        executionHostId: worktree.hostId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -122,7 +125,9 @@ export function useWorktreeCardFoundation({
     ]
   )
 
-  const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
+  const deleteState = useAppStore((s) => {
+    return getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
+  })
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
   const workspacePorts = useAppStore(

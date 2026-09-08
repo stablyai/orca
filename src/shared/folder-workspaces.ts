@@ -57,6 +57,9 @@ export function normalizeFolderWorkspaces(
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
     const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
     seen.add(raw.id)
+    // Why: `executionHostId` is deliberately NOT persisted. It is a fetch-time renderer
+    // stamp that can name a `runtime:*` authority the desktop store does not own, and it
+    // carries no generation to fence on. `connectionId` below is the durable pin main projects from.
     workspaces.push({
       id: raw.id,
       projectGroupId: raw.projectGroupId,

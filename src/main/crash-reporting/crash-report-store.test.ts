@@ -41,7 +41,8 @@ function input(reason = 'crashed'): CrashReportCreateInput {
       {
         createdAt: '2026-05-16T01:00:00.000Z',
         name: 'workspace_opened',
-        data: { path: '/Users/alice/project', ssh: false }
+        data: { path: '/Users/alice/project', ssh: false },
+        origin: 'renderer:42'
       }
     ]
   }
