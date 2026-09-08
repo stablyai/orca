@@ -504,6 +504,39 @@ describe('MobileNativeChatComposer', () => {
     expect(texts).toContain('Clear conversation history')
   })
 
+  it('offers discovered worktree skills with descriptions on the PTY lane', async () => {
+    const onChangeText = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/de',
+          onChangeText,
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          skillSuggestions: [{ name: 'deploy-check', description: 'Verify the deploy' }]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 4 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    expect(texts).toContain('/deploy-check')
+    expect(texts).toContain('Verify the deploy')
+    expect(texts).toContain('skill')
+
+    const skillRow = renderer!.root.findAll(
+      (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
+    )[0] as { props: { onPress: () => void } }
+    await act(async () => skillRow.props.onPress())
+    expect(onChangeText).toHaveBeenCalledWith('/deploy-check ')
+  })
+
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()
