@@ -94,3 +94,19 @@ describe('mobileComposerSlashEntries', () => {
     ])
   })
 })
+
+describe('mobileComposerSlashEntries with discovered skills', () => {
+  it('appends discovered skills with descriptions, deduped by name', () => {
+    const catalog = nativeChatComposerCatalog('claude', {
+      sessionCommands: [{ name: 'to-spec', kind: 'skill' }]
+    })
+    const entries = mobileComposerSlashEntries(catalog, [
+      { name: 'to-spec', description: 'Discovery duplicate' },
+      { name: 'deploy-check', description: 'Verify the deploy' }
+    ])
+    expect(entries).toEqual([
+      { name: 'to-spec' },
+      { name: 'deploy-check', description: 'Verify the deploy' }
+    ])
+  })
+})

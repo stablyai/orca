@@ -52,13 +52,18 @@ export function nativeChatComposerCatalog(
 
 /** The mobile `/` menu renders one ranked list: commands first, then the
  *  reported skills (deduped against command names — a collision keeps the
- *  command and its curated description), under one shared cap. Desktop does
- *  not use this: it renders skills in the picker's own group instead. */
+ *  command and its curated description), then filesystem-discovered skills
+ *  (deduped the same way), under one shared cap. Desktop does not use this:
+ *  it renders skills in the picker's own group instead. */
 export function mobileComposerSlashEntries(
-  catalog: NativeChatComposerCatalog
+  catalog: NativeChatComposerCatalog,
+  discovered?: readonly SlashCommandSuggestion[]
 ): readonly SlashCommandSuggestion[] {
-  const skills = (catalog.sessionSkillNames ?? [])
-    .filter((name) => !catalog.agentCommands.some((command) => command.name === name))
+  const commands = catalog.agentCommands
+  const reportedSkills = (catalog.sessionSkillNames ?? [])
+    .filter((name) => !commands.some((command) => command.name === name))
     .map((name) => ({ name }))
-  return [...catalog.agentCommands, ...skills]
+  const known = new Set([...commands, ...reportedSkills].map((entry) => entry.name))
+  const discoveredSkills = (discovered ?? []).filter((entry) => !known.has(entry.name))
+  return [...commands, ...reportedSkills, ...discoveredSkills]
 }

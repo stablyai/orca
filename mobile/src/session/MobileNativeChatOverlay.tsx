@@ -4,10 +4,14 @@ import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './Mo
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
 import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-streaming-bubble'
 
 type Props = {
   controller: MobileNativeChatController
+  /** Filesystem-discovered skills for the active worktree, offered in the
+   *  composer's `/` menu on every lane. */
+  skillSuggestions: readonly SlashCommandSuggestion[]
   /** Opens a tapped file reference (worktree-relative or absolute, optional
    *  :line(:col) suffix) through the shared tap-to-open flow. */
   onOpenFile: (pathText: string) => void
@@ -49,7 +53,8 @@ export function MobileNativeChatOverlay({
   onClearSendError,
   sendSurfaceId,
   getSendCompletionGeneration,
-  keyboardInset
+  keyboardInset,
+  skillSuggestions
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   const folded = useMemo(() => foldMobileNativeChatMessages(session.messages), [session.messages])
@@ -76,6 +81,7 @@ export function MobileNativeChatOverlay({
         workingStartedAt={controller.nativeChatWorkingStartedAt}
         settledTurns={controller.nativeChatSettledTurns}
         sessionCommands={controller.nativeChatSessionCommands}
+        skillSuggestions={skillSuggestions}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}

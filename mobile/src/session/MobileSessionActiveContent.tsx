@@ -3,6 +3,7 @@ import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { useMobileNativeChatDiscoveredSkills } from './use-mobile-native-chat-discovered-skills'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
@@ -81,6 +82,11 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
+  const { skillSuggestions: nativeChatSkillSuggestions } = useMobileNativeChatDiscoveredSkills({
+    client,
+    worktreeId,
+    agent: nativeChatController.nativeChatAgent
+  })
   return showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -233,6 +239,7 @@ export function MobileSessionActiveContent({
       ))}
       <MobileNativeChatOverlay
         controller={nativeChatController}
+        skillSuggestions={nativeChatSkillSuggestions}
         onOpenFile={handleNativeChatFileTap}
         images={nativeChatImages}
         onMicPress={handleDictationToggle}

@@ -53,6 +53,11 @@ export function MobileNativeChatComposerSuggestions({
                 {suggestion.command.description}
               </Text>
             ) : null}
+            {suggestion.kind === 'skill' && suggestion.skill.description ? (
+              <Text style={styles.suggestionDescription} numberOfLines={1}>
+                {suggestion.skill.description}
+              </Text>
+            ) : null}
           </Pressable>
         ))}
       </ScrollView>
