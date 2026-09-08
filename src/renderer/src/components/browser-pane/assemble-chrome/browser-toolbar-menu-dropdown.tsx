@@ -225,6 +225,7 @@ export function BrowserToolbarMenuDropdown({
         <DropdownMenuSeparator />
 
         <DropdownMenuItem
+          variant="destructive"
           onSelect={() => {
             useAppStore.getState().clearBrowserHistory()
             toast.success(

@@ -184,16 +184,15 @@ export default function BrowserAddressBar({
   )
 
   const handleClearHistory = useCallback(() => {
-    clearSuggestionPreview()
-    clearBrowserHistory()
     restoreTypedQuery()
+    clearBrowserHistory()
     toast.success(
       translate(
         'auto.components.browser.pane.browser.address.bar.suggestions.clearHistorySuccess',
         'Browsing history cleared'
       )
     )
-  }, [clearBrowserHistory, clearSuggestionPreview, restoreTypedQuery])
+  }, [clearBrowserHistory, restoreTypedQuery])
 
   const selectedValue =
     selectedValueOverride &&
