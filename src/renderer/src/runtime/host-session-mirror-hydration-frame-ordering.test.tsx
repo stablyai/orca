@@ -437,21 +437,19 @@ describe('mirror latch verdicts against real stream failures', () => {
     expect(Object.keys(state.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
 
-  it('a spawn that rejects after the patch still settles the frame that landed', async () => {
+  it('an empty snapshot settles the frame without spawning a terminal', async () => {
     renderHook(() => useWebSessionTabsSync())
     await act(settle)
     const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-spawn-reject')
     expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
 
-    // The wake respawn this frame triggers fails, but the frame it failed after
-    // already reached the store — the host is healthy and has spoken.
-    mocks.createTerminal.mockRejectedValue(new Error('spawn failed'))
+    // An authoritative empty frame releases parked resumes without inventing a terminal.
     await publish(findSubscription('session.tabs.subscribe'), {
       type: 'snapshot',
       ...makeEmptyHostSnapshot(WT)
     })
 
-    expect(mocks.createTerminal).toHaveBeenCalled()
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
     expectReplayedResume(paneKey, WT, 'codex-session-spawn-reject')
   })
