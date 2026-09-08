@@ -1,22 +1,28 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
 
 /** One row of the composer autocomplete: an agent slash command (with its
- *  catalog description, desktop parity) or a worktree file path. */
+ *  catalog description, desktop parity), a session-reported skill, or a
+ *  worktree file path. */
 export type ComposerSuggestion =
   | { kind: 'command'; command: SlashCommandSuggestion }
+  | { kind: 'skill'; skill: SlashCommandSuggestion }
   | { kind: 'file'; path: string }
 
 export function composerSuggestionKey(suggestion: ComposerSuggestion): string {
-  return suggestion.kind === 'command'
-    ? `command:${suggestion.command.name}`
-    : `file:${suggestion.path}`
+  if (suggestion.kind === 'command') {
+    return `command:${suggestion.command.name}`
+  }
+  return suggestion.kind === 'skill' ? `skill:${suggestion.skill.name}` : `file:${suggestion.path}`
 }
 
 /** The text the suggestion inserts at the trigger span. */
 export function composerSuggestionInsertText(suggestion: ComposerSuggestion): string {
-  return suggestion.kind === 'command' ? `/${suggestion.command.name}` : `@${suggestion.path}`
+  if (suggestion.kind === 'command') {
+    return `/${suggestion.command.name}`
+  }
+  return suggestion.kind === 'skill' ? `/${suggestion.skill.name}` : `@${suggestion.path}`
 }
 
 export function MobileNativeChatComposerSuggestions({
@@ -36,9 +42,12 @@ export function MobileNativeChatComposerSuggestions({
             style={({ pressed }) => [styles.suggestion, pressed && styles.suggestionPressed]}
             onPress={() => onPick(suggestion)}
           >
-            <Text style={styles.suggestionText} numberOfLines={1}>
-              {composerSuggestionInsertText(suggestion)}
-            </Text>
+            <View style={styles.suggestionTitle}>
+              <Text style={styles.suggestionText} numberOfLines={1}>
+                {composerSuggestionInsertText(suggestion)}
+              </Text>
+              {suggestion.kind === 'skill' ? <Text style={styles.skillTag}>skill</Text> : null}
+            </View>
             {suggestion.kind === 'command' && suggestion.command.description ? (
               <Text style={styles.suggestionDescription} numberOfLines={1}>
                 {suggestion.command.description}
@@ -66,6 +75,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
     gap: 1
+  },
+  suggestionTitle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs
+  },
+  skillTag: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radii.row,
+    paddingHorizontal: 4,
+    overflow: 'hidden'
   },
   suggestionPressed: {
     backgroundColor: colors.bgRaised

@@ -436,6 +436,44 @@ describe('MobileNativeChatComposer', () => {
     expect(texts).not.toContain('/model')
   })
 
+  it("offers the session's reported skills in the slash menu, marked and insertable", async () => {
+    const onChangeText = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/to',
+          onChangeText,
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          structuredCommands: [],
+          sessionCommands: [
+            { name: 'clear', kind: 'command' },
+            { name: 'to-spec', kind: 'skill' }
+          ]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 4 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    // The reported skill matches the prefix; the unmatched command does not show.
+    expect(texts).toContain('/to-spec')
+    expect(texts).toContain('skill')
+    expect(texts).not.toContain('/clear')
+
+    const skillRow = renderer!.root.findAll(
+      (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
+    )[0] as { props: { onPress: () => void } }
+    await act(async () => skillRow.props.onPress())
+    expect(onChangeText).toHaveBeenCalledWith('/to-spec ')
+  })
+
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()
