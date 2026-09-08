@@ -2,6 +2,7 @@ import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
 import { formatSkillsCommandFlagHelp } from './skills-command-flag-help'
+import { formatTerminalCommandFlagHelp } from './terminal-command-flag-help'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
 import { ROOT_HELP_TEXT_SECONDARY } from './root-help-text-secondary'
 
@@ -77,11 +78,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (skillsHelp) {
     return skillsHelp
   }
-  if (commandPath[0] === 'terminal' && flag === 'terminal') {
-    return '--terminal <selector> Runtime handle or stable pty:<ptyId> from terminal list'
-  }
-  if (command === 'terminal close' && flag === 'tab') {
-    return '--tab                  Close the whole tab and wait for durable persistence'
+  const terminalHelp = formatTerminalCommandFlagHelp(commandPath, flag)
+  if (terminalHelp) {
+    return terminalHelp
   }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
