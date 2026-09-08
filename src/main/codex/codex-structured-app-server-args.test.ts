@@ -18,22 +18,33 @@ function expectPermissionConfig(
   ])
 }
 
+/** The YOLO default must reach app-server as config, since it ignores the TUI bypass flag. */
+function expectYoloDefaultTranslated(shell: AgentStartupShell): void {
+  expectPermissionConfig(YOLO_TUI_AGENT_ARGS.codex!, shell, 'never', 'danger-full-access')
+}
+
+/** Restricted flags must keep their configured values in either short or long spelling. */
+function expectRestrictedPermissionsPreserved(configured: string): void {
+  expectPermissionConfig(configured, 'posix', 'on-request', 'workspace-write')
+}
+
+/** An empty configuration must not grant bypass permissions implicitly. */
+function expectNoBypassWhenDisabled(): void {
+  expect(resolveCodexStructuredAppServerArgs('', 'posix')).toEqual([])
+}
+
 describe('structured Codex app-server arguments', () => {
   it.each(['posix', 'powershell', 'cmd'] as const)(
     'translates the configured YOLO default into app-server permissions on %s',
-    (shell) =>
-      expectPermissionConfig(YOLO_TUI_AGENT_ARGS.codex!, shell, 'never', 'danger-full-access')
+    expectYoloDefaultTranslated
   )
 
   it.each([
     '-a on-request -s workspace-write',
     '--ask-for-approval=on-request --sandbox=workspace-write'
-  ])('preserves explicit restricted permissions: %s', (configured) =>
-    expectPermissionConfig(configured, 'posix', 'on-request', 'workspace-write')
-  )
+  ])('preserves explicit restricted permissions: %s', expectRestrictedPermissionsPreserved)
 
-  it('does not grant bypass permissions when YOLO is disabled', () =>
-    expect(resolveCodexStructuredAppServerArgs('', 'posix')).toEqual([]))
+  it('does not grant bypass permissions when YOLO is disabled', expectNoBypassWhenDisabled)
 
   it('keeps configuration flags and converts effort to the app-server config contract', () => {
     expect(
