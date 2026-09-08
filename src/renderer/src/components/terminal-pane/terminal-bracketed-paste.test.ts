@@ -178,7 +178,7 @@ describe('terminal bracketed paste policy', () => {
     expect(observedIgnoreValues).toEqual([false, false])
   })
 
-  it('keeps bracketed paste for single-line payloads that contain escape bytes after Ctrl+C', () => {
+  it('forwards interrupted single-line paste to xterm native sanitization', () => {
     const terminal = createTerminal(true)
     const observedIgnoreValues: (boolean | undefined)[] = []
     terminal.paste.mockImplementation(() => {
@@ -188,7 +188,7 @@ describe('terminal bracketed paste policy', () => {
     markTerminalBracketedPasteInterrupted(terminal)
     pasteTerminalText(terminal, 'before\x1b[201~after')
 
-    expect(terminal.paste).toHaveBeenCalledWith('before\u241b[201~after')
+    expect(terminal.paste).toHaveBeenCalledWith('before\x1b[201~after')
     expect(observedIgnoreValues).toEqual([false])
   })
 })
