@@ -268,6 +268,28 @@ describe('detectTerminalComposerDraft', () => {
     ).toBeNull()
   })
 
+  it('recognizes a stock placeholder split mid-word across a soft wrap', () => {
+    const context = {
+      rows: ['› Ask Codex to do any'],
+      typedRows: ['›'],
+      promptGlyphBoldRows: [true],
+      rowsBelow: ['thing', '', 'gpt-5.6 · ~/repo'],
+      typedRowsBelow: ['', '', 'gpt-5.6 · ~/repo'],
+      rowsBelowWrapped: [true, false, false],
+      beforeCursor: '› ',
+      afterCursor: '',
+      rawAfterCursor: 'Ask Codex to do any',
+      cursorHidden: false,
+      cursorViewportRow: 4
+    }
+
+    expect(hasTerminalComposerPlaceholder(context)).toBe(true)
+    expect(detectTerminalComposerDraft(context)).toBeNull()
+    expect(
+      detectTerminalComposerDraft({ ...context, rowsBelowWrapped: [false, false, false] })?.text
+    ).toBe('Ask Codex to do any\nthing')
+  })
+
   it('joins soft-wrapped continuation rows without inserting a newline', () => {
     expect(
       detectTerminalComposerDraft({

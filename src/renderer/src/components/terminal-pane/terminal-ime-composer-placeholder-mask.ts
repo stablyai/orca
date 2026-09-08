@@ -53,6 +53,7 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
     activeSessionId = null
     syncPlaceholderOwnership()
   }
+  // xterm requests the remainder during repaint, before deciding whether to draw its mask.
   const handleRemainder = (event: Event): void => {
     syncPlaceholderOwnership()
     if (element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)) {
@@ -64,11 +65,6 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
   element.addEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, handleSessionStart)
   element.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, handleSessionEnd)
   element.addEventListener('blur', handleBlur, true)
-  const renderDisposable = terminal.onRender(() => {
-    if (activeSessionId !== null) {
-      syncPlaceholderOwnership()
-    }
-  })
 
   return {
     dispose: () => {
@@ -78,7 +74,6 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
       element.removeEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, handleSessionStart)
       element.removeEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, handleSessionEnd)
       element.removeEventListener('blur', handleBlur, true)
-      renderDisposable.dispose()
     }
   }
 }

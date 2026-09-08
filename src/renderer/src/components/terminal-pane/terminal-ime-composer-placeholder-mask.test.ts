@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as cursorContext from '../../../../shared/terminal-cursor-line-context'
 import {
   installTerminalImeComposerPlaceholderMask,
   TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS
@@ -273,6 +274,41 @@ describe('terminal IME composer placeholder mask', () => {
       `\x1b[K\x1b[2m${CODEX_PLACEHOLDER}\x1b[22m\x1b[${CODEX_PLACEHOLDER.length}D`
     )
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
+  })
+
+  it('reads context once per render-time decision and stops after disposal', async () => {
+    const rig = openTerminal()
+    await rig.writeAwaitingRender(codexPlaceholderFrame())
+    rig.compose()
+    await nextEventLoop()
+    const readContext = vi.spyOn(cursorContext, 'readTerminalCursorLineContext')
+    const decisions: boolean[] = []
+    rig.element.addEventListener('xterm-composition-remainder', (event) => {
+      decisions.push(event.defaultPrevented)
+    })
+
+    for (const [text, masked] of [
+      ['Background task', false],
+      [CODEX_PLACEHOLDER, true]
+    ] as const) {
+      readContext.mockClear()
+      decisions.length = 0
+      await rig.writeAwaitingRender(`\x1b[K\x1b[2m${text}\x1b[22m\x1b[${text.length}D`)
+      expect(decisions.length).toBeGreaterThan(0)
+      expect(decisions.at(-1)).toBe(masked)
+      expect(readContext).toHaveBeenCalledTimes(decisions.length)
+      expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(masked)
+    }
+
+    rig.disposeMask()
+    readContext.mockClear()
+    decisions.length = 0
+    dispatchSession(rig, XTERM_COMPOSITION_SESSION_START_EVENT, 99)
+    await rig.writeAwaitingRender(codexPlaceholderFrame())
+    expect(readContext).not.toHaveBeenCalled()
+    expect(decisions.length).toBeGreaterThan(0)
+    expect(decisions.every((decision) => !decision)).toBe(true)
+    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
   })
 
   it('clears ownership on composition end, blur, and disposal', async () => {
