@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 const mocks = vi.hoisted(() => ({
   focusTerminalTabSurface: vi.fn(),
@@ -380,7 +382,7 @@ describe('runSourceControlAgentActionStart', () => {
         selectedAgent: 'gemini',
         agentArgs: '',
         promptDelivery: 'auto-submit',
-        settings: { agentDefaultArgs: { gemini: '' } } as never
+        settings: { ...getDefaultSettings(path.resolve('tmp')), agentDefaultArgs: { gemini: '' } }
       })
     )
 
