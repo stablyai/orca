@@ -155,7 +155,7 @@ type DispatchContext struct {
 	// "list active dispatch contexts for the current user" need. Nullable:
 	// a dispatch context created by a system process with no end-user
 	// caller legitimately has none. See
-	// specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
+	// docs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
 	// for why this lives here rather than on coordinator_runs.
 	UserID string
 	// WorktreeID is the frontend worktree this dispatch is running for —
@@ -166,7 +166,7 @@ type DispatchContext struct {
 	// legitimately has none. Added so agentSession.listActive's dispatch
 	// contexts can be keyed onto the frontend's worktreeId-keyed
 	// remoteAgentSessions slice — see
-	// specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+	// docs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
 	WorktreeID string
 	// OrchestrationTaskID is the owning task. May be empty in this
 	// scaffold — see README "Known gaps": the generated

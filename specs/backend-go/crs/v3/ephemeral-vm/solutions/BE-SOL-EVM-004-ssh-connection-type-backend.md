@@ -321,7 +321,7 @@ func WrapClient(client *ssh.Client) *Connection { return &Connection{client: cli
 
 ## Liên quan
 
-- `specs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md`
+- `docs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md`
 - `backend-go/services/infra-fleet-service/internal/usecase/ephemeral_vm_relay.go` (guard hiện tại)
 - `backend-go/services/infra-fleet-service/internal/adapter/sshconn/connector.go` (Hướng B tái dùng)
 - `backend-go/services/infra-fleet-service/internal/adapter/sshrelay/provisioner.go` (Hướng B tái dùng nguyên vẹn)

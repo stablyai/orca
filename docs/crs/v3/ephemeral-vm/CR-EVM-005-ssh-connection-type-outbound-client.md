@@ -9,7 +9,7 @@
 | **Phiên bản** | v1.0 |
 | **Ngày tạo** | 2026-09-08 |
 | **Trạng thái** | 🔲 Proposed — thiết kế sketch, chưa committed |
-| **Tác giả** | Kế thừa `specs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md`, xác nhận lại bằng mã nguồn hiện tại |
+| **Tác giả** | Kế thừa `docs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md`, xác nhận lại bằng mã nguồn hiện tại |
 | **Tác động HLD** | Agent transport layer (WebSocket modes hiện có), Infra-Fleet domain |
 | **Tác động Features** | Ephemeral VM workspace với recipe trả `{type: 'ssh', target}` — hiện bị chặn vĩnh viễn |
 
@@ -111,7 +111,7 @@ nhanh.
 
 ## Liên quan
 
-- `specs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md` (thiết kế gốc, CR này hiện thực hoá)
+- `docs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md` (thiết kế gốc, CR này hiện thực hoá)
 - `backend-go/services/infra-fleet-service/internal/usecase/ephemeral_vm_relay.go` (nơi guard `connection_type == "ssh"` sống hôm nay)
 - `agent/src/relay/agent-connection-direct.ts`, `agent-connection-relay.ts` (2 chế độ hiện có, để so sánh)
 - `frontend/src/shared/ephemeral-vm-recipes.ts` (`EphemeralVmRecipeSshTargetSchema`)

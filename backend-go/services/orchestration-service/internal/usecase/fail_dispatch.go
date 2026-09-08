@@ -25,7 +25,7 @@ type FailDispatchInput struct {
 
 // FailDispatch is the real call site TASK-BE-STORAGE-011 built
 // ClassifyDispatchFailure for but had nothing to wire it into — see
-// specs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
+// docs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
 // It exists as a standalone, callable RPC/usecase now; which service ends
 // up calling it (once a real agent-dispatch relay call site exists
 // somewhere in backend-go) is intentionally left open — see that backlog

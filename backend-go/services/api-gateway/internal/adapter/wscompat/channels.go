@@ -438,7 +438,7 @@ type devServerView struct {
 	// approval) — the coarse dev-server health/bootstrap state backend-go
 	// now exposes (infrafleetv1.DevServer.health_status). "pending" | "healthy" |
 	// "degraded" | "unhealthy". See
-	// specs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md.
+	// docs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md.
 	HealthStatus string `json:"healthStatus"`
 }
 

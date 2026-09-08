@@ -52,7 +52,7 @@ type OrchestrationServiceClient interface {
 	// ListActiveDispatchContextsForUser: every non-terminal dispatch context
 	// for the calling user (tenant/user from identity, not a request field).
 	// Added for CR-STORAGE-006/007 — see
-	// specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
+	// docs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
 	ListActiveDispatchContextsForUser(ctx context.Context, in *ListActiveDispatchContextsForUserRequest, opts ...grpc.CallOption) (*ListActiveDispatchContextsForUserResponse, error)
 	// FailDispatch records a real dispatch-attempt failure against
 	// dispatch_context_id, tripping the circuit breaker at
@@ -63,7 +63,7 @@ type OrchestrationServiceClient interface {
 	// failure (UNAVAILABLE/DEADLINE_EXCEEDED) is intentionally NOT recorded,
 	// matching BE-SOL-STORAGE-003 §4's "a transient network blip must not
 	// trip the circuit breaker" rule. See
-	// specs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
+	// docs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
 	FailDispatch(ctx context.Context, in *FailDispatchRequest, opts ...grpc.CallOption) (*FailDispatchResponse, error)
 }
 
@@ -169,7 +169,7 @@ type OrchestrationServiceServer interface {
 	// ListActiveDispatchContextsForUser: every non-terminal dispatch context
 	// for the calling user (tenant/user from identity, not a request field).
 	// Added for CR-STORAGE-006/007 — see
-	// specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
+	// docs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
 	ListActiveDispatchContextsForUser(context.Context, *ListActiveDispatchContextsForUserRequest) (*ListActiveDispatchContextsForUserResponse, error)
 	// FailDispatch records a real dispatch-attempt failure against
 	// dispatch_context_id, tripping the circuit breaker at
@@ -180,7 +180,7 @@ type OrchestrationServiceServer interface {
 	// failure (UNAVAILABLE/DEADLINE_EXCEEDED) is intentionally NOT recorded,
 	// matching BE-SOL-STORAGE-003 §4's "a transient network blip must not
 	// trip the circuit breaker" rule. See
-	// specs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
+	// docs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
 	FailDispatch(context.Context, *FailDispatchRequest) (*FailDispatchResponse, error)
 	mustEmbedUnimplementedOrchestrationServiceServer()
 }

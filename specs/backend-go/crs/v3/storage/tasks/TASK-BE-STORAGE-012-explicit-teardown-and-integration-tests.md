@@ -9,7 +9,7 @@ existing coverage rather than duplicating it), Part C (`connection.teardown`
 wscompat channel), and Part D (best-effort agent notify) all complete. The
 original "`FailDispatch` not double-fired" test is 🔲 NOT APPLICABLE, not
 missing — `FailDispatch` does not exist in this codebase (confirmed by
-TASK-BE-STORAGE-011; tracked separately at `specs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md`).
+TASK-BE-STORAGE-011; tracked separately at `docs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md`).
 
 > **Kết quả thực tế / adjusted scope:** như TASK-BE-STORAGE-010/011 đã phát
 > hiện, KHÔNG có RPC `TeardownConnection` thật trong `infrafleet.proto`
@@ -171,7 +171,7 @@ FE-TASK-STORAGE-016 (phần resume UX) có backend thật để kiểm chứng.
 Part A above built `TeardownConnection` as a real gRPC RPC on
 `infra-fleet-service`, but never exposed it through `api-gateway`'s
 wscompat layer — so no browser/agent caller could actually reach it. That
-gap was flagged in `specs/backlog/README.md` and in
+gap was flagged in `docs/backlog/README.md` and in
 `FE-TASK-STORAGE-016`'s own status note. Closed now:
 
 - `backend-go/services/api-gateway/internal/adapter/wscompat/channels_infra_fleet.go`

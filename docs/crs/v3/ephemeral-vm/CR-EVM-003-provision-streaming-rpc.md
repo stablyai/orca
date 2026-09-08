@@ -23,7 +23,7 @@ hoặc suspend/resume/destroy trên 1 VM **đã tồn tại**
 (`ephemeral_vm_relay.go:19-23`'s doc comment tự xác nhận điều này). Không
 có `provision`, `ephemeralVm` không thể tạo ra bất kỳ VM/container nào
 qua backend-go — đây chính là gốc rễ của
-[BACKLOG-002](../../../../specs/backlog/BACKLOG-002-environment-devserver-resolution.md)
+[BACKLOG-002](../../../../docs/backlog/BACKLOG-002-environment-devserver-resolution.md)
 ("`environment_id` chưa từng được ghi vì không có code path nào pairing
 thành công").
 

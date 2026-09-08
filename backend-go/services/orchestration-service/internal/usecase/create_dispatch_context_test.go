@@ -76,7 +76,7 @@ func TestCreateDispatchContext_ThreadsOrchestrationTaskID(t *testing.T) {
 
 // TestCreateDispatchContext_ThreadsWorktreeID proves a caller-supplied
 // WorktreeID reaches the repository call and round-trips on the result —
-// see specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+// see docs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
 func TestCreateDispatchContext_ThreadsWorktreeID(t *testing.T) {
 	repo := &fakeDispatchContextRepository{}
 	uc := NewCreateDispatchContext(repo, &synchronousSerializer{})

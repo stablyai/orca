@@ -55,7 +55,7 @@
 > `git-gateway-service`, `scm-integration-service`, `api-gateway`,
 > `task-service`) build clean.
 >
-> See `specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md`
+> See `docs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md`
 > for the full "why not coordinator_runs.user_id" writeup (kept, marked
 > resolved) and `TASK-BE-STORAGE-008` for the wscompat wiring this unblocks.
 

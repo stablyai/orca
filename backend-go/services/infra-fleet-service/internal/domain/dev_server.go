@@ -61,7 +61,7 @@ func (s DevServerStatus) Valid() bool {
 // migrations/0007_dev_server_health_status.up.sql, for the full history) —
 // this type/field is this session's first Go-side exposure of it, reusing
 // the column exactly as committed rather than adding a new one. See
-// specs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md
+// docs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md
 // (option 2: reuse the coarse status instead of a dedicated bootstrap-step
 // field).
 type DevServerHealthStatus string

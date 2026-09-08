@@ -258,7 +258,7 @@ code sau):
 
 ## Liên quan
 
-- `specs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md`
+- `docs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md`
 - `frontend/src/shared/ephemeral-vm-recipes.ts:47-` (`EphemeralVmRecipeSshTargetSchema`)
 - `agent/src/main/ssh/ssh-filesystem-stream-reader.ts`, `ssh-git-response-stream-reader.ts` (kiến trúc để mirror, không phải code)
 - `specs/agent/tdd/v5/03-connection-modes.md` §1-2

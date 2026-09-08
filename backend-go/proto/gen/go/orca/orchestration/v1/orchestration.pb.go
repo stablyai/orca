@@ -41,7 +41,7 @@ type DispatchContext struct {
 	// caller-supplied on CreateDispatchContextRequest (like handle/
 	// coordinator_run_id/orchestration_task_id, unlike user_id). Empty for a
 	// dispatch with no worktree association. See
-	// specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+	// docs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
 	WorktreeId    string `protobuf:"bytes,9,opt,name=worktree_id,json=worktreeId,proto3" json:"worktree_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -154,7 +154,7 @@ type CreateDispatchContextRequest struct {
 	// worktree_id: the frontend worktree this dispatch is running for.
 	// Optional — an ad-hoc dispatch with no worktree association
 	// legitimately omits it. See
-	// specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+	// docs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
 	WorktreeId    string `protobuf:"bytes,4,opt,name=worktree_id,json=worktreeId,proto3" json:"worktree_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

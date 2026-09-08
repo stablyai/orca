@@ -26,7 +26,7 @@ service OrchestrationService {
   // ListActiveDispatchContextsForUser: every non-terminal dispatch context
   // for the calling user (tenant/user from identity, not a request field).
   // Added for CR-STORAGE-006/007 — see
-  // specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
+  // docs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
   rpc ListActiveDispatchContextsForUser(ListActiveDispatchContextsForUserRequest) returns (ListActiveDispatchContextsForUserResponse);
 
   // FailDispatch records a real dispatch-attempt failure against
@@ -38,7 +38,7 @@ service OrchestrationService {
   // failure (UNAVAILABLE/DEADLINE_EXCEEDED) is intentionally NOT recorded,
   // matching BE-SOL-STORAGE-003 §4's "a transient network blip must not
   // trip the circuit breaker" rule. See
-  // specs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
+  // docs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md.
   rpc FailDispatch(FailDispatchRequest) returns (FailDispatchResponse);
 }
 
@@ -61,7 +61,7 @@ message DispatchContext {
   // caller-supplied on CreateDispatchContextRequest (like handle/
   // coordinator_run_id/orchestration_task_id, unlike user_id). Empty for a
   // dispatch with no worktree association. See
-  // specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+  // docs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
   string worktree_id = 9;
 }
 
@@ -78,7 +78,7 @@ message CreateDispatchContextRequest {
   // worktree_id: the frontend worktree this dispatch is running for.
   // Optional — an ad-hoc dispatch with no worktree association
   // legitimately omits it. See
-  // specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+  // docs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
   string worktree_id = 4;
 }
 

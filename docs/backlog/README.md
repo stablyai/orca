@@ -17,6 +17,12 @@ kept as a historical record — see each service/CR's own tracking docs
 (`specs/backend-go/bugs/missing-v3/`, `specs/{agent,backend-go,frontend}/crs/`)
 for closed-item history.
 
+This directory was moved here from `specs/backlog/` (2026-09-08) so every
+backlog item lives in one place — see [`TODO.md`](./TODO.md), a separate,
+manually-maintained list of larger initiatives (surveyed/planned but not
+yet built, or reverted) that predates this directory and uses its own
+format; the two are complementary, not duplicates.
+
 ## Index
 
 | ID | Title | Blocked on | Priority |

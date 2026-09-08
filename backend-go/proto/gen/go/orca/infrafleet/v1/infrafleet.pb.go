@@ -1026,7 +1026,7 @@ type DevServer struct {
 	// pre-existing infra.dev_servers.status column, exposed here for the
 	// first time. "pending" (the column default) | "healthy" | "degraded" |
 	// "unhealthy". See
-	// specs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md
+	// docs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md
 	// (option 2: reuse this coarse status for bootstrap.ts instead of adding
 	// a dedicated per-step bootstrap field).
 	HealthStatus  string `protobuf:"bytes,9,opt,name=health_status,json=healthStatus,proto3" json:"health_status,omitempty"`

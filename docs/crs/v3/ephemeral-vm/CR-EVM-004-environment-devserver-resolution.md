@@ -9,7 +9,7 @@
 | **Phiên bản** | v1.0 |
 | **Ngày tạo** | 2026-09-08 |
 | **Trạng thái** | 🔲 Proposed — chưa triển khai, phụ thuộc cứng [CR-EVM-003](./CR-EVM-003-provision-streaming-rpc.md) |
-| **Tác giả** | Kế thừa thiết kế đã có ở `specs/backlog/BACKLOG-002-environment-devserver-resolution.md`, xác nhận lại bằng mã nguồn hiện tại |
+| **Tác giả** | Kế thừa thiết kế đã có ở `docs/backlog/BACKLOG-002-environment-devserver-resolution.md`, xác nhận lại bằng mã nguồn hiện tại |
 | **Tác động HLD** | Infra-Fleet domain (`ResolveConnection`), Terminal RPC surface |
 | **Tác động Features** | `terminal.create`, `files.browseServerDir` cho workspace backed thuần bởi ephemeral VM (chưa gắn compute cụ thể) |
 
@@ -18,7 +18,7 @@
 ## Bối cảnh & Vấn đề gốc
 
 Đây là nội dung của
-[BACKLOG-002](../../../../specs/backlog/BACKLOG-002-environment-devserver-resolution.md),
+[BACKLOG-002](../../../../docs/backlog/BACKLOG-002-environment-devserver-resolution.md),
 giờ **không còn bị block nữa** một khi
 [CR-EVM-003](./CR-EVM-003-provision-streaming-rpc.md) tồn tại — CR này
 hiện thực hoá đúng thiết kế đã sketch ở đó, không phát minh lại.
@@ -96,7 +96,7 @@ path SSH/dev-server-bound khác đã dùng — resolve `environmentId` →
 
 ## Liên quan
 
-- `specs/backlog/BACKLOG-002-environment-devserver-resolution.md` (thiết kế gốc, CR này hiện thực hoá)
+- `docs/backlog/BACKLOG-002-environment-devserver-resolution.md` (thiết kế gốc, CR này hiện thực hoá)
 - `backend-go/services/infra-fleet-service/migrations/0013_ephemeral_vm_runtimes.up.sql:9`
 - `backend-go/proto/orca/infrafleet/v1/infrafleet.proto` (`ResolveConnectionRequest`)
 - `backend-go/services/api-gateway/internal/adapter/wscompat/channels_onboarding.go:654` (tiền lệ `dev_server_id` alternate-key đang chạy thật)

@@ -41,7 +41,7 @@ dispatch).
 **Hệ quả thật, không phải lý thuyết**: bất kỳ recipe nào có field
 `suspend`/`resume`/`destroy` không rỗng, một khi được `attachWorkspace`
 vào 1 dev server thật (`connection_type: "orca-server"` — path đã "ship
-đầy đủ" theo chính [BACKLOG-001](../../../../specs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md)),
+đầy đủ" theo chính [BACKLOG-001](../../../../docs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md)),
 **luôn nhận `INFRA_EPHEMERAL_VM_UNSUPPORTED` mỗi lần suspend/resume/
 cleanup có command** — không phải "tính năng chưa có", mà là lỗi runtime
 đang chờ xảy ra ngay khi ai đó dùng feature này với recipe thật.

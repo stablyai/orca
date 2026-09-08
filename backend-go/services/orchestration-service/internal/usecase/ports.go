@@ -93,7 +93,7 @@ type DispatchContextRepository interface {
 	// for (tenantID, userID) not in a terminal status (completed/failed/
 	// circuit_broken excluded) — backs CR-STORAGE-006/007's
 	// "agentSession.listActive" hydrate. See
-	// specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
+	// docs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md.
 	ListActiveDispatchContextsForUser(ctx context.Context, tenantID, userID string) ([]domain.DispatchContext, error)
 
 	// RecordDispatchFailure loads dispatchContextID (locked, tenant-scoped),
@@ -101,7 +101,7 @@ type DispatchContextRepository interface {
 	// failure_count and tripping the circuit breaker at the threshold — and
 	// persists the result, atomically. Returns ErrDispatchContextNotFound if
 	// no such row exists for tenantID. See
-	// specs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md
+	// docs/backlog/BACKLOG-009-orchestration-service-fail-dispatch-missing.md
 	// for why this port and its caller (usecase.FailDispatch) didn't exist
 	// before.
 	RecordDispatchFailure(ctx context.Context, tenantID, dispatchContextID, reason string) (domain.DispatchContext, error)

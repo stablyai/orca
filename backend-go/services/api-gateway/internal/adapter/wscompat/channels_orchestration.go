@@ -61,7 +61,7 @@ func registerOrchestrationChannels(r *Registry, client orchestrationv1.Orchestra
 	// agentSession.listActive: every active dispatch context for the
 	// calling user (identity, never a request field) — CR-STORAGE-006/007's
 	// hydrate for "which of my AI-agent sessions are currently running."
-	// See specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
+	// See docs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
 	// for why this filters DispatchContext.user_id directly rather than
 	// resolving through a coordinator_run (no RPC creates one yet).
 	r.Register("agentSession.listActive", func(ctx context.Context, id Identity, _ []json.RawMessage) (any, error) {

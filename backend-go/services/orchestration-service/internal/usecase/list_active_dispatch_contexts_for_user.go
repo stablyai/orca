@@ -15,7 +15,7 @@ import (
 // identity, never a request field — same rule every other usecase in this
 // service follows for tenantID.
 //
-// See specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
+// See docs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
 // for why this filters dispatch_contexts.user_id directly rather than
 // resolving through coordinator_runs (no RPC creates a coordinator_runs
 // row yet — StartCoordinatorRun is out of scope here, tracked separately

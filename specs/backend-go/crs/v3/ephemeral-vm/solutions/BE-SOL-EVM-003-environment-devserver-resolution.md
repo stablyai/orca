@@ -177,7 +177,7 @@ viết relay call).
 
 ## Liên quan
 
-- `specs/backlog/BACKLOG-002-environment-devserver-resolution.md` (thiết kế gốc)
+- `docs/backlog/BACKLOG-002-environment-devserver-resolution.md` (thiết kế gốc)
 - `backend-go/services/infra-fleet-service/migrations/0013_ephemeral_vm_runtimes.up.sql:9`
 - `backend-go/services/infra-fleet-service/internal/domain/ephemeral_vm_runtime.go:20` (`EnvironmentID` field đã có)
 - `backend-go/services/api-gateway/internal/adapter/wscompat/channels_onboarding.go:654` (tiền lệ `dev_server_id` alternate-key)
