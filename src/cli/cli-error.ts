@@ -44,7 +44,13 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     )
   }
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
-    if (hasOrchestrationRequestId(error.data)) {
+    if (
+      hasOrchestrationRequestId(error.data) ||
+      (typeof error.data === 'object' &&
+        error.data !== null &&
+        'processState' in error.data &&
+        error.data.processState === 'unverifiable')
+    ) {
       return message
     }
     return `${message}\nOrca is not running. Run 'orca open' first.`
