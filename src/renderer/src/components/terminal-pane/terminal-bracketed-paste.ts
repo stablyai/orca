@@ -137,5 +137,6 @@ export function pasteTerminalText(
   }
   // Why: TUI agents treat paste vs keystrokes by bracketing, not line count.
   // Stripping wrappers after Ctrl+C truncates long single-line pastes.
-  terminal.paste(text)
+  // Why: xterm's native paste wrapper must not let pasted escape bytes close the frame early.
+  terminal.paste(sanitizeTerminalPasteText(text))
 }

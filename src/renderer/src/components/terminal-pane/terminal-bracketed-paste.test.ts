@@ -188,7 +188,7 @@ describe('terminal bracketed paste policy', () => {
     markTerminalBracketedPasteInterrupted(terminal)
     pasteTerminalText(terminal, 'before\x1b[201~after')
 
-    expect(terminal.paste).toHaveBeenCalledWith('before\x1b[201~after')
+    expect(terminal.paste).toHaveBeenCalledWith('before\u241b[201~after')
     expect(observedIgnoreValues).toEqual([false])
   })
 })
