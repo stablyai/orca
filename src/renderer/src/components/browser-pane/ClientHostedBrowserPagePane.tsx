@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type {
@@ -23,6 +23,7 @@ import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-int
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
 import { watchBrowserClientPageGuestLoss } from './host-guest/browser-client-page-guest-loss'
 import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
+import { useClientHostedBrowserMarkup } from './annotate/use-client-hosted-browser-markup'
 import BrowserFind from './assemble-chrome/BrowserFind'
 import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
 import BrowserAddressBar from './assemble-chrome/BrowserAddressBar'
@@ -327,15 +328,15 @@ export function ClientHostedBrowserPagePane({
     isDefaultZoom: zoom.browserZoomPercent === zoom.browserDefaultZoomPercent
   })
 
-  useEffect(() => {
-    const webview = webviewRef.current
-    if (!webview) {
-      return
-    }
-    // Why: the retained guest is a body-level fixed host painted over this pane's viewport, so a
-    // React overlay inside the viewport cannot cover it — drop the guest from layout instead.
-    webview.style.display = showFailureOverlay || attachmentError ? 'none' : 'flex'
-  }, [attachmentError, showFailureOverlay])
+  const markup = useClientHostedBrowserMarkup({
+    webviewRef,
+    browserPageId: browserTab.id,
+    runtimeEnvironmentId,
+    placement,
+    isActive,
+    unavailable: Boolean(attachmentError) || restoredPageUnrecovered,
+    showFailureOverlay
+  })
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col bg-background">
@@ -381,9 +382,12 @@ export function ClientHostedBrowserPagePane({
             />
           }
           reloadLabel={reload.reloadButtonLabel}
-        />
+        >
+          {markup.drawButton}
+        </BrowserNavigationControlRow>
       </div>
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
+        {markup.overlay}
         <div
           role="status"
           aria-live="polite"
