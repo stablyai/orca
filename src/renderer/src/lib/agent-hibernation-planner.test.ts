@@ -712,7 +712,8 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
     'grok',
     'devin',
     'copilot',
-    'kimi'
+    'kimi',
+    'cursor'
   ] as const
 
   function liveAnchor(

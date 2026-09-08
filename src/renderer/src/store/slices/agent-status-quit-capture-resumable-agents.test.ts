@@ -39,4 +39,41 @@ describe('quit-time capture for newly resumable agents', () => {
       origin: 'live'
     })
   })
+
+  it('checkpoints a live Cursor provider session before quit-time capture', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      {
+        state: 'working',
+        prompt: 'finish the task',
+        agentType: 'cursor'
+      },
+      'Cursor Agent',
+      { updatedAt: 10, stateStartedAt: 10 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      {
+        providerSession: {
+          key: 'session_id',
+          id: '668320d2-2fd8-4888-b33c-2a466fec86e7'
+        }
+      }
+    )
+
+    // Why: this is the #18668 regression — without cursor in RESUMABLE_TUI_AGENTS no sleeping
+    // record is ever captured, so restart restores an empty shell instead of cursor-agent.
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'cursor',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      providerSession: { key: 'session_id', id: '668320d2-2fd8-4888-b33c-2a466fec86e7' },
+      origin: 'live'
+    })
+  })
 })

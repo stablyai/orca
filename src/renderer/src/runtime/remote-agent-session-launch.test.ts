@@ -64,6 +64,23 @@ describe('remote agent-session launch routing', () => {
     expect(hostAuthority).not.toHaveBeenCalled()
   })
 
+  it('falls back to legacy when an older host lacks the Cursor resume capability', async () => {
+    const hostAuthority = vi.fn().mockResolvedValue('structured')
+    const legacy = vi.fn().mockResolvedValue('legacy')
+    mocks.supportsCapability.mockResolvedValue(false)
+
+    await expect(
+      runRemoteAgentSessionLaunch({
+        environmentId: 'env-1',
+        hostAuthority,
+        hostAuthorityCapability: agentResumeHostAuthorityCapability('cursor'),
+        legacy
+      })
+    ).resolves.toBe('legacy')
+    expect(mocks.supportsCapability).toHaveBeenCalledWith('env-1', 'agent-session.cursor-resume.v1')
+    expect(hostAuthority).not.toHaveBeenCalled()
+  })
+
   it('preserves the exact legacy path when the capability is absent', async () => {
     const hostAuthority = vi.fn().mockResolvedValue('structured')
     const legacy = vi.fn().mockResolvedValue('legacy')
