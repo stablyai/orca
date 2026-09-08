@@ -87,6 +87,52 @@ it('moves the invoking window and gathers registered windows onto its monitor', 
   expect(primary.window.setBounds).toHaveBeenCalledWith(expect.objectContaining({ x: -550 }))
 })
 
+it('tiles registered windows on the invoking monitor without focusing them', async () => {
+  const primary = createWindow(1)
+  const secondary = createWindow(2)
+  registerWorkspaceViewIpc(() => primary.window as never)
+  invoke('ready', primary.window)
+  invoke('ready', secondary.window)
+
+  expect(await invoke('tileWindowsOnMonitor', secondary.window)).toBe(2)
+  expect(primary.window.setBounds).toHaveBeenCalledWith({
+    x: -688,
+    y: 12,
+    width: 282,
+    height: 676
+  })
+  expect(secondary.window.setBounds).toHaveBeenCalledWith({
+    x: -394,
+    y: 12,
+    width: 282,
+    height: 676
+  })
+  expect(primary.window).not.toHaveProperty('show')
+  expect(primary.window).not.toHaveProperty('focus')
+})
+
+it('distributes registered windows across all monitors', async () => {
+  const primary = createWindow(1)
+  const secondary = createWindow(2)
+  registerWorkspaceViewIpc(() => primary.window as never)
+  invoke('ready', primary.window)
+  invoke('ready', secondary.window)
+
+  expect(await invoke('distributeWindowsAcrossMonitors', secondary.window)).toBe(2)
+  expect(primary.window.setBounds).toHaveBeenCalledWith({
+    x: 12,
+    y: 12,
+    width: 476,
+    height: 476
+  })
+  expect(secondary.window.setBounds).toHaveBeenCalledWith({
+    x: -688,
+    y: 12,
+    width: 576,
+    height: 676
+  })
+})
+
 it('discovers presentations and fences Visit and Open against renderer reloads', async () => {
   const source = createWindow(1)
   const destination = createWindow(2)

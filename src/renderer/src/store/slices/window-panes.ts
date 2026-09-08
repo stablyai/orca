@@ -10,6 +10,7 @@ import {
   buildSplitNode,
   replaceLeaf,
   collapseGroupLayout,
+  buildBalancedSplitLayout,
   updateSplitRatio
 } from './tabs/tabs-layout'
 import {
@@ -31,6 +32,7 @@ export type WindowPanesSlice = WindowPaneHistory & {
   synchronizeWindowPaneSelection: (unplacedOnly?: boolean) => void
   focusWindowPane: (paneId: string, viewId?: string) => void
   splitWindowPane: (paneId: string, direction: 'horizontal' | 'vertical') => void
+  tileWindowPanes: () => void
   expandWindowPane: (paneId: string) => void
   closeWindowPane: (paneId: string) => void
   closeWorkspaceView: (paneId: string, viewId: string, history?: boolean) => void
@@ -155,6 +157,21 @@ export const createWindowPanesSlice: StateCreator<AppState, [], [], WindowPanesS
                 workspace: pane.workspace
               }
             }
+          }
+        }
+      }),
+    tileWindowPanes: () =>
+      change((state) => {
+        const layout = state.windowPaneLayout
+        const paneIds = Object.keys(layout?.panes ?? {})
+        if (!layout || paneIds.length < 2) {
+          return {}
+        }
+        return {
+          windowPaneLayout: {
+            ...layout,
+            root: buildBalancedSplitLayout(paneIds),
+            expandedPaneId: null
           }
         }
       }),

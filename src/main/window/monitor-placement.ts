@@ -6,6 +6,7 @@ export type MonitorDisplay = {
   workArea: WindowPlacement
 }
 
+const TILE_GAP = 12
 const TITLEBAR_HEIGHT = 48
 const MIN_REACHABLE_TITLEBAR_WIDTH = 96
 
@@ -77,4 +78,70 @@ export function readMonitorDisplays(
   } catch {
     return []
   }
+}
+
+function gridShape(count: number): { columns: number; rows: number } {
+  const columns = Math.max(1, Math.ceil(Math.sqrt(count)))
+  return { columns, rows: Math.max(1, Math.ceil(count / columns)) }
+}
+
+function gridCell(
+  area: WindowPlacement,
+  index: number,
+  count: number,
+  gap: number
+): WindowPlacement {
+  const { columns, rows } = gridShape(count)
+  const columnGap = Math.min(gap, Math.max(0, Math.floor(area.width / (columns + 1))))
+  const rowGap = Math.min(gap, Math.max(0, Math.floor(area.height / (rows + 1))))
+  const width = Math.max(1, Math.floor((area.width - columnGap * (columns + 1)) / columns))
+  const height = Math.max(1, Math.floor((area.height - rowGap * (rows + 1)) / rows))
+  const column = index % columns
+  const row = Math.floor(index / columns)
+  return {
+    x: area.x + columnGap + column * (width + columnGap),
+    y: area.y + rowGap + row * (height + rowGap),
+    width,
+    height
+  }
+}
+
+export function tileWindowPlacements(
+  display: MonitorDisplay,
+  count: number,
+  gap = TILE_GAP
+): WindowPlacement[] {
+  if (count <= 0 || !isValidWindowPlacement(display.workArea)) {
+    return []
+  }
+  return Array.from({ length: count }, (_, index) =>
+    gridCell(display.workArea, index, count, Math.max(0, gap))
+  )
+}
+
+export function distributeWindowPlacements(
+  displays: readonly MonitorDisplay[],
+  count: number,
+  gap = TILE_GAP
+): WindowPlacement[] {
+  const usableDisplays = displays.filter((display) => isValidWindowPlacement(display.workArea))
+  if (count <= 0 || usableDisplays.length === 0) {
+    return []
+  }
+  const groups = usableDisplays.map(() => [] as number[])
+  for (let index = 0; index < count; index += 1) {
+    groups[index % usableDisplays.length].push(index)
+  }
+  const placements = Array<WindowPlacement>(count)
+  for (const [displayIndex, indexes] of groups.entries()) {
+    indexes.forEach((windowIndex, gridIndex) => {
+      placements[windowIndex] = gridCell(
+        usableDisplays[displayIndex].workArea,
+        gridIndex,
+        indexes.length,
+        Math.max(0, gap)
+      )
+    })
+  }
+  return placements
 }

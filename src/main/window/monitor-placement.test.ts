@@ -3,6 +3,8 @@ import {
   isValidWindowPlacement,
   readMonitorDisplays,
   recoverWindowPlacement,
+  distributeWindowPlacements,
+  tileWindowPlacements,
   type MonitorDisplay
 } from './monitor-placement'
 
@@ -66,4 +68,20 @@ it('tolerates an unavailable display service', () => {
       throw new Error('screen unavailable')
     })
   ).toEqual([])
+})
+
+it('tiles windows into a balanced grid inside the monitor work area', () => {
+  expect(tileWindowPlacements(displays[0], 3)).toEqual([
+    { x: -1908, y: 12, width: 942, height: 522 },
+    { x: -954, y: 12, width: 942, height: 522 },
+    { x: -1908, y: 546, width: 942, height: 522 }
+  ])
+})
+
+it('distributes windows round-robin while preserving monitor origins', () => {
+  expect(distributeWindowPlacements(displays, 3)).toEqual([
+    { x: -1908, y: 12, width: 942, height: 1056 },
+    { x: 12, y: -888, width: 1416, height: 876 },
+    { x: -954, y: 12, width: 942, height: 1056 }
+  ])
 })

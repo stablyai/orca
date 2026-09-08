@@ -17,6 +17,10 @@ export function exposeWorkspaceViewBridge(
       ipcRenderer.invoke('workspaceViews:moveToMonitor', id) as Promise<boolean>,
     bringWindowsToMonitor: () =>
       ipcRenderer.invoke('workspaceViews:bringWindowsToMonitor') as Promise<void>,
+    tileWindowsOnMonitor: () =>
+      ipcRenderer.invoke('workspaceViews:tileWindowsOnMonitor') as Promise<number>,
+    distributeWindowsAcrossMonitors: () =>
+      ipcRenderer.invoke('workspaceViews:distributeWindowsAcrossMonitors') as Promise<number>,
     showMonitorMenu: () => ipcRenderer.invoke('workspaceViews:showMonitorMenu') as Promise<void>,
     reopenWindow: () => ipcRenderer.invoke('workspaceViews:reopenWindow') as Promise<number>,
     discover: () =>

@@ -1,5 +1,11 @@
 import { ipcMain, screen, Menu, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
-import { readMonitorDisplays, recoverWindowPlacement } from './monitor-placement'
+import {
+  distributeWindowPlacements,
+  readMonitorDisplays,
+  recoverWindowPlacement,
+  tileWindowPlacements,
+  type WindowPlacement
+} from './monitor-placement'
 import { isBackgroundLaunch } from './foreground-activation-policy'
 
 export function moveWorkspaceWindowToMonitor(window: BrowserWindow, displayId: number): boolean {
@@ -24,6 +30,30 @@ export function moveWorkspaceWindowToMonitor(window: BrowserWindow, displayId: n
   return true
 }
 
+function arrangeWorkspaceWindows(
+  windows: Map<number, BrowserWindow>,
+  placements: readonly WindowPlacement[]
+): number {
+  let arranged = 0
+  let placementIndex = 0
+  for (const window of windows.values()) {
+    if (window.isDestroyed() || window.isFullScreen()) {
+      continue
+    }
+    const placement = placements[placementIndex]
+    placementIndex += 1
+    if (!placement) {
+      break
+    }
+    if (window.isMaximized()) {
+      window.unmaximize()
+    }
+    window.setBounds(placement)
+    arranged += 1
+  }
+  return arranged
+}
+
 export function registerWorkspaceWindowMonitors(
   authorize: (event: IpcMainInvokeEvent) => BrowserWindow,
   windows: Map<number, BrowserWindow>
@@ -44,6 +74,22 @@ export function registerWorkspaceWindowMonitors(
     for (const window of windows.values()) {
       moveWorkspaceWindowToMonitor(window, display.id)
     }
+  })
+  ipcMain.handle('workspaceViews:tileWindowsOnMonitor', (event) => {
+    const invoker = authorize(event)
+    const display = screen.getDisplayMatching(invoker.getBounds())
+    const candidates = [...windows.values()].filter(
+      (window) => !window.isDestroyed() && !window.isFullScreen()
+    )
+    return arrangeWorkspaceWindows(windows, tileWindowPlacements(display, candidates.length))
+  })
+  ipcMain.handle('workspaceViews:distributeWindowsAcrossMonitors', (event) => {
+    authorize(event)
+    const displays = readMonitorDisplays(() => screen.getAllDisplays())
+    const candidates = [...windows.values()].filter(
+      (window) => !window.isDestroyed() && !window.isFullScreen()
+    )
+    return arrangeWorkspaceWindows(windows, distributeWindowPlacements(displays, candidates.length))
   })
   ipcMain.handle('workspaceViews:showMonitorMenu', (event) => {
     const window = authorize(event)

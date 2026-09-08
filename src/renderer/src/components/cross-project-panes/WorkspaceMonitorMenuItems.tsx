@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import {
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
@@ -27,6 +28,15 @@ export function WorkspaceMonitorMenuItems() {
   if (!bridge?.monitors) {
     return null
   }
+  const arrange = (run: () => Promise<number>) => {
+    void run()
+      .then((count) => {
+        if (count > 0) {
+          toast.success(`${count} windows arranged`)
+        }
+      })
+      .catch((error) => toast.error(String(error)))
+  }
   return (
     <>
       <DropdownMenuSub>
@@ -51,6 +61,26 @@ export function WorkspaceMonitorMenuItems() {
       >
         Bring All Windows to This Monitor
       </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>Arrange Windows</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          <DropdownMenuItem
+            onSelect={() => {
+              arrange(bridge.tileWindowsOnMonitor)
+            }}
+          >
+            Tile All Windows on This Monitor
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              arrange(bridge.distributeWindowsAcrossMonitors)
+            }}
+          >
+            Distribute Windows Across Monitors
+          </DropdownMenuItem>
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
     </>
   )
 }

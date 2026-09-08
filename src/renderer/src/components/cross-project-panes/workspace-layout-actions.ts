@@ -41,6 +41,11 @@ export function paneLayoutActions(paneId: string) {
     { label: 'Split Right', run: () => state.splitWindowPane(paneId, 'horizontal') },
     { label: 'Split Down', run: () => state.splitWindowPane(paneId, 'vertical') },
     {
+      label: 'Tile Panes in This Window',
+      run: () => state.tileWindowPanes(),
+      disabled: Object.keys(state.windowPaneLayout?.panes ?? {}).length < 2
+    },
+    {
       label: state.windowPaneLayout?.expandedPaneId ? 'Restore Layout' : 'Expand Pane',
       run: () => state.expandWindowPane(paneId)
     },
