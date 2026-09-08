@@ -1113,7 +1113,9 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "agentSessionHistoryTitle": "Agent Session History",
+        "agentSessionHistoryDescription": "Local index that lets you search inside past agent conversations."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -8210,7 +8212,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "agentSessionHistoryTitle": "Agent Session History",
+          "agentSessionHistoryDescription": "Local index that lets you search inside past agent conversations."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -11827,6 +11831,47 @@
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
         },
+        "AgentSessionHistoryPane": {
+          "enabledLabel": "Search inside conversations",
+          "enabledDescription": "Builds a local index of your agent transcripts on this computer so the Session History panel and `orca search` can match on what was said, not just titles.",
+          "historyLabel": "History to index",
+          "historyDescription": "Older transcripts are skipped when the index is built, and narrowing the range removes them from the index.",
+          "historyAll": "All history",
+          "history90": "Last 90 days",
+          "history30": "Last 30 days",
+          "indexSizeLabel": "Index size",
+          "indexSizeDescription": "Disk used by the local transcript index on this computer.",
+          "clearIndex": "Clear index",
+          "clearTitle": "Clear the transcript index?",
+          "clearBodyEnabled": "Deletes the index files. Your transcripts are untouched, and Orca starts rebuilding the index right away.",
+          "clearBodyDisabled": "Deletes the index files. Your transcripts are untouched.",
+          "cancel": "Cancel",
+          "clearing": "Clearing…",
+          "clearError": "Could not clear the index. Please try again."
+        },
+        "agentSessionHistory": {
+          "search": {
+            "title": "Agent Session History",
+            "description": "Local transcript index that powers full-text search over past agent sessions.",
+            "keywordTranscript": "transcript",
+            "keywordSearch": "search",
+            "keywordIndex": "index",
+            "keywordHistory": "history",
+            "keywordSessions": "sessions",
+            "keywordFullText": "full text",
+            "enableTitle": "Search Inside Conversations",
+            "enableDescription": "Turn the local transcript index on or off and choose how much history it covers.",
+            "keywordEnable": "enable",
+            "keywordRetention": "retention",
+            "keywordDays": "days",
+            "clearTitle": "Clear Index",
+            "clearDescription": "Delete the transcript index files and reclaim the disk they use.",
+            "keywordClear": "clear",
+            "keywordDelete": "delete",
+            "keywordDisk": "disk",
+            "keywordSize": "size"
+          }
+        },
         "contrast": {
           "title": "Color Contrast",
           "description": "Improve text readability or preserve the colors chosen by terminal programs.",
@@ -13041,6 +13086,10 @@
             "prepareSessionResumeFailed": "Could not prepare this session for resume.",
             "sessionDeleted": "Session deleted",
             "sessionDeleteFailed": "Couldn't delete the session",
+            "searchMatches_one": "{{count}} match",
+            "searchMatches_other": "{{count}} matches",
+            "searchMatches": "{{count}} matches",
+            "localSearchOnly": "Conversation search covers this computer only. Remote hosts use title search.",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
             "resumeInChatFailed": "Could not resume this session in a new chat."
@@ -13341,6 +13390,23 @@
             "90cabf6cfc": "Stack this PR above #{{value0}}",
             "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
             "29732f2fb0": "new PR"
+          },
+          "AiVaultSearchStatus": {
+            "providerNotIndexed": "{{value0}} not indexed",
+            "sortAriaLabel": "Sort search results",
+            "relevance": "Relevance",
+            "newest": "Newest",
+            "searchableAndPreparing": "{{value0}} conversations searchable · preparing older ones…",
+            "matchingIncomplete": "{{value0}} matching · still preparing",
+            "matchingInConversations": "{{value0}} matching · {{value1}} conversations",
+            "showingResultsFor": "Showing results for {{value0}} ·"
+          },
+          "AiVaultSearchConsentCard": {
+            "title": "Search inside conversations",
+            "body": "Builds a local index of your agent transcripts on this computer. Large histories can take several minutes and use several GB of disk.",
+            "enable": "Enable",
+            "notNow": "Not now",
+            "titlesOnly": "Titles only · "
           }
         }
       },
@@ -17761,5 +17827,38 @@
     "title": "Orca keeps failing to load",
     "stalledMessage": "The app window stopped responding while reloading after a crash.",
     "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
+  },
+  "sessionSearch": {
+    "indexing": {
+      "searchPaused": "{{sessions}} conversations searchable · indexing paused",
+      "clearPaused": "Deletes the index files. Your transcripts are untouched. Indexing stays paused until you resume.",
+      "discovering": "Finding conversations…",
+      "indexing": "Indexing conversations",
+      "updating": "Updating search index",
+      "paused": "Indexing paused",
+      "failed": "Index needs attention",
+      "complete": "Up to date",
+      "statusUnavailable": "Index status unavailable",
+      "loading": "Reading index status…",
+      "applying": "Applying…",
+      "pause": "Pause",
+      "resume": "Resume",
+      "retry": "Retry",
+      "files": "Files processed: {{processed}} / {{total}} · {{percent}}%",
+      "pausedDescription": "Indexed conversations stay searchable. Resume to catch up on new activity.",
+      "completeDescription": "New activity is indexed automatically.",
+      "partialDescription": "You can search indexed conversations while the rest are added.",
+      "counts": "Searchable conversations: {{sessions}} · Messages: {{messages}}",
+      "failures": "{{count}} indexing issues. Retry to check the remaining files.",
+      "unavailable": "Could not update index status. Please try again.",
+      "segmentProgress": "{{phase}} · {{percent}}%",
+      "segmentTooltip": "{{status}}. Click to open search settings.",
+      "settingsError": "Could not save search settings. Please try again.",
+      "idle": "Waiting to index",
+      "start": "Index now"
+    },
+    "results": {
+      "sourcesUnverified": "{{count}} sources could not be verified"
+    }
   }
 }

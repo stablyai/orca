@@ -37,6 +37,7 @@ function sessionIdFromLegacyFilePath(filePath: string): string {
  */
 export async function discoverOpenCodeSessions(args: {
   storageDir: string
+  signal?: AbortSignal
   dbPaths: readonly string[]
   limitPerAgent: number
   issues: AiVaultScanIssue[]
@@ -44,6 +45,7 @@ export async function discoverOpenCodeSessions(args: {
   const [fileDiscovery, sqliteCandidates] = await Promise.all([
     discoverFiles({
       rootDir: join(args.storageDir, 'session'),
+      signal: args.signal,
       limit: args.limitPerAgent,
       agent: 'opencode',
       issues: args.issues,

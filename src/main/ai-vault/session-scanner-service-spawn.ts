@@ -1,3 +1,4 @@
+import { removeSessionSearchDatabase } from '../ai-vault-search/session-search-schema'
 import { fork, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import type { AiVaultListResult, AiVaultSubagentListResult } from '../../shared/ai-vault-types'
@@ -15,8 +16,14 @@ import { buildAiVaultServiceEnv } from './session-scanner-service-env'
 import { AiVaultScannerServiceClient } from './session-scanner-service-client'
 import { getAiVaultServiceEntryPath } from './session-scanner-service-entry-path'
 import { lowerAiVaultServicePriority } from './session-scanner-service-priority'
-import type { AiVaultServiceSubagentRequest } from './session-scanner-service-protocol'
+import type {
+  AiVaultServiceSearchConfigureRequest,
+  AiVaultServiceSearchRequest,
+  AiVaultServiceSubagentRequest
+} from './session-scanner-service-protocol'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
+import { getSessionSearchInitOptions } from '../ai-vault-search/session-search-paths'
+import type { AiVaultSearchCoverage, AiVaultSearchResult } from '../../shared/ai-vault-search-types'
 
 export function spawnAiVaultServiceProcess(): ChildProcess {
   const entryPath = getAiVaultServiceEntryPath()
@@ -39,7 +46,10 @@ let sharedClient: AiVaultScannerServiceClient | null = null
 function getSharedClient(): AiVaultScannerServiceClient {
   sharedClient ??= new AiVaultScannerServiceClient({
     processFactory: spawnAiVaultServiceProcess,
-    init: { sessionParseCache: getSessionParseCachePersistenceOptions() },
+    init: () => ({
+      sessionParseCache: getSessionParseCachePersistenceOptions(),
+      sessionSearch: getSessionSearchInitOptions()
+    }),
     onStderr: (text) => console.error('[ai-vault-service]', text.trimEnd())
   })
   return sharedClient
@@ -79,6 +89,45 @@ export function readAiVaultFirstUserPromptInService(
   signal?: AbortSignal
 ): Promise<ReadAiVaultFirstUserPromptResult> {
   return getSharedClient().request({ type: 'request', operation: 'firstPrompt', request }, signal)
+}
+
+export function searchAiVaultSessionsInService(
+  request: AiVaultServiceSearchRequest,
+  signal?: AbortSignal
+): Promise<AiVaultSearchResult> {
+  return getSharedClient().request({ type: 'request', operation: 'search', request }, signal)
+}
+
+export function readAiVaultSearchCoverageInService(
+  request: Pick<AiVaultServiceSearchRequest, 'roots'>,
+  signal?: AbortSignal
+): Promise<AiVaultSearchCoverage> {
+  return getSharedClient().request(
+    { type: 'request', operation: 'searchCoverage', request },
+    signal
+  )
+}
+
+/**
+ * Explicit enabling starts backfill; disabling an absent writer needs no child.
+ */
+export function configureAiVaultSearchInService(
+  request: AiVaultServiceSearchConfigureRequest,
+  signal?: AbortSignal
+): Promise<AiVaultSearchCoverage> | null {
+  if (request.init.enabled) {
+    return getSharedClient().request(
+      { type: 'request', operation: 'searchConfigure', request },
+      signal
+    )
+  }
+  if (!sharedClient && request.clearIndex) {
+    removeSessionSearchDatabase(request.init.databasePath)
+  }
+  return (
+    sharedClient?.request({ type: 'request', operation: 'searchConfigure', request }, signal) ??
+    null
+  )
 }
 
 export function invalidateAiVaultServiceCache(paths: string[]): Promise<void> {

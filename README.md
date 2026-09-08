@@ -150,6 +150,8 @@ Agents drive Orca too — script every workflow with `orca worktree create`, `sn
 
 [Docs →](https://www.onorca.dev/docs/cli/overview)
 
+[Agent-session search across local, paired, and SSH hosts](docs/reference/agent-session-search.md)
+
 </td>
 <td width="50%">
   <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="docs/assets/feature-wall/orca-cli.gif" type="image/gif"><img src="docs/assets/feature-wall/orca-cli.jpg" alt="Script Orca from the CLI" width="100%" /></picture></a>

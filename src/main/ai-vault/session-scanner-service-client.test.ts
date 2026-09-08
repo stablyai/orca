@@ -14,7 +14,7 @@ function setup(idleTimeoutMs?: number): {
   const child = new AiVaultServiceTestChild()
   const client = new AiVaultScannerServiceClient({
     processFactory: () => child.asChildProcess(),
-    init: { sessionParseCache: null },
+    init: () => ({ sessionParseCache: null }),
     idleTimeoutMs
   })
   return { child, client }
@@ -135,7 +135,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null })
     })
     const titles = client.request({ type: 'request', operation: 'titles', requests: [] })
     expect(children).toHaveLength(1)
@@ -167,7 +167,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null })
     })
     const titles = client.request({ type: 'request', operation: 'titles', requests: [] })
 
@@ -190,7 +190,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null })
     })
     const titles = client.request({ type: 'request', operation: 'titles', requests: [] })
 
@@ -224,7 +224,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null })
     })
     // Each request retries its cold start once, so two requests spend the three
     // faults the circuit breaker needs.
@@ -314,7 +314,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null }
+      init: () => ({ sessionParseCache: null })
     })
     const invalidation = client.invalidate(['/tmp/deleted.jsonl'])
     readyAiVaultServiceChild(children[0]!)
@@ -350,7 +350,7 @@ describe('AiVaultScannerServiceClient', () => {
         children.push(child)
         return child.asChildProcess()
       },
-      init: { sessionParseCache: null },
+      init: () => ({ sessionParseCache: null }),
       idleTimeoutMs: 100
     })
 

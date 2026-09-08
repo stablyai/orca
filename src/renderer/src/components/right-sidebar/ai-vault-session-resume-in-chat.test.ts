@@ -2,12 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   aiVaultSessionCwdMatchesWorkspace,
-  resolveAiVaultSessionResumeInChatEligibility
+  aiVaultSessionResumeInChatWorkspaceId
 } from './ai-vault-session-resume-in-chat'
 
-type ResumeInChatSession = Parameters<
-  typeof resolveAiVaultSessionResumeInChatEligibility
->[0]['session']
+type ResumeInChatSession = Parameters<typeof aiVaultSessionResumeInChatWorkspaceId>[0]['session']
 
 const WORKSPACE_PATH = '/repo/orca'
 
@@ -23,10 +21,10 @@ function session(overrides: Partial<ResumeInChatSession> = {}): ResumeInChatSess
   }
 }
 
-function eligibility(
-  overrides: Partial<Parameters<typeof resolveAiVaultSessionResumeInChatEligibility>[0]> = {}
+function workspaceId(
+  overrides: Partial<Parameters<typeof aiVaultSessionResumeInChatWorkspaceId>[0]> = {}
 ) {
-  return resolveAiVaultSessionResumeInChatEligibility({
+  return aiVaultSessionResumeInChatWorkspaceId({
     session: session(),
     targetWorkspaceId: 'repo-1::/repo/orca',
     targetWorkspacePath: WORKSPACE_PATH,
@@ -35,81 +33,66 @@ function eligibility(
   })
 }
 
-describe('resolveAiVaultSessionResumeInChatEligibility', () => {
+describe('aiVaultSessionResumeInChatWorkspaceId', () => {
   it('offers the chat for a local Claude row in its own workspace', () => {
-    expect(eligibility()).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca' })
+    expect(workspaceId()).toBe('repo-1::/repo/orca')
   })
 
   it.each(['hermes', 'grok', 'opencode'] as AiVaultSession['agent'][])(
     'refuses %s, which has no structured lane',
     (agent) => {
-      expect(eligibility({ session: session({ agent }) })).toEqual({
-        available: false,
-        reason: 'agent'
-      })
+      expect(workspaceId({ session: session({ agent }) })).toBeNull()
     }
   )
 
-  it('refuses a row already adopted into a chat before any other check', () => {
+  it('refuses a row already adopted into a chat', () => {
     // That row reopens its own chat; a second adoption is a conflict the host would refuse.
     expect(
-      eligibility({
+      workspaceId({
         session: {
           ...session(),
           structuredSession: { sessionId: 'claude_1', workspaceId: 'repo-1::/repo/orca' }
         }
       })
-    ).toEqual({ available: false, reason: 'already-structured' })
+    ).toBeNull()
   })
 
   it('refuses a row recorded on a remote host', () => {
-    expect(eligibility({ session: session({ executionHostId: 'ssh:build-box' }) })).toEqual({
-      available: false,
-      reason: 'remote'
-    })
+    expect(workspaceId({ session: session({ executionHostId: 'ssh:build-box' }) })).toBeNull()
   })
 
   it('refuses a row whose transcript is stored inside WSL', () => {
     expect(
-      eligibility({
+      workspaceId({
         session: session({
           filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.claude/projects/p/session-1.jsonl'
         })
       })
-    ).toEqual({ available: false, reason: 'remote' })
+    ).toBeNull()
   })
 
   it('refuses a transcript that holds no conversation', () => {
-    expect(eligibility({ session: session({ messageCount: 0, previewMessages: [] }) })).toEqual({
-      available: false,
-      reason: 'empty'
-    })
+    expect(workspaceId({ session: session({ messageCount: 0, previewMessages: [] }) })).toBeNull()
   })
 
   it('offers a zero-count row whose preview proves the turns exist', () => {
     // Some parsers only learn the turn count from metadata that may be absent.
     expect(
-      eligibility({
+      workspaceId({
         session: session({
           messageCount: 0,
           previewMessages: [{ role: 'user', text: 'hello', timestamp: null }]
         })
       })
-    ).toMatchObject({ available: true })
+    ).toBe('repo-1::/repo/orca')
   })
 
   it('refuses when the same pair could not take the structured route for a fresh chat', () => {
-    expect(eligibility({ structuredRouteAvailable: false })).toEqual({
-      available: false,
-      reason: 'workspace'
-    })
+    expect(workspaceId({ structuredRouteAvailable: false })).toBeNull()
   })
 
   it('refuses when there is no target workspace at all', () => {
-    expect(eligibility({ targetWorkspaceId: null })).toEqual({
-      available: false,
-      reason: 'workspace'
-    })
+    expect(workspaceId({ targetWorkspaceId: null })).toBeNull()
   })
 })
 
@@ -117,37 +100,34 @@ describe('workspace matching, which only Claude is bound by', () => {
   it('refuses a Claude row whose conversation was recorded in another workspace', () => {
     // Claude's SDK keys transcripts by launch cwd, so resuming elsewhere silently finds nothing.
     expect(
-      eligibility({
+      workspaceId({
         session: session({ cwd: '/repo/other' }),
         targetWorkspacePath: WORKSPACE_PATH
       })
-    ).toEqual({ available: false, reason: 'workspace' })
+    ).toBeNull()
   })
 
   it('refuses a Claude row that recorded no cwd', () => {
-    expect(eligibility({ session: session({ cwd: null }) })).toEqual({
-      available: false,
-      reason: 'workspace'
-    })
+    expect(workspaceId({ session: session({ cwd: null }) })).toBeNull()
   })
 
   it('keeps Codex available in a different workspace, and with no recorded cwd', () => {
     // Codex is handed the rollout file and a cwd, so it resumes anywhere.
-    expect(eligibility({ session: session({ agent: 'codex', cwd: '/repo/other' }) })).toMatchObject(
-      { available: true }
+    expect(workspaceId({ session: session({ agent: 'codex', cwd: '/repo/other' }) })).toBe(
+      'repo-1::/repo/orca'
     )
-    expect(eligibility({ session: session({ agent: 'codex', cwd: null }) })).toMatchObject({
-      available: true
-    })
+    expect(workspaceId({ session: session({ agent: 'codex', cwd: null }) })).toBe(
+      'repo-1::/repo/orca'
+    )
   })
 
   it('treats Windows spellings of one directory as the same workspace', () => {
     expect(
-      eligibility({
+      workspaceId({
         session: session({ cwd: 'C:\\Users\\Dev\\repo\\Orca\\' }),
         targetWorkspacePath: 'c:/users/dev/repo/orca'
       })
-    ).toMatchObject({ available: true })
+    ).toBe('repo-1::/repo/orca')
   })
 })
 

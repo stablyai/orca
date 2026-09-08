@@ -106,8 +106,20 @@ function buildForkedChild(entryPoint, outfile) {
 }
 
 const childResults = await Promise.all([
+  buildForkedChild(
+    join(ROOT, 'src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts'),
+    join(OUT_DIR, 'session-scanner-opencode-sqlite-worker-entry.js')
+  ),
   buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
-  buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE)
+  buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE),
+  buildForkedChild(
+    join(ROOT, 'src/main/ai-vault/session-scanner-service-entry.ts'),
+    join(OUT_DIR, 'session-scanner-service-entry.js')
+  ),
+  buildForkedChild(
+    join(ROOT, 'src/main/native-chat/wsl-transcript-fs-process-entry.ts'),
+    join(OUT_DIR, 'wsl-transcript-fs-process-entry.js')
+  )
 ])
 
 const result = await build({

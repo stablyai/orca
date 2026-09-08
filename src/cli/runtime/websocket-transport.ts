@@ -13,10 +13,18 @@ export async function sendWebSocketRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
-    return await sendRemoteRuntimeRequest<TResult>(pairing, method, params, timeoutMs, envelope)
+    return await sendRemoteRuntimeRequest<TResult>(
+      pairing,
+      method,
+      params,
+      timeoutMs,
+      envelope,
+      signal
+    )
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {
       throw new RuntimeClientError(error.code, error.message, error.data)
@@ -31,7 +39,8 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
   params: unknown,
   timeoutMs: number,
   validateStatus: (response: RuntimeRpcResponse<RuntimeStatus>) => void,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
   try {
     return await sendRemoteRuntimeRequestWithStatusPreflight<TResult>(
@@ -40,7 +49,9 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
       params,
       timeoutMs,
       validateStatus,
-      envelope
+      envelope,
+      [],
+      signal
     )
   } catch (error) {
     if (error instanceof RemoteRuntimeClientError) {

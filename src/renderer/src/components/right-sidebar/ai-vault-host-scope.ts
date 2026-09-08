@@ -97,6 +97,15 @@ export function buildRuntimeAiVaultHostScopeOptions(
   })
 }
 
+/** Whether the panel can address any host other than this computer. */
+export function aiVaultHostScopeOptionsIncludeRemote(
+  options: readonly AiVaultHostScopeOption[]
+): boolean {
+  return options.some(
+    (option) => option.id !== LOCAL_EXECUTION_HOST_ID && option.id !== ALL_EXECUTION_HOSTS_SCOPE
+  )
+}
+
 export function buildAiVaultHostScopeOptions(args: {
   activeExecutionHostScope: ExecutionHostId | null
   runtimeHostOptions: readonly AiVaultHostScopeOption[]

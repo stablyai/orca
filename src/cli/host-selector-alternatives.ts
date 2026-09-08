@@ -1,4 +1,6 @@
 import type { RuntimeClient } from './runtime-client'
+import { mapWithConcurrency } from '../shared/map-with-concurrency'
+import { z } from 'zod'
 
 export type SshTargetSummary = {
   id: string
@@ -101,21 +103,72 @@ export function crossKindNextSteps(
 
 // Why: only display identity crosses this boundary — the RPC deliberately withholds addresses
 // and credentials — and an enumeration failure must never mask the error we are explaining.
-export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSummary[]> {
+export type SshInventoryOptions = { strict?: boolean; signal?: AbortSignal; deadline?: number }
+
+function inventoryCallOptions(options?: SshInventoryOptions): {
+  signal?: AbortSignal
+  timeoutMs?: number
+} {
+  if (options?.signal?.aborted) {
+    throw options.signal.reason
+  }
+  const remaining = options?.deadline === undefined ? undefined : options.deadline - Date.now()
+  if (remaining !== undefined && remaining <= 0) {
+    throw new Error('SSH inventory deadline exceeded.')
+  }
+  return { signal: options?.signal, timeoutMs: remaining }
+}
+
+const SshTargetSummariesSchema = z
+  .array(
+    z.object({
+      id: z.string().min(1).max(512),
+      label: z.string().max(512),
+      connected: z.boolean().optional(),
+      connectionStatus: z.string().max(128).optional(),
+      remotePlatform: z.enum(['linux', 'darwin', 'win32']).optional()
+    })
+  )
+  .max(4096)
+
+export async function listSshTargets(
+  client: RuntimeClient,
+  options?: SshInventoryOptions
+): Promise<SshTargetSummary[]> {
   try {
-    const result = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargetSummaries')
-    return result.result.targets
+    const result = await client.call<{ targets: SshTargetSummary[] }>(
+      'ssh.listTargetSummaries',
+      ...(options ? ([undefined, inventoryCallOptions(options)] as const) : [])
+    )
+    return options?.strict
+      ? SshTargetSummariesSchema.parse(result.result.targets)
+      : result.result.targets
   } catch (error) {
     // Why: hosts predating listTargetSummaries still answer listTargets, and both are served by
     // the same summariser. Without this an old host looks like one with no SSH targets at all,
     // which would reject a target id that is actually valid there.
     if (error instanceof Error && 'code' in error && error.code === 'method_not_found') {
       try {
-        const legacy = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargets')
-        return await enrichLegacySshTargetStates(client, legacy.result.targets)
-      } catch {
+        const legacy = await client.call<{ targets: SshTargetSummary[] }>(
+          'ssh.listTargets',
+          ...(options ? ([undefined, inventoryCallOptions(options)] as const) : [])
+        )
+        return await enrichLegacySshTargetStates(
+          client,
+          options?.strict
+            ? SshTargetSummariesSchema.parse(legacy.result.targets)
+            : legacy.result.targets,
+          options
+        )
+      } catch (legacyError) {
+        if (options?.strict) {
+          throw legacyError
+        }
         return []
       }
+    }
+    if (options?.strict) {
+      throw error
     }
     return []
   }
@@ -123,30 +176,38 @@ export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSu
 
 async function enrichLegacySshTargetStates(
   client: RuntimeClient,
-  targets: SshTargetSummary[]
+  targets: SshTargetSummary[],
+  options?: SshInventoryOptions
 ): Promise<SshTargetSummary[]> {
-  return Promise.all(
-    targets.map(async (target) => {
-      try {
-        const response = await client.call<{
-          state: {
-            status?: string
-            remotePlatform?: 'linux' | 'darwin' | 'win32'
-          } | null
-        }>('ssh.getState', { targetId: target.id })
-        const state = response.result.state
-        return {
-          ...target,
-          ...(state?.status === undefined
-            ? {}
-            : { connected: state.status === 'connected', connectionStatus: state.status }),
-          ...(state?.remotePlatform === undefined ? {} : { remotePlatform: state.remotePlatform })
-        }
-      } catch {
-        return target
+  return mapWithConcurrency(targets, 3, async (target) => {
+    if (
+      options?.signal?.aborted ||
+      (options?.deadline !== undefined && Date.now() >= options.deadline)
+    ) {
+      return { ...target, connected: undefined, connectionStatus: 'unknown' }
+    }
+    try {
+      const response = await client.call<{
+        state: { status?: string; remotePlatform?: 'linux' | 'darwin' | 'win32' } | null
+      }>(
+        'ssh.getState',
+        { targetId: target.id },
+        ...(options ? ([inventoryCallOptions(options)] as const) : [])
+      )
+      const state = response.result.state
+      return {
+        ...target,
+        ...(state?.status !== undefined
+          ? { connected: state.status === 'connected', connectionStatus: state.status }
+          : options?.strict
+            ? { connected: undefined, connectionStatus: 'unknown' }
+            : {}),
+        ...(state?.remotePlatform ? { remotePlatform: state.remotePlatform } : {})
       }
-    })
-  )
+    } catch {
+      return { ...target, connected: undefined, connectionStatus: 'unknown' }
+    }
+  })
 }
 
 // Why: `--host ssh:<id>` was never validated, so an unknown target answered ok:true with an

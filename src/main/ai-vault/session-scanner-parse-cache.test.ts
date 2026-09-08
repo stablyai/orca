@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -36,6 +36,14 @@ async function claudeCandidate(path: string): Promise<SessionFileCandidate> {
     sizeBytes: fileStat.size
   }
   return { agent: 'claude', file, codexHome: null }
+}
+
+// Mirrors discovery, which stats identity; the plain helper above models
+// synthetic candidates that carry no inode.
+async function identifiedClaudeCandidate(path: string): Promise<SessionFileCandidate> {
+  const candidate = await claudeCandidate(path)
+  const fileStat = await stat(path)
+  return { ...candidate, file: { ...candidate.file, dev: fileStat.dev, ino: fileStat.ino } }
 }
 
 function userRecord(index: number, text: string): string {
@@ -229,6 +237,59 @@ describe('parseAgentSessionFileCached', () => {
     expect(stats.incremental).toBe(0)
     expect(reparsed).toEqual(await freshParse(path))
     expect(reparsed?.messageCount).toBe(2)
+  })
+
+  it('refuses to resume across a rename-replace even when the old offset lands on a newline', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    const original = `${userRecord(0, 'aa')}\n`
+    await writeFile(path, original)
+    const stats = createSessionParseStats()
+    await parseAgentSessionFileCached(
+      await identifiedClaudeCandidate(path),
+      process.platform,
+      stats
+    )
+
+    // A larger replacement whose byte at the old offset is exactly '\n', so the
+    // newline guard alone would resume mid-file and skip the first record.
+    const padded = userRecord(0, 'aa'.padEnd(original.length - 1 - userRecord(0, '').length, 'b'))
+    const replacement = `${padded}\n${assistantRecord(1, 'answer')}\n${userRecord(2, 'more')}\n`
+    expect(replacement[original.length - 1]).toBe('\n')
+    expect(replacement.length).toBeGreaterThan(original.length)
+    const staging = join(root, 'staging.jsonl')
+    await writeFile(staging, replacement)
+    await rename(staging, path)
+
+    const reparsed = await parseAgentSessionFileCached(
+      await identifiedClaudeCandidate(path),
+      process.platform,
+      stats
+    )
+    expect(stats.fullParses).toBe(2)
+    expect(stats.incremental).toBe(0)
+    expect(reparsed).toEqual(await freshParse(path))
+    expect(reparsed?.messageCount).toBe(3)
+  })
+
+  it('still resumes an append when file identity is unchanged', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    await writeFile(path, `${userRecord(0, 'question')}\n`)
+    const stats = createSessionParseStats()
+    await parseAgentSessionFileCached(
+      await identifiedClaudeCandidate(path),
+      process.platform,
+      stats
+    )
+    await appendFile(path, `${assistantRecord(1, 'answer')}\n`)
+    const resumed = await parseAgentSessionFileCached(
+      await identifiedClaudeCandidate(path),
+      process.platform,
+      stats
+    )
+    expect(stats.incremental).toBe(1)
+    expect(resumed).toEqual(await freshParse(path))
   })
 
   it('parses CRLF transcripts identically to the streaming parser', async () => {

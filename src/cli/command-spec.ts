@@ -9,6 +9,11 @@ export type CommandSpec = {
   summary: string
   usage: string
   allowedFlags: string[]
+  // Why: value-less and repeatable flags are per-command vocabulary. Declaring
+  // them here keeps one command's flags out of the global parser, which cannot
+  // scope `--agent` (repeatable for `search`, single-valued for `worktree create`).
+  booleanFlags?: string[]
+  repeatableFlags?: string[]
   positionalArgs?: string[]
   examples?: string[]
   notes?: string[]

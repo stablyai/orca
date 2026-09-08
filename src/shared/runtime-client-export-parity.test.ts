@@ -206,7 +206,8 @@ describe('runtime client public export parity', () => {
         timeoutMs: number,
         validateStatus: (response: RuntimeRpcResponse<Runtime.RuntimeStatus>) => void,
         envelope?: RuntimeOrchestrationEnvelope,
-        clientCapabilities?: readonly RuntimeCapability[]
+        clientCapabilities?: readonly RuntimeCapability[],
+        signal?: AbortSignal
       ) => Promise<RuntimeRpcResponse<TResult>>
     >()
     expectTypeOf(RemoteClient.subscribeRemoteRuntimeRequest).toEqualTypeOf<

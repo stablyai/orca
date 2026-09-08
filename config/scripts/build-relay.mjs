@@ -116,6 +116,16 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
   // manifest check and be hashed into .version, shipping mixed-generation bytes.
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
+  await build({
+    entryPoints: [join(ROOT, 'src/main/ai-vault/session-scanner-opencode-sqlite-worker-entry.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, 'session-scanner-opencode-sqlite-worker-entry.js'),
+    minify: true,
+    logLevel: 'error'
+  })
 
   await build({
     entryPoints: [RELAY_ENTRY],

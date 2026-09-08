@@ -215,6 +215,7 @@ export function registerCoreHandlers(
   registerRuntimeEnvironmentHandlers(store)
   registerEphemeralVmHandlers(store, pluginService)
   registerAiVaultHandlers({
+    persistSearchPolicy: () => store.flushPendingOrThrowAsync({ drainToStableGeneration: false }),
     ensureStructuredSessionOwnership: () => runtime.ensureStructuredAgentSessionHost(),
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,

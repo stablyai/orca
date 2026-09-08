@@ -103,3 +103,16 @@ function unreadableShareAdvice(dbPath: string): string {
     ? 'Windows cannot open SQLite databases over the \\\\wsl.localhost share, so this history has to be read from inside the distro.'
     : 'Its write-ahead log cannot be opened read-only on this filesystem. Exit OpenCode cleanly to flush the log.'
 }
+
+/** Keeps the read handle alive across capture backpressure. */
+export async function readOpenCodeDatabaseAsync<T>(args: {
+  dbPath: string
+  read: (db: SyncDatabase) => Promise<T>
+}): Promise<T> {
+  const db = openOpenCodeDatabaseReadonly(args.dbPath)
+  try {
+    return await args.read(db)
+  } finally {
+    db.close()
+  }
+}

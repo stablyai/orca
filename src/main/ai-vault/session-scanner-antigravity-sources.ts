@@ -23,6 +23,7 @@ export function antigravityDiscoveries(
   return rootDirs.map((rootDir) =>
     discoverFiles({
       rootDir,
+      signal: options.signal,
       limit,
       agent: 'antigravity',
       issues,

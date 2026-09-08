@@ -148,40 +148,40 @@ export function useAiVaultSessionLaunchActions({
 
   const handleResumeInNewChat = useCallback(
     (session: AiVaultSession, targetWorktreeId?: string): void => {
-      if (!isAgentSessionHandleProvider(session.agent)) {
+      // Hoisted so the provider narrowing survives into the `.then` closure without a cast.
+      const agent = session.agent
+      if (!isAgentSessionHandleProvider(agent)) {
         return
       }
-      const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null
-      if (!worktreeId) {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.AiVaultPanel.openWorkspaceBeforeResuming',
-            'Open a workspace before resuming a session.'
-          )
-        )
+      // Why: the render-time eligibility only decides whether to offer the item; the handler is
+      // handed a workspace id and must run the same host/workspace check as its two siblings.
+      const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
+        sessionFilePath: session.filePath,
+        sessionExecutionHostId: session.executionHostId,
+        activeWorktreeId: activeWorktreeId ?? activeWorktree?.id ?? null,
+        targetWorktreeId,
+        targetState
+      })
+      if (!targetId) {
         return
       }
       // Codex rows can live under a shared legacy home; the same preparation the terminal resume
       // runs re-pins them, and its result is what names the conversation the host will look for.
       void prepareAiVaultSessionForResume(session)
-        .then((preparedSession) => {
-          const launch = startStructuredAgentLaunch(
-            worktreeId,
-            session.agent as 'claude' | 'codex',
-            {
+        .then(
+          (preparedSession) =>
+            startStructuredAgentLaunch(targetId.worktreeId, agent, {
               resumeFrom: { providerSessionId: preparedSession.sessionId }
-            }
-          )
-          return launch.launchResult
-        })
+            }).launchResult
+        )
         .then(() => {
-          if (useAppStore.getState().activeWorktreeId !== worktreeId) {
-            activateAiVaultResumeWorkspace(worktreeId)
+          if (useAppStore.getState().activeWorktreeId !== targetId.worktreeId) {
+            activateAiVaultResumeWorkspace(targetId.worktreeId)
           }
         })
         .catch(notifyAiVaultSessionResumeInChatFailure)
     },
-    [activeWorktree?.id, activeWorktreeId]
+    [activeWorktree?.id, activeWorktreeId, targetState]
   )
 
   const handleContinueInNewSession = useCallback(
@@ -306,4 +306,13 @@ function activateAiVaultResumeWorkspace(workspaceId: string): void {
     return
   }
   activateAndRevealWorktree(workspaceId)
+}
+
+export async function copyAiVaultSessionValue(text: string, label: string): Promise<void> {
+  await window.api.ui.writeClipboardText(text)
+  toast.success(
+    translate('auto.components.right.sidebar.AiVaultPanel.valueCopied', '{{value0}} copied', {
+      value0: label
+    })
+  )
 }

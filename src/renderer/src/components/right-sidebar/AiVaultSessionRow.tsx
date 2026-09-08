@@ -7,9 +7,11 @@ import {
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
 } from '@/lib/ai-vault-session-drag'
+import type { AiVaultSearchEvidence } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
+import { AiVaultSearchEvidenceLine } from './AiVaultSearchSnippet'
 import { SessionInlineDetails } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from './ai-vault-session-display'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
@@ -33,6 +35,7 @@ export function VaultSessionRow({
   vaultScope,
   detailsExpanded,
   resumeDisabled,
+  searchEvidence,
   onToggleDetails,
   onJumpToOriginalPane,
   showJumpToWorktree,
@@ -60,6 +63,8 @@ export function VaultSessionRow({
   vaultScope: AiVaultScope
   detailsExpanded: boolean
   resumeDisabled: boolean
+  /** Set only for search results: the transcript line this row matched on. */
+  searchEvidence?: AiVaultSearchEvidence | null
   onToggleDetails: () => void
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
@@ -186,7 +191,7 @@ export function VaultSessionRow({
               onRequestDelete={requestDelete}
             />
           </div>
-          {!detailsExpanded ? (
+          {!detailsExpanded && !searchEvidence ? (
             <div className="mt-0.5 min-w-0 line-clamp-2 text-[12px] leading-4 text-muted-foreground">
               {latestTurn ? (
                 <>
@@ -210,6 +215,7 @@ export function VaultSessionRow({
             worktreeInfo={worktreeInfo}
             vaultScope={vaultScope}
           />
+          {searchEvidence ? <AiVaultSearchEvidenceLine evidence={searchEvidence} /> : null}
           {detailsExpanded ? (
             <SessionInlineDetails
               id={detailsId}

@@ -1,4 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import { RelaySessionSearchOwner } from './session-search-owner'
 import { scanRemoteAiVaultSessions } from '../main/ai-vault/remote-session-scanner'
 import { readAiVaultSessionTitlesFromFiles } from '../main/ai-vault/session-title-file-reader'
 import { createRelayAiVaultFilesystemProvider } from './ai-vault-service-filesystem'
@@ -7,6 +8,7 @@ import {
   isRelayAiVaultServiceRequest,
   relayAiVaultServiceLane,
   type RelayAiVaultServiceChildMessage,
+  type RelayAiVaultServiceLane,
   type RelayAiVaultServiceInit,
   type RelayAiVaultServiceParentMessage,
   type RelayAiVaultServiceRequest
@@ -21,9 +23,13 @@ const cancelled = new Set<number>()
 const pending = new Set<number>()
 const provider = createRelayAiVaultFilesystemProvider()
 let init: RelayAiVaultServiceInit | null = null
-let cacheLane = Promise.resolve()
-let interactiveLane = Promise.resolve()
+const lanes: Record<RelayAiVaultServiceLane, Promise<void>> = {
+  cache: Promise.resolve(),
+  interactive: Promise.resolve(),
+  search: Promise.resolve()
+}
 let shuttingDown = false
+let searchOwner: RelaySessionSearchOwner | null = null
 
 function send(message: RelayAiVaultServiceChildMessage): void {
   process.send?.(message)
@@ -38,6 +44,12 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
   try {
     if (!init) {
       throw new Error('Relay AI Vault service is not initialized.')
+    }
+    if (request.operation === 'search') {
+      searchOwner ??= new RelaySessionSearchOwner(init.remoteHome)
+      const value = await searchOwner.request(request.action, request.params, controller.signal)
+      send({ type: 'result', id: request.id, operation: 'search', value })
+      return
     }
     if (request.operation === 'titles') {
       const value = await readAiVaultSessionTitlesFromFiles(request.requests, {
@@ -78,7 +90,8 @@ async function shutdown(): Promise<void> {
   for (const controller of controllers.values()) {
     controller.abort()
   }
-  await Promise.allSettled([cacheLane, interactiveLane])
+  await Promise.allSettled(Object.values(lanes))
+  await searchOwner?.close()
   process.disconnect?.()
 }
 
@@ -112,11 +125,8 @@ process.on('message', (raw: RelayAiVaultServiceParentMessage) => {
     return
   }
   pending.add(raw.id)
-  if (relayAiVaultServiceLane(raw.operation) === 'interactive') {
-    interactiveLane = interactiveLane.then(() => execute(raw))
-    return
-  }
-  cacheLane = cacheLane.then(() => execute(raw))
+  const lane = relayAiVaultServiceLane(raw)
+  lanes[lane] = lanes[lane].then(() => execute(raw))
 })
 
 process.on('disconnect', () => void shutdown())

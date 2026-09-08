@@ -13,17 +13,6 @@ import {
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
 
-export type AiVaultResumeInChatBlockedReason =
-  | 'agent'
-  | 'remote'
-  | 'empty'
-  | 'already-structured'
-  | 'workspace'
-
-export type AiVaultResumeInChatEligibility =
-  | { available: true; workspaceId: string }
-  | { available: false; reason: AiVaultResumeInChatBlockedReason }
-
 /**
  * Claude and Codex do not have the same freedom about *where* a conversation may be resumed.
  *
@@ -57,7 +46,8 @@ export function aiVaultSessionCwdMatchesWorkspace(
   )
 }
 
-export function resolveAiVaultSessionResumeInChatEligibility(args: {
+/** The workspace to resume into, or null when this row cannot be resumed into a chat at all. */
+export function aiVaultSessionResumeInChatWorkspaceId(args: {
   session: Pick<
     AiVaultSession,
     'agent' | 'cwd' | 'filePath' | 'executionHostId' | 'messageCount' | 'previewMessages'
@@ -68,33 +58,26 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
    *  re-derived: it already encodes the settings flag, host capability, platform refusals and the
    *  WSL/repair refusal, and a second copy of those conditions would drift from it. */
   structuredRouteAvailable: boolean
-}): AiVaultResumeInChatEligibility {
+}): string | null {
   const { session } = args
-  if (!isAgentSessionHandleProvider(session.agent)) {
-    return { available: false, reason: 'agent' }
-  }
   // An already-adopted row reopens its own chat instead; offering a second resume of it would ask
   // for a conflict the host would rightly refuse.
-  if (session.structuredSession) {
-    return { available: false, reason: 'already-structured' }
-  }
   if (
+    !isAgentSessionHandleProvider(session.agent) ||
+    session.structuredSession ||
     session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-    isWslStoredAiVaultSessionFile(session.filePath)
+    isWslStoredAiVaultSessionFile(session.filePath) ||
+    !isAiVaultSessionResumableContent(session) ||
+    !args.targetWorkspaceId ||
+    !args.structuredRouteAvailable
   ) {
-    return { available: false, reason: 'remote' }
-  }
-  if (!isAiVaultSessionResumableContent(session)) {
-    return { available: false, reason: 'empty' }
-  }
-  if (!args.targetWorkspaceId || !args.structuredRouteAvailable) {
-    return { available: false, reason: 'workspace' }
+    return null
   }
   if (
     aiVaultSessionResumeInChatWorkspaceMatters(session.agent) &&
     !aiVaultSessionCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath)
   ) {
-    return { available: false, reason: 'workspace' }
+    return null
   }
-  return { available: true, workspaceId: args.targetWorkspaceId }
+  return args.targetWorkspaceId
 }

@@ -52,6 +52,7 @@ export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   { filename: 'relay.js' },
   { filename: 'relay-watcher.js', daemonServiceChild: true },
   { filename: 'relay-ai-vault-service.js', daemonServiceChild: true },
+  { filename: 'session-scanner-opencode-sqlite-worker-entry.js' },
   { filename: 'managed-hook-runtime.js' },
   // Forked by the AI Vault title reader; without it a relay answers every WSL
   // title request with no title and no error.

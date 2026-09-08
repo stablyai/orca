@@ -295,7 +295,11 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
       this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(session, worktreeId, tabs)
   })
 
-  protected readonly aiVault = new RuntimeAiVaultCommands(() => this.prepareAiVaultSessionResumeFn)
+  protected readonly aiVault = new RuntimeAiVaultCommands(
+    () => this.prepareAiVaultSessionResumeFn,
+    () => this.store ?? null,
+    (targetId) => this.getSshProviderFn?.(targetId)
+  )
 
   protected readonly claudeAgentTeams = new ClaudeAgentTeamsService()
 

@@ -118,6 +118,7 @@ export type RuntimeStore = {
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
+    aiVaultSearch?: GlobalSettings['aiVaultSearch']
     nativeChatSessionOptions?: GlobalSettings['nativeChatSessionOptions']
   }
   // Why: narrow to `unknown` return so test mocks can return void without

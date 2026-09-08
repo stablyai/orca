@@ -18,10 +18,23 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import type {
+  AiVaultSearchArgs,
+  AiVaultSearchCoverage,
+  AiVaultSearchResult
+} from '../../shared/ai-vault-search-types'
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
+  /** Full-text search over indexed transcripts on the local host. */
+  searchSessions: (args: AiVaultSearchArgs) => Promise<AiVaultSearchResult>
+  /** How much of the transcript corpus the search index currently covers. */
+  searchCoverage: () => Promise<AiVaultSearchCoverage>
+  /** Disk the index occupies including WAL sidecars; null when it does not exist. */
+  searchIndexSize: () => Promise<{ bytes: number | null }>
+  /** Deletes the index files, then rebuilds when search is still enabled. */
+  clearSearchIndex: () => Promise<AiVaultSearchCoverage | null>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>
   prepareSessionResume: (
     args: AiVaultPrepareSessionResumeArgs
@@ -34,4 +47,10 @@ export type AiVaultApi = {
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
   /** Fires when any app window regains OS focus; returns an unsubscribe. */
   onWindowFocused: (callback: () => void) => () => void
+  /**
+   * Fires when the host changes something the coverage reading depends on: a settings apply, a
+   * pause, a resume or a clear. Absent on transports with no push channel, which is how the
+   * renderer knows it must keep a standing poll instead.
+   */
+  onSearchIndexingChanged?: (callback: () => void) => () => void
 }

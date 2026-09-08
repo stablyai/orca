@@ -33,6 +33,7 @@ export class RemoteRuntimeCompatGate {
     params: unknown
     timeoutMs: number
     envelope?: RuntimeOrchestrationEnvelope
+    signal?: AbortSignal
   }): Promise<RuntimeRpcResponse<TResult>> {
     if (this.checked || args.method === 'status.get') {
       return args.transport.sendWebSocketRequest<TResult>(
@@ -40,7 +41,8 @@ export class RemoteRuntimeCompatGate {
         args.method,
         args.params,
         args.timeoutMs,
-        args.envelope
+        args.envelope,
+        ...(args.signal ? [args.signal] : [])
       )
     }
     return args.transport.sendWebSocketRequestWithStatusPreflight<TResult>(
@@ -59,7 +61,8 @@ export class RemoteRuntimeCompatGate {
           })
         }
       },
-      args.envelope
+      args.envelope,
+      ...(args.signal ? [args.signal] : [])
     )
   }
 

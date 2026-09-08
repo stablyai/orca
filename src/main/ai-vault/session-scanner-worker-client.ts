@@ -10,16 +10,25 @@ import type {
   AiVaultWorkerResponse,
   AiVaultWorkerScanOptions
 } from './session-scanner-worker-protocol'
+import type {
+  AiVaultServiceSearchConfigureRequest,
+  AiVaultServiceSearchRequest
+} from './session-scanner-service-protocol'
+import type { AiVaultSearchCoverage, AiVaultSearchResult } from '../../shared/ai-vault-search-types'
 
 const SCAN_TIMEOUT_MS = 130_000
 const TITLE_TIMEOUT_MS = 15_000
+// Why: the first search may fold a burst of stale files before answering.
+const SEARCH_TIMEOUT_MS = 60_000
 const MAX_QUEUED_CALLS = 16
 
 export type AiVaultWorkerFactory = () => Worker
 
-type RequestBody =
-  | Omit<Extract<AiVaultWorkerRequest, { kind: 'scan' }>, 'id'>
-  | Omit<Extract<AiVaultWorkerRequest, { kind: 'titles' }>, 'id'>
+type RequestBody = AiVaultWorkerRequest extends infer R
+  ? R extends { id: number }
+    ? Omit<R, 'id'>
+    : never
+  : never
 
 type PendingCall = {
   request: AiVaultWorkerRequest
@@ -62,6 +71,32 @@ export class AiVaultScannerWorkerClient {
       TITLE_TIMEOUT_MS,
       signal
     ) as Promise<AiVaultSessionTitlesResult>
+  }
+
+  search(request: AiVaultServiceSearchRequest, signal?: AbortSignal): Promise<AiVaultSearchResult> {
+    return this.dispatch(
+      { kind: 'search', request },
+      SEARCH_TIMEOUT_MS,
+      signal
+    ) as Promise<AiVaultSearchResult>
+  }
+
+  searchCoverage(
+    request: Pick<AiVaultServiceSearchRequest, 'roots'>,
+    signal?: AbortSignal
+  ): Promise<AiVaultSearchCoverage> {
+    return this.dispatch(
+      { kind: 'searchCoverage', request },
+      TITLE_TIMEOUT_MS,
+      signal
+    ) as Promise<AiVaultSearchCoverage>
+  }
+
+  searchConfigure(request: AiVaultServiceSearchConfigureRequest): Promise<AiVaultSearchCoverage> {
+    return this.dispatch(
+      { kind: 'searchConfigure', request },
+      SEARCH_TIMEOUT_MS
+    ) as Promise<AiVaultSearchCoverage>
   }
 
   dispose(): void {

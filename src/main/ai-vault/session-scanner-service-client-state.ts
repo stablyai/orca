@@ -16,7 +16,8 @@ export const AI_VAULT_SERVICE_SHUTDOWN_TIMEOUT_MS = 2_000
 export type AiVaultServiceProcessFactory = () => ChildProcess
 export type AiVaultServiceClientOptions = {
   processFactory: AiVaultServiceProcessFactory
-  init: Omit<AiVaultServiceInit, 'type' | 'protocol'>
+  /** Called per spawn: a settings change between spawns must reach the new child. */
+  init: () => Omit<AiVaultServiceInit, 'type' | 'protocol'>
   idleTimeoutMs?: number
   onStderr?: (text: string) => void
 }
@@ -129,7 +130,7 @@ export function attachAiVaultServiceChild(
   child.send({
     type: 'init',
     protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION,
-    ...init
+    ...init()
   } satisfies AiVaultServiceInit)
 }
 

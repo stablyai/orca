@@ -148,6 +148,8 @@ async function startOrcadRuntime(
   const { collectOrcadHealth } = await import('./orcad-health')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
+  const { initSessionSearchPaths } = await import('../ai-vault-search/session-search-paths')
+  initSessionSearchPaths(runtimeUserDataPath)
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(runtimeUserDataPath)
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`

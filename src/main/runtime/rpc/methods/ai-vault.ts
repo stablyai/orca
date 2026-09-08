@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import {
+  SESSION_SEARCH_METHODS,
+  SessionSearchConfigureSchema,
+  SessionSearchQuerySchema
+} from '../../../../shared/ai-vault-search-contract'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean } from '../schemas'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
@@ -19,6 +24,13 @@ import {
 const AI_VAULT_SCOPE_PATH_MAX_LENGTH = 4096
 const AI_VAULT_LIMIT_MAX = 2000
 
+// Why: this is the whole SSH/foreign-host boundary for the aiVault surface. The
+// scan and the index are host-local, so a caller must not be able to name a host
+// this process does not execute on — an `ssh:` or `local` id is refused here
+// rather than silently answered with this runtime's own transcripts
+// (docs/reference/ssh-execution-boundary.md rule 1). A `runtime:` id names the
+// *client's* saved environment, whose id this host never learns, so it is
+// accepted for restamping only and never routes anything.
 const executionHostIdSchema = z.string().transform((value, ctx): `runtime:${string}` => {
   const parsed = parseExecutionHostId(value)
   if (parsed?.kind === 'runtime') {
@@ -80,7 +92,67 @@ export const AiVaultSessionTitlesParams = z.object({
     .max(AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT)
 })
 
+export const AiVaultSearchSessionsParams = SessionSearchQuerySchema.extend({
+  // Preserve local RPC coercion and truncation for existing clients.
+  scopePaths: z
+    .array(z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH))
+    .transform((paths) => paths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT))
+    .optional(),
+  refresh: OptionalBoolean,
+  executionHostId: executionHostIdSchema.optional()
+})
+
+export const AiVaultConfigureSessionSearchParams = SessionSearchConfigureSchema.extend({
+  enabled: OptionalBoolean,
+  clearIndex: OptionalBoolean,
+  executionHostId: executionHostIdSchema.optional()
+})
+
 export const AI_VAULT_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: SESSION_SEARCH_METHODS.query.runtimeSsh,
+    params: SessionSearchQuerySchema.extend({ targetId: z.string().min(1).max(512) }),
+    handler: ({ targetId, ...params }, { runtime, signal }) =>
+      runtime.sshSearchAiVault(targetId, 'query', params, signal)
+  }),
+  defineMethod({
+    name: SESSION_SEARCH_METHODS.status.runtimeSsh,
+    params: z.object({ targetId: z.string().min(1).max(512) }),
+    handler: ({ targetId }, { runtime, signal }) =>
+      runtime.sshSearchAiVault(targetId, 'status', {}, signal)
+  }),
+  defineMethod({
+    name: SESSION_SEARCH_METHODS.configure.runtimeSsh,
+    params: SessionSearchConfigureSchema.extend({ targetId: z.string().min(1).max(512) }),
+    handler: ({ targetId, ...params }, { runtime, signal }) =>
+      runtime.sshSearchAiVault(targetId, 'configure', params, signal)
+  }),
+  defineMethod({
+    name: SESSION_SEARCH_METHODS.query.runtime,
+    params: AiVaultSearchSessionsParams,
+    // Why: the index lives with the transcripts, so this runs on the host the
+    // client addressed; the id only names that host, it never redirects the search.
+    handler: ({ executionHostId: _host, ...params }, { runtime, signal }) =>
+      runtime.searchAiVaultSessions(params, signal)
+  }),
+  defineMethod({
+    name: SESSION_SEARCH_METHODS.coverage.runtime,
+    params: z.object({ executionHostId: executionHostIdSchema.optional() }),
+    handler: (_params, { runtime, signal }) => runtime.readAiVaultSearchCoverage(signal)
+  }),
+  defineMethod({
+    name: SESSION_SEARCH_METHODS.status.runtime,
+    params: z.object({ executionHostId: executionHostIdSchema.optional() }),
+    handler: (_params, { runtime }) => runtime.readAiVaultSearchIndexStatus()
+  }),
+  defineMethod({
+    name: SESSION_SEARCH_METHODS.configure.runtime,
+    params: AiVaultConfigureSessionSearchParams,
+    // Why: consent is per machine and the index lives with the transcripts, so
+    // this writes the addressed host's own setting; the id never redirects it.
+    handler: ({ executionHostId: _host, ...params }, { runtime }) =>
+      runtime.configureAiVaultSessionSearch(params)
+  }),
   defineMethod({
     name: 'aiVault.resolveSessionTitles',
     params: AiVaultSessionTitlesParams,

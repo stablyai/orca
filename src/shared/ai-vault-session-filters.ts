@@ -8,6 +8,7 @@ import {
   normalizeRuntimePathSeparators
 } from './cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
+import { splitAiVaultSearchQuery } from './ai-vault-search-query-operators'
 import { parseWslUncPath } from './wsl-paths'
 import type {
   AiVaultAgent,
@@ -174,31 +175,23 @@ export function agentLabel(agent: AiVaultAgent): string {
   return aiVaultAgentLabel(agent)
 }
 
+/**
+ * The panel reading of the one shared operator split. The scanner preserves case
+ * so the index can treat an absolute `path:` as an identity claim; the fold is
+ * panel-local and safe because every comparison in `matchesQuery` is a
+ * case-insensitive substring probe. Removing it silently breaks all three keys.
+ */
 export function parseVaultQuery(query: string): ParsedQuery {
-  const terms: string[] = []
-  const repoTerms: string[] = []
-  const pathTerms: string[] = []
-
-  for (const rawToken of tokenizeQuery(query)) {
-    const token = rawToken.toLowerCase()
-    if (token.startsWith('repo:')) {
-      const value = token.slice('repo:'.length)
-      if (value) {
-        repoTerms.push(value)
-      }
-      continue
-    }
-    if (token.startsWith('path:')) {
-      const value = token.slice('path:'.length)
-      if (value) {
-        pathTerms.push(value)
-      }
-      continue
-    }
-    terms.push(token)
+  const split = splitAiVaultSearchQuery(query)
+  return {
+    terms: fold(split.terms),
+    repoTerms: fold(split.repoTerms),
+    pathTerms: fold(split.pathTerms)
   }
+}
 
-  return { terms, repoTerms, pathTerms }
+function fold(values: readonly string[]): string[] {
+  return values.map((value) => value.trim().toLowerCase()).filter(Boolean)
 }
 
 function matchesQuery(
@@ -289,26 +282,4 @@ function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: stri
   // WSL agent transcripts record Linux cwd values even when Orca stores the
   // active worktree as a Windows UNC path.
   return isPathInsideOrEqual(workspaceWslPath.linuxPath, sessionCwd)
-}
-
-function tokenizeQuery(query: string): string[] {
-  const tokens: string[] = []
-  // Why: keep quoted operator values (repo:/path:) intact so labels and paths
-  // containing spaces still match — e.g. path:"/Users/ada/My Project".
-  const pattern = /(repo|path):"([^"]+)"|(repo|path):'([^']+)'|"([^"]+)"|'([^']+)'|(\S+)/gi
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(query)) !== null) {
-    const operator = match[1] ?? match[3]
-    const operatorValue = match[2] ?? match[4]
-    if (operator && operatorValue?.trim()) {
-      tokens.push(`${operator.toLowerCase()}:${operatorValue.trim()}`)
-      continue
-    }
-
-    const token = match[5] ?? match[6] ?? match[7]
-    if (token?.trim()) {
-      tokens.push(token.trim())
-    }
-  }
-  return tokens
 }

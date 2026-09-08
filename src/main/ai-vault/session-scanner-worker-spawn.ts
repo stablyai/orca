@@ -1,3 +1,4 @@
+import { removeSessionSearchDatabase } from '../ai-vault-search/session-search-schema'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
@@ -10,6 +11,12 @@ import { withSpan } from '../observability/tracer'
 import { getSessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 import { AiVaultScannerWorkerClient } from './session-scanner-worker-client'
 import type { AiVaultWorkerData, AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
+import type {
+  AiVaultServiceSearchConfigureRequest,
+  AiVaultServiceSearchRequest
+} from './session-scanner-service-protocol'
+import { getSessionSearchInitOptions } from '../ai-vault-search/session-search-paths'
+import type { AiVaultSearchCoverage, AiVaultSearchResult } from '../../shared/ai-vault-search-types'
 
 const WORKER_ENTRY_FILENAME = 'session-scanner-worker-entry.js'
 
@@ -20,7 +27,8 @@ function defaultWorkerFactory(): Worker {
   }
   return new Worker(workerPath, {
     workerData: {
-      sessionParseCache: getSessionParseCachePersistenceOptions()
+      sessionParseCache: getSessionParseCachePersistenceOptions(),
+      sessionSearch: getSessionSearchInitOptions()
     } satisfies AiVaultWorkerData
   })
 }
@@ -49,6 +57,30 @@ export function resolveAiVaultSessionTitlesInWorker(
   signal?: AbortSignal
 ): Promise<AiVaultSessionTitlesResult> {
   return getSharedClient().resolveTitles(requests, signal)
+}
+
+export function searchAiVaultSessionsInWorker(
+  request: AiVaultServiceSearchRequest,
+  signal?: AbortSignal
+): Promise<AiVaultSearchResult> {
+  return getSharedClient().search(request, signal)
+}
+
+export function readAiVaultSearchCoverageInWorker(
+  request: Pick<AiVaultServiceSearchRequest, 'roots'>,
+  signal?: AbortSignal
+): Promise<AiVaultSearchCoverage> {
+  return getSharedClient().searchCoverage(request, signal)
+}
+
+/** Null when no worker exists yet; the next one reads the new policy from its workerData. */
+export function configureAiVaultSearchInWorker(
+  request: AiVaultServiceSearchConfigureRequest
+): Promise<AiVaultSearchCoverage> | null {
+  if (!sharedClient && request.clearIndex) {
+    removeSessionSearchDatabase(request.init.databasePath)
+  }
+  return sharedClient?.searchConfigure(request) ?? null
 }
 
 export function resetAiVaultScannerWorkerForTests(): void {

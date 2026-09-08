@@ -6,19 +6,13 @@ import type {
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
-import {
-  codexRolloutHardlinkIdentity,
-  dedupeCodexRolloutAliases,
-  dedupeCodexSessionsBySessionId
-} from './codex-session-root-dedup'
-import { readCodexRolloutSessionMetaId } from '../codex/codex-rollout-session-meta'
+import { dedupeCodexSessionsBySessionId } from './codex-session-root-dedup'
+import { sessionCandidatesFromDiscoveries } from './session-scanner-candidates'
 import {
   createAntigravityWorkspaceResolver,
   readLocalAntigravityHistory,
   type AntigravityWorkspaceResolver
 } from './session-scanner-antigravity-history'
-import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
-import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
 import {
   ensureSessionParseCacheLoaded,
   scheduleSessionParseCachePersist
@@ -30,10 +24,7 @@ import {
 } from './session-scanner-parse-cache'
 import { recordSessionScanIssue } from './session-scan-issues'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
-import {
-  DEFAULT_CODEX_HOME_DIR,
-  discoverAiVaultSessionSources
-} from './session-scanner-source-discovery'
+import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
@@ -83,35 +74,7 @@ export async function scanAiVaultSessions(
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
     throwIfAiVaultScanCancelled(options.signal)
 
-    const candidates = await dedupeCodexRolloutAliases(
-      discoveries
-        .flatMap((discovery) =>
-          discovery.files.map((file): SessionFileCandidate => ({
-            agent: discovery.agent,
-            file,
-            codexHome:
-              discovery.agent === 'codex'
-                ? codexHomeForSessionsDir(
-                    discovery.rootDir,
-                    options.defaultCodexHomeDir ?? DEFAULT_CODEX_HOME_DIR
-                  )
-                : null,
-            antigravityHistoryPath:
-              discovery.agent === 'antigravity'
-                ? antigravityHistoryPathForBrainDir(discovery.rootDir)
-                : undefined
-          }))
-        )
-        .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),
-      {
-        isCodex: (candidate) => candidate.agent === 'codex',
-        getFilePath: (candidate) => candidate.file.path,
-        getCodexHome: (candidate) => candidate.codexHome,
-        getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
-      },
-      (filePath) => readCodexRolloutSessionMetaId(filePath, options.signal, 'scan'),
-      options.signal
-    )
+    const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
 
     const parsedSessions = await parseSessionCandidates({
       candidates: candidates.slice(0, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER),

@@ -1,10 +1,17 @@
-import { app, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
+import {
+  clearAiVaultSearchIndex,
+  readAiVaultSearchIndexSizeBytes,
+  setSessionSearchIndexingChangeNotifier
+} from '../ai-vault-search/session-search-enablement'
 import {
   configureAiVaultSessionSources,
-  listAiVaultSessions as listCachedLocalAiVaultSessions,
+  readAiVaultSearchCoverage,
   resetAiVaultSessionListCacheForTests,
+  searchAiVaultSessions,
   type AiVaultSessionSources
 } from '../ai-vault/cached-session-list'
+import { scanLocalAiVaultSessionsAsIssue } from './ai-vault-local-session-scan'
 import { deleteAiVaultSession, registerAiVaultDeleteHandler } from './ai-vault-delete'
 import { listAiVaultSubagentSessions } from './ai-vault-subagent-list'
 import {
@@ -12,10 +19,11 @@ import {
   cancelledAiVaultListResult,
   mergeAiVaultListResults
 } from '../ai-vault/session-list-results'
+import type { AiVaultSearchArgs } from '../../shared/ai-vault-search-types'
+import { projectSessionSearchResult } from '../../shared/ai-vault-search-projection'
 import { scanSshAiVaultSessions } from '../ai-vault/ssh-session-list'
 import { AiVaultScanCoordinator } from '../ai-vault/ai-vault-scan-coordinator'
 import type { AiVaultDeleteSessionArgs } from '../../shared/ai-vault-session-deletion'
-import { describeAiVaultScanError } from '../../shared/ai-vault-scan-error-message'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -70,6 +78,7 @@ const AI_VAULT_ALL_HOST_SSH_TIMEOUT_MS = 20_000
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
+    persistSearchPolicy?: () => Promise<void>
     getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
     resolveRuntimeAiVaultSessionTitles?: RuntimeAiVaultSessionTitleResolver
@@ -224,51 +233,6 @@ function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targ
   })
 }
 
-// Why: the SSH legs already degrade to an issue row so one bad host can't take
-// the shared Promise.all down; the local leg can throw too (parse-cache load,
-// WSL home resolution, scanner service supervision) and would otherwise discard
-// every host's sessions under 'all', or replace the list with a raw error string
-// under single-host scope.
-async function scanLocalAiVaultSessionsAsIssue(
-  args: AiVaultListArgs | undefined,
-  signal: AbortSignal | undefined
-): Promise<AiVaultListResult> {
-  try {
-    return await scanLocalAiVaultSessions(args, signal)
-  } catch (error) {
-    if (isAiVaultScanCancelledError(error)) {
-      throw error
-    }
-    // Raw supervision text ("restart circuit is open") means nothing to a user,
-    // so the row carries actionable copy and the log keeps the original.
-    const raw = error instanceof Error ? error.message : 'Local session scan failed.'
-    console.error('[ai-vault] local session scan failed:', raw)
-    return aiVaultScanIssueResult({
-      executionHostId: LOCAL_EXECUTION_HOST_ID,
-      path: 'this computer',
-      message: describeAiVaultScanError(raw)
-    })
-  }
-}
-
-async function scanLocalAiVaultSessions(
-  args?: AiVaultListArgs,
-  signal?: AbortSignal
-): Promise<AiVaultListResult> {
-  // Why: the shared cache module owns codex-home/WSL sourcing and the local
-  // scan cache, so the desktop IPC path and the runtime RPC method (mobile)
-  // share one cache instance and one source of managed-Codex homes.
-  return listCachedLocalAiVaultSessions(
-    {
-      limit: args?.limit,
-      unlimited: args?.unlimited,
-      force: args?.force,
-      scopePaths: args?.scopePaths
-    },
-    { signal }
-  )
-}
-
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
   handlerOptions = options
   // Why: configure the SAME shared cache module the runtime RPC method uses so
@@ -297,6 +261,22 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
       listCancellations.finish(event, requestToken, controller)
     }
   })
+  // Local-only: the search index is built beside the transcripts on this host,
+  // so a remote scope has nothing to consult here. Projected all the same, so the
+  // renderer sees one result shape whether the host is local or remote.
+  ipcMain.handle('aiVault:searchSessions', (_event, args: AiVaultSearchArgs) =>
+    searchAiVaultSessions(args).then(projectSessionSearchResult)
+  )
+  ipcMain.handle('aiVault:searchCoverage', () => readAiVaultSearchCoverage())
+  ipcMain.handle('aiVault:searchIndexSize', () => ({
+    bytes: readAiVaultSearchIndexSizeBytes()
+  }))
+  ipcMain.handle('aiVault:clearSearchIndex', () => {
+    if (!options.persistSearchPolicy) {
+      throw new Error('Search policy persistence is unavailable.')
+    }
+    return clearAiVaultSearchIndex(options.persistSearchPolicy)
+  })
   ipcMain.handle(
     'aiVault:resolveSessionTitles',
     (_event, args: AiVaultSessionTitlesArgs): Promise<AiVaultSessionTitlesResult> =>
@@ -324,6 +304,14 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
   app.on('browser-window-focus', (_event, window) => {
     if (!window.isDestroyed()) {
       window.webContents.send('aiVault:windowFocused')
+    }
+  })
+  // Every window shows coverage somewhere (status bar, settings, sidebar), so all of them hear it.
+  setSessionSearchIndexingChangeNotifier(() => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('aiVault:searchIndexingChanged')
+      }
     }
   })
 }

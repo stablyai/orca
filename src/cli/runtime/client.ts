@@ -81,11 +81,16 @@ export class RuntimeClient {
     return this.remotePairing !== null
   }
 
+  get selectedEnvironment(): string | null {
+    return this.environmentSelector
+  }
+
   async call<TResult>(
     method: string,
     params?: unknown,
     options?: {
       timeoutMs?: number
+      signal?: AbortSignal
       legacyTerminalPrompt?: true
       terminalPromptPreflight?: { runtimeId: string | null }
     } & RuntimeOrchestrationEnvelope
@@ -146,7 +151,8 @@ export class RuntimeClient {
           method,
           params,
           timeoutMs: effectiveTimeoutMs,
-          envelope
+          envelope,
+          ...(options?.signal ? { signal: options.signal } : {})
         })
       } catch (error) {
         throw recover(error, null)
@@ -164,7 +170,14 @@ export class RuntimeClient {
     const metadata = readMetadata(this.userDataPath)
     let response
     try {
-      response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)
+      response = await sendRequest<TResult>(
+        metadata,
+        method,
+        params,
+        effectiveTimeoutMs,
+        envelope,
+        ...(options?.signal ? [options.signal] : [])
+      )
     } catch (error) {
       throw recover(error, metadata.runtimeId ?? null)
     }

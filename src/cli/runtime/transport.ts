@@ -1,3 +1,4 @@
+import { abortSignalReason, throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { createConnection } from 'node:net'
 import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
@@ -11,8 +12,10 @@ export async function sendRequest<TResult>(
   method: string,
   params: unknown,
   timeoutMs: number,
-  envelope?: RuntimeOrchestrationEnvelope
+  envelope?: RuntimeOrchestrationEnvelope,
+  signal?: AbortSignal
 ): Promise<RuntimeRpcResponse<TResult>> {
+  throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -40,6 +43,7 @@ export async function sendRequest<TResult>(
         return
       }
       settled = true
+      signal?.removeEventListener('abort', onAbort)
       lineSegments = []
       socket.destroy()
       reject(
@@ -57,6 +61,7 @@ export async function sendRequest<TResult>(
         return
       }
       settled = true
+      signal?.removeEventListener('abort', onAbort)
       lineSegments = []
       clearTimeout(timeout)
       socket.end()
@@ -67,6 +72,11 @@ export async function sendRequest<TResult>(
       }
     }
 
+    const onAbort = (): void => {
+      finish({ ok: false, error: abortSignalReason(signal!) })
+      socket.destroy()
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
     socket.setEncoding('utf8')
     socket.once('error', () => {
       finish({

@@ -1,45 +1,42 @@
-import type { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type {
-  OpenCodeSqliteListRequest,
   OpenCodeSqliteListValue,
-  OpenCodeSqliteParseRequest,
-  OpenCodeSqliteWorkerRequest,
+  OpenCodeSqliteRequestBody,
+  OpenCodeSqliteParseValue,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
+import { createAiVaultScanCancelledError } from './ai-vault-scan-cancellation'
+import {
+  isSessionSearchCaptureActive,
+  markSessionSearchCaptureIncomplete
+} from './session-search-capture'
+import {
+  bindOpenCodeRequestCancellation,
+  type OpenCodePendingCall as PendingCall
+} from './session-scanner-opencode-pending-request'
+import {
+  bindOpenCodeCaptureConsumer,
+  receiveOpenCodeCaptureBatch
+} from './session-search-opencode-capture-channel'
+import { LazyWorkerThreadHost, type WorkerThreadFactory } from '../lazy-worker-thread-host'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 
 // Why (#8864): a lazily-spawned, unref'd worker runs OpenCode SQLite reads off
-// the main-process event loop. Lifecycle (idle teardown, FIFO one-at-a-time
-// dispatch, per-call timeouts, respawn-on-fault) mirrors src/main/speech/
-// stt-service.ts. The default spawn + shared singleton live in
+// the main-process event loop. This module owns the request half (FIFO
+// one-at-a-time dispatch, per-call deadlines, respawn-on-fault); the thread's
+// own lifetime belongs to LazyWorkerThreadHost, shared with the port-scan probe
+// client. The default spawn + shared singleton live in
 // session-scanner-opencode-sqlite-worker-spawn.ts.
 
+export const IDLE_TEARDOWN_MS = 30_000
 export const LIST_TIMEOUT_MS = 30_000
 export const PARSE_TIMEOUT_MS = 15_000
-export const IDLE_TEARDOWN_MS = 30_000
 // After this many consecutive worker deaths, fail the remaining queued calls to
 // scan issues instead of respawning so a DB that reliably kills the worker can't
 // spin a crash loop. Reset on any successful response, after draining, and when a
 // fresh scan burst starts from idle (so the cap is per-scan, not process-wide).
 export const MAX_CONSECUTIVE_DEATHS = 3
-
-export type WorkerFactory = () => Worker
-
-// Omit<union, 'id'> collapses to the shared keys, so omit each member and let
-// the client stamp the correlation id.
-type OpenCodeSqliteRequestBody =
-  | Omit<OpenCodeSqliteListRequest, 'id'>
-  | Omit<OpenCodeSqliteParseRequest, 'id'>
-
-type PendingCall = {
-  request: OpenCodeSqliteWorkerRequest
-  timeoutMs: number
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer: NodeJS.Timeout | null
-}
 
 // Distinguishes "no worker available at all" from a timeout or crash so callers
 // can surface a precise issue while keeping synchronous SQLite off the main thread.
@@ -53,20 +50,27 @@ class OpenCodeSqliteWorkerUnavailableError extends Error {}
  * no worker can be spawned rather than moving SQLite work onto the main thread.
  */
 export class OpenCodeSqliteWorkerClient {
-  private worker: Worker | null = null
   private active: PendingCall | null = null
   private queue: PendingCall[] = []
-  private idleTimer: NodeJS.Timeout | null = null
   private consecutiveDeaths = 0
   private nextId = 1
-  private loggedWorkerUnavailable = false
-  private cleanupWorkerListeners: (() => void) | null = null
-  private readonly workerFactory: WorkerFactory
-  private readonly log: (message: string) => void
+  private readonly host: LazyWorkerThreadHost<OpenCodeSqliteWorkerResponse>
 
-  constructor(options: { workerFactory: WorkerFactory; log?: (message: string) => void }) {
-    this.workerFactory = options.workerFactory
-    this.log = options.log ?? ((message) => console.warn(message))
+  constructor(options: { workerFactory: WorkerThreadFactory; log?: (message: string) => void }) {
+    const log = options.log ?? ((message: string) => console.warn(message))
+    this.host = new LazyWorkerThreadHost<OpenCodeSqliteWorkerResponse>({
+      factory: options.workerFactory,
+      idleTeardownMs: IDLE_TEARDOWN_MS,
+      onMessage: (response) => this.onMessage(response),
+      onError: (error) => this.onWorkerFault(error),
+      onExit: (code) => this.onWorkerExit(code),
+      isIdle: () => !this.active && this.queue.length === 0,
+      // Why (#8864): never fall back to synchronous SQLite reads here; a missing
+      // bundle or resource-exhausted spawn must omit OpenCode history rather than
+      // reintroduce the main-process hang this worker boundary prevents.
+      onUnavailable: (err) =>
+        log(`OpenCode SQLite worker unavailable; skipping its history. ${errorMessage(err)}`)
+    })
   }
 
   /**
@@ -129,12 +133,25 @@ export class OpenCodeSqliteWorkerClient {
     sessionId: string
     platform: NodeJS.Platform
   }): Promise<AiVaultSession | null> {
+    const capture = isSessionSearchCaptureActive()
     try {
-      const value = await this.dispatch(
-        { kind: 'parse', dbPath: args.dbPath, sessionId: args.sessionId, platform: args.platform },
-        PARSE_TIMEOUT_MS
-      )
-      return value as AiVaultSession | null
+      const value = (await this.dispatch(
+        {
+          kind: 'parse',
+          dbPath: args.dbPath,
+          sessionId: args.sessionId,
+          platform: args.platform,
+          capture
+        },
+        PARSE_TIMEOUT_MS,
+        capture ? bindOpenCodeCaptureConsumer() : undefined
+      )) as OpenCodeSqliteParseValue | null
+      if (value?.captureIncomplete) {
+        // Re-raised in this thread's capture scope: the worker's own scope ended
+        // with the parse, and only this one reaches the index writer.
+        markSessionSearchCaptureIncomplete()
+      }
+      return value?.session ?? null
     } catch (err) {
       if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
         throw new Error('OpenCode SQLite background scanner could not start.')
@@ -144,7 +161,11 @@ export class OpenCodeSqliteWorkerClient {
     }
   }
 
-  private dispatch(request: OpenCodeSqliteRequestBody, timeoutMs: number): Promise<unknown> {
+  private dispatch(
+    request: OpenCodeSqliteRequestBody,
+    timeoutMs: number,
+    capture?: PendingCall['capture']
+  ): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = this.nextId++
       // A fresh burst from full idle starts a new scan: clear any death count
@@ -152,22 +173,32 @@ export class OpenCodeSqliteWorkerClient {
       if (!this.active && this.queue.length === 0) {
         this.consecutiveDeaths = 0
       }
-      this.queue.push({
-        request: { ...request, id } as OpenCodeSqliteWorkerRequest,
+      const call: PendingCall = {
+        request: { ...request, id } as PendingCall['request'],
         timeoutMs,
-        resolve,
-        reject,
-        timer: null
-      })
+        ...bindOpenCodeRequestCancellation(resolve, reject, () => this.cancel(call)),
+        timer: null,
+        capture
+      }
+      this.queue.push(call)
       this.pump()
     })
+  }
+
+  private cancel(call: PendingCall): void {
+    if (this.active === call) {
+      this.host.destroy()
+    }
+    this.queue = this.queue.filter((pending) => pending !== call)
+    this.settle(call, () => call.reject(createAiVaultScanCancelledError()))
+    this.afterSettle()
   }
 
   private pump(): void {
     if (this.active || this.queue.length === 0) {
       return
     }
-    const worker = this.ensureWorker()
+    const worker = this.host.ensure()
     if (!worker) {
       this.failQueuedAsUnavailable()
       return
@@ -177,45 +208,12 @@ export class OpenCodeSqliteWorkerClient {
       return
     }
     this.active = call
-    this.clearIdleTimer()
+    this.host.clearIdleTimer()
     // Timeout clock starts at dispatch (not enqueue): a batch may enqueue up to
     // 8 parses at once, and a queue-inclusive timeout would fire falsely.
-    call.timer = setTimeout(() => this.onTimeout(call), call.timeoutMs)
+    call.timer = setTimeout(() => this.onTimeout(call, call.timeoutMs), call.timeoutMs)
     call.timer.unref?.()
     worker.postMessage(call.request)
-  }
-
-  private ensureWorker(): Worker | null {
-    if (this.worker) {
-      return this.worker
-    }
-    try {
-      const worker = this.workerFactory()
-      const onMessage = (response: OpenCodeSqliteWorkerResponse): void => this.onMessage(response)
-      const onError = (error: Error): void => this.onWorkerFault(error)
-      const onExit = (code: number): void => this.onWorkerExit(code)
-      worker.on('message', onMessage)
-      worker.on('error', onError)
-      worker.on('exit', onExit)
-      this.cleanupWorkerListeners = () => {
-        worker.off('message', onMessage)
-        worker.off('error', onError)
-        worker.off('exit', onExit)
-      }
-      // Never keep the app alive for a scan worker.
-      worker.unref?.()
-      this.worker = worker
-      return worker
-    } catch (err) {
-      // Why (#8864): never fall back to synchronous SQLite reads here; a missing
-      // bundle or resource-exhausted spawn must omit OpenCode history rather than
-      // reintroduce the main-process hang this worker boundary prevents.
-      if (!this.loggedWorkerUnavailable) {
-        this.loggedWorkerUnavailable = true
-        this.log(`OpenCode SQLite worker unavailable; skipping its history. ${errorMessage(err)}`)
-      }
-      return null
-    }
   }
 
   private onMessage(response: OpenCodeSqliteWorkerResponse): void {
@@ -223,27 +221,48 @@ export class OpenCodeSqliteWorkerClient {
     if (!call || call.request.id !== response.id) {
       return
     }
-    this.consecutiveDeaths = 0
-    if (response.ok) {
-      this.settle(call, () => call.resolve(response.value))
-    } else {
-      this.settle(call, () => call.reject(new Error(response.error)))
+    if (response.kind === 'batch') {
+      receiveOpenCodeCaptureBatch({
+        call,
+        batch: response,
+        worker: this.host.current,
+        isActive: () => this.active === call,
+        onTimeout: (timeoutMs) => this.onTimeout(call, timeoutMs),
+        onProtocolViolation: (error) => this.onWorkerFault(error),
+        onConsumerError: (error) => this.onCaptureConsumerFailure(call, error)
+      })
+      return
     }
+    this.consecutiveDeaths = 0
+    this.settle(call, () =>
+      response.kind === 'result'
+        ? call.resolve(response.value)
+        : call.reject(new Error(response.error))
+    )
     this.afterSettle()
   }
 
-  private onTimeout(call: PendingCall): void {
+  // The worker is healthy, only parked on an ack that will never arrive, so it
+  // is retired without counting a death: a failing index write must not spend
+  // the respawn budget that unrelated queued calls depend on.
+  private onCaptureConsumerFailure(call: PendingCall, error: Error): void {
+    this.host.destroy()
+    this.settle(call, () => call.reject(error))
+    this.afterSettle()
+  }
+
+  private onTimeout(call: PendingCall, timeoutMs: number): void {
     if (this.active !== call) {
       return
     }
-    this.onWorkerFault(new Error(`OpenCode SQLite worker timed out after ${call.timeoutMs}ms`))
+    this.onWorkerFault(new Error(`OpenCode SQLite worker timed out after ${timeoutMs}ms`))
   }
 
   private onWorkerExit(code: number): void {
     // A clean self-exit is not a death, but the stale handle must be dropped
     // or the next dispatch would post into the dead worker and stall to timeout.
     if (code === 0 && !this.active && this.queue.length === 0) {
-      this.destroyWorker()
+      this.host.destroy()
       return
     }
     this.onWorkerFault(new Error(`OpenCode SQLite worker exited with code ${code}`))
@@ -251,7 +270,7 @@ export class OpenCodeSqliteWorkerClient {
 
   private onWorkerFault(error: Error): void {
     const failed = this.active
-    this.destroyWorker()
+    this.host.destroy()
     this.consecutiveDeaths++
     if (failed) {
       this.settle(failed, () => failed.reject(error))
@@ -302,46 +321,7 @@ export class OpenCodeSqliteWorkerClient {
     if (this.queue.length > 0) {
       this.pump()
     } else {
-      this.scheduleIdleTeardown()
+      this.host.scheduleIdleTeardown()
     }
-  }
-
-  private scheduleIdleTeardown(): void {
-    this.clearIdleTimer()
-    if (!this.worker) {
-      return
-    }
-    this.idleTimer = setTimeout(() => this.teardownIfIdle(), IDLE_TEARDOWN_MS)
-    this.idleTimer.unref?.()
-  }
-
-  private teardownIfIdle(): void {
-    this.idleTimer = null
-    // Only tear down with nothing active AND nothing queued: a request arriving
-    // as the timer fires must never be lost to a self-exiting worker.
-    if (this.active || this.queue.length > 0) {
-      return
-    }
-    this.destroyWorker()
-  }
-
-  private clearIdleTimer(): void {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer)
-      this.idleTimer = null
-    }
-  }
-
-  private destroyWorker(): void {
-    this.clearIdleTimer()
-    const worker = this.worker
-    this.worker = null
-    if (!worker) {
-      return
-    }
-    this.cleanupWorkerListeners?.()
-    this.cleanupWorkerListeners = null
-    worker.removeAllListeners()
-    void worker.terminate().catch(() => undefined)
   }
 }

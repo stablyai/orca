@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { walkSessionFiles } from './session-scanner-discovery'
+import { forEachSessionFile, walkSessionFiles } from './session-scanner-discovery'
 
 let tempRoot: string | null = null
 
@@ -60,4 +60,30 @@ describe('walkSessionFiles directory reader', () => {
       })
     ).rejects.toBe(cancelled)
   })
+})
+
+it('visits file contents before descending further without retaining paths', async () => {
+  tempRoot = await mkdtemp(join(tmpdir(), 'orca-session-stream-'))
+  await writeFile(join(tempRoot, 'first.jsonl'), '{}\n')
+  await mkdir(join(tempRoot, 'nested'))
+  await writeFile(join(tempRoot, 'nested', 'second.jsonl'), '{}\n')
+  const visited: string[] = []
+  const readDirectory = vi.fn(async (path: string) => {
+    if (path.endsWith('nested')) {
+      expect(visited).toEqual([join(tempRoot!, 'first.jsonl')])
+    }
+    return (await readdir(path, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name)
+    )
+  })
+  await forEachSessionFile(
+    tempRoot,
+    'claude',
+    [],
+    { extensions: new Set(['.jsonl']), readDirectory },
+    async (path) => {
+      visited.push(path)
+    }
+  )
+  expect(visited).toHaveLength(2)
 })

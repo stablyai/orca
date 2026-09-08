@@ -317,7 +317,8 @@ describe('AiVaultHandler', () => {
       hostPlatform: getRemoteHostPlatform('linux-x64'),
       service: {
         listSessions: () => Promise.reject(new Error('sidecar crashed')),
-        resolveSessionTitles: () => Promise.resolve({ titles: [] })
+        resolveSessionTitles: () => Promise.resolve({ titles: [] }),
+        search: unwiredSearch
       }
     })
 
@@ -338,7 +339,8 @@ describe('AiVaultHandler', () => {
         hostPlatform: getRemoteHostPlatform('linux-x64'),
         service: {
           listSessions: () => Promise.resolve(emptyResult()),
-          resolveSessionTitles: () => Promise.reject(new Error('sidecar crashed'))
+          resolveSessionTitles: () => Promise.reject(new Error('sidecar crashed')),
+          search: unwiredSearch
         }
       })
 
@@ -365,7 +367,8 @@ describe('AiVaultHandler', () => {
           const error = new Error('The operation was aborted.')
           error.name = 'AbortError'
           return Promise.reject(error)
-        }
+        },
+        search: unwiredSearch
       }
     })
 
@@ -403,9 +406,13 @@ function createTestService(
         signal
       }),
     resolveSessionTitles: (requests, signal) =>
-      readAiVaultSessionTitlesFromFiles(requests, { signal })
+      readAiVaultSessionTitlesFromFiles(requests, { signal }),
+    search: unwiredSearch
   }
 }
+
+const unwiredSearch = (): Promise<never> =>
+  Promise.reject(new Error('Search is not wired in this fixture.'))
 
 function createMockDispatcher(): {
   value: RelayDispatcher

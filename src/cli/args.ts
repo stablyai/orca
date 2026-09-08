@@ -5,7 +5,8 @@ import {
   CLI_BOOLEAN_FLAGS,
   CLI_GLOBAL_FLAGS,
   CLI_GLOBAL_VALUE_FLAGS,
-  findCliCommandIndex
+  findCliCommandIndex,
+  findCliCommandPathAt
 } from '../shared/cli-argument-boundary'
 
 export { specPaths }
@@ -24,19 +25,66 @@ export const BOOLEAN_FLAGS = CLI_BOOLEAN_FLAGS
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
 const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
 
-function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
+function setFlagValue(
+  flags: Map<string, string | boolean>,
+  name: string,
+  value: string,
+  repeatable: ReadonlySet<string>
+): void {
   const existing = flags.get(name)
-  if (typeof existing === 'string' && REPEATABLE_STRING_FLAGS.has(name)) {
+  if (typeof existing === 'string' && repeatable.has(name)) {
     flags.set(name, `${existing}${REPEATED_FLAG_SEPARATOR}${value}`)
     return
   }
   flags.set(name, value)
 }
 
-export function parseArgs(argv: string[], commandPaths?: readonly string[][]): ParsedArgs {
+/** The most specific spec whose path prefixes `path`, so a group never shadows a leaf. */
+function specForPathPrefix(
+  specs: readonly CommandSpec[],
+  path: readonly string[]
+): CommandSpec | undefined {
+  let best: { spec: CommandSpec; length: number } | undefined
+  for (const spec of specs) {
+    for (const candidate of specPaths(spec)) {
+      if (
+        candidate.length <= path.length &&
+        candidate.every((part, index) => part === path[index]) &&
+        (!best || candidate.length > best.length)
+      ) {
+        best = { spec, length: candidate.length }
+      }
+    }
+  }
+  return best?.spec
+}
+
+export function parseArgs(
+  argv: string[],
+  commandPaths?: readonly string[][],
+  specs: readonly CommandSpec[] = []
+): ParsedArgs {
   const commandPath: string[] = []
   const flags = new Map<string, string | boolean>()
-  const commandIndex = findCliCommandIndex(argv, commandPaths ?? [])
+  const paths = commandPaths ?? []
+  // Why the union rather than the resolved spec: the scan is what finds the
+  // command, so it runs before there is a spec to scope it to. Safe only while no
+  // two specs disagree on a flag's valuedness, which command-scoped-flag-parsing
+  // pins. The reader below narrows to the resolved spec once the scan has run.
+  const allBooleanFlags = new Set([
+    ...BOOLEAN_FLAGS,
+    ...specs.flatMap((spec) => spec.booleanFlags ?? [])
+  ])
+  const commandIndex = findCliCommandIndex(argv, paths, [], allBooleanFlags)
+  const pinned =
+    commandIndex === -1 ? null : findCliCommandPathAt(argv, paths, commandIndex, allBooleanFlags)
+  // Resolved lazily: without a registry the command is only known once its
+  // leading tokens have been read.
+  const activeSpec = (): CommandSpec | undefined => specForPathPrefix(specs, pinned ?? commandPath)
+  const repeatableFlags = (): ReadonlySet<string> => {
+    const scoped = activeSpec()?.repeatableFlags
+    return scoped ? new Set([...REPEATABLE_STRING_FLAGS, ...scoped]) : REPEATABLE_STRING_FLAGS
+  }
 
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
@@ -51,12 +99,17 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
     // treats a `--`-leading next token as a new flag, so it can't express one.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      setFlagValue(flags, assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      setFlagValue(
+        flags,
+        assignment.slice(0, equalsIndex),
+        assignment.slice(equalsIndex + 1),
+        repeatableFlags()
+      )
       continue
     }
 
     const flag = assignment
-    if (BOOLEAN_FLAGS.has(flag)) {
+    if (BOOLEAN_FLAGS.has(flag) || (activeSpec()?.booleanFlags?.includes(flag) ?? false)) {
       flags.set(flag, true)
       continue
     }
@@ -71,7 +124,7 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
       flags.set(flag, true)
       continue
     }
-    setFlagValue(flags, flag, next)
+    setFlagValue(flags, flag, next, repeatableFlags())
     i += 1
   }
 

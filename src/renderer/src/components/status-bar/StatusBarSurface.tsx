@@ -1,3 +1,4 @@
+import { SessionSearchStatusSegment } from './SessionSearchStatusSegment'
 import { PanelsTopLeft, RefreshCw } from 'lucide-react'
 import React from 'react'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
@@ -243,6 +244,7 @@ export function StatusBarSurface({
       <div className="flex-1" />
 
       <div className="flex items-center gap-3">
+        {!isPairedWebClientWindow() ? <SessionSearchStatusSegment iconOnly={iconOnly} /> : null}
         {!isPairedWebClientWindow() ? <CaffeinateStatusSegment iconOnly={iconOnly} /> : null}
         <RemoteServerUpdateStatusSegment iconOnly={iconOnly} />
         <SkillUpdateStatusSegment iconOnly={iconOnly} />

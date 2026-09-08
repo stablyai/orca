@@ -8,11 +8,18 @@ import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
 } from '../../../../shared/ai-vault-session-title'
+import type {
+  AiVaultSearchArgs,
+  AiVaultSearchCoverage,
+  AiVaultSearchResult
+} from '../../../../shared/ai-vault-search-types'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../../shared/ai-vault-types'
 import {
   normalizeExecutionHostScope,
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
+import { SESSION_SEARCH_METHODS } from '../../../../shared/ai-vault-search-contract'
+import type { AiVaultSearchIndexStatus } from '../../../../shared/ai-vault-search-settings'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { callRuntimeResult } from './web-runtime-calls'
 import { requireActiveEnvironment } from './web-runtime-session'
@@ -37,6 +44,35 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
         scopePaths: args?.scopePaths,
         executionHostId
       })
+    },
+    searchSessions: (args: AiVaultSearchArgs) => {
+      const environment = requireActiveEnvironment()
+      return callRuntimeResult<AiVaultSearchResult>('aiVault.searchSessions', {
+        ...args,
+        executionHostId: toRuntimeExecutionHostId(environment.id)
+      })
+    },
+    searchCoverage: () => {
+      const environment = requireActiveEnvironment()
+      return callRuntimeResult<AiVaultSearchCoverage>(SESSION_SEARCH_METHODS.coverage.runtime, {
+        executionHostId: toRuntimeExecutionHostId(environment.id)
+      })
+    },
+    searchIndexSize: async () => {
+      const environment = requireActiveEnvironment()
+      const status = await callRuntimeResult<AiVaultSearchIndexStatus>(
+        'aiVault.searchIndexStatus',
+        { executionHostId: toRuntimeExecutionHostId(environment.id) }
+      )
+      return { bytes: status.indexSizeBytes }
+    },
+    clearSearchIndex: async () => {
+      const environment = requireActiveEnvironment()
+      await callRuntimeResult<AiVaultSearchIndexStatus>('aiVault.configureSessionSearch', {
+        clearIndex: true,
+        executionHostId: toRuntimeExecutionHostId(environment.id)
+      })
+      return null
     },
     resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
       const environment = requireActiveEnvironment()
@@ -70,6 +106,8 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
         agent: args.agent,
         reason: 'non-local-host' as const
       }),
+    // Why: the runtime RPC transport carries no coverage-change push, so `onSearchIndexingChanged`
+    // is deliberately absent — its absence is what tells the renderer to keep a standing poll.
     onWindowFocused: () => noopUnsubscribe
   }
 }

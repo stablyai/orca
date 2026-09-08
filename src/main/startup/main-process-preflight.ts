@@ -66,6 +66,7 @@ import { setDefaultProxySessionResolver } from '../network/proxy-settings'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence'
 import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
 import { initSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
+import { initSessionSearchPaths } from '../ai-vault-search/session-search-paths'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
 import { initStatsPath } from '../stats/collector'
 import { initClaudeUsagePath } from '../claude-usage/store'
@@ -269,6 +270,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     filePath: join(getCanonicalUserDataPath(), 'ai-vault', 'session-parse-cache.json'),
     appVersion: app.getVersion()
   })
+  initSessionSearchPaths(getCanonicalUserDataPath())
   initOrcaProfilePaths()
   // Why: same timing as initDataPath — capture userData before app.setName changes it. See persistence.ts:20-28.
   initStatsPath()

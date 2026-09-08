@@ -18,7 +18,7 @@ export function resolveAiVaultServiceEntryPath(
 ): string {
   const basePath = isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
   const adjacentEntry = join(basePath, 'session-scanner-service-entry.js')
-  if (!isPackaged && pathExists(adjacentEntry)) {
+  if (!appPath.endsWith('app.asar') && pathExists(adjacentEntry)) {
     return adjacentEntry
   }
   return join(basePath, 'out', 'main', 'session-scanner-service-entry.js')

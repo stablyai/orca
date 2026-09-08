@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
   useActiveRepo,
@@ -29,9 +28,11 @@ import {
   resolveAiVaultSessionResumeActions,
   resolveAiVaultSessionResumeState
 } from './ai-vault-session-resume'
-import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-actions'
-import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
-import { resolveAiVaultSessionResumeInChatForWorkspace } from './ai-vault-session-resume-in-chat-workspace'
+import {
+  useAiVaultSessionLaunchActions,
+  copyAiVaultSessionValue as copyText
+} from './ai-vault-session-launch-actions'
+import { useAiVaultSessionResumeInChat } from './ai-vault-session-resume-in-chat-workspace'
 import {
   useAiVaultSessionWorktreeMap,
   withAiVaultCurrentWorktreeStatus
@@ -44,6 +45,7 @@ import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
 import {
+  aiVaultHostScopeOptionsIncludeRemote,
   buildAiVaultHostScopeOptions,
   buildRuntimeAiVaultHostScopeOptions,
   useAiVaultExecutionHostScope
@@ -52,6 +54,8 @@ import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-op
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import { AiVaultScanIssueBanners } from './AiVaultScanIssueBanners'
 import { useAiVaultSessionDeleteAction } from './ai-vault-session-delete-action'
+import { useAiVaultSearchConsent } from './ai-vault-search-consent'
+import { useAiVaultSessionSearchResults } from './ai-vault-session-search-results'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -70,7 +74,6 @@ export default function AiVaultPanel(): React.JSX.Element {
   )
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const agentCmdOverrides = settings?.agentCmdOverrides
   const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
     useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
@@ -109,11 +112,7 @@ export default function AiVaultPanel(): React.JSX.Element {
       availableExecutionHostScopes
     })
   const hostScopeOptions = useMemo(
-    () =>
-      buildAiVaultHostScopeOptions({
-        activeExecutionHostScope,
-        runtimeHostOptions
-      }),
+    () => buildAiVaultHostScopeOptions({ activeExecutionHostScope, runtimeHostOptions }),
     [activeExecutionHostScope, runtimeHostOptions]
   )
   const activeWorktreePath = activeWorktree?.path ?? null
@@ -181,7 +180,7 @@ export default function AiVaultPanel(): React.JSX.Element {
     activeWorktree: activeWorktree ?? null,
     activeWorktreeId: effectiveActiveWorktreeId,
     targetState: resumeTargetState,
-    agentCmdOverrides
+    agentCmdOverrides: settings?.agentCmdOverrides
   })
   const viewAdjustmentCount = countAiVaultViewAdjustments({
     agents,
@@ -252,15 +251,6 @@ export default function AiVaultPanel(): React.JSX.Element {
     [filteredSessions, group, projectLabelByKey, sessionProjectById]
   )
 
-  const copyText = useCallback(async (text: string, label: string): Promise<void> => {
-    await window.api.ui.writeClipboardText(text)
-    toast.success(
-      translate('auto.components.right.sidebar.AiVaultPanel.valueCopied', '{{value0}} copied', {
-        value0: label
-      })
-    )
-  }, [])
-
   const getSessionResumeState = useCallback(
     (session: AiVaultSession) =>
       resolveAiVaultSessionResumeState({
@@ -289,21 +279,12 @@ export default function AiVaultPanel(): React.JSX.Element {
     [allWorktrees, effectiveActiveWorktreeId, getSessionWorktreeInfo, repos, resumeTargetState]
   )
 
-  // Resuming into a chat asks a different question from resuming into a terminal: not "can this
-  // workspace host a PTY" but "will the provider still find this conversation from the workspace we
-  // would run it in". The workspace it targets is the session's own when that is open, because
-  // Claude looks its transcript up under a directory derived from the launch cwd.
-  const getSessionResumeInChat = useCallback(
-    (session: AiVaultSession): AiVaultResumeInChatEligibility =>
-      resolveAiVaultSessionResumeInChatForWorkspace({
-        session,
-        resumeState: getSessionResumeState(session),
-        activeWorkspaceId: effectiveActiveWorktreeId,
-        targetState: resumeTargetState,
-        settings
-      }),
-    [effectiveActiveWorktreeId, getSessionResumeState, resumeTargetState, settings]
-  )
+  const getSessionResumeInChat = useAiVaultSessionResumeInChat({
+    getResumeState: getSessionResumeState,
+    activeWorkspaceId: effectiveActiveWorktreeId,
+    targetState: resumeTargetState,
+    settings
+  })
 
   const handleScopeChange = useCallback((nextScope: AiVaultScope) => {
     preferredScopeRef.current = nextScope
@@ -324,13 +305,28 @@ export default function AiVaultPanel(): React.JSX.Element {
   }, [])
 
   const requestDelete = useAiVaultSessionDeleteAction({ refresh })
+  const consent = useAiVaultSearchConsent()
+  const search = useAiVaultSessionSearchResults({
+    enabled: consent.enabled,
+    query,
+    agents,
+    // 'All' must not be narrowed; the scoped views restrict the index the same way they restrict the scan.
+    scopePaths: scope === 'all' ? [] : scope === 'workspace' ? activeWorktreePaths : scopePaths,
+    executionHostScope,
+    // Why: on desktop only remote hosts fall back to title search, so the notice about that is
+    // worth showing only when the panel can actually address one.
+    remoteHostsAvailable: aiVaultHostScopeOptionsIncludeRemote(hostScopeOptions),
+    sessions
+  })
 
   return (
     <div className="@container/ai-vault flex h-full min-h-0 flex-col bg-sidebar">
       <AiVaultPanelHeader
         query={query}
         loading={loading}
-        shownCount={filteredSessions.length}
+        shownCount={
+          search.active ? search.listCounts.filteredSessionsCount : filteredSessions.length
+        }
         sessionCount={sessions.length}
         hasScanResult={Boolean(scanResult)}
         activeWorktreePath={activeWorktreePath}
@@ -355,28 +351,33 @@ export default function AiVaultPanel(): React.JSX.Element {
         onSessionLimitChange={setSessionLimit}
         onReset={resetViewOptions}
         onRefresh={() => void refresh({ force: true })}
+        search={search}
+        consent={consent}
       />
 
-      {error ? (
+      {(error ?? search.error) ? (
         <div className="border-b border-sidebar-border px-3 py-2 text-xs text-destructive">
-          {error}
+          {error ?? search.error}
         </div>
       ) : null}
 
       <AiVaultScanIssueBanners scanResult={scanResult} />
 
       <AiVaultSessionVirtualList
-        groups={groups}
+        groups={search.active ? search.groups : groups}
         collapsedGroups={collapsedGroups}
-        loading={loading}
-        sessionsCount={sessions.length}
-        filteredSessionsCount={filteredSessions.length}
+        loading={loading || search.loading}
+        sessionsCount={search.active ? search.listCounts.sessionsCount : sessions.length}
+        filteredSessionsCount={
+          search.active ? search.listCounts.filteredSessionsCount : filteredSessions.length
+        }
         noAgentsSelected={agents.length === 0}
         error={error}
         vaultScope={scope}
         buildResumeStartup={launchActions.buildResumeStartup}
         getSessionResumeState={getSessionResumeState}
         getSessionResumeActions={getSessionResumeActions}
+        getSearchEvidence={search.active ? search.evidenceFor : undefined}
         getOriginalPaneTarget={getOriginalPaneTarget}
         getSessionLiveState={getSessionLiveState}
         getWorktreeInfo={getSessionWorktreeInfo}

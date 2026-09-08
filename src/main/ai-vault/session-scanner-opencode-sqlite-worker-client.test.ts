@@ -7,16 +7,23 @@ import {
   OpenCodeSqliteWorkerClient,
   PARSE_TIMEOUT_MS
 } from './session-scanner-opencode-sqlite-worker-client'
+import { CAPTURE_CONSUMER_TIMEOUT_MS } from './session-search-opencode-capture-channel'
 import type {
-  OpenCodeSqliteWorkerRequest,
+  OpenCodeSqliteParseValue,
+  OpenCodeSqliteParentMessage,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import {
+  isSessionSearchCaptureActive,
+  withStreamingSessionSearchCapture
+} from './session-search-capture'
+import type { SessionSearchCapturedMessage } from './session-search-capture'
+import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 
 // A worker_threads stand-in the tests drive directly: it records posted requests
 // and lets a test emit message/error/exit without a built worker bundle.
 class FakeWorker {
-  postedRequests: OpenCodeSqliteWorkerRequest[] = []
+  postedRequests: OpenCodeSqliteParentMessage[] = []
   terminated = false
   unrefed = false
   private listeners = new Map<string, Set<(arg?: unknown) => void>>()
@@ -46,7 +53,7 @@ class FakeWorker {
     return 1
   }
 
-  postMessage(request: OpenCodeSqliteWorkerRequest): void {
+  postMessage(request: OpenCodeSqliteParentMessage): void {
     this.postedRequests.push(request)
   }
 
@@ -64,6 +71,12 @@ class FakeWorker {
     }
     return last.id
   }
+}
+
+// The lifecycle cases only care which call settles, so they tag the session
+// with a sentinel and let the protocol shape carry it.
+function parseValue(sessionId: string): OpenCodeSqliteParseValue {
+  return { session: sessionId as unknown as AiVaultSession }
 }
 
 function makeFactory(workers: FakeWorker[]): () => Worker {
@@ -87,13 +100,13 @@ describe('OpenCodeSqliteWorkerClient', () => {
     // A response for a different id must not settle the active call.
     worker!.emit('message', {
       id: 999,
-      ok: true,
+      kind: 'result',
       value: null
     } satisfies OpenCodeSqliteWorkerResponse)
     worker!.emit('message', {
       id: worker!.lastId(),
-      ok: true,
-      value: { sessionId: 'a' }
+      kind: 'result',
+      value: { session: { sessionId: 'a' } }
     } satisfies OpenCodeSqliteWorkerResponse)
 
     await expect(parsePromise).resolves.toEqual({ sessionId: 'a' })
@@ -111,12 +124,20 @@ describe('OpenCodeSqliteWorkerClient', () => {
     expect(worker.postedRequests).toHaveLength(1)
     expect(worker.postedRequests[0]).toMatchObject({ kind: 'parse', sessionId: 'a' })
 
-    worker.emit('message', { id: worker.postedRequests[0]!.id, ok: true, value: 'A' })
+    worker.emit('message', {
+      id: worker.postedRequests[0]!.id,
+      kind: 'result',
+      value: parseValue('A')
+    })
     await first
 
     expect(worker.postedRequests).toHaveLength(2)
     expect(worker.postedRequests[1]).toMatchObject({ kind: 'parse', sessionId: 'b' })
-    worker.emit('message', { id: worker.postedRequests[1]!.id, ok: true, value: 'B' })
+    worker.emit('message', {
+      id: worker.postedRequests[1]!.id,
+      kind: 'result',
+      value: parseValue('B')
+    })
     await expect(second).resolves.toBe('B')
     // The worker is reused across serial calls (one persistent worker).
     expect(workers).toHaveLength(1)
@@ -145,7 +166,7 @@ describe('OpenCodeSqliteWorkerClient', () => {
       const respawned = workers[1]!
       expect(respawned.postedRequests).toHaveLength(1)
       expect(respawned.postedRequests[0]).toMatchObject({ sessionId: 'b' })
-      respawned.emit('message', { id: respawned.lastId(), ok: true, value: 'B' })
+      respawned.emit('message', { id: respawned.lastId(), kind: 'result', value: parseValue('B') })
       await expect(queued).resolves.toBe('B')
     } finally {
       vi.useRealTimers()
@@ -167,7 +188,7 @@ describe('OpenCodeSqliteWorkerClient', () => {
     // Exactly one respawn; the queued call drains on the new worker.
     expect(workers).toHaveLength(2)
     const respawned = workers[1]!
-    respawned.emit('message', { id: respawned.lastId(), ok: true, value: 'B' })
+    respawned.emit('message', { id: respawned.lastId(), kind: 'result', value: parseValue('B') })
     await expect(queued).resolves.toBe('B')
   })
 
@@ -273,7 +294,7 @@ describe('OpenCodeSqliteWorkerClient', () => {
     expect(worker).toBeDefined()
     worker!.emit('message', {
       id: worker!.lastId(),
-      ok: true,
+      kind: 'result',
       value: { candidates: [], issues: [] }
     } satisfies OpenCodeSqliteWorkerResponse)
     await expect(secondPromise).resolves.toEqual([])
@@ -285,13 +306,21 @@ describe('OpenCodeSqliteWorkerClient', () => {
     const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
 
     const first = client.parse({ dbPath: '/db#a', sessionId: 'a', platform: 'darwin' })
-    workers[0]!.emit('message', { id: workers[0]!.lastId(), ok: true, value: 'A' })
+    workers[0]!.emit('message', {
+      id: workers[0]!.lastId(),
+      kind: 'result',
+      value: parseValue('A')
+    })
     await expect(first).resolves.toBe('A')
     workers[0]!.emit('exit', 0)
 
     const second = client.parse({ dbPath: '/db#b', sessionId: 'b', platform: 'darwin' })
     expect(workers).toHaveLength(2)
-    workers[1]!.emit('message', { id: workers[1]!.lastId(), ok: true, value: 'B' })
+    workers[1]!.emit('message', {
+      id: workers[1]!.lastId(),
+      kind: 'result',
+      value: parseValue('B')
+    })
     await expect(second).resolves.toBe('B')
   })
 
@@ -305,14 +334,22 @@ describe('OpenCodeSqliteWorkerClient', () => {
       })
 
       const first = client.parse({ dbPath: '/db#a', sessionId: 'a', platform: 'darwin' })
-      workers[0]!.emit('message', { id: workers[0]!.lastId(), ok: true, value: 'A' })
+      workers[0]!.emit('message', {
+        id: workers[0]!.lastId(),
+        kind: 'result',
+        value: parseValue('A')
+      })
       await expect(first).resolves.toBe('A')
       await vi.advanceTimersByTimeAsync(IDLE_TEARDOWN_MS)
       expect(workers[0]!.terminated).toBe(true)
 
       const second = client.parse({ dbPath: '/db#b', sessionId: 'b', platform: 'darwin' })
       expect(workers).toHaveLength(2)
-      workers[1]!.emit('message', { id: workers[1]!.lastId(), ok: true, value: 'B' })
+      workers[1]!.emit('message', {
+        id: workers[1]!.lastId(),
+        kind: 'result',
+        value: parseValue('B')
+      })
       await expect(second).resolves.toBe('B')
     } finally {
       vi.useRealTimers()
@@ -352,9 +389,263 @@ describe('OpenCodeSqliteWorkerClient', () => {
     for (let i = 0; i < 3; i++) {
       const promise = client.parse({ dbPath: `/db#${i}`, sessionId: `s${i}`, platform: 'darwin' })
       const worker = workers[0]!
-      worker.emit('message', { id: worker.lastId(), ok: true, value: `v${i}` })
+      worker.emit('message', { id: worker.lastId(), kind: 'result', value: parseValue(`v${i}`) })
       await expect(promise).resolves.toBe(`v${i}`)
     }
     expect(workers).toHaveLength(1)
   })
+})
+
+describe('OpenCodeSqliteWorkerClient search capture', () => {
+  it('asks the worker to capture and replays its rows into the caller scope', async () => {
+    const workers: FakeWorker[] = []
+    const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+
+    const messages: SessionSearchCapturedMessage[] = []
+    const value = await withStreamingSessionSearchCapture(
+      { push: (message) => messages.push(message), checkpoint: async () => {} },
+      async () => {
+        const parsePromise = client.parse({ dbPath: '/db', sessionId: 'a', platform: 'darwin' })
+        const worker = workers[0]!
+        await vi.waitFor(() => expect(worker.postedRequests).toHaveLength(1))
+        expect(worker.postedRequests[0]).toMatchObject({ kind: 'parse', capture: true })
+        worker.emit('message', {
+          id: worker.lastId(),
+          kind: 'batch',
+          batch: 1,
+          messages: [{ role: 'user', text: 'ballast tanks', timestamp: null }]
+        } satisfies OpenCodeSqliteWorkerResponse)
+        await vi.waitFor(() =>
+          expect(worker.postedRequests.at(-1)).toMatchObject({ kind: 'captureAck', batch: 1 })
+        )
+        worker.emit('message', {
+          id: worker.lastId(),
+          kind: 'result',
+          value: { session: { sessionId: 'a' } }
+        })
+        return parsePromise
+      }
+    )
+
+    expect(value).toEqual({ sessionId: 'a' })
+    expect(messages).toEqual([{ role: 'user', text: 'ballast tanks', timestamp: null }])
+  })
+
+  it('does not ask for capture outside a capture scope', async () => {
+    const workers: FakeWorker[] = []
+    const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+
+    expect(isSessionSearchCaptureActive()).toBe(false)
+    const parsePromise = client.parse({ dbPath: '/db', sessionId: 'a', platform: 'darwin' })
+    const worker = workers[0]!
+    expect(worker.postedRequests[0]).toMatchObject({ kind: 'parse', capture: false })
+    worker.emit('message', {
+      id: worker.lastId(),
+      kind: 'result',
+      value: { session: null }
+    } satisfies OpenCodeSqliteWorkerResponse)
+
+    await expect(parsePromise).resolves.toBeNull()
+  })
+})
+
+it('acknowledges capture only after the caller channel drains, including across async scopes', async () => {
+  const workers: FakeWorker[] = []
+  const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+  let release!: () => void
+  const drained = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const push = vi.fn()
+  const checkpoint = vi.fn(() => drained)
+  const parsed = withStreamingSessionSearchCapture({ push, checkpoint }, () =>
+    client.parse({ dbPath: '/db', sessionId: 'a', platform: process.platform })
+  )
+  const worker = workers[0]!
+  worker.emit('message', {
+    id: worker.lastId(),
+    kind: 'batch',
+    batch: 1,
+    messages: [{ role: 'user', text: 'late marker', timestamp: null }]
+  })
+  await Promise.resolve()
+  expect(push).toHaveBeenCalledOnce()
+  expect(checkpoint).toHaveBeenCalledOnce()
+  expect(worker.postedRequests).toHaveLength(1)
+  release()
+  await vi.waitFor(() =>
+    expect(worker.postedRequests.at(-1)).toMatchObject({ kind: 'captureAck', batch: 1 })
+  )
+  worker.emit('message', {
+    id: worker.lastId(),
+    kind: 'result',
+    value: { session: { sessionId: 'a' } }
+  })
+  expect(await parsed).toEqual({ sessionId: 'a' })
+})
+
+function failingCaptureParse(client: OpenCodeSqliteWorkerClient): Promise<unknown> {
+  return withStreamingSessionSearchCapture(
+    {
+      push() {},
+      checkpoint: async () => {
+        throw new Error('capture stopped')
+      }
+    },
+    () => client.parse({ dbPath: '/db', sessionId: 'a', platform: process.platform })
+  )
+}
+
+it('rejects the parse and retires its worker when the capture consumer fails', async () => {
+  const workers: FakeWorker[] = []
+  const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+  const parsed = failingCaptureParse(client)
+  const rejected = expect(parsed).rejects.toThrow('capture stopped')
+  workers[0]!.emit('message', { id: workers[0]!.lastId(), kind: 'batch', batch: 1, messages: [] })
+  await rejected
+  // The worker is parked on an ack that will never arrive, so it has to go.
+  expect(workers[0]!.terminated).toBe(true)
+  expect(workers[0]!.postedRequests).toHaveLength(1)
+})
+
+it('does not count a failing index write as a worker death', async () => {
+  const workers: FakeWorker[] = []
+  const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+
+  // One burst: enough capturing parses to hit the respawn cap, plus an unrelated
+  // list for another database queued behind them. The death counter only resets
+  // from full idle, so nothing here hides an increment.
+  const parses = withStreamingSessionSearchCapture(
+    {
+      push() {},
+      checkpoint: async () => {
+        throw new Error('capture stopped')
+      }
+    },
+    async () =>
+      Array.from({ length: MAX_CONSECUTIVE_DEATHS }, (_, i) =>
+        client.parse({ dbPath: `/db#${i}`, sessionId: `s${i}`, platform: process.platform })
+      )
+  )
+  const issues: AiVaultScanIssue[] = []
+  const list = client.list({ dbPaths: ['/db#other'], limit: 10, issues })
+
+  for (const parse of await parses) {
+    const rejected = expect(parse).rejects.toThrow('capture stopped')
+    const worker = workers.at(-1)!
+    worker.emit('message', { id: worker.lastId(), kind: 'batch', batch: 1, messages: [] })
+    await rejected
+  }
+
+  // A healthy worker parked on an unreachable ack is not a crash, so the queued
+  // list must still be dispatched rather than drained as a crash loop.
+  const worker = workers.at(-1)!
+  expect(worker.postedRequests.at(-1)).toMatchObject({ kind: 'list' })
+  worker.emit('message', {
+    id: worker.lastId(),
+    kind: 'result',
+    value: { candidates: [], issues: [] }
+  })
+  await expect(list).resolves.toEqual([])
+  expect(issues).toEqual([])
+})
+
+it('caps a single backpressure stall at the parse deadline instead of waiting forever', async () => {
+  vi.useFakeTimers()
+  try {
+    const workers: FakeWorker[] = []
+    const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+    // A consumer that never resolves stands in for a wedged index writer.
+    const parsed = withStreamingSessionSearchCapture(
+      { push() {}, checkpoint: () => new Promise<void>(() => {}) },
+      () => client.parse({ dbPath: '/db', sessionId: 'a', platform: process.platform })
+    )
+    const failure = expect(parsed).rejects.toThrow('timed out')
+    const worker = workers[0]!
+    worker.emit('message', { id: worker.lastId(), kind: 'batch', batch: 1, messages: [] })
+
+    // The batch restarts the deadline rather than removing it.
+    await vi.advanceTimersByTimeAsync(CAPTURE_CONSUMER_TIMEOUT_MS - 1)
+    expect(worker.terminated).toBe(false)
+    await vi.advanceTimersByTimeAsync(2)
+    await failure
+    expect(worker.terminated).toBe(true)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('does not spend the worker deadline on a consumer queued behind other writes', async () => {
+  vi.useFakeTimers()
+  try {
+    const workers: FakeWorker[] = []
+    const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+    let release = (): void => {}
+    const parsed = withStreamingSessionSearchCapture(
+      { push() {}, checkpoint: () => new Promise<void>((resolve) => (release = resolve)) },
+      () => client.parse({ dbPath: '/db', sessionId: 'a', platform: process.platform })
+    )
+    const worker = workers[0]!
+    worker.emit('message', { id: worker.lastId(), kind: 'batch', batch: 1, messages: [] })
+
+    // SessionSearchIndexWriter.apply serializes every file's write, so this wait
+    // is other files' queue time. Charging it to the worker killed live parses.
+    await vi.advanceTimersByTimeAsync(PARSE_TIMEOUT_MS + 1)
+    expect(worker.terminated).toBe(false)
+
+    release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(worker.postedRequests.at(-1)).toMatchObject({ kind: 'captureAck', batch: 1 })
+    worker.emit('message', { id: worker.lastId(), kind: 'result', value: parseValue('A') })
+    await expect(parsed).resolves.toBe('A')
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('marks this thread capture incomplete when the worker degraded its read', async () => {
+  const workers: FakeWorker[] = []
+  const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+  const degraded = { incomplete: false }
+  const parsed = withStreamingSessionSearchCapture(
+    { push() {}, checkpoint: async () => {} },
+    () => client.parse({ dbPath: '/db', sessionId: 'a', platform: process.platform }),
+    degraded
+  )
+  const worker = workers[0]!
+  worker.emit('message', {
+    id: worker.lastId(),
+    kind: 'result',
+    value: { ...parseValue('A'), captureIncomplete: true }
+  })
+
+  await expect(parsed).resolves.toBe('A')
+  expect(degraded.incomplete).toBe(true)
+})
+
+it('lets total production run past the deadline as long as batches keep arriving', async () => {
+  vi.useFakeTimers()
+  try {
+    const workers: FakeWorker[] = []
+    const client = new OpenCodeSqliteWorkerClient({ workerFactory: makeFactory(workers), log() {} })
+    const parsed = withStreamingSessionSearchCapture(
+      { push() {}, checkpoint: async () => {} },
+      () => client.parse({ dbPath: '/db', sessionId: 'a', platform: process.platform })
+    )
+    const worker = workers[0]!
+
+    // Four batches, each landing just under the deadline: cumulative time is far
+    // past PARSE_TIMEOUT_MS, but no single gap is, so the parse must survive.
+    for (let batch = 1; batch <= 4; batch++) {
+      worker.emit('message', { id: worker.lastId(), kind: 'batch', batch, messages: [] })
+      await vi.advanceTimersByTimeAsync(PARSE_TIMEOUT_MS - 1)
+      expect(worker.terminated).toBe(false)
+    }
+    expect(worker.postedRequests.at(-1)).toMatchObject({ kind: 'captureAck', batch: 4 })
+
+    worker.emit('message', { id: worker.lastId(), kind: 'result', value: parseValue('A') })
+    await expect(parsed).resolves.toBe('A')
+  } finally {
+    vi.useRealTimers()
+  }
 })

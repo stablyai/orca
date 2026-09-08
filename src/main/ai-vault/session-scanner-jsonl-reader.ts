@@ -1,9 +1,10 @@
+import { checkpointSessionSearchCapture } from './session-search-capture'
 import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 
 const NEWLINE_BYTE = 0x0a
 const CARRIAGE_RETURN_BYTE = 0x0d
 
-type JsonlReadResult = {
+export type JsonlReadResult = {
   consumedThrough: number
   trailingPartialLine: string | null
   bytesRead: number
@@ -61,6 +62,7 @@ export async function consumeCompleteJsonlLines(args: {
       }
       newlineIndex = data.indexOf(NEWLINE_BYTE, lineStart)
     }
+    await checkpointSessionSearchCapture()
     consumedThrough += lineStart
     if (stopped) {
       remainderParts = []
