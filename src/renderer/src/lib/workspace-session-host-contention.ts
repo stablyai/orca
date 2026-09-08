@@ -11,6 +11,7 @@ import {
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
+import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
 import {
   isWorkspaceSessionRecord,
   type WorkspaceSessionRecord
@@ -40,10 +41,8 @@ import {
  * would let the two disagree — the catalog names `ssh:*` hosts that own no partition — and the
  * write would then copy one host's workspace into another host's partition.
  *
- * Known gaps: hosts that share a partition cannot be separated at all ('local' and every `ssh:*`
- * host persist into the 'local' blob), and the unified renderer session still holds one bucket per
- * bare id, so both workspaces display the primary's tabs. Closing either needs host-qualified keys
- * through the whole tab store.
+ * Known gap: the unified renderer session still holds one bucket per bare id, so both workspaces
+ * display the primary's tabs. Closing it needs host-qualified keys through the whole tab store.
  */
 
 export type WorktreeHostClaims = ReadonlyMap<string, ReadonlySet<ExecutionHostId>>
@@ -100,10 +99,9 @@ export function indexWorktreeHostClaims(
   return claims
 }
 
-/** The partition a host's session rows live in: a runtime host owns one, while 'local' and every
- *  `ssh:*` host share the 'local' blob. */
+/** The partition a host's session rows live in: every non-'local' host owns its own. */
 export function sessionPartitionHostFor(hostId: ExecutionHostId): ExecutionHostId {
-  return parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : LOCAL_EXECUTION_HOST_ID
+  return workspaceSessionPartitionHostId(hostId)
 }
 
 /** Distinct partitions a set of claimants spans. Fewer than two means persistence cannot tell the
@@ -112,14 +110,20 @@ export function contestedPartitionHosts(claimed: Iterable<ExecutionHostId>): Exe
   return [...new Set([...claimed].map(sessionPartitionHostFor))]
 }
 
-/** Stable owner of a contested id: 'local' when it is a claimant, else the lowest host id.
+/** Stable owner of a contested id: 'local' when it is a claimant, then any non-runtime host, then
+ *  the lowest host id.
  *  Deliberately not the active host — a primary that followed navigation would migrate the same
- *  rows between partitions on every workspace switch. */
+ *  rows between partitions on every workspace switch. And deliberately not plain sort order once
+ *  'local' is out: a `runtime:` environment id rotates across relay restarts, so ranking it last
+ *  keeps a re-created environment from taking a stable host's rows into its partition. */
 export function pickPrimaryHostForClaims(hostIds: Iterable<ExecutionHostId>): ExecutionHostId {
   const sorted = [...hostIds].sort()
-  return sorted.includes(LOCAL_EXECUTION_HOST_ID)
-    ? LOCAL_EXECUTION_HOST_ID
-    : (sorted[0] ?? LOCAL_EXECUTION_HOST_ID)
+  return (
+    sorted.find((hostId) => hostId === LOCAL_EXECUTION_HOST_ID) ??
+    sorted.find((hostId) => parseExecutionHostId(hostId)?.kind !== 'runtime') ??
+    sorted[0] ??
+    LOCAL_EXECUTION_HOST_ID
+  )
 }
 
 function definedHostIds(slices: HostSessionSlices): ExecutionHostId[] {

@@ -110,16 +110,13 @@ function assignVisitRecencyByHost(
     return
   }
   for (const [key, entry] of Object.entries(value)) {
-    // Why: boot hydration reads only local + runtime:* partitions, and SSH worktree
-    // session state deliberately stays in the local partition (see buildHostIdByWorktreeId);
-    // routing ssh-qualified keys to an ssh partition would strand them across restarts.
+    // Why the qualified host wins: the key already names the host that owns the visit, so routing
+    // it anywhere else separates the recency row from the workspace it describes.
     const qualifiedHost = isWorktreeHostIdentity(key)
       ? parseExecutionHostId(key.slice(0, key.indexOf('|')))
       : null
     const host = isWorktreeHostIdentity(key)
-      ? qualifiedHost?.kind === 'runtime'
-        ? qualifiedHost.id
-        : LOCAL_EXECUTION_HOST_ID
+      ? (qualifiedHost?.id ?? LOCAL_EXECUTION_HOST_ID)
       : ctx.hostIdByWorktreeId(key)
     const slice = ensureSlice(slices, host, templates) as WorkspaceSessionRecord
     const target = (slice.lastVisitedAtByWorktreeId ??= {}) as WorkspaceSessionRecord

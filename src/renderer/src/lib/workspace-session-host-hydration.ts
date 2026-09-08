@@ -6,6 +6,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import { adoptStrandedHostPartitionSession } from '../../../shared/workspace-session-stranded-partition-adoption'
 import {
   mergeWorkspaceSessionsWithHostShadow,
   normalizeWorkspaceSessionKeyToWorktreeId
@@ -100,19 +101,35 @@ function buildRuntimeHostIdByWorkspaceSessionKey(
 export function listKnownRuntimeHostIds(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
 ): ExecutionHostId[] {
+  return listKnownPartitionHostIds(repos, 'runtime')
+}
+
+/** Collect the distinct SSH hosts owning any persisted repo. Their partitions are read separately
+ *  from the runtime ones: an `ssh:*` partition is not a rival claimant of the same workspace id,
+ *  it is the other half of ONE host's session that shipping builds split in two (#12723). */
+export function listKnownSshHostIds(
+  repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
+): ExecutionHostId[] {
+  return listKnownPartitionHostIds(repos, 'ssh')
+}
+
+function listKnownPartitionHostIds(
+  repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[],
+  kind: 'ssh' | 'runtime'
+): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
   for (const repo of repos) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-    if (parsed?.kind === 'runtime') {
+    if (parsed?.kind === kind) {
       hostIds.add(parsed.id)
     }
   }
   return [...hostIds]
 }
 
-/** Boot-time hydration: fetch the local partition plus one partition per known
- *  runtime host (from loaded repos and saved runtime ids), then merge them into
- *  the unified session the hydrators expect.
+/** Boot-time hydration: fetch the local partition, one partition per known runtime host (from
+ *  loaded repos and saved runtime ids) and one per known SSH host, then merge them into the
+ *  unified session the hydrators expect.
  *
  *  Fail-soft: a partition whose fetch rejects is skipped — boot proceeds with
  *  the rest. Corrupt partitions never reach here; persistence zod-validates
@@ -131,6 +148,14 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[],
   additionalRuntimeHostIds: readonly ExecutionHostId[] = []
 ): Promise<WorkspaceSessionHostRead> {
+  const readPartition = async (hostId: ExecutionHostId): Promise<WorkspaceSessionState | null> => {
+    try {
+      return await api.get(hostId)
+    } catch (err) {
+      console.warn(`[session] skipping unreadable host partition ${hostId}:`, err)
+      return null
+    }
+  }
   const slices: HostSessionSlices = {
     [LOCAL_EXECUTION_HOST_ID]: await api.get()
   }
@@ -140,18 +165,30 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
     ...listKnownRuntimeHostIds(repos),
     ...additionalRuntimeHostIds
   ])
-  await Promise.all(
-    [...runtimeHostIds].map(async (hostId) => {
-      try {
-        slices[hostId] = await api.get(hostId)
-      } catch (err) {
-        console.warn(`[session] skipping unreadable host partition ${hostId}:`, err)
-      }
-    })
-  )
+  const sshHostIds = listKnownSshHostIds(repos)
+  const [, sshSlices] = await Promise.all([
+    Promise.all(
+      [...runtimeHostIds].map(async (hostId) => {
+        const slice = await readPartition(hostId)
+        if (slice) {
+          slices[hostId] = slice
+        }
+      })
+    ),
+    Promise.all(sshHostIds.map((hostId) => readPartition(hostId)))
+  ])
   const merged = mergeWorkspaceSessionsWithHostShadow(slices)
+  // Why the ssh partitions stay out of `slices`: the contention split reads two slices holding one
+  // workspace id as two DIFFERENT workspaces on rival hosts and parks one of them. 'local' and
+  // `ssh:<targetId>` are the same workspace written twice, so they are reunited afterwards instead
+  // — and a workspace the merged session has no tabs for is adopted rather than read as a
+  // deletion (#12721). Routing sends the reunited rows back to the owning partition.
+  let session = merged.session
+  for (const slice of sshSlices) {
+    session = adoptStrandedHostPartitionSession(session, slice)
+  }
   return {
-    session: merged.session,
+    session,
     // Why the merged slices and not the raw ones: a row parked out of the renderer session must not
     // still name its host as the owner, or startup builds runtime placeholders for a local row.
     runtimeHostIdByWorkspaceSessionKey: buildRuntimeHostIdByWorkspaceSessionKey(merged.slices),
