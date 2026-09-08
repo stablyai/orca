@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -7,10 +7,12 @@ import { useAppStore } from '@/store'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
-import { shouldOverlayBrowserAddressBar } from './browser-address-bar-expansion'
-import { saveBrowserAddressBarEditSession } from './browser-address-bar-edit-session'
+import { useBrowserAddressBarExpansion } from './browser-address-bar-expansion'
+import { useBrowserAddressBarEditSessionSync } from './use-browser-address-bar-edit-session-sync'
 import { useBrowserAddressBarDismissal } from './use-browser-address-bar-dismissal'
 import type { BrowserAddressBarEditSessionBinding } from './use-browser-address-bar-edit-session'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 
 type BrowserAddressBarProps = {
@@ -50,6 +52,8 @@ export default function BrowserAddressBar({
   const autocompleteQuery = prePreviewValueRef.current ?? value
   const browserUrlHistory = useAppStore((s) => s.browserUrlHistory)
   const workspaceDocHistory = useAppStore((s) => s.workspaceDocHistory)
+  const removeBrowserHistoryEntry = useAppStore((s) => s.removeBrowserHistoryEntry)
+  const clearBrowserHistory = useAppStore((s) => s.clearBrowserHistory)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const browserKagiSessionLink = useAppStore((s) => s.browserKagiSessionLink)
   const closingRef = useRef(false)
@@ -57,77 +61,18 @@ export default function BrowserAddressBar({
   const openedAtRef = useRef(0)
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
-  const slotRef = useRef<HTMLDivElement | null>(null)
-  const [inlineWidth, setInlineWidth] = useState<number | null>(null)
+  const { slotRef, overlay } = useBrowserAddressBarExpansion(open)
 
-  // Why: the slot keeps its flex width even while the bar overlays the toolbar,
-  // so measuring it here (not the form) cannot oscillate with the overlay.
-  useEffect(() => {
-    const slot = slotRef.current
-    if (!slot || typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const syncWidth = (): void => setInlineWidth(slot.getBoundingClientRect().width)
-    syncWidth()
-    const observer = new ResizeObserver(syncWidth)
-    observer.observe(slot)
-    return () => observer.disconnect()
-  }, [])
-
-  const overlay = shouldOverlayBrowserAddressBar({ inlineWidth, focused: open })
-
-  const editSessionPageId = editSession?.pageId ?? null
-  const resumedChrome = editSession?.resumed ?? null
-  const liveEditRef = useRef({ value, open })
-  useLayoutEffect(() => {
-    liveEditRef.current = { value, open }
+  useBrowserAddressBarEditSessionSync({
+    editSession,
+    value,
+    open,
+    inputRef,
+    prePreviewValueRef,
+    openedAtRef,
+    setSelectedValueOverride,
+    setOpen
   })
-
-  useLayoutEffect(() => {
-    if (!resumedChrome) {
-      return
-    }
-    // Why after the fact rather than as the initial state: the pane resumes in its own layout
-    // effect, which runs after this bar has already mounted (and after the focus it takes has
-    // opened the dropdown the way a fresh click would). This is what puts it back as the user
-    // left it. Re-arming the blur grace window keeps the resumed focus from closing it again.
-    if (resumedChrome.preview) {
-      prePreviewValueRef.current = resumedChrome.preview.typedQuery
-      setSelectedValueOverride(resumedChrome.preview.previewedUrl)
-    }
-    openedAtRef.current = Date.now()
-    setOpen(resumedChrome.suggestionsOpen)
-  }, [resumedChrome])
-
-  // Why layout and not a passive cleanup: React destroys passive effects for a deleted tree after
-  // its DOM is gone, and by then document.activeElement is the body — every edit would read idle.
-  useLayoutEffect(() => {
-    const input = inputRef.current
-    if (!editSessionPageId || !input) {
-      return
-    }
-    return () => {
-      // Why only a focused bar: an idle one has no edit to hand on, and resuming it would seize
-      // focus and reopen a dropdown for a user who was reading the page.
-      if (document.activeElement !== input) {
-        return
-      }
-      const typedQuery = prePreviewValueRef.current
-      saveBrowserAddressBarEditSession(editSessionPageId, {
-        draft: liveEditRef.current.value,
-        selection: {
-          start: input.selectionStart ?? input.value.length,
-          end: input.selectionEnd ?? input.value.length,
-          direction: input.selectionDirection ?? 'none'
-        },
-        suggestionsOpen: liveEditRef.current.open,
-        // Why the draft alone is not enough: mid-preview it holds the highlighted suggestion, and
-        // dropping this would strand the user with no way back to what they actually typed.
-        preview:
-          typedQuery === null ? null : { typedQuery, previewedUrl: liveEditRef.current.value }
-      })
-    }
-  }, [editSessionPageId, inputRef])
 
   const clearAddressBarTimers = useCallback((): void => {
     if (blurCloseTimerRef.current !== null) {
@@ -227,6 +172,28 @@ export default function BrowserAddressBar({
   const cancelSuggestionPreview = useCallback((): void => {
     dismissSuggestions()
   }, [dismissSuggestions])
+
+  const handleRemoveSuggestion = useCallback(
+    (url: string) => {
+      if (selectedValueOverride === url) {
+        restoreTypedQuery()
+      }
+      removeBrowserHistoryEntry(url)
+    },
+    [removeBrowserHistoryEntry, restoreTypedQuery, selectedValueOverride]
+  )
+
+  const handleClearHistory = useCallback(() => {
+    clearSuggestionPreview()
+    clearBrowserHistory()
+    restoreTypedQuery()
+    toast.success(
+      translate(
+        'auto.components.browser.pane.browser.address.bar.suggestions.clearHistorySuccess',
+        'Browsing history cleared'
+      )
+    )
+  }, [clearBrowserHistory, clearSuggestionPreview, restoreTypedQuery])
 
   const selectedValue =
     selectedValueOverride &&
@@ -351,6 +318,18 @@ export default function BrowserAddressBar({
         }
         selectSuggestionAtIndex(startIdx - 1)
       }
+
+      if (event.shiftKey && (event.key === 'Delete' || event.key === 'Backspace')) {
+        const currentSuggestion = suggestions.find((s) => s.url === selectedValue)
+        if (
+          currentSuggestion &&
+          currentSuggestion.lastVisitedAt > 0 &&
+          !currentSuggestion.isSearch
+        ) {
+          event.preventDefault()
+          handleRemoveSuggestion(currentSuggestion.url)
+        }
+      }
     },
     [
       open,
@@ -360,7 +339,8 @@ export default function BrowserAddressBar({
       restoreTypedQuery,
       cancelSuggestionPreview,
       clearSuggestionPreview,
-      onSubmit
+      onSubmit,
+      handleRemoveSuggestion
     ]
   )
 
@@ -481,6 +461,8 @@ export default function BrowserAddressBar({
               selectedValue={selectedValue}
               onSelectedValueChange={setSelectedValueOverride}
               onSelect={handleSelect}
+              onRemoveSuggestion={handleRemoveSuggestion}
+              onClearHistory={handleClearHistory}
             />
           </PopoverContent>
         )}

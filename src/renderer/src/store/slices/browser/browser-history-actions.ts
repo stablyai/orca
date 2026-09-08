@@ -19,7 +19,10 @@ export function createBrowserHistoryActions(
   _get: BrowserSliceGet
 ): Pick<
   BrowserSlice,
-  'recordWorkspaceDocVisit' | 'addBrowserHistoryEntry' | 'clearBrowserHistory'
+  | 'recordWorkspaceDocVisit'
+  | 'addBrowserHistoryEntry'
+  | 'removeBrowserHistoryEntry'
+  | 'clearBrowserHistory'
 > {
   return {
     recordWorkspaceDocVisit: (docLocation, title, options) => {
@@ -98,6 +101,21 @@ export function createBrowserHistoryActions(
         }
         return { browserUrlHistory: next }
       })
+    },
+
+    removeBrowserHistoryEntry: (urlOrPath) => {
+      const normalized = normalizeBrowserHistoryUrl(urlOrPath)
+      set((s) => ({
+        browserUrlHistory: s.browserUrlHistory.filter(
+          (entry) =>
+            entry.url !== urlOrPath &&
+            entry.normalizedUrl !== urlOrPath &&
+            entry.normalizedUrl !== normalized
+        ),
+        workspaceDocHistory: s.workspaceDocHistory.filter(
+          (entry) => entry.docLocation.filePath !== urlOrPath
+        )
+      }))
     },
 
     // One clear for both sources: the dropdown presents them as one history.
