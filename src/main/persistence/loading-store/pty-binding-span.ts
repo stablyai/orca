@@ -43,7 +43,7 @@ export type PtyBindingSpan = {
  * in the trace file. A local-only NDJSON lane, collected only into a user-submitted bundle.
  */
 export function startPtyBindingSpan(entry: {
-  hostKind: 'local' | 'ssh'
+  hostKind: 'local' | 'ssh' | 'runtime'
   savePending: boolean
   generationGap: number
 }): PtyBindingSpan {
