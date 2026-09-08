@@ -48,7 +48,8 @@ export default function TabGroupPanel({
   activeTerminalTabId,
   onTerminalActivate,
   onBodyElement,
-  terminalEmptyState
+  terminalEmptyState,
+  tabBarSlots
 }: {
   groupId: string
   worktreeId: string
@@ -70,6 +71,7 @@ export default function TabGroupPanel({
   onTerminalActivate?: (terminalTabId: string) => void
   onBodyElement?: (element: HTMLDivElement | null) => void
   terminalEmptyState?: React.ReactNode
+  tabBarSlots?: { leading?: React.ReactNode; trailing?: React.ReactNode }
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
@@ -273,8 +275,7 @@ export default function TabGroupPanel({
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
       onFocusCapture={commands.focusGroup}
     >
-      {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
-      {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
+      {/* Why: each split needs a draggable tab row because the hidden-inset titlebar has only one shared center slot. */}
       <div
         className="h-[32px] shrink-0 border-b border-border bg-card"
         data-tab-group-strip-id={groupId}
@@ -294,6 +295,7 @@ export default function TabGroupPanel({
               }
             />
           ) : null}
+          {tabBarSlots?.leading}
           <div className="min-w-0 flex-1 h-full">{tabBar}</div>
           <div
             className="ml-1.5 flex shrink-0 items-center gap-0.5"
@@ -347,6 +349,7 @@ export default function TabGroupPanel({
                 </Tooltip>
               ) : null}
             </div>
+            {tabBarSlots?.trailing}
           </div>
           {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
           {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (

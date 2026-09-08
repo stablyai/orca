@@ -189,6 +189,8 @@ export function activateAndRevealWorktree(
     providesInitialSurface?: boolean
     /** Keep sidebar filters intact when navigating to a hidden target. */
     clearSidebarFilters?: boolean
+    /** Keep a non-terminal surface visible while applying worktree startup state. */
+    preserveActiveView?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -213,7 +215,7 @@ export function activateAndRevealWorktree(
   }
 
   // 2. Switch any non-terminal view back to terminal
-  if (state.activeView !== 'terminal') {
+  if (!opts?.preserveActiveView && state.activeView !== 'terminal') {
     state.setActiveView('terminal')
   }
 

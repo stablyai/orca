@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Folder, GitBranch, Plus, SquareTerminal } from 'lucide-react'
+import { Folder, GitBranch, GitBranchPlus, Plus, SquareTerminal, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
 import {
   Command,
   CommandEmpty,
@@ -10,10 +11,13 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { reviewStateLabel } from '@/components/dashboard-popout/agent-dashboard-filter-options'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { resolveRepoHeaderColor } from '@/components/sidebar/project-header-color'
 import { useWorktreeActivityStatuses } from '@/components/sidebar/use-worktree-activity-statuses'
+import { getReviewLabel, ReviewIcon } from '@/components/sidebar/worktree-review-helpers'
 import {
   getWorkspaceStatus,
   getWorkspaceStatusVisualMeta
@@ -22,6 +26,7 @@ import { translate } from '@/i18n/i18n'
 import { getWorktreeStatusLabel } from '@/lib/worktree-status'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+import { getWorktreeOnHostFromState } from '@/store/selectors'
 import {
   groupWorkspaceMultiplexerCatalog,
   type WorkspaceMultiplexerCatalogItem
@@ -47,6 +52,30 @@ export function WorkspaceMultiplexerPicker({
   const worktreeIds = useMemo(() => items.map((item) => item.worktreeId), [items])
   const activityStatuses = useWorktreeActivityStatuses(worktreeIds)
   const workspaceStatuses = useAppStore((state) => state.workspaceStatuses)
+  const handleCreateWorktree = (): void => {
+    setOpen(false)
+    queueMicrotask(() =>
+      useAppStore
+        .getState()
+        .openModal('new-workspace-composer', { telemetrySource: 'command_palette' })
+    )
+  }
+  const handleDeleteWorktree = (item: WorkspaceMultiplexerCatalogItem): void => {
+    const state = useAppStore.getState()
+    const worktree =
+      getWorktreeOnHostFromState(state, item.worktreeId, item.executionHostId) ??
+      getWorktreeOnHostFromState(state, item.worktreeId, undefined)
+    if (!worktree || worktree.isMainWorktree) {
+      return
+    }
+    setOpen(false)
+    queueMicrotask(() =>
+      runWorktreeDelete(worktree.id, {
+        ...(worktree.instanceId ? { expectedInstanceId: worktree.instanceId } : {}),
+        ...(worktree.hostId ? { expectedHostId: worktree.hostId } : {})
+      })
+    )
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -98,6 +127,7 @@ export function WorkspaceMultiplexerPicker({
                 className="border-b border-border/60 last:border-b-0"
               >
                 {group.items.map((item) => {
+                  const canDelete = item.workspaceKind === 'worktree' && !item.isMainWorktree
                   const multiplexerCount = slotCountByIdentity.get(item.identity) ?? 0
                   const terminalCount = terminalCountByIdentity.get(item.identity) ?? 0
                   const activityStatus = activityStatuses.get(item.worktreeId) ?? 'inactive'
@@ -107,15 +137,21 @@ export function WorkspaceMultiplexerPicker({
                     workspaceStatusId
                   const workspaceStatusMeta = getWorkspaceStatusVisualMeta(workspaceStatus)
                   const WorkspaceStatusIcon = workspaceStatusMeta.icon
+                  const deleteLabel = translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.16bc3c998a',
+                    'Delete workspace {{value0}}',
+                    { value0: item.workspaceName }
+                  )
                   return (
                     <CommandItem
                       key={item.identity}
                       value={`${item.identity} ${item.projectGroupName ?? ''} ${item.projectName} ${item.workspaceName} ${item.branch ?? ''} ${item.path} ${item.hostLabel ?? ''}`}
-                      className="jump-palette-item group ml-3 cursor-grab items-center gap-2 border-l border-border/70 py-2 pl-2.5 active:cursor-grabbing"
+                      className="jump-palette-item group/workspace ml-3 cursor-grab items-center gap-2 border-l border-border/70 py-2 pl-2.5 active:cursor-grabbing"
                       data-workspace-multiplexer-worktree-id={item.worktreeId}
                       data-terminal-tab-count={terminalCount}
                       data-workspace-activity-status={activityStatus}
                       data-workspace-status={workspaceStatusId}
+                      data-review-state={item.review?.state ?? undefined}
                       draggable
                       onDragStart={(event) => {
                         event.dataTransfer.effectAllowed = 'copy'
@@ -145,6 +181,16 @@ export function WorkspaceMultiplexerPicker({
                           className="size-3.5 shrink-0"
                           style={{ color: resolveRepoHeaderColor(item.projectBadgeColor) }}
                         />
+                      ) : item.review ? (
+                        <span
+                          className="inline-flex size-3.5 shrink-0 items-center justify-center"
+                          data-workspace-multiplexer-review-state={item.review.state}
+                        >
+                          <ReviewIcon review={item.review} className="size-3.5" variant="generic" />
+                          <span className="sr-only">
+                            {getReviewLabel(item.review)}: {reviewStateLabel(item.review.state)}
+                          </span>
+                        </span>
                       ) : (
                         <GitBranch
                           className="size-3.5 shrink-0"
@@ -214,12 +260,60 @@ export function WorkspaceMultiplexerPicker({
                           </span>
                         ) : null}
                       </div>
+                      {canDelete ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={deleteLabel}
+                              data-workspace-multiplexer-delete-worktree-id={item.worktreeId}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.stopPropagation()
+                                }
+                              }}
+                              onPointerDown={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                              }}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                handleDeleteWorktree(item)
+                              }}
+                              className="text-muted-foreground transition-opacity can-hover:opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100 group-data-[selected=true]/workspace:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
+                            >
+                              <Trash2 aria-hidden />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={4}>
+                            {deleteLabel}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
                     </CommandItem>
                   )
                 })}
               </CommandGroup>
             ))}
           </CommandList>
+          <div className="border-t border-border p-1">
+            <Button
+              type="button"
+              variant="ghost"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={handleCreateWorktree}
+              className="h-9 w-full justify-start rounded-sm px-3 text-xs font-normal"
+            >
+              <GitBranchPlus className="size-3.5 text-muted-foreground" />
+              {translate(
+                'auto.components.NewWorkspaceComposerModal.createWorktree',
+                'Create worktree'
+              )}
+            </Button>
+          </div>
         </Command>
       </PopoverContent>
     </Popover>

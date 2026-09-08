@@ -234,6 +234,7 @@ describe('Workspace Multiplexer model', () => {
       branch: 'feature/multiplexer',
       isMainWorktree: false,
       workspaceStatus: 'in-progress',
+      review: null,
       path: '/repo/anglerfish',
       hostLabel: null
     } satisfies WorkspaceMultiplexerCatalogItem
@@ -295,6 +296,7 @@ describe('Workspace Multiplexer model', () => {
       branch: 'feature/multiplexer',
       isMainWorktree: false,
       workspaceStatus: 'in-progress',
+      review: null,
       path: '/repo/anglerfish',
       hostLabel: 'Build box'
     } satisfies WorkspaceMultiplexerCatalogItem

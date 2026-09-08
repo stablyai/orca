@@ -3,7 +3,10 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-iden
 import type { AppState } from '@/store/types'
 import type { DashboardCardReview } from '../../../../shared/dashboard-snapshot'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
-import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
+import {
+  isPositiveHostedReviewNumber,
+  type HostedReviewInfo
+} from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import {
@@ -36,11 +39,11 @@ function hasLinkedReview(worktree: Worktree): boolean {
   ].some(isPositiveHostedReviewNumber)
 }
 
-function resolveReview(
+export function resolveDashboardHostedReview(
   state: DashboardCardContextState,
   repo: Repo | null,
   worktree: Worktree
-): DashboardCardReview | undefined {
+): HostedReviewInfo | undefined {
   if (!repo || !state.hostedReviewCache || !state.prCache || repo.kind === 'folder') {
     return undefined
   }
@@ -62,7 +65,7 @@ function resolveReview(
     hostedReview &&
     canUseParentPrChecksHostedReviewCacheEntry(worktree, hostedReview, hostedReviewEntry)
   ) {
-    return { number: hostedReview.number, state: hostedReview.state }
+    return hostedReview
   }
   const prEntry = getParentPrChecksGitHubPRCacheEntry({
     prCache: state.prCache,
@@ -70,10 +73,9 @@ function resolveReview(
     branch,
     settings: state.settings ?? null
   })
-  const review = canUseParentPrChecksGitHubPRCacheEntry(worktree, prEntry, hostedReviewEntry)
+  return canUseParentPrChecksGitHubPRCacheEntry(worktree, prEntry, hostedReviewEntry)
     ? hostedReviewInfoFromGitHubPRInfo(prEntry.data)
     : undefined
-  return review ? { number: review.number, state: review.state } : undefined
 }
 
 export function resolveDashboardCardContext(
@@ -86,7 +88,10 @@ export function resolveDashboardCardContext(
       ? state.workspaceStatuses
       : DEFAULT_WORKSPACE_STATUSES
   const workspaceStatusId = getWorkspaceStatus(worktree, statuses)
-  const review = resolveReview(state, repo, worktree)
+  const hostedReview = resolveDashboardHostedReview(state, repo, worktree)
+  const review: DashboardCardReview | undefined = hostedReview
+    ? { number: hostedReview.number, state: hostedReview.state }
+    : undefined
   return {
     workspaceStatus:
       statuses.find((status) => status.id === workspaceStatusId) ?? DEFAULT_WORKSPACE_STATUSES[0],

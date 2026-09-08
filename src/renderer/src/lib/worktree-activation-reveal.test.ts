@@ -19,10 +19,11 @@ describe('activateAndRevealWorktree', () => {
   it('queues a one-shot initial cwd for the primary activation-created tab', () => {
     const queueTabInitialCwd = vi.fn()
     const revealWorktreeInSidebar = vi.fn()
+    const setActiveView = vi.fn()
     useAppStore.setState({
       activeRepoId: null,
       activeWorktreeId: null,
-      activeView: 'settings',
+      activeView: 'multiplexer',
       filterRepoIds: [],
       isNavigatingHistory: false,
       repos: [{ id: 'repo-1', connectionId: null }],
@@ -54,7 +55,7 @@ describe('activateAndRevealWorktree', () => {
             } as never)
           : null,
       setActiveRepo: vi.fn(),
-      setActiveView: vi.fn(),
+      setActiveView,
       setActiveWorktree: vi.fn(),
       markWorktreeVisited: vi.fn(),
       recordWorktreeVisit: vi.fn(),
@@ -73,11 +74,13 @@ describe('activateAndRevealWorktree', () => {
 
     const result = activateAndRevealWorktree('wt-1', {
       initialCwd: '/repo/packages/web',
-      executionHostId: 'ssh:box'
+      executionHostId: 'ssh:box',
+      preserveActiveView: true
     })
 
     expect(result).toEqual({ primaryTabId: 'tab-1' })
     expect(queueTabInitialCwd).toHaveBeenCalledWith('tab-1', '/repo/packages/web')
+    expect(setActiveView).not.toHaveBeenCalled()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-1', {
       executionHostId: 'ssh:box'
     })

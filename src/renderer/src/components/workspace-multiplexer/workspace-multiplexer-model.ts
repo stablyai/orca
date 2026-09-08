@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
@@ -20,6 +21,10 @@ import {
   isUnifiedTabOwnedByWorktree
 } from '@/lib/unified-tab-host-ownership'
 import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-alias'
+import {
+  resolveDashboardHostedReview,
+  type DashboardCardContextState
+} from '../dashboard/dashboard-card-context'
 
 const NO_AMBIGUOUS_WORKTREE_IDS: ReadonlySet<string> = new Set()
 
@@ -37,6 +42,7 @@ export type WorkspaceMultiplexerCatalogItem = {
   branch: string | null
   isMainWorktree: boolean
   workspaceStatus: Worktree['workspaceStatus']
+  review: HostedReviewInfo | null
   path: string
   hostLabel: string | null
 }
@@ -79,6 +85,7 @@ export function buildWorkspaceMultiplexerCatalog(args: {
   folderWorkspaces: readonly FolderWorkspace[]
   repos: readonly Repo[]
   projectGroups: readonly ProjectGroup[]
+  reviewContext?: DashboardCardContextState
 }): WorkspaceMultiplexerCatalogItem[] {
   const projectGroupsById = new Map(args.projectGroups.map((group) => [group.id, group]))
   const rows = [
@@ -114,6 +121,9 @@ export function buildWorkspaceMultiplexerCatalog(args: {
         branch: folderProject ? null : worktree.branch,
         isMainWorktree: !folderProject && worktree.isMainWorktree,
         workspaceStatus: worktree.workspaceStatus,
+        review: args.reviewContext
+          ? (resolveDashboardHostedReview(args.reviewContext, repo ?? null, worktree) ?? null)
+          : null,
         path: worktree.path,
         hostLabel: executionHostId === 'local' ? null : getExecutionHostLabel(executionHostId)
       }

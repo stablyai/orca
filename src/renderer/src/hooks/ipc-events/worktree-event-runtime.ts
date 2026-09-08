@@ -1,4 +1,5 @@
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { requestWorkspaceMultiplexerAdd } from '@/components/workspace-multiplexer/workspace-multiplexer-add-request'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
@@ -157,16 +158,25 @@ export function createWorktreeEventRuntime(
     const existedBeforeFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
     // Why: fetch first so activation can resolve the CLI-created worktree; it arrived from main, not yet in renderer state.
     await useAppStore.getState().fetchWorktrees(repoId)
-    const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
+    const activatedWorktree = useAppStore.getState().getKnownWorktreeById(worktreeId)
+    const existsAfterFetch = Boolean(activatedWorktree)
+    const addToMultiplexer = useAppStore.getState().activeView === 'multiplexer'
     // Why: use the canonical activation path so the CLI switch records a back/forward visit, or the nav buttons ignore it.
-    activateAndRevealWorktree(worktreeId, {
+    const activated = activateAndRevealWorktree(worktreeId, {
       ...(setup ? { setup } : {}),
       ...(startup ? { startup } : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
+      ...(addToMultiplexer ? { preserveActiveView: true } : {}),
       // Why: this activation came from the host runtime stream; echoing it back can create a selection loop.
       notifyHostRuntime: false
     })
+    if (activated && addToMultiplexer && useAppStore.getState().activeView === 'multiplexer') {
+      requestWorkspaceMultiplexerAdd({
+        worktreeId,
+        ...(activatedWorktree?.hostId ? { executionHostId: activatedWorktree.hostId } : {})
+      })
+    }
   }
 
   return { worktreeChangeRefreshQueue, activateNotifiedWorktree }

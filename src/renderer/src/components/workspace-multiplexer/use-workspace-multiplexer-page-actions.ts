@@ -1,6 +1,7 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore } from '@/store'
+import { getAllWorktreesFromState } from '@/store/selectors'
 import type { WorkspaceMultiplexerSlot } from '../../../../shared/workspace-multiplexer-types'
 import {
   findWorkspaceMultiplexerPaneForSlot,
@@ -8,6 +9,7 @@ import {
   removeWorkspaceMultiplexerSlot
 } from './workspace-multiplexer-layout'
 import {
+  buildWorkspaceMultiplexerCatalog,
   findWorkspaceMultiplexerCatalogItem,
   findWorkspaceMultiplexerSlotTerminalTab,
   selectWorkspaceMultiplexerGroup,
@@ -15,6 +17,10 @@ import {
   workspaceMultiplexerSlotIdentity,
   type WorkspaceMultiplexerCatalogItem
 } from './workspace-multiplexer-model'
+import {
+  WORKSPACE_MULTIPLEXER_ADD_REQUEST_EVENT,
+  type WorkspaceMultiplexerAddRequestDetail
+} from './workspace-multiplexer-add-request'
 
 export function useWorkspaceMultiplexerPageActions(
   catalog: readonly WorkspaceMultiplexerCatalogItem[]
@@ -176,6 +182,38 @@ export function useWorkspaceMultiplexerPageActions(
     },
     [focusSlot, focusedSlotId]
   )
+  useEffect(() => {
+    const handleAddRequest = (event: Event): void => {
+      const { worktreeId, executionHostId } = (
+        event as CustomEvent<WorkspaceMultiplexerAddRequestDetail>
+      ).detail
+      const state = useAppStore.getState()
+      const workspace = buildWorkspaceMultiplexerCatalog({
+        worktrees: getAllWorktreesFromState(state),
+        folderWorkspaces: state.folderWorkspaces,
+        repos: state.repos,
+        projectGroups: state.projectGroups
+      }).find(
+        (item) =>
+          item.worktreeId === worktreeId &&
+          (!executionHostId || item.executionHostId === executionHostId)
+      )
+      if (!workspace) {
+        return
+      }
+      const existingSlot = state.workspaceMultiplexer.slots.find(
+        (slot) => workspaceMultiplexerSlotIdentity(slot) === workspace.identity
+      )
+      if (existingSlot) {
+        focusWorkspaceSlot(existingSlot.id)
+      } else {
+        addWorkspace(workspace)
+      }
+    }
+    window.addEventListener(WORKSPACE_MULTIPLEXER_ADD_REQUEST_EVENT, handleAddRequest)
+    return () =>
+      window.removeEventListener(WORKSPACE_MULTIPLEXER_ADD_REQUEST_EVENT, handleAddRequest)
+  }, [addWorkspace, focusWorkspaceSlot])
   const removeWorkspace = useCallback((slotId: string): void => {
     const state = useAppStore.getState()
     const sourcePane = findWorkspaceMultiplexerPaneForSlot(state.workspaceMultiplexer, slotId)

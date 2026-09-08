@@ -38,6 +38,9 @@ export default function WorkspaceMultiplexerPage(): React.JSX.Element {
       worktrees: getAllWorktreesFromState(state),
       folderWorkspaces: state.folderWorkspaces,
       projectGroups: state.projectGroups,
+      hostedReviewCache: state.hostedReviewCache,
+      prCache: state.prCache,
+      settings: state.settings,
       groupsByWorktree: state.groupsByWorktree,
       unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       terminalTabsByWorktree: state.tabsByWorktree,
@@ -53,9 +56,22 @@ export default function WorkspaceMultiplexerPage(): React.JSX.Element {
         worktrees: store.worktrees,
         folderWorkspaces: store.folderWorkspaces,
         repos: store.repos,
-        projectGroups: store.projectGroups
+        projectGroups: store.projectGroups,
+        reviewContext: {
+          hostedReviewCache: store.hostedReviewCache,
+          prCache: store.prCache,
+          settings: store.settings
+        }
       }),
-    [store.folderWorkspaces, store.projectGroups, store.repos, store.worktrees]
+    [
+      store.folderWorkspaces,
+      store.hostedReviewCache,
+      store.prCache,
+      store.projectGroups,
+      store.repos,
+      store.settings,
+      store.worktrees
+    ]
   )
   const catalogOwnershipKey = baseCatalog
     .map((workspace) =>

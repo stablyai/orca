@@ -24,29 +24,19 @@ export function WorkspaceMultiplexerHeader({
   isDragOver: boolean
 }): React.JSX.Element {
   return (
-    <header className="relative flex shrink-0 items-center gap-3 border-b border-border px-5 py-3">
+    <header className="relative flex h-10 shrink-0 items-center gap-2 border-b border-border px-3">
       <Button variant="outline" size="sm" onClick={onBack} className="shrink-0 gap-1.5">
         <ArrowLeft className="size-3.5" />
         {translate('auto.components.workspace.multiplexer.WorkspaceMultiplexerPage.back', 'Back')}
       </Button>
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted/30">
-          <PanelsTopLeft className="size-4 text-muted-foreground" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold text-foreground">
-            {translate(
-              'auto.components.workspace.multiplexer.WorkspaceMultiplexerPage.title',
-              'Workspace Multiplexer'
-            )}
-          </h1>
-          <p className="truncate text-xs text-muted-foreground">
-            {translate(
-              'auto.components.workspace.multiplexer.WorkspaceMultiplexerPage.description',
-              'Keep active workspaces and their terminals together so running work stays in sight.'
-            )}
-          </p>
-        </div>
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <PanelsTopLeft className="size-3.5 shrink-0 text-muted-foreground" />
+        <h1 className="truncate text-sm font-semibold text-foreground">
+          {translate(
+            'auto.components.workspace.multiplexer.WorkspaceMultiplexerPage.title',
+            'Workspace Multiplexer'
+          )}
+        </h1>
       </div>
       <WorkspaceMultiplexerPicker
         items={items}

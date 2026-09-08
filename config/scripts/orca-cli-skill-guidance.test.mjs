@@ -44,6 +44,16 @@ describe('orca CLI skill guidance', () => {
     expect(skill).toContain('Never base it on the current feature branch')
   })
 
+  it('adds explicitly presented worktrees to Workspace Multiplexer', () => {
+    const skill = readSkill()
+
+    expect(skill).toContain('add or show it in Workspace Multiplexer')
+    expect(skill).toContain('pass `--activate`')
+    expect(skill).toContain(
+      'Do not pass `--activate` for background or orchestration-created worktrees'
+    )
+  })
+
   it('documents non-lifecycle full handoffs and custom Codex model fallback', () => {
     const skill = readSkill()
 

@@ -4,8 +4,8 @@ description: >-
   Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
   terminals, repos, automations, artifacts, skill sharing, worktree comments, and the browser
   embedded inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
-  "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
-  "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
+  "Orca worktree", "child worktree", "Workspace Multiplexer", "cardStatus", "spawn codex/claude in a worktree",
+  "read/wait/send Orca terminal", "full handoff", "handover",
   "give this to another agent", "another worktree", "Orca browser", "orca artifacts",
   "share HTML/Markdown", "public artifact link", "share skills", or "control the browser inside
   Orca". Prefer this over raw `git worktree`, ad hoc
@@ -115,6 +115,7 @@ ORCA worktree create --repo id:<repoId> --name related-task --parent-worktree ac
 ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
 ORCA worktree create --name child-task --agent codex --prompt "hi" --json
 ORCA worktree create --name independent-task --no-parent --json
+ORCA worktree create --name visible-task --activate --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
@@ -152,6 +153,7 @@ ORCA worktree create --name task --run-hooks --json
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
+- When the user asks to create a worktree and add or show it in Workspace Multiplexer, pass `--activate`. If Workspace Multiplexer is open, Orca inserts and focuses the worktree there; otherwise the normal reveal behavior applies. Do not pass `--activate` for background or orchestration-created worktrees unless the user asks to present them.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior. Do not manually create extra setup terminals when `--agent` already owns the first tab.
 - If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "<requested-agent>"` and `orca terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
 - `worktree create` creates a new checkout. For a fresh agent in the **current** checkout (no new worktree), use `orca terminal create --worktree active --command "codex" --json` — that path does not create a second worktree shell.
