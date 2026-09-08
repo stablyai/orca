@@ -156,13 +156,16 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
   })
 
-  it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
+  it('omits desktop-only import appearance entries when desktop-only controls are hidden', () => {
     const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
-    const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
+    const webEntries = getAppearancePaneSearchEntries({
+      showWarpImport: false,
+      showGhosttyImport: false
+    })
 
     expect(desktopEntries.some((entry) => entry.title === 'Import from Warp')).toBe(true)
     expect(webEntries.some((entry) => entry.title === 'Import from Warp')).toBe(false)
-    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
+    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(false)
   })
 
   it('includes the system tray appearance entry only when desktop tray controls are shown', () => {

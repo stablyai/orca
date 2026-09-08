@@ -64,9 +64,10 @@ export {
 
 type TerminalAppearanceSearchOptions = {
   showWarpImport?: boolean
+  showGhosttyImport?: boolean
 }
 
-const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
+const getTerminalAppearanceSearchEntriesCore = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     ...getTerminalTypographySearchEntries(),
     ...getTerminalCursorSearchEntries(),
@@ -74,8 +75,7 @@ const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
     ...getTerminalThemeTargetSearchEntries(),
     ...getTerminalDarkThemeSearchEntries(),
     ...getTerminalLightThemeSearchEntries(),
-    ...getTerminalWindowSearchEntries(),
-    ...getTerminalGhosttyImportSearchEntries()
+    ...getTerminalWindowSearchEntries()
   ]
 )
 
@@ -83,7 +83,7 @@ const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
 // an English title would leak the Warp entry back in under non-English locales.
 const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
-    ...getTerminalAppearanceSearchEntriesWithoutWarp(),
+    ...getTerminalAppearanceSearchEntriesCore(),
     ...getTerminalWarpImportSearchEntries(),
     ...getTerminalYamlImportSearchEntries()
   ]
@@ -92,9 +92,12 @@ const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
 export function getTerminalAppearanceSearchEntries(
   options: TerminalAppearanceSearchOptions = {}
 ): SettingsSearchEntry[] {
-  return (options.showWarpImport ?? true)
-    ? getTerminalAppearanceSearchEntriesWithWarp()
-    : getTerminalAppearanceSearchEntriesWithoutWarp()
+  return [
+    ...((options.showWarpImport ?? true)
+      ? getTerminalAppearanceSearchEntriesWithWarp()
+      : getTerminalAppearanceSearchEntriesCore()),
+    ...((options.showGhosttyImport ?? true) ? getTerminalGhosttyImportSearchEntries() : [])
+  ]
 }
 
 export function getTerminalPaneSearchEntries(platform: {

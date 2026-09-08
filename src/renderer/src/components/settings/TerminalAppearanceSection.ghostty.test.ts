@@ -473,7 +473,9 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
     })
 
     expect(findComponentByTypeName(element, 'TerminalFontSizeSetting')).toBeNull()
-    expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(false)
+    expect(
+      findButtons(element).some((button) => button.text === 'Import from Ghostty')
+    ).toBe(false)
   })
 
   it('shows the Ghostty import button for Ghostty-only searches', () => {
@@ -524,6 +526,8 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
 
     expect(findTerminalThemeCatalogSection(element)?.props.showThemeImport).toBe(false)
     expect(findWarpThemeImportModal(element)).toBeNull()
+    expect(findButtons(element).some((button) => button.text === 'Import from Ghostty')).toBe(false)
+    expect(findGhosttyImportModal(element)).toBeNull()
   })
 
   it('passes hook state to GhosttyImportModal', () => {
