@@ -36,7 +36,7 @@ export function WorkspacePaneActions({
   ]
   return (
     <div
-      className="flex items-center shrink-0"
+      className="ml-1 flex shrink-0 items-center border-l border-border/70 pl-1"
       style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
     >
       {actions.map(({ label, icon: Icon, run }) => (

@@ -734,6 +734,10 @@
   pointer-events: none;
 }
 
+.workspace-pane-region[data-current='true'] > [data-tab-group-strip-id] {
+  background: color-mix(in srgb, var(--ring) 4%, var(--card));
+}
+
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
    SortableTab.tsx rather than via ::after here, so the drop-indicator
    ::before/::after pseudo-elements stay free for drag-and-drop feedback. See
