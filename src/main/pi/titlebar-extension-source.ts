@@ -11,7 +11,7 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     kind === 'pi'
       ? [
           "  pi.on('ui_prompt_start', async (_event, ctx) => {",
-          '    if (isOmpRuntime()) return',
+          '    if (isOmpRuntime() || !ownsMarker) return',
           '    promptDepth++',
           '    // Why: retry on every open rather than only the outermost, so an outer ctx',
           '    // that could not paint cannot decide the whole stack stays unmarked.',
@@ -26,7 +26,7 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
           '  })',
           '',
           "  pi.on('ui_prompt_end', async (_event, ctx) => {",
-          '    if (isOmpRuntime() || promptDepth === 0) return',
+          '    if (isOmpRuntime() || !ownsMarker || promptDepth === 0) return',
           '    promptDepth--',
           '    if (promptDepth > 0) return',
           '    // Why: the opening ctx already painted once, so a close whose own ctx is stale',
@@ -114,6 +114,17 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     '',
     'export default function (pi) {',
     '  if (!process.env.ORCA_PANE_KEY) return',
+    ...(kind === 'pi'
+      ? [
+          '  // Why: child agents inherit the pane env, and the spinner is harmlessly',
+          '  // per-process — but the needs-input marker is status the pane reports, so only',
+          '  // one process may assert it. Mirrors ORCA_PI_STATUS_OWNED in the status hook.',
+          '  const markerOwnerPid = process.env.ORCA_PI_TITLE_MARKER_OWNED',
+          '  const ownsMarker = !markerOwnerPid || markerOwnerPid === String(process.pid)',
+          '  if (ownsMarker) process.env.ORCA_PI_TITLE_MARKER_OWNED = String(process.pid)'
+        ]
+      : []),
+
     '  let timer = null',
     '  let frameIndex = 0',
     '  // Why: only idle maintenance owns a spinner of its own. A threshold compaction runs',

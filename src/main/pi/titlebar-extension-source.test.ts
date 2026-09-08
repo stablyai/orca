@@ -35,6 +35,7 @@ function createHarness(
     processTitle?: string
     cwdImpl?: () => string
     sessionNameImpl?: () => string
+    env?: Record<string, string>
   } = {}
 ): Harness {
   const titles: string[] = []
@@ -60,7 +61,8 @@ function createHarness(
     module,
     exports: module.exports,
     process: {
-      env: { ORCA_PANE_KEY: options.paneKey ?? 'pane-1' },
+      env: { ORCA_PANE_KEY: options.paneKey ?? 'pane-1', ...options.env },
+      pid: options.env?.ORCA_PI_TITLE_MARKER_OWNED === undefined ? 111 : 222,
       title: options.processTitle ?? 'pi',
       argv: ['node', 'pi'],
       cwd: options.cwdImpl ?? (() => CWD)
@@ -566,6 +568,18 @@ describe('getPiTitlebarExtensionSource', () => {
     live = false
     await vi.advanceTimersByTimeAsync(2000)
     await expect(harness.callHook('ui_prompt_end')).resolves.toBeUndefined()
+  })
+
+  it('leaves the needs-input marker to the process that owns the pane', async () => {
+    // Why: child agents inherit ORCA_PANE_KEY, and a second process asserting the marker
+    // would report needs-input for a pane it does not speak for.
+    const harness = createHarness({ env: { ORCA_PI_TITLE_MARKER_OWNED: '111' } })
+
+    await harness.callHook('agent_start')
+    await harness.callHook('ui_prompt_start')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(harness.titles).not.toContain(PROMPT_TITLE)
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
   })
 
   it('leaves an OMP runtime to its own approval events', () => {
