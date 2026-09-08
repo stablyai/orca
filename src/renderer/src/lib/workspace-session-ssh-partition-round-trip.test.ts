@@ -154,6 +154,166 @@ describe('ssh host partition hydration', () => {
   })
 })
 
+describe('ssh host partition workspaces with no terminal tabs', () => {
+  /** An SSH workspace the user left with an editor open and every terminal closed. Orca does not
+   *  auto-create a terminal while other tabs exist, so this is an ordinary state — and the whole
+   *  workspace now persists to `ssh:<targetId>`, tabs or no tabs. */
+  function editorOnlyPartitions() {
+    return {
+      local: session({ tabsByWorktree: {} }),
+      [SSH_HOST_ID]: session({
+        tabsByWorktree: { [WORKTREE_ID]: [] },
+        openFilesByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              filePath: '/remote/checkout/feature/src/main.ts',
+              relativePath: 'src/main.ts',
+              worktreeId: WORKTREE_ID,
+              language: 'typescript',
+              dirtyDraftContent: 'unsaved work'
+            }
+          ]
+        },
+        activeFileIdByWorktree: { [WORKTREE_ID]: '/remote/checkout/feature/src/main.ts' },
+        activeTabTypeByWorktree: { [WORKTREE_ID]: 'editor' },
+        browserTabsByWorktree: {
+          [WORKTREE_ID]: [{ id: 'browser-1', name: 'Docs', tabs: [], activeTabId: null }]
+        },
+        lastVisitedAtByWorktreeId: { [`${SSH_HOST_ID}|${WORKTREE_ID}`]: 4242 }
+      } as unknown as WorkspaceSessionState)
+    }
+  }
+
+  it('restores the open editor files', async () => {
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(editorOnlyPartitions()),
+      repos
+    )
+
+    expect(
+      read.session.openFilesByWorktree?.[WORKTREE_ID]?.map((file) => file.relativePath)
+    ).toEqual(['src/main.ts'])
+  })
+
+  it('restores an unsaved hot-exit draft, which no other channel can recover', async () => {
+    // RemoteWorkspaceSession carries terminal fields only, so the SSH host snapshot cannot
+    // round-trip editor state. Losing it here loses user-authored content outright.
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(editorOnlyPartitions()),
+      repos
+    )
+
+    expect(read.session.openFilesByWorktree?.[WORKTREE_ID]?.[0]?.dirtyDraftContent).toBe(
+      'unsaved work'
+    )
+  })
+
+  it('restores browser workspaces and the active tab type', async () => {
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(editorOnlyPartitions()),
+      repos
+    )
+
+    expect(read.session.browserTabsByWorktree?.[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'browser-1'
+    ])
+    expect(read.session.activeTabTypeByWorktree?.[WORKTREE_ID]).toBe('editor')
+  })
+
+  it('restores a workspace the host partition names with no tabs row at all', async () => {
+    // Stricter than the fixtures above, which carry an empty `tabsByWorktree` key. A workspace that
+    // never had a terminal has no such key, so tab presence cannot be what discovers it.
+    const partitions = {
+      local: session({ tabsByWorktree: {} }),
+      [SSH_HOST_ID]: session({
+        tabsByWorktree: {},
+        openFilesByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              filePath: '/remote/checkout/feature/README.md',
+              relativePath: 'README.md',
+              worktreeId: WORKTREE_ID,
+              language: 'markdown',
+              dirtyDraftContent: 'never saved'
+            }
+          ]
+        }
+      } as unknown as WorkspaceSessionState)
+    }
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(partitionedApi(partitions), repos)
+
+    expect(read.session.openFilesByWorktree?.[WORKTREE_ID]?.[0]?.dirtyDraftContent).toBe(
+      'never saved'
+    )
+  })
+
+  it('restores host-qualified visit recency, which is keyed by host and not by bare id', async () => {
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(editorOnlyPartitions()),
+      repos
+    )
+
+    expect(read.session.lastVisitedAtByWorktreeId?.[`${SSH_HOST_ID}|${WORKTREE_ID}`]).toBe(4242)
+  })
+})
+
+describe('ssh host partition write/read round trip', () => {
+  /** The two halves pinned together through the shipping write path. Testing the read against a
+   *  hand-built partition is what let an editor-only workspace fall out: the fixture asserted the
+   *  shape the read expected instead of the shape the write actually produces. */
+  async function roundTrip(payload: WorkspaceSessionState): Promise<WorkspaceSessionState> {
+    const { buildWorkspaceSessionHostSnapshots } =
+      await import('./workspace-session-host-persistence')
+    const snapshots = buildWorkspaceSessionHostSnapshots(payload, {
+      repos: [{ id: REPO_ID, connectionId: TARGET_ID, executionHostId: null }],
+      worktreesByRepo: {}
+    })
+    const partitions: Record<string, WorkspaceSessionState> = {}
+    for (const snapshot of snapshots) {
+      partitions[snapshot.hostId ?? 'local'] = snapshot.state
+    }
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(partitions as never),
+      repos
+    )
+    return read.session
+  }
+
+  it('sends an editor-only SSH workspace to its partition and reads it back', async () => {
+    const restored = await roundTrip(
+      session({
+        tabsByWorktree: {},
+        openFilesByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              filePath: '/remote/checkout/feature/src/app.ts',
+              relativePath: 'src/app.ts',
+              worktreeId: WORKTREE_ID,
+              language: 'typescript',
+              dirtyDraftContent: 'work in progress'
+            }
+          ]
+        },
+        activeTabTypeByWorktree: { [WORKTREE_ID]: 'editor' }
+      } as unknown as WorkspaceSessionState)
+    )
+
+    expect(restored.openFilesByWorktree?.[WORKTREE_ID]?.[0]?.dirtyDraftContent).toBe(
+      'work in progress'
+    )
+    expect(restored.activeTabTypeByWorktree?.[WORKTREE_ID]).toBe('editor')
+  })
+
+  it('sends a terminal SSH workspace to its partition and reads it back', async () => {
+    const restored = await roundTrip(
+      session({ tabsByWorktree: { [WORKTREE_ID]: [tab('tab-live')] } })
+    )
+
+    expect(restored.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-live'])
+  })
+})
+
 describe('ssh host partition remote-workspace round trip', () => {
   it('does not delete the worktree tabs across a publish and the next pull', async () => {
     const partitions = strandedPartitions([tab('tab-runtime')])

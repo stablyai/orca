@@ -5,11 +5,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import {
-  getWorktreeIdFromHostIdentity,
-  isWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
 import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
 import {
@@ -51,14 +47,9 @@ const WORKTREE_KEYED_FIELDS = (
   Object.keys(WORKSPACE_SESSION_FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]
 ).filter((field) => WORKSPACE_SESSION_FIELD_OWNERSHIP[field] === 'worktreeKeyed')
 
-/** Bare worktree id behind a session key, which may be a WorkspaceKey or a host-qualified identity. */
-export function normalizeWorkspaceSessionKeyToWorktreeId(value: string): string {
-  if (isWorktreeHostIdentity(value)) {
-    return getWorktreeIdFromHostIdentity(value)
-  }
-  const scope = parseWorkspaceKey(value)
-  return scope?.type === 'worktree' ? scope.worktreeId : value
-}
+/** Bare worktree id behind a session key. Lives in shared because the partition adoption read needs
+ *  the same normalization, and two implementations of it would drift. */
+export const normalizeWorkspaceSessionKeyToWorktreeId = normalizeWorkspaceSessionKeyToWorkspaceId
 
 function resolveClaimedHostId(
   worktree: WorkspaceRuntimeOwnerProjection,

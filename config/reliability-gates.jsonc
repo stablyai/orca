@@ -258,7 +258,7 @@
 
     {
       "id": "workspace-session.ssh-host-partition-round-trip",
-      "title": "An SSH workspace's tabs are never round-tripped to the host as an empty list",
+      "title": "An SSH workspace round-trips through its own partition without losing tabs, editor files or browser state",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "workspace-session-persistence",
@@ -278,8 +278,8 @@
         "https://github.com/stablyai/orca/issues/18173",
         "https://github.com/stablyai/orca/blob/main/src/shared/workspace-session-partition-owner.ts"
       ],
-      "invariant": "A workspace whose tab list exists only in its `ssh:<targetId>` partition is hydrated at boot and published to the host with those tabs. An empty tab row is read as a gap, never as evidence that the tabs were closed, so a replace-session upload can never delete a populated host list. A workspace the local partition already holds tabs for is left untouched, and every workspace routes back to the one partition that owns it.",
-      "oracle": "Seed a real Store the way shipping builds leave it: the local blob holds the worktree key with an empty list while `ssh:<targetId>` holds the real one, with a second populated SSH partition present. Publish through the IPC handler with no session argument (the path the debounced writer takes) and assert the host snapshot carries the runtime-authored tabs rather than []. Separately hydrate through the real boot read, export and re-import through the real projection, and merge through mergeDirectSshRemoteWorkspaceSession, asserting the tabs survive the publish and the next pull. Assert the reunited workspace routes to `ssh:<targetId>`, that a populated local row is not modified, and that a contested id claimed by an SSH and a runtime host does not send the SSH rows into the rotating runtime partition.",
+      "invariant": "Every workspace the `ssh:<targetId>` partition names is hydrated at boot and published to the host, whatever kind of state it holds - terminal tabs, open editor files with unsaved hot-exit drafts, browser workspaces, tab groups, or host-qualified visit recency. An empty tab row is read as a gap, never as evidence the tabs were closed, so a replace-session upload can never delete a populated host list. A workspace the local partition already holds terminal tabs for is left untouched, and every workspace routes back to the partition that owns it.",
+      "oracle": "Seed a real Store the way shipping builds leave it: the local blob holds the worktree key with an empty list while `ssh:<targetId>` holds the real one, with a second populated SSH partition present. Publish through the IPC handler with no session argument (the path the debounced writer takes) and assert the host snapshot carries the runtime-authored tabs rather than []. Separately drive the shipping split (buildWorkspaceSessionHostSnapshots) and feed its own output back through the real boot read, pinning the write and read halves to each other rather than to a hand-built fixture: an SSH workspace with open editor files, an unsaved dirtyDraftContent and no terminal tabs must come back intact, as must one with no tabsByWorktree key at all. Export and re-import through the real projection and merge through mergeDirectSshRemoteWorkspaceSession, asserting tabs survive a publish, the next pull, and an older client publishing an empty list for them. Assert the reunited workspace routes to `ssh:<targetId>`, that a workspace the base holds tabs for is not modified, and that a contested id claimed by an SSH and a runtime host does not send the SSH rows into the rotating runtime partition.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-host-partition-session-export.test.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session-partition-owner.test.ts"
       ],
@@ -330,8 +330,8 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-host-partition-session-export.test.ts src/renderer/src/lib/workspace-session-ssh-partition-round-trip.test.ts src/renderer/src/lib/workspace-session-host-contention.test.ts src/shared/workspace-session-partition-owner.test.ts",
           "result": "passed",
-          "durationSeconds": 2.94,
-          "summary": "35 tests passed across 4 files, including the real Store publish and the real export/import/merge round trip."
+          "durationSeconds": 2.45,
+          "summary": "43 tests passed across 4 files, including the real Store publish, the shipping write/read split round trip, and the older-client empty-publish skew direction."
         }
       ],
       "runtimeBudget": {
@@ -344,7 +344,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Against pristine main ea102a9eb89 the boot read returned no tabs for the worktree, the export published tabsByWorktreePath[path] = [], the round trip ended with the tabs deleted, and routing answered 'local' instead of ssh:target-1 - 8 of 9 new assertions failed. All pass after the fix. Each assertion was additionally mutation-checked against the specific regression it claims to catch; the load-bearing one, treating an empty tab row as an answer rather than a gap, fails 6."
+        "evidence": "Against pristine main 12f53da542d, 9 of the 11 assertions that target the original defect fail: the boot read returns no tabs, the export publishes an empty tabsByWorktreePath row, the round trip ends with the tabs deleted, routing answers local instead of ssh:target-1, and an older client's empty publish deletes the tabs on pull. The remaining assertions guard the fix itself rather than main's bug: review found that gating adoption on terminal tabs stranded editor-only and browser-only SSH workspaces, destroying unsaved hot-exit drafts no other channel can recover. The gate now discovers a workspace through an exhaustive switch over the field-ownership table, and reintroducing the tabs-only gate fails 6 assertions including the write/read round trip."
       },
       "performanceBudget": {
         "required": false,
@@ -353,7 +353,8 @@
       "knownGaps": [
         "No live SSH host or relay is exercised; the multiplexer is faked at the request boundary.",
         "Folder workspaces still persist to the local partition, so their half of the writer divergence in #12723 is not covered here.",
-        "Tabs stranded beside an already-populated local row are deliberately not recovered, and no assertion claims they are."
+        "Rows stranded beside a workspace the local partition already holds terminal tabs for are deliberately not recovered, and no assertion claims they are.",
+        "One-shot resurrection in the legacy-transition shape: where an older build left an empty local row while the runtime partition still holds that workspace's tabs, boot adopts them back once. Non-destructive and does not recur, because a workspace this build empties deliberately leaves an empty row in the owning partition, which is not adoptable."
       ],
       "promotionCriteria": [
         "Complete the CI soak requirement with no unexplained flakes.",
