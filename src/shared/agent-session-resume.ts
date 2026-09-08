@@ -105,6 +105,7 @@ function normalizeSessionId(value: unknown): string | null {
   return trimmed
 }
 
+/** First usable session id among the payload keys this agent actually posts. */
 function readSessionId(record: Record<string, unknown>, keys: readonly string[]): string | null {
   for (const key of keys) {
     const normalized = normalizeSessionId(record[key])
@@ -135,6 +136,7 @@ function readTranscriptPathFromKeys(
   return undefined
 }
 
+/** Attach a hook transcript path when present so native chat can open the real file. */
 function withTranscriptPath(
   metadata: AgentProviderSessionMetadata,
   payload: Record<string, unknown>,
