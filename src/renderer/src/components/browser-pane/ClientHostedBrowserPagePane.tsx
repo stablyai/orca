@@ -1,5 +1,5 @@
 import { useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
-import { cn } from '@/lib/utils'
+import { BrowserPageZoomIndicator } from './assemble-chrome/browser-page-zoom-indicator'
 import { useAppStore } from '@/store'
 import type {
   BrowserLoadError,
@@ -388,17 +388,10 @@ export function ClientHostedBrowserPagePane({
       </div>
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
         {markup.overlay}
-        <div
-          role="status"
-          aria-live="polite"
-          aria-hidden={browserZoomIndicatorState.ariaHidden}
-          className={cn(
-            'pointer-events-none absolute top-3 right-3 z-30 rounded-md border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-xs transition-opacity duration-300 ease-out',
-            browserZoomIndicatorState.opacityClassName
-          )}
-        >
-          {zoom.browserZoomPercent}%
-        </div>
+        <BrowserPageZoomIndicator
+          state={browserZoomIndicatorState}
+          percent={zoom.browserZoomPercent}
+        />
         <BrowserFind
           isOpen={findOpen}
           onClose={() => setFindOpen(false)}
