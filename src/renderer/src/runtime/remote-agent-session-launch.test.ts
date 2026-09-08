@@ -15,6 +15,10 @@ vi.mock('./runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
+import {
+  AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import { RuntimeRpcCallError } from './runtime-rpc-client'
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
@@ -45,41 +49,30 @@ describe('remote agent-session launch routing', () => {
     expect(legacy).not.toHaveBeenCalled()
   })
 
-  it('falls back to legacy when an older host lacks the Kimi resume capability', async () => {
-    const hostAuthority = vi.fn().mockResolvedValue('structured')
-    const legacy = vi.fn().mockResolvedValue('legacy')
-    mocks.supportsCapability.mockResolvedValue(false)
+  it.each([
+    ['kimi', AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY],
+    ['cursor', AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY]
+  ] as const)(
+    'falls back to legacy when an older host lacks the %s resume capability',
+    async (agent, expectedCapability) => {
+      const hostAuthority = vi.fn().mockResolvedValue('structured')
+      const legacy = vi.fn().mockResolvedValue('legacy')
+      mocks.supportsCapability.mockResolvedValue(false)
 
-    // Why: an old host rejects the widened agent enum with invalid_argument, which is not a
-    // fallback code — so the probe, not the error handler, has to keep the pane alive.
-    await expect(
-      runRemoteAgentSessionLaunch({
-        environmentId: 'env-1',
-        hostAuthority,
-        hostAuthorityCapability: agentResumeHostAuthorityCapability('kimi'),
-        legacy
-      })
-    ).resolves.toBe('legacy')
-    expect(mocks.supportsCapability).toHaveBeenCalledWith('env-1', 'agent-session.kimi-resume.v1')
-    expect(hostAuthority).not.toHaveBeenCalled()
-  })
-
-  it('falls back to legacy when an older host lacks the Cursor resume capability', async () => {
-    const hostAuthority = vi.fn().mockResolvedValue('structured')
-    const legacy = vi.fn().mockResolvedValue('legacy')
-    mocks.supportsCapability.mockResolvedValue(false)
-
-    await expect(
-      runRemoteAgentSessionLaunch({
-        environmentId: 'env-1',
-        hostAuthority,
-        hostAuthorityCapability: agentResumeHostAuthorityCapability('cursor'),
-        legacy
-      })
-    ).resolves.toBe('legacy')
-    expect(mocks.supportsCapability).toHaveBeenCalledWith('env-1', 'agent-session.cursor-resume.v1')
-    expect(hostAuthority).not.toHaveBeenCalled()
-  })
+      // Why: an old host rejects the widened agent enum with invalid_argument, which is not a
+      // fallback code — so the probe, not the error handler, has to keep the pane alive.
+      await expect(
+        runRemoteAgentSessionLaunch({
+          environmentId: 'env-1',
+          hostAuthority,
+          hostAuthorityCapability: agentResumeHostAuthorityCapability(agent),
+          legacy
+        })
+      ).resolves.toBe('legacy')
+      expect(mocks.supportsCapability).toHaveBeenCalledWith('env-1', expectedCapability)
+      expect(hostAuthority).not.toHaveBeenCalled()
+    }
+  )
 
   it('preserves the exact legacy path when the capability is absent', async () => {
     const hostAuthority = vi.fn().mockResolvedValue('structured')

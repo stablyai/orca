@@ -160,9 +160,7 @@ export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.statu
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
 export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-resume.v1' as const
-// Why: adding cursor to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
-// older host answers the unknown member with invalid_argument — a code the launch fallback does
-// not retry on — so clients must probe before taking the host-authority path.
+// Why: same enum-growth gate as kimi — older hosts answer invalid_argument.
 export const AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY =
   'agent-session.cursor-resume.v1' as const
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.

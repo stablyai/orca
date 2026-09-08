@@ -74,7 +74,12 @@ describe('agent session resume metadata', () => {
       { key: 'session_id', id: '668320d2-2fd8-4888-b33c-2a466fec86e7' }
     ],
     ['cursor', { session_id: 'cursor-session' }, { key: 'session_id', id: 'cursor-session' }],
-    ['cursor', { conversationId: 'cursor-camel' }, { key: 'session_id', id: 'cursor-camel' }]
+    ['cursor', { conversationId: 'cursor-camel' }, { key: 'session_id', id: 'cursor-camel' }],
+    [
+      'cursor',
+      { sessionId: 'cursor-session-camel' },
+      { key: 'session_id', id: 'cursor-session-camel' }
+    ]
   ] as const)('extracts %s provider session ids', (source, payload, expected) => {
     expect(extractAgentProviderSession(source, payload)).toEqual(expected)
   })

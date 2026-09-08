@@ -3,77 +3,54 @@ import type { AppState } from '../types'
 import { createTestStore, makeTab } from './store-test-helpers'
 
 describe('quit-time capture for newly resumable agents', () => {
-  it('checkpoints a live Kimi provider session before quit-time capture', () => {
-    const store = createTestStore()
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      }
-    } as Partial<AppState>)
-
-    store.getState().setAgentStatus(
-      'tab-1:leaf-1',
-      {
-        state: 'working',
-        prompt: 'finish the task',
-        agentType: 'kimi'
-      },
-      'Kimi',
-      { updatedAt: 10, stateStartedAt: 10 },
-      { tabId: 'tab-1', worktreeId: 'wt-1' },
-      {
-        providerSession: {
-          key: 'session_id',
-          id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
-        }
-      }
-    )
-
-    // Why: this is the #15155 regression — without kimi in RESUMABLE_TUI_AGENTS no sleeping
-    // record is ever captured, so restart drops the session instead of resuming it.
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+  it.each([
+    {
       agent: 'kimi',
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      providerSession: { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' },
-      origin: 'live'
-    })
-  })
-
-  it('checkpoints a live Cursor provider session before quit-time capture', () => {
-    const store = createTestStore()
-    store.setState({
-      tabsByWorktree: {
-        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
-      }
-    } as Partial<AppState>)
-
-    store.getState().setAgentStatus(
-      'tab-1:leaf-1',
-      {
-        state: 'working',
-        prompt: 'finish the task',
-        agentType: 'cursor'
-      },
-      'Cursor Agent',
-      { updatedAt: 10, stateStartedAt: 10 },
-      { tabId: 'tab-1', worktreeId: 'wt-1' },
-      {
-        providerSession: {
-          key: 'session_id',
-          id: '668320d2-2fd8-4888-b33c-2a466fec86e7'
-        }
-      }
-    )
-
-    // Why: this is the #18668 regression — without cursor in RESUMABLE_TUI_AGENTS no sleeping
-    // record is ever captured, so restart restores an empty shell instead of cursor-agent.
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      displayName: 'Kimi',
+      sessionId: 'session_431324d7-2165-42f0-9ecd-9f93437b3201',
+      issue: '#15155'
+    },
+    {
       agent: 'cursor',
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      providerSession: { key: 'session_id', id: '668320d2-2fd8-4888-b33c-2a466fec86e7' },
-      origin: 'live'
-    })
-  })
+      displayName: 'Cursor Agent',
+      sessionId: '668320d2-2fd8-4888-b33c-2a466fec86e7',
+      issue: '#18668'
+    }
+  ] as const)(
+    'checkpoints a live $agent provider session before quit-time capture ($issue)',
+    ({ agent, displayName, sessionId }) => {
+      const store = createTestStore()
+      store.setState({
+        tabsByWorktree: {
+          'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+        }
+      } as Partial<AppState>)
+
+      store.getState().setAgentStatus(
+        'tab-1:leaf-1',
+        {
+          state: 'working',
+          prompt: 'finish the task',
+          agentType: agent
+        },
+        displayName,
+        { updatedAt: 10, stateStartedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        {
+          providerSession: {
+            key: 'session_id',
+            id: sessionId
+          }
+        }
+      )
+
+      expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+        agent,
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        providerSession: { key: 'session_id', id: sessionId },
+        origin: 'live'
+      })
+    }
+  )
 })
