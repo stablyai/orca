@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
+import { resolveTuiAgentLaunchArgs } from '../../../../shared/tui-agent-launch-defaults'
 
 type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
@@ -74,6 +75,13 @@ export async function runSourceControlAgentActionStart({
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
+  // Why: the dialog seeds a blank field, so '' reaches here as "no per-action override" — not as
+  // "launch with no arguments". Resolve the agent's default instead of stripping it (#19379); the
+  // saved recipe below keeps the raw value so an untouched field never rewrites stored settings.
+  const effectiveAgentArgs =
+    agentArgs === ''
+      ? resolveTuiAgentLaunchArgs(selectedAgent, settings?.agentDefaultArgs)
+      : agentArgs
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false
@@ -88,7 +96,7 @@ export async function runSourceControlAgentActionStart({
     launched = await onStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
-      agentArgs
+      agentArgs: effectiveAgentArgs
     })
     if (launched) {
       notifyLaunchAccepted()
@@ -99,7 +107,7 @@ export async function runSourceControlAgentActionStart({
       worktreeId,
       groupId: groupId ?? worktreeId,
       prompt: trimmedCommandInput,
-      agentArgs,
+      agentArgs: effectiveAgentArgs,
       promptDelivery,
       launchPlatform,
       launchSource
