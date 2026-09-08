@@ -16,6 +16,7 @@ function compositionSessionId(event: Event): number | null {
   return Number.isSafeInteger(id) && Number(id) > 0 ? Number(id) : null
 }
 
+/** Claim placeholder masking before xterm paints each remainder; disposal releases composition ownership. */
 export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): IDisposable {
   const element = terminal.element
   if (!element) {

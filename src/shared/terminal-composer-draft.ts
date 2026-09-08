@@ -85,6 +85,7 @@ function findCodexFooterIndex(context: TerminalCursorContext): number {
   return -1
 }
 
+/** Rejoin soft wraps without spaces so stock hints are not mistaken for user-authored drafts. */
 function isStockPlaceholder(
   afterCursor: string,
   continuationRows: { text: string; wrapped: boolean }[]
