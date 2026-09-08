@@ -157,3 +157,37 @@ or `release_unknown`, follow its exact recovery action. Never substitute
 
 `orchestration reset` is destructive recovery. Do not run it during active
 coordination unless the user explicitly abandons that state.
+
+## Worktree cleanup after release
+
+After `worker-release` accepts, check whether that Dispatch's own `effects`
+recorded `{ "kind": "worktree", "action": "created_child" }`:
+
+```text
+ORCA orchestration worker-show --dispatch <dispatch_id> --json
+```
+
+If it did, remove the checkout Orca created for it, using the exact path from
+that same response's `terminal.worktreePath`:
+
+```text
+ORCA worktree rm --force --worktree path:<worktreePath> --json
+```
+
+`--force` skips the dirty-tree confirmation prompt; it never force-deletes the
+underlying Git branch. Leave the worktree in place and report it instead when
+any of the following hold:
+
+- The user asked to keep the workspace, or the Dispatch recorded
+  `worker-retain`.
+- The terminal was user-taken-over.
+- The recorded start effect was `reused`, or the worker started with
+  `--worktree current` or an exact pre-existing workspace — never delete a
+  checkout this Dispatch did not create.
+- The worker STOP'd or failed with unpushed, local-only commits (check
+  `git status` first).
+- `worktree rm` itself errors — a locked worktree or unverifiable Git state.
+
+This is coordinator hygiene layered on top of release, not a substitute for
+it: run it only after `worker-release` has already closed the terminal, and
+only for the exact `created_child` worktree that Dispatch created.
