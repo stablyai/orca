@@ -39,7 +39,14 @@ export function getTabStripBorderClasses(
   options?: { includeTopBorder?: boolean }
 ): string {
   const includeTopBorder = options?.includeTopBorder ?? true
-  return [includeTopBorder ? 'border-t' : '', hasTabsToRight ? 'border-r' : '', 'border-border']
+  return [
+    includeTopBorder ? 'border-t' : '',
+    hasTabsToRight ? 'border-r' : '',
+    'border-border',
+    // Tabs share the panel language: the top edge is softened while the
+    // bottom edge stays open to the pane surface and active marker.
+    'rounded-t-md'
+  ]
     .filter(Boolean)
     .join(' ')
 }

@@ -52,7 +52,7 @@ export function CrossProjectPaneLayout(): React.JSX.Element | null {
                 aria-label="Workspace pane"
                 data-pane-id={id}
                 data-current={focused}
-                className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs"
+                className="workspace-pane-region relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs"
                 onPointerDown={focus}
                 onFocusCapture={focus}
               >

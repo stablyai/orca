@@ -719,6 +719,21 @@
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
+/* The active workspace region is marked by one quiet contour that follows the
+   panel's upper corners. Keeping it on the region (rather than the tab row)
+   makes focus legible when tabs are mixed across projects. */
+.workspace-pane-region[data-current='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 20;
+  height: 33px;
+  border: 1px solid color-mix(in srgb, var(--ring) 72%, transparent);
+  border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  pointer-events: none;
+}
+
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
    SortableTab.tsx rather than via ::after here, so the drop-indicator
    ::before/::after pseudo-elements stay free for drag-and-drop feedback. See

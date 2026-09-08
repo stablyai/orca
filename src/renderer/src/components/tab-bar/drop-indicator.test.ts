@@ -58,15 +58,17 @@ describe('ACTIVE_TAB_INDICATOR_CLASSES', () => {
 
 describe('getTabStripBorderClasses', () => {
   it('includes top and right borders by default', () => {
-    expect(getTabStripBorderClasses(true)).toBe('border-t border-r border-border')
-    expect(getTabStripBorderClasses(false)).toBe('border-t border-border')
+    expect(getTabStripBorderClasses(true)).toBe('border-t border-r border-border rounded-t-md')
+    expect(getTabStripBorderClasses(false)).toBe('border-t border-border rounded-t-md')
   })
 
   it('can omit the top border for rounded floating panel titlebars', () => {
     expect(getTabStripBorderClasses(true, { includeTopBorder: false })).toBe(
-      'border-r border-border'
+      'border-r border-border rounded-t-md'
     )
-    expect(getTabStripBorderClasses(false, { includeTopBorder: false })).toBe('border-border')
+    expect(getTabStripBorderClasses(false, { includeTopBorder: false })).toBe(
+      'border-border rounded-t-md'
+    )
   })
 })
 
