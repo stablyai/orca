@@ -31,6 +31,7 @@ for closed-item history.
 | [BACKLOG-009](./BACKLOG-009-orchestration-service-fail-dispatch-missing.md) | `FailDispatch` RPC now built and tested (circuit-breaker for real) — still no real caller found anywhere in backend-go | Which component makes the actual dispatch/relay-to-agent call this would hook into (not found in this deployment yet) | Low-Medium |
 | [BACKLOG-012](./BACKLOG-012-worktree-missing-infra-connections-row-local-exec-fallback.md) | Dev-server-backed worktree with no `infra.connections` row falls back to running `git status` LOCALLY inside git-gateway-service's own (distroless, repo-less) container — `GITGATEWAY_STATUS_FAILED` | Root cause not yet diagnosed | Medium-High |
 | [BACKLOG-013](./BACKLOG-013-dispatch-context-handle-worktree-linkage.md) | Backend RESOLVED 2026-09-08: `dispatch_contexts.worktree_id` added, threaded end-to-end. Frontend `mapDispatchContextsToSessions` wiring still open (small, unblocked) | Frontend wiring only — no backend blocker remains | Low |
+| [BACKLOG-014](./BACKLOG-014-legacy-electron-backend-bug-audit-unverified.md) | Legacy Electron/Node backend (still live in prod for Task/Workflow + all of desktop) has ~70 unverified bug findings from a 5-6-week-old audit (consolidates 4 loose top-level index files, now removed) | A re-verification pass against current code — audit may be partly stale, partly still live | Medium |
 
 ## Status of everything else
 
