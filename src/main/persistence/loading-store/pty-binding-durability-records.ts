@@ -1,14 +1,8 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 /**
- * What the last durable write of one pane's binding contained.
- *
- * `session` is the object identity the binding was written into. Every session-replacing writer
- * (`setWorkspaceSession`, `patchWorkspaceSession`) installs a fresh object, so an identity
- * mismatch retires the record without those writers knowing this map exists. The two in-place
- * binding writers are covered by the value fields instead: SSH lease cleanup only clears bindings,
- * and SSH target migration rewrites the PTY id, so neither can leave a stale record matching a
- * request. See the writer audit in orca-persistence-design-assessment.md.
+ * Tracks the last durable binding. Session identity detects whole-session replacements, while the
+ * binding fields detect in-place updates.
  */
 type DurableBindingRecord = {
   readonly session: WorkspaceSessionState

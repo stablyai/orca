@@ -59,7 +59,9 @@ A tab row names one PTY, but a split tab holds several panes. The renderer keeps
 ### Durability check
 
 ```ts
-!runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
+!runtime.quitFlushStarted &&
+  (runtime.lastDurableWriteGeneration >= runtime.writeGeneration ||
+    isBindingDurable(runtime.durableBindingRecords, paneKey, session, ptyId, incarnationId, ...))
 ```
 
 `scheduleSave` bumps `writeGeneration` before it arms the timer. `writeToDiskAsync` raises `lastDurableWriteGeneration` after the file is durably renamed or proven byte-identical by the hash comparison. A pending mutation leaves the durable generation behind. A synchronous flush can close that gap while an older async promise is still pending: it first removes the in-flight temporary file, so a parked async rename fails instead of overwriting the newer snapshot; if the rename already completed, the sync write wins. Thus no additional pending-write guard is needed. The existing async-write syscall test covers the parked-rename race.
@@ -68,7 +70,11 @@ Before this change, `writeToDiskSync` raised the counter only after a real renam
 
 `PtyBindingPersistenceOperationsRuntime` reads the existing generation counters and quit state for eligibility, plus pending-write and timer state for trace metadata. No new durability tracking state is introduced.
 
-The generation check covers the entire persisted state. Unrelated scheduled changes also block the fast path until a successful save closes the generation gap. This is conservative: there is no separate binding durability cache.
+The generation check covers the entire persisted state, which measurement showed is too coarse to be useful on its own. In a capture of 17 calls during workspace switching, nine missed on `not_durable` and nothing else, accounting for 209 ms of the 337 ms spent flushing. `scheduleSave` bumps `writeGeneration` for any state change, and switching workspaces dirties unrelated state constantly, so a binding untouched for minutes still looked unpersisted.
+
+`pty-binding-durability-records.ts` closes that gap by remembering, per pane key, the session object identity, the PTY id, the incarnation, and the generation of the flush that put them on disk. A binding whose own last change is already durable qualifies regardless of what else is pending. The map is bounded at 4096 entries and cleared wholesale when it fills, since the entries are cheap to rebuild.
+
+Retiring a record needs no cooperation from other writers, which is what keeps this safe as the code moves. Every session-replacing writer in the audit below installs a fresh session object, so the identity check retires the record on its own. The two in-place binding writers are covered by the stored values instead: SSH lease cleanup only clears bindings to null or removes keys, and SSH target migration rewrites the PTY id, so neither can leave behind a stale record that still matches a request.
 
 The fast path must preserve the persistence lifecycle: once the final quit flush has started, a matching binding still reaches the existing refusal to synchronously flush. Durable equality does not authorize a late binding acknowledgement during shutdown.
 
