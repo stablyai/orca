@@ -180,6 +180,42 @@ describe('ssh host partition remote-workspace round trip', () => {
     expect(merged.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-runtime'])
   })
 
+  it('keeps the tabs when an older client publishes an empty list for them', async () => {
+    // Rule 3 skew, the dangerous direction: a client that predates this fix still reads only the
+    // local partition, so its own `replace-session` names this workspace's path with NO tabs. The
+    // merge already refuses to delete what the host has never been told about — but only for tabs
+    // this client actually holds, which before the fix it did not. Hydrating them is what arms
+    // that defence, and this client then republishes the real list and repairs the snapshot.
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(strandedPartitions([tab('tab-runtime')])),
+      repos
+    )
+    const publishedByOldClient = importRemoteWorkspaceSession(
+      {
+        activeWorktreePath: null,
+        activeTabId: null,
+        tabsByWorktreePath: { [WORKTREE_PATH]: [] },
+        terminalLayoutsByTabId: {}
+      },
+      {
+        resolveWorktreeId: (worktreePath) => (worktreePath === WORKTREE_PATH ? WORKTREE_ID : null),
+        executionHostId: SSH_HOST_ID
+      }
+    )
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      read.session,
+      publishedByOldClient,
+      new Set([WORKTREE_ID]),
+      read.session.tabsByWorktree,
+      new Set(),
+      SSH_HOST_ID,
+      2
+    )
+
+    expect(merged.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-runtime'])
+  })
+
   it('publishes the stranded tabs rather than an empty list', async () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
       partitionedApi(strandedPartitions([tab('tab-runtime')])),
