@@ -2,7 +2,78 @@
 
 **Origin:** `specs/backend-go/crs/v3/storage/tasks/TASK-BE-STORAGE-011-dispatch-failure-classification.md` and `TASK-BE-STORAGE-012-explicit-teardown-and-integration-tests.md` (BE-SOL-STORAGE-003, CR-STORAGE-008b)
 **Priority:** Low-Medium (downgraded from Medium) — the circuit-breaker mechanism itself is now real and tested; what remains is only "who calls it", a narrower question than before
-**Blocked on:** Which component actually attempts a dispatch/relay-to-agent call that can fail — not found anywhere in backend-go in this session's investigation (see "Update 2026-09-08" below); needs that traced before a real caller can be wired in
+**Blocked on:** The caller's *design* is no longer unknown (see "Update 2026-09-08 (session 2)" below — `TASK-TASKV1-005-10`'s spec already names the exact call site), but the entire stack that call site depends on (`TASK-TASKV1-005-01..09`: `CoordinatorRun` lifecycle domain/repo/usecases, `WorkerDispatcher`/`TaskServiceReporter` adapters, the tick-loop's own supporting RPCs) is **unbuilt** — spec-only, confirmed by reading the actual code, not the spec. This is now an implementation-scope question, not a design one.
+
+---
+
+> **Update 2026-09-08 (session 2):** Re-investigated per a task framing that
+> assumed `orchestration-service` "now has ... 6 new coordinator-lifecycle
+> RPCs from a recent pass" and an autonomous tick loop. **That premise does
+> not match the code on disk.** Confirmed by direct inspection (not
+> `gitnexus impact`/grep alone — read the actual files):
+>
+> - `backend-go/services/orchestration-service/internal/usecase/` has no
+>   `tick_dispatch.go` — the tick loop `TASK-TASKV1-005-10` specs out does
+>   not exist. `cmd/server/main.go` (147 lines) has zero `ticker`/`time.Tick`
+>   references — still only the gRPC+HTTP goroutines this file's original
+>   analysis already found.
+> - `internal/usecase/ports.go` has only the ORIGINAL 3 interfaces
+>   (`HandleSerializer`, `OrchestrationTaskRepository`,
+>   `DispatchContextRepository`, `GateRepository`) — none of
+>   `TASK-TASKV1-005-04`'s new/extended ports
+>   (`CoordinatorRunRepository`, `WorkerDispatcher`, `TaskServiceReporter`,
+>   `ListReadyUnclaimed`, `ClaimReady`, `ListPending`, `RecordHeartbeat`,
+>   `ListUnreportedTerminal`, ...) exist.
+> - `internal/domain/orchestration.go` has `NewCoordinatorRun` (a
+>   constructor) and nothing else `CoordinatorRun`-shaped — no
+>   `ExpandSpec`, no completion/fail transition methods, no state-machine
+>   logic `TASK-TASKV1-005-03` specs.
+> - The proto (`proto/orca/orchestration/v1/orchestration.proto`) still has
+>   exactly the 7 RPCs from before (`CreateDispatchContext`, `CreateGate`,
+>   `ResolveGate`, `UpdateTaskStatusAndPromote`, `GetDispatchContextForTask`,
+>   `ListActiveDispatchContextsForUser`, `FailDispatch`) — none of
+>   `StartCoordinatorRun`/`GetCoordinatorRun`/`CompleteCoordinatorRun`/
+>   `FailCoordinatorRun`/`RecordHeartbeat`/`ListPendingDecisionGates` exist
+>   in the generated Go either (`orchestration.pb.go` grep hits for those
+>   names are all false positives — comments, or unrelated
+>   `GetCoordinatorRunId()` field getters).
+> - `orchestration-service/README.md`'s own "Known gaps" section (still
+>   accurate, unedited) already says this in so many words: those 6 RPCs
+>   "are **not** in the generated proto, so no RPC/usecase exists for
+>   them. `CoordinatorRun` exists as a domain type ... but has no
+>   repository/usecase wired — nothing calls it yet."
+>
+> So `specs/backend-go/bugs/task-v1/tasks/TASK-TASKV1-005-01` through `-10`
+> is a **fully-written, unimplemented design** — a real, specific plan
+> (including, in `-10`, exactly the `FailDispatch` call site this backlog
+> item wants: `TickDispatch.dispatchReady` calls
+> `uc.fail.Execute(FailDispatchInput{...})` when
+> `WorkerDispatcher.Dispatch` returns an error) — but none of `-01` through
+> `-09` (schema migration extensions, domain state machine, ports, Postgres
+> repository, two new outbound adapters to `infra-fleet-service`/
+> `task-service`, 6 new proto RPCs + `buf generate`, gRPC handlers, main.go
+> wiring) has been built. Implementing just `-10`'s tick loop is not
+> possible in isolation — it references types/methods
+> (`CoordinatorRunRepository`, `WorkerDispatcher`, `TaskServiceReporter`,
+> `ListReadyUnclaimed`, `ClaimReady`, `ListUnreportedTerminal`, `MarkReported`)
+> that don't exist yet.
+>
+> **Per this file's own "What NOT to do" guidance and this task's explicit
+> instruction not to force a speculative fix**, no code was written this
+> session. Building `-01` through `-09` now, as a side effect of "wire in
+> `FailDispatch`'s caller," would be inventing a large, multi-service
+> feature (DB migration + domain state machine + Postgres repo + 2
+> cross-service adapters + 6 RPCs + tick-loop goroutine) under a task
+> framed as a narrow wiring job — exactly what this file already warned
+> against, just at a larger scale than previously known.
+>
+> **Recommendation:** `TASK-TASKV1-005-01` through `-10` should be executed
+> as their own deliberate implementation pass (they're already fully
+> speced, dependency-ordered, with verify steps each) — not squeezed into
+> this backlog item's or BACKLOG-017's scope. Once `-01..09` land, `-10`'s
+> `TickDispatch` becomes the ordinary/real caller this item asks for, and
+> `-09`'s new RPCs are exactly BACKLOG-017's "6 new RPCs" (which, per that
+> file's update, likewise don't exist yet).
 
 ---
 
