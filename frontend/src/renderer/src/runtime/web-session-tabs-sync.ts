@@ -2558,6 +2558,14 @@ export function useWebSessionTabsSync(): void {
                 )
                 return
               }
+              // session.tabs.subscribeAll is a StreamHandler channel (registry.go)
+              // — its plain invoke ack carries no meaningful value (result: null)
+              // and is now delivered to onResponse too (isSubscriptionResponse
+              // widened for FE-TASK-EVM-002's subscribeRuntimeStreamChannel);
+              // only real push events have an event shape here.
+              if (!response.result) {
+                return
+              }
               const event = response.result as SessionTabsStreamEvent
               const replayed = isRuntimeSubscriptionReplayResponse(response)
               if (event.type === 'snapshots') {
@@ -2649,6 +2657,11 @@ export function useWebSessionTabsSync(): void {
             }
             if (response.ok === false) {
               console.warn('[web-session-tabs-sync] subscription failed:', response.error.message)
+              return
+            }
+            // Same StreamHandler-ack guard as session.tabs.subscribeAll above —
+            // see that call site's comment.
+            if (!response.result) {
               return
             }
             const event = response.result as SessionTabsStreamEvent

@@ -35,6 +35,12 @@ describe('subscribeRuntimeClientEvents', () => {
     if (!capturedOnResponse) {
       throw new Error('Expected subscription callbacks')
     }
+    // Regression: runtime.clientEvents.subscribe is a StreamHandler channel
+    // (registry.go) — its plain invoke ack carries result:null, delivered to
+    // onResponse too (isSubscriptionResponse widened for FE-TASK-EVM-002's
+    // subscribeRuntimeStreamChannel). Used to throw reading message.type on
+    // that null (found live on b15.openledger.vn, 2026-09-08).
+    expect(() => capturedOnResponse?.({ ok: true, result: null })).not.toThrow()
     capturedOnResponse({
       ok: true,
       result: { type: 'ready', subscriptionId: 'sub-1' }
