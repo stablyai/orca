@@ -9,6 +9,26 @@ function parse(row: Record<string, unknown>): boolean {
 }
 
 describe('journal row validation', () => {
+  it.each([null, 7, 1n, {}, new Uint8Array([255])])(
+    'fences unrepresentable raw SQLite value %s',
+    (value) => expect(parseJournalRow(value)).toEqual({ ok: false, unreadable: true })
+  )
+
+  it('uses the same version and shape rules for UTF-8 BLOB and TEXT', () => {
+    for (const text of [
+      '{"v":999}',
+      '}{',
+      JSON.stringify({
+        ...BASE,
+        kind: 'epoch',
+        reason: 'session_created',
+        providerHandle: { kind: 'codex', threadId: 'λ' }
+      })
+    ]) {
+      expect(parseJournalRow(new Uint8Array(Buffer.from(text)))).toEqual(parseJournalRow(text))
+    }
+  })
+
   it('upcasts v1 rows to the current schema without changing their body', () => {
     const parsed = parseJournalRow(
       JSON.stringify({

@@ -1,20 +1,7 @@
-// The standing demand for a rebuild that a repair leaves behind.
-//
-// A repair that empties the epoch republishes an `unreconcilable_prefix` anchor,
-// and replay reads that back as history still owed. A repair that KEEPS a prefix
-// has no such anchor to publish and — for a plain sequence gap — no malformed
-// row to disclose either, so nothing on disk would record that the deleted
-// suffix was never reconstructed. This marker is that record, written in the
-// SAME transaction as the deletion: a crash between the two would otherwise
-// leave the rows gone with nothing left asking for them back.
-//
-// It records the first sequence at which the epoch would hold content of its
-// own again, because it retires under exactly the rule the emptied-epoch anchor
-// takes: a fresh epoch carries the rebuild, and a session that writes past that
-// sequence owns the epoch and stops the retry.
+// The live generation still owes reconstruction until it writes content of its own.
+// Recovery evidence has a separate, immutable lifetime in journal_recovery_epochs.
 
 import type Database from '../../sqlite/sync-database'
-import { deleteJournalRowSuffix } from './journal-row-table'
 
 const SELECT_REPAIR = 'SELECT epoch, content_from FROM journal_repairs WHERE session_id = ?'
 const UPSERT_REPAIR = `INSERT INTO journal_repairs (session_id, epoch, content_from, repaired_at)
@@ -45,25 +32,13 @@ export function clearJournalRepairMarker(db: Database.Database, sessionId: strin
   db.prepare(DELETE_REPAIR).run(sessionId)
 }
 
-/** Drop the rejected suffix and record that it is owed, atomically. */
-export function deleteJournalRepairedSuffix(input: {
-  db: Database.Database
-  sessionId: string
-  epoch: string
-  /** First sequence of the rejected suffix. */
-  fromSeq: number
-  /** First sequence left free once the suffix is gone. */
-  contentFrom: number
+/** Record the rebuild demand inside the caller's repair-generation transaction. */
+export function writeJournalRepairMarker(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string,
+  contentFrom: number,
   now: number
-}): number {
-  input.db.exec('BEGIN IMMEDIATE')
-  try {
-    const deleted = deleteJournalRowSuffix(input.db, input.sessionId, input.epoch, input.fromSeq)
-    input.db.prepare(UPSERT_REPAIR).run(input.sessionId, input.epoch, input.contentFrom, input.now)
-    input.db.exec('COMMIT')
-    return deleted
-  } catch (error) {
-    input.db.exec('ROLLBACK')
-    throw error
-  }
+): void {
+  db.prepare(UPSERT_REPAIR).run(sessionId, epoch, contentFrom, now)
 }

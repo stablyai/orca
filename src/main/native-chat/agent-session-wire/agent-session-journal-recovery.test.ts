@@ -15,6 +15,7 @@ import { openJournalDatabase } from '../agent-session-journal/journal-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../agent-session-journal/journal-database-schema'
 import { loadJournal } from '../agent-session-journal/journal-open'
 import { journalDatabaseFile } from '../agent-session-journal/journal-paths'
+import { parseJournalRow } from '../agent-session-journal/journal-row-schema'
 import { readJournalEpochRows } from '../agent-session-journal/journal-row-table'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type Database from '../../sqlite/sync-database'
@@ -207,7 +208,9 @@ describe('openAgentSessionJournalWithRecovery', () => {
     // The unreadable journal is left exactly as found; a newer host still owns it.
     await withJournalDatabase(journalDir, (db) => {
       const rows = readJournalEpochRows(db, CODEX_SESSION, epoch)
-      expect(rows.some((entry) => entry.rowJson.includes('"v":99'))).toBe(true)
+      expect(
+        rows.some((entry) => typeof entry.rowJson === 'string' && entry.rowJson.includes('"v":99'))
+      ).toBe(true)
       expect(rows).toHaveLength(3)
     })
     await opened.close()
@@ -390,7 +393,10 @@ describe('openAgentSessionJournalWithRecovery', () => {
     await reopened.journal.close()
     await withJournalDatabase(journalDir, (db) => {
       const rows = readJournalEpochRows(db, CODEX_SESSION, epoch)
-      expect(JSON.parse(rows[0]?.rowJson ?? '{}')).toMatchObject({ kind: 'epoch', seq: 1 })
+      expect(parseJournalRow(rows[0]?.rowJson)).toMatchObject({
+        ok: true,
+        row: { kind: 'epoch', seq: 1 }
+      })
     })
   })
 
@@ -419,10 +425,9 @@ describe('openAgentSessionJournalWithRecovery', () => {
     await first.journal.close()
     await withJournalDatabase(journalDir, (db) => {
       const rows = readJournalEpochRows(db, CODEX_SESSION, epoch)
-      expect(JSON.parse(rows[0]?.rowJson ?? '{}')).toMatchObject({
-        kind: 'epoch',
-        seq: 1,
-        reason: 'unreconcilable_prefix'
+      expect(parseJournalRow(rows[0]?.rowJson)).toMatchObject({
+        ok: true,
+        row: { kind: 'epoch', seq: 1, reason: 'unreconcilable_prefix' }
       })
     })
 

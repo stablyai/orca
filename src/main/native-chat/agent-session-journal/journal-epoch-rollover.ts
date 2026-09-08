@@ -1,9 +1,4 @@
-// Opening a new epoch.
-//
-// One transaction: discard every row of the superseded epoch, insert the new
-// epoch row at sequence 1, move the session projection onto it, and retire any
-// repair marker the superseded epoch was carrying. Superseded rows are DELETED
-// rather than retained — nothing would ever shed them.
+// Atomically publish a new live epoch; sealed recovery epochs remain untouched.
 
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandle } from '../../../shared/agent-session-journal-types'

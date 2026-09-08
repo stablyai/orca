@@ -4,7 +4,9 @@
 // persistent pragma and run no DDL: a future-schema database must be left
 // byte-identical, and `journal_mode = WAL` writes the file header.
 
+import { existsSync } from 'node:fs'
 import Database from '../../sqlite/sync-database'
+import { parseJournalRow } from './journal-row-schema'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import { createJournalTablesSql, JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 
@@ -21,10 +23,14 @@ export function journalPragmaNumber(db: Database.Database, name: string): number
 }
 
 export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
-  const probe = new Database(dbPath)
+  const probe = new Database(dbPath, { readonly: existsSync(dbPath) })
   let stored: number
   try {
     stored = journalPragmaNumber(probe, 'user_version')
+    if (stored <= JOURNAL_DB_SCHEMA_VERSION && hasFutureJournalRows(probe)) {
+      probe.close()
+      return { db: new Database(dbPath, { readonly: true, fileMustExist: true }), readOnly: true }
+    }
   } catch (error) {
     probe.close()
     throw error
@@ -33,17 +39,19 @@ export function openJournalDatabase(dbPath: string): OpenJournalDatabase {
     probe.close()
     return { db: new Database(dbPath, { readonly: true, fileMustExist: true }), readOnly: true }
   }
+  probe.close()
+  const writable = new Database(dbPath)
   let transferred = false
   try {
-    configureJournalPragmas(probe)
-    createJournalSchema(probe, stored)
+    configureJournalPragmas(writable)
+    createJournalSchema(writable, stored)
     hardenSqliteDatabaseFiles(dbPath)
-    const opened = { db: probe, readOnly: false }
+    const opened = { db: writable, readOnly: false }
     transferred = true
     return opened
   } finally {
     if (!transferred) {
-      probe.close()
+      writable.close()
     }
   }
 }
@@ -77,4 +85,22 @@ function createJournalSchema(db: Database.Database, stored: number): void {
     db.exec('ROLLBACK')
     throw error
   }
+}
+
+/** Check before persistent pragmas or migration, including rows behind a corrupt prefix. */
+function hasFutureJournalRows(db: Database.Database): boolean {
+  if (
+    !db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'journal_rows'")
+      .get()
+  ) {
+    return false
+  }
+  for (const entry of db.prepare('SELECT row_json FROM journal_rows').iterate()) {
+    const parsed = parseJournalRow(entry.row_json)
+    if (!parsed.ok && parsed.unreadable) {
+      return true
+    }
+  }
+  return false
 }

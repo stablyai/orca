@@ -194,7 +194,7 @@ describe('replay', () => {
     expect(reopened.snapshot().items).toHaveLength(0)
   })
 
-  it('keeps the intact prefix and drops the rejected suffix', async () => {
+  it('keeps the intact prefix in a new generation and seals the rejected suffix', async () => {
     const journal = await open()
     for (let index = 0; index < 4; index += 1) {
       await journal.appendItem(item(index), body(`m${index}`), { fence: 1 })
@@ -206,12 +206,17 @@ describe('replay', () => {
     })
 
     const reopened = await open()
-    expect(reopened.epoch).toBe(before)
+    expect(reopened.epoch).not.toBe(before)
     expect(reopened.snapshot().items.map((entry) => entry.body)).toEqual([body('m0')])
     // Sequences 4 and 5 are VALID rows that the gap at 3 made unreplayable.
-    // Nothing preserves them; recovery rebuilds the epoch from provider history.
+    // The sealed epoch preserves them even if provider recovery replaces the live generation.
     await withJournalDatabase(root, (db) => {
-      const rows = db.prepare('SELECT seq FROM journal_rows ORDER BY seq').all()
+      const rows = db
+        .prepare('SELECT seq FROM journal_rows WHERE epoch = ? ORDER BY seq')
+        .all(reopened.epoch)
+      expect(
+        db.prepare('SELECT seq FROM journal_rows WHERE epoch = ? ORDER BY seq').all(before)
+      ).toHaveLength(4)
       expect(rows.map((row) => (row as { seq: number }).seq)).toEqual([1, 2])
     })
     expect(reopened.repair).toEqual({ malformedRows: 0 })

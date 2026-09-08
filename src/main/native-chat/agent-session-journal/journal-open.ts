@@ -1,8 +1,7 @@
 // Loading a journal: the session projection names the live epoch, and that
 // epoch's rows are folded through the reducer in sequence order.
 //
-// There is no snapshot to anchor to and no superseded-epoch rows to drop — a
-// roll deletes them in the same transaction that publishes the new epoch. A gap
+// Sealed recovery epochs are excluded by the session projection. A gap
 // in the surviving sequence is corruption, and the caller rolls the epoch
 // rather than rendering a partial timeline.
 
@@ -38,7 +37,7 @@ export type JournalLoad = {
    *  `readOnly`, never counted here). The store discloses these in the timeline. */
   malformedRows: number
   /** Directory-internal: the first sequence of an unusable suffix. The store
-   *  deletes from here before it accepts a write; a probe leaves it alone. */
+   *  seals the source before publishing a writable prefix; a probe leaves it alone. */
   truncateFrom?: number
 }
 
@@ -67,7 +66,10 @@ export function replayJournal(
   const repairedFrom = pendingJournalRepairSequence(db, sessionId, epoch)
   const rows: JournalRow[] = []
   let malformedRows = 0
-  let latched = false
+  let latched = stored.some((entry) => {
+    const parsed = parseJournalRow(entry.rowJson)
+    return !parsed.ok && parsed.unreadable
+  })
   let truncateFrom: number | undefined
   for (const entry of stored) {
     const parsed = parseJournalRow(entry.rowJson)

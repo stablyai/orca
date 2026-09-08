@@ -146,8 +146,15 @@ describe('failure paths inside the open call', () => {
 
     // Replay runs after the connection is open, so a read it cannot serve
     // throws with the handle already held.
-    const exec = vi.spyOn(Database.prototype, 'prepare').mockImplementation(() => {
-      throw new Error('replay cannot read this journal')
+    const prepare = Database.prototype.prepare
+    const exec = vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (
+      this: Database.Database,
+      sql: string
+    ) {
+      if (sql === 'SELECT epoch FROM journal_sessions WHERE session_id = ?') {
+        throw new Error('replay cannot read this journal')
+      }
+      return prepare.call(this, sql)
     })
     try {
       await expect(journals.open({ identity: IDENTITY, journalDir: root })).rejects.toThrow(

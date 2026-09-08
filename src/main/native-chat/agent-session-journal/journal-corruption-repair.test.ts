@@ -1,11 +1,4 @@
-// A repair drops what it cannot replay, and says so.
-//
-// Two things make a suffix unreplayable: a row this build cannot parse, and a
-// sequence gap that makes every later row unanchored. The rejected suffix is
-// DELETED; the load reports `corrupt`, and recovery rebuilds the epoch from
-// provider history. Every case here asserts the same two halves: the live epoch
-// holds only the replayable prefix, AND the epoch stays anchored so nothing
-// replays a repaired journal as a clean timeline.
+// Repair publishes an anchored readable prefix while sealing the original epoch.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -72,9 +65,11 @@ async function withJournalDatabase(run: (db: Database.Database) => void): Promis
 function firstLiveRow(): Promise<JournalRow | null> {
   let row: JournalRow | null = null
   return withJournalDatabase((db) => {
-    const stored = db.prepare('SELECT row_json FROM journal_rows ORDER BY seq LIMIT 1').get() as
-      | { row_json: string }
-      | undefined
+    const stored = db
+      .prepare(
+        'SELECT row_json FROM journal_rows WHERE epoch = (SELECT epoch FROM journal_sessions) ORDER BY seq LIMIT 1'
+      )
+      .get() as { row_json: string } | undefined
     const parsed = stored ? parseJournalRow(stored.row_json) : null
     row = parsed?.ok ? parsed.row : null
   }).then(() => row)
@@ -84,7 +79,11 @@ function liveSequences(): Promise<number[]> {
   let sequences: number[] = []
   return withJournalDatabase((db) => {
     sequences = (
-      db.prepare('SELECT seq FROM journal_rows ORDER BY seq').all() as { seq: number }[]
+      db
+        .prepare(
+          'SELECT seq FROM journal_rows WHERE epoch = (SELECT epoch FROM journal_sessions) ORDER BY seq'
+        )
+        .all() as { seq: number }[]
     ).map((row) => row.seq)
   }).then(() => sequences)
 }
@@ -100,7 +99,7 @@ afterEach(async () => {
 })
 
 describe('a malformed row', () => {
-  it('keeps the readable prefix live and drops the rest of the epoch', async () => {
+  it('keeps the readable prefix live in a new generation', async () => {
     const journal = await open()
     await journal.appendItem(item(0), body('readable'), { fence: 1 })
     await journal.appendItem(item(1), body('unreadable'), { fence: 1 })

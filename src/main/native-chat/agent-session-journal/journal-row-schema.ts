@@ -111,7 +111,7 @@ export type JournalRowParse =
   | { ok: true; row: JournalRow }
   /** Malformed JSON or a shape this build rejects outright. */
   | { ok: false; unreadable: false }
-  /** A future schema version. The host must not write or compact this journal. */
+  /** A future version or unsupported encoding/type. The host must not write or compact. */
   | { ok: false; unreadable: true }
 
 const ROW_KINDS = new Set([
@@ -131,7 +131,20 @@ export function serializeJournalRow(row: JournalRow): string {
  * Parse one persisted line. Older versions are upcast; newer versions are
  * reported as unreadable so the caller fails closed.
  */
-export function parseJournalRow(line: string): JournalRowParse {
+export function parseJournalRow(value: unknown): JournalRowParse {
+  let line: string
+  if (typeof value === 'string') {
+    line = value
+  } else if (value instanceof Uint8Array) {
+    try {
+      // Decode only for admission/replay; SQLite retains the original storage type and bytes.
+      line = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(value)
+    } catch {
+      return { ok: false, unreadable: true }
+    }
+  } else {
+    return { ok: false, unreadable: true }
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(line)

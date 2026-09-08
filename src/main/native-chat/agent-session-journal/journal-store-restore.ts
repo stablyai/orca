@@ -10,7 +10,7 @@ import type { JournalEpochController } from './journal-epoch-controller'
 import { replayJournal } from './journal-open'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'
-import { deleteJournalRepairedSuffix } from './journal-repair-marker'
+import { repairJournalGeneration } from './journal-repair-generation'
 
 export function restoreJournalStore(
   host: JournalStoreHost,
@@ -18,26 +18,21 @@ export function restoreJournalStore(
 ): Promise<void> {
   return openJournalStoreState({
     journalDir: host.journalDir,
-    loaded: host.loaded(),
+    loaded: host.database().readOnly ? undefined : host.loaded(),
     replay: () => {
       const opened = host.database()
       return replayJournal(opened.db, opened.readOnly, host.identity.sessionId)
     },
-    deleteSuffix: (fromSeq, contentFrom) =>
-      deleteJournalRepairedSuffix({
+    repairGeneration: (loaded) =>
+      repairJournalGeneration({
         db: host.database().db,
-        sessionId: host.identity.sessionId,
-        epoch: host.state().epoch,
-        fromSeq,
-        contentFrom,
-        now: host.now()
+        identity: host.identity,
+        loaded,
+        epoch: host.mintEpoch(),
+        now: host.now(),
+        onPublished: host.adopt
       }),
     start: () => collaborators.epochController.start('session_created', 0),
-    // `unreconcilable_prefix` is the durable statement that this epoch exists
-    // because a repair emptied one: replay reads it back and keeps asking for
-    // provider history until the timeline is rebuilt or the session writes.
-    publishRepairEpoch: () =>
-      collaborators.epochController.start('unreconcilable_prefix', host.state().highestFence),
     adopt: host.adopt,
     appendItem: (identity, body, fence) => host.journal().appendItem(identity, body, { fence }),
     agent: host.identity.agent,

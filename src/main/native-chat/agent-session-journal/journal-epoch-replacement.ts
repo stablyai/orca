@@ -1,8 +1,4 @@
-// Republishing a live item set into a fresh epoch.
-//
-// One transaction: discard every row, insert the epoch row plus the replacement
-// items, move the session projection, and retire any repair marker — this
-// republished history is exactly what the marker was holding out for.
+// Atomically publish a new live epoch; sealed recovery epochs remain untouched.
 
 import type {
   AgentJournalItemBody,

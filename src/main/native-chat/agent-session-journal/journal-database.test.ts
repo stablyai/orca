@@ -12,7 +12,6 @@ import { JOURNAL_DB_SCHEMA_VERSION } from './journal-database-schema'
 import { journalDatabaseFile } from './journal-paths'
 import {
   deleteAllJournalRows,
-  deleteJournalRowSuffix,
   insertJournalRow,
   readJournalEpochRows,
   readJournalRowsAfter,
@@ -103,7 +102,7 @@ describe('journal database open', () => {
 })
 
 describe('journal row statements', () => {
-  it('serves replay, resume, discard and suffix truncation from the primary key', () => {
+  it('serves replay, resume and discard from the primary key', () => {
     const opened = openJournalDatabase(dbPath)
     try {
       const { db } = opened
@@ -123,13 +122,6 @@ describe('journal row statements', () => {
       expect(readJournalRowsAfter(db, 'session-1', 'epoch-1', 3).map((row) => row.seq)).toEqual([
         4, 5
       ])
-
-      // The rejected suffix leaves `journal_rows`, scoped to its own epoch.
-      expect(deleteJournalRowSuffix(db, 'session-1', 'epoch-1', 4)).toBe(2)
-      expect(readJournalEpochRows(db, 'session-1', 'epoch-1').map((row) => row.seq)).toEqual([
-        1, 2, 3
-      ])
-      expect(readJournalEpochRows(db, 'session-1', 'epoch-old')).toHaveLength(1)
 
       deleteAllJournalRows(db)
       expect(readJournalEpochRows(db, 'session-1', 'epoch-1')).toHaveLength(0)
