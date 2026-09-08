@@ -77,6 +77,7 @@ export type SleepingAgentSessionRecord = {
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
 const PROVIDER_SESSION_ID_MAX_LENGTH = 512
 
+/** True when a session id contains control characters that must not reach argv or the PTY. */
 export function hasUnsafeProviderSessionIdChars(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
     const code = value.charCodeAt(i)
@@ -147,6 +148,7 @@ export function isResumableTuiAgent(value: unknown): value is ResumableTuiAgent 
   return typeof value === 'string' && RESUMABLE_TUI_AGENT_SET.has(value)
 }
 
+/** Validate persisted or relayed session metadata with the same id rules as hook payloads. */
 export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessionMetadata | null {
   if (typeof raw !== 'object' || raw === null) {
     return null
