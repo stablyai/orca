@@ -1,6 +1,5 @@
 import { warnTerminalLifecycleAnomaly } from '../terminal-lifecycle-diagnostics'
 import {
-  captureTerminalPaneRecoveryGeneration,
   requestTerminalPaneRecovery,
   type TerminalPaneRecoveryReason
 } from '../terminal-pane-recovery'
@@ -130,10 +129,12 @@ export function armSpawnSettlementWatchdog(
   const tabId = session.deps.tabId
   const timer = setTimeout(
     () => {
-      if (pendingSpawnByPaneKey.get(pendingSpawnKey) === trackedPromise) {
-        pendingSpawnByPaneKey.delete(pendingSpawnKey)
-        pendingSpawnGenerationByPaneKey.delete(pendingSpawnKey)
+      // A replacement spawn owns both the pin and its recovery deadline.
+      if (pendingSpawnByPaneKey.get(pendingSpawnKey) !== trackedPromise) {
+        return
       }
+      pendingSpawnByPaneKey.delete(pendingSpawnKey)
+      pendingSpawnGenerationByPaneKey.delete(pendingSpawnKey)
       // Something bound meanwhile, or the SSH ledger owns the retry: leave it alone.
       if (session.transport.getPtyId() || session.directSshRetryAttempt) {
         return
@@ -163,7 +164,7 @@ export function armSpawnSettlementWatchdog(
         tabId,
         ptyId: null,
         reason: 'spawn-never-settled',
-        terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration(tabId)
+        terminalRecoveryGeneration: session.terminalRecoveryGeneration
       })
     },
     // A remote-runtime create runs its own retry ladder inside the call, so it settles

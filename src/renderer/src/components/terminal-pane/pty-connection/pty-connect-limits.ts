@@ -1,4 +1,5 @@
 import { e2eConfig } from '@/lib/e2e-config'
+import { PTY_SPAWN_PREPARATION_DEADLINE_MS } from '../../../../../main/ipc/pty/pty-spawn-preparation-deadline'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from '../remote-runtime-pty-recovery-state'
 
 export const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
@@ -53,14 +54,17 @@ export const TRANSPORT_CONNECT_SETTLE_GRACE_MS = 60_000
 const LOCAL_PTY_STARTUP_GATE_CEILING_MS = 60_000
 const DAEMON_SPAWN_SETTLE_CEILING_MS = 20_000 + 30_000
 export const SPAWN_SETTLEMENT_WATCHDOG_MS =
-  LOCAL_PTY_STARTUP_GATE_CEILING_MS + DAEMON_SPAWN_SETTLE_CEILING_MS + 30_000
+  LOCAL_PTY_STARTUP_GATE_CEILING_MS +
+  PTY_SPAWN_PREPARATION_DEADLINE_MS +
+  DAEMON_SPAWN_SETTLE_CEILING_MS +
+  30_000
 // Why a second, longer deadline: a remote-runtime create does not fail fast. It runs
 // its own retry ladder inside the create call, arming REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS
 // on the first recoverable connection error, so the connect promise legitimately pends
 // past the local deadline on a flapping link. Timing that out would remount a pane whose
 // create is still running and can orphan a host terminal.
 export const REMOTE_RUNTIME_SPAWN_SETTLEMENT_WATCHDOG_MS =
-  REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 30_000
+  PTY_SPAWN_PREPARATION_DEADLINE_MS + REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 30_000
 
 export function recordPtyConnectDiagnostic(message: string): void {
   if (!e2eConfig.exposeStore) {

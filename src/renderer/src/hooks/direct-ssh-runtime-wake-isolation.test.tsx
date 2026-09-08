@@ -10,9 +10,15 @@ const { retryAllRemoteRuntimePtyRecoveriesNowMock } = vi.hoisted(() => ({
   retryAllRemoteRuntimePtyRecoveriesNowMock: vi.fn()
 }))
 
-vi.mock('@/components/terminal-pane/remote-runtime-pty-recovery-state', () => ({
-  retryAllRemoteRuntimePtyRecoveriesNow: retryAllRemoteRuntimePtyRecoveriesNowMock
-}))
+vi.mock('@/components/terminal-pane/remote-runtime-pty-recovery-state', async () => {
+  const actual = await vi.importActual(
+    '@/components/terminal-pane/remote-runtime-pty-recovery-state'
+  )
+  return {
+    ...actual,
+    retryAllRemoteRuntimePtyRecoveriesNow: retryAllRemoteRuntimePtyRecoveriesNowMock
+  }
+})
 
 function authority(): DirectSshAuthority {
   return {

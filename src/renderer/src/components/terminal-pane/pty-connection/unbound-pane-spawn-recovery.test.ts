@@ -32,6 +32,16 @@ function buildSession(overrides: Record<string, unknown> = {}): never {
   } as never
 }
 
+function observePinnedSpawn(...args: Parameters<typeof observeSpawnSettlement>): void {
+  pendingSpawnByPaneKey.set(args[0].pendingSpawnKey, args[1])
+  void args[1].finally(() => {
+    if (pendingSpawnByPaneKey.get(args[0].pendingSpawnKey) === args[1]) {
+      pendingSpawnByPaneKey.delete(args[0].pendingSpawnKey)
+    }
+  })
+  observeSpawnSettlement(...args)
+}
+
 describe('settleSpawnThatLeftPaneUnbound', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -120,6 +130,7 @@ describe('armSpawnSettlementWatchdog', () => {
   } {
     const promise = new Promise<string | null>(() => {})
     const session = buildSession({ pendingSpawnKey: 'pane-key', ...overrides })
+    pendingSpawnByPaneKey.set(String(overrides.pendingSpawnKey ?? 'pane-key'), promise)
     armSpawnSettlementWatchdog(session, promise)
     return { session, promise }
   }
@@ -154,6 +165,7 @@ describe('armSpawnSettlementWatchdog', () => {
     vi.advanceTimersByTime(SPAWN_SETTLEMENT_WATCHDOG_MS)
 
     expect(pendingSpawnByPaneKey.get('pane-key')).toBe(newerSpawn)
+    expect(requestTerminalPaneRecovery).not.toHaveBeenCalled()
   })
 
   it('does not remount when a transport bound while it waited', () => {
@@ -206,7 +218,7 @@ describe('observeSpawnSettlement', () => {
   })
 
   it('arms the settlement watchdog for a spawn that never settles', () => {
-    observeSpawnSettlement(
+    observePinnedSpawn(
       buildSession({ deps: { tabId: 'tab-observe' }, pendingSpawnKey: 'observe-key' }),
       new Promise<string | null>(() => {})
     )
@@ -219,7 +231,7 @@ describe('observeSpawnSettlement', () => {
   })
 
   it('recovers a spawn that settles without a PTY id under the settled reason', async () => {
-    observeSpawnSettlement(
+    observePinnedSpawn(
       buildSession({ deps: { tabId: 'tab-settled' }, pendingSpawnKey: 'settled-key' }),
       Promise.resolve(null)
     )
@@ -248,7 +260,7 @@ describe('cold-restore resume spawns', () => {
   // --resume on the same transcript, and the late spawn is never retired.
   it('never remounts a resume spawn that hangs', () => {
     const promise = new Promise<string | null>(() => {})
-    observeSpawnSettlement(
+    observePinnedSpawn(
       buildSession({ deps: { tabId: 'tab-resume' }, pendingSpawnKey: 'resume-key' }),
       promise,
       { resumesProviderSession: true }
@@ -266,11 +278,9 @@ describe('cold-restore resume spawns', () => {
   // the arming call instead of the spawn, this pane would re-issue --resume.
   it('never remounts a resume spawn adopted by a remount whose arming pane was disposed', () => {
     const promise = new Promise<string | null>(() => {})
-    observeSpawnSettlement(
-      buildSession({ deps: { tabId: 'tab-disposed' }, disposed: true }),
-      promise,
-      { resumesProviderSession: true }
-    )
+    observePinnedSpawn(buildSession({ deps: { tabId: 'tab-disposed' }, disposed: true }), promise, {
+      resumesProviderSession: true
+    })
 
     armSpawnSettlementWatchdog(buildSession({ deps: { tabId: 'tab-adopter' } }), promise)
     vi.advanceTimersByTime(SPAWN_SETTLEMENT_WATCHDOG_MS)
@@ -279,7 +289,7 @@ describe('cold-restore resume spawns', () => {
   })
 
   it('still remounts a non-resume spawn that hangs', () => {
-    observeSpawnSettlement(
+    observePinnedSpawn(
       buildSession({ deps: { tabId: 'tab-plain' }, pendingSpawnKey: 'plain-key' }),
       new Promise<string | null>(() => {}),
       { resumesProviderSession: false }
@@ -304,7 +314,7 @@ describe('remote-runtime spawns', () => {
 
   // The create's own retry ladder can still be running at the local deadline.
   it('does not remount a remote-runtime pane at the local deadline', () => {
-    observeSpawnSettlement(
+    observePinnedSpawn(
       buildSession({ deps: { tabId: 'tab-remote' }, runtimeEnvironmentId: 'env-1' }),
       new Promise<string | null>(() => {})
     )

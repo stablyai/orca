@@ -8,6 +8,7 @@ import { executePtyIpcSpawn } from './spawn-execute'
 import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './spawn-state'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
+import { createPtySpawnPreparationDeadline } from '../pty-spawn-preparation-deadline'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 
 function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
@@ -33,17 +34,41 @@ function restoreProvisionalPtySize(ctx: PtyIpcSpawnState): void {
 export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArgs) {
   triggerPtySpawnPushTargetMaterialization(deps, args)
   const ctx = createPtyIpcSpawnState(deps, args)
-  const early = await beginPtyIpcSpawn(ctx)
-  if (early) {
-    return early
-  }
+  const preparationDeadline = createPtySpawnPreparationDeadline({
+    onTimeout: () =>
+      rejectPaneSpawnReservation(
+        ctx.paneSpawnReservationKey,
+        ctx.paneSpawnReservation,
+        new Error('PTY spawn preparation timed out before provider spawn')
+      )
+  })
+  preparationDeadline.start()
+  const operation = (async () => {
+    const early = await beginPtyIpcSpawn(ctx)
+    if (early) {
+      return early
+    }
+    return await runPtyIpcSpawnAfterBegin(deps, ctx, preparationDeadline)
+  })()
+  return preparationDeadline.race(operation)
+}
+
+async function runPtyIpcSpawnAfterBegin(
+  deps: PtySpawnIpcDeps,
+  ctx: PtyIpcSpawnState,
+  preparationDeadline: ReturnType<typeof createPtySpawnPreparationDeadline>
+) {
+  preparationDeadline.assertPreparing()
   try {
     await preparePtyIpcSpawnPreflight(ctx)
+    preparationDeadline.assertPreparing()
     await assemblePtyIpcSpawnEnv(ctx)
+    preparationDeadline.assertPreparing()
     const earlyReserved = await buildPtyIpcSpawnOptions(ctx).catch((error: unknown) => {
       restoreProvisionalPtySize(ctx)
       throw error
     })
+    preparationDeadline.assertPreparing()
     if (earlyReserved) {
       // Why: this request lost the pane to the reservation winner, so its
       // pre-allocated leader handle never binds to a PTY. Nothing else can
@@ -52,6 +77,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       releaseAbandonedAgentTeamsLeader(ctx)
       return earlyReserved
     }
+    preparationDeadline.finish()
     await executePtyIpcSpawn(ctx)
     return await commitPtyIpcSpawn(ctx)
   } catch (err) {

@@ -16,6 +16,7 @@ import { buildRuntimePtySpawnOptions } from './spawn-options'
 import { executeRuntimePtySpawn } from './spawn-execute'
 import { commitRuntimePtySpawn } from './spawn-commit'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
+import { createPtySpawnPreparationDeadline } from '../pty-spawn-preparation-deadline'
 
 function toRuntimeSpawnReply(result: {
   id: string
@@ -76,14 +77,33 @@ export async function spawnPtyFromRuntimeController(
       ctx.paneSpawnReservation = reservePaneSpawn(ownerKey)
     }
   }
+  const preparationDeadline = createPtySpawnPreparationDeadline({
+    onTimeout: () =>
+      rejectPaneSpawnReservation(
+        ctx.paneSpawnReservationKey,
+        ctx.paneSpawnReservation,
+        new Error('PTY spawn preparation timed out before provider spawn')
+      )
+  })
+  return preparationDeadline.race(runRuntimeSpawnAfterAdmission(ctx, deps, preparationDeadline))
+}
+
+async function runRuntimeSpawnAfterAdmission(
+  ctx: ReturnType<typeof createRuntimePtySpawnState>,
+  deps: PtyRuntimeControllerDeps,
+  preparationDeadline: ReturnType<typeof createPtySpawnPreparationDeadline>
+) {
+  preparationDeadline.start()
   try {
     const materializedOrPromise = adoptMaterializedRuntimePtySpawn(ctx)
     const materialized =
       materializedOrPromise instanceof Promise ? await materializedOrPromise : materializedOrPromise
+    preparationDeadline.assertPreparing()
     if (materialized) {
       return toRuntimeSpawnReply(materialized)
     }
     const earlyAdopt = await prepareRuntimePtySpawn(ctx)
+    preparationDeadline.assertPreparing()
     if (earlyAdopt) {
       return toRuntimeSpawnReply(earlyAdopt)
     }
@@ -91,9 +111,11 @@ export async function spawnPtyFromRuntimeController(
       restoreProvisionalPtySize(ctx)
       throw error
     })
+    preparationDeadline.assertPreparing()
     if (earlyReserved) {
       return toRuntimeSpawnReply(earlyReserved)
     }
+    preparationDeadline.finish()
     await executeRuntimePtySpawn(ctx)
     return toRuntimeSpawnReply(await commitRuntimePtySpawn(ctx))
   } catch (err) {
