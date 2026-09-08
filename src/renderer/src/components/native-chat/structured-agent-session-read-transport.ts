@@ -4,6 +4,7 @@ import { createStructuredAgentSessionEventCoalescer } from '../../../../shared/s
 import { shouldAdvanceStructuredResumeCursor } from '../../../../shared/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { subscribeStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { structuredAgentSessionErrorMessage } from './structured-agent-session-error-message'
 
 function createReconnectScheduler(args: { shouldStop: () => boolean; reconnect: () => void }) {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -126,7 +127,7 @@ export function startStructuredAgentSessionReadTransport(args: {
           }
           closedDuringOpen = true
           connected = false
-          args.applyError(String(error))
+          args.applyError(structuredAgentSessionErrorMessage(error))
           reconnectScheduler.schedule()
         },
         () => {
@@ -152,7 +153,7 @@ export function startStructuredAgentSessionReadTransport(args: {
         return
       }
       connected = false
-      args.applyError(String(error))
+      args.applyError(structuredAgentSessionErrorMessage(error))
       reconnectScheduler.schedule()
     } finally {
       if (currentOpenGeneration === openGeneration) {
@@ -175,7 +176,7 @@ export function startStructuredAgentSessionReadTransport(args: {
       })
       .catch((error) => {
         if (!shouldStop()) {
-          args.applyError(String(error))
+          args.applyError(structuredAgentSessionErrorMessage(error))
         }
       })
   }
@@ -191,7 +192,7 @@ export function startStructuredAgentSessionReadTransport(args: {
     })
     .catch((error) => {
       if (!shouldStopInitialRead()) {
-        args.applyError(String(error))
+        args.applyError(structuredAgentSessionErrorMessage(error))
         reconnectScheduler.schedule()
       }
     })

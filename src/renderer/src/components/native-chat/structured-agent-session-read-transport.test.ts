@@ -132,4 +132,20 @@ describe('structured agent-session read transport generations', () => {
       vi.useRealTimers()
     }
   })
+
+  it('renders the message from a JSON RPC error payload', async () => {
+    const applyError = vi.fn()
+    const transport = start(() => undefined, applyError)
+    await flushPromises()
+
+    attempts[0].onError({
+      code: 'agent_session_ownership_unknown',
+      message: 'This host holds no attached session by that id.'
+    })
+
+    expect(applyError).toHaveBeenCalledExactlyOnceWith(
+      'This host holds no attached session by that id.'
+    )
+    transport.dispose()
+  })
 })
