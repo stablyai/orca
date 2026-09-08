@@ -8,23 +8,34 @@ export function createRun(
   this: OrchestrationDb,
   params: {
     objective: string
-    coordinatorHandle: string
-    coordinatorPaneKey: string
+    coordinatorHandle?: string | null
+    coordinatorPaneKey?: string | null
+    coordinatorAgentSessionId?: string | null
   }
 ): RunRow {
   const id = generateId('run')
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    this.unbindOtherRunsForPane(params.coordinatorPaneKey)
+    if (params.coordinatorPaneKey) {
+      this.unbindOtherRunsForPane(params.coordinatorPaneKey)
+    }
     this.db
       .prepare(
         `INSERT INTO runs (
-           id, objective, coordinator_handle, coordinator_pane_key,
+           id, objective, coordinator_handle, coordinator_pane_key, coordinator_agent_session_id,
            consumer_generation, legacy
-         ) VALUES (?, ?, ?, ?, 1, 0)`
+         ) VALUES (?, ?, ?, ?, ?, 1, 0)`
       )
-      .run(id, params.objective, params.coordinatorHandle, params.coordinatorPaneKey)
-    this.rememberRunCoordinatorHandle(id, params.coordinatorHandle)
+      .run(
+        id,
+        params.objective,
+        params.coordinatorHandle ?? null,
+        params.coordinatorPaneKey ?? null,
+        params.coordinatorAgentSessionId ?? null
+      )
+    if (params.coordinatorHandle) {
+      this.rememberRunCoordinatorHandle(id, params.coordinatorHandle)
+    }
     this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')

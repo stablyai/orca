@@ -7,6 +7,7 @@ import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
 import {
+  orchestrationSessionPayload,
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from './terminal-identity'
@@ -75,16 +76,21 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if (
       (type === 'worker_done' || type === 'heartbeat') &&
       !getOptionalStringFlag(flags, 'from') &&
-      !process.env.ORCA_TERMINAL_HANDLE
+      !process.env.ORCA_TERMINAL_HANDLE &&
+      !orchestrationSessionPayload().agentSessionId
     ) {
       // Why: focus isn't lifecycle authority — an identity-less subprocess must fail closed rather than guess the worker.
       throwNoActiveSenderTerminal()
     }
 
     // Why: lifecycle senders preserve ORCA_TERMINAL_HANDLE across restarts for older runtimes.
-    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const session = orchestrationSessionPayload()
+    const from = session.agentSessionId
+      ? undefined
+      : await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
       from,
+      ...session,
       to,
       run: getOptionalStringFlag(flags, 'run'),
       subject: getRequiredStringFlag(flags, 'subject'),

@@ -7,7 +7,7 @@ import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../.
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { orchestrationSessionPayload, resolveCoordinatorTerminalHandle } from './terminal-identity'
 import { formatWorkerStart } from './worker-output'
 import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
 
@@ -33,6 +33,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const taskTitle = getOptionalStringFlag(flags, 'task-title')
     const deps = getOptionalStringFlag(flags, 'deps')
     const parent = getOptionalStringFlag(flags, 'parent')
+    const sessionPayload = orchestrationSessionPayload()
     const result = await callOrchestrationMutation<{
       runId: string
       taskId: string
@@ -66,7 +67,9 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       retryOf: getOptionalStringFlag(flags, 'retry-of'),
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
       run: getOptionalStringFlag(flags, 'run'),
-      from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
+      ...(Object.keys(sessionPayload).length > 0
+        ? sessionPayload
+        : { from: await resolveCoordinatorTerminalHandle(flags, cwd, client) }),
       devMode: isDevCliInvocation()
     })
     if (result.result.state !== 'ready') {

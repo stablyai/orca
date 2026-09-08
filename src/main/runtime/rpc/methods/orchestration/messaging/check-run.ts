@@ -50,6 +50,8 @@ export async function checkRunMailbox(args: {
   }
   const run = resolveRunScope(runtime, {
     runId: params.run,
+    callerAgentSessionId: params.agentSessionId,
+    callerRuntimeFence: params.runtimeFence,
     callerTerminalHandle: handle,
     callerPaneKey: paneKey,
     requireCurrentConsumer: true,
@@ -59,9 +61,11 @@ export async function checkRunMailbox(args: {
   const generation = run.consumer_generation
   const address = `run:${run.id}`
   runtime.ensureOrchestrationFederationRelay(run.id)
-  await routeDirectSnapshot(run.id, handle, (throughSequence) =>
-    db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
-  )
+  if (params.terminal) {
+    await routeDirectSnapshot(run.id, handle, (throughSequence) =>
+      db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
+    )
+  }
   const coordinatorHandle = run.coordinator_handle
   if (coordinatorHandle && coordinatorHandle !== handle) {
     await routeDirectSnapshot(run.id, coordinatorHandle, (throughSequence) =>
@@ -71,6 +75,8 @@ export async function checkRunMailbox(args: {
   revalidateLegacyCoordinator?.()
   const currentRun = resolveRunScope(runtime, {
     runId: run.id,
+    callerAgentSessionId: params.agentSessionId,
+    callerRuntimeFence: params.runtimeFence,
     callerTerminalHandle: handle,
     callerPaneKey: paneKey,
     requireCurrentConsumer: true,
@@ -170,6 +176,14 @@ export async function checkRunMailbox(args: {
   })
   try {
     revalidateLegacyCoordinator?.()
+    if (params.agentSessionId) {
+      resolveRunScope(runtime, {
+        runId: run.id,
+        callerAgentSessionId: params.agentSessionId,
+        callerRuntimeFence: params.runtimeFence,
+        requireCurrentConsumer: true
+      })
+    }
   } catch (error) {
     if (!acknowledged) {
       throw error

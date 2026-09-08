@@ -71,6 +71,8 @@ export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
         const run = resolveRunScope(runtime, {
           runId: params.run ?? question.run_id,
           callerTerminalHandle: params.from,
+          callerAgentSessionId: params.agentSessionId,
+          callerRuntimeFence: params.runtimeFence,
           requireCurrentConsumer: true,
           legacyCoordinatorRunId,
           callerEvidence: orchestrationCompatibilityEvidence

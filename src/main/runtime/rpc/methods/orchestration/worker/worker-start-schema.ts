@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../../../schemas'
+import { OptionalFiniteNumber, OptionalString } from '../../../schemas'
 
 export const OptionalWorkerLaunchPreference = z
   .string()
@@ -17,7 +17,9 @@ export const WorkerStartParams = z
     parent: OptionalString,
     on: OptionalString,
     run: OptionalString,
-    from: requiredString('Missing --from'),
+    from: z.string().min(1).optional(),
+    agentSessionId: OptionalString,
+    runtimeFence: OptionalFiniteNumber,
     worktree: OptionalString,
     name: OptionalString,
     repo: OptionalString,
@@ -34,6 +36,9 @@ export const WorkerStartParams = z
     devMode: z.boolean().optional()
   })
   .superRefine((params, ctx) => {
+    if (!params.from && !params.agentSessionId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['from'], message: 'Missing --from or agent session identity' })
+    }
     if (!params.task && !params.spec) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

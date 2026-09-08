@@ -2,6 +2,10 @@ import { LEGACY_RUN_ID } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
 
 export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: number): void {
+  // Session identity is authoritative for orchestration; retain terminal columns during migration.
+  if (!this.hasColumn('runs', 'coordinator_agent_session_id')) {
+    this.db.exec('ALTER TABLE runs ADD COLUMN coordinator_agent_session_id TEXT')
+  }
   // v1 → v2: SQLite can't ALTER a CHECK, so rebuild messages to allow 'heartbeat'; fold in v3's delivered_at to skip a second rebuild.
   if (current < 2) {
     if (!this.hasColumn('dispatch_contexts', 'last_heartbeat_at')) {

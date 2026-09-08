@@ -4,7 +4,7 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
 import { callOrchestrationMutation } from './mutation-request'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { orchestrationSessionPayload, resolveCoordinatorTerminalHandle } from './terminal-identity'
 
 const TASK_STATUS_VALUES = [
   'pending',
@@ -17,7 +17,10 @@ const TASK_STATUS_VALUES = [
 
 export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
   'orchestration task-create': async ({ flags, client, cwd, json }) => {
-    const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const session = orchestrationSessionPayload()
+    const callerTerminalHandle = session.agentSessionId
+      ? undefined
+      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await callOrchestrationMutation<{ task: { id: string; status: string } }>(
       client,
       flags,
@@ -29,7 +32,8 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         deps: getOptionalStringFlag(flags, 'deps'),
         parent: getOptionalStringFlag(flags, 'parent'),
         run: getOptionalStringFlag(flags, 'run'),
-        callerTerminalHandle
+        callerTerminalHandle,
+        ...session
       }
     )
     printResult(result, json, (r) => `Created ${r.task.id} [${r.task.status}]`)
@@ -38,9 +42,11 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
   'orchestration task-list': async ({ flags, client, cwd, json }) => {
     const brief = flags.has('brief')
     const run = getOptionalStringFlag(flags, 'run')
-    const callerTerminalHandle = run
-      ? undefined
-      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const session = orchestrationSessionPayload()
+    const callerTerminalHandle =
+      run || session.agentSessionId
+        ? undefined
+        : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       tasks: {
         id: string
@@ -60,7 +66,8 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       ready: flags.has('ready') ? true : undefined,
       brief: brief ? true : undefined,
       run,
-      callerTerminalHandle
+      callerTerminalHandle,
+      ...session
     })
     // Why: only older runtimes (no spec_truncated) skip server-side abbreviation and need this client-side fallback.
     const needsClientAbbreviation =
@@ -106,7 +113,9 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         status,
         result: getOptionalStringFlag(flags, 'result'),
         run: getOptionalStringFlag(flags, 'run'),
-        callerTerminalHandle: await resolveCoordinatorTerminalHandle(flags, cwd, client)
+        ...(orchestrationSessionPayload().agentSessionId
+          ? orchestrationSessionPayload()
+          : { callerTerminalHandle: await resolveCoordinatorTerminalHandle(flags, cwd, client) })
       }
     )
     printResult(result, json, (r) => `Updated ${r.task.id} -> ${r.task.status}`)

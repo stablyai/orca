@@ -72,6 +72,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
+    'ORCA_AGENT_SESSION_ID/u',
+    'ORCA_AGENT_SESSION_RUNTIME_FENCE/u',
     'ORCA_USER_DATA_PATH/p',
     // Why /p: the guest reads the content-addressed wrapper tree through /mnt/c,
     // and it cannot derive the hash segment from ORCA_USER_DATA_PATH alone.

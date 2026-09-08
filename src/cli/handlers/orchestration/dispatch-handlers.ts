@@ -5,11 +5,14 @@ import { RuntimeClientError } from '../../runtime-client'
 import { orchestrationMigrationData } from '../../../shared/orchestration-rpc-contract'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { orchestrationSessionPayload, resolveCoordinatorTerminalHandle } from './terminal-identity'
 
 export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
-    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const session = flags.has('from') ? {} : orchestrationSessionPayload()
+    const from = session.agentSessionId
+      ? undefined
+      : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const dryRun = flags.has('dry-run') ? true : undefined
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
@@ -23,6 +26,7 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
       task: getRequiredStringFlag(flags, 'task'),
       run: getOptionalStringFlag(flags, 'run'),
       to,
+      ...session,
       from,
       inject: flags.has('inject') ? true : undefined,
       dryRun,
@@ -43,7 +47,8 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
   'orchestration dispatch-show': async ({ flags, client, cwd, json }) => {
     const showPreamble = flags.has('preamble') ? true : undefined
     // Why: a preview must embed the same real coordinator handle as an actual dispatch.
-    const from = showPreamble
+    const session = flags.has('from') ? {} : orchestrationSessionPayload()
+    const from = showPreamble && !session.agentSessionId
       ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
       : undefined
     const result = await client.call<{
@@ -52,6 +57,7 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
     }>('orchestration.dispatchShow', {
       task: getRequiredStringFlag(flags, 'task'),
       preamble: showPreamble,
+      ...session,
       from,
       devMode: isDevCliInvocation()
     })

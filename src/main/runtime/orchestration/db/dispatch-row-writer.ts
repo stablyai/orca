@@ -14,11 +14,11 @@ import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from './pane-key-match'
 
 export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
   id, run_id, task_id, contract_version, launch_token_hash,
-  assignee_handle, assignee_pane_key, process_incarnation,
+  assignee_handle, assignee_agent_session_id, assignee_pane_key, process_incarnation,
   creator_dispatch_id, creator_handle, creator_pane_key,
   status, failure_count, depth, dispatched_at
 )
-SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
+SELECT ?, run_id, id, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now')
 FROM tasks
 WHERE id = ? AND status = 'ready'
   AND NOT EXISTS (
@@ -69,6 +69,7 @@ export function claimDispatchContextRow(
     contractVersion: number
     launchTokenHash: string | null
     assigneeHandle: string
+    assigneeAgentSessionId?: string | null
     assigneePaneKey: string | null
     processIncarnation: string | null
     creatorDispatchId?: string | null
@@ -88,6 +89,7 @@ export function claimDispatchContextRow(
       params.contractVersion,
       params.launchTokenHash,
       params.assigneeHandle,
+      params.assigneeAgentSessionId ?? null,
       params.assigneePaneKey,
       params.processIncarnation,
       params.creatorDispatchId ?? null,

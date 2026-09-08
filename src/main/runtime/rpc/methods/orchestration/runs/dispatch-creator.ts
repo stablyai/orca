@@ -1,3 +1,4 @@
+import { structuredWorkerIdentities } from '../../../../structured-worker-identity'
 import type { DispatchCreator } from '../../../../orchestration/db/dispatch-depth'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
@@ -24,4 +25,14 @@ export function resolveDispatchCreator(
     paneKey: authority?.paneKey ?? runtime.getTerminalPaneKey(callerHandle) ?? undefined,
     processIncarnation: authority?.processIncarnation ?? undefined
   }
+}
+
+export function resolveWorkerStartCallerHandle(params: {
+  agentSessionId?: string
+  from?: string
+}): string {
+  const identity = params.agentSessionId
+    ? structuredWorkerIdentities.getBySessionId(params.agentSessionId)
+    : undefined
+  return identity?.handle ?? params.from ?? ''
 }

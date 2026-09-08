@@ -15,6 +15,7 @@ export function createDispatchContext(
   params: {
     taskId: string
     assigneeHandle: string
+    assigneeAgentSessionId?: string | null
     // Why: pane key is the remint-stable identity behind the handle — lets worker_done ownership survive handle reissue.
     assigneePaneKey?: string
     launchTokenHash?: string
@@ -64,6 +65,7 @@ export function createDispatchContext(
       contractVersion: CURRENT_CONTRACT_VERSION,
       launchTokenHash: launchTokenHash ?? null,
       assigneeHandle,
+      assigneeAgentSessionId: params.assigneeAgentSessionId,
       assigneePaneKey: assigneePaneKey ?? null,
       processIncarnation: processIncarnation ?? null,
       creatorDispatchId,

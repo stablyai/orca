@@ -95,6 +95,7 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       spawnToken: string
       providerRoot: string
       sessionId: string
+      runtimeFence: number
       launchArgs?: AgentSessionLaunchArgs
     }
   ): Promise<RuntimeEnsureAgentSessionResult> {
@@ -150,6 +151,10 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
       }),
       agentEnv: {
         ...resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+        ...(handoffAuthority ? {
+          ORCA_AGENT_SESSION_ID: handoffAuthority.sessionId,
+          ORCA_AGENT_SESSION_RUNTIME_FENCE: String(handoffAuthority.runtimeFence)
+        } : {}),
         ...(handoffAuthority && request.agent === 'codex'
           ? { CODEX_HOME: handoffAuthority.providerRoot }
           : handoffAuthority && request.agent === 'claude'

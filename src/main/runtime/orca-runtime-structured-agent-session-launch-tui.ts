@@ -32,6 +32,7 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
           spawnToken,
           providerRoot: record.accountHome.path,
           sessionId: record.sessionId,
+          runtimeFence: fence,
           ...(record.launchArgs !== undefined ? { launchArgs: record.launchArgs } : {})
         }
       )

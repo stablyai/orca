@@ -104,6 +104,8 @@ export const SendParams = z
     to: OptionalString,
     subject: requiredString('Missing --subject'),
     from: OptionalString,
+    agentSessionId: OptionalString,
+    runtimeFence: OptionalFiniteNumber,
     body: OptionalString,
     type: z
       .enum(MESSAGE_TYPES, {
@@ -133,6 +135,8 @@ export const SendParams = z
 
 export const CheckParams = z
   .object({
+    agentSessionId: OptionalString,
+    runtimeFence: OptionalFiniteNumber,
     terminal: OptionalString,
     terminalPaneKey: OptionalString,
     unread: OptionalBoolean,
@@ -170,6 +174,8 @@ export const ReplyParams = z.object({
   id: requiredString('Missing --id'),
   body: requiredString('Missing --body'),
   from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: OptionalFiniteNumber,
   run: OptionalString
 })
 
@@ -186,6 +192,8 @@ export const TaskCreateParams = z.object({
   deps: OptionalString,
   parent: OptionalString,
   callerTerminalHandle: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: OptionalFiniteNumber,
   run: OptionalString
 })
 
@@ -195,7 +203,9 @@ export const TaskListParams = z.object({
   // Why: server-side truncation keeps --brief cheap over SSH/relay instead of shipping full specs the CLI throws away.
   brief: OptionalBoolean,
   run: OptionalString,
-  callerTerminalHandle: OptionalString
+  callerTerminalHandle: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: OptionalFiniteNumber
 })
 
 export const TaskUpdateParams = z.object({
@@ -215,7 +225,9 @@ export const TaskUpdateParams = z.object({
     ),
   result: OptionalString,
   run: OptionalString,
-  callerTerminalHandle: OptionalString
+  callerTerminalHandle: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: OptionalFiniteNumber
 })
 
 export const DispatchParams = z.object({
@@ -223,6 +235,8 @@ export const DispatchParams = z.object({
   // Why: --to is optional so --dry-run can preview without a target; the handler enforces presence before any side-effecting work.
   to: OptionalString,
   from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: OptionalFiniteNumber,
   inject: OptionalBoolean,
   dryRun: OptionalBoolean,
   returnPreamble: OptionalBoolean,
@@ -234,6 +248,8 @@ export const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,
   from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: OptionalFiniteNumber,
   devMode: OptionalBoolean
 })
 
@@ -245,6 +261,8 @@ export const AskParams = z
     options: OptionalString,
     timeoutMs: OptionalFiniteNumber,
     from: OptionalString,
+    agentSessionId: OptionalString,
+    runtimeFence: OptionalFiniteNumber,
     run: OptionalString,
     compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
     compatibilityWindowsCommand: z.enum(['orca', 'orca-ide']).optional()

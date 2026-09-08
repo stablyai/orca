@@ -143,6 +143,7 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   contract_version    INTEGER NOT NULL DEFAULT ${CURRENT_CONTRACT_VERSION},
   launch_token_hash   TEXT,
   assignee_handle     TEXT,
+  assignee_agent_session_id TEXT,
   assignee_pane_key   TEXT,
   capability_hash     TEXT,
   process_incarnation TEXT,
@@ -205,6 +206,7 @@ CREATE TABLE IF NOT EXISTS coordinator_runs (
   status              TEXT NOT NULL DEFAULT 'idle'
     CHECK(status IN ('idle', 'running', 'completed', 'failed')),
   coordinator_handle  TEXT NOT NULL,
+  coordinator_agent_session_id TEXT,
   poll_interval_ms    INTEGER NOT NULL DEFAULT 2000,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
   completed_at        TEXT,

@@ -5,7 +5,8 @@ import { structuredWorkerChildIdentityEnv } from '../runtime/structured-worker-c
 export function buildCodexStructuredChildEnvironment(
   launch: CodexStructuredLaunch,
   spawnToken: string,
-  sessionId: string
+  sessionId: string,
+  runtimeFence?: number
 ): Record<string, string> {
   return {
     // Only a dispatched structured worker gets the orchestration identity and the Orca CLI on
@@ -13,7 +14,7 @@ export function buildCodexStructuredChildEnvironment(
     ...structuredWorkerChildIdentityEnv(sessionId, {
       ...launch.env,
       ...(launch.codexHome ? { CODEX_HOME: launch.codexHome } : {})
-    }),
+    }, runtimeFence),
     [CODEX_SPAWN_TOKEN_ENV]: spawnToken
   }
 }

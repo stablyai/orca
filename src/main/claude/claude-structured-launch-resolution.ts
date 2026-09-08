@@ -240,17 +240,21 @@ export function createClaudeStructuredLaunchResolver(
       command,
       // Only a dispatched structured worker gets the orchestration identity and the Orca CLI on
       // PATH; an ordinary chat session's env passes through untouched.
-      structuredWorkerChildIdentityEnv(record.sessionId, {
-        ...applyClaudeEnvPatch(
-          cloneDefinedEnv(process.env),
-          {},
-          {
-            stripAuthEnv: auth.stripAuthEnv,
-            platform: process.platform
-          }
-        ),
-        ...(overlay ? cloneDefinedEnv(overlay) : {})
-      }),
+      structuredWorkerChildIdentityEnv(
+        record.sessionId,
+        {
+          ...applyClaudeEnvPatch(
+            cloneDefinedEnv(process.env),
+            {},
+            {
+              stripAuthEnv: auth.stripAuthEnv,
+              platform: process.platform
+            }
+          ),
+          ...(overlay ? cloneDefinedEnv(overlay) : {})
+        },
+        record.lease.runtimeFence
+      ),
       { platform: process.platform }
     )
     return {

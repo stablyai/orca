@@ -65,6 +65,18 @@ export function getRunMailboxOwnerIdsForHandle(
   return [...new Set(runIds)].sort()
 }
 
+/** Resolves mailbox ownership by durable agent session identity. */
+export function getRunMailboxOwnerIdsForAgentSession(
+  this: OrchestrationDb,
+  agentSessionId: string
+): string[] {
+  return (
+    this.db
+      .prepare('SELECT id FROM runs WHERE legacy = 0 AND coordinator_agent_session_id = ?')
+      .all(agentSessionId) as { id: string }[]
+  ).map((row) => row.id)
+}
+
 export function listRuns(
   this: OrchestrationDb,
   params: { limit?: number; cursor?: string } = {}
@@ -104,6 +116,19 @@ export function listRuns(
 
 export function getCurrentRunForPane(this: OrchestrationDb, paneKey: string): RunRow | undefined {
   const run = this.runsBoundToPane(paneKey)[0]
+  return run ? exposeRunTimestamps(run) : undefined
+}
+
+export function getCurrentRunForAgentSession(
+  this: OrchestrationDb,
+  agentSessionId: string
+): RunRow | undefined {
+  const run = this.db
+    .prepare(
+      `SELECT * FROM runs WHERE legacy = 0 AND coordinator_agent_session_id = ?
+       ORDER BY updated_at DESC, id DESC LIMIT 1`
+    )
+    .get(agentSessionId) as RunRow | undefined
   return run ? exposeRunTimestamps(run) : undefined
 }
 
@@ -160,8 +185,10 @@ export type RunLookupMethods = {
   getRun: typeof getRun
   getLegacyAdoptedRunMailboxOwner: typeof getLegacyAdoptedRunMailboxOwner
   getRunMailboxOwnerIdsForHandle: typeof getRunMailboxOwnerIdsForHandle
+  getRunMailboxOwnerIdsForAgentSession: typeof getRunMailboxOwnerIdsForAgentSession
   listRuns: typeof listRuns
   getCurrentRunForPane: typeof getCurrentRunForPane
+  getCurrentRunForAgentSession: typeof getCurrentRunForAgentSession
   runsBoundToPane: typeof runsBoundToPane
   getRunRaw: typeof getRunRaw
   unbindOtherRunsForPane: typeof unbindOtherRunsForPane
@@ -174,8 +201,10 @@ export function attachRunLookup(ctor: { prototype: object }): void {
     getRun,
     getLegacyAdoptedRunMailboxOwner,
     getRunMailboxOwnerIdsForHandle,
+    getRunMailboxOwnerIdsForAgentSession,
     listRuns,
     getCurrentRunForPane,
+    getCurrentRunForAgentSession,
     runsBoundToPane,
     getRunRaw,
     unbindOtherRunsForPane,

@@ -16,13 +16,19 @@ import {
   resolveCompatibilityCliCommand,
   resolvePackagedWindowsCompatibilityCommand
 } from './runtime-compatibility'
-import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import {
+  orchestrationSessionPayload,
+  resolveOrchestrationTerminalHandle
+} from './terminal-identity'
 
 export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
   'orchestration ask': async ({ flags, client, cwd, json }) => {
     const parsedTimeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const timeoutMs = clampOrchestrationAskTimeoutMs(parsedTimeoutMs)
-    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const session = flags.has('from') ? {} : orchestrationSessionPayload()
+    const from = session.agentSessionId
+      ? undefined
+      : await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const question = getOptionalStringFlag(flags, 'question')
     const resume = getOptionalStringFlag(flags, 'resume')
     if ((question ? 1 : 0) + (resume ? 1 : 0) !== 1) {
@@ -58,6 +64,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         resume,
         options: getOptionalStringFlag(flags, 'options'),
         timeoutMs: parsedTimeoutMs === undefined ? undefined : timeoutMs,
+        ...session,
         from,
         compatibilityCliCommand: resolveCompatibilityCliCommand(),
         compatibilityWindowsCommand: resolvePackagedWindowsCompatibilityCommand()
@@ -86,6 +93,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
     if (answerAck && result.result.answer !== null) {
       await flushOrchestrationStdout()
       await client.call('orchestration.check', {
+        ...session,
         terminal: from,
         compatibilityQuestionAck: JSON.stringify(answerAck)
       })
@@ -103,8 +111,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
                 resolveOrchestrationCliExecutable(),
                 'orchestration',
                 'ask',
-                '--from',
-                from,
+                ...(from ? ['--from', from] : []),
                 ...(dispatchCapability ? ['--dispatch-capability', dispatchCapability] : []),
                 '--resume',
                 messageId,

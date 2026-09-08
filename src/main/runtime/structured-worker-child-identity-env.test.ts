@@ -76,6 +76,32 @@ describe('structuredWorkerChildIdentityEnv', () => {
     expect(shim.ensureLinuxTerminalOrcaCliShimDir).not.toHaveBeenCalled()
   })
 
+  it('replaces inherited orchestration credentials with the current native lease', () => {
+    const env = structuredWorkerChildIdentityEnv(SESSION_ID, {
+      ORCA_AGENT_SESSION_ID: 'parent-session',
+      ORCA_AGENT_SESSION_RUNTIME_FENCE: '999',
+      ORCA_TERMINAL_HANDLE: 'parent-handle',
+      ORCA_PANE_KEY: 'parent-pane',
+      ORCA_STRUCTURED_SESSION: '1'
+    }, 3)
+    expect(env.ORCA_AGENT_SESSION_ID).toBe(SESSION_ID)
+    expect(env.ORCA_AGENT_SESSION_RUNTIME_FENCE).toBe('3')
+    expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
+    expect(env.ORCA_PANE_KEY).toBeUndefined()
+    expect(env.ORCA_STRUCTURED_SESSION).toBeUndefined()
+    expect(env.ORCA_CLI_COMMAND).toBe('orca')
+  })
+
+  it('does not inherit parent session credentials without a host lease', () => {
+    const env = structuredWorkerChildIdentityEnv(SESSION_ID, {
+      ORCA_AGENT_SESSION_ID: 'parent-session',
+      ORCA_AGENT_SESSION_RUNTIME_FENCE: '999'
+    })
+    expect(env.ORCA_AGENT_SESSION_ID).toBeUndefined()
+    expect(env.ORCA_AGENT_SESSION_RUNTIME_FENCE).toBeUndefined()
+    expect(env.ORCA_STRUCTURED_SESSION).toBe('1')
+  })
+
   it('gives a packaged-Linux worker the bare-orca shim its ORCA_CLI_COMMAND assumes', () => {
     // Without this the child's first `orca orchestration check` execs GNOME Orca — the CLI
     // installs as `orca-ide` on Linux (stablyai/orca#7904) — and the dispatch hangs to timeout.

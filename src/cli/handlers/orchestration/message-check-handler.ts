@@ -13,7 +13,7 @@ import { startCheckKeepalive } from './check-keepalive'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { flushOrchestrationStdout, resolveCompatibilityCliCommand } from './runtime-compatibility'
-import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import { orchestrationSessionPayload, resolveOrchestrationTerminalHandle } from './terminal-identity'
 
 type CheckResult = {
   messages: MessageSummary[]
@@ -40,13 +40,18 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
-    const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+    const session = explicitTerminal ? {} : orchestrationSessionPayload()
+    const terminal = session.agentSessionId
+      ? undefined
+      : await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+    const checkedIdentity = terminal ?? session.agentSessionId!
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>
     try {
       result = await callOrchestrationMutation<CheckResult>(client, flags, 'orchestration.check', {
+        ...session,
         terminal,
-        terminalPaneKey: explicitTerminal ? undefined : process.env.ORCA_PANE_KEY || undefined,
+        terminalPaneKey: explicitTerminal || session.agentSessionId ? undefined : process.env.ORCA_PANE_KEY || undefined,
         // Why: old runtimes degrade peek to non-consuming all mode instead of destructive mark-read.
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
@@ -68,13 +73,14 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
     }
     result = {
       ...result,
-      result: prepareOrchestrationCheckOutput(result.result, terminal, flags.has('format'))
+      result: prepareOrchestrationCheckOutput(result.result, checkedIdentity, flags.has('format'))
     }
-    printResult(result, json, (value) => formatOrchestrationCheckText(value, terminal))
+    printResult(result, json, (value) => formatOrchestrationCheckText(value, checkedIdentity))
     const compatibilityAck = result.result.legacyCompatibility?.ackMessageIds
     if (compatibilityAck && compatibilityAck.length > 0) {
       await flushOrchestrationStdout()
       await client.call('orchestration.check', {
+        ...session,
         terminal,
         compatibilityAck: JSON.stringify({
           messageIds: compatibilityAck,

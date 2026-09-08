@@ -6,7 +6,7 @@ import {
   decideWorkerStartMode,
   readWorkerStartModeSettings
 } from '../../orchestration-worker-start-mode'
-import { resolveOrchestrationCaller } from '../runs/run-scope'
+import { resolveOrchestrationCaller, resolveRunScope } from '../runs/run-scope'
 import { WorkerStartParams } from './worker-start-schema'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
@@ -30,11 +30,23 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence
-      })
-      const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
+      const native = Boolean(params.agentSessionId)
+      const coordinatorPane = native
+        ? null
+        : resolveOrchestrationCaller(runtime, {
+            callerTerminalHandle: params.from!,
+            callerEvidence: orchestrationCompatibilityEvidence
+          })
+      const run = native
+        ? resolveRunScope(runtime, {
+            runId: params.run,
+            callerAgentSessionId: params.agentSessionId,
+            callerRuntimeFence: params.runtimeFence,
+            requireCurrentConsumer: true
+          })
+        : coordinatorPane
+          ? db.getCurrentRunForPane(coordinatorPane)
+          : undefined
       if (!run || (params.run && params.run !== run.id)) {
         throw new OrchestrationError(
           'consumer_fenced',

@@ -8,8 +8,9 @@ export function bindRun(
   this: OrchestrationDb,
   params: {
     runId: string
-    coordinatorHandle: string
-    coordinatorPaneKey: string
+    coordinatorHandle?: string | null
+    coordinatorPaneKey?: string | null
+    coordinatorAgentSessionId?: string | null
     takeoverLegacy?: boolean
     legacyCoordinatorAuthority?: {
       runId: string
@@ -26,6 +27,28 @@ export function bindRun(
     if (!run || run.legacy === 1) {
       this.db.exec('ROLLBACK')
       return undefined
+    }
+    if (
+      params.coordinatorAgentSessionId &&
+      !params.coordinatorHandle &&
+      !params.coordinatorPaneKey
+    ) {
+      this.db
+        .prepare(
+          `UPDATE runs SET coordinator_agent_session_id = ?, consumer_generation = consumer_generation + 1,
+             updated_at = datetime('now') WHERE id = ?`
+        )
+        .run(params.coordinatorAgentSessionId, params.runId)
+      this.fenceOutstandingDelivery(params.runId)
+      this.db.exec('COMMIT')
+      return this.getRun(params.runId)
+    }
+    if (!params.coordinatorHandle || !params.coordinatorPaneKey) {
+      this.db.exec('ROLLBACK')
+      throw new OrchestrationError(
+        'stable_pane_required',
+        'A terminal binding requires handle and pane.'
+      )
     }
     const sameBinding =
       run.coordinator_pane_key !== null &&

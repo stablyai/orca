@@ -3,21 +3,33 @@ import { defineMethod, type RpcMethod } from '../../../core'
 import { OptionalBoolean, OptionalString, requiredString } from '../../../schemas'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../../../shared/orchestration-run-pagination'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
+import {
+  assertCallerHandleMatchesEvidence,
+  resolveNativeCoordinatorSession,
+  resolveOrchestrationCaller
+} from './run-scope'
 import { exposeRun } from './run-receipt'
 
 const RunCreateParams = z.object({
   objective: requiredString('Missing --objective'),
-  from: requiredString('Missing coordinator terminal')
+  from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: z.number().int().positive().optional()
 })
 
 const RunUseParams = z.object({
   id: requiredString('Missing --id'),
-  from: requiredString('Missing coordinator terminal'),
+  from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: z.number().int().positive().optional(),
   takeoverLegacy: OptionalBoolean
 })
 
-const RunCurrentParams = z.object({ from: requiredString('Missing coordinator terminal') })
+const RunCurrentParams = z.object({
+  from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: z.number().int().positive().optional()
+})
 const RunListParams = z.object({
   limit: z.number().int().min(1).max(ORCHESTRATION_RUN_PAGE_LIMIT).optional(),
   cursor: z.string().min(1).optional()
@@ -29,8 +41,24 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
     name: 'orchestration.runCreate',
     params: RunCreateParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
+      if (params.agentSessionId) {
+        if (params.runtimeFence === undefined) {
+          throw new OrchestrationError('consumer_fenced', 'Missing native session lease fence.')
+        }
+        resolveNativeCoordinatorSession(runtime, params.agentSessionId, params.runtimeFence)
+        const db = runtime.getOrchestrationDb()
+        const run = db.createRun({
+          objective: params.objective,
+          coordinatorAgentSessionId: params.agentSessionId
+        })
+        return { run: exposeRun(run) }
+      }
+      const coordinatorHandle = params.from
+      if (!coordinatorHandle) {
+        throw new OrchestrationError('stable_pane_required', 'Missing coordinator identity.')
+      }
       const paneKey = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
+        callerTerminalHandle: coordinatorHandle,
         callerEvidence: orchestrationCompatibilityEvidence,
         requireStablePane: true
       })
@@ -38,10 +66,10 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
       const priorRun = db.getCurrentRunForPane(paneKey)
       const run = db.createRun({
         objective: params.objective,
-        coordinatorHandle: params.from,
+        coordinatorHandle,
         coordinatorPaneKey: paneKey
       })
-      runtime.cancelMessageWaiters(params.from)
+      runtime.cancelMessageWaiters(coordinatorHandle)
       if (priorRun) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
       }
@@ -60,8 +88,27 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
         orchestrationCompatibilityCallerAuthority: callerAuthority
       }
     ) => {
+      if (params.agentSessionId) {
+        if (params.runtimeFence === undefined) {
+          throw new OrchestrationError('consumer_fenced', 'Missing native session lease fence.')
+        }
+        resolveNativeCoordinatorSession(runtime, params.agentSessionId, params.runtimeFence)
+        const run = runtime.getOrchestrationDb().bindRun({
+          runId: params.id,
+          coordinatorAgentSessionId: params.agentSessionId
+        })
+        if (!run) {
+          throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
+        }
+        return { run: exposeRun(run) }
+      }
+      if (!params.from) {
+        throw new OrchestrationError('stable_pane_required', 'Missing coordinator identity.')
+      }
       const paneKey = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
+        callerAgentSessionId: params.agentSessionId,
+        callerRuntimeFence: params.runtimeFence,
         callerEvidence: orchestrationCompatibilityEvidence,
         callerAuthority,
         requireStablePane: true,
@@ -105,8 +152,21 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
     name: 'orchestration.runCurrent',
     params: RunCurrentParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
+      if (params.agentSessionId) {
+        if (params.runtimeFence === undefined) {
+          throw new OrchestrationError('consumer_fenced', 'Missing native session lease fence.')
+        }
+        resolveNativeCoordinatorSession(runtime, params.agentSessionId, params.runtimeFence)
+        const run = runtime.getOrchestrationDb().getCurrentRunForAgentSession(params.agentSessionId)
+        return { run: run ? exposeRun(run) : null }
+      }
+      if (!params.from) {
+        throw new OrchestrationError('stable_pane_required', 'Missing coordinator identity.')
+      }
       const paneKey = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
+        callerAgentSessionId: params.agentSessionId,
+        callerRuntimeFence: params.runtimeFence,
         callerEvidence: orchestrationCompatibilityEvidence,
         requireStablePane: true
       })

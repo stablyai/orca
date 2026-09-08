@@ -14,6 +14,8 @@ let activeCoordinator: Coordinator | null = null
 const RunParams = z.object({
   spec: requiredString('Missing --spec'),
   from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: z.number().int().positive().optional(),
   pollIntervalMs: OptionalFiniteNumber,
   maxConcurrent: OptionalFiniteNumber,
   worktree: OptionalString
@@ -26,6 +28,8 @@ const GateCreateParams = z.object({
   question: requiredString('Missing --question'),
   options: OptionalString,
   from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: z.number().int().positive().optional(),
   run: OptionalString
 })
 
@@ -33,6 +37,8 @@ const GateResolveParams = z.object({
   id: requiredString('Missing --id'),
   resolution: requiredString('Missing --resolution'),
   from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: z.number().int().positive().optional(),
   run: OptionalString
 })
 
@@ -40,6 +46,8 @@ const GateListParams = z.object({
   task: OptionalString,
   status: z.enum(['pending', 'resolved', 'timeout']).optional(),
   from: OptionalString,
+  agentSessionId: OptionalString,
+  runtimeFence: z.number().int().positive().optional(),
   run: OptionalString
 })
 
@@ -132,6 +140,8 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.from,
+        callerAgentSessionId: params.agentSessionId,
+        callerRuntimeFence: params.runtimeFence,
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence
@@ -163,6 +173,8 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.from,
+        callerAgentSessionId: params.agentSessionId,
+        callerRuntimeFence: params.runtimeFence,
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence
@@ -192,6 +204,8 @@ export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
           : resolveRunScope(runtime, {
               runId: params.run,
               callerTerminalHandle: params.from,
+              callerAgentSessionId: params.agentSessionId,
+              callerRuntimeFence: params.runtimeFence,
               requireCurrentConsumer: params.run === undefined,
               legacyCoordinatorRunId,
               callerEvidence: orchestrationCompatibilityEvidence
