@@ -15,6 +15,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsageWindows } from '../../../../shared/status-bar-usage-windows'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
 import {
   normalizeTuiAgentArgsRecord,
@@ -54,6 +55,9 @@ export function mergeWebUIState(
     ),
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
+    ),
+    statusBarUsageWindows: normalizeStatusBarUsageWindows(
+      safeUpdates.statusBarUsageWindows ?? base.statusBarUsageWindows
     )
   }
 }
@@ -65,6 +69,7 @@ export function mergeHostWebUIState(
   // Why `satisfies Record<...>` rather than a `Pick<...>` annotation: every member is optional in
   // PersistedUIState, so Pick would accept a literal that silently skipped a newly added member.
   const pinned = {
+    statusBarUsageWindows: normalizeStatusBarUsageWindows(local.statusBarUsageWindows),
     automationHostFilter: local.automationHostFilter,
     hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
     manualRepoOrder: local.manualRepoOrder,

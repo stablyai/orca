@@ -17761,5 +17761,13 @@
     "title": "Orca keeps failing to load",
     "stalledMessage": "The app window stopped responding while reloading after a crash.",
     "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
+  },
+  "statusBar": {
+    "usageWindows": {
+      "label": "Footer windows",
+      "session": "5-hour",
+      "weekly": "Weekly",
+      "both": "Both"
+    }
   }
 }

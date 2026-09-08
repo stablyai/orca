@@ -257,6 +257,37 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().statusBarUsageMode).toBe('verbose')
   })
 
+  it.each(['session', 'weekly', 'both'] as const)(
+    'persists and restores %s footer windows',
+    (windows) => {
+      const setUI = vi.fn().mockResolvedValue(undefined)
+      vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+      const store = createUIStore()
+      expect(store.getState().statusBarUsageWindows).toBe('both')
+
+      store.getState().setStatusBarUsageWindows(windows)
+      expect(store.getState().statusBarUsageWindows).toBe(windows)
+      expect(setUI).toHaveBeenCalledWith({ statusBarUsageWindows: windows })
+
+      const restored = createUIStore()
+      restored.getState().hydratePersistedUI(makePersistedUI(setUI.mock.calls[0][0]))
+      expect(restored.getState().statusBarUsageWindows).toBe(windows)
+    }
+  )
+
+  it.each([undefined, null, 'unknown'])(
+    'defaults legacy or invalid footer windows (%s) to both',
+    (value) => {
+      const store = createUIStore()
+      store.getState().hydratePersistedUI(
+        makePersistedUI({
+          statusBarUsageWindows: value as PersistedUIState['statusBarUsageWindows']
+        })
+      )
+      expect(store.getState().statusBarUsageWindows).toBe('both')
+    }
+  )
+
   it('clamps persisted workspace board column width', () => {
     const store = createUIStore()
 

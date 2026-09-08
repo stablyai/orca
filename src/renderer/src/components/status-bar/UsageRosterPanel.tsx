@@ -16,6 +16,8 @@ import { getProviderDisplayName } from './usage-error-copy'
 import { formatPlanLabel, usageTextColorClass } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import type { StatusBarUsageWindows } from '../../../../shared/status-bar-usage-windows'
+import { StatusBarUsageWindowsControl } from './StatusBarUsageWindowsControl'
 
 type ProviderId = ProviderRateLimits['provider']
 export type UsageSection = { label: string; window: RateLimitWindow }
@@ -192,6 +194,8 @@ export function UsageRosterPanel({
   display,
   statusBarUsageMode,
   onStatusBarUsageModeChange,
+  statusBarUsageWindows,
+  onStatusBarUsageWindowsChange,
   isRefreshing,
   onRefresh,
   onOpenProvider,
@@ -205,6 +209,8 @@ export function UsageRosterPanel({
   display: UsagePercentageDisplay
   statusBarUsageMode: StatusBarUsageMode
   onStatusBarUsageModeChange: (mode: StatusBarUsageMode) => void
+  statusBarUsageWindows: StatusBarUsageWindows
+  onStatusBarUsageWindowsChange: (windows: StatusBarUsageWindows) => void
   isRefreshing: boolean
   onRefresh: () => void
   onOpenProvider: (provider: ProviderId) => void
@@ -285,6 +291,10 @@ export function UsageRosterPanel({
           ]}
         />
       </div>
+      <StatusBarUsageWindowsControl
+        value={statusBarUsageWindows}
+        onChange={onStatusBarUsageWindowsChange}
+      />
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
         const state = getUsageRosterRowState(p, usedSections(p).length > 0)

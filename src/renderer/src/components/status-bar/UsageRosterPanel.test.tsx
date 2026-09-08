@@ -115,6 +115,8 @@ describe('UsageRow', () => {
           display="used"
           statusBarUsageMode="verbose"
           onStatusBarUsageModeChange={() => {}}
+          statusBarUsageWindows="both"
+          onStatusBarUsageWindowsChange={() => {}}
           isRefreshing={false}
           onRefresh={() => {}}
           onOpenProvider={() => {}}
@@ -269,7 +271,9 @@ describe('UsageRosterPanel density picker', () => {
 
   function renderPanel(
     statusBarUsageMode: 'verbose' | 'compact',
-    onStatusBarUsageModeChange: (mode: 'verbose' | 'compact') => void
+    onStatusBarUsageModeChange: (mode: 'verbose' | 'compact') => void,
+    onStatusBarUsageWindowsChange = vi.fn(),
+    statusBarUsageWindows: 'session' | 'weekly' | 'both' = 'both'
   ): void {
     act(() => {
       root.render(
@@ -279,6 +283,8 @@ describe('UsageRosterPanel density picker', () => {
             display="used"
             statusBarUsageMode={statusBarUsageMode}
             onStatusBarUsageModeChange={onStatusBarUsageModeChange}
+            statusBarUsageWindows={statusBarUsageWindows}
+            onStatusBarUsageWindowsChange={onStatusBarUsageWindowsChange}
             isRefreshing={false}
             onRefresh={() => {}}
             onOpenProvider={() => {}}
@@ -324,5 +330,23 @@ describe('UsageRosterPanel density picker', () => {
       segmentButton('Compact').click()
     })
     expect(onStatusBarUsageModeChange).toHaveBeenLastCalledWith('compact')
+  })
+
+  it('switches footer windows independently of detail mode', () => {
+    const onModeChange = vi.fn()
+    const onWindowsChange = vi.fn()
+    renderPanel('compact', onModeChange, onWindowsChange, 'weekly')
+
+    expect(segmentButton('Weekly').getAttribute('aria-checked')).toBe('true')
+    expect(segmentButton('Both').getAttribute('aria-checked')).toBe('false')
+    for (const [label, value] of [
+      ['5-hour', 'session'],
+      ['Weekly', 'weekly'],
+      ['Both', 'both']
+    ]) {
+      act(() => segmentButton(label).click())
+      expect(onWindowsChange).toHaveBeenLastCalledWith(value)
+    }
+    expect(onModeChange).not.toHaveBeenCalled()
   })
 })
