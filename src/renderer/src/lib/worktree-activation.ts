@@ -48,6 +48,7 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
+/** A caller-provided editor or browser surface suppresses terminal reseeding unless startup is explicit. */
 function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
   startup?: WorktreeStartupPayload,
@@ -70,6 +71,7 @@ function ensureFolderWorkspaceInitialTerminal(
   return primaryTabId
 }
 
+/** Gate inventory-based activation on both host RPC and PTY inventory support. */
 function canInspectAgentActivationInventory(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -78,6 +80,7 @@ function canInspectAgentActivationInventory(): boolean {
   )
 }
 
+/** Resolve folder host ownership before applying the same activation policy as git worktrees. */
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: {

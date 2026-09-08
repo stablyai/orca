@@ -40,10 +40,12 @@ const WEB_SESSION_TABS_FRAME_UNMIRRORED = {
   settlesHostMirror: false
 } as const satisfies WebSessionTabsSnapshotDecision
 
+/** Floating terminals are client-owned and must not be replaced by same-id host snapshots. */
 function isHostMirroredWorktree(worktreeId: string): boolean {
   return worktreeId !== FLOATING_TERMINAL_WORKTREE_ID
 }
 
+/** Also records publication and inventory evidence; this compatibility predicate is not a pure read. */
 export function shouldApplyWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
@@ -52,6 +54,7 @@ export function shouldApplyWebSessionTabsSnapshot(
   return decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId).apply
 }
 
+/** Fence stale publishers while retaining host-settlement evidence from valid outranked snapshots. */
 export function decideWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
@@ -128,6 +131,7 @@ export function decideWebSessionTabsSnapshot(
   return WEB_SESSION_TABS_FRAME_APPLIED
 }
 
+/** Subscribe only after session hydration identifies the selected workspace and its execution host. */
 export function shouldSyncRuntimeSessionTabs(args: {
   activeWorktreeId?: string | null
   activeWorktreeRuntimeEnvironmentId?: string | null
@@ -140,6 +144,7 @@ export function shouldSyncRuntimeSessionTabs(args: {
   return Boolean(args.activeWorktreeId?.trim())
 }
 
+/** Keep host-wide inventory synchronized even when no workspace is selected. */
 export function shouldSyncAllRuntimeSessionTabs(args: {
   activeRuntimeEnvironmentId: string | null | undefined
   workspaceSessionReady: boolean
