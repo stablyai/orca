@@ -52,6 +52,42 @@ func (s DevServerStatus) Valid() bool {
 	}
 }
 
+// DevServerHealthStatus is the coarse connectivity/health state of a
+// DevServer — a DIFFERENT concept from DevServerStatus (admin approval,
+// above) and from the frontend's own client-side "connected/disconnected"
+// live relay state. Backed by infra.dev_servers.status, a column added
+// directly against production by a separate, concurrent effort (see that
+// column's own migration-slot placeholder,
+// migrations/0007_dev_server_health_status.up.sql, for the full history) —
+// this type/field is this session's first Go-side exposure of it, reusing
+// the column exactly as committed rather than adding a new one. See
+// specs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md
+// (option 2: reuse the coarse status instead of a dedicated bootstrap-step
+// field).
+type DevServerHealthStatus string
+
+const (
+	// DevServerHealthPending is the column's DB default — set when a dev
+	// server is registered and not yet confirmed healthy. bootstrap.ts
+	// treats this as "still bootstrapping" (option 2's whole point: no
+	// dedicated per-step tracking, just this coarse signal).
+	DevServerHealthPending   DevServerHealthStatus = "pending"
+	DevServerHealthHealthy   DevServerHealthStatus = "healthy"
+	DevServerHealthDegraded  DevServerHealthStatus = "degraded"
+	DevServerHealthUnhealthy DevServerHealthStatus = "unhealthy"
+)
+
+// Valid reports whether s is one of the known enum values — mirrors the
+// live table's own dev_servers_status_check constraint.
+func (s DevServerHealthStatus) Valid() bool {
+	switch s {
+	case DevServerHealthPending, DevServerHealthHealthy, DevServerHealthDegraded, DevServerHealthUnhealthy:
+		return true
+	default:
+		return false
+	}
+}
+
 // AgentKind distinguishes a Dev Server Agent registration from a Mobile
 // Emulator Agent registration — both share this same registry via
 // RegisterDevServer, see docs/crs/v2/dev-server/
@@ -108,6 +144,12 @@ type DevServer struct {
 	// usecase yet; GroupID empty means "ungrouped", a valid state.
 	Status  DevServerStatus
 	GroupID string
+	// HealthStatus — see DevServerHealthStatus's doc comment. Defaults to
+	// DevServerHealthPending in the database; NewDevServer below does not
+	// set it explicitly (zero value would be "", not a valid enum member)
+	// since every INSERT relies on the column's own DB DEFAULT instead —
+	// see Repository.RegisterDevServer.
+	HealthStatus DevServerHealthStatus
 	// Kind is CR-DS-009's Dev Server Agent vs Mobile Emulator Agent
 	// distinction — see AgentKind's doc comment. NewDevServer defaults this
 	// to AgentKindDevServer; usecase.RegisterDevServer overrides it when the

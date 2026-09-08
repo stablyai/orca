@@ -20,55 +20,63 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	InfraFleetService_RegisterDevServer_FullMethodName          = "/orca.infrafleet.v1.InfraFleetService/RegisterDevServer"
-	InfraFleetService_ResolveConnection_FullMethodName          = "/orca.infrafleet.v1.InfraFleetService/ResolveConnection"
-	InfraFleetService_CreateSshTarget_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/CreateSshTarget"
-	InfraFleetService_GetFleetHealth_FullMethodName             = "/orca.infrafleet.v1.InfraFleetService/GetFleetHealth"
-	InfraFleetService_ScanWorkspacePorts_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/ScanWorkspacePorts"
-	InfraFleetService_ListDevServers_FullMethodName             = "/orca.infrafleet.v1.InfraFleetService/ListDevServers"
-	InfraFleetService_ApproveDevServer_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/ApproveDevServer"
-	InfraFleetService_RejectDevServer_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/RejectDevServer"
-	InfraFleetService_AssignDevServerGroup_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/AssignDevServerGroup"
-	InfraFleetService_CreateDevServerGroup_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/CreateDevServerGroup"
-	InfraFleetService_ListDevServerGroups_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/ListDevServerGroups"
-	InfraFleetService_GrantDevServerGroupAccess_FullMethodName  = "/orca.infrafleet.v1.InfraFleetService/GrantDevServerGroupAccess"
-	InfraFleetService_RevokeDevServerGroupAccess_FullMethodName = "/orca.infrafleet.v1.InfraFleetService/RevokeDevServerGroupAccess"
-	InfraFleetService_ListDevServerGroupGrants_FullMethodName   = "/orca.infrafleet.v1.InfraFleetService/ListDevServerGroupGrants"
-	InfraFleetService_ListDevServersForUser_FullMethodName      = "/orca.infrafleet.v1.InfraFleetService/ListDevServersForUser"
-	InfraFleetService_CreateAccessRequest_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/CreateAccessRequest"
-	InfraFleetService_ListPendingAccessRequests_FullMethodName  = "/orca.infrafleet.v1.InfraFleetService/ListPendingAccessRequests"
-	InfraFleetService_ResolveAccessRequest_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/ResolveAccessRequest"
-	InfraFleetService_CreateConnection_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/CreateConnection"
-	InfraFleetService_Relay_FullMethodName                      = "/orca.infrafleet.v1.InfraFleetService/Relay"
-	InfraFleetService_RelayByDevServer_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/RelayByDevServer"
-	InfraFleetService_IsDevServerConnected_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/IsDevServerConnected"
-	InfraFleetService_ListSshTargets_FullMethodName             = "/orca.infrafleet.v1.InfraFleetService/ListSshTargets"
-	InfraFleetService_GetSshState_FullMethodName                = "/orca.infrafleet.v1.InfraFleetService/GetSshState"
-	InfraFleetService_EstablishConnection_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/EstablishConnection"
-	InfraFleetService_KillWorkspacePort_FullMethodName          = "/orca.infrafleet.v1.InfraFleetService/KillWorkspacePort"
-	InfraFleetService_SpawnTerminalSession_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/SpawnTerminalSession"
-	InfraFleetService_ResizeTerminalSession_FullMethodName      = "/orca.infrafleet.v1.InfraFleetService/ResizeTerminalSession"
-	InfraFleetService_KillTerminalSession_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/KillTerminalSession"
-	InfraFleetService_StopTerminalProcess_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/StopTerminalProcess"
-	InfraFleetService_ListTerminalSessions_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/ListTerminalSessions"
-	InfraFleetService_WaitTerminalSession_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/WaitTerminalSession"
-	InfraFleetService_FocusTerminalSession_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/FocusTerminalSession"
-	InfraFleetService_GetTerminalAgentStatus_FullMethodName     = "/orca.infrafleet.v1.InfraFleetService/GetTerminalAgentStatus"
-	InfraFleetService_InspectTerminalProcess_FullMethodName     = "/orca.infrafleet.v1.InfraFleetService/InspectTerminalProcess"
-	InfraFleetService_AttachPty_FullMethodName                  = "/orca.infrafleet.v1.InfraFleetService/AttachPty"
-	InfraFleetService_AttachScreencast_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/AttachScreencast"
-	InfraFleetService_ListBrowserProfiles_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/ListBrowserProfiles"
-	InfraFleetService_CreateBrowserProfile_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/CreateBrowserProfile"
-	InfraFleetService_DeleteBrowserProfile_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/DeleteBrowserProfile"
-	InfraFleetService_ListEmulatorDevices_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/ListEmulatorDevices"
-	InfraFleetService_GetEmulatorAvailability_FullMethodName    = "/orca.infrafleet.v1.InfraFleetService/GetEmulatorAvailability"
-	InfraFleetService_AttachEmulatorSession_FullMethodName      = "/orca.infrafleet.v1.InfraFleetService/AttachEmulatorSession"
-	InfraFleetService_SendEmulatorTap_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/SendEmulatorTap"
-	InfraFleetService_SendEmulatorGesture_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/SendEmulatorGesture"
-	InfraFleetService_SendEmulatorButton_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/SendEmulatorButton"
-	InfraFleetService_RotateEmulator_FullMethodName             = "/orca.infrafleet.v1.InfraFleetService/RotateEmulator"
-	InfraFleetService_ShutdownEmulator_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/ShutdownEmulator"
-	InfraFleetService_GetHostCapabilities_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/GetHostCapabilities"
+	InfraFleetService_RegisterDevServer_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/RegisterDevServer"
+	InfraFleetService_ResolveConnection_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/ResolveConnection"
+	InfraFleetService_CreateSshTarget_FullMethodName             = "/orca.infrafleet.v1.InfraFleetService/CreateSshTarget"
+	InfraFleetService_GetFleetHealth_FullMethodName              = "/orca.infrafleet.v1.InfraFleetService/GetFleetHealth"
+	InfraFleetService_ScanWorkspacePorts_FullMethodName          = "/orca.infrafleet.v1.InfraFleetService/ScanWorkspacePorts"
+	InfraFleetService_ListDevServers_FullMethodName              = "/orca.infrafleet.v1.InfraFleetService/ListDevServers"
+	InfraFleetService_ApproveDevServer_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/ApproveDevServer"
+	InfraFleetService_RejectDevServer_FullMethodName             = "/orca.infrafleet.v1.InfraFleetService/RejectDevServer"
+	InfraFleetService_AssignDevServerGroup_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/AssignDevServerGroup"
+	InfraFleetService_CreateDevServerGroup_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/CreateDevServerGroup"
+	InfraFleetService_ListDevServerGroups_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/ListDevServerGroups"
+	InfraFleetService_GrantDevServerGroupAccess_FullMethodName   = "/orca.infrafleet.v1.InfraFleetService/GrantDevServerGroupAccess"
+	InfraFleetService_RevokeDevServerGroupAccess_FullMethodName  = "/orca.infrafleet.v1.InfraFleetService/RevokeDevServerGroupAccess"
+	InfraFleetService_ListDevServerGroupGrants_FullMethodName    = "/orca.infrafleet.v1.InfraFleetService/ListDevServerGroupGrants"
+	InfraFleetService_ListDevServersForUser_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/ListDevServersForUser"
+	InfraFleetService_CreateAccessRequest_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/CreateAccessRequest"
+	InfraFleetService_ListPendingAccessRequests_FullMethodName   = "/orca.infrafleet.v1.InfraFleetService/ListPendingAccessRequests"
+	InfraFleetService_ResolveAccessRequest_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/ResolveAccessRequest"
+	InfraFleetService_CreateConnection_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/CreateConnection"
+	InfraFleetService_Relay_FullMethodName                       = "/orca.infrafleet.v1.InfraFleetService/Relay"
+	InfraFleetService_RelayByDevServer_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/RelayByDevServer"
+	InfraFleetService_IsDevServerConnected_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/IsDevServerConnected"
+	InfraFleetService_ListSshTargets_FullMethodName              = "/orca.infrafleet.v1.InfraFleetService/ListSshTargets"
+	InfraFleetService_GetSshState_FullMethodName                 = "/orca.infrafleet.v1.InfraFleetService/GetSshState"
+	InfraFleetService_GetFleetConnectivitySummary_FullMethodName = "/orca.infrafleet.v1.InfraFleetService/GetFleetConnectivitySummary"
+	InfraFleetService_EstablishConnection_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/EstablishConnection"
+	InfraFleetService_KillWorkspacePort_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/KillWorkspacePort"
+	InfraFleetService_TeardownConnection_FullMethodName          = "/orca.infrafleet.v1.InfraFleetService/TeardownConnection"
+	InfraFleetService_SpawnTerminalSession_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/SpawnTerminalSession"
+	InfraFleetService_ResizeTerminalSession_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/ResizeTerminalSession"
+	InfraFleetService_KillTerminalSession_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/KillTerminalSession"
+	InfraFleetService_StopTerminalProcess_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/StopTerminalProcess"
+	InfraFleetService_ListTerminalSessions_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/ListTerminalSessions"
+	InfraFleetService_WaitTerminalSession_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/WaitTerminalSession"
+	InfraFleetService_FocusTerminalSession_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/FocusTerminalSession"
+	InfraFleetService_GetTerminalAgentStatus_FullMethodName      = "/orca.infrafleet.v1.InfraFleetService/GetTerminalAgentStatus"
+	InfraFleetService_InspectTerminalProcess_FullMethodName      = "/orca.infrafleet.v1.InfraFleetService/InspectTerminalProcess"
+	InfraFleetService_AttachPty_FullMethodName                   = "/orca.infrafleet.v1.InfraFleetService/AttachPty"
+	InfraFleetService_AttachScreencast_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/AttachScreencast"
+	InfraFleetService_ListBrowserProfiles_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/ListBrowserProfiles"
+	InfraFleetService_CreateBrowserProfile_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/CreateBrowserProfile"
+	InfraFleetService_DeleteBrowserProfile_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/DeleteBrowserProfile"
+	InfraFleetService_ListEmulatorDevices_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/ListEmulatorDevices"
+	InfraFleetService_GetEmulatorAvailability_FullMethodName     = "/orca.infrafleet.v1.InfraFleetService/GetEmulatorAvailability"
+	InfraFleetService_AttachEmulatorSession_FullMethodName       = "/orca.infrafleet.v1.InfraFleetService/AttachEmulatorSession"
+	InfraFleetService_SendEmulatorTap_FullMethodName             = "/orca.infrafleet.v1.InfraFleetService/SendEmulatorTap"
+	InfraFleetService_SendEmulatorGesture_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/SendEmulatorGesture"
+	InfraFleetService_SendEmulatorButton_FullMethodName          = "/orca.infrafleet.v1.InfraFleetService/SendEmulatorButton"
+	InfraFleetService_RotateEmulator_FullMethodName              = "/orca.infrafleet.v1.InfraFleetService/RotateEmulator"
+	InfraFleetService_ShutdownEmulator_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/ShutdownEmulator"
+	InfraFleetService_GetHostCapabilities_FullMethodName         = "/orca.infrafleet.v1.InfraFleetService/GetHostCapabilities"
+	InfraFleetService_ListEphemeralVmRuntimes_FullMethodName     = "/orca.infrafleet.v1.InfraFleetService/ListEphemeralVmRuntimes"
+	InfraFleetService_AttachEphemeralVmWorkspace_FullMethodName  = "/orca.infrafleet.v1.InfraFleetService/AttachEphemeralVmWorkspace"
+	InfraFleetService_SuspendEphemeralVmWorkspace_FullMethodName = "/orca.infrafleet.v1.InfraFleetService/SuspendEphemeralVmWorkspace"
+	InfraFleetService_ResumeEphemeralVmWorkspace_FullMethodName  = "/orca.infrafleet.v1.InfraFleetService/ResumeEphemeralVmWorkspace"
+	InfraFleetService_CleanupEphemeralVmWorkspace_FullMethodName = "/orca.infrafleet.v1.InfraFleetService/CleanupEphemeralVmWorkspace"
+	InfraFleetService_StreamVmProvision_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/StreamVmProvision"
 )
 
 // InfraFleetServiceClient is the client API for InfraFleetService service.
@@ -131,11 +139,24 @@ type InfraFleetServiceClient interface {
 	// GetSshState is a local read (no dial) of whichever connection (if any)
 	// currently binds this SSH target's dev server.
 	GetSshState(ctx context.Context, in *GetSshStateRequest, opts ...grpc.CallOption) (*GetSshStateResponse, error)
+	// GetFleetConnectivitySummary is CR-STORAGE-007's poll-driven health
+	// summary — a plain Postgres read (no dial) over every connections row
+	// scoped to the caller's tenant, joined with dev_servers. Request is
+	// deliberately empty: tenant/user scoping comes from gRPC metadata
+	// (identity), never a request field — see BE-SOL-STORAGE-002 §5.
+	GetFleetConnectivitySummary(ctx context.Context, in *GetFleetConnectivitySummaryRequest, opts ...grpc.CallOption) (*GetFleetConnectivitySummaryResponse, error)
 	// EstablishConnection performs the actual SSH + Dev Server Agent
 	// handshake synchronously — it IS the connection-establishment act, not
 	// a record of one requested. See usecase.EstablishConnection's doc comment.
 	EstablishConnection(ctx context.Context, in *EstablishConnectionRequest, opts ...grpc.CallOption) (*Connection, error)
 	KillWorkspacePort(ctx context.Context, in *KillWorkspacePortRequest, opts ...grpc.CallOption) (*KillWorkspacePortResponse, error)
+	// TeardownConnection is the confirmed-logout explicit-close path
+	// (BE-SOL-STORAGE-003 §5, TASK-BE-STORAGE-012) — transitions
+	// established|degraded -> closed immediately, bypassing
+	// grace_period_seconds entirely, and closes every open terminal_sessions
+	// row bound to the connection. tenant_id comes from the authenticated
+	// context, matching every other tenant-scoped RPC in this service.
+	TeardownConnection(ctx context.Context, in *TeardownConnectionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// --- Terminal/PTY lifecycle (control-plane, unary) ---
 	SpawnTerminalSession(ctx context.Context, in *SpawnTerminalSessionRequest, opts ...grpc.CallOption) (*SpawnTerminalSessionResponse, error)
 	ResizeTerminalSession(ctx context.Context, in *ResizeTerminalSessionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
@@ -200,6 +221,33 @@ type InfraFleetServiceClient interface {
 	// does not exist yet (confirmed absent as of this pass) — see
 	// usecase.GetHostCapabilities's doc comment.
 	GetHostCapabilities(ctx context.Context, in *GetHostCapabilitiesRequest, opts ...grpc.CallOption) (*GetHostCapabilitiesResponse, error)
+	// ListEphemeralVmRuntimes is a plain tenant-scoped Postgres read (no
+	// relay) of every non-destroyed ephemeral_vm_runtimes row — SOL-004
+	// Group 1's second read. Written to by EphemeralVmRelay (TASK-004).
+	ListEphemeralVmRuntimes(ctx context.Context, in *ListEphemeralVmRuntimesRequest, opts ...grpc.CallOption) (*ListEphemeralVmRuntimesResponse, error)
+	// AttachEphemeralVmWorkspace is pure bookkeeping (no agent relay) — binds
+	// an already-provisioned runtime to a workspace/worktree id. See
+	// EphemeralVmRelay's doc comment for why this differs from SOL-004's own
+	// sketch (which incorrectly modeled it as a create-command exec).
+	AttachEphemeralVmWorkspace(ctx context.Context, in *AttachEphemeralVmWorkspaceRequest, opts ...grpc.CallOption) (*EphemeralVmRuntime, error)
+	// SuspendEphemeralVmWorkspace/ResumeEphemeralVmWorkspace/CleanupEphemeralVmWorkspace
+	// relay `command` (the recipe's suspend/resume/destroy shell command,
+	// resolved by api-gateway's wscompat layer via git-gateway-service's
+	// ReadEphemeralVmRecipes — see TASK-005) to the repo's Dev Server via a
+	// new agent-side `vm.exec` method that does not exist today. Every call
+	// reaches a real agent and fails with a typed, permanent
+	// INFRA_EPHEMERAL_VM_UNSUPPORTED FailedPrecondition until agent/ gains
+	// one — see EmulatorRelay's identical, already-shipped pattern.
+	SuspendEphemeralVmWorkspace(ctx context.Context, in *SuspendEphemeralVmWorkspaceRequest, opts ...grpc.CallOption) (*EphemeralVmRuntime, error)
+	ResumeEphemeralVmWorkspace(ctx context.Context, in *ResumeEphemeralVmWorkspaceRequest, opts ...grpc.CallOption) (*EphemeralVmRuntime, error)
+	CleanupEphemeralVmWorkspace(ctx context.Context, in *CleanupEphemeralVmWorkspaceRequest, opts ...grpc.CallOption) (*EphemeralVmRuntime, error)
+	// StreamVmProvision runs a recipe's provision command against the Dev
+	// Server Agent and streams its stdout/stderr back live, mirroring
+	// AttachScreencast/AttachPty's precedent (BE-SOL-EVM-002 §2) rather than a
+	// unary call — provisioning a real VM can take minutes. The terminal
+	// "result"-typed event carries VmProvisionResult; the "ssh" branch is
+	// pass-through only here (no dial) — see BE-SOL-EVM-004 for that.
+	StreamVmProvision(ctx context.Context, in *StreamVmProvisionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VmProvisionEvent], error)
 }
 
 type infraFleetServiceClient struct {
@@ -450,6 +498,16 @@ func (c *infraFleetServiceClient) GetSshState(ctx context.Context, in *GetSshSta
 	return out, nil
 }
 
+func (c *infraFleetServiceClient) GetFleetConnectivitySummary(ctx context.Context, in *GetFleetConnectivitySummaryRequest, opts ...grpc.CallOption) (*GetFleetConnectivitySummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetFleetConnectivitySummaryResponse)
+	err := c.cc.Invoke(ctx, InfraFleetService_GetFleetConnectivitySummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *infraFleetServiceClient) EstablishConnection(ctx context.Context, in *EstablishConnectionRequest, opts ...grpc.CallOption) (*Connection, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Connection)
@@ -464,6 +522,16 @@ func (c *infraFleetServiceClient) KillWorkspacePort(ctx context.Context, in *Kil
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(KillWorkspacePortResponse)
 	err := c.cc.Invoke(ctx, InfraFleetService_KillWorkspacePort_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infraFleetServiceClient) TeardownConnection(ctx context.Context, in *TeardownConnectionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, InfraFleetService_TeardownConnection_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -706,6 +774,75 @@ func (c *infraFleetServiceClient) GetHostCapabilities(ctx context.Context, in *G
 	return out, nil
 }
 
+func (c *infraFleetServiceClient) ListEphemeralVmRuntimes(ctx context.Context, in *ListEphemeralVmRuntimesRequest, opts ...grpc.CallOption) (*ListEphemeralVmRuntimesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEphemeralVmRuntimesResponse)
+	err := c.cc.Invoke(ctx, InfraFleetService_ListEphemeralVmRuntimes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infraFleetServiceClient) AttachEphemeralVmWorkspace(ctx context.Context, in *AttachEphemeralVmWorkspaceRequest, opts ...grpc.CallOption) (*EphemeralVmRuntime, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EphemeralVmRuntime)
+	err := c.cc.Invoke(ctx, InfraFleetService_AttachEphemeralVmWorkspace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infraFleetServiceClient) SuspendEphemeralVmWorkspace(ctx context.Context, in *SuspendEphemeralVmWorkspaceRequest, opts ...grpc.CallOption) (*EphemeralVmRuntime, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EphemeralVmRuntime)
+	err := c.cc.Invoke(ctx, InfraFleetService_SuspendEphemeralVmWorkspace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infraFleetServiceClient) ResumeEphemeralVmWorkspace(ctx context.Context, in *ResumeEphemeralVmWorkspaceRequest, opts ...grpc.CallOption) (*EphemeralVmRuntime, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EphemeralVmRuntime)
+	err := c.cc.Invoke(ctx, InfraFleetService_ResumeEphemeralVmWorkspace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infraFleetServiceClient) CleanupEphemeralVmWorkspace(ctx context.Context, in *CleanupEphemeralVmWorkspaceRequest, opts ...grpc.CallOption) (*EphemeralVmRuntime, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EphemeralVmRuntime)
+	err := c.cc.Invoke(ctx, InfraFleetService_CleanupEphemeralVmWorkspace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *infraFleetServiceClient) StreamVmProvision(ctx context.Context, in *StreamVmProvisionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VmProvisionEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &InfraFleetService_ServiceDesc.Streams[2], InfraFleetService_StreamVmProvision_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamVmProvisionRequest, VmProvisionEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type InfraFleetService_StreamVmProvisionClient = grpc.ServerStreamingClient[VmProvisionEvent]
+
 // InfraFleetServiceServer is the server API for InfraFleetService service.
 // All implementations must embed UnimplementedInfraFleetServiceServer
 // for forward compatibility.
@@ -766,11 +903,24 @@ type InfraFleetServiceServer interface {
 	// GetSshState is a local read (no dial) of whichever connection (if any)
 	// currently binds this SSH target's dev server.
 	GetSshState(context.Context, *GetSshStateRequest) (*GetSshStateResponse, error)
+	// GetFleetConnectivitySummary is CR-STORAGE-007's poll-driven health
+	// summary — a plain Postgres read (no dial) over every connections row
+	// scoped to the caller's tenant, joined with dev_servers. Request is
+	// deliberately empty: tenant/user scoping comes from gRPC metadata
+	// (identity), never a request field — see BE-SOL-STORAGE-002 §5.
+	GetFleetConnectivitySummary(context.Context, *GetFleetConnectivitySummaryRequest) (*GetFleetConnectivitySummaryResponse, error)
 	// EstablishConnection performs the actual SSH + Dev Server Agent
 	// handshake synchronously — it IS the connection-establishment act, not
 	// a record of one requested. See usecase.EstablishConnection's doc comment.
 	EstablishConnection(context.Context, *EstablishConnectionRequest) (*Connection, error)
 	KillWorkspacePort(context.Context, *KillWorkspacePortRequest) (*KillWorkspacePortResponse, error)
+	// TeardownConnection is the confirmed-logout explicit-close path
+	// (BE-SOL-STORAGE-003 §5, TASK-BE-STORAGE-012) — transitions
+	// established|degraded -> closed immediately, bypassing
+	// grace_period_seconds entirely, and closes every open terminal_sessions
+	// row bound to the connection. tenant_id comes from the authenticated
+	// context, matching every other tenant-scoped RPC in this service.
+	TeardownConnection(context.Context, *TeardownConnectionRequest) (*emptypb.Empty, error)
 	// --- Terminal/PTY lifecycle (control-plane, unary) ---
 	SpawnTerminalSession(context.Context, *SpawnTerminalSessionRequest) (*SpawnTerminalSessionResponse, error)
 	ResizeTerminalSession(context.Context, *ResizeTerminalSessionRequest) (*emptypb.Empty, error)
@@ -835,6 +985,33 @@ type InfraFleetServiceServer interface {
 	// does not exist yet (confirmed absent as of this pass) — see
 	// usecase.GetHostCapabilities's doc comment.
 	GetHostCapabilities(context.Context, *GetHostCapabilitiesRequest) (*GetHostCapabilitiesResponse, error)
+	// ListEphemeralVmRuntimes is a plain tenant-scoped Postgres read (no
+	// relay) of every non-destroyed ephemeral_vm_runtimes row — SOL-004
+	// Group 1's second read. Written to by EphemeralVmRelay (TASK-004).
+	ListEphemeralVmRuntimes(context.Context, *ListEphemeralVmRuntimesRequest) (*ListEphemeralVmRuntimesResponse, error)
+	// AttachEphemeralVmWorkspace is pure bookkeeping (no agent relay) — binds
+	// an already-provisioned runtime to a workspace/worktree id. See
+	// EphemeralVmRelay's doc comment for why this differs from SOL-004's own
+	// sketch (which incorrectly modeled it as a create-command exec).
+	AttachEphemeralVmWorkspace(context.Context, *AttachEphemeralVmWorkspaceRequest) (*EphemeralVmRuntime, error)
+	// SuspendEphemeralVmWorkspace/ResumeEphemeralVmWorkspace/CleanupEphemeralVmWorkspace
+	// relay `command` (the recipe's suspend/resume/destroy shell command,
+	// resolved by api-gateway's wscompat layer via git-gateway-service's
+	// ReadEphemeralVmRecipes — see TASK-005) to the repo's Dev Server via a
+	// new agent-side `vm.exec` method that does not exist today. Every call
+	// reaches a real agent and fails with a typed, permanent
+	// INFRA_EPHEMERAL_VM_UNSUPPORTED FailedPrecondition until agent/ gains
+	// one — see EmulatorRelay's identical, already-shipped pattern.
+	SuspendEphemeralVmWorkspace(context.Context, *SuspendEphemeralVmWorkspaceRequest) (*EphemeralVmRuntime, error)
+	ResumeEphemeralVmWorkspace(context.Context, *ResumeEphemeralVmWorkspaceRequest) (*EphemeralVmRuntime, error)
+	CleanupEphemeralVmWorkspace(context.Context, *CleanupEphemeralVmWorkspaceRequest) (*EphemeralVmRuntime, error)
+	// StreamVmProvision runs a recipe's provision command against the Dev
+	// Server Agent and streams its stdout/stderr back live, mirroring
+	// AttachScreencast/AttachPty's precedent (BE-SOL-EVM-002 §2) rather than a
+	// unary call — provisioning a real VM can take minutes. The terminal
+	// "result"-typed event carries VmProvisionResult; the "ssh" branch is
+	// pass-through only here (no dial) — see BE-SOL-EVM-004 for that.
+	StreamVmProvision(*StreamVmProvisionRequest, grpc.ServerStreamingServer[VmProvisionEvent]) error
 	mustEmbedUnimplementedInfraFleetServiceServer()
 }
 
@@ -917,11 +1094,17 @@ func (UnimplementedInfraFleetServiceServer) ListSshTargets(context.Context, *Lis
 func (UnimplementedInfraFleetServiceServer) GetSshState(context.Context, *GetSshStateRequest) (*GetSshStateResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetSshState not implemented")
 }
+func (UnimplementedInfraFleetServiceServer) GetFleetConnectivitySummary(context.Context, *GetFleetConnectivitySummaryRequest) (*GetFleetConnectivitySummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetFleetConnectivitySummary not implemented")
+}
 func (UnimplementedInfraFleetServiceServer) EstablishConnection(context.Context, *EstablishConnectionRequest) (*Connection, error) {
 	return nil, status.Error(codes.Unimplemented, "method EstablishConnection not implemented")
 }
 func (UnimplementedInfraFleetServiceServer) KillWorkspacePort(context.Context, *KillWorkspacePortRequest) (*KillWorkspacePortResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method KillWorkspacePort not implemented")
+}
+func (UnimplementedInfraFleetServiceServer) TeardownConnection(context.Context, *TeardownConnectionRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method TeardownConnection not implemented")
 }
 func (UnimplementedInfraFleetServiceServer) SpawnTerminalSession(context.Context, *SpawnTerminalSessionRequest) (*SpawnTerminalSessionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SpawnTerminalSession not implemented")
@@ -991,6 +1174,24 @@ func (UnimplementedInfraFleetServiceServer) ShutdownEmulator(context.Context, *S
 }
 func (UnimplementedInfraFleetServiceServer) GetHostCapabilities(context.Context, *GetHostCapabilitiesRequest) (*GetHostCapabilitiesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetHostCapabilities not implemented")
+}
+func (UnimplementedInfraFleetServiceServer) ListEphemeralVmRuntimes(context.Context, *ListEphemeralVmRuntimesRequest) (*ListEphemeralVmRuntimesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListEphemeralVmRuntimes not implemented")
+}
+func (UnimplementedInfraFleetServiceServer) AttachEphemeralVmWorkspace(context.Context, *AttachEphemeralVmWorkspaceRequest) (*EphemeralVmRuntime, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachEphemeralVmWorkspace not implemented")
+}
+func (UnimplementedInfraFleetServiceServer) SuspendEphemeralVmWorkspace(context.Context, *SuspendEphemeralVmWorkspaceRequest) (*EphemeralVmRuntime, error) {
+	return nil, status.Error(codes.Unimplemented, "method SuspendEphemeralVmWorkspace not implemented")
+}
+func (UnimplementedInfraFleetServiceServer) ResumeEphemeralVmWorkspace(context.Context, *ResumeEphemeralVmWorkspaceRequest) (*EphemeralVmRuntime, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResumeEphemeralVmWorkspace not implemented")
+}
+func (UnimplementedInfraFleetServiceServer) CleanupEphemeralVmWorkspace(context.Context, *CleanupEphemeralVmWorkspaceRequest) (*EphemeralVmRuntime, error) {
+	return nil, status.Error(codes.Unimplemented, "method CleanupEphemeralVmWorkspace not implemented")
+}
+func (UnimplementedInfraFleetServiceServer) StreamVmProvision(*StreamVmProvisionRequest, grpc.ServerStreamingServer[VmProvisionEvent]) error {
+	return status.Error(codes.Unimplemented, "method StreamVmProvision not implemented")
 }
 func (UnimplementedInfraFleetServiceServer) mustEmbedUnimplementedInfraFleetServiceServer() {}
 func (UnimplementedInfraFleetServiceServer) testEmbeddedByValue()                           {}
@@ -1445,6 +1646,24 @@ func _InfraFleetService_GetSshState_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InfraFleetService_GetFleetConnectivitySummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFleetConnectivitySummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfraFleetServiceServer).GetFleetConnectivitySummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfraFleetService_GetFleetConnectivitySummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfraFleetServiceServer).GetFleetConnectivitySummary(ctx, req.(*GetFleetConnectivitySummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _InfraFleetService_EstablishConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EstablishConnectionRequest)
 	if err := dec(in); err != nil {
@@ -1477,6 +1696,24 @@ func _InfraFleetService_KillWorkspacePort_Handler(srv interface{}, ctx context.C
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(InfraFleetServiceServer).KillWorkspacePort(ctx, req.(*KillWorkspacePortRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfraFleetService_TeardownConnection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TeardownConnectionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfraFleetServiceServer).TeardownConnection(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfraFleetService_TeardownConnection_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfraFleetServiceServer).TeardownConnection(ctx, req.(*TeardownConnectionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1873,6 +2110,107 @@ func _InfraFleetService_GetHostCapabilities_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _InfraFleetService_ListEphemeralVmRuntimes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEphemeralVmRuntimesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfraFleetServiceServer).ListEphemeralVmRuntimes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfraFleetService_ListEphemeralVmRuntimes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfraFleetServiceServer).ListEphemeralVmRuntimes(ctx, req.(*ListEphemeralVmRuntimesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfraFleetService_AttachEphemeralVmWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachEphemeralVmWorkspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfraFleetServiceServer).AttachEphemeralVmWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfraFleetService_AttachEphemeralVmWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfraFleetServiceServer).AttachEphemeralVmWorkspace(ctx, req.(*AttachEphemeralVmWorkspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfraFleetService_SuspendEphemeralVmWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SuspendEphemeralVmWorkspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfraFleetServiceServer).SuspendEphemeralVmWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfraFleetService_SuspendEphemeralVmWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfraFleetServiceServer).SuspendEphemeralVmWorkspace(ctx, req.(*SuspendEphemeralVmWorkspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfraFleetService_ResumeEphemeralVmWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResumeEphemeralVmWorkspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfraFleetServiceServer).ResumeEphemeralVmWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfraFleetService_ResumeEphemeralVmWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfraFleetServiceServer).ResumeEphemeralVmWorkspace(ctx, req.(*ResumeEphemeralVmWorkspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfraFleetService_CleanupEphemeralVmWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CleanupEphemeralVmWorkspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(InfraFleetServiceServer).CleanupEphemeralVmWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: InfraFleetService_CleanupEphemeralVmWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(InfraFleetServiceServer).CleanupEphemeralVmWorkspace(ctx, req.(*CleanupEphemeralVmWorkspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _InfraFleetService_StreamVmProvision_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamVmProvisionRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(InfraFleetServiceServer).StreamVmProvision(m, &grpc.GenericServerStream[StreamVmProvisionRequest, VmProvisionEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type InfraFleetService_StreamVmProvisionServer = grpc.ServerStreamingServer[VmProvisionEvent]
+
 // InfraFleetService_ServiceDesc is the grpc.ServiceDesc for InfraFleetService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1977,12 +2315,20 @@ var InfraFleetService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _InfraFleetService_GetSshState_Handler,
 		},
 		{
+			MethodName: "GetFleetConnectivitySummary",
+			Handler:    _InfraFleetService_GetFleetConnectivitySummary_Handler,
+		},
+		{
 			MethodName: "EstablishConnection",
 			Handler:    _InfraFleetService_EstablishConnection_Handler,
 		},
 		{
 			MethodName: "KillWorkspacePort",
 			Handler:    _InfraFleetService_KillWorkspacePort_Handler,
+		},
+		{
+			MethodName: "TeardownConnection",
+			Handler:    _InfraFleetService_TeardownConnection_Handler,
 		},
 		{
 			MethodName: "SpawnTerminalSession",
@@ -2068,6 +2414,26 @@ var InfraFleetService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetHostCapabilities",
 			Handler:    _InfraFleetService_GetHostCapabilities_Handler,
 		},
+		{
+			MethodName: "ListEphemeralVmRuntimes",
+			Handler:    _InfraFleetService_ListEphemeralVmRuntimes_Handler,
+		},
+		{
+			MethodName: "AttachEphemeralVmWorkspace",
+			Handler:    _InfraFleetService_AttachEphemeralVmWorkspace_Handler,
+		},
+		{
+			MethodName: "SuspendEphemeralVmWorkspace",
+			Handler:    _InfraFleetService_SuspendEphemeralVmWorkspace_Handler,
+		},
+		{
+			MethodName: "ResumeEphemeralVmWorkspace",
+			Handler:    _InfraFleetService_ResumeEphemeralVmWorkspace_Handler,
+		},
+		{
+			MethodName: "CleanupEphemeralVmWorkspace",
+			Handler:    _InfraFleetService_CleanupEphemeralVmWorkspace_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
@@ -2081,6 +2447,11 @@ var InfraFleetService_ServiceDesc = grpc.ServiceDesc{
 			Handler:       _InfraFleetService_AttachScreencast_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
+		},
+		{
+			StreamName:    "StreamVmProvision",
+			Handler:       _InfraFleetService_StreamVmProvision_Handler,
+			ServerStreams: true,
 		},
 	},
 	Metadata: "orca/infrafleet/v1/infrafleet.proto",

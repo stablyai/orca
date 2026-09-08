@@ -130,9 +130,12 @@ func RegisterRealChannels(
 	registerDevServerAccessControlChannels(r, infraFleetClient, tenantClient)
 	registerFleetChannels(r, infraFleetClient)
 	registerCliChannels(r, infraFleetClient)
+	registerInfraFleetChannels(r, infraFleetClient)
 	registerCrashReportChannels(r)
 	registerRateLimitChannels(r, rateLimits)
 	registerOnboardingChannels(r, infraFleetClient, tenantClient)
+	registerStarNagChannels(r, tenantClient)
+	registerStarNagGitHubChannels(r, tenantClient)
 	registerTelemetryChannels(r)
 
 	// Final integration pass — every group below was implemented as a
@@ -149,6 +152,7 @@ func RegisterRealChannels(
 	registerRepoSshStatusWorkspaceChannels(r, projectClient, gitClient, infraFleetClient)
 	registerSCMChannels(r, scmClient, gitClient)
 	registerBrowserChannels(r, infraFleetClient)
+	registerEphemeralVmChannels(r, gitClient, projectClient, infraFleetClient)
 	registerBrowserScreencastChannel(r, infraFleetClient)
 	registerBrowserProfileChannels(r, infraFleetClient)
 	// registerGitDeepChannels must be called after registerGitChannels:
@@ -428,6 +432,13 @@ type devServerView struct {
 	// "disconnected" here per this view's own comment below).
 	ApprovalStatus string `json:"approvalStatus"`
 	GroupID        string `json:"groupId"`
+	// HealthStatus is a THIRD, distinct "status" concept from this struct's
+	// own Status (live relay connection state) and ApprovalStatus (admin
+	// approval) — the coarse dev-server health/bootstrap state backend-go
+	// now exposes (infrafleetv1.DevServer.health_status). "pending" | "healthy" |
+	// "degraded" | "unhealthy". See
+	// specs/backlog/BACKLOG-007-dev-server-bootstrap-status-proto-field.md.
+	HealthStatus string `json:"healthStatus"`
 }
 
 // toDevServerView maps a proto DevServer (id/tenant_id/host/mode only) onto
@@ -441,6 +452,7 @@ func toDevServerView(ds *infrafleetv1.DevServer) devServerView {
 		Status:         "disconnected", // overwritten by attachConnectionStatus wherever live status matters
 		ApprovalStatus: ds.GetApprovalStatus(),
 		GroupID:        ds.GetGroupId(),
+		HealthStatus:   ds.GetHealthStatus(),
 	}
 	if host := ds.GetHost(); host != "" {
 		view.WSUrl = &host
