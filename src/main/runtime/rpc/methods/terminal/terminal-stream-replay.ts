@@ -1,3 +1,4 @@
+import { normalizeDesktopTerminalSnapshotRows } from '../../../../../shared/terminal-scrollback-policy'
 import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal-reply-query-scan'
 import {
   iterateTerminalOutputFrameChunks,
@@ -189,15 +190,12 @@ export function isTerminalReadPayloadIncomplete(read: {
 export function normalizeMultiplexSnapshotScrollbackRows(
   value: number | undefined
 ): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return undefined
-  }
-  return Math.max(0, Math.min(50_000, Math.floor(value)))
+  return normalizeDesktopTerminalSnapshotRows(value)
 }
 
 export function requestedSnapshotScrollbackCandidates(requestedRows: number | undefined): number[] {
   const candidates = [requestedRows ?? 0, 1000, 500, 250, 100, 25, 0]
     .filter((rows): rows is number => typeof rows === 'number')
-    .map((rows) => Math.max(0, Math.min(50_000, Math.floor(rows))))
+    .map((rows) => normalizeDesktopTerminalSnapshotRows(rows) ?? 0)
   return [...new Set(candidates)]
 }

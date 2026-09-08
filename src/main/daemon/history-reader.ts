@@ -6,7 +6,7 @@ import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from './terminal-history-log'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { HeadlessEmulator } from './headless-emulator'
-import { PrioritySemaphore } from '../../shared/priority-semaphore'
+import { terminalHistoryReplayAdmission } from './terminal-history-replay-admission'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { readTerminalHistoryBufferAsync } from './terminal-history-file-reader'
 import { detectColdRestoreFromLegacyScrollback } from './terminal-history-legacy-scrollback-restore'
@@ -53,9 +53,6 @@ type IncrementalLogRestore = {
   restoreInfo: ColdRestoreInfo | null
   readFailed: boolean
 }
-
-// Why: parallel pane mounts should interleave with main-process work without multiplying replay slices per turn.
-const coldRestoreReplaySemaphore = new PrioritySemaphore(1)
 
 export class HistoryReader {
   private basePath: string
@@ -254,7 +251,7 @@ export class HistoryReader {
     } catch {
       return { restoreInfo: null, readFailed: existsSync(logPath) }
     }
-    const release = await coldRestoreReplaySemaphore.acquire(0)
+    const release = await terminalHistoryReplayAdmission.acquire(0)
     try {
       let logBuffer: Buffer
       try {

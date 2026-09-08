@@ -256,7 +256,7 @@ describe('terminal multiplex RPC', () => {
           seq: 2,
           payload: encodeTerminalStreamJson({
             requestId: 55,
-            scrollbackRows: 5000
+            scrollbackRows: 100000
           })
         })
       )!
@@ -274,7 +274,7 @@ describe('terminal multiplex RPC', () => {
       truncatedByByteBudget: true
     })
     expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(2, 'pty-1', {
-      scrollbackRows: 5000
+      scrollbackRows: 100000
     })
     expect(runtime.serializeTerminalBuffer).toHaveBeenNthCalledWith(3, 'pty-1', {
       scrollbackRows: 1000

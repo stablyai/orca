@@ -103,4 +103,17 @@ describe('TerminalAdvancedSection scrollback rows', () => {
     expect(updateSettings).toHaveBeenCalledWith({ terminalScrollbackRows: 12345 })
     expect(input.value).toBe('12345')
   })
+
+  it('allows 100,000 rows and bounds values above the supported maximum', () => {
+    const updateSettings = vi.fn()
+    renderSection(updateSettings)
+    const input = getScrollbackRowsInput()
+    expect(input.max).toBe('100000')
+    typeText(input, '100000')
+    pressEnter(input)
+    expect(updateSettings).toHaveBeenLastCalledWith({ terminalScrollbackRows: 100000 })
+    typeText(input, '200000')
+    blurInput(input)
+    expect(input.value).toBe('100000')
+  })
 })

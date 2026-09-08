@@ -1,3 +1,4 @@
+import { normalizeDesktopTerminalSnapshotRows } from '../../../../shared/terminal-scrollback-policy'
 import { getPtyIpc } from '../../pty-host-bindings'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { tryGetProviderForPty } from '../provider/registry'
@@ -9,13 +10,6 @@ import {
   resetPtyRendererDeliveryDebug,
   type PtyRendererDeliveryDebugSnapshot
 } from '../delivery/debug'
-
-function normalizeSnapshotScrollbackRows(value: unknown): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return undefined
-  }
-  return Math.max(0, Math.min(50_000, Math.floor(value)))
-}
 
 export function installPtySnapshotIpcHandlers(deps: {
   runtime?: OrcaRuntimeService
@@ -48,7 +42,7 @@ export function installPtySnapshotIpcHandlers(deps: {
       if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
         return null
       }
-      const scrollbackRows = normalizeSnapshotScrollbackRows(args.opts?.scrollbackRows)
+      const scrollbackRows = normalizeDesktopTerminalSnapshotRows(args.opts?.scrollbackRows)
       try {
         const runtimeSeqBeforeSnapshot = runtime.getPtyOutputSequence(args.id)
         const providerSnapshotRequired = providerSnapshotRequiredPtys.has(args.id)

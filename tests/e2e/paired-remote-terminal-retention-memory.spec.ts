@@ -5,10 +5,11 @@ import {
 } from './helpers/paired-electron-client'
 import { runPairedTerminalParkingOracle } from './helpers/paired-terminal-parking-oracle'
 
-test('ordinary-parks paired terminals and restores authoritative host scrollback @headful', async ({
+test('ordinary-parks paired terminals and restores authoritative host scrollback', async ({
   electronApp,
   orcaPage
 }) => {
+  test.skip(process.env.ORCA_E2E_WEB_CLIENT !== '1', 'Requires the paired web client build.')
   test.setTimeout(240_000)
   const seed = await orcaPage.evaluate(() => {
     const state = window.__store?.getState()

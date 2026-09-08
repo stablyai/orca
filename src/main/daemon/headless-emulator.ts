@@ -168,12 +168,8 @@ export class HeadlessEmulator {
   }
 
   write(data: string, opts: HeadlessEmulatorWriteOptions = {}): Promise<void> {
-    if (this.disposed) {
-      return Promise.resolve()
-    }
-
     const forwardQueryReplies = opts.forwardQueryReplies === true
-    if (this.tryWriteSync(data, { forwardQueryReplies })) {
+    if (this.disposed || this.tryWriteSync(data, { forwardQueryReplies })) {
       return Promise.resolve()
     }
     this.oscText.scan(data)
@@ -285,6 +281,10 @@ export class HeadlessEmulator {
 
   get isAlternateScreen(): boolean {
     return this.terminal.buffer.active.type === 'alternate'
+  }
+
+  get scrollbackRows(): number {
+    return this.terminal.options.scrollback ?? DEFAULT_SCROLLBACK
   }
 
   /** Dangling incomplete escape at the stream position; handoffs seed the other side so a split sequence isn't lost. */

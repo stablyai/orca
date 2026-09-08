@@ -119,7 +119,7 @@ export function TerminalAdvancedSection({
                   }}
                   variant="outline"
                   size="sm"
-                  className="h-8 flex-wrap justify-end"
+                  className="min-h-8 flex-wrap justify-end"
                 >
                   {SCROLLBACK_PRESETS_ROWS.map((preset) => (
                     <ToggleGroupItem

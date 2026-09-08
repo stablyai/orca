@@ -325,7 +325,7 @@ describe('registerPtyHandlers', () => {
       })
 
       expect(runtime.serializeHiddenOutputRecoveryBuffer).toHaveBeenCalledWith('pty-1', {
-        scrollbackRows: 50_000
+        scrollbackRows: 100_000
       })
       // Why pendingDeliveryStartSeq === seq: pending delivery queue is empty, so low-seq live chunks must not be dropped against the snapshot baseline.
       expect(result).toEqual({

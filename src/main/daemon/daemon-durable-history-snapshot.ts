@@ -1,6 +1,7 @@
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { HeadlessEmulator } from './headless-emulator'
+import { terminalHistoryReplayAdmission } from './terminal-history-replay-admission'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
@@ -63,16 +64,18 @@ export async function buildDurableCheckpointSnapshot(opts: {
     })
   }
 
-  const emulator = new HeadlessEmulator({
-    cols: opts.restoreInfo?.cols ?? opts.liveSnapshot.cols,
-    rows: opts.restoreInfo?.rows ?? opts.liveSnapshot.rows,
-    scrollback: Math.min(
-      opts.scrollbackRows ?? DAEMON_RESTORE_SCROLLBACK_ROWS,
-      DAEMON_RESTORE_SCROLLBACK_ROWS
-    )
-  })
-  const replay = new ColdRestoreReplayWriter(emulator)
+  const release = await terminalHistoryReplayAdmission.acquire(0)
+  let emulator: HeadlessEmulator | undefined
   try {
+    emulator = new HeadlessEmulator({
+      cols: opts.restoreInfo?.cols ?? opts.liveSnapshot.cols,
+      rows: opts.restoreInfo?.rows ?? opts.liveSnapshot.rows,
+      scrollback: Math.min(
+        opts.scrollbackRows ?? DAEMON_RESTORE_SCROLLBACK_ROWS,
+        DAEMON_RESTORE_SCROLLBACK_ROWS
+      )
+    })
+    const replay = new ColdRestoreReplayWriter(emulator)
     // Why not seed the live window when there is no disk history: pending records
     // are the raw stream. Replaying them on top of the already-truncated live
     // snapshot would duplicate the newest rows and evict the older recoverable ones.
@@ -128,7 +131,8 @@ export async function buildDurableCheckpointSnapshot(opts: {
     console.warn('[history] durable snapshot rebuild failed:', error)
     return opts.liveSnapshot
   } finally {
-    emulator.dispose()
+    emulator?.dispose()
+    release()
   }
 }
 

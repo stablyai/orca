@@ -28,7 +28,7 @@ describe('configured scrollback survives durable replay', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('retains 50,000 requested rows through checkpoint plus incremental replay', async () => {
+  it('retains the maximum requested rows through checkpoint plus incremental replay', async () => {
     const output = Array.from(
       { length: DESKTOP_TERMINAL_SCROLLBACK_ROWS_MAX },
       (_, i) => `history-${String(i).padStart(5, '0')}\r\n`

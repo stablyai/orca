@@ -9,6 +9,6 @@ describe('hidden terminal restore scrollback', () => {
 
   it('clamps malformed or oversized values with the shared desktop policy', () => {
     expect(resolveHiddenRestoreScrollbackRows(undefined)).toBe(5_000)
-    expect(resolveHiddenRestoreScrollbackRows(100_000)).toBe(50_000)
+    expect(resolveHiddenRestoreScrollbackRows(200_000)).toBe(100_000)
   })
 })

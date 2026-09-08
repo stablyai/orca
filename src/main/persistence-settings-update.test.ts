@@ -307,12 +307,12 @@ describe('Store', () => {
 
     writeDataFile({
       settings: {
-        terminalScrollbackRows: 75_000
+        terminalScrollbackRows: 175_000
       }
     })
 
     const clampedStore = await createStore()
-    expect(clampedStore.getSettings().terminalScrollbackRows).toBe(50_000)
+    expect(clampedStore.getSettings().terminalScrollbackRows).toBe(100_000)
   })
 
   it('normalizes terminal scrollback row updates and ignores stale byte updates', async () => {
@@ -322,23 +322,23 @@ describe('Store', () => {
 
     const updated = store.updateSettings(
       {
-        terminalScrollbackRows: 75_000,
+        terminalScrollbackRows: 175_000,
         terminalScrollbackBytes: 250_000_000
       } as never,
       { notifyListeners: true }
     )
 
-    expect(updated.terminalScrollbackRows).toBe(50_000)
+    expect(updated.terminalScrollbackRows).toBe(100_000)
     expect(listener).toHaveBeenCalledWith(
-      { terminalScrollbackRows: 50_000 },
-      expect.objectContaining({ terminalScrollbackRows: 50_000 }),
+      { terminalScrollbackRows: 100_000 },
+      expect.objectContaining({ terminalScrollbackRows: 100_000 }),
       undefined
     )
 
     store.updateSettings({ terminalScrollbackBytes: 10_000_000 } as never)
     store.flush()
     const persisted = readDataFile() as { settings?: Record<string, unknown> }
-    expect(persisted.settings?.terminalScrollbackRows).toBe(50_000)
+    expect(persisted.settings?.terminalScrollbackRows).toBe(100_000)
     expect(persisted.settings).not.toHaveProperty('terminalScrollbackBytes')
   })
 

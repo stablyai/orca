@@ -3,6 +3,7 @@ import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './orca-runtime-cr
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../providers/types'
 import { withTimeout } from './runtime-async-boundaries'
+import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './orca-runtime-postlude'
 
 export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
   protected async serializeTerminalBufferFromAvailableState(
@@ -53,14 +54,22 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
   ) {
-    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+    const mirror = this.headlessTerminals.get(ptyId)
+    const needsDeeperHistory = mirror && (opts.scrollbackRows ?? 0) > mirror.emulator.scrollbackRows
+    if (!this.providerSnapshotPreferredPtys.has(ptyId) && !needsDeeperHistory) {
       return null
     }
-    // Pre-attach bytes are only a suffix; older providers can fall back to the renderer.
-    return (
-      (await this.serializeProviderTerminalBuffer(ptyId, opts)) ??
-      (await this.serializeRendererTerminalBuffer(ptyId, opts))
-    )
+    // Bound optional deep-history acquisition without duplicating an outstanding provider request.
+    const provider = await this.serializeProviderTerminalBuffer(ptyId, opts, {
+      timeoutMs: AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      retireOnTimeout: true
+    })
+    if (provider) {
+      return provider
+    }
+    const renderer = await this.serializeRendererTerminalBuffer(ptyId, opts)
+    // A parked renderer can register before hydration; keep the populated mirror in that case.
+    return needsDeeperHistory && renderer?.data.length === 0 ? null : renderer
   }
 
   async serializeRendererTerminalBuffer(
@@ -134,25 +143,21 @@ export class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends Or
         }
       })
     }
-    if (acquisition.timedOut) {
-      return null
-    }
     if (typeof wait.timeoutMs !== 'number') {
       return acquisition.promise
     }
-    const result = await withTimeout<
-      { settled: true; value: PtyProviderBufferSnapshot | null } | { settled: false }
-    >(
-      acquisition.promise.then((value) => ({ settled: true as const, value })),
+    // Undefined marks a timeout; null is a settled provider with no snapshot.
+    const result = await withTimeout<PtyProviderBufferSnapshot | null | undefined>(
+      acquisition.promise,
       wait.timeoutMs,
-      { settled: false as const }
+      undefined
     )
-    if (!result.settled) {
+    if (result === undefined) {
       if (wait.retireOnTimeout) {
         acquisition.timedOut = true
       }
       return null
     }
-    return result.value
+    return result
   }
 }
