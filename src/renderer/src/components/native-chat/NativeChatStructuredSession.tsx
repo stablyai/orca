@@ -274,16 +274,31 @@ export function NativeChatStructuredSession(
       {retryableOutboxEntry ? (
         <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-1 text-xs text-muted-foreground">
           <span>
-            {retryableOutboxEntry.state === 'unconfirmed'
+            {controller.recoveryPaused
               ? translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
-                  'Message delivery is unconfirmed.'
+                  'nativeChat.structuredSession.recoveryPaused',
+                  'Delivery is unconfirmed. Automatic checking is paused.'
                 )
-              : translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
-                  'Message was not sent.'
-                )}
+              : retryableOutboxEntry.state === 'unconfirmed'
+                ? translate(
+                    'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
+                    'Message delivery is unconfirmed.'
+                  )
+                : translate(
+                    'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
+                    'Message was not sent.'
+                  )}
           </span>
+          {controller.recoveryPaused ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => controller.resumeChecking(retryableOutboxEntry.clientMessageId)}
+            >
+              {translate('nativeChat.structuredSession.resumeChecking', 'Resume checking')}
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"

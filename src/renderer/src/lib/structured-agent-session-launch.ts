@@ -11,7 +11,7 @@ import {
 import {
   discardStructuredAgentSessionLaunchOutbox,
   enqueueStructuredAgentSessionLaunchPrompt
-} from '@/components/native-chat/structured-agent-session-outbox-storage'
+} from '@/components/native-chat/structured-agent-session-launch-outbox'
 import {
   launchAndReconcile,
   reconcileUnknownLaunch,

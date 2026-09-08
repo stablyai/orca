@@ -272,17 +272,15 @@ export function useStructuredAgentSession(args: {
       outboxController.outbox,
       state.submissions
     ),
+    ...outboxController,
     status: state.status,
     error: state.error ?? writeError ?? outboxController.error,
     hasOlder: state.hasOlder,
     loadingOlder,
     loadOlder,
     prompts,
-    outbox: outboxController.outbox,
-    blockedClientMessageId: outboxController.blockedClientMessageId,
     send: (...input: Parameters<typeof outboxController.send>) =>
       !commandPending.current && outboxController.send(...input),
-    retry: outboxController.retry,
     isWorking: turnId !== null,
     turnActivity,
     isMonitoringBackgroundTasks,

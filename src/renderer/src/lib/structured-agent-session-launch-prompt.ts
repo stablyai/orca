@@ -9,9 +9,10 @@ import {
 } from '../../../shared/structured-agent-session-outbox'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
 import {
-  mutateStructuredAgentSessionLaunchPrompt,
-  type StructuredAgentSessionLaunchPromptMutation
-} from '@/components/native-chat/structured-agent-session-outbox-storage'
+  claimOutboxDispatch,
+  forgetOutboxDispatch,
+  transitionOutboxEntry
+} from '@/components/native-chat/structured-agent-session-outbox-transitions'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 
 export type StructuredPromptDeliveryResult = {
@@ -26,26 +27,15 @@ export type StructuredLaunchPromptOptions = {
 
 type LaunchReceipt = { sessionId: string; fence: number }
 
-function mutateEntry(
-  entry: StructuredAgentSessionOutboxEntry,
-  update: StructuredAgentSessionLaunchPromptMutation
-): boolean {
-  return mutateStructuredAgentSessionLaunchPrompt(entry.sessionId, entry.clientMessageId, update)
-}
-
 async function dispatchStructuredLaunchPrompt(
   entry: StructuredAgentSessionOutboxEntry,
   receipt: LaunchReceipt
 ): Promise<boolean> {
-  if (
-    !mutateEntry(entry, (current) => ({
-      ...current,
-      state: 'dispatching',
-      lastAttemptAt: Date.now()
-    }))
-  ) {
+  const reservation = claimOutboxDispatch(entry)
+  if (!reservation.changed || !reservation.entry) {
     return false
   }
+  const claim = reservation.entry
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionSendResult>
@@ -55,7 +45,7 @@ async function dispatchStructuredLaunchPrompt(
       structuredAgentSessionSendRequest(entry, receipt.fence)
     )
     if (!result.ok) {
-      mutateEntry(entry, (current) =>
+      transitionOutboxEntry(claim, (current) =>
         requeueStructuredAgentSessionSendRefusal(current, result.refusal.code, () =>
           createStructuredAgentSessionOperationId(() => crypto.randomUUID())
         )
@@ -63,18 +53,23 @@ async function dispatchStructuredLaunchPrompt(
       return false
     }
     const dispatchState = result.value.submission.dispatchState
-    mutateEntry(entry, (current) =>
+    transitionOutboxEntry(
+      claim,
+      (current) =>
+        dispatchState === 'accepted'
+          ? null
+          : {
+              ...current,
+              state: dispatchState === 'unknown' ? 'unconfirmed' : 'queued'
+            },
       dispatchState === 'accepted'
-        ? null
-        : {
-            ...current,
-            state: dispatchState === 'unknown' ? 'unconfirmed' : 'queued'
-          }
     )
     return dispatchState === 'accepted'
   } catch {
-    mutateEntry(entry, (current) => ({ ...current, state: 'unconfirmed' }))
+    transitionOutboxEntry(claim, (current) => ({ ...current, state: 'unconfirmed' }))
     return false
+  } finally {
+    forgetOutboxDispatch(claim)
   }
 }
 

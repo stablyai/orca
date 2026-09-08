@@ -74,6 +74,8 @@ vi.mock('./use-structured-agent-session', async () => {
         blockedClientMessageId: outbox.blockedClientMessageId,
         send: outbox.send,
         retry: outbox.retry,
+        resumeChecking: outbox.resumeChecking,
+        recoveryPaused: outbox.recoveryPaused,
         isWorking: false,
         isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
         supportsBackgroundTaskStop: mocks.supportsBackgroundTaskStop,
@@ -721,7 +723,7 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.call.mock.calls.length).toBeLessThanOrEqual(3)
   }, 20000)
 
-  it('keeps probing past the old five-attempt budget', async () => {
+  it('parks after eight probes and exposes safe checking separately from Retry', async () => {
     mocks.mode = 'outbox'
     mocks.call.mockRejectedValue(new Error('socket closed'))
     vi.useFakeTimers({ shouldAdvanceTime: true })
@@ -741,14 +743,24 @@ describe('NativeChatStructuredSession', () => {
         | undefined
       expect(send?.('first', [])).toBe(true)
 
-      // Backoff is 1+2+4+8+16 = 31s for five probes, which was the old hard budget.
-      // Step past it; a seventh call proves the probe re-arms instead of giving up.
-      for (let step = 0; step < 12; step += 1) {
+      // Advance beyond the full automatic budget, then exercise the rendered recovery action.
+      for (let step = 0; step < 20; step += 1) {
         await act(async () => {
           await vi.advanceTimersByTimeAsync(8_000)
         })
       }
-      expect(mocks.call.mock.calls.length).toBeGreaterThanOrEqual(7)
+      expect(mocks.call).toHaveBeenCalledTimes(9)
+      expect(
+        screen.getByText('Delivery is unconfirmed. Automatic checking is paused.')
+      ).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+      fireEvent.click(screen.getByRole('button', { name: 'Resume checking' }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+      expect(mocks.call).toHaveBeenCalledTimes(10)
+      expect(mocks.call.mock.calls[9]![2]).toEqual(mocks.call.mock.calls[0]![2])
+      expect(mocks.call.mock.calls[9]![2]).not.toHaveProperty('retryUnknown')
     } finally {
       vi.useRealTimers()
     }

@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { useLayoutEffect } from 'react'
 import { createRoot } from 'react-dom/client'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
 
@@ -98,6 +98,7 @@ function refusedResult(code: AgentSessionWireRefusalCode) {
 }
 
 describe('useStructuredAgentSessionOutbox', () => {
+  afterEach(cleanup)
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
