@@ -1,6 +1,7 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { wslGatedAccess } from '../native-chat/wsl-transcript-fs-access'
 import { discoverFiles } from './session-scanner-discovery'
 import {
   listHermesSqliteSessionIds,
@@ -16,19 +17,32 @@ import { sessionRootDirs } from './session-scanner-roots'
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 
 /**
- * Resolves candidate Hermes state.db file paths across host and WSL environments.
+ * Resolves existing Hermes state.db file paths across host and WSL environments.
+ * Gated rather than a raw existsSync: a stalled 9P mount would hang the scan.
  */
-function hermesStateDbPaths(options: AiVaultScanOptions, wslHomeDirs: readonly string[]): string[] {
+async function hermesStateDbPaths(
+  options: AiVaultScanOptions,
+  wslHomeDirs: readonly string[]
+): Promise<string[]> {
   if (options.hermesStateDbPaths) {
     return [...options.hermesStateDbPaths]
   }
   const mainDir = options.hermesSessionsDir
     ? dirname(options.hermesSessionsDir)
     : join(homedir(), '.hermes')
-  return [
+  const candidateDbPaths = [
     join(mainDir, 'state.db'),
     ...wslHomeDirs.map((homeDir) => join(homeDir, '.hermes', 'state.db'))
   ]
+  const probedDbPaths = await Promise.all(
+    candidateDbPaths.map((dbPath) =>
+      wslGatedAccess(dbPath, 'scan').then(
+        () => dbPath,
+        () => null
+      )
+    )
+  )
+  return probedDbPaths.filter((dbPath): dbPath is string => dbPath !== null)
 }
 
 /**
@@ -64,14 +78,15 @@ export function hermesDiscoveries(
     })
   )
 
-  const dbPaths = hermesStateDbPaths(options, wslHomeDirs)
-  const sqlitePromise = listHermesSqliteSessions({ dbPaths, limit, issues })
-  const sqliteSessionIds = listHermesSqliteSessionIds(dbPaths)
+  const sqlitePromise = hermesStateDbPaths(options, wslHomeDirs).then(async (dbPaths) => ({
+    candidates: await listHermesSqliteSessions({ dbPaths, limit, issues }),
+    sessionIds: listHermesSqliteSessionIds(dbPaths)
+  }))
 
   return [
     Promise.all([Promise.all(fileDiscoveryPromises), sqlitePromise]).then(
-      ([fileResults, sqliteCandidates]) => {
-        const sqliteFiles = sqliteCandidates.map((c) => c.file)
+      ([fileResults, sqlite]) => {
+        const sqliteFiles = sqlite.candidates.map((c) => c.file)
 
         // Why: collect all legacy JSON session files across all root dirs (local & WSL)
         // and filter out any that are duplicated in the SQLite database.
@@ -80,7 +95,7 @@ export function hermesDiscoveries(
           for (const file of res.files) {
             const name = basename(file.path, '.json')
             const sessionId = name.startsWith('session_') ? name.slice(8) : name
-            if (!sqliteSessionIds.has(sessionId)) {
+            if (!sqlite.sessionIds.has(sessionId)) {
               allFiles.push(file)
             }
           }

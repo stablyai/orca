@@ -1,4 +1,3 @@
-import { existsSync } from 'node:fs'
 import type { AiVaultAgent, AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import {
   addPreviewContent,
@@ -126,9 +125,6 @@ function buildSessionListQuery(db: SyncDatabase): string {
 export function listHermesSqliteSessionIds(dbPaths: readonly string[]): Set<string> {
   const ids = new Set<string>()
   for (const dbPath of dbPaths) {
-    if (!existsSync(dbPath)) {
-      continue
-    }
     let db: SyncDatabase | null = null
     try {
       db = openReadonlyDatabase(dbPath)
@@ -168,9 +164,6 @@ export async function listHermesSqliteSessions(args: {
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
   for (const dbPath of args.dbPaths) {
-    if (!existsSync(dbPath)) {
-      continue
-    }
     let db: SyncDatabase | null = null
     try {
       db = openReadonlyDatabase(dbPath)
@@ -221,9 +214,6 @@ export async function parseHermesSqliteSession(args: {
   sessionId: string
   platform: NodeJS.Platform
 }): Promise<AiVaultSession | null> {
-  if (!existsSync(args.dbPath)) {
-    return null
-  }
   let db: SyncDatabase | null = null
   try {
     db = openReadonlyDatabase(args.dbPath)
