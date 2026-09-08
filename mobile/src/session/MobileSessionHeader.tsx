@@ -11,7 +11,6 @@ import {
   Plus
 } from 'lucide-react-native'
 import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
-import { triggerMediumImpact } from '../platform/haptics'
 import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import {
@@ -44,7 +43,6 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     creatingMarkdown,
     setCreateError,
     setShowCreateTabDrawer,
-    setShowQuickCommands,
     setShowHeaderMoreActions,
     quickCommandsSupported,
     showToast,
@@ -56,7 +54,11 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     showConnectionRetry,
     terminalSummary,
     handlePanelTap,
-    showHeaderMoreButton
+    showHeaderMoreButton,
+    reconnectProp,
+    sessionTabOperations,
+    setQuickCommandsOpenFor,
+    triggerMediumImpact
   } = controller
   return (
     <SafeAreaView style={styles.sessionChrome} edges={['top']}>
@@ -79,7 +81,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             disabled={!showConnectionRetry}
             onPress={() => {
               if (hostId) {
-                void forceReconnectHost(hostId)
+                void (reconnectProp ? reconnectProp() : forceReconnectHost(hostId))
               }
             }}
             accessibilityRole={showConnectionRetry ? 'button' : undefined}
@@ -143,6 +145,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             {visibleTabs.map((t) => (
               <Pressable
                 key={t.id}
+                accessibilityRole="button"
                 style={[styles.tab, t.id === activeSessionTabId && styles.tabActive]}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
@@ -206,7 +209,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             disabled={creating || creatingBrowser || creatingMarkdown || connState !== 'connected'}
             onPress={() => {
               if (quickCommandsSupported === true) {
-                setShowQuickCommands(true)
+                setQuickCommandsOpenFor(sessionTabOperations)
                 return
               }
               showToast(

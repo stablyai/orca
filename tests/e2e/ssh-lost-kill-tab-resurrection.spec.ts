@@ -14,9 +14,9 @@ import {
 } from './helpers/docker-ssh-relay-processes'
 import {
   connectDockerSshRelayTarget,
-  disconnectDockerSshRelayTarget,
-  reconnectDisconnectedDockerSshRelayTarget
+  disconnectDockerSshRelayTarget
 } from './helpers/docker-ssh-relay-connection'
+import { reconnectDisconnectedDockerSshRelayTarget } from './helpers/docker-ssh-relay-reconnect'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const DROP_CYCLES = 3

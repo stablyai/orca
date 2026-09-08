@@ -97,3 +97,18 @@ export function filterEnabledTuiAgents<T extends TuiAgent>(
   const disabledSet = new Set(normalizeDisabledTuiAgents(disabled))
   return [...agents].filter((agent) => !disabledSet.has(agent))
 }
+
+export function orderDetectedTuiAgents(
+  preferred: TuiAgent | 'blank' | null | undefined,
+  detected: Iterable<unknown>,
+  disabled?: unknown
+): TuiAgent[] {
+  const detectedSet = new Set([...detected].filter(isTuiAgent))
+  const enabled = filterEnabledTuiAgents(
+    TUI_AGENT_AUTO_PICK_ORDER,
+    Array.isArray(disabled) ? disabled : null
+  ).filter((agent) => detectedSet.has(agent))
+  return preferred && preferred !== 'blank' && enabled.includes(preferred)
+    ? [preferred, ...enabled.filter((agent) => agent !== preferred)]
+    : enabled
+}

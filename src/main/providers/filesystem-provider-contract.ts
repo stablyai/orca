@@ -23,6 +23,12 @@ export type FileReadResult = {
   mimeType?: string
 }
 
+export type FileChunkReadResult = {
+  contentBase64: string
+  bytesRead: number
+  eof: boolean
+}
+
 export type FileReadLimits = {
   maxBinaryBytes?: number
   maxTextBytes?: number
@@ -52,6 +58,7 @@ export class FileRangeReadUnsupportedError extends Error {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
+  readFileChunk?(filePath: string, offset: number, length: number): Promise<FileChunkReadResult>
   readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
   /** Positional read. Optional because an older remote host cannot serve one.
    *  Strict by design: it throws `FileRangeReadUnsupportedError` rather than
@@ -74,6 +81,12 @@ export type IFilesystemProvider = {
     filePath: string,
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult>
+  readTerminalArtifactChunk?(
+    filePath: string,
+    offset: number,
+    length: number,
+    options: TerminalArtifactAccessOptions
+  ): Promise<FileChunkReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
   downloadFolder?: (src: string, dest: string, options?: { signal?: AbortSignal }) => Promise<void>
   openFileUploadSession?(): Promise<FileUploadSession>

@@ -15,12 +15,11 @@ import {
   type RpcStreamingListener,
   type RpcStreamSubscribeOptions
 } from './rpc-client-stream-registry'
-import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
-import { isStaleForegroundDial } from './rpc-stale-dial'
+import { nudgeRpcClientForeground } from './rpc-client-foreground-nudge'
+import { isLivenessProbeResponseId, RpcClientLivenessSession } from './rpc-client-liveness-session'
+import type { TerminalStreamFrame } from './terminal-stream-protocol'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
 import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
-
-const LIVENESS_REQUEST_ID_PREFIX = 'mobile-liveness-'
 
 export class DirectRpcClient implements RpcClient {
   private socketSession: RpcClientSocketSession | null = null
@@ -28,7 +27,7 @@ export class DirectRpcClient implements RpcClient {
   private readonly reconnect: RpcClientReconnectSchedule
   private readonly requests: RpcClientRequestTracker
   private readonly streams: RpcClientStreamRegistry
-  private readonly liveness: RpcSessionLivenessWatchdog
+  private readonly liveness: RpcClientLivenessSession
   private readonly socketFactory: RpcClientSocketFactory
   private readonly authenticationRetry: RpcClientAuthenticationRetry
   private readonly socketClose: RpcClientSocketCloseController
@@ -36,7 +35,6 @@ export class DirectRpcClient implements RpcClient {
   private readonly connectionLog: DirectConnectionLog
   private intentionallyClosed = false
   private authenticationGeneration = 0
-  private livenessSession: RpcClientSocketSession | null = null
 
   constructor(
     private readonly endpoint: string,
@@ -70,15 +68,15 @@ export class DirectRpcClient implements RpcClient {
       waitForConnected: (timeoutMs) => this.waitForConnected(timeoutMs),
       sendEncrypted: (request) => this.sendEncrypted(request)
     })
-    this.liveness = new RpcSessionLivenessWatchdog({
-      transport: 'direct',
-      sendProbe: (identity) => this.sendLivenessProbe(identity),
-      terminate: (identity) => {
-        if (identity === this.livenessSession && this.socketSession === this.livenessSession) {
-          this.socketClose.forceClose(this.livenessSession)
+    this.liveness = new RpcClientLivenessSession({
+      sendProbe: (probeId) => this.sendLivenessProbe(probeId),
+      terminate: (session) => {
+        if (this.socketSession === session) {
+          this.socketClose.forceClose(session)
         }
       },
-      onTimeout: this.connectionLog.livenessTimeout
+      onTimeout: this.connectionLog.livenessTimeout,
+      nextId: () => this.nextId()
     })
     this.socketFactory = new RpcClientSocketFactory({
       endpoint,
@@ -95,13 +93,13 @@ export class DirectRpcClient implements RpcClient {
       onAuthRejected: (reason) => this.authenticationRetry.reject(reason),
       onRpcResponse: (response) => this.handleRpcResponse(response),
       onBinary: (bytes) => this.streams.handleBinary(bytes),
-      onAuthenticatedInbound: (session) => this.liveness.noteAuthenticatedInbound(session),
+      onAuthenticatedInbound: (session) => this.liveness.noteInbound(session),
       onClosed: (session, closeCode) => this.socketClose.handle(session, closeCode),
       onForcedClose: (session) => this.socketClose.forceClose(session)
     })
     this.authenticationRetry = new RpcClientAuthenticationRetry({
       endpoint,
-      stopLiveness: () => this.stopLiveness(),
+      stopLiveness: () => this.liveness.stop(),
       emitWarning: (message, detail) =>
         this.connectionLog.emit('warn', message, detail, { code: 'authentication-rejected' }),
       retry: (reason) => this.retryAuthentication(reason),
@@ -118,11 +116,7 @@ export class DirectRpcClient implements RpcClient {
       clearCurrentSession: () => (this.socketSession = null),
       getAuthenticationGeneration: () => this.authenticationGeneration,
       isIntentionallyClosed: () => this.intentionallyClosed,
-      stopLiveness: (session) => {
-        if (this.livenessSession === session) {
-          this.stopLiveness()
-        }
-      },
+      stopLiveness: (session) => this.liveness.stop(session),
       emitWarning: (message, detail, evidence) =>
         this.connectionLog.emit('warn', message, detail, evidence)
     })
@@ -153,6 +147,10 @@ export class DirectRpcClient implements RpcClient {
     this.streams.updateTerminalViewport(terminal, viewport)
   }
 
+  sendTerminalBinaryFrame(frame: TerminalStreamFrame): boolean {
+    return this.socketSession?.sendTerminalBinaryFrame(frame) ?? false
+  }
+
   getState(): ConnectionState {
     return this.connectionState.get()
   }
@@ -165,7 +163,7 @@ export class DirectRpcClient implements RpcClient {
     return this.connectionState.getLastConnectedAt()
   }
 
-  getLastInboundAt = (): number | null => this.liveness.getLastInboundAt() || null
+  getLastInboundAt = (): number | null => this.liveness.getLastInboundAt()
 
   onStateChange(listener: (state: ConnectionState) => void): () => void {
     return this.connectionState.addListener(listener)
@@ -175,31 +173,22 @@ export class DirectRpcClient implements RpcClient {
     if (this.intentionallyClosed) {
       return
     }
-    if (this.getState() === 'connected') {
-      console.log('[net] foreground — probing live connection')
-      if (this.livenessSession) {
-        this.liveness.probeNow(this.livenessSession)
-      }
-      return
-    }
-    const dialing = this.socketSession
-    const dialAgeMs = Date.now() - this.socketFactory.getDialStartedAt()
-    let abandoned = false
-    if (dialing && isStaleForegroundDial(this.getState(), dialAgeMs)) {
-      console.log('[net] foreground — abandoning stale dial', {
-        state: this.getState(),
-        dialAgeMs
-      })
-      this.socketClose.forceClose(dialing)
-      abandoned = true
-    }
-    if (this.getState() === 'reconnecting') {
-      console.log('[net] foreground — restarting reconnect loop', {
-        attempt: this.getReconnectAttempt(),
-        hadTimer: this.reconnect.hasTimer()
-      })
-      this.reconnect.redialNow(!abandoned)
-    }
+    nudgeRpcClientForeground({
+      getState: () => this.getState(),
+      getReconnectAttempt: () => this.getReconnectAttempt(),
+      dialAgeMs: Date.now() - this.socketFactory.getDialStartedAt(),
+      hasReconnectTimer: () => this.reconnect.hasTimer(),
+      probeLiveness: () => this.liveness.probeNow(),
+      abandonDial: () => {
+        const dialing = this.socketSession
+        if (!dialing) {
+          return false
+        }
+        this.socketClose.forceClose(dialing)
+        return true
+      },
+      redial: (keepTimer) => this.reconnect.redialNow(keepTimer)
+    })
   }
 
   close(): void {
@@ -207,10 +196,7 @@ export class DirectRpcClient implements RpcClient {
     this.reconnect.cancel()
     const session = this.socketSession
     session?.clearTimers()
-    if (this.livenessSession) {
-      this.liveness.stop(this.livenessSession)
-      this.livenessSession = null
-    }
+    this.liveness.stop()
     session?.close()
     this.socketSession = null
     session?.clearKey()
@@ -227,7 +213,6 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private handleAuthenticated(session: RpcClientSocketSession): void {
-    this.livenessSession = session
     this.liveness.start(session)
     const generation = ++this.authenticationGeneration
     negotiateMobileRuntimeCapabilities({
@@ -246,7 +231,7 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private handleRpcResponse(response: RpcResponse): void {
-    if (response.id.startsWith(LIVENESS_REQUEST_ID_PREFIX)) {
+    if (isLivenessProbeResponseId(response.id)) {
       return
     }
     if (!response.ok && response.error.code === 'unauthorized') {
@@ -255,13 +240,6 @@ export class DirectRpcClient implements RpcClient {
     }
     if (!this.streams.handleResponse(response)) {
       this.requests.resolve(response)
-    }
-  }
-
-  private stopLiveness(): void {
-    if (this.livenessSession) {
-      this.liveness.stop(this.livenessSession)
-      this.livenessSession = null
     }
   }
 
@@ -296,12 +274,12 @@ export class DirectRpcClient implements RpcClient {
     return false
   }
 
-  private sendLivenessProbe(identity: object): boolean {
-    if (identity !== this.livenessSession || this.getState() !== 'connected') {
+  private sendLivenessProbe(probeId: string): boolean {
+    if (this.getState() !== 'connected') {
       return false
     }
     return this.sendEncrypted({
-      id: `${LIVENESS_REQUEST_ID_PREFIX}${this.nextId()}`,
+      id: probeId,
       deviceToken: this.deviceToken,
       method: 'status.get'
     })

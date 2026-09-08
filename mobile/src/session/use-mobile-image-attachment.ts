@@ -7,6 +7,7 @@ import {
   pickMobileImage,
   type MobileImageSource
 } from './mobile-image-source-picker'
+import type { HostSessionTerminalOperations } from './host-session-terminal-operations'
 
 type CurrentRef<T> = {
   readonly current: T
@@ -25,6 +26,7 @@ type UseMobileImageAttachmentArgs = {
   readonly onSuccess: () => void
   readonly onError: () => void
   readonly beforeTerminalSend?: (terminal: string) => Promise<boolean>
+  readonly terminalOperations: HostSessionTerminalOperations | null
 }
 
 type MobileImageAttachment = {
@@ -48,15 +50,33 @@ export function useMobileImageAttachment({
   showToast,
   onSuccess,
   onError,
-  beforeTerminalSend
+  beforeTerminalSend,
+  terminalOperations
 }: UseMobileImageAttachmentArgs): MobileImageAttachment {
   const [isAttaching, setIsAttaching] = useState(false)
   const attachImage = useCallback(
     async (source: MobileImageSource): Promise<void> => {
-      if (!client || !activeHandle || !canSend) {
+      if (!activeHandle || !canSend) {
         return
       }
       try {
+        if (!client) {
+          if (!terminalOperations?.attachImage) {
+            return
+          }
+          setIsAttaching(true)
+          const result = await terminalOperations.attachImage(activeHandle, source)
+          if (result?.status === 'accepted') {
+            onSuccess()
+          } else if (result?.status === 'permission-denied') {
+            onError()
+            showToast('Photo permission denied', 1500)
+          } else if (result?.status === 'too-large') {
+            onError()
+            showToast('Image too large to attach', 1500)
+          }
+          return
+        }
         const sent = await attachMobileImageToTerminal(source, {
           client,
           terminal: activeHandle,
@@ -99,7 +119,8 @@ export function useMobileImageAttachment({
       getActiveWorktreeConnectionId,
       onError,
       onSuccess,
-      showToast
+      showToast,
+      terminalOperations
     ]
   )
 

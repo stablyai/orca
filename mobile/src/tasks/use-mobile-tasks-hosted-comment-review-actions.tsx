@@ -1,41 +1,34 @@
 import type { HostedMetadataActionsModel } from './use-mobile-tasks-hosted-metadata-actions'
-import {
-  Clipboard,
-  buildGitHubCheckSummary,
-  scheduleMobileTaskCopyFeedbackReset,
-  useCallback
-} from './mobile-tasks-dependencies'
+import { buildGitHubCheckSummary, useCallback } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
   type GitHubAssignableUser,
-  type GitHubDetailCheck,
   type TaskItem,
-  isSuccess,
-  splitReviewerList
-} from './mobile-tasks-legacy-foundation'
+  splitReviewerList,
+  taskItemMutationTarget
+} from './mobile-tasks-model'
 
 export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataActionsModel) {
   const {
-    client,
-    copiedLinkResetTimerRef,
     detailPayload,
     itemCommentDraft,
     itemReviewersDraft,
     mutatingStatus,
     setActionItem,
-    setCopiedLinkKey,
     setDetailPayload,
     setError,
     setItemCommentDraft,
     setItemReviewersDraft,
     setItems,
-    setMutatingStatus
+    setMutatingStatus,
+    taskItemFileOperations,
+    taskItemReviewOperations
   } = model
   const addHostedItemComment = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>
     ): Promise<void> => {
-      if (!client || mutatingStatus) {
+      if (!taskItemReviewOperations || mutatingStatus) {
         return
       }
       const body = itemCommentDraft.trim()
@@ -45,47 +38,11 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        const response =
-          item.provider === 'github'
-            ? await client.sendRequest(
-                'github.addIssueComment',
-                {
-                  repo: `id:${item.source.repoId}`,
-                  number: item.source.number,
-                  body,
-                  type: item.source.type
-                },
-                { timeoutMs: 30_000 }
-              )
-            : await client.sendRequest(
-                item.source.type === 'mr' ? 'gitlab.addMRComment' : 'gitlab.addIssueComment',
-                item.source.type === 'mr'
-                  ? {
-                      repo: `id:${item.source.repoId}`,
-                      iid: item.source.number,
-                      body,
-                      projectRef: item.source.projectRef
-                    }
-                  : {
-                      repo: `id:${item.source.repoId}`,
-                      number: item.source.number,
-                      body,
-                      projectRef: item.source.projectRef
-                    },
-                { timeoutMs: 30_000 }
-              )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          error?: string
-          comment?: DetailComment
-        }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to add comment')
-        }
-        const comment: DetailComment = result.comment ?? {
+        const addedComment = await taskItemReviewOperations.addComment(
+          taskItemMutationTarget(item),
+          body
+        )
+        const comment: DetailComment = addedComment ?? {
           id: `local-${Date.now()}`,
           body,
           createdAt: new Date().toISOString(),
@@ -105,32 +62,11 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         setMutatingStatus(false)
       }
     },
-    [client, itemCommentDraft, mutatingStatus]
+    [itemCommentDraft, mutatingStatus, taskItemReviewOperations]
   )
-
-  const copyTaskLink = useCallback(async (key: string, url: string): Promise<void> => {
-    try {
-      await Clipboard.setStringAsync(url)
-      setCopiedLinkKey(key)
-      scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy link')
-    }
-  }, [])
-
-  const copyTextToClipboard = useCallback(async (key: string, value: string): Promise<void> => {
-    try {
-      await Clipboard.setStringAsync(value)
-      setCopiedLinkKey(key)
-      scheduleMobileTaskCopyFeedbackReset(copiedLinkResetTimerRef, key, setCopiedLinkKey)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to copy text')
-    }
-  }, [])
-
   const requestGitHubReviewers = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, logins?: string[]): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') {
+      if (!taskItemReviewOperations || mutatingStatus || item.source.type !== 'pr') {
         return
       }
       const reviewers = logins ?? splitReviewerList(itemReviewersDraft)
@@ -140,22 +76,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.requestPRReviewers',
-          {
-            repo: `id:${item.source.repoId}`,
-            prNumber: item.source.number,
-            reviewers
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to request reviewers')
-        }
+        await taskItemReviewOperations.requestReviewers(taskItemMutationTarget(item), reviewers)
         const nextReviewRequests = (() => {
           const byLogin = new Map<string, GitHubAssignableUser>()
           for (const reviewer of detailPayload?.provider === 'github'
@@ -210,34 +131,20 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         setMutatingStatus(false)
       }
     },
-    [client, detailPayload, itemReviewersDraft, mutatingStatus]
+    [detailPayload, itemReviewersDraft, mutatingStatus, taskItemReviewOperations]
   )
-
   const refreshGitHubChecks = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') {
+      if (!taskItemFileOperations || mutatingStatus || item.source.type !== 'pr') {
         return
       }
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.prChecks',
-          {
-            repo: `id:${item.source.repoId}`,
-            prNumber: item.source.number,
-            headSha: detailPayload?.provider === 'github' ? detailPayload.headSha : undefined,
-            noCache: true
-          },
-          { timeoutMs: 30_000 }
+        const checks = await taskItemFileOperations.refreshChecks(
+          taskItemMutationTarget(item),
+          detailPayload?.provider === 'github' ? detailPayload.headSha : undefined
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        if (!Array.isArray(response.result)) {
-          throw new Error('Invalid checks response')
-        }
-        const checks = response.result as GitHubDetailCheck[]
         const checksSummary = buildGitHubCheckSummary(checks)
         setDetailPayload((current) =>
           current?.provider === 'github' ? { ...current, checks } : current
@@ -266,14 +173,12 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         setMutatingStatus(false)
       }
     },
-    [client, detailPayload, mutatingStatus]
+    [detailPayload, mutatingStatus, taskItemFileOperations]
   )
   return Object.assign(model, {
     addHostedItemComment,
-    copyTaskLink,
-    copyTextToClipboard,
-    requestGitHubReviewers,
-    refreshGitHubChecks
+    refreshGitHubChecks,
+    requestGitHubReviewers
   })
 }
 

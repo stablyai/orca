@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, Linking, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobilePrShellOperations } from '../../platform/mobile-pr-shell-operations'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchPRCheckDetails, type GitHubPrRepoSlug } from '../../session/github-pr-rpc'
@@ -42,6 +43,7 @@ type Props = {
 // fetch github.prCheckDetails, cached per check key (U5). Display-only; the
 // rerun action is U6.
 export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, triage }: Props) {
+  const shell = useMobilePrShellOperations()
   const sorted = sortPRChecks(checks)
   const summary = summarizePRChecks(checks)
   const rerunBusy = actions?.isBusy({ kind: 'rerun' }) ?? false
@@ -221,7 +223,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
               {url ? (
                 <Pressable
                   style={styles.rowTrailing}
-                  onPress={() => void Linking.openURL(url).catch(() => {})}
+                  onPress={() => void shell.openExternal(url).catch(() => {})}
                   hitSlop={6}
                   accessibilityRole="button"
                   accessibilityLabel={`Open ${check.name} on the web`}

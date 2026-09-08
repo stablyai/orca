@@ -10,7 +10,9 @@ type FunctionDefinition = {
 }
 
 const TASKS_ROUTE = '../../app/h/[hostId]/tasks.tsx'
-const FOUNDATION_SOURCE = 'mobile-tasks-legacy-foundation.tsx'
+/** Stage inputs whose destructure is plumbing, not behavior. */
+const STAGE_INPUT_NAMES = new Set(['model', 'hostOperations', 'itemState'])
+const FOUNDATION_SOURCE = 'mobile-tasks-model.tsx'
 const LEGACY_STYLE_SOURCE = 'mobile-tasks-legacy-styles.ts'
 
 function parseSource(relativePath: string): ts.SourceFile {
@@ -86,7 +88,7 @@ function isModelDestructure(statement: ts.Statement): boolean {
     ts.isObjectBindingPattern(declaration.name) &&
     declaration.initializer != null &&
     ts.isIdentifier(declaration.initializer) &&
-    declaration.initializer.text === 'model'
+    STAGE_INPUT_NAMES.has(declaration.initializer.text)
   )
 }
 

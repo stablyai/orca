@@ -333,6 +333,56 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.cols).toBe(120)
       expect(snapshot.rows).toBe(40)
     })
+
+    it('preserves live OSC 8 link ranges', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('\x1b]8;;file:///tmp/result.json\x07ORCA_FILE\x1b]8;;\x07')
+
+      emulator.resize(72, 24)
+
+      expect(emulator.getSnapshot().oscLinks).toContainEqual({
+        row: 0,
+        startCol: 0,
+        endCol: 9,
+        uri: 'file:///tmp/result.json'
+      })
+    })
+
+    it('preserves repeated live OSC 8 links through mobile height reflow', async () => {
+      emulator = new HeadlessEmulator({ cols: 49, rows: 36 })
+      const link = (label: string) =>
+        `\x1b]8;;file:///tmp/result.json\x1b\\${label}\x1b]8;;\x1b\\\r\n`
+      await emulator.write(
+        `\x1b[2J\x1b[H\x1b[999;1H\x1b[10A${link('ORCA_FILE')}${link('ORCA_FILE')}\r\n`
+      )
+
+      expect(emulator.getSnapshot().oscLinks).toHaveLength(2)
+      emulator.resize(49, 18)
+
+      expect(emulator.getSnapshot().oscLinks).toHaveLength(2)
+    })
+
+    it('preserves restored OSC 8 link ranges when dimensions do not change', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+      await emulator.write('ORCA_FILE')
+      emulator.setRestoredOscLinks([
+        {
+          row: 0,
+          startCol: 0,
+          endCol: 9,
+          uri: 'file:///tmp/result.json'
+        }
+      ])
+
+      emulator.resize(80, 24)
+
+      expect(emulator.getSnapshot().oscLinks).toContainEqual({
+        row: 0,
+        startCol: 0,
+        endCol: 9,
+        uri: 'file:///tmp/result.json'
+      })
+    })
   })
 
   describe('clear scrollback (CSI 3J)', () => {

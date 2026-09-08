@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
-import {
-  buildMobileAiVaultResumeLaunch,
-  resumeAiVaultSessionInTerminal
-} from './ai-vault-resume-launch'
+import { buildMobileAiVaultResumeLaunch } from '../../../src/shared/mobile-ai-vault-resume-launch-plan'
+import { resumeAiVaultSessionInTerminal } from './ai-vault-resume-launch'
 import {
   prepareMobileAiVaultSessionResume,
   RESUME_RPC_TIMEOUT_MS

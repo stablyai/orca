@@ -1,78 +1,61 @@
 import { useEffect, useState } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse, RpcSuccess } from '../transport/types'
 import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
 } from '../tasks/mobile-task-providers'
-import type { NewWorktreeRuntimeSettings } from './new-worktree-agent-selection'
-
-function settledSuccess(entry: PromiseSettledResult<RpcResponse>): RpcSuccess | null {
-  return entry.status === 'fulfilled' && entry.value.ok ? (entry.value as RpcSuccess) : null
-}
+import type {
+  HostWorkspaceCreationOperations,
+  NewWorkspaceRuntimeSettings
+} from '../worktree/host-workspace-creation-operations'
 
 export function useNewWorkspaceRuntimeContext(
-  client: RpcClient | null,
-  visible: boolean,
-  hostId?: string
+  operations: HostWorkspaceCreationOperations | null,
+  visible: boolean
 ): {
-  runtimeSettings: NewWorktreeRuntimeSettings | null
-  setRuntimeSettings: (settings: NewWorktreeRuntimeSettings) => void
+  runtimeSettings: NewWorkspaceRuntimeSettings | null
+  setRuntimeSettings: (settings: NewWorkspaceRuntimeSettings) => void
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
   availableProviders: TaskProvider[]
 } {
-  const [runtimeSettings, setRuntimeSettings] = useState<NewWorktreeRuntimeSettings | null>(null)
+  const [runtimeSettings, setRuntimeSettings] = useState<NewWorkspaceRuntimeSettings | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
 
   useEffect(() => {
-    if (!visible || !client) {
+    if (!visible || !operations) {
       return
     }
     let stale = false
     void (async () => {
       const probes = Promise.allSettled([
-        client.sendRequest('preflight.check'),
-        client.sendRequest('linear.status')
+        operations.isGitLabCliInstalled(),
+        operations.isLinearConnected()
       ])
       const [settingsRes, uiRes] = await Promise.allSettled([
-        client.sendRequest('settings.get'),
-        client.sendRequest('ui.get')
+        operations.readRuntimeSettings(),
+        operations.readTrustedHooks()
       ])
       if (stale) {
         return
       }
 
-      const settingsResult = settledSuccess(settingsRes)
-      const settingsValue = settingsResult
-        ? (
-            settingsResult.result as {
-              settings: NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown }
-            }
-          ).settings
-        : null
+      const settingsValue = settingsRes.status === 'fulfilled' ? settingsRes.value : null
       if (settingsValue) {
         setRuntimeSettings(settingsValue)
       }
-      const uiResult = settledSuccess(uiRes)
-      if (uiResult) {
-        const ui = (uiResult.result as { ui?: { trustedOrcaHooks?: PersistedTrustedOrcaHooks } }).ui
-        setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
+      if (uiRes.status === 'fulfilled') {
+        setTrustedOrcaHooks(uiRes.value)
       }
 
       const [preflightRes, linearRes] = await probes
       if (stale) {
         return
       }
-      const glabInstalled =
-        (settledSuccess(preflightRes)?.result as { glab?: { installed?: boolean } } | undefined)
-          ?.glab?.installed === true
-      const linearConnected =
-        (settledSuccess(linearRes)?.result as { connected?: boolean } | undefined)?.connected ===
-        true
+      const glabInstalled = preflightRes.status === 'fulfilled' && preflightRes.value
+      const linearConnected = linearRes.status === 'fulfilled' && linearRes.value
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
       setAvailableProviders(
         filterAvailableTaskProviders(visibleProviders, {
@@ -84,7 +67,7 @@ export function useNewWorkspaceRuntimeContext(
     return () => {
       stale = true
     }
-  }, [visible, client, hostId])
+  }, [visible, operations])
 
   return {
     runtimeSettings,

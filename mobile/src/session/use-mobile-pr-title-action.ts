@@ -3,7 +3,7 @@ import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
 import { fetchUpdatePRTitle, type GitHubPrMutationOutcome } from './github-pr-mutations'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { useMobilePrShellOperations } from '../platform/mobile-pr-shell-operations'
 import { buildUpdatePRTitleParams } from './pr-title-edit'
 
 export type PrTitleMutations = {
@@ -41,6 +41,7 @@ function realMutations(
 // successful no-op (the caller closes the editor) without a host round-trip.
 export function useMobilePrTitleAction(input: PrTitleActionInput) {
   const { client, connState, worktreeId, prNumber, prRepo, refetch } = input
+  const shell = useMobilePrShellOperations()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inFlightRef = useRef(false)
@@ -73,17 +74,17 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
       try {
         const outcome = await mutations.updateTitle({ ...params, prRepo })
         if (outcome.ok) {
-          triggerSuccess()
+          shell.success()
           await refetch()
           return true
         }
-        triggerError()
+        shell.error()
         setError(outcome.error)
         return false
       } catch (err) {
         // Why: updateTitle/refetch can throw; without this the `void save()`
         // rejection is unhandled — set the error + error haptic and return false.
-        triggerError()
+        shell.error()
         setError(err instanceof Error ? err.message : 'Failed to update title.')
         return false
       } finally {
@@ -91,7 +92,7 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
         setSaving(false)
       }
     },
-    [ready, mutations, prNumber, prRepo, refetch]
+    [ready, mutations, prNumber, prRepo, refetch, shell]
   )
 
   return {

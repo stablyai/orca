@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
+import { nativeHostSessionTerminalFileOperations } from './native-host-session-terminal-file-operations'
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -18,7 +19,7 @@ function activationState(activated: boolean) {
 
 function baseOptions(client: { sendRequest: ReturnType<typeof vi.fn> }) {
   return {
-    client,
+    operations: nativeHostSessionTerminalFileOperations(client as never),
     hostId: 'host-1',
     worktreeId: 'wt-1',
     pushPreviewRoute: vi.fn(),
@@ -90,6 +91,7 @@ describe('openMobileNativeChatFileTap', () => {
       nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
     })
     await Promise.resolve()
+    await Promise.resolve()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -118,6 +120,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts:120:7' })
+    await Promise.resolve()
     await Promise.resolve()
 
     expect(sendRequest).toHaveBeenCalledWith(
@@ -166,6 +169,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
+    await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
 

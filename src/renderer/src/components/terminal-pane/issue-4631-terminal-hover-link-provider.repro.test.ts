@@ -3,7 +3,7 @@ import { Terminal } from '@xterm/headless'
 import type { IDisposable } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { extractTerminalFileLinks } from '@/lib/terminal-links'
+import { extractTerminalFileLinks } from '../../../../shared/terminal-links'
 import { createFilePathLinkProvider, getTerminalFileOpenHint } from './terminal-link-handlers'
 import { buildWrappedLogicalLine } from './wrapped-terminal-link-ranges'
 

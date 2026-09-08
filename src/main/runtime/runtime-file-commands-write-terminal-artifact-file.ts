@@ -4,6 +4,7 @@ import type { TerminalFileGrant } from './runtime-file-commands-mobile-file-list
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
   MOBILE_FILE_READ_MAX_BYTES,
+  RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES,
   previewableBinaryByteLimit
 } from './runtime-file-commands-mobile-file-list-limit'
 import { isBinaryBuffer, isMobileBinaryPath } from './runtime-file-command-host'
@@ -17,9 +18,86 @@ import { chmod, constants, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { FileStat, IFilesystemProvider } from '../providers/types'
-import type { RuntimeFilePreviewResult } from '../../shared/runtime-types'
+import type {
+  RuntimeFilePreviewResult,
+  RuntimeFileReadChunkResult
+} from '../../shared/runtime-types'
 
 export class RuntimeFileCommandsWithWriteTerminalArtifactFile extends RuntimeFileCommandsWithRevokeTerminalFileGrantsForClient {
+  async readTerminalArtifactChunk(
+    worktreeSelector: string,
+    grantId: string,
+    absolutePath: string,
+    offset: number,
+    length: number,
+    maxBytes: number,
+    clientId?: string
+  ): Promise<RuntimeFileReadChunkResult> {
+    if (
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      !Number.isSafeInteger(length) ||
+      length < 1 ||
+      length > 512 * 1024 ||
+      !Number.isSafeInteger(maxBytes) ||
+      maxBytes < 1 ||
+      maxBytes > RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES
+    ) {
+      throw new Error('invalid_terminal_artifact_chunk')
+    }
+    const { grant } = await this.requireTerminalFileGrant(
+      worktreeSelector,
+      grantId,
+      absolutePath,
+      clientId
+    )
+    let result: RuntimeFileReadChunkResult
+    if (grant.connectionId) {
+      const provider = await this.assertRemoteTerminalFileGrantPathStillCanonical(grant)
+      if (!provider.readTerminalArtifactChunk) {
+        throw new Error('terminal_file_grant_unavailable')
+      }
+      result = await provider.readTerminalArtifactChunk(
+        grant.absolutePath,
+        offset,
+        length,
+        this.terminalArtifactAccessOptions(grant, maxBytes)
+      )
+    } else {
+      const handle = await openLocalTerminalArtifactGrant(grant, constants.O_RDONLY)
+      try {
+        const fileStats = await handle.stat()
+        if (fileStats.isDirectory()) {
+          throw new Error('Cannot read a directory')
+        }
+        if (fileStats.size > maxBytes) {
+          throw new Error('file_too_large')
+        }
+        assertTerminalFileGrantFresh(grant, fileStats)
+        const buffer = Buffer.alloc(Math.min(length, Math.max(0, fileStats.size - offset)))
+        const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
+        result = {
+          contentBase64: buffer.subarray(0, bytesRead).toString('base64'),
+          bytesRead,
+          eof: offset + bytesRead >= fileStats.size
+        }
+      } finally {
+        await handle.close()
+      }
+    }
+    const decoded = Buffer.from(result.contentBase64, 'base64')
+    if (
+      decoded.toString('base64') !== result.contentBase64 ||
+      result.bytesRead !== decoded.byteLength ||
+      result.bytesRead > length ||
+      (result.bytesRead === 0 && !result.eof)
+    ) {
+      throw new Error('invalid_terminal_artifact_chunk')
+    }
+    this.refreshTerminalFileGrant(grant)
+    return result
+  }
+
   async writeTerminalArtifactFile(
     worktreeSelector: string,
     grantId: string,

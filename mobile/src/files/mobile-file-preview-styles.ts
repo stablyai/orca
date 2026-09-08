@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native'
+import { Platform, StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const filePreviewStyles = StyleSheet.create({
@@ -94,7 +94,10 @@ export const filePreviewStyles = StyleSheet.create({
   },
   textPreview: {
     color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
+    ...Platform.select({
+      default: { fontFamily: typography.monoFamily },
+      web: {}
+    }),
     fontSize: 13,
     lineHeight: 19
   },
@@ -161,7 +164,10 @@ export const filePreviewStyles = StyleSheet.create({
   editInput: {
     flex: 1,
     color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
+    ...Platform.select({
+      default: { fontFamily: typography.monoFamily },
+      web: {}
+    }),
     fontSize: 13,
     lineHeight: 19,
     padding: 0

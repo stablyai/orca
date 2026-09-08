@@ -4,6 +4,7 @@ import {
   decodeTerminalStreamText
 } from '../../../../../shared/terminal-stream-protocol'
 import { isTerminalInputLockedForClient, sendTerminalStreamInput } from './terminal-input-delivery'
+import { isAcceptableTerminalQueryReplyFrame } from './terminal-query-reply-guard'
 import type { TerminalSubscriptionArgs } from './terminal-legacy-subscription-types'
 import { updateViewportForClient } from './terminal-viewport-update'
 
@@ -29,8 +30,10 @@ export function registerLegacyBinaryControlFrames(
     registerBinaryStreamHandler,
     ptyId,
     clientId,
+    connectionClientId,
     isMobile,
     supportsDesktopViewportClaims,
+    supportsQueryReply,
     supportsWriteUnavailable
   } = args
   if (!registerBinaryStreamHandler) {
@@ -40,7 +43,10 @@ export function registerLegacyBinaryControlFrames(
     if (controls.isClosed()) {
       return
     }
-    if (frame.opcode === TerminalStreamOpcode.Input) {
+    if (
+      frame.opcode === TerminalStreamOpcode.Input ||
+      (frame.opcode === TerminalStreamOpcode.QueryReply && supportsQueryReply)
+    ) {
       const text = decodeTerminalStreamText(frame.payload)
       if (!text) {
         return
@@ -48,15 +54,30 @@ export function registerLegacyBinaryControlFrames(
       if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
         return
       }
+      const isQueryReply = frame.opcode === TerminalStreamOpcode.QueryReply
       void controls.getDesktopClaimTail().then(async (claimed) => {
         if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+          return
+        }
+        // Why: opcode 18 skips the mobile input floor, so it needs every guard terminal.send applies; drop otherwise.
+        if (
+          isQueryReply &&
+          !isAcceptableTerminalQueryReplyFrame({
+            runtime,
+            ptyId,
+            text,
+            client: params.client,
+            connectionClientId
+          })
+        ) {
           return
         }
         const outcome = await sendTerminalStreamInput(runtime, {
           terminal: params.terminal,
           text,
           client: params.client,
-          isMobile
+          isMobile,
+          inputKind: isQueryReply ? 'query-reply' : 'input'
         })
         if (!controls.isClosed() && outcome === 'rejected' && supportsWriteUnavailable) {
           controls.sendFrame(TerminalStreamOpcode.WriteUnavailable)

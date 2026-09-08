@@ -1,10 +1,8 @@
 import type { Page } from '@stablyai/playwright-test'
 import type { PairedElectronClient } from './paired-electron-client'
 import type { DockerSshRelayTarget } from './docker-ssh-relay-target'
-import {
-  reconnectDisconnectedDockerSshRelayTarget,
-  resetDockerSshRelayTarget
-} from './docker-ssh-relay-connection'
+import { resetDockerSshRelayTarget } from './docker-ssh-relay-connection'
+import { reconnectDisconnectedDockerSshRelayTarget } from './docker-ssh-relay-reconnect'
 import {
   isDockerSshRelayPidRunning,
   readDockerSshRelayProcessSnapshots,

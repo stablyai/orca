@@ -13,6 +13,7 @@ import type {
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
+import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { AgentSessionClaimSigner } from './agent-session-claim-identity'
 import type { OrchestrationEnvironmentTransport } from './orchestration/environment-transport'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
@@ -35,7 +36,52 @@ import { createEphemeralAgentSessionClaimSigner } from './agent-session-claim-id
 import { registerConptyDa1OverrideInstaller } from './terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from './terminal-view-attribute-store'
 
+export type RuntimeNativeChatTranscriptBinding = {
+  worktreeId: string
+  connectionId: string | null
+  agent: string | null
+  providerSession: AgentProviderSessionMetadata | null
+}
+
 export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
+  private readonly lastKnownNativeChatSessions = new Map<
+    string,
+    Pick<RuntimeNativeChatTranscriptBinding, 'agent' | 'providerSession'>
+  >()
+
+  resolveNativeChatTranscriptBinding(handle: string): RuntimeNativeChatTranscriptBinding | null {
+    const terminalContext = this.resolveTerminalContext(handle)
+    if (!terminalContext) {
+      this.lastKnownNativeChatSessions.delete(handle)
+      return null
+    }
+    const snapshot = this.mobileSessionTabsByWorktree.get(terminalContext.worktreeId)
+    const terminal = snapshot
+      ? this.toMobileSessionTabsResult(snapshot).tabs.find(
+          (tab) => tab.type === 'terminal' && tab.status === 'ready' && tab.terminal === handle
+        )
+      : undefined
+    const live =
+      terminal?.type === 'terminal'
+        ? {
+            agent: terminal.agentStatus?.agentType ?? terminal.launchAgent ?? null,
+            providerSession: terminal.agentStatus?.providerSession ?? null
+          }
+        : null
+    if (live?.providerSession) {
+      this.lastKnownNativeChatSessions.set(handle, live)
+      return { ...terminalContext, ...live }
+    }
+    // Why: a relay teardown clears this connection's agent status, but loss of contact is never
+    // evidence the session is gone. Keeping the last-known identity lets the read fail against
+    // the unreachable host instead of reporting the session as missing.
+    const remembered = this.lastKnownNativeChatSessions.get(handle)
+    if (remembered) {
+      return { ...terminalContext, ...remembered }
+    }
+    return live ? { ...terminalContext, ...live } : null
+  }
+
   constructor(
     store: RuntimeStore | null = null,
     stats?: StatsCollector,

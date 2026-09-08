@@ -1,8 +1,6 @@
 import { expect, test } from './helpers/orca-app'
-import {
-  connectDockerSshRelayTarget,
-  reconnectDockerSshRelayTarget
-} from './helpers/docker-ssh-relay-connection'
+import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
+import { reconnectDockerSshRelayTarget } from './helpers/docker-ssh-relay-reconnect'
 import {
   cleanupDockerSshRelayTarget,
   execDockerSshRelayTargetControlCommand,

@@ -11,6 +11,7 @@ import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-even
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
+import { toSshExecutionHostId } from '../../shared/execution-host'
 
 export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStatus {
   // Why: SSH state changes originate in main's ssh handlers, not in runtime
@@ -22,6 +23,13 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
       this.legacyWorkerRecovery.cancelScope(`ssh:${targetId}`)
     }
     this.emitClientEvent({ type: 'sshStateChanged', targetId, state: getPublicSshState(state)! })
+  }
+
+  notifySshRelayUnavailable(targetId: string): void {
+    this.bumpSshRelayRecoveryGeneration(targetId)
+    for (const worktreeId of this.collectMobileSessionWorktreeIdsForSshTarget(targetId)) {
+      this.notifyMobileSessionTabsChangedNow(worktreeId, ++this.mobileSessionTabsChangeSequence)
+    }
   }
 
   notifySshRelayReady(targetId: string): void {
@@ -66,6 +74,20 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     const generation = (this.sshRelayRecoveryGenerationByTargetId.get(targetId) ?? 0) + 1
     this.sshRelayRecoveryGenerationByTargetId.set(targetId, generation)
     return generation
+  }
+
+  private collectMobileSessionWorktreeIdsForSshTarget(targetId: string): Set<string> {
+    const worktreeIds = new Set<string>()
+    const executionHostId = toSshExecutionHostId(targetId)
+    for (const worktreeId of [
+      ...this.getKnownWorkspaceSessionWorktreeIds(),
+      ...this.mobileSessionTabsByWorktree.keys()
+    ]) {
+      if (this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId) === executionHostId) {
+        worktreeIds.add(worktreeId)
+      }
+    }
+    return worktreeIds
   }
 
   protected async publishRecoveredSshMobileSessionTabs(
@@ -136,6 +158,9 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
   // clients need an explicit catalog invalidation; the local renderer already
   // got its own repos:changed and must not be re-notified (#11994).
   notifyReposChangedForRemoteClients(): void {
+    // Why here: the resolved-worktree snapshot is derived from the repo list, so a repo
+    // registered while a snapshot is warm stays invisible for the whole TTL.
+    this.invalidateResolvedWorktreeCache()
     this.emitClientEvent({ type: 'reposChanged' })
   }
 

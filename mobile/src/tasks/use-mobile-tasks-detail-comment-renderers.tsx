@@ -21,7 +21,7 @@ import {
   detailCommentGroupRoot,
   isResolvedDetailCommentGroup,
   renderCommentReactions
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsModel) {
@@ -29,6 +29,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
     actionItem,
     detailPayload,
     expandedResolvedCommentGroups,
+    handleOpenExternalUrl,
     itemReplyDrafts,
     mutatingStatus,
     replyToGitHubComment,
@@ -74,7 +75,6 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
       </View>
     )
   }
-
   const renderDetailComment = (
     comment: DetailComment,
     options: { nested?: boolean } = {}
@@ -94,7 +94,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
         {commentAuthor(comment)}
         {commentDate(comment.createdAt) ? ` · ${commentDate(comment.createdAt)}` : ''}
       </Text>
-      <MobileMarkdown content={comment.body} />
+      <MobileMarkdown content={comment.body} onOpenLink={handleOpenExternalUrl} />
       {renderCommentReactions(comment)}
       {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
       actionItem?.provider === 'github' &&
@@ -142,7 +142,6 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
       ) : null}
     </View>
   )
-
   const renderDetailCommentGroup = (group: DetailCommentGroup): ReactNode => {
     const id = detailCommentGroupId(group)
     const root = detailCommentGroupRoot(group)

@@ -39,7 +39,7 @@ describe('mobile onboarding plan', () => {
 
   it.each([
     [[], undefined, '/'],
-    [[], 'paired-host', '/h/paired-host'],
+    [[], 'paired-host', '/hybrid?hostId=paired-host'],
     [
       ['session-view', 'notifications'],
       undefined,
@@ -57,7 +57,7 @@ describe('mobile onboarding plan', () => {
       }
     ]
   ] as const)('maps %j with host %s to the correct destination', (steps, hostId, destination) => {
-    expect(mobileOnboardingDestination(steps, hostId)).toEqual(destination)
+    expect(mobileOnboardingDestination(steps, hostId, false)).toEqual(destination)
   })
 
   it('parses route steps in canonical order without duplicates', () => {

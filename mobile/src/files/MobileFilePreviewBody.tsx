@@ -20,6 +20,7 @@ type Props = {
   onDraftChange: (content: string) => void
   onImageError: () => void
   onRetry: () => void
+  onOpenLink: (url: string) => void
 }
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
@@ -81,6 +82,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         truncated={preview.truncated}
         byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
+        onOpenLink={options.onOpenLink}
       />
     )
   }

@@ -7,6 +7,7 @@ import type {
   TerminalModes,
   TerminalWebViewHandle
 } from '../terminal/terminal-webview-contract'
+import type { MobileWebTerminalTextScale } from '../../../src/shared/mobile-web/native-operation-contract'
 
 type TerminalPaneViewProps = {
   handle: string
@@ -27,7 +28,7 @@ type TerminalPaneViewProps = {
   onTerminalTap: (handle: string) => void
   onFileTap: (handle: string, pathText: string, line: number | null, column: number | null) => void
   onOpenUrl: (handle: string, url: string) => void
-  onTextScaleChange: (scale: number) => void
+  onTextScaleChange: (scale: MobileWebTerminalTextScale) => void
 }
 
 export function TerminalPaneView({

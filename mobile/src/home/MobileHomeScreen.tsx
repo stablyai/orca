@@ -1,18 +1,14 @@
 import { useCallback, useState } from 'react'
 import { Alert, StyleSheet } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
-import { hostNewWorktreeRoute } from '../host-route-action-state'
-import { hostRouteWithNotice } from '../host-route-notice'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
-import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import type { TaskProvider } from '../tasks/mobile-task-providers'
-import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
+import { useOpenMobileHostTarget } from '../mobile-web/use-open-mobile-host-target'
 import { colors } from '../theme/mobile-theme'
 import {
   useDisconnectHostClient,
@@ -38,14 +34,16 @@ export function MobileHomeScreen() {
   const insets = useSafeAreaInsets()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const openMobileHostEdit = useOpenMobileHostEdit()
-  const openMobileTasks = useOpenMobileTasks()
-  const openMobileSession = useOpenMobileSession()
-  const openMobileAccounts = useOpenMobileAccounts()
+  const openMobileHostTarget = useOpenMobileHostTarget()
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
-  const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
+  const [confirmRemove, setConfirmRemove] = useState<{
+    id: string
+    name: string
+    publicKeyB64: string
+  } | null>(null)
 
   const openResume = useCallback(
     (card: HomeResumeCard) => {
@@ -55,25 +53,35 @@ export function MobileHomeScreen() {
           getProvenCachedWorktrees(card.hostId) as HomeWorktreeSummary[] | null
         )
       ) {
-        data.router.push(hostRouteWithNotice(card.hostId, 'worktree-missing'))
+        openMobileHostTarget(card.hostId, { kind: 'workspaceList', notice: 'worktree-missing' })
         return
       }
-      openMobileSession({
-        hostId: card.hostId,
-        worktreeId: card.worktree.worktreeId,
+      openMobileHostTarget(card.hostId, {
+        kind: 'session',
+        hostWorkspaceId: card.worktree.worktreeId,
         name: card.worktree.displayName || card.worktree.repo
       })
     },
-    [data.router, openMobileSession]
+    [openMobileHostTarget]
   )
 
-  const openTasks = useCallback(
+  const openMobileTasks = useCallback(
     (provider?: TaskProvider) => {
       if (data.primaryHost) {
-        openMobileTasks(data.primaryHost.id, provider)
+        openMobileHostTarget(
+          data.primaryHost.id,
+          provider ? { kind: 'tasks', taskSource: provider } : { kind: 'tasks' }
+        )
       }
     },
-    [data.primaryHost, openMobileTasks]
+    [data.primaryHost, openMobileHostTarget]
+  )
+
+  const openMobileAccounts = useCallback(
+    (hostId: string) => {
+      openMobileHostTarget(hostId, { kind: 'accounts' })
+    },
+    [openMobileHostTarget]
   )
 
   function openHost(host: HostCatalogEntry): void {
@@ -84,7 +92,7 @@ export function MobileHomeScreen() {
         .then(data.setHostCatalog)
         .catch(() => Alert.alert('Could not check pairing', 'Please try again.'))
     } else {
-      data.router.push(`/h/${host.id}`)
+      openMobileHostTarget(host.id, { kind: 'workspaceList' })
     }
   }
 
@@ -102,7 +110,7 @@ export function MobileHomeScreen() {
     }
     const host = confirmRemove
     try {
-      await removeHostAndCloseClient(host.id, forgetHostClient)
+      await removeHostAndCloseClient(host.id, host.publicKeyB64, forgetHostClient)
       setConfirmRemove(null)
       data.setHostCatalog(await loadHostCatalog())
     } catch {
@@ -133,10 +141,10 @@ export function MobileHomeScreen() {
               primaryHost={data.primaryHost}
               primaryTaskProviders={data.primaryTaskProviders}
               resumeCard={data.resumeCard}
-              onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
+              onCreateWorkspace={(hostId) => openMobileHostTarget(hostId, { kind: 'newWorkspace' })}
               onOpenAccounts={openMobileAccounts}
               onOpenResume={openResume}
-              onOpenTasks={openTasks}
+              onOpenTasks={openMobileTasks}
               onPairDesktop={() => data.router.push('/pair-scan')}
             />
           }

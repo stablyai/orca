@@ -34,6 +34,14 @@ export type MobileFilePreviewSource =
       relativePath: string
     }
   | MobileTerminalArtifactPreviewSource
+  | {
+      source: 'webArtifact'
+      worktreeId: string
+      tabId: string
+      pathText: string
+      displayName: string
+      previewKind: 'text' | 'raster'
+    }
 
 export type MobileFilePreviewRequest = {
   method: MobileFilePreviewReadMethod | MobileTerminalArtifactPreviewReadMethod
@@ -59,6 +67,9 @@ export function createMobileFilePreviewRequest(
     typeof worktreeIdOrSource === 'string'
       ? { source: 'worktree' as const, worktreeId: worktreeIdOrSource, relativePath: relativePath! }
       : worktreeIdOrSource
+  if (source.source === 'webArtifact') {
+    throw new Error('Hosted artifact requires the web preview adapter')
+  }
   if (source.source === 'terminalArtifact') {
     const method =
       classifyMobileArtifact(source.absolutePath) === 'image'
@@ -255,5 +266,8 @@ function terminalArtifactPreviewMatchesBase(
 }
 
 function previewPathForSource(source: MobileFilePreviewSource): string {
+  if (source.source === 'webArtifact') {
+    return source.pathText
+  }
   return source.source === 'terminalArtifact' ? source.absolutePath : source.relativePath
 }

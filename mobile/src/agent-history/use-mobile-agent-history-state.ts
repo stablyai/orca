@@ -8,7 +8,7 @@ import type {
   AiVaultSession
 } from '../../../src/shared/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
-import { deriveMobileAiVaultScopePaths } from './agent-history-scope-paths'
+import { deriveMobileAiVaultScopePaths } from '../../../src/shared/mobile-ai-vault-scope-paths'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 
 export { MOBILE_AI_VAULT_CAPABILITY }

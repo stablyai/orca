@@ -54,6 +54,7 @@ export async function initializeMultiplexStream(
     ackInFlightBytes: 0,
     ackWindowBytes: TERMINAL_MULTIPLEX_ACK_STREAM_INITIAL_WINDOW_BYTES,
     supportsOutputPause: request.capabilities?.outputPause === 1,
+    supportsQueryReply: request.capabilities?.queryReply === 1,
     supportsWriteUnavailable: request.capabilities?.writeUnavailable === 1,
     outputPaused: false,
     supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,

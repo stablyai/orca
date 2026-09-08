@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Pencil
 } from './mobile-tasks-dependencies'
-import { TASK_SECONDARY_DRAWER_Z_INDEX } from './mobile-tasks-legacy-foundation'
+import { TASK_SECONDARY_DRAWER_Z_INDEX } from './mobile-tasks-model'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPresentationModel) {

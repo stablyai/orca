@@ -4,9 +4,11 @@ import {
   MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES,
   type NativeChatLineDecoder
 } from './transcript-tail-reader'
+import type { TranscriptFileSource } from './transcript-file-source'
 import { openTranscriptReadStream, wslGatedStat } from './wsl-transcript-fs-access'
 
 const APPEND_BATCH_MESSAGE_LIMIT = 40
+const INCREMENTAL_READ_CHUNK_BYTES = 64 * 1024
 
 export type IncrementalTranscriptState = {
   offset: number
@@ -14,6 +16,11 @@ export type IncrementalTranscriptState = {
   pendingStart: number
   pendingBytes: number
   droppingOversizedRecord: boolean
+}
+
+type IncrementalTranscriptReadOptions = {
+  fileSource?: TranscriptFileSource
+  signal?: AbortSignal
 }
 
 export function createIncrementalTranscriptState(): IncrementalTranscriptState {
@@ -41,13 +48,22 @@ export async function readIncrementalTranscriptMessages(
   onBatch?: (messages: NativeChatMessage[]) => void,
   decodeLifecycle?: (line: string, fallbackId: string) => NativeChatTurnLifecycle | null,
   onLifecycle?: (lifecycle: NativeChatTurnLifecycle) => void,
-  signal?: AbortSignal
+  optionsOrSignal: IncrementalTranscriptReadOptions | AbortSignal = {}
 ): Promise<NativeChatMessage[]> {
-  const end = (await wslGatedStat(filePath, 'exact', signal)).size
+  const options = isAbortSignal(optionsOrSignal) ? { signal: optionsOrSignal } : optionsOrSignal
+  const { fileSource, signal } = options
+  const end = (
+    fileSource ? await fileSource.stat(filePath) : await wslGatedStat(filePath, 'exact', signal)
+  ).size
+  signal?.throwIfAborted()
   if (end <= state.offset) {
     return []
   }
   const messages: NativeChatMessage[] = []
+  if (fileSource) {
+    await readProviderChunks(fileSource)
+    return messages
+  }
   const stream = openTranscriptReadStream(
     filePath,
     { start: state.offset, end: end - 1 },
@@ -58,20 +74,7 @@ export async function readIncrementalTranscriptMessages(
     let absoluteOffset = state.offset
     for await (const rawChunk of stream) {
       const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
-      let segmentStart = 0
-      let newline = chunk.indexOf(0x0a)
-      while (newline >= 0) {
-        retainPart(chunk.subarray(segmentStart, newline))
-        if (!state.droppingOversizedRecord) {
-          decodeLine()
-        }
-        resetPendingLine(absoluteOffset + newline + 1)
-        segmentStart = newline + 1
-        newline = chunk.indexOf(0x0a, segmentStart)
-      }
-      if (segmentStart < chunk.length) {
-        retainPart(chunk.subarray(segmentStart))
-      }
+      processChunk(chunk, absoluteOffset)
       absoluteOffset += chunk.length
       state.offset = absoluteOffset
     }
@@ -80,6 +83,44 @@ export async function readIncrementalTranscriptMessages(
     // Early exits (throw/oversized-record bail) must not leak the fd or, on
     // UNC, the gated handle the generator's finally closes.
     stream.destroy()
+  }
+
+  async function readProviderChunks(fileSource: TranscriptFileSource): Promise<void> {
+    const reader = await fileSource.open(filePath)
+    try {
+      let absoluteOffset = state.offset
+      while (absoluteOffset < end) {
+        signal?.throwIfAborted()
+        const requestedBytes = Math.min(INCREMENTAL_READ_CHUNK_BYTES, end - absoluteOffset)
+        const chunk = await reader.read(absoluteOffset, requestedBytes)
+        signal?.throwIfAborted()
+        if (chunk.length === 0 || chunk.length > requestedBytes) {
+          throw new Error('Transcript changed during read')
+        }
+        processChunk(chunk, absoluteOffset)
+        absoluteOffset += chunk.length
+        state.offset = absoluteOffset
+      }
+    } finally {
+      await reader.close()
+    }
+  }
+
+  function processChunk(chunk: Buffer, absoluteOffset: number): void {
+    let segmentStart = 0
+    let newline = chunk.indexOf(0x0a)
+    while (newline >= 0) {
+      retainPart(chunk.subarray(segmentStart, newline))
+      if (!state.droppingOversizedRecord) {
+        decodeLine()
+      }
+      resetPendingLine(absoluteOffset + newline + 1)
+      segmentStart = newline + 1
+      newline = chunk.indexOf(0x0a, segmentStart)
+    }
+    if (segmentStart < chunk.length) {
+      retainPart(chunk.subarray(segmentStart))
+    }
   }
 
   function retainPart(part: Buffer): void {
@@ -124,4 +165,10 @@ export async function readIncrementalTranscriptMessages(
       onBatch(messages.splice(0))
     }
   }
+}
+
+function isAbortSignal(
+  value: IncrementalTranscriptReadOptions | AbortSignal
+): value is AbortSignal {
+  return 'aborted' in value
 }

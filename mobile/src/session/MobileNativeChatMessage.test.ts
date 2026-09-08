@@ -26,7 +26,6 @@ vi.mock('react-native', async () => {
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
 })
-vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ChevronDown: 'ChevronDown',
@@ -60,6 +59,7 @@ describe('MobileNativeChatMessage', () => {
     message: NativeChatMessage,
     props: {
       toolsExpanded?: boolean
+      onCopyText?: (text: string) => Promise<void>
       structuredActivityUi?: boolean
       activeTurnIsWorking?: boolean
       turnExpanded?: boolean
@@ -142,7 +142,6 @@ describe('MobileNativeChatMessage', () => {
       tree.root.findAllByType('Pressable' as never).find((node) => textIn(node).includes(label))!
 
     act(() => pressableWith('1×').props.onPress())
-    // The row label is the command, and the detail stays closed until tapped.
     expect(textIn(tree.root)).toContain('git status')
     expect(textIn(tree.root).some((text) => text.startsWith('{\n'))).toBe(false)
 
@@ -153,16 +152,10 @@ describe('MobileNativeChatMessage', () => {
   })
 
   it('does not echo the row label as detail when a row has nothing to expand', () => {
-    // The Tools toggle opens every row at once, bypassing the tap guard — a row
-    // whose formatted input is its own label would echo itself in a panel that
-    // no tap can dismiss.
     const tree = render(toolMessage([{ type: 'tool-call', name: 'ListTodos', input: '{}' }]), {
       toolsExpanded: true
     })
     expect(textIn(tree.root).filter((text) => text === '{}')).toHaveLength(1)
-    // The chevron has to agree with the panel, or the row claims to be open over
-    // nothing and the tap that would close it is guarded off. Only the run header
-    // is open here; the row itself stays collapsed.
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
     expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
   })
@@ -175,6 +168,26 @@ describe('MobileNativeChatMessage', () => {
     expect(textIn(tree.root).filter((text) => text === input)).toHaveLength(1)
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
     expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
+  })
+
+  it('routes agent message copy through the injected device operation', async () => {
+    const onCopyText = vi.fn().mockResolvedValue(undefined)
+    const tree = render(
+      {
+        id: 'a1',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'copy through shell' }],
+        timestamp: null,
+        source: 'transcript'
+      },
+      { onCopyText }
+    )
+
+    await act(async () => {
+      tree.root.findByProps({ accessibilityLabel: 'Copy message' }).props.onPress()
+    })
+
+    expect(onCopyText).toHaveBeenCalledWith('copy through shell')
   })
 
   describe('structured activity UI', () => {

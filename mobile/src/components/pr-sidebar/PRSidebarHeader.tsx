@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobilePrShellOperations } from '../../platform/mobile-pr-shell-operations'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
 import { prStateBadge } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
 import { canEditPRTitle } from '../../session/pr-title-edit'
-import { openMobilePrUrl } from '../mobile-pr-url'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
 
@@ -32,6 +32,7 @@ export function PRSidebarHeader({
   showOpenOnWeb = true,
   bare = false
 }: Props) {
+  const shell = useMobilePrShellOperations()
   const item = details?.item
   const badge = prStateBadge(pr.state)
   const badgeColor = statusColor(badge.token)
@@ -40,7 +41,8 @@ export function PRSidebarHeader({
   const baseRef = item?.baseRefName ?? null
   const headRef = item?.branchName ?? null
   const editable = canEditPRTitle(pr.state)
-  const openPr = pr.url ? () => openMobilePrUrl(pr.url) : undefined
+  const prUrl = pr.url
+  const openPr = prUrl ? () => void shell.openExternal(prUrl).catch(() => {}) : undefined
 
   const body = (
     <>

@@ -1,23 +1,16 @@
-import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useHostClient } from '../transport/client-context'
-import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
+import { useHostStatusGates } from '../transport/host-status-gates'
 import { colors } from '../theme/mobile-theme'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
+import { HostProtocolGatesProvider, useHostProtocolGates } from './host-protocol-gates-context'
+
+export { HostProtocolGatesProvider, useHostProtocolGates }
 
 type Props = {
   hostId: string | undefined
   children: ReactNode
-}
-
-const HostStatusGatesContext = createContext<HostStatusGates | null>(null)
-
-export function useHostProtocolGates(): HostStatusGates {
-  const gates = useContext(HostStatusGatesContext)
-  if (!gates) {
-    throw new Error('useHostProtocolGates must be used inside <HostProtocolGate>')
-  }
-  return gates
 }
 
 // Why: single choke point above every /h/[hostId] route so a blocked verdict replaces the
@@ -66,28 +59,16 @@ export function HostProtocolGate({ hostId, children }: Props) {
   }
   // Why: the host sidebar needs the same status fields; sharing the result avoids a second status.get per route.
   return (
-    <HostStatusGatesContext.Provider value={gates}>
+    <HostProtocolGatesProvider value={gates}>
       <View style={styles.host}>
         <View
           style={styles.host}
-          // Why: the overlay blocks in-tree touches but TalkBack can still walk the covered
-          // stack; hide it while pending (Android counterpart of the overlay's iOS modal flag).
           importantForAccessibility={pending ? 'no-hide-descendants' : 'auto'}
         >
           {children}
         </View>
         {pending ? (
-          // Why: once the stack is mounted, unmounting it for a pending status.get destroys
-          // in-flight nested navigation, so cover it instead. Mount effects underneath still
-          // run — they wait for connState 'connected' and every capability-dependent call
-          // re-probes status.get itself, so nothing newer than the baseline fires here.
-          <View
-            style={styles.pendingOverlay}
-            // Why: the fill owns the hit test for in-tree views only — native-Modal-hosted
-            // surfaces (bottom drawers) present in a separate window above it and stay live.
-            pointerEvents="auto"
-            accessibilityViewIsModal
-          >
+          <View style={styles.pendingOverlay} pointerEvents="auto" accessibilityViewIsModal>
             <ActivityIndicator
               color={colors.textSecondary}
               accessibilityLabel="Checking host compatibility"
@@ -95,7 +76,7 @@ export function HostProtocolGate({ hostId, children }: Props) {
           </View>
         ) : null}
       </View>
-    </HostStatusGatesContext.Provider>
+    </HostProtocolGatesProvider>
   )
 }
 

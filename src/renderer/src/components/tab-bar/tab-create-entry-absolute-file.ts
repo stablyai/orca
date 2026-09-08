@@ -1,5 +1,5 @@
 import { detectLanguage } from '@/lib/language-detect'
-import { toWorktreeRelativePath } from '@/lib/terminal-links'
+import { toWorktreeRelativePath } from '../../../../shared/terminal-links'
 import type { RuntimeFileOperationArgs, statRuntimePath } from '@/runtime/runtime-file-client'
 import type { OpenFile } from '@/store/slices/editor'
 import {

@@ -24,6 +24,14 @@ function createMockWebContents() {
 
   return {
     isDestroyed: vi.fn(() => false),
+    on: dbg.on.bind(dbg),
+    removeListener: dbg.removeListener.bind(dbg),
+    getURL: vi.fn(() => 'https://example.com'),
+    getTitle: vi.fn(() => 'Example Domain'),
+    navigationHistory: {
+      canGoBack: vi.fn(() => false),
+      canGoForward: vi.fn(() => false)
+    },
     debugger: dbg
   }
 }
@@ -310,6 +318,41 @@ describe('startBrowserScreencast', () => {
     await vi.waitFor(() => expect(onFrame).toHaveBeenCalledTimes(2))
     const frame = decodeBrowserScreencastFrame(onFrame.mock.calls[1][0])
     expect(Buffer.from(frame?.image ?? new Uint8Array()).toString()).toBe('capture-2')
+
+    session.stop()
+    await session.done
+  })
+
+  it('emits live navigation state after main-frame navigation', async () => {
+    const webContents = createMockWebContents()
+    webContents.navigationHistory.canGoBack.mockReturnValue(true)
+    webContents.debugger.sendCommand.mockResolvedValue({ currentIndex: 1, entries: [{}, {}] })
+    const onEvent = vi.fn()
+
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 1440,
+      maxHeight: 1200,
+      everyNthFrame: 2,
+      minFrameIntervalMs: 0,
+      onFrame: vi.fn(),
+      onEvent
+    })
+
+    webContents.debugger.emit('message', {}, 'Page.frameNavigated', { frame: { id: 'main' } })
+
+    await vi.waitFor(() =>
+      expect(onEvent).toHaveBeenCalledWith({
+        type: 'navigation',
+        tab: {
+          url: 'https://example.com',
+          title: 'Example Domain',
+          canGoBack: true,
+          canGoForward: false
+        }
+      })
+    )
 
     session.stop()
     await session.done

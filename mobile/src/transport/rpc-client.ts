@@ -1,5 +1,6 @@
-import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
+import type { RpcStreamSubscribeOptions } from './rpc-client-stream-registry'
+import type { TerminalStreamFrame } from './terminal-stream-protocol'
 import type {
   ConnectionLogSink,
   ConnectionState,
@@ -13,11 +14,15 @@ export type SendRequestOptions = {
   budgetSpansConnect?: boolean
   /** Reject instead of replaying the request after reconnect. */
   failWhenDisconnected?: boolean
+  /** Revalidate caller authority synchronously at the final transport write. */
+  beforeSend?: () => void
 }
 
-type SubscribeOptions = {
-  onBinaryFrame?: (frame: BrowserScreencastFrame) => void
-}
+/** A unary reply as its caller reads it. The hosted page answers over the capability bridge, which
+ * carries no request id or runtime metadata, so those stay on the transport's own `RpcResponse`. */
+export type RpcRequestReply =
+  | { ok: true; result: unknown }
+  | { ok: false; error?: { code?: string; message?: string } }
 
 type StreamingListener = (result: unknown) => void
 
@@ -31,12 +36,14 @@ export type RpcClient = {
     method: string,
     params: unknown,
     onData: StreamingListener,
-    options?: SubscribeOptions
+    options?: RpcStreamSubscribeOptions
   ) => () => void
   updateTerminalSubscriptionViewport: (
     terminal: string,
     viewport: { cols: number; rows: number }
   ) => void
+  // Why: the hosted bridge multiplexes terminal bytes over one binary channel.
+  sendTerminalBinaryFrame: (frame: TerminalStreamFrame) => boolean
   getState: () => ConnectionState
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null
@@ -45,6 +52,10 @@ export type RpcClient = {
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   close: () => void
 }
+
+/** The one method a caller needs to reach the desktop. The hosted page satisfies it over the
+ * bridge, so request code written against the socket runs unchanged inside the webview. */
+export type RpcRequestSender = Pick<RpcClient, 'sendRequest'>
 
 export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void

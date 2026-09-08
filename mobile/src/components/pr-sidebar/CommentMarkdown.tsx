@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { useMobilePrShellOperations } from '../../platform/mobile-pr-shell-operations'
 import { MermaidDiagram } from './MermaidDiagram'
 import { isAllowedMarkdownLinkUrl } from './markdown-link-scheme'
 import {
@@ -141,13 +142,6 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
   }
 }
 
-function openMarkdownLink(url: string): void {
-  if (!isAllowedMarkdownLinkUrl(url)) {
-    return
-  }
-  void Linking.openURL(url).catch(() => {})
-}
-
 function alignToFlex(align: CellAlign | undefined): 'flex-start' | 'center' | 'flex-end' {
   if (align === 'center') {
     return 'center'
@@ -203,48 +197,69 @@ function TableBlock({
 }
 
 function Inline({ text, base }: { text: string; base: number }) {
-  const tokens = useMemo<InlineToken[]>(() => {
-    try {
-      return parseInline(text)
-    } catch {
-      return [{ kind: 'text', text }]
-    }
-  }, [text])
+  const shell = useMobilePrShellOperations()
+  const tokens = useMemo(() => keyedInlineTokens(parseInlineSafely(text)), [text])
   return (
     <>
-      {tokens.map((token, i) => {
+      {tokens.map(({ key, token }) => {
         if (token.kind === 'bold') {
           return (
-            <Text key={i} style={styles.bold}>
+            <Text key={key} style={styles.bold}>
               {token.text}
             </Text>
           )
         }
         if (token.kind === 'italic') {
           return (
-            <Text key={i} style={styles.italic}>
+            <Text key={key} style={styles.italic}>
               {token.text}
             </Text>
           )
         }
         if (token.kind === 'code') {
           return (
-            <Text key={i} style={[styles.codeInline, { fontSize: base - 1 }]}>
+            <Text key={key} style={[styles.codeInline, { fontSize: base - 1 }]}>
               {token.text}
             </Text>
           )
         }
         if (token.kind === 'link') {
           return (
-            <Text key={i} style={styles.link} onPress={() => openMarkdownLink(token.url)}>
+            <Text
+              key={key}
+              style={styles.link}
+              onPress={() => {
+                if (isAllowedMarkdownLinkUrl(token.url)) {
+                  void shell.openExternal(token.url).catch(() => {})
+                }
+              }}
+            >
               {token.text}
             </Text>
           )
         }
-        return <Text key={i}>{token.text}</Text>
+        return <Text key={key}>{token.text}</Text>
       })}
     </>
   )
+}
+
+function parseInlineSafely(text: string): InlineToken[] {
+  try {
+    return parseInline(text)
+  } catch {
+    return [{ kind: 'text', text }]
+  }
+}
+
+function keyedInlineTokens(tokens: InlineToken[]): { key: string; token: InlineToken }[] {
+  let sourceOffset = 0
+  // The index keeps two adjacent zero-length tokens of the same kind distinct.
+  return tokens.map((token, index) => {
+    const key = `${index}:${sourceOffset}:${token.kind}`
+    sourceOffset += token.text.length
+    return { key, token }
+  })
 }
 
 const styles = StyleSheet.create({

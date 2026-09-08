@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { startRuntimeCapabilityProbe } from './runtime-capability-probe'
+import { startRuntimeCapabilityProbe, startRuntimeCapabilityRead } from './runtime-capability-probe'
 import { LogicalClientCutoverError } from './stable-logical-rpc-client'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
@@ -96,6 +96,22 @@ describe('startRuntimeCapabilityProbe', () => {
     cancel()
   })
 
+  it('reuses the retry behavior for a named capability reader', async () => {
+    const read = vi
+      .fn<() => Promise<{ agentHistorySupported: boolean }>>()
+      .mockRejectedValueOnce(new LogicalClientCutoverError())
+      .mockResolvedValue({ agentHistorySupported: true })
+    const seen: { agentHistorySupported: boolean }[] = []
+    const cancel = startRuntimeCapabilityRead(read, (capabilities) => seen.push(capabilities))
+
+    await flushMicrotasks()
+    await vi.advanceTimersByTimeAsync(250)
+
+    expect(seen).toEqual([{ agentHistorySupported: true }])
+    expect(read).toHaveBeenCalledTimes(2)
+    cancel()
+  })
+
   it('retries promptly after a logical-client cutover rejection', async () => {
     const { client, calls } = makeClient([new LogicalClientCutoverError(), ok(['a.v1'])])
     const seen: (readonly string[])[] = []
@@ -153,6 +169,26 @@ describe('startRuntimeCapabilityProbe', () => {
     await vi.advanceTimersByTimeAsync(15_000 * 10)
     expect(seen).toEqual([['a.v1']])
     expect(calls()).toBe(11)
+    cancel()
+  })
+
+  it('stops polling at cutover speed when the link keeps cutting over', async () => {
+    const outcomes: ProbeOutcome[] = Array.from(
+      { length: 6 },
+      () => new LogicalClientCutoverError()
+    )
+    outcomes.push(ok(['a.v1']))
+    const { client, calls } = makeClient(outcomes)
+    const seen: (readonly string[])[] = []
+    const cancel = startRuntimeCapabilityProbe(client, (capabilities) => seen.push(capabilities))
+    await flushMicrotasks()
+
+    // Three prompt retries, then the backoff ladder: an endless 4 Hz poll would be 40 calls here.
+    await vi.advanceTimersByTimeAsync(250 * 4)
+    expect(calls()).toBe(4)
+    await vi.advanceTimersByTimeAsync(1_000 + 2_000 + 4_000)
+    expect(seen).toEqual([['a.v1']])
+    expect(calls()).toBe(7)
     cancel()
   })
 

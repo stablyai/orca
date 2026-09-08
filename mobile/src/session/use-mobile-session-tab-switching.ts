@@ -1,13 +1,9 @@
 import { useCallback } from 'react'
-import { triggerSelection } from '../platform/haptics'
-import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 
 export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateModel) {
   const {
-    worktreeId,
-    client,
     sessionTabs,
     defaultTerminalHandlesToLiveInput,
     setActiveHandle,
@@ -24,7 +20,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     unsubscribeTerminal,
     subscribeToTerminal,
     readMarkdownTab,
-    readFileTab
+    readFileTab,
+    activateSessionTab,
+    triggerSelection
   } = scope
   // Why: unsubscribe restores old dims (clears phone-fit banner); resubscribe phone-fits the new one.
   const switchTab = useCallback(
@@ -53,25 +51,16 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         initializedHandlesRef.current.delete(handle)
       }
       subscribeToTerminal(handle)
-      if (client) {
-        if (matchingTab) {
-          void activateMobileSessionTab(client, {
-            worktree: `id:${worktreeId}`,
-            tabId: matchingTab.id,
-            notifyClients: false,
-            navigation: 'caller',
-            intent: 'user'
-          }).catch(() => {})
-        }
+      if (matchingTab) {
+        void activateSessionTab(matchingTab.id).catch(() => {})
       }
     },
     [
-      client,
+      activateSessionTab,
       defaultTerminalHandlesToLiveInput,
       sessionTabs,
       subscribeToTerminal,
-      unsubscribeTerminal,
-      worktreeId
+      unsubscribeTerminal
     ]
   )
 
@@ -95,15 +84,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         }
         activeHandleRef.current = null
         setActiveHandle(null)
-        if (client) {
-          void activateMobileSessionTab(client, {
-            worktree: `id:${worktreeId}`,
-            tabId: tab.id,
-            notifyClients: false,
-            navigation: 'caller',
-            intent: 'user'
-          }).catch(() => {})
-        }
+        void activateSessionTab(tab.id).catch(() => {})
         return
       }
 
@@ -120,15 +101,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       }
       activeHandleRef.current = null
       setActiveHandle(null)
-      if (client) {
-        void activateMobileSessionTab(client, {
-          worktree: `id:${worktreeId}`,
-          tabId: tab.id,
-          notifyClients: false,
-          navigation: 'caller',
-          intent: 'user'
-        }).catch(() => {})
-      }
+      void activateSessionTab(tab.id).catch(() => {})
       if (tab.type === 'browser') {
         return
       }
@@ -146,7 +119,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       // Why: tab list lacks a reliable version for desktop clean saves; re-read on revisit unless the phone has a draft.
       void readMarkdownTab(tab)
     },
-    [client, markdownDocs, readFileTab, readMarkdownTab, switchTab, unsubscribeTerminal, worktreeId]
+    [activateSessionTab, markdownDocs, readFileTab, readMarkdownTab, switchTab, unsubscribeTerminal]
   )
   // Ref to latest switchSessionTab so fetchSessionTabs can activate a synced browser tab without a dependency cycle.
   switchSessionTabRef.current = switchSessionTab

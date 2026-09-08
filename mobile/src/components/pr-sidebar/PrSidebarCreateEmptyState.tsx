@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
+import { useMobilePrShellOperations } from '../../platform/mobile-pr-shell-operations'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { ConnectionState } from '../../transport/types'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
@@ -18,7 +19,6 @@ import {
   runMobileHostedReviewCreateIntent
 } from '../../source-control/mobile-hosted-review-create-intent-runner'
 import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
-import { openMobilePrUrl } from '../mobile-pr-url'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
 import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
 
@@ -45,6 +45,7 @@ export function PrSidebarCreateEmptyState({
   connState,
   onCreated
 }: Props) {
+  const shell = useMobilePrShellOperations()
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   const [createWarning, setCreateWarning] = useState<string | null>(null)
@@ -128,7 +129,7 @@ export function PrSidebarCreateEmptyState({
         return
       }
       setCreateWarning(outcome.warning ?? null)
-      openMobilePrUrl(outcome.url)
+      void shell.openExternal(outcome.url).catch(() => {})
       onCreated()
     } catch (err) {
       setCreateWarning(err instanceof Error ? err.message : 'Failed to create pull request.')

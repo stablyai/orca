@@ -10,7 +10,7 @@ import {
   Check,
   X
 } from './mobile-tasks-dependencies'
-import { TASK_SECONDARY_DRAWER_Z_INDEX, setupSourceLabel } from './mobile-tasks-legacy-foundation'
+import { TASK_SECONDARY_DRAWER_Z_INDEX, setupSourceLabel } from './mobile-tasks-model'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {

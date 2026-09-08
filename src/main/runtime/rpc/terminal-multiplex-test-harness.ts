@@ -51,7 +51,8 @@ export function makeRequest(method: string, params?: unknown): RpcRequest {
 export function startDesktopMultiplexSubscribe(
   overrides: Partial<OrcaRuntimeService> = {},
   trace?: string[],
-  sendBinaryOverride?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  sendBinaryOverride?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void,
+  connectionClientId?: string
 ) {
   const messages: string[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
@@ -93,6 +94,7 @@ export function startDesktopMultiplexSubscribe(
     },
     {
       connectionId: 'conn-desktop-first-paint',
+      clientId: connectionClientId,
       sendBinary: (bytes) => {
         const sent = sendBinaryOverride?.(bytes)
         if (sent === false) {

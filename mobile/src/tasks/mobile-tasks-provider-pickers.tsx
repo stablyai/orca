@@ -19,7 +19,7 @@ import {
   getRepoBadgeColor,
   issueSourceSlug,
   GITHUB_KIND_OPTIONS
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {

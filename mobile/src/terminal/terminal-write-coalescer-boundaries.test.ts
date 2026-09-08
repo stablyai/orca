@@ -108,16 +108,19 @@ describe('terminal write coalescer boundaries', () => {
     expect(webViewSource).toContain(
       "createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data }))"
     )
-    const writeStart = webViewSource.indexOf('write(data: string) {')
+    const writeStart = webViewSource.indexOf(
+      'write(data: string | Uint8Array, onParsed?: () => void) {'
+    )
     expect(writeStart).toBeGreaterThanOrEqual(0)
-    const writeBody = webViewSource.slice(writeStart, writeStart + 120)
-    expect(writeBody).toContain('writeCoalescer.write(data)')
+    const writeBody = webViewSource.slice(writeStart, writeStart + 240)
+    expect(writeBody).toContain('writeCoalescer.write(')
+    expect(writeBody).toContain("typeof data === 'string' ? data : new TextDecoder().decode(data)")
     expect(writeBody).not.toContain('postMessage')
   })
 
   it('clears the coalescer before posting init and clear (snapshot supersession)', () => {
     // Anchor on the init() signature (unique) — 'init(' alone also matches comments.
-    const initStart = webViewSource.indexOf('initialData?: string,')
+    const initStart = webViewSource.indexOf('initialData?: string | Uint8Array,')
     const initClear = webViewSource.indexOf('writeCoalescer.clear()', initStart)
     const initPost = webViewSource.indexOf("type: 'init'", initStart)
     expect(initStart).toBeGreaterThanOrEqual(0)

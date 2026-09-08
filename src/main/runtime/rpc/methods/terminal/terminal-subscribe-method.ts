@@ -15,7 +15,14 @@ export const TERMINAL_SUBSCRIBE_METHODS: RpcAnyMethod[] = [
     params: TerminalSubscribe,
     handler: async (
       params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      {
+        runtime,
+        connectionId,
+        clientId: connectionClientId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal
+      },
       emit
     ) => {
       let leaf = runtime.resolveLeafForHandle(params.terminal)
@@ -70,8 +77,10 @@ export const TERMINAL_SUBSCRIBE_METHODS: RpcAnyMethod[] = [
         emit,
         ptyId,
         clientId,
+        connectionClientId,
         isMobile,
         supportsDesktopViewportClaims: params.capabilities?.desktopViewportClaims === 1,
+        supportsQueryReply: params.capabilities?.queryReply === 1,
         supportsWriteUnavailable: params.capabilities?.writeUnavailable === 1,
         rendererMountRequestedBeforePty,
         missingHeadlessStateBeforeMobileFit,

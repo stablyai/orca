@@ -1,66 +1,34 @@
-import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type {
+  GenerationRpcClient,
+  SessionTabsApplyOutcome,
+  SessionTabsRequestCohort,
+  SessionTabsRequestOwner,
+  SessionTabsStreamHealth,
+  SessionTabsStreamHealthOptions,
+  SessionTabsStreamSource,
+  SessionTabsStreamSubscription
+} from './mobile-session-tabs-stream-health-contract'
 
-export type SessionTabsApplyOutcome<Tab> =
-  | { accepted: false }
-  | { accepted: true; effectiveTabs: readonly Tab[]; applicationRevision?: number }
-
-export type SessionTabsStreamSource = 'list' | 'stream'
-
-type StreamHealth = 'probing' | 'live' | 'degraded'
-
-type RequestOwner = {
-  generation: number
-  barrier: number
-  requirement: number
-  applicationRevision: number
-}
-
-type RequestCohort = {
-  promise: Promise<void>
-  resolve: () => void
-  retry: boolean
-}
-
-type ControllerOptions<Result, Tab> = {
-  client: RpcClient
-  scope: string
-  apply: (result: Result) => SessionTabsApplyOutcome<Tab>
-  consumeAccepted: (
-    result: Result,
-    effectiveTabs: readonly Tab[],
-    source: SessionTabsStreamSource
-  ) => void
-  hasRecoveryNeed: () => boolean
-  allowRecoveryPoll?: () => boolean
-  getApplicationRevision?: () => number
-  onFetchStarted?: () => void
-  onFetchSucceeded?: (result: Result) => void
-  onFetchFailed?: (failure: RpcFailure) => void
-  onFetchErrored?: (error: unknown) => void
-}
-
-type StreamSubscription = {
-  listener: (payload: unknown) => void
-  cancel: () => void
-}
-
-type GenerationClient = RpcClient & { getGeneration?: () => number }
+export type {
+  SessionTabsApplyOutcome,
+  SessionTabsStreamSource
+} from './mobile-session-tabs-stream-health-contract'
 
 export class MobileSessionTabsStreamHealth<Result, Tab> {
-  private readonly inFlight = new Map<string, RequestCohort>()
+  private readonly inFlight = new Map<string, SessionTabsRequestCohort>()
   private generation: number
   private barrier = 0
   private subscriptionEpoch = 0
   private requirementRevision = 0
   private satisfiedRevision = 0
   private applicationRevision = 0
-  private health: StreamHealth = 'probing'
+  private health: SessionTabsStreamHealth = 'probing'
   private snapshotSeen = false
   private reconciliationActive = false
   private disposed = false
 
-  constructor(private readonly options: ControllerOptions<Result, Tab>) {
+  constructor(private readonly options: SessionTabsStreamHealthOptions<Result, Tab>) {
     this.generation = this.readGeneration()
     this.applicationRevision = this.readApplicationRevision()
   }
@@ -122,7 +90,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
     this.reconciliationActive = active
   }
 
-  beginSubscription(): StreamSubscription {
+  beginSubscription(): SessionTabsStreamSubscription {
     this.syncGeneration()
     const epoch = ++this.subscriptionEpoch
     this.invalidateStream('probing')
@@ -200,7 +168,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
     return outcome
   }
 
-  private invalidateStream(health: Exclude<StreamHealth, 'live'>): void {
+  private invalidateStream(health: Exclude<SessionTabsStreamHealth, 'live'>): void {
     this.barrier += 1
     this.health = health
     this.snapshotSeen = false
@@ -226,8 +194,8 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
     return promise
   }
 
-  private runCohortRequest(key: string, cohort: RequestCohort): void {
-    const owner: RequestOwner = {
+  private runCohortRequest(key: string, cohort: SessionTabsRequestCohort): void {
+    const owner: SessionTabsRequestOwner = {
       generation: this.generation,
       barrier: this.barrier,
       requirement: this.requirementRevision,
@@ -252,22 +220,20 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
     void this.runRequest(owner).then(finish, () => finish(false))
   }
 
-  private async runRequest(owner: RequestOwner): Promise<boolean> {
+  private async runRequest(owner: SessionTabsRequestOwner): Promise<boolean> {
     try {
       this.options.onFetchStarted?.()
-      const response = await this.options.client.sendRequest('session.tabs.list', {
-        worktree: this.options.scope
-      })
+      const read = await this.readSnapshot()
       if (!this.isCurrentGeneration(owner.generation)) {
         return false
       }
-      if (!response.ok) {
-        if (owner.barrier === this.barrier) {
-          this.options.onFetchFailed?.(response as RpcFailure)
+      if (!read.ok) {
+        if (owner.barrier === this.barrier && read.failure) {
+          this.options.onFetchFailed?.(read.failure)
         }
         return false
       }
-      const result = (response as RpcSuccess).result as Result
+      const result = read.result
       if (owner.barrier !== this.barrier) {
         return false
       }
@@ -320,10 +286,32 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
   }
 
   private readGeneration(): number {
-    return (this.options.client as GenerationClient).getGeneration?.() ?? 0
+    return (
+      this.options.getGeneration?.() ??
+      (this.options.client as GenerationRpcClient | undefined)?.getGeneration?.() ??
+      0
+    )
   }
 
   private readApplicationRevision(): number {
     return Math.max(this.applicationRevision, this.options.getApplicationRevision?.() ?? 0)
+  }
+
+  private async readSnapshot(): Promise<
+    { ok: true; result: Result } | { ok: false; failure?: RpcFailure }
+  > {
+    if (this.options.requestSnapshot) {
+      return { ok: true, result: await this.options.requestSnapshot() }
+    }
+    if (!this.options.client || !this.options.scope) {
+      throw new Error('session_snapshot_source_missing')
+    }
+    const response = await this.options.client.sendRequest('session.tabs.list', {
+      worktree: this.options.scope
+    })
+    if (!response.ok) {
+      return { ok: false, failure: response as RpcFailure }
+    }
+    return { ok: true, result: (response as RpcSuccess).result as Result }
   }
 }

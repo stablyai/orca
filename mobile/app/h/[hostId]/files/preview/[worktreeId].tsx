@@ -1,9 +1,19 @@
-import { useLocalSearchParams } from 'expo-router'
 import { MobileFilePreviewScreen } from '../../../../../src/files/MobileFilePreviewScreen'
+import { useMobileWebRouteParams } from '../../../../../src/mobile-web/use-mobile-web-route-params'
+import type { HostFilePreviewOperations } from '../../../../../src/files/host-file-preview-operations'
 import { normalizeMobileFilePreviewRouteParams } from '../../../../../src/files/mobile-file-preview-route'
+import type { ConnectionState } from '../../../../../src/transport/types'
 
-export default function MobileFilePreviewRoute() {
-  const params = useLocalSearchParams<{
+export function MobileFilePreviewRoute({
+  operations,
+  connectionState,
+  nativeHostBinding = true
+}: {
+  operations?: HostFilePreviewOperations
+  connectionState?: ConnectionState
+  nativeHostBinding?: boolean
+} = {}) {
+  const params = useMobileWebRouteParams<{
     hostId?: string | string[]
     worktreeId?: string | string[]
     relativePath?: string | string[]
@@ -20,5 +30,14 @@ export default function MobileFilePreviewRoute() {
     name?: string | string[]
     worktreeName?: string | string[]
   }>()
-  return <MobileFilePreviewScreen route={normalizeMobileFilePreviewRouteParams(params)} />
+  return (
+    <MobileFilePreviewScreen
+      route={normalizeMobileFilePreviewRouteParams(params)}
+      operations={operations}
+      connectionState={connectionState}
+      nativeHostBinding={nativeHostBinding}
+    />
+  )
 }
+
+export default MobileFilePreviewRoute

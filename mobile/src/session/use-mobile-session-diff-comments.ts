@@ -1,7 +1,5 @@
 import { useEffect, useCallback } from 'react'
-import * as Clipboard from 'expo-clipboard'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
-import { triggerSelection, triggerSuccess, triggerError } from '../platform/haptics'
 import {
   addMobileDiffComment,
   formatDiffComments,
@@ -23,7 +21,11 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
     diffCommentBusy,
     setDiffCommentBusy,
     setPendingDiffNotesDelivery,
-    showToast
+    showToast,
+    copyTextToDevice,
+    triggerError,
+    triggerSelection,
+    triggerSuccess
   } = scope
   const loadDiffComments = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !worktreeId || isFloatingWorkspaceRoute) {
@@ -131,14 +133,14 @@ export function useMobileSessionDiffComments(scope: MobileSessionDocumentReaders
       return
     }
     try {
-      await Clipboard.setStringAsync(formatDiffComments(comments))
+      await copyTextToDevice(formatDiffComments(comments))
       triggerSuccess()
       showToast('Notes copied')
     } catch {
       triggerError()
       showToast("Couldn't copy notes", 1600)
     }
-  }, [showToast])
+  }, [copyTextToDevice, showToast, triggerError, triggerSuccess])
 
   const sendDiffCommentsToAgent = useCallback((): void => {
     const comments = diffCommentsRef.current.filter((comment) => !comment.sentAt)

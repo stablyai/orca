@@ -17,7 +17,7 @@ import {
   type TaskItem,
   compareLinearIssues,
   groupLinearIssues
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function useMobileTasksProviderViewProjection(model: PickerProjectionModel) {
   const {
@@ -45,6 +45,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     persistRepoSelection,
     selectedLinearTeamIds,
     selectedLinearWorkspaceId,
+    selectedRepoIds,
     setAppliedGithubProjectSearch,
     setSelectedRepoIds
   } = model
@@ -134,8 +135,6 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     () => groupLinearIssues(linearIssuesForView, linearGroupBy, linearOrderBy),
     [linearGroupBy, linearIssuesForView, linearOrderBy]
   )
-  // Why: FlatList treats data identity as meaningful; unrelated renders should
-  // not rebuild the section/item wrapper array.
   const linearListEntries = useMemo<LinearListEntry[]>(
     () =>
       linearIssueSections.flatMap((section) =>
@@ -219,56 +218,52 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     githubProjectSettings.recent,
     githubProjects
   ])
-
   const toggleRepoSelection = useCallback(
     (repoId: string) => {
-      setSelectedRepoIds((current) => {
-        const next = new Set(current)
-        if (next.has(repoId)) {
-          next.delete(repoId)
-        } else {
-          next.add(repoId)
-        }
-        const normalized =
-          next.size === 0 || next.size === hostedRepos.length ? new Set<string>() : next
-        persistRepoSelection(normalized, hostedRepos)
-        return normalized
-      })
+      const next = new Set(selectedRepoIds)
+      if (next.has(repoId)) {
+        next.delete(repoId)
+      } else {
+        next.add(repoId)
+      }
+      const normalized =
+        next.size === 0 || next.size === hostedRepos.length ? new Set<string>() : next
+      setSelectedRepoIds(normalized)
+      persistRepoSelection(normalized, hostedRepos)
     },
-    [hostedRepos, persistRepoSelection]
+    [hostedRepos, persistRepoSelection, selectedRepoIds]
   )
-
   const applyGitHubProjectSearch = useCallback(() => {
     const viewFilter = githubProjectTable?.selectedView.filter ?? ''
     const next = githubProjectSearch
     setAppliedGithubProjectSearch(next === viewFilter ? undefined : next)
   }, [githubProjectSearch, githubProjectTable?.selectedView.filter])
   return Object.assign(model, {
+    activeProjectLabel,
+    applyGitHubProjectSearch,
+    browseGitHubProjects,
+    effectiveLinearDisplayProperties,
+    githubModeLabel,
+    githubPresetLabel,
     githubPresetOptions,
     githubPresetPickerOptions,
-    githubPresetLabel,
+    githubProjectsByKey,
     gitlabFilterLabel,
+    linearBoardSections,
     linearFilterLabel,
-    linearViewLabel,
     linearGroupLabel,
+    linearIssueSections,
+    linearIssuesForView,
+    linearListEntries,
     linearOrderLabel,
+    linearTeamLabel,
+    linearViewLabel,
     linearWorkspaceLabel,
     linearWorkspaceOptions,
-    linearTeamLabel,
-    effectiveLinearDisplayProperties,
-    linearIssuesForView,
-    linearIssueSections,
-    linearListEntries,
-    linearBoardSections,
-    githubModeLabel,
-    activeProjectLabel,
-    selectedGitHubProjectViewUrl,
-    githubProjectsByKey,
     pinnedGitHubProjects,
     recentGitHubProjects,
-    browseGitHubProjects,
-    toggleRepoSelection,
-    applyGitHubProjectSearch
+    selectedGitHubProjectViewUrl,
+    toggleRepoSelection
   })
 }
 

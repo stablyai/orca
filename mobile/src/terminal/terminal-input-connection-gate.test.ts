@@ -9,8 +9,11 @@ const runtimeSource = readMobileSessionRouteSource(
 const sendActionsSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-send-actions.ts'
 )
-const terminalInputSource = readMobileSessionRouteSource(
-  '../session/use-mobile-session-terminal-input.ts'
+const createActionsSource = readMobileSessionRouteSource(
+  '../session/use-mobile-session-terminal-create-actions.ts'
+)
+const terminalOperationsSource = readMobileSessionRouteSource(
+  '../session/native-host-session-terminal-operations.ts'
 )
 const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
 
@@ -141,16 +144,17 @@ describe('session route offline-compose wiring', () => {
   })
 
   it('keeps every keystroke-grade terminal send now-or-never so nothing replays after reconnect', () => {
-    // Live mirror, buffered send, and gesture arrows must all opt out of the
-    // connect wait — a parked send replays stale bytes into the PTY. Accessory
-    // keys get the same option inside terminal-live-accessory-raw-send.ts.
+    // Buffered send, initial prompt, and every keystroke-grade send routed through
+    // the terminal operations adapter (live mirror, gesture arrows, accessory keys)
+    // must opt out of the connect wait — a parked send replays stale bytes.
     expect(sendActionsSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
-    expect(terminalInputSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
-    const optionUses = [sendActionsSource, terminalInputSource].flatMap(
+    expect(createActionsSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
+    expect(terminalOperationsSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
+    const optionUses = [sendActionsSource, createActionsSource, terminalOperationsSource].flatMap(
       (source) => source.match(/TERMINAL_INPUT_SEND_OPTIONS/g) ?? []
     ).length
-    // Two owner imports plus one buffered, one live, and one gesture send.
-    expect(optionUses).toBe(5)
+    // Three owner imports plus one buffered, one initial-prompt, and one adapter send.
+    expect(optionUses).toBe(6)
     expect(TERMINAL_INPUT_SEND_OPTIONS).toEqual({ failWhenDisconnected: true })
   })
 

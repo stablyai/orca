@@ -37,11 +37,13 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
     setError
   } = args
 
-  if (event.type === 'ready') {
-    clearStartupTimer()
-    if (busyRef.current) {
-      busyRef.current = false
-      setBusy(false)
+  if (event.type === 'ready' || event.type === 'navigation') {
+    if (event.type === 'ready') {
+      clearStartupTimer()
+      if (busyRef.current) {
+        busyRef.current = false
+        setBusy(false)
+      }
     }
     if (typeof event.tab?.url === 'string') {
       setAddressValue(displayBrowserUrl(event.tab.url))

@@ -72,6 +72,24 @@ describe('resolveMobileNativeChat', () => {
     ).toEqual({ agent: 'codex', sessionId: null, transcriptPath: null })
   })
 
+  it('uses the opaque hosted session identity instead of provider metadata', () => {
+    expect(
+      resolveMobileNativeChat({
+        type: 'terminal',
+        launchAgent: 'claude',
+        nativeChatSessionId: `native_chat_0_${'01'.repeat(16)}`,
+        agentStatus: {
+          state: 'waiting',
+          agentType: 'claude'
+        }
+      })
+    ).toEqual({
+      agent: 'claude',
+      sessionId: `native_chat_0_${'01'.repeat(16)}`,
+      transcriptPath: null
+    })
+  })
+
   it('admits OpenClaude with its distinct agent identity', () => {
     expect(resolveMobileNativeChat({ type: 'terminal', launchAgent: 'openclaude' })).toEqual({
       agent: 'openclaude',

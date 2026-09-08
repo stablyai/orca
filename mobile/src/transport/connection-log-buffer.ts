@@ -15,6 +15,8 @@ export type ConnectionLogStore = {
   get: (hostId: string) => readonly ConnectionLogEntry[]
   hydrate: (hostId: string) => Promise<void>
   subscribe: (hostId: string, listener: () => void) => () => void
+  // Why: a completed unpair must not leave the removed host's log in process memory.
+  delete: (hostId: string) => void
 }
 
 export type ConnectionLogPersistence = {
@@ -29,6 +31,7 @@ export function createConnectionLogStore(
   const entriesByHost = new Map<string, ConnectionLogEntry[]>()
   const listenersByHost = new Map<string, Set<() => void>>()
   const hydratedHosts = new Set<string>()
+  const revisionByHost = new Map<string, number>()
   const hydrationFailedHosts = new Set<string>()
   const hydrationByHost = new Map<string, Promise<void>>()
   const saveByHost = new Map<string, Promise<void>>()
@@ -58,15 +61,21 @@ export function createConnectionLogStore(
     if (!persistence || !hydratedHosts.has(hostId)) {
       return
     }
+    const revision = revisionByHost.get(hostId) ?? 0
     const snapshot = [...(entriesByHost.get(hostId) ?? [])]
     const previous = saveByHost.get(hostId) ?? Promise.resolve()
     const pending = previous
       .catch(() => {})
       .then(async () => {
+        if ((revisionByHost.get(hostId) ?? 0) !== revision) {
+          return
+        }
         try {
           await persistence.save(hostId, snapshot)
         } catch {
-          await persistence.save(hostId, snapshot)
+          if ((revisionByHost.get(hostId) ?? 0) === revision) {
+            await persistence.save(hostId, snapshot)
+          }
         }
       })
       .catch(() => {})
@@ -84,9 +93,14 @@ export function createConnectionLogStore(
     if (!retryAfterFailure && hydrationFailedHosts.has(hostId)) {
       return
     }
+    const revision = revisionByHost.get(hostId) ?? 0
+    const isCurrent = () => (revisionByHost.get(hostId) ?? 0) === revision
     const pending = persistence
       .load(hostId)
       .then((stored) => {
+        if (!isCurrent()) {
+          return
+        }
         const live = entriesByHost.get(hostId) ?? []
         const seen = new Set<string>()
         const merged: ConnectionLogEntry[] = []
@@ -107,10 +121,17 @@ export function createConnectionLogStore(
         persist(hostId)
       })
       .catch((error: unknown) => {
+        if (!isCurrent()) {
+          return
+        }
         hydrationFailedHosts.add(hostId)
         throw error
       })
-      .finally(() => hydrationByHost.delete(hostId))
+      .finally(() => {
+        if (isCurrent()) {
+          hydrationByHost.delete(hostId)
+        }
+      })
     hydrationByHost.set(hostId, pending)
     return pending
   }
@@ -163,6 +184,17 @@ export function createConnectionLogStore(
           listenersByHost.delete(hostId)
         }
       }
+    },
+
+    delete(hostId) {
+      // Fence stale loads and queued saves; clearing disk follows any save already in flight.
+      revisionByHost.set(hostId, (revisionByHost.get(hostId) ?? 0) + 1)
+      entriesByHost.delete(hostId)
+      hydratedHosts.add(hostId)
+      hydrationFailedHosts.delete(hostId)
+      hydrationByHost.delete(hostId)
+      persist(hostId)
+      notify(hostId)
     }
   }
 }

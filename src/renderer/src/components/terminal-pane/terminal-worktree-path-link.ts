@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { normalizeAbsolutePath } from '@/lib/terminal-path-normalization'
+import { normalizeAbsolutePath } from '../../../../shared/terminal-path-normalization'
 
 export type WorktreeRootPathLink = {
   id: string

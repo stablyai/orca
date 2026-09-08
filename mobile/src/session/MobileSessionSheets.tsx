@@ -1,9 +1,7 @@
 import { Platform } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
 import { Copy, FileText, Globe, RefreshCw, SquareTerminal } from 'lucide-react-native'
 import { MobileSessionHeaderMoreActionsSheet } from './MobileSessionHeaderMoreActionsSheet'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
-import { triggerSuccess, triggerError } from '../platform/haptics'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { TextInputModal } from '../components/TextInputModal'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -11,16 +9,12 @@ import { CustomKeyModal } from '../components/CustomKeyModal'
 import { MobileDictationSetupSheet } from '../components/MobileDictationSetupSheet'
 import { MobileBrowserTabActionSheet } from './MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from './mobile-terminal-action-sheet-actions'
-import {
-  getRepoIdFromMobileWorktreeId,
-  isTerminalPhoneDisplayMode
-} from './mobile-session-route-helpers'
+import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const {
     worktreeId,
-    isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     client,
     worktreeName,
@@ -29,8 +23,6 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     setPendingDiffNotesDelivery,
     showCreateTabDrawer,
     setShowCreateTabDrawer,
-    showQuickCommands,
-    setShowQuickCommands,
     setShowCreateBrowserModal,
     showCreateBrowserModal,
     showHeaderMoreActions,
@@ -88,7 +80,17 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     handlePanelTap,
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
-    showChecksAction
+    showChecksAction,
+    copyTextToDevice,
+    sessionDeviceOperations,
+    sessionDictationOperations,
+    sessionQuickCommandOperations,
+    clearMarkdownDrafts,
+    setQuickCommandsOpenFor,
+    handleCustomKeyModalAfterClose,
+    showQuickCommands,
+    triggerError,
+    triggerSuccess
   } = controller
   return (
     <>
@@ -102,15 +104,12 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       />
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
-        onClose={() => setShowQuickCommands(false)}
-        client={client}
-        repoId={
-          isFolderWorkspaceRoute || isFloatingWorkspaceRoute
-            ? null
-            : getRepoIdFromMobileWorktreeId(worktreeId) || null
-        }
+        onClose={() => setQuickCommandsOpenFor(null)}
+        operations={sessionQuickCommandOperations}
+        workspaceId={worktreeId}
         repoName={worktreeName || null}
         onLaunch={launchQuickCommand}
+        onCopy={copyTextToDevice}
       />
       <ActionSheetModal
         visible={showCreateTabDrawer}
@@ -133,8 +132,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             : [
                 {
                   label: 'Browser',
-                  icon: Globe,
                   closeBeforePress: true,
+                  icon: Globe,
                   onPress: () => {
                     if (browserScreencastSupported !== true) {
                       showToast('Desktop update required for mobile browser streaming', 1600)
@@ -170,7 +169,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               if (!delivery) {
                 return
               }
-              void Clipboard.setStringAsync(delivery.prompt)
+              void copyTextToDevice(delivery.prompt)
                 .then(() => {
                   triggerSuccess()
                   showToast('Notes copied')
@@ -228,8 +227,9 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               const target = markdownActionTarget
               setMarkdownActionTarget(null)
               if (target) {
-                void Clipboard.setStringAsync(target.relativePath || target.filePath)
-                showToast('Path copied')
+                void copyTextToDevice(target.relativePath || target.filePath)
+                  .then(() => showToast('Path copied'))
+                  .catch(() => showToast("Couldn't copy path", 1500))
               }
             }
           },
@@ -284,7 +284,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               const combined = drafts
                 .map((draft) => `# ${draft.title}\n\n${draft.content}`)
                 .join('\n\n---\n\n')
-              void Clipboard.setStringAsync(combined)
+              void copyTextToDevice(combined)
+                .then(() => {
+                  return clearMarkdownDrafts(drafts.map((draft) => draft.tabId)).catch(() => {})
+                })
                 .then(() => {
                   setLeaveDrafts(null)
                   leaveSession()
@@ -299,8 +302,13 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             label: 'Discard & Leave',
             destructive: true,
             onPress: () => {
-              setLeaveDrafts(null)
-              leaveSession()
+              const drafts = leaveDrafts ?? []
+              void clearMarkdownDrafts(drafts.map((draft) => draft.tabId))
+                .catch(() => {})
+                .then(() => {
+                  setLeaveDrafts(null)
+                  leaveSession()
+                })
             }
           }
         ]}
@@ -345,14 +353,24 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <CustomKeyModal
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
+        onAfterClose={handleCustomKeyModalAfterClose}
         onKeysChanged={setCustomKeys}
         onManageShortcuts={handleManageShortcuts}
+        loadKeys={async () =>
+          (await sessionDeviceOperations?.loadTerminalAccessoryPreferences())?.customKeys ?? []
+        }
+        saveKeys={async (keys) => {
+          await sessionDeviceOperations?.saveTerminalCustomKeys(keys)
+        }}
       />
       <MobileDictationSetupSheet
         visible={showDictationSetup}
         client={client}
+        operations={sessionDictationOperations}
         onClose={() => setShowDictationSetup(false)}
         onReady={() => setShowDictationSetup(false)}
+        onErrorFeedback={triggerError}
+        onSuccessFeedback={triggerSuccess}
       />
       <ActionSheetModal
         visible={deleteKeyTarget != null}

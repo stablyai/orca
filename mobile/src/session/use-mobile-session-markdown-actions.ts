@@ -1,17 +1,14 @@
 import { useEffect, useCallback } from 'react'
 import { BackHandler, Keyboard } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
-import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionDiffCommentsModel } from './use-mobile-session-diff-comments'
+import { mobileMarkdownSaveErrorCopy } from './mobile-markdown-save-error-copy'
 
 export function useMobileSessionMarkdownActions(scope: MobileSessionDiffCommentsModel) {
   const {
     hostId,
     worktreeId,
     router,
-    client,
     sessionTabs,
     setMarkdownDocs,
     markdownDocs,
@@ -21,24 +18,32 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     markdownSaveSeqRef,
     markdownSaveInFlightRef,
     showToast,
-    readMarkdownTab
+    readMarkdownTab,
+    copyTextToDevice,
+    sessionMarkdownOperations,
+    clearMarkdownDraft,
+    markMarkdownDraftEdited,
+    triggerError,
+    triggerSuccess
   } = scope
-  const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
-    setMarkdownDocs((prev) => {
-      const current = prev.get(tabId)
-      if (current?.status !== 'ready') {
-        return prev
-      }
-      const next = new Map(prev)
-      next.set(tabId, {
-        ...current,
-        localContent: content,
-        isDirty: content !== current.content,
-        saveError: undefined
+  const updateMarkdownLocalContent = useCallback(
+    (tabId: string, content: string) => {
+      markMarkdownDraftEdited(tabId)
+      setMarkdownDocs((previous) => {
+        const current = previous.get(tabId)
+        if (current?.status !== 'ready') {
+          return previous
+        }
+        return new Map(previous).set(tabId, {
+          ...current,
+          localContent: content,
+          isDirty: content !== current.content,
+          saveError: undefined
+        })
       })
-      return next
-    })
-  }, [])
+    },
+    [markMarkdownDraftEdited]
+  )
 
   const copyMarkdownLocalContent = useCallback(
     async (tabId: string) => {
@@ -46,11 +51,11 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
       if (current?.status !== 'ready') {
         return
       }
-      await Clipboard.setStringAsync(current.localContent)
+      await copyTextToDevice(current.localContent)
       triggerSuccess()
       showToast('Copied')
     },
-    [markdownDocs, showToast]
+    [copyTextToDevice, markdownDocs, showToast, triggerSuccess]
   )
 
   const getDirtyMarkdownDrafts = useCallback(() => {
@@ -111,13 +116,14 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     const target = discardMarkdownTarget
     setDiscardMarkdownTarget(null)
     if (target) {
+      void clearMarkdownDraft(target).catch(() => {})
       void readMarkdownTab(target)
     }
-  }, [discardMarkdownTarget, readMarkdownTab])
+  }, [clearMarkdownDraft, discardMarkdownTarget, readMarkdownTab])
 
   const saveMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
-      if (!client) {
+      if (!sessionMarkdownOperations) {
         return
       }
       const current = markdownDocs.get(tab.id)
@@ -138,29 +144,24 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
         return new Map(prev).set(tab.id, { ...existing, saving: true, saveError: undefined })
       })
       try {
-        const response = await client.sendRequest('markdown.saveTab', {
-          worktree: `id:${worktreeId}`,
+        const result = await sessionMarkdownOperations.saveTab({
+          workspaceId: worktreeId,
           tabId: tab.id,
+          relativePath: tab.relativePath,
           baseVersion: current.baseVersion,
           content: current.localContent
         })
-        if (!response.ok) {
-          throw new Error((response as RpcFailure).error.message)
-        }
-        const result = (response as RpcSuccess).result as {
-          content: string
-          version: string
-          isDirty: false
-        }
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }
+        // Draft persistence must not delay an already acknowledged document transition.
+        void clearMarkdownDraft(tab).catch(() => {})
         setMarkdownDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'ready',
             content: result.content,
             localContent: result.content,
-            baseVersion: result.version,
+            baseVersion: result.baseVersion,
             isDirty: false,
             editable: true
           })
@@ -170,7 +171,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
         showToast('Saved')
       } catch (error) {
         triggerError()
-        const message = error instanceof Error ? error.message : 'Save failed'
+        const message = mobileMarkdownSaveErrorCopy(error)
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }
@@ -182,14 +183,14 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
           return new Map(prev).set(tab.id, {
             ...existing,
             saving: false,
-            saveError: message || 'Save failed'
+            saveError: message
           })
         })
       } finally {
         markdownSaveInFlightRef.current.delete(tab.id)
       }
     },
-    [client, markdownDocs, showToast, worktreeId]
+    [clearMarkdownDraft, markdownDocs, sessionMarkdownOperations, showToast, worktreeId]
   )
   return {
     updateMarkdownLocalContent,

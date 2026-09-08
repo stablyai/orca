@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { Platform, type Keyboard, type TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
@@ -20,6 +20,7 @@ import type {
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
 import type { MobileSessionScreenStateModel } from './use-mobile-session-screen-state'
+import type { HostSessionTerminalOperations } from './host-session-terminal-operations'
 
 export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateModel) {
   const {
@@ -28,13 +29,15 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     connState,
     client,
     clientId,
+    hostClientIdentityReady,
     sessionTabs,
     setLiveInputCapture,
     liveInputTerminalHandles,
     liveInputTerminalHandlesRef,
     activeHandle,
     activeSessionTabId,
-    keyboardHeight
+    keyboardHeight,
+    sessionTerminalOperations
   } = scope
   // Why: WebView pushes terminal modes on every change so paste reads a synchronous snapshot — no round-trip.
   const ptyModesRef = useRef<Map<string, TerminalModes>>(new Map())
@@ -49,6 +52,9 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Why: state (not a ref) so the connection verdict re-renders when the endpoint loads and the Tailscale hint can appear.
   const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
+  const sessionTerminalOperationsRef = useRef<HostSessionTerminalOperations | null>(
+    sessionTerminalOperations
+  )
   const connStateRef = useRef<ConnectionState>(connState)
   // Why: measured once on mount, then passed with every subscribe so the server can auto-fit the PTY to phone dims.
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
@@ -126,13 +132,16 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     sendLiveTerminalInputRef,
     setLiveInputCapture
   })
+  useEffect(() => {
+    sessionTerminalOperationsRef.current = sessionTerminalOperations
+  }, [sessionTerminalOperations])
   const inputGate = resolveMobileTerminalInputGate({
     connState,
     activeHandle,
     activeSessionTabType: activeSessionTab?.type
   })
   const canCompose = inputGate.canCompose
-  const canSend = inputGate.canSend && clientId !== null
+  const canSend = inputGate.canSend && sessionTerminalOperations != null && hostClientIdentityReady
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
@@ -162,6 +171,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     hostEndpoint,
     setHostEndpoint,
     clientRef,
+    sessionTerminalOperationsRef,
     connStateRef,
     viewportRef,
     viewportMeasuredRef,

@@ -54,7 +54,6 @@ export function logRpcSocketClose(options: SocketCloseLogOptions): number | unde
   const closeEvent = describeSocketEvent(options.event)
   console.log('[net] ws.onclose', {
     code: event?.code,
-    reason: event?.reason,
     wasClean: event?.wasClean,
     state: options.state,
     attempt: options.attempt,
@@ -63,8 +62,7 @@ export function logRpcSocketClose(options: SocketCloseLogOptions): number | unde
     constructToCloseMs,
     aliveMs: options.authenticated ? constructToCloseMs : null,
     inboundIdleMs: options.lastInboundAt != null ? closeAt - options.lastInboundAt : null,
-    eventKeys: closeEvent.keys,
-    eventStr: closeEvent.json
+    eventFields: closeEvent.fields
   })
   return event?.code
 }

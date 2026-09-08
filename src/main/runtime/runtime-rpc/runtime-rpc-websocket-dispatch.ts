@@ -1,3 +1,4 @@
+import { isMobileWebHostRpcMethod } from '../rpc/methods/mobile-web-host-rpc-allowlist'
 import type { WebSocket } from 'ws'
 import type {
   PairingGetEndpointsParams,
@@ -73,7 +74,11 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return
     }
-    if (device.scope === 'mobile' && !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
+    if (
+      device.scope === 'mobile' &&
+      !MOBILE_RPC_METHOD_ALLOWLIST.has(request.method) &&
+      !isMobileWebHostRpcMethod(request.method)
+    ) {
       reply(
         JSON.stringify(
           this.buildError(

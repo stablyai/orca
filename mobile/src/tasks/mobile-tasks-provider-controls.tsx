@@ -9,7 +9,7 @@ import {
   GitBranch
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
-import { getRepoBadgeColor } from './mobile-tasks-legacy-foundation'
+import { getRepoBadgeColor } from './mobile-tasks-model'
 import { renderMobileTasksGitHubViewControls } from './mobile-tasks-github-view-controls'
 import { renderMobileTasksLinearViewControls } from './mobile-tasks-linear-view-controls'
 

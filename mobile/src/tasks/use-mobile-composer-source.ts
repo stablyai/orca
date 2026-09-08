@@ -5,7 +5,7 @@ import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import { resolveComposerManualBranchNameChange } from '../../../src/shared/composer-branch-selection'
 import { resolveGitHubWorkItemIdentity } from '../../../src/shared/new-workspace/github-work-item-identity'
 import { getForkPushWarning } from '../../../src/shared/new-workspace/fork-push-warning'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 import {
   buildGitHubLinkedWorkItem,
   buildGitLabLinkedWorkItem,
@@ -17,11 +17,7 @@ import {
   resolveWorkItemAutoName,
   shouldApplyAutoName
 } from './composer-linked-work-item'
-import {
-  resolveComposerMrBase,
-  resolveComposerPrBase,
-  type ComposerHostedBase
-} from './composer-source-base-resolve'
+import type { ComposerHostedBase } from './composer-source-base-resolve'
 import type {
   ComposerBaseState,
   MobileComposerCreateSelection,
@@ -31,14 +27,14 @@ import type {
 const EMPTY_BASE: ComposerBaseState = {}
 
 export type UseMobileComposerSourceArgs = {
-  client: RpcClient | null
+  operations: HostWorkspaceCreationOperations | null
   selectedRepoId: string | null
   worktreeBranches?: readonly string[]
   onError?: (message: string) => void
 }
 
 export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
-  const { client, selectedRepoId, worktreeBranches = [], onError } = args
+  const { operations, selectedRepoId, worktreeBranches = [], onError } = args
   const [name, setNameState] = useState('')
   const [linkedWorkItem, setLinkedWorkItem] = useState<MobileLinkedWorkItem | null>(null)
   const [base, setBase] = useState<ComposerBaseState>(EMPTY_BASE)
@@ -132,13 +128,12 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         name
       )
       clearBaseAndBranch()
-      if (identity.type !== 'pr' || !client || !repoId) {
+      if (identity.type !== 'pr' || !operations || !repoId) {
         return
       }
       runBaseResolve(
         token,
-        resolveComposerPrBase({
-          client,
+        operations.resolvePrBase({
           repoId,
           prNumber: identity.number,
           ...(item.branchName ? { headRefName: item.branchName } : {}),
@@ -149,7 +144,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         })
       )
     },
-    [applyAutoName, clearBaseAndBranch, client, name, runBaseResolve, selectedRepoId]
+    [applyAutoName, clearBaseAndBranch, name, operations, runBaseResolve, selectedRepoId]
   )
 
   const handleSmartGitLabItemSelect = useCallback(
@@ -176,13 +171,12 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         name
       )
       clearBaseAndBranch()
-      if (item.type !== 'mr' || !client || !repoId) {
+      if (item.type !== 'mr' || !operations || !repoId) {
         return
       }
       runBaseResolve(
         token,
-        resolveComposerMrBase({
-          client,
+        operations.resolveMrBase({
           repoId,
           mrIid: item.number,
           ...(item.branchName ? { sourceBranch: item.branchName } : {}),
@@ -193,7 +187,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         })
       )
     },
-    [applyAutoName, clearBaseAndBranch, client, name, runBaseResolve, selectedRepoId]
+    [applyAutoName, clearBaseAndBranch, name, operations, runBaseResolve, selectedRepoId]
   )
 
   const handleSmartLinearIssueSelect = useCallback(

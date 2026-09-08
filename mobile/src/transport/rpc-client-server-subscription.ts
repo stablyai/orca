@@ -1,12 +1,15 @@
-export function buildReadyStreamUnsubscribe(
+export function buildServerSubscriptionUnsubscribe(
   method: string,
-  subscriptionId: string
+  subscriptionId: string,
+  cleanupMethod?: string
 ): { method: string; params: { subscriptionId: string } } | null {
-  if (method === 'browser.screencast') {
-    return { method: 'browser.screencast.unsubscribe', params: { subscriptionId } }
-  }
-  if (method === 'runtime.clientEvents.subscribe') {
-    return { method: 'runtime.clientEvents.unsubscribe', params: { subscriptionId } }
-  }
-  return null
+  const unsubscribeMethod =
+    cleanupMethod ??
+    {
+      'browser.screencast': 'browser.screencast.unsubscribe',
+      'accounts.subscribe': 'accounts.unsubscribe',
+      'files.watch': 'files.unwatch',
+      'runtime.clientEvents.subscribe': 'runtime.clientEvents.unsubscribe'
+    }[method]
+  return unsubscribeMethod ? { method: unsubscribeMethod, params: { subscriptionId } } : null
 }

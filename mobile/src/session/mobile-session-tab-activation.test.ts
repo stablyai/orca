@@ -66,6 +66,50 @@ describe('mobile session tab activation', () => {
     expect(sendRequest).toHaveBeenCalledOnce()
   })
 
+  it('reports which target failed and why, without logging the full identity', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const tabId = 'tab-secret-0123abcd'
+    const sendRequest = vi.fn<RpcClient['sendRequest']>().mockResolvedValue({
+      id: 'rpc-1',
+      ok: false,
+      error: { code: 'worktree_not_found', message: 'gone' },
+      _meta: { runtimeId: 'runtime-1' }
+    } as RpcResponse)
+
+    await activateMobileSessionTab(clientWith(sendRequest), {
+      worktree: 'id:worktree-1',
+      tabId,
+      notifyClients: false,
+      navigation: 'caller',
+      intent: 'user'
+    })
+
+    expect(log).toHaveBeenCalledWith('[terminal-diagnostic]', 'activation-result', {
+      terminal: false,
+      target: '0123abcd',
+      ok: false,
+      rpcCode: 'worktree_not_found'
+    })
+    expect(JSON.stringify(log.mock.calls)).not.toContain(tabId)
+    log.mockRestore()
+  })
+
+  it('names the failure class when activation throws outside a cutover', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const sendRequest = vi.fn<RpcClient['sendRequest']>().mockRejectedValue(new TypeError('nope'))
+
+    await expect(
+      focusMobileTerminal(clientWith(sendRequest), 'terminal-secret-89abcdef')
+    ).rejects.toThrow('nope')
+
+    expect(log).toHaveBeenCalledWith('[terminal-diagnostic]', 'activation-error', {
+      terminal: true,
+      target: '89abcdef',
+      errorName: 'TypeError'
+    })
+    log.mockRestore()
+  })
+
   it('retries at most once when consecutive cutovers interrupt activation', async () => {
     const sendRequest = vi
       .fn<RpcClient['sendRequest']>()

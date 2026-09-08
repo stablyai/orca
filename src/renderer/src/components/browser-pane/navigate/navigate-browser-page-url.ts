@@ -1,6 +1,6 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { getConnectionId } from '@/lib/connection-context'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../../shared/terminal-links'
 import { useAppStore } from '@/store'
 import {
   isRemoteRuntimeFileOperation,

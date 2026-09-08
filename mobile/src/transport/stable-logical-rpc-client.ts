@@ -1,3 +1,11 @@
+import {
+  LogicalClientCutoverError,
+  guardLogicalClientRequest
+} from './logical-client-request-authority'
+export {
+  LogicalClientCutoverError,
+  isLogicalClientCutoverError
+} from './logical-client-request-authority'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
 import {
@@ -8,21 +16,8 @@ import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
 
-export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
-
-export class LogicalClientCutoverError extends Error {
-  constructor() {
-    super('RPC interrupted by connection migration')
-  }
-}
-
-// Why: instanceof can miss across bundle copies, so also match by message.
-export function isLogicalClientCutoverError(error: unknown): boolean {
-  return (
-    error instanceof LogicalClientCutoverError ||
-    (error instanceof Error && error.message === 'RPC interrupted by connection migration')
-  )
-}
+import type { StableLogicalRpcClient, MobileConnectionPath } from './logical-client-contract'
+export type { StableLogicalRpcClient, MobileConnectionPath } from './logical-client-contract'
 
 type SubscriptionRecord = {
   method: string
@@ -35,32 +30,6 @@ type SubscriptionRecord = {
 
 type PendingRequest = {
   reject: (error: Error) => void
-}
-
-export type StableLogicalRpcClient = RpcClient & {
-  migrateTo(
-    session: RpcClient,
-    path: MobileConnectionPath,
-    timeoutMs?: number,
-    // Checked after the replacement authenticates, before the swap — lets a racing
-    // caller withdraw when another path won while this dial was in flight.
-    shouldAbort?: () => boolean
-  ): Promise<void>
-  suspendActiveSession(): void
-  getActivePath(): MobileConnectionPath
-  // The path the user is waiting on while migration or scheduled recovery is active.
-  getPendingPath(): MobileConnectionPath | null
-  setRecoveryPath(path: MobileConnectionPath | null, attempt?: number): void
-  setRecoveryAttempt(attempt: number): void
-  // Latched when the desktop has repeatedly refused this device's relay credential.
-  setPairingRejected(rejected: boolean): void
-  isPairingRejected(): boolean
-  // Latched when the relay named the desktop's own sign-out as the reason it is absent.
-  setHostSignedOut(signedOut: boolean): void
-  isHostSignedOut(): boolean
-  // Recovery attempts share this signal so status-only changes rerender.
-  onConnectionPathChange(listener: () => void): () => void
-  getGeneration(): number
 }
 
 export function createStableLogicalRpcClient(
@@ -92,11 +61,15 @@ export function createStableLogicalRpcClient(
       }
       const requestGeneration = generation
       const session = activeSession
+      const guardedOptions = guardLogicalClientRequest(
+        options,
+        () => !closed && !suspended && requestGeneration === generation
+      )
       return new Promise<RpcResponse>((resolve, reject) => {
         const pending = { reject }
         pendingRequests.add(pending)
         void session
-          .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
+          .sendRequest(method, projectMobileRpcRequestParams(method, params), guardedOptions)
           .then(
             (response) => {
               pendingRequests.delete(pending)
@@ -158,6 +131,10 @@ export function createStableLogicalRpcClient(
       if (!suspended) {
         activeSession.updateTerminalSubscriptionViewport(terminal, viewport)
       }
+    },
+
+    sendTerminalBinaryFrame(frame) {
+      return !closed && !suspended && activeSession.sendTerminalBinaryFrame(frame)
     },
 
     getState: () => state,

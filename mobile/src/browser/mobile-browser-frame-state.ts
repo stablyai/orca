@@ -6,6 +6,7 @@ import type {
   BrowserScreencastFrameMetadata
 } from '../transport/browser-screencast-protocol'
 import { colors } from '../theme/mobile-theme'
+import { setBrowserImageUri, setBrowserLayerOpacity } from './browser-frame-layer-mutation'
 import {
   clampBrowserZoomState,
   readLocalTouchPoint,
@@ -93,15 +94,14 @@ export function updateBrowserLayerVisibility(
   visible: FrameLayer
 ): void {
   for (const [index, layer] of layers.entries()) {
-    layer?.setNativeProps({ style: { opacity: index === visible ? 1 : 0 } })
+    setBrowserLayerOpacity(layer, index === visible ? 1 : 0)
   }
 }
 
 export function updateBrowserImageSource(image: Image | null, uri: string): void {
-  // Why: browser frames are large strings; mutating only the native Image
-  // source avoids re-rendering the whole tab view for every streamed frame.
-  const source = [{ uri }]
-  image?.setNativeProps({ source, src: source })
+  // Why: browser frames are large strings; mutating only the Image source avoids
+  // re-rendering the whole tab view for every streamed frame.
+  setBrowserImageUri(image, uri)
 }
 
 export function assertRpcOk(

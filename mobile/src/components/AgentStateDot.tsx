@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Activity } from 'lucide-react-native'
-import { Animated, Easing, StyleSheet, View } from 'react-native'
+import { Animated, StyleSheet, View } from 'react-native'
+import { createRotationLoop } from '../animation/animated-rotation-loop'
+import { busyRingColors } from './agent-busy-ring'
 import type { AgentDotState } from '../worktree/agent-row-display'
 
 // Per-agent state indicator, 1:1 with desktop AgentStateDot
@@ -22,14 +24,7 @@ export function AgentStateDot({ state }: { state: AgentDotState }) {
 
   useEffect(() => {
     if (state === 'working') {
-      const animation = Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.linear,
-          useNativeDriver: true
-        })
-      )
+      const animation = createRotationLoop(spinValue)
       animation.start()
       return () => animation.stop()
     }
@@ -41,7 +36,9 @@ export function AgentStateDot({ state }: { state: AgentDotState }) {
     const rotate = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
     return (
       <View style={styles.wrapper}>
-        <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />
+        <Animated.View
+          style={[styles.spinner, busyRingColors(WORKING_COLOR), { transform: [{ rotate }] }]}
+        />
       </View>
     )
   }
@@ -68,8 +65,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    borderWidth: 1.5,
-    borderColor: WORKING_COLOR,
-    borderTopColor: 'transparent'
+    borderWidth: 1.5
   }
 })

@@ -154,8 +154,7 @@ describe('terminal viewport refit', () => {
     expect(sessionSource).toContain('textScale: terminalTextScale')
     expect(sessionSource).toContain('connState,')
     expect(sessionSource).toContain('notifyTerminalFrameHeight(nextHeight)')
-    expect(sessionSource).toContain('notifyKeyboardVisibility(true)')
-    expect(sessionSource).toContain('notifyKeyboardVisibility(false)')
+    expect(sessionSource).toContain('notifyKeyboardVisibility(keyboardHeight > 0)')
   })
 
   it('does not rerender SessionScreen for frame-height-only layout changes', () => {

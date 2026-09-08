@@ -84,6 +84,31 @@ describe('electron-builder config', () => {
     expect(packs('out/main/examples/index.js')).toBe(true)
   })
 
+  // Why: `files` is exclusion-only, so both mobile-web trees packed into app.asar on top
+  // of the Resources/mobile-web copy that resolveMobileWebPackageRoot actually reads.
+  it('keeps the hosted mobile-web bundle out of app.asar', () => {
+    const matcher = new FileMatcher('/app', '/dest', (value) => value, electronBuilderConfig.files)
+    matcher.prependPattern('**/*')
+    const isPacked = matcher.createFilter()
+    const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
+
+    for (const extraResourceOnly of [
+      'out/mobile-web-rnw/manifest.json',
+      'out/mobile-web-rnw/assets/index.js',
+      'out/mobile-web-rnw-export/index.html',
+      'out/mobile-web-rnw-export/_expo/static/js/web/entry.js'
+    ]) {
+      expect(packs(extraResourceOnly)).toBe(false)
+    }
+    // The extraResources copy is the one the packaged host reads.
+    for (const platform of ['mac', 'linux', 'win']) {
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
+        from: 'out/mobile-web-rnw',
+        to: 'mobile-web'
+      })
+    }
+  })
+
   // Why: out/electron-dev holds `pnpm dev`'s cached Electron.app copies (~270MB per branch).
   // CI never creates it, so only a local package would have hit this -- silently, as bulk.
   it('keeps cached dev Electron bundles out of app.asar', () => {
@@ -116,6 +141,10 @@ describe('electron-builder config', () => {
       expect(electronBuilderConfig[platform].extraResources).toEqual(
         expect.arrayContaining([bundledPluginResources])
       )
+      expect(electronBuilderConfig[platform].extraResources).toContainEqual({
+        from: 'out/mobile-web-rnw',
+        to: 'mobile-web'
+      })
     }
     expect(electronBuilderConfig.mac.extraResources).toEqual(
       expect.arrayContaining([

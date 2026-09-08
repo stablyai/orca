@@ -7,12 +7,18 @@
     "ignoreDeprecations": "6.0",
     "strict": true,
     "paths": {
-      "@/*": ["./src/*"],
       "tweetnacl": ["./node_modules/tweetnacl"],
       "ws": ["./node_modules/@types/ws"],
       "zod": ["./node_modules/zod"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
+  // The measurement harness drives the desktop main-process reader directly; that code is
+  // typed against Node's lib, which this React Native program cannot model.
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "scripts/mobile-web-package-download-measurement.ts",
+    "scripts/mobile-web-package-download-loopback-clients.ts"
+  ]
 }

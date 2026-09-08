@@ -4,7 +4,8 @@ export type MobileFilePreviewRouteParams = {
   hostId: string
   worktreeId: string
   relativePath?: string
-  source?: 'worktree' | 'terminalArtifact'
+  source?: 'worktree' | 'terminalArtifact' | 'webArtifact'
+  previewKind?: 'text' | 'raster'
   absolutePath?: string
   grantId?: string
   terminal?: string
@@ -31,6 +32,7 @@ type RawPreviewRouteParams = {
   hostId?: MobileFilePreviewParamValue
   worktreeId?: MobileFilePreviewParamValue
   relativePath?: MobileFilePreviewParamValue
+  previewKind?: MobileFilePreviewParamValue
   source?: MobileFilePreviewParamValue
   absolutePath?: MobileFilePreviewParamValue
   grantId?: MobileFilePreviewParamValue
@@ -64,6 +66,30 @@ export function normalizeMobileFilePreviewRouteParams(
   const grantId = singleParam(params.grantId)
   if (!hostId || !worktreeId) {
     return { ok: false, message: 'Unable to load preview' }
+  }
+  if (source === 'webArtifact') {
+    const terminal = singleParam(params.terminal)
+    const pathText = singleParam(params.pathText)
+    const previewKind = singleParam(params.previewKind)
+    const name = singleParam(params.name)
+    if (!terminal || !pathText || !name || (previewKind !== 'text' && previewKind !== 'raster')) {
+      return { ok: false, message: 'Unable to load preview' }
+    }
+    return {
+      ok: true,
+      params: {
+        hostId,
+        worktreeId,
+        source,
+        terminal,
+        pathText,
+        previewKind,
+        name,
+        line: optionalSingleParam(params.line),
+        column: optionalSingleParam(params.column),
+        worktreeName: optionalSingleParam(params.worktreeName)
+      }
+    }
   }
   if (source === 'terminalArtifact') {
     if (!absolutePath || !grantId) {

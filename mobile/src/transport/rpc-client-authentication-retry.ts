@@ -1,4 +1,4 @@
-import { redactSocketEndpoint } from './socket-event-debug'
+import { redactedWebSocketEndpoint } from './socket-event-debug'
 
 const AUTH_RETRY_BUDGET = 3
 
@@ -26,7 +26,7 @@ export class RpcClientAuthenticationRetry {
       console.log('[net] auth rejected — retrying handshake', {
         attempt: this.rejectionCount,
         budget: AUTH_RETRY_BUDGET,
-        endpoint: redactSocketEndpoint(this.options.endpoint)
+        endpoint: redactedWebSocketEndpoint(this.options.endpoint)
       })
       this.options.emitWarning(
         'Authentication rejected',
@@ -39,7 +39,7 @@ export class RpcClientAuthenticationRetry {
     }
     console.log('[net] auth rejected — budget exhausted, latching auth-failed', {
       attempt: this.rejectionCount,
-      endpoint: redactSocketEndpoint(this.options.endpoint)
+      endpoint: redactedWebSocketEndpoint(this.options.endpoint)
     })
     this.options.latchFailure(reason)
   }

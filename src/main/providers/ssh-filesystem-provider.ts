@@ -1,6 +1,5 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
-import { uploadBuffer } from '../ssh/sftp-upload'
+import { isMethodNotFoundError } from '../ssh/ssh-filesystem-stream-reader'
 import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import { lstatViaSftp } from './ssh-filesystem-provider-sftp'
 import {
@@ -18,7 +17,6 @@ import {
 import type {
   IFilesystemProvider,
   FileRangeReadResult,
-  FileReadLimits,
   FileStat,
   FileReadResult,
   FileUploadSession,
@@ -38,7 +36,13 @@ import {
   readSshTerminalArtifact,
   writeSshTerminalArtifact
 } from './ssh-filesystem-terminal-artifact'
+import {
+  readSshFileChunk,
+  readSshTerminalArtifactChunk
+} from './ssh-filesystem-bounded-file-reader'
+import { writeSshFileBase64Chunk } from './ssh-filesystem-binary-write'
 import { readSshDocPreviewFile } from './ssh-filesystem-doc-preview'
+import { SshFilesystemFileReader } from './ssh-filesystem-file-reader'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
@@ -47,7 +51,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   private unsubscribeNotifications: (() => void) | null = null
   private tempDirPromise: Promise<string> | null = null
   private disposed = false
-  private loggedStreamFallback = false
+  private readonly fileReader: SshFilesystemFileReader
   readonly downloadFolder?: IFilesystemProvider['downloadFolder']
 
   constructor(
@@ -59,6 +63,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   ) {
     this.connectionId = connectionId
     this.mux = mux
+    this.fileReader = new SshFilesystemFileReader(mux)
 
     if (createSftp) {
       // Why: system SSH has raw single-file transfer but no ssh2 SFTP channel;
@@ -100,26 +105,12 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.readDir', { dirPath })) as DirEntry[]
   }
 
-  async readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult> {
-    // Why: streaming is the default path so previews above the legacy single-
-    // frame budget (~12 MB after base64) don't hit MAX_MESSAGE_SIZE. Old relays
-    // that don't implement fs.readFileStream surface as MethodNotFound; we fall
-    // back to the legacy single-shot fs.readFile (which retains the old 10 MB
-    // cap on those hosts).
-    try {
-      return await readFileViaStream(this.mux, filePath, limits)
-    } catch (err) {
-      if (isMethodNotFoundError(err)) {
-        if (!this.loggedStreamFallback) {
-          this.loggedStreamFallback = true
-          console.warn(
-            '[ssh-fs] Relay does not implement fs.readFileStream; falling back to fs.readFile (10 MB cap)'
-          )
-        }
-        return (await this.mux.request('fs.readFile', { filePath })) as FileReadResult
-      }
-      throw err
-    }
+  readFile(...args: Parameters<IFilesystemProvider['readFile']>): Promise<FileReadResult> {
+    return this.fileReader.readFile(...args)
+  }
+
+  readFileChunk(filePath: string, offset: number, length: number) {
+    return readSshFileChunk(this.mux, filePath, offset, length)
   }
 
   readDocPreviewFile(
@@ -146,6 +137,15 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult> {
     return readSshTerminalArtifact(this.mux, filePath, options)
+  }
+
+  readTerminalArtifactChunk(
+    filePath: string,
+    offset: number,
+    length: number,
+    options: TerminalArtifactAccessOptions
+  ) {
+    return readSshTerminalArtifactChunk(this.mux, filePath, offset, length, options)
   }
 
   writeTerminalArtifact(
@@ -196,25 +196,13 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     contentBase64: string,
     append: boolean
   ): Promise<void> {
-    const contents = Buffer.from(contentBase64, 'base64')
-    if (this.rawTransfer?.writeBuffer) {
-      await this.rawTransfer.writeBuffer(filePath, contents, { append, exclusive: !append })
-      return
-    }
-    if (!this.createSftp) {
-      throw new Error('remote_binary_upload_unavailable')
-    }
-    const sftp = await this.createSftp()
-    try {
-      // Why: relay fs.writeFile is text-only. SFTP writes the decoded bytes
-      // directly so runtime uploads do not corrupt images, PDFs, or archives.
-      await uploadBuffer(sftp, contents, filePath, {
-        append,
-        exclusive: !append
-      })
-    } finally {
-      sftp.end()
-    }
+    await writeSshFileBase64Chunk(
+      this.createSftp,
+      this.rawTransfer,
+      filePath,
+      contentBase64,
+      append
+    )
   }
 
   async stat(filePath: string): Promise<FileStat> {

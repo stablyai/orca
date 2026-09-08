@@ -196,6 +196,18 @@ describe('mobile rpc-client connection timeout', () => {
       { worktree: 'id:wt-1' },
       () => {}
     )
+    const request = socket.sent
+      .map((payload) => JSON.parse(payload.replace(/^encrypted:/, '')))
+      .find((request) => request.method === 'session.tabs.subscribe')
+    socket.receive(
+      `encrypted:${JSON.stringify({
+        id: request.id,
+        ok: true,
+        streaming: true,
+        result: { type: 'snapshot', worktree: 'wt-1', tabs: [] },
+        _meta: { runtimeId: 'host' }
+      })}`
+    )
     unsubscribe()
 
     expect(

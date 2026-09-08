@@ -28,10 +28,9 @@ type PasteImagesArgs = {
   /** Budget shared with the rest of the user action (the text body that follows, or
    *  the send this is healing for). Omit to open a fresh one for this paste alone. */
   readonly deadline?: number
-  /** Bytes for the leading clear. Defaults to a single Ctrl+U, which clears only
-   *  ONE logical line — callers holding a parked multi-line launch draft must
-   *  pass a burst, or its earlier lines survive and glue onto the message. */
+  /** Clears every parked launch-draft line before the image paste. */
   readonly clearInput?: string
+  readonly assertCurrent?: () => void | Promise<void>
 }
 
 /** Clears the agent's unsubmitted input line, then pastes each uploaded image
@@ -46,7 +45,8 @@ export async function pasteMobileNativeChatImagePaths({
   imagePaths,
   followedByText,
   deadline: sharedDeadline,
-  clearInput
+  clearInput,
+  assertCurrent = () => {}
 }: PasteImagesArgs): Promise<boolean> {
   const mobileClient: MobileTerminalClient | null = deviceToken
     ? { id: deviceToken, type: 'mobile' }
@@ -60,6 +60,7 @@ export async function pasteMobileNativeChatImagePaths({
     clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
     ...imagePasteWritesFollowedByText(imagePaths.map(buildMobileImagePastePayload), followedByText)
   ]) {
+    await assertCurrent()
     const remainingMs = deadline - Date.now()
     // Why: the budget is the whole sequence's — starting a write it can't fund would
     // let a multi-image paste overrun before the text body even begins its own send.

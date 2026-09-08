@@ -2,10 +2,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 const BROWSER_KEYS = ['Enter', 'Backspace', 'Tab', 'Escape'] as const
+export type MobileBrowserKey = (typeof BROWSER_KEYS)[number]
 
 type Props = {
   disabled: boolean
-  onKeypress: (key: string) => void
+  onKeypress: (key: MobileBrowserKey) => void
 }
 
 export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.Element {

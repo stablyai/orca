@@ -4,7 +4,6 @@ import {
   View,
   Text,
   Pressable,
-  Linking,
   ExternalLink,
   colors,
   Copy,
@@ -23,7 +22,7 @@ import {
   githubProjectOptionColor,
   canCreateWorkspaceFromProjectRow,
   projectRowType
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import { renderMobileTasksProjectFieldEditors } from './mobile-tasks-project-field-editors'
 import {
   renderMobileTasksProjectLabelsEditor,
@@ -33,6 +32,7 @@ import { renderMobileTasksProjectLoadedDetail } from './mobile-tasks-project-det
 
 export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     copiedLinkKey,
     copyTextToClipboard,
     projectRepoNotInOrca,
@@ -62,7 +62,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
                 style={styles.actionRow}
                 onPress={() => {
                   if (projectRepoNotInOrca.url) {
-                    void Linking.openURL(projectRepoNotInOrca.url)
+                    void deviceOperations.openExternalUrl(projectRepoNotInOrca.url)
                   }
                 }}
               >
@@ -97,6 +97,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
 
 export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     activeProjectLabel,
     copiedLinkKey,
     copyTaskLink,
@@ -261,7 +262,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   style={styles.actionRow}
                   onPress={() => {
                     if (projectRowItem.content.url) {
-                      void Linking.openURL(projectRowItem.content.url)
+                      void deviceOperations.openExternalUrl(projectRowItem.content.url)
                     }
                   }}
                 >

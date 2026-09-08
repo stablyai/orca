@@ -1,10 +1,10 @@
 import { useCallback, type MutableRefObject } from 'react'
 import { useRouter } from 'expo-router'
 import type { RpcClient } from '../transport/rpc-client'
-import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
+import { useMobileSourceControlBranchRunners } from './use-mobile-source-control-branch-runners'
 import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
@@ -13,6 +13,7 @@ import type {
   MobileCommitFailureRecovery,
   RecordMobileCommitFailure
 } from './mobile-commit-failure-recovery'
+import type { HostSourceControlFeedback } from './host-source-control-binding'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
@@ -45,13 +46,10 @@ type Params = {
   setCreatedPrUrl: (next: string | null) => void
   setCreatedPrWarning: (next: string | null) => void
   recordCommitFailure: RecordMobileCommitFailure
-  // Hub override: switch to the History segment instead of pushing the route.
   onOpenHistory?: () => void
+  feedback: HostSourceControlFeedback
 }
 
-// All git workflow + action-sheet runners for the source-control panel. Split
-// out of the state hook to keep each file under the line limit; behavior is
-// unchanged from the original inline definitions.
 export function useMobileSourceControlRunners(params: Params) {
   const {
     client,
@@ -81,7 +79,8 @@ export function useMobileSourceControlRunners(params: Params) {
     setCreatedPrUrl,
     setCreatedPrWarning,
     recordCommitFailure,
-    onOpenHistory
+    onOpenHistory,
+    feedback
   } = params
 
   const runGitWorkflow = useCallback(
@@ -105,14 +104,14 @@ export function useMobileSourceControlRunners(params: Params) {
         if (options?.clearCommitMessage) {
           setCommitMessage('')
         }
-        triggerSuccess()
+        feedback.success()
         await loadStatus({ preserveReadyOnFailure: true, force: true })
         return true
       } catch (err) {
         if (!mountedRef.current) {
           return false
         }
-        triggerError()
+        feedback.error()
         setActionError(err instanceof Error ? err.message : 'Source control action failed')
         return false
       } finally {
@@ -126,6 +125,7 @@ export function useMobileSourceControlRunners(params: Params) {
     },
     [
       busyActionRef,
+      feedback,
       loadStatus,
       mountedRef,
       recordCommitFailure,
@@ -168,14 +168,18 @@ export function useMobileSourceControlRunners(params: Params) {
     if (stageablePaths.length === 0) {
       return
     }
-    await runGitAction('stage-all', 'git.bulkStage', { filePaths: stageablePaths })
+    await runGitAction('stage-all', 'git.bulkStage', {
+      filePaths: stageablePaths
+    })
   }, [runGitAction, stageablePaths])
 
   const unstageAll = useCallback(async () => {
     if (unstageablePaths.length === 0) {
       return
     }
-    await runGitAction('unstage-all', 'git.bulkUnstage', { filePaths: unstageablePaths })
+    await runGitAction('unstage-all', 'git.bulkUnstage', {
+      filePaths: unstageablePaths
+    })
   }, [runGitAction, unstageablePaths])
 
   const { commit, runCommitSequence, runCommitSyncSequence } = useMobileSourceControlCommitRunners({
@@ -223,61 +227,19 @@ export function useMobileSourceControlRunners(params: Params) {
     recordCommitFailure
   })
 
-  const openBranchPicker = useCallback(() => {
-    setShowActionSheet(false)
-    setLocalBranches(null)
-    setShowBranchPicker(true)
-    if (client) {
-      void sendGitRequest<RuntimeGitLocalBranches>('git.localBranches')
-        .then((result) => {
-          if (mountedRef.current) {
-            setLocalBranches(result)
-          }
-        })
-        .catch(() => {
-          if (mountedRef.current) {
-            setLocalBranches({ current: null, branches: [] })
-          }
-        })
-    }
-  }, [
+  const branchRunners = useMobileSourceControlBranchRunners({
     client,
-    mountedRef,
+    hostId,
+    worktreeId,
+    router,
     sendGitRequest,
-    setLocalBranches,
+    runGitAction,
+    mountedRef,
     setShowActionSheet,
-    setShowBranchPicker
-  ])
-
-  const openHistory = useCallback(() => {
-    setShowActionSheet(false)
-    // Inside the hub, History is a segment — switch to it rather than pushing a
-    // route. Fallback pushes the hub with `tab=history` (not the redirecting
-    // /history route) so deep links land in one hop.
-    if (onOpenHistory) {
-      onOpenHistory()
-      return
-    }
-    if (hostId && worktreeId) {
-      router.push({
-        pathname: '/h/[hostId]/source-control/[worktreeId]',
-        params: {
-          hostId,
-          worktreeId,
-          tab: 'history'
-        }
-      } as Parameters<typeof router.push>[0])
-    }
-  }, [hostId, onOpenHistory, router, setShowActionSheet, worktreeId])
-
-  // Switch to a local branch, then reload status.
-  const checkoutBranch = useCallback(
-    async (branch: string) => {
-      setShowBranchPicker(false)
-      await runGitAction('checkout', 'git.checkout', { branch })
-    },
-    [runGitAction, setShowBranchPicker]
-  )
+    setLocalBranches,
+    setShowBranchPicker,
+    onOpenHistory
+  })
 
   const actionSheetRunners = useMobileSourceControlActionSheetRunners({
     client,
@@ -313,10 +275,8 @@ export function useMobileSourceControlRunners(params: Params) {
     generateCommitMessage,
     cancelGenerateCommitMessage,
     createPr,
-    openBranchPicker,
-    openHistory,
-    checkoutBranch,
     abortConflictOperation,
+    ...branchRunners,
     ...actionSheetRunners
   }
 }

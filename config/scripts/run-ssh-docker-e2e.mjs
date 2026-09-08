@@ -33,6 +33,8 @@ if (runtime.status !== 0) {
 //     cost the lane its credibility. NOTE: a runner script test:e2e:ssh-docker-perf exists in
 //     package.json but NO workflow invokes it, so this spec currently runs in no CI lane at
 //     all. Recorded as a real gap, not as coverage living somewhere else.
+//   hosted-mobile-webview-ssh.spec.ts — requires a macOS iOS simulator and cannot run on the
+//     Linux Docker runner. Run test:e2e:hosted-mobile-webview:ssh on macOS before release.
 // The bulk-open frame probe runs headed: headless Linux compositing schedules idle RAFs
 // roughly 1s apart, so it cannot measure foreground interaction against the same budget.
 //
@@ -78,6 +80,7 @@ const result = spawnSync(
     'tests/e2e/ssh-restart-tab-accumulation.spec.ts',
     'tests/e2e/ssh-skill-installation.spec.ts',
     'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts',
+    'tests/e2e/ssh-docker-native-chat-transcript.spec.ts',
     '--config',
     'tests/playwright.config.ts',
     '--project',

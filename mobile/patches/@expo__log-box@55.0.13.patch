@@ -1,0 +1,23 @@
+diff --git a/android/src/main/expo/modules/logbox/ExpoLogBoxWebViewWrapper.kt b/android/src/main/expo/modules/logbox/ExpoLogBoxWebViewWrapper.kt
+index 556724a6f48706fe64d7872a58a63a7a53e01f9d..5286ea546d42e2f9afa63916b2fce02b6ff2ebdf 100644
+--- a/android/src/main/expo/modules/logbox/ExpoLogBoxWebViewWrapper.kt
++++ b/android/src/main/expo/modules/logbox/ExpoLogBoxWebViewWrapper.kt
+@@ -3,6 +3,7 @@
+ package expo.modules.logbox
+ 
+ import android.app.Activity
++import android.content.pm.ApplicationInfo
+ import android.graphics.Bitmap
+ import android.graphics.Color
+ import android.webkit.JavascriptInterface
+@@ -24,7 +25,9 @@ class ExpoLogBoxWebViewWrapper(
+   val webView: WebView = WebView(context).apply {
+     setBackgroundColor(Color.BLACK)
+     settings.javaScriptEnabled = true
+-    setWebContentsDebuggingEnabled(true)
++    val isDebuggable =
++      context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
++    setWebContentsDebuggingEnabled(isDebuggable)
+     // This interface is defined by the Expo DOM Components WebView Wrapper
+     // and must always be the same as [add link]
+     addJavascriptInterface(

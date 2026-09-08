@@ -1,6 +1,6 @@
 import { useEffect, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { PixelRatio, type Image, type View } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { MobileBrowserRpcClient } from './mobile-browser-rpc-client'
 import type {
   BrowserScreencastFrame,
   BrowserScreencastFrameMetadata
@@ -40,7 +40,7 @@ type MobileBrowserStreamArgs = {
   browserViewMode: MobileBrowserViewMode
   busyRef: { current: boolean }
   cacheKey: string | null
-  client: RpcClient | null
+  client: MobileBrowserRpcClient | null
   frameMetadata: BrowserScreencastFrameMetadata | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }
   frameMountedRef: { current: boolean }
@@ -60,6 +60,7 @@ type MobileBrowserStreamArgs = {
   setError: Dispatch<SetStateAction<string | null>>
   setFrameMetadata: Dispatch<SetStateAction<BrowserScreencastFrameMetadata | null>>
   setFrameUri: Dispatch<SetStateAction<string | null>>
+  setNavigationState?: (next: { canGoBack: boolean; canGoForward: boolean }) => void
   setZoom: Dispatch<SetStateAction<BrowserZoomState>>
   streamGenerationRef: { current: number }
   tab: MobileBrowserTab
@@ -96,6 +97,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     setError,
     setFrameMetadata,
     setFrameUri,
+    setNavigationState,
     setZoom,
     streamGenerationRef,
     tab,
@@ -237,10 +239,23 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
         if (streamGenerationRef.current !== generation) {
           return
         }
+        const event = payload as ScreencastEvent
+        // Only a payload that actually carries the flags may override the tab props;
+        // an older host's `ready` omits them and would pin both arrows off.
+        if (
+          (event.type === 'ready' || event.type === 'navigation') &&
+          typeof event.tab?.canGoBack === 'boolean' &&
+          typeof event.tab.canGoForward === 'boolean'
+        ) {
+          setNavigationState?.({
+            canGoBack: event.tab.canGoBack,
+            canGoForward: event.tab.canGoForward
+          })
+        }
         handleBrowserScreencastEvent({
           busyRef,
           clearStartupTimer,
-          event: payload as ScreencastEvent,
+          event,
           lastZoomResetUrlRef,
           resetBrowserZoomState,
           setAddressValue,

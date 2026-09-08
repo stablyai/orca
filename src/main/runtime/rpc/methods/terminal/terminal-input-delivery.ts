@@ -108,10 +108,12 @@ export async function sendTerminalStreamInput(
     text: string
     client: TerminalViewportClient | undefined
     isMobile: boolean
+    inputKind?: 'input' | 'query-reply'
   }
 ): Promise<TerminalStreamInputOutcome> {
   const action = { text: args.text, enter: false, interrupt: false }
-  const clientId = args.isMobile ? args.client?.id : undefined
+  const clientId =
+    args.inputKind === 'query-reply' ? undefined : args.isMobile ? args.client?.id : undefined
   const floorClaim: MobileInputFloorClaimHolder = { current: null }
   try {
     if (!clientId) {

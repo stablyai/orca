@@ -4,9 +4,14 @@ import {
   encodeNativeChatTranscriptIdentity
 } from '../../../src/shared/native-chat-transcript-retention'
 import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
-import type { RpcClient } from '../transport/rpc-client'
+import type {
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../../src/shared/native-chat-types'
+import type {
+  HostSessionNativeChatOperations,
+  HostSessionNativeChatTarget
+} from './host-session-native-chat-operations'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
@@ -16,21 +21,19 @@ export type MobileNativeChatStatus =
   | 'idle'
   | 'loading'
   | 'waiting-session'
-  /** The host answered, but the session has no transcript file yet — render the
-   *  empty chat instead of a spinner while the read stays open. */
   | 'awaiting-transcript'
   | 'ready'
   | 'error'
 
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]
+  lifecycle?: NativeChatTurnLifecycle
   status: MobileNativeChatStatus
   /** True while `messages` cannot be trusted as this session's real history:
-   *  the read is in flight, the transcript has not been written yet, OR the
-   *  subscription effect has not yet caught up to a just-changed agent/session,
-   *  so `messages`/`status` still describe the previous tab. Consumers that
-   *  decide something from an empty transcript (the launch-draft seed) must
-   *  wait for this to clear. */
+   *  the read is in flight, OR the subscription effect has not yet caught up to
+   *  a just-changed agent/session, so `messages`/`status` still describe the
+   *  previous tab. Consumers that decide something from an empty transcript
+   *  (the launch-draft seed) must wait for this to clear. */
   transcriptLoading: boolean
   error?: string
   /** True when an older page may exist (the last read filled the window). */
@@ -47,38 +50,46 @@ const PAGE = 60
 const MAX_MESSAGES = 2000
 
 type ReadSessionResult =
-  | { messages: NativeChatMessage[]; hasMore?: boolean; beforeOffset?: number }
+  | {
+      messages: NativeChatMessage[]
+      hasMore?: boolean
+      beforeOffset?: number
+      lifecycle?: NativeChatTurnLifecycle
+    }
   | { error: string }
 /** Subscribe to an agent's native-chat transcript over the paired connection.
  *  Reads a small recent window for a fast first paint, tails it for live turns,
  *  and pages in older history on demand. Read results replace the list (they are
  *  an ordered tail); live appends merge by id so order stays stable. */
 export function useMobileNativeChatSession(args: {
-  client: RpcClient | null
-  /** Stable host/workspace source; unlike `client`, it survives manual reconnect. */
-  sourceIdentity: string
+  operations: HostSessionNativeChatOperations | null
+  workspaceId: string
   agent: string | null
   sessionId: string | null
   transcriptPath: string | null
+  terminalId: string | null
+  clientId: string | null
 }): MobileNativeChatSession {
-  const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
+  const { operations, workspaceId, agent, sessionId, transcriptPath, terminalId, clientId } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
-    sourceIdentity,
+    workspaceId,
     agent,
     sessionId,
-    transcriptPath
+    transcriptPath,
+    terminalId,
+    clientId
   ])
   // Pre-read status is a pure function of the props, so derive it rather than
   // letting the effect write it a commit later.
   const initialStatus: MobileNativeChatStatus =
-    !client || !agent ? 'idle' : !sessionId ? 'waiting-session' : 'loading'
+    !operations || !agent ? 'idle' : !sessionId ? 'waiting-session' : 'loading'
   // Only the settled outcome is genuinely async, and it is tagged with the
   // identity it describes so a just-switched tab is never judged by the
   // previous tab's transcript — the effect that clears `messages` is passive
   // and lands a commit late.
   const [read, setRead] = useState<{
-    client: RpcClient
+    operations: HostSessionNativeChatOperations
     identity: string
     status: MobileNativeChatStatus
   } | null>(null)
@@ -87,7 +98,7 @@ export function useMobileNativeChatSession(args: {
   // Without this a toggle out of chat view and back (agent null, then the same
   // identity again) would resurface a settled 'ready' over an emptied list.
   let current = read
-  if (current !== null && (current.identity !== identity || current.client !== client)) {
+  if (current !== null && (current.identity !== identity || current.operations !== operations)) {
     current = null
     setRead(null)
   }
@@ -95,6 +106,7 @@ export function useMobileNativeChatSession(args: {
   // client/agent/session means idle or waiting-session outranks it outright.
   const settled = initialStatus === 'loading' ? current : null
   const status = settled ? settled.status : initialStatus
+  const [lifecycle, setLifecycle] = useState<NativeChatTurnLifecycle | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
   const [hasMore, setHasMore] = useState(false)
   const [loadingEarlier, setLoadingEarlier] = useState(false)
@@ -137,26 +149,21 @@ export function useMobileNativeChatSession(args: {
     snapshotSeenRef.current = false
     setLoadingEarlier(false)
     setList([])
+    setLifecycle(undefined)
     setError(undefined)
     setHasMore(false)
     beforeOffsetRef.current = null
-    if (!client || !agent) {
+    if (!operations || !agent) {
       return
     }
     if (!sessionId) {
       return
     }
 
-    const unsubscribe = client.subscribe(
-      'nativeChat.subscribe',
-      {
-        agent,
-        sessionId,
-        limit: limitRef.current,
-        subscriptionId: buildNativeChatSubscriptionId(agent, sessionId),
-        capabilities: { transcriptPending: 1 },
-        ...(transcriptPath ? { transcriptPath } : {})
-      },
+    const target = nativeChatTarget(args, agent, sessionId)
+    const unsubscribe = operations.subscribe(
+      target,
+      limitRef.current,
       (raw) => {
         if (cancelled) {
           return
@@ -172,13 +179,11 @@ export function useMobileNativeChatSession(args: {
           return
         }
         if (applied.kind === 'error') {
-          setRead({ client, identity, status: 'error' })
+          setRead({ operations, identity, status: 'error' })
           setError(applied.error)
           return
         }
-        if (frame.type === 'snapshot' && !applied.pending) {
-          // A pending window has no transcript behind it, so the snapshot that
-          // follows is still this subscription's base, not a reconnect replay.
+        if (frame.type === 'snapshot') {
           snapshotSeenRef.current = true
         }
         if (applied.windowReplaced || frame.type === 'snapshot') {
@@ -196,6 +201,9 @@ export function useMobileNativeChatSession(args: {
           setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
         }
         setMessages(applied.messages)
+        if (applied.lifecycle !== undefined) {
+          setLifecycle(applied.lifecycle)
+        }
         if (!applied.windowReplaced && applied.hasMore != null) {
           setHasMore(applied.hasMore)
         }
@@ -210,7 +218,13 @@ export function useMobileNativeChatSession(args: {
           setLoadingEarlier(false)
           beforeOffsetRef.current = null
         }
-        setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
+        setRead({ operations, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
+      },
+      () => {
+        if (!cancelled) {
+          setRead({ operations, identity, status: 'error' })
+          setError('Transcript stream failed')
+        }
       }
     )
 
@@ -218,10 +232,10 @@ export function useMobileNativeChatSession(args: {
       cancelled = true
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList])
+  }, [operations, workspaceId, agent, sessionId, transcriptPath, terminalId, clientId, setList])
 
   const loadEarlier = useCallback(() => {
-    if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {
+    if (!operations || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {
       return
     }
     // Capture the session this page belongs to; a swap underneath us must not
@@ -239,17 +253,11 @@ export function useMobileNativeChatSession(args: {
     setLoadingEarlier(true)
     void (async () => {
       try {
-        const response = await client.sendRequest('nativeChat.readSession', {
-          agent,
-          sessionId,
-          limit: beforeOffset === null ? nextLimit : pageLimit,
-          ...(beforeOffset === null ? {} : { beforeOffset }),
-          ...(transcriptPath ? { transcriptPath } : {})
-        })
-        if (!response.ok) {
-          return
-        }
-        const result = response.result as ReadSessionResult
+        const result = (await operations.read(
+          nativeChatTarget(args, agent, sessionId),
+          beforeOffset === null ? nextLimit : pageLimit,
+          beforeOffset === null ? undefined : beforeOffset
+        )) as ReadSessionResult
         if ('error' in result) {
           return
         }
@@ -283,7 +291,17 @@ export function useMobileNativeChatSession(args: {
         }
       }
     })()
-  }, [client, agent, sessionId, transcriptPath, hasMore, setList])
+  }, [
+    operations,
+    workspaceId,
+    agent,
+    sessionId,
+    transcriptPath,
+    terminalId,
+    clientId,
+    hasMore,
+    setList
+  ])
 
   // Held for any unsettled read, not just an in-flight one: a stream error or a
   // dropped client would otherwise trade the conversation for an error card.
@@ -297,11 +315,32 @@ export function useMobileNativeChatSession(args: {
     // Withheld until the settled read belongs to this identity: the effect that
     // clears the previous tab's list is passive, so `messages` lags a commit.
     messages: visibleMessages,
+    lifecycle,
     status,
     transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
     error,
     hasMore,
     loadingEarlier,
     loadEarlier
+  }
+}
+
+function nativeChatTarget(
+  args: {
+    workspaceId: string
+    transcriptPath: string | null
+    terminalId: string | null
+    clientId: string | null
+  },
+  agent: string,
+  sessionId: string
+): HostSessionNativeChatTarget {
+  return {
+    workspaceId: args.workspaceId,
+    agent,
+    sessionId,
+    transcriptPath: args.transcriptPath,
+    terminalId: args.terminalId,
+    clientId: args.clientId
   }
 }

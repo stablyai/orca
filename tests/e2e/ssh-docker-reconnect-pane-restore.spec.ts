@@ -13,10 +13,8 @@ import {
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
-import {
-  connectDockerSshRelayTarget,
-  reconnectDockerSshRelayTarget
-} from './helpers/docker-ssh-relay-connection'
+import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
+import { reconnectDockerSshRelayTarget } from './helpers/docker-ssh-relay-reconnect'
 import { openTerminalTabInActiveGroup } from './helpers/terminal-tab-open'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'

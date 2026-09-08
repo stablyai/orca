@@ -47,6 +47,80 @@ const HostedReviewCreate = z.object({
   useTemplate: z.boolean().optional()
 })
 
+const ReviewSubmissionHead = z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i)
+const ReviewSubmissionPath = z
+  .string()
+  .min(1)
+  .max(1024)
+  .refine(isSafeRelativePath, 'Invalid review path')
+const ReviewSubmissionComment = z
+  .object({
+    body: z
+      .string()
+      .trim()
+      .min(1)
+      .max(8 * 1024),
+    path: ReviewSubmissionPath,
+    oldPath: ReviewSubmissionPath.optional(),
+    line: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    startLine: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional()
+  })
+  .strict()
+  .refine(
+    (comment) => comment.startLine === undefined || comment.startLine <= comment.line,
+    'Invalid review line range'
+  )
+const ReviewSubmissionBase = {
+  repo: requiredString('Missing repo selector'),
+  number: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  expectedHead: ReviewSubmissionHead,
+  summary: z
+    .string()
+    .trim()
+    .max(8 * 1024),
+  comments: z.array(ReviewSubmissionComment).max(32)
+} as const
+const HostedReviewSubmit = z
+  .discriminatedUnion('provider', [
+    z
+      .object({
+        ...ReviewSubmissionBase,
+        provider: z.literal('github'),
+        action: z.enum(['comment', 'approve', 'request-changes']),
+        repository: z
+          .object({
+            owner: z.string().min(1).max(256),
+            repo: z.string().min(1).max(256),
+            host: z.string().min(1).max(256).optional()
+          })
+          .strict()
+      })
+      .strict(),
+    z
+      .object({
+        ...ReviewSubmissionBase,
+        provider: z.literal('gitlab'),
+        action: z.literal('comment'),
+        projectRef: z
+          .object({
+            host: z.string().min(1).max(256),
+            path: z.string().min(1).max(1024)
+          })
+          .strict(),
+        baseSha: ReviewSubmissionHead,
+        startSha: ReviewSubmissionHead
+      })
+      .strict()
+  ])
+  .superRefine((submission, context) => {
+    const retainedCharacters =
+      submission.summary.length +
+      submission.comments.reduce((total, comment) => total + comment.body.length, 0)
+    if (retainedCharacters > 64 * 1024) {
+      context.addIssue({ code: 'custom', message: 'Review submission is too large' })
+    }
+  })
+
 export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'hostedReview.forBranch',
@@ -110,6 +184,14 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
       })
   }),
   defineMethod({
+    name: 'hostedReview.submit',
+    params: HostedReviewSubmit,
+    handler: async (params, { runtime }) => {
+      const { repo, ...input } = params
+      return runtime.submitHostedReview({ repoSelector: repo, ...input })
+    }
+  }),
+  defineMethod({
     name: 'hostedReview.createStacked',
     params: HostedReviewCreate,
     handler: async (params, { runtime }) =>
@@ -126,3 +208,15 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
       })
   })
 ]
+
+function isSafeRelativePath(value: string): boolean {
+  if (
+    value.includes('\0') ||
+    value.includes('\\') ||
+    value.startsWith('/') ||
+    /^[A-Za-z]:/.test(value)
+  ) {
+    return false
+  }
+  return value.split('/').every((part) => part.length > 0 && part !== '.' && part !== '..')
+}

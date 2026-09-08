@@ -9,8 +9,6 @@ import {
   Pressable,
   ChevronLeft,
   ChevronRight,
-  triggerMediumImpact,
-  Linking,
   TaskProviderLogo,
   GitBranch,
   getHostedReviewSignalTone,
@@ -27,10 +25,11 @@ import {
   taskKindLabel,
   getGitHubReviewSummary,
   getGitHubMergeLabel
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function renderMobileTasksProviderItemList(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     displayedEntries,
     emptyLabel,
     githubCanLoadUncountedNextPage,
@@ -165,9 +164,9 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
             onPress={() => {
-              triggerMediumImpact()
+              deviceOperations.hapticMediumImpact()
               if (item.provider === 'gitlabTodo') {
-                void Linking.openURL(item.source.targetUrl)
+                void deviceOperations.openExternalUrl(item.source.targetUrl)
                 return
               }
               setActionItem(item)

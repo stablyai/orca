@@ -15,6 +15,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     client,
     reconnectAttempts,
     lastConnectedAt,
+    relayRecovery,
     terminalsLoaded,
     activeHandle,
     creating,
@@ -27,15 +28,16 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     initialSessionAutoCreateRef,
     terminalFrameHeightRef,
     handleCreateTerminal,
-    visibleTabs
+    visibleTabs,
+    sessionTabOperations,
+    setCreateError
   } = scope
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
-  // Why: a newly created workspace can hydrate with zero tabs before its first terminal exists.
   useInitialSessionTerminalAutoCreate({
-    client,
+    client: client ?? sessionTabOperations,
     newlyCreatedWorkspace: created === '1',
     connState,
     terminalsLoaded,
@@ -45,7 +47,10 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     stateRef: initialSessionAutoCreateRef,
     worktreeId,
     consumeCreationRoute: () => router.setParams({ created: undefined }),
-    createTerminal: () => void handleCreateTerminal()
+    createTerminal: () => {
+      setCreateError('')
+      void handleCreateTerminal()
+    }
   })
 
   // Why: reconnect trickles to 90s at its give-up cap; surface tap-to-retry so recovery needn't wait it out (issue #5049).
@@ -53,7 +58,8 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
-    endpoint: hostEndpoint
+    endpoint: hostEndpoint,
+    ...relayRecovery
   })
   const showConnectionRetry =
     connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'

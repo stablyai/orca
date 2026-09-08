@@ -1,8 +1,8 @@
 import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
 import { InvalidArgumentError, defineMethod, type RpcAnyMethod } from '../../core'
-import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
+import { resolveTerminalQueryReplyAuthorId } from './terminal-query-reply-guard'
 import { TerminalSend } from './unary-schemas'
 import {
   assertTerminalSendExactPtyBinding,
@@ -48,18 +48,18 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
           runtime.ensureStructuredAgentSessionHost()
         )
       }
-      const queryReplyClientId = clientId ?? params.client?.id
+      const queryReplyClientId = resolveTerminalQueryReplyAuthorId({
+        text: params.text,
+        client: params.client,
+        connectionClientId: clientId
+      })
       if (
         params.inputKind === 'query-reply' &&
-        (!params.text ||
-          !isTerminalQueryReply(params.text) ||
+        (!queryReplyClientId ||
           params.enter === true ||
           params.interrupt === true ||
           params.agentPrompt === true ||
-          params.requireAgentStatus !== undefined ||
-          params.client?.type !== 'mobile' ||
-          !queryReplyClientId ||
-          (clientId !== undefined && params.client.id !== clientId))
+          params.requireAgentStatus !== undefined)
       ) {
         throw new InvalidArgumentError('Invalid terminal query reply')
       }

@@ -19,7 +19,6 @@ import androidx.annotation.RequiresApi
 import java.util.Queue
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.pow
 
 
@@ -35,7 +34,7 @@ class AudioEngine (context: Context) {
     private var audioFocusChangeListener: AudioManager.OnAudioFocusChangeListener? = null
     private var audioDeviceCallback: android.media.AudioDeviceCallback? = null
     private val audioSampleQueue: Queue<ByteArray> = ConcurrentLinkedQueue()
-    private val playbackRunning = AtomicBoolean(false)
+    private val playbackGate = AudioPlaybackGate()
     private var echoCanceler: AcousticEchoCanceler? = null
     private var noiseSuppressor: NoiseSuppressor? = null
     private val executorServiceMicrophone = Executors.newFixedThreadPool(1)
@@ -51,7 +50,7 @@ class AudioEngine (context: Context) {
 
     var isRecording = false
     private var isRecordingBeforePause = false
-    var isPlaying = false
+    @Volatile var isPlaying = false
 
     // Callbacks
     var onMicDataCallback: ((ByteArray) -> Unit)? = null
@@ -329,14 +328,14 @@ class AudioEngine (context: Context) {
         playbackEvents += 1
         playbackQueuedBytes += data.size.toLong()
         flushBridgeStats("queue")
-        if (playbackRunning.compareAndSet(false, true)) {
+        if (playbackGate.startIfIdle()) {
+            isPlaying = true
             playAudioFromSampleQueue()
         }
     }
 
     private fun playAudioFromSampleQueue() {
         executorServicePlayback.execute{
-            isPlaying = true
             try {
                 while (true){
                     val data = audioSampleQueue.poll() ?: break
@@ -348,10 +347,11 @@ class AudioEngine (context: Context) {
                 Log.e("AudioEngine", "Error playing audio", e)
                 e.printStackTrace()
             }finally {
-                playbackRunning.set(false)
+                playbackGate.finish()
                 isPlaying = false
                 onOutputVolumeCallback?.invoke(0.0F)
-                if (audioSampleQueue.isNotEmpty() && playbackRunning.compareAndSet(false, true)) {
+                if (audioSampleQueue.isNotEmpty() && playbackGate.startIfIdle()) {
+                    isPlaying = true
                     playAudioFromSampleQueue()
                 }
             }
@@ -359,10 +359,21 @@ class AudioEngine (context: Context) {
     }
 
     private fun playSample(data: ByteArray) {
-        val written = audioTrack.write(data, 0, data.size)
-        playbackWrites += 1
-        playbackWriteBytes += written.coerceAtLeast(0).toLong()
-        flushBridgeStats("write")
+        val written = writeAudioSampleFully(
+            sample = data,
+            isActive = playbackGate::isActive,
+            awaitWritable = playbackGate::awaitWritable,
+            retryNoProgress = playbackGate::retryNoProgress,
+            write = { offset, length -> audioTrack.write(data, offset, length) },
+            onWrite = { bytes ->
+                playbackWrites += 1
+                playbackWriteBytes += bytes.toLong()
+                flushBridgeStats("write")
+            }
+        )
+        if (written < data.size && playbackGate.isActive()) {
+            Log.e("AudioEngine", "Playback write stopped after $written/${data.size} bytes")
+        }
     }
 
     fun bypassVoiceProcessing(bypass: Boolean) {
@@ -379,6 +390,7 @@ class AudioEngine (context: Context) {
     fun pauseRecordingAndPlayer() {
         isRecordingBeforePause = isRecording
         isRecording = toggleRecording(false)
+        playbackGate.pause()
         audioTrack.pause()
     }
 
@@ -387,25 +399,28 @@ class AudioEngine (context: Context) {
         requestAudioFocus()
         isRecording = toggleRecording(isRecordingBeforePause)
         audioTrack.play()
+        playbackGate.resume()
     }
 
     fun stopPlayback() {
         audioSampleQueue.clear()
+        playbackGate.cancel()
         audioTrack.pause()
         audioTrack.flush()
-        playbackRunning.set(false)
         isPlaying = false
         onOutputVolumeCallback?.invoke(0.0F)
         Log.d("AudioEngine", "Playback stopped")
     }
 
     fun pausePlayback() {
+        playbackGate.pause()
         audioTrack.pause()
         Log.d("AudioEngine", "Playback paused")
     }
 
     fun resumePlayback() {
         audioTrack.play()
+        playbackGate.resume()
         Log.d("AudioEngine", "Playback resumed")
     }
 
@@ -421,7 +436,7 @@ class AudioEngine (context: Context) {
         noiseSuppressor?.release()
         noiseSuppressor = null
         audioSampleQueue.clear()
-        playbackRunning.set(false)
+        playbackGate.cancel()
         audioManager.mode = AudioManager.MODE_NORMAL
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             audioDeviceCallback?.let { audioManager.unregisterAudioDeviceCallback(it) }

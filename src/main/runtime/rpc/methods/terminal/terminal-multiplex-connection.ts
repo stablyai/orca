@@ -20,6 +20,8 @@ export type MultiplexEmit = (result: unknown) => void
 export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
   connectionId: string
+  /** Authenticated device token for this socket; undefined for in-process/desktop callers. */
+  connectionClientId: string | undefined
   sendBinary: NonNullable<RpcContext['sendBinary']>
   registerBinaryStreamHandler: NonNullable<RpcContext['registerBinaryStreamHandler']>
   signal: RpcContext['signal']

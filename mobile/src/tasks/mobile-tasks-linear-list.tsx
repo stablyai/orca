@@ -7,7 +7,6 @@ import {
   ScrollView,
   spacing,
   Pressable,
-  triggerMediumImpact,
   ChevronDown,
   FlatList,
   TaskProviderLogo
@@ -18,10 +17,11 @@ import {
   type TaskItem,
   linearIssueSecondaryParts,
   formatUpdatedAt
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function renderMobileTasksLinearList(model: ConnectionPresentationModel) {
   const {
+    deviceOperations,
     effectiveLinearDisplayProperties,
     emptyLabel,
     insets,
@@ -65,7 +65,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                 key={issue.id}
                 style={({ pressed }) => [styles.boardCard, pressed && styles.taskRowPressed]}
                 onPress={() => {
-                  triggerMediumImpact()
+                  deviceOperations.hapticMediumImpact()
                   setActionItem(
                     createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>
                   )
@@ -85,7 +85,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                     accessibilityLabel={`Change status from ${issue.state.name}`}
                     onPress={(event) => {
                       event.stopPropagation()
-                      triggerMediumImpact()
+                      deviceOperations.hapticMediumImpact()
                       setLinearStatusPickerItem(
                         createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>
                       )
@@ -141,7 +141,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
             onPress={() => {
-              triggerMediumImpact()
+              deviceOperations.hapticMediumImpact()
               setActionItem(linearTask)
             }}
           >
@@ -173,7 +173,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
                   accessibilityLabel={`Change status from ${issue.state.name}`}
                   onPress={(event) => {
                     event.stopPropagation()
-                    triggerMediumImpact()
+                    deviceOperations.hapticMediumImpact()
                     setLinearStatusPickerItem(linearTask)
                   }}
                 >

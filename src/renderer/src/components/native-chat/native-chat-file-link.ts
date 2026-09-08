@@ -3,7 +3,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   parseExplicitFileLinkTarget,
   resolveExplicitFileLinkTarget
-} from '@/lib/explicit-file-link-target'
+} from '../../../../shared/explicit-file-link-target'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'

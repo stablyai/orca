@@ -18,6 +18,7 @@ import {
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
 import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
+import { mobileHostWorkspaceEntry } from '../src/mobile-web/mobile-web-home-navigation'
 import {
   saveDefaultSessionView,
   type MobileSessionView
@@ -70,7 +71,7 @@ function MobileOnboardingFlow({
   )
 
   const continueToApp = useCallback(() => {
-    router.replace(hostId ? `/h/${hostId}` : '/')
+    router.replace(hostId ? mobileHostWorkspaceEntry(hostId) : '/')
   }, [hostId, router])
 
   const advanceOrContinue = useCallback(() => {

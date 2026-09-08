@@ -19,6 +19,7 @@ type HostedReviewCommandName =
   | 'getHostedReviewForBranch'
   | 'getHostedReviewCreationEligibility'
   | 'createHostedReview'
+  | 'submitHostedReview'
   | 'createStackedHostedReview'
 type GitHubRepositoryQueryCommandName =
   | 'listRepoWorkItems'
@@ -146,6 +147,7 @@ export function installRuntimeRepositoryCommandSurface(
     getHostedReviewForBranch: reviews.getHostedReviewForBranch.bind(reviews),
     getHostedReviewCreationEligibility: reviews.getHostedReviewCreationEligibility.bind(reviews),
     createHostedReview: reviews.createHostedReview.bind(reviews),
+    submitHostedReview: reviews.submitHostedReview.bind(reviews),
     createStackedHostedReview: reviews.createStackedHostedReview.bind(reviews),
     listRepoWorkItems: queries.listRepoWorkItems.bind(queries),
     listRepoIssues: queries.listRepoIssues.bind(queries),

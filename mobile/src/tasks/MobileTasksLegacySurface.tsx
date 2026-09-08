@@ -18,7 +18,7 @@ import {
   getHostedStateConfirmTitle,
   getHostedStateConfirmMessage,
   getHostedStateConfirmLabel
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import { renderMobileTasksChrome } from './mobile-tasks-screen-chrome'
 import { renderMobileTasksListSurface } from './mobile-tasks-list-surface'
 import {

@@ -129,7 +129,8 @@ export function buildSections(
   pinnedIds: Set<string>,
   repoIdsByName: ReadonlyMap<string, string> = new Map(),
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
-  collapsedGroups: ReadonlySet<string> = new Set()
+  collapsedGroups: ReadonlySet<string> = new Set(),
+  worktreesLoaded = true
 ): Section[] {
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
@@ -161,7 +162,12 @@ export function buildSections(
     }
     const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
     const query = search.trim().toLowerCase()
-    for (const [displayName, id] of repoIdsByName) {
+    // Why: repo metadata resolves before the paged worktree snapshot, so synthesizing a
+    // placeholder per repo while the rows are still loading renders the whole list as empty groups.
+    const repoPlaceholders: ReadonlyMap<string, string> = worktreesLoaded
+      ? repoIdsByName
+      : new Map()
+    for (const [displayName, id] of repoPlaceholders) {
       if (representedRepoIds.has(id)) {
         continue
       }

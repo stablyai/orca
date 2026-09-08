@@ -51,7 +51,12 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
   } = model
   return (
     <View style={styles.statusBar}>
-      <Pressable style={styles.backButton} onPress={() => router.back()}>
+      <Pressable
+        style={styles.backButton}
+        onPress={() => router.back()}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+      >
         <ChevronLeft size={22} color={colors.textPrimary} />
       </Pressable>
       <View style={styles.titleWrap}>
@@ -61,6 +66,11 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
       <Pressable
         style={styles.iconButton}
         disabled={!taskUiReady || loading || refreshing || githubProjectLoading}
+        accessibilityRole="button"
+        accessibilityLabel="Refresh tasks"
+        accessibilityState={{
+          disabled: !taskUiReady || loading || refreshing || githubProjectLoading
+        }}
         onPress={() => {
           if (!taskUiReady) {
             return
@@ -78,6 +88,9 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
         <Pressable
           style={styles.iconButton}
           disabled={!taskUiReady}
+          accessibilityRole="button"
+          accessibilityLabel="Create task"
+          accessibilityState={{ disabled: !taskUiReady }}
           onPress={() => {
             if (!taskUiReady) {
               return

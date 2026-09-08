@@ -42,18 +42,22 @@ const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 export const TERMINAL_TEXT_SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
 const DEFAULT_TEXT_SCALE = 1
 
-export async function loadTerminalTextScale(): Promise<number> {
+export async function loadTerminalTextScale(
+  options: { fallback?: number; rejectReadFailure?: boolean } = {}
+): Promise<number> {
+  const fallback = options.fallback ?? DEFAULT_TEXT_SCALE
   try {
     const raw = await AsyncStorage.getItem(TEXT_SCALE_KEY)
     if (raw === null) {
-      return DEFAULT_TEXT_SCALE
+      return fallback
     }
     const parsed = Number(raw)
-    return (TERMINAL_TEXT_SCALES as readonly number[]).includes(parsed)
-      ? parsed
-      : DEFAULT_TEXT_SCALE
-  } catch {
-    return DEFAULT_TEXT_SCALE
+    return (TERMINAL_TEXT_SCALES as readonly number[]).includes(parsed) ? parsed : fallback
+  } catch (error) {
+    if (options.rejectReadFailure) {
+      throw error
+    }
+    return fallback
   }
 }
 
@@ -66,12 +70,17 @@ const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
 // Why: terminal command inputs default to autocorrect/suggestions OFF so the
 // keyboard never mangles commands, flags, or paths. Users who want phone-style
 // typing opt in via Settings → Terminal; the choice persists locally per device.
-export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
+export async function loadTerminalAutocompleteEnabled(
+  options: { fallback?: boolean; rejectReadFailure?: boolean } = {}
+): Promise<boolean> {
   try {
     const raw = await AsyncStorage.getItem(AUTOCOMPLETE_KEY)
-    return raw === 'true'
-  } catch {
-    return false
+    return raw === null ? (options.fallback ?? false) : raw === 'true'
+  } catch (error) {
+    if (options.rejectReadFailure) {
+      throw error
+    }
+    return options.fallback ?? false
   }
 }
 
@@ -197,12 +206,14 @@ export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
 export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
 
-export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
+export async function loadTerminalLinkOpenMode(
+  fallback: MobileTerminalLinkOpenMode = DEFAULT_TERMINAL_LINK_OPEN_MODE
+): Promise<MobileTerminalLinkOpenMode> {
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
-    return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
+    return raw === 'phone-browser' || raw === 'orca-browser' ? raw : fallback
   } catch {
-    return DEFAULT_TERMINAL_LINK_OPEN_MODE
+    return fallback
   }
 }
 

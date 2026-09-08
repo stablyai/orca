@@ -1,17 +1,14 @@
 import { useEffect, useCallback } from 'react'
-import { Keyboard, Platform, type KeyboardEvent } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
-import { saveCustomKeys, type CustomKey } from '../components/CustomKeyModal'
-import { LAST_VISITED_WORKTREE_STORAGE_KEY } from '../worktree/last-visited-worktree-repo'
+import type { CustomKey } from '../components/CustomKeyModal'
 import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import type { MobileSessionLifecycleModel } from './use-mobile-session-lifecycle'
+import { persistSessionLastVisitedWorktree } from './session-last-visited-worktree'
 
 export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel) {
   const {
     hostId,
     worktreeId,
-    router,
     connState,
     terminals,
     terminalTextScale,
@@ -24,7 +21,6 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
     customKeys,
     setCustomKeys,
     setShowCustomKeyModal,
-    setKeyboardHeight,
     deviceTokenRef,
     clientRef,
     viewportRef,
@@ -36,7 +32,10 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
     terminalFrameWidth,
     showNativeChatRef,
     unsubscribeTerminal,
-    subscribeToTerminal
+    subscribeToTerminal,
+    keyboardHeight,
+    sessionDeviceOperations,
+    terminalSettingsModalHandoffRef
   } = scope
   // Why: non-subscribe layout refits (tab strip, fold, rotation) live in a dedicated hook — see terminal-viewport-refit.ts.
   const { notifyTerminalFrameHeight, notifyKeyboardVisibility } = useTerminalViewportRefit({
@@ -58,23 +57,8 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
   })
 
   useEffect(() => {
-    const onShow = (e: KeyboardEvent) => {
-      notifyKeyboardVisibility(true)
-      setKeyboardHeight(e.endCoordinates?.height ?? 0)
-    }
-    const onHide = () => {
-      notifyKeyboardVisibility(false)
-      setKeyboardHeight(0)
-    }
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const showSub = Keyboard.addListener(showEvent, onShow)
-    const hideSub = Keyboard.addListener(hideEvent, onHide)
-    return () => {
-      showSub.remove()
-      hideSub.remove()
-    }
-  }, [notifyKeyboardVisibility])
+    notifyKeyboardVisibility(keyboardHeight > 0)
+  }, [keyboardHeight, notifyKeyboardVisibility])
 
   const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
     if (!tabId) {
@@ -105,10 +89,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
 
   useEffect(() => {
     if (hostId && worktreeId) {
-      void AsyncStorage.setItem(
-        LAST_VISITED_WORKTREE_STORAGE_KEY,
-        JSON.stringify({ hostId, worktreeId })
-      )
+      void persistSessionLastVisitedWorktree(hostId, worktreeId)
     }
   }, [hostId, worktreeId])
 
@@ -116,21 +97,26 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
     async (key: CustomKey) => {
       const updated = customKeys.filter((k) => k.id !== key.id)
       setCustomKeys(updated)
-      await saveCustomKeys(updated)
+      await sessionDeviceOperations?.saveTerminalCustomKeys(updated)
     },
-    [customKeys]
+    [customKeys, sessionDeviceOperations]
   )
 
   const handleManageShortcuts = useCallback(() => {
-    setShowCustomKeyModal(false)
-    router.push('/terminal-settings')
-  }, [router])
+    terminalSettingsModalHandoffRef.current.request(() => setShowCustomKeyModal(false))
+  }, [])
+  const handleCustomKeyModalAfterClose = useCallback(() => {
+    terminalSettingsModalHandoffRef.current.complete(() =>
+      sessionDeviceOperations?.openTerminalSettings()
+    )
+  }, [sessionDeviceOperations])
   return {
     notifyTerminalFrameHeight,
     notifyKeyboardVisibility,
     scrollActiveTabIntoView,
     handleDeleteCustomKey,
-    handleManageShortcuts
+    handleManageShortcuts,
+    handleCustomKeyModalAfterClose
   }
 }
 

@@ -224,6 +224,11 @@ jobs:
           # Why the native IME spec is dropped: it test.skip()s itself without
           # ORCA_E2E_NATIVE_IBUS_HANGUL, which this lane cannot set because it has no ibus
           # session. Running it here reported a green skip as coverage.
+          # Why the hosted mobile WebView SSH spec is dropped: it test.skip()s itself off
+          # darwin, and it needs an iOS simulator plus a Docker daemon — no runner GitHub
+          # offers has both. It runs from a macOS checkout via
+          # `pnpm test:e2e:hosted-mobile-webview:ssh`; reporting a green skip here only hid
+          # that CI never covers it.
           mapfile -t TEST_FILES < <(jq -r '.[] | select(
             . != "tests/e2e/ssh-startup-exec-readiness.spec.ts" and
             . != "tests/e2e/paired-startup-exec-readiness.spec.ts" and
@@ -232,7 +237,8 @@ jobs:
             . != "tests/e2e/ssh-localhost.spec.ts" and
             . != "tests/e2e/ssh-client-hosted-browser-drop-reconnect.spec.ts" and
             . != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts" and
-            . != "tests/e2e/terminal-ibus-hangul-native.spec.ts"
+            . != "tests/e2e/terminal-ibus-hangul-native.spec.ts" and
+            . != "tests/e2e/hosted-mobile-webview-ssh.spec.ts"
           )' <<<"$TEST_FILES_JSON")
           if [ "${#TEST_FILES[@]}" -eq 0 ]; then
             echo "Changed specs are all owned by dedicated lanes."

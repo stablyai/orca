@@ -212,15 +212,23 @@ export function getVisibleTerminalAccessoryKeys(
   })
 }
 
-export async function loadTerminalAccessoryLayout(): Promise<TerminalAccessoryLayoutPreference> {
+export async function loadTerminalAccessoryLayout(
+  options: { fallback?: TerminalAccessoryLayout; rejectReadFailure?: boolean } = {}
+): Promise<TerminalAccessoryLayoutPreference> {
+  const fallback = options.fallback
+    ? normalizeTerminalAccessoryLayoutPreference({ version: 2, ...options.fallback })
+    : defaultPreference()
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY)
     if (!raw) {
-      return defaultPreference()
+      return fallback
     }
     return normalizeTerminalAccessoryLayoutPreference(JSON.parse(raw))
-  } catch {
-    return defaultPreference()
+  } catch (error) {
+    if (options.rejectReadFailure) {
+      throw error
+    }
+    return fallback
   }
 }
 

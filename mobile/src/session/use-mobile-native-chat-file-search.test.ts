@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { nativeHostSessionNativeChatOperations } from './native-host-session-native-chat-operations'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 
 type SearchState = ReturnType<typeof useMobileNativeChatFileSearch>
@@ -20,8 +21,19 @@ describe('useMobileNativeChatFileSearch', () => {
   let state: SearchState | null = null
 
   async function mount(client: RpcClient): Promise<void> {
+    const operations = nativeHostSessionNativeChatOperations(client)
     function Harness(): null {
-      state = useMobileNativeChatFileSearch({ client, worktreeId: 'wt-1' })
+      state = useMobileNativeChatFileSearch({
+        operations,
+        target: {
+          workspaceId: 'wt-1',
+          agent: 'claude',
+          sessionId: 'session',
+          transcriptPath: null,
+          terminalId: 'terminal',
+          clientId: 'device'
+        }
+      })
       return null
     }
     await act(async () => {

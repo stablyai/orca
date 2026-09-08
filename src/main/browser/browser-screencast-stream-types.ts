@@ -39,6 +39,12 @@ export type BrowserScreencastSession = {
 export type BrowserScreencastEvent =
   | { type: 'dialog'; dialogType: string; message: string }
   | { type: 'dialogClosed' }
+  // Rule 3, ungated: clients route screencast results through an unvalidated cast into an
+  // if/else-if chain with no else, so a build that predates this member ignores it silently.
+  | {
+      type: 'navigation'
+      tab: { url: string; title: string; canGoBack: boolean; canGoForward: boolean }
+    }
 
 export type PendingScreencastFrame = {
   metadata: BrowserScreencastFrameMetadata

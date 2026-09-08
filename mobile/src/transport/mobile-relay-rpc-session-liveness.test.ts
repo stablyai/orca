@@ -104,6 +104,27 @@ describe('mobile relay RPC session liveness', () => {
   })
   afterEach(() => vi.useRealTimers())
 
+  it('checks caller authority after the connected wait and before relay transmission', async () => {
+    const session = await authenticateSession()
+    const failure = new Error('Retired page')
+    let active = true
+    const pending = session.sendRequest(
+      'future.write',
+      {},
+      {
+        beforeSend: () => {
+          if (!active) {
+            throw failure
+          }
+        }
+      }
+    )
+    active = false
+    await expect(pending).rejects.toBe(failure)
+    expect(fakes.sendText).not.toHaveBeenCalled()
+    session.close()
+  })
+
   it('sends no periodic traffic while an authenticated relay is idle', async () => {
     const session = await authenticateSession()
 

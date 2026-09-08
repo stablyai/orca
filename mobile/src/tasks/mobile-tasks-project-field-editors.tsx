@@ -3,7 +3,7 @@ import {
   SHOW_MOBILE_PROJECT_METADATA_EDITORS,
   editableProjectFields,
   projectFieldValueLabel
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import { View, Text, Pressable, Check, colors, TextInput } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 

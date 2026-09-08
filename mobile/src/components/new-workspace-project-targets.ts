@@ -13,7 +13,7 @@ import {
 type WorkspaceRepo = Pick<Repo, 'id' | 'displayName' | 'path'> &
   Partial<
     Pick<Repo, 'connectionId' | 'executionHostId' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
-  >
+  > & { projectId?: string; executionHostLabel?: string }
 
 export type NewWorkspaceProjectOption<TRepo extends WorkspaceRepo> = {
   id: string
@@ -35,7 +35,7 @@ export function buildNewWorkspaceProjectOptions<TRepo extends WorkspaceRepo>(
   const options = new Map<string, NewWorkspaceProjectOption<TRepo>>()
   const hostIdsByProject = new Map<string, Set<string>>()
   for (const repo of repos) {
-    const id = getProjectIdentityKey(repo)
+    const id = repo.projectId ?? getProjectIdentityKey(repo)
     const hostIds = hostIdsByProject.get(id) ?? new Set<string>()
     hostIds.add(getRepoExecutionHostId(repo))
     hostIdsByProject.set(id, hostIds)
@@ -67,7 +67,7 @@ export function getNewWorkspaceRunTarget(
 } {
   const hostId = getRepoExecutionHostId(repo)
   const host = parseExecutionHostId(hostId)
-  const hostLabel = getExecutionHostLabel(hostId)
+  const hostLabel = repo.executionHostLabel ?? getExecutionHostLabel(hostId)
   if (host?.kind === 'ssh') {
     return { label: `SSH · ${hostLabel}`, detail: repo.path }
   }
@@ -90,7 +90,7 @@ export function buildNewWorkspaceRunTargetOptions<TRepo extends WorkspaceRepo>(
   }
   const options = new Map<string, NewWorkspaceRunTargetOption<TRepo>>()
   for (const repo of repos) {
-    if (getProjectIdentityKey(repo) !== projectId) {
+    if ((repo.projectId ?? getProjectIdentityKey(repo)) !== projectId) {
       continue
     }
     const hostId = getRepoExecutionHostId(repo)

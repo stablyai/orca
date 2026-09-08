@@ -1,22 +1,20 @@
 import { useRef, useCallback } from 'react'
-import { Keyboard, Platform, type View } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
+import { Keyboard, type View } from 'react-native'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
-import {
-  triggerSelection,
-  triggerSuccess,
-  triggerError,
-  triggerEdgeBump
-} from '../platform/haptics'
 import type {
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes
 } from '../terminal/terminal-webview-contract'
 import type { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
+import {
+  createTerminalAccessoryRepeatController,
+  createTerminalAccessoryRepeatSender
+} from '../terminal/terminal-accessory-repeat'
 import { clearTerminalLiveInputFocusTimer } from '../terminal/terminal-live-input'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 import type { RuntimeRepoSummary } from './mobile-session-route-types'
 import type { MobileSessionTerminalInputModel } from './use-mobile-session-terminal-input'
+import { mobileLogErrorKind } from '../diagnostics/mobile-log-error-kind'
 
 export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalInputModel) {
   const {
@@ -33,41 +31,52 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     liveInputFocusTimerRef,
     sessionTabActionSheetRequestSeqRef,
     activeHandleRef,
+    clientRef,
+    connStateRef,
     clearPendingLiveInputCommit,
     clearDelayedActionTimers,
     clearToastHideTimer,
     showToast,
     clearTerminalCache,
     handleAccessoryKey,
-    clearSessionTabActionSheetKeyboardListener
+    clearSessionTabActionSheetKeyboardListener,
+    copyTextToDevice,
+    sessionDeviceOperations,
+    triggerError,
+    triggerSuccess
   } = scope
-  // Why: hold-to-repeat matches iOS cadence (400ms then 45ms); non-repeatable keys fire once (holding is destructive).
-  const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const repeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Why: ref keeps repeat firing the current callback; else a mid-hold tab switch/reconnect routes bytes to a stale terminal.
+  const accessoryRepeatRef = useRef(
+    createTerminalAccessoryRepeatController<ReturnType<typeof createTerminalLiveAccessoryInput>>()
+  )
+  // Why: the current callback observes reconnect state while the sender pins the press to its original terminal.
   const handleAccessoryKeyRef = useRef(handleAccessoryKey)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   handleAccessoryKeyRef.current = handleAccessoryKey
   const stopAccessoryRepeat = useCallback(() => {
-    if (repeatTimeoutRef.current) {
-      clearTimeout(repeatTimeoutRef.current)
-      repeatTimeoutRef.current = null
-    }
-    if (repeatIntervalRef.current) {
-      clearInterval(repeatIntervalRef.current)
-      repeatIntervalRef.current = null
-    }
+    accessoryRepeatRef.current.stop()
   }, [])
   const startAccessoryRepeat = useCallback(
     (input: ReturnType<typeof createTerminalLiveAccessoryInput>) => {
-      stopAccessoryRepeat()
-      repeatTimeoutRef.current = setTimeout(() => {
-        repeatIntervalRef.current = setInterval(() => {
-          void handleAccessoryKeyRef.current(input)
-        }, 45)
-      }, 400)
+      // Why: a held repeat must not resume through a replacement client or connection.
+      const targetClient = clientRef.current
+      const targetConnectedAt = targetClient?.getLastConnectedAt() ?? null
+      const isDeliveryTargetCurrent = (targetHandle: string) =>
+        activeHandleRef.current === targetHandle &&
+        targetClient !== null &&
+        clientRef.current === targetClient &&
+        connStateRef.current === 'connected' &&
+        targetClient.getLastConnectedAt() === targetConnectedAt
+      accessoryRepeatRef.current.start(
+        input,
+        createTerminalAccessoryRepeatSender(
+          activeHandleRef.current,
+          isDeliveryTargetCurrent,
+          (nextInput, targetHandle, isTargetCurrent) =>
+            handleAccessoryKeyRef.current(nextInput, targetHandle, isTargetCurrent)
+        )
+      )
     },
-    [stopAccessoryRepeat]
+    []
   )
   const setMobileSessionRootRef = useCallback(
     (node: View | null): void => {
@@ -115,25 +124,23 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
         return
       }
       try {
-        await Clipboard.setStringAsync(text)
+        const result = await copyTextToDevice(text)
         triggerSuccess()
         // Why: Android 13+ shows its own system copy toast; iOS shows none, so only iOS needs our in-app toast.
-        if (Platform.OS === 'ios') {
+        if (result.confirmation === 'in-app') {
           showToast('Copied')
         }
         terminalRefs.current.get(handle)?.cancelSelect()
       } catch (e) {
         triggerError()
-        const err = e as { name?: string; message?: string }
         // eslint-disable-next-line no-console
         console.warn('[mobile-clip] setString failed', {
-          name: err.name,
-          message: err.message
+          kind: mobileLogErrorKind(e)
         })
         showToast("Couldn't copy", 1500)
       }
     },
-    [showToast]
+    [copyTextToDevice, showToast, triggerError, triggerSuccess]
   )
 
   const handleSelectionEvicted = useCallback(
@@ -173,17 +180,12 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     []
   )
 
-  const handleHaptic = useCallback((kind: 'selection' | 'success' | 'error' | 'edge-bump') => {
-    if (kind === 'selection') {
-      triggerSelection()
-    } else if (kind === 'success') {
-      triggerSuccess()
-    } else if (kind === 'error') {
-      triggerError()
-    } else if (kind === 'edge-bump') {
-      triggerEdgeBump()
-    }
-  }, [])
+  const handleHaptic = useCallback(
+    (kind: 'selection' | 'success' | 'error' | 'edge-bump') => {
+      sessionDeviceOperations?.hapticFeedback(kind)
+    },
+    [sessionDeviceOperations]
+  )
 
   const getActiveWorktreeConnectionId = useCallback(async (): Promise<string | null> => {
     // Why: the floating workspace always runs on the paired host itself, never an SSH repo target.
@@ -201,16 +203,12 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   }, [client, isFloatingWorkspaceRoute, worktreeId])
 
   const refreshCanPaste = useCallback(() => {
-    void Promise.all([
-      Clipboard.hasStringAsync().catch(() => false),
-      Clipboard.hasImageAsync().catch(() => false)
-    ]).then(([hasString, hasImage]) => {
-      setCanPaste(hasString || hasImage)
-    })
-  }, [])
+    void sessionDeviceOperations
+      ?.clipboardAvailability()
+      .then(({ hasText, hasImage }) => setCanPaste(hasText || hasImage))
+      .catch(() => setCanPaste(false))
+  }, [sessionDeviceOperations])
   return {
-    repeatTimeoutRef,
-    repeatIntervalRef,
     handleAccessoryKeyRef,
     stopAccessoryRepeat,
     startAccessoryRepeat,

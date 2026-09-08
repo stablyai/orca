@@ -1,11 +1,11 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
+import type { MobileBrowserRpcClient } from './mobile-browser-rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { browserErrorMessage, shouldSurfaceBrowserError } from './mobile-browser-frame-state'
 
 type BrowserRequestArgs = {
   busyRef: { current: boolean }
-  client: RpcClient | null
+  client: MobileBrowserRpcClient | null
   pageId: string | null
   setBusy: Dispatch<SetStateAction<boolean>>
   setError: Dispatch<SetStateAction<string | null>>

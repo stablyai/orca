@@ -11,6 +11,7 @@ import {
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
 } from './mobile-native-chat-stale-input'
+import { nativeHostSessionNativeChatOperations } from './native-host-session-native-chat-operations'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite,
@@ -71,10 +72,18 @@ describe('useMobileNativeChatAnswerSend', () => {
 
   function Harness({ enabled }: { enabled: boolean }): null {
     answerSend = useMobileNativeChatAnswerSend({
-      client: mountedClient,
+      operations: mountedClient ? nativeHostSessionNativeChatOperations(mountedClient) : null,
       enabled,
-      handleRef: { current: 'terminal' },
-      deviceTokenRef: { current: 'device' },
+      targetRef: {
+        current: {
+          workspaceId: 'worktree',
+          agent: mountedAgent,
+          sessionId: 'session',
+          transcriptPath: null,
+          terminalId: 'terminal',
+          clientId: 'device'
+        }
+      },
       agentRef: { current: mountedAgent },
       sessionId: 'session',
       streamIdentity: 'host\0worktree\0tab\0session',

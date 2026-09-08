@@ -73,12 +73,13 @@ export function dispatchTerminalWebViewNotification(
       handlers.onHaptic?.(kind)
     }
   } else if (msg.type === 'font-scale-changed') {
-    const scale = typeof msg.fontScale === 'number' ? msg.fontScale : 0
-    if (scale > 0) {
-      handlers.onTextScaleChange?.(scale)
+    const scale = MobileWebTerminalTextScaleSchema.safeParse(msg.fontScale)
+    if (scale.success) {
+      handlers.onTextScaleChange?.(scale.data)
     }
   } else if (msg.type === 'mobile-clip-cancel-by-pinch') {
     // eslint-disable-next-line no-console
     console.warn('[mobile-clip] selection cancelled by pinch')
   }
 }
+import { MobileWebTerminalTextScaleSchema } from '../../../src/shared/mobile-web/native-operation-contract'

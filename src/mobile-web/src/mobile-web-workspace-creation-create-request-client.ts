@@ -1,0 +1,36 @@
+import { WORKTREE_CREATE_TIMEOUT_MS } from '../../shared/mobile-web/host-operation-timeouts'
+import {
+  MobileWebCreationBlankPayloadSchema,
+  MobileWebCreationFromSourcePayloadSchema,
+  MobileWebCreationResultSchema,
+  type MobileWebCreationBlankPayload,
+  type MobileWebCreationFromSourcePayload,
+  type MobileWebCreationResult
+} from '../../shared/mobile-web/workspace-creation-create-contract'
+import type { MobileWebOneShotRequestClient } from './mobile-web-one-shot-request-client'
+
+export class MobileWebWorkspaceCreationCreateRequestClient {
+  constructor(private readonly requests: MobileWebOneShotRequestClient) {}
+
+  createBlank(payload: MobileWebCreationBlankPayload): Promise<MobileWebCreationResult> {
+    return this.requests.request(
+      'workspace',
+      'creationCreateBlank',
+      payload,
+      MobileWebCreationBlankPayloadSchema,
+      MobileWebCreationResultSchema,
+      { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
+    )
+  }
+
+  createFromSource(payload: MobileWebCreationFromSourcePayload): Promise<MobileWebCreationResult> {
+    return this.requests.request(
+      'workspace',
+      'creationCreateFromSource',
+      payload,
+      MobileWebCreationFromSourcePayloadSchema,
+      MobileWebCreationResultSchema,
+      { timeoutMs: WORKTREE_CREATE_TIMEOUT_MS }
+    )
+  }
+}

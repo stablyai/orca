@@ -3,7 +3,7 @@ import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-pr
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { detectLanguage } from '@/lib/language-detect'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import { isPathInsideWorktree, toWorktreeRelativePath } from '../../../../shared/terminal-links'
 import {
   buildWorkspaceFileContext,
   canClientOsOpenWorkspaceFile

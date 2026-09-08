@@ -183,6 +183,72 @@ describe('hosted review RPC methods', () => {
     })
   })
 
+  it('dispatches bounded review submissions without stripping provider targets', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      submitHostedReview: vi.fn().mockResolvedValue({
+        ok: true,
+        action: 'request-changes',
+        submittedComments: 1
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('hostedReview.submit', {
+        repo: 'repo-1',
+        provider: 'github',
+        number: 51,
+        expectedHead: 'a'.repeat(40),
+        action: 'request-changes',
+        summary: 'Please address this.',
+        comments: [{ path: 'src/review.ts', line: 12, body: 'Keep this bounded.' }],
+        repository: { host: 'github.example.com', owner: 'acme', repo: 'orca' }
+      })
+    )
+
+    expect(runtime.submitHostedReview).toHaveBeenCalledWith({
+      repoSelector: 'repo-1',
+      provider: 'github',
+      number: 51,
+      expectedHead: 'a'.repeat(40),
+      action: 'request-changes',
+      summary: 'Please address this.',
+      comments: [{ path: 'src/review.ts', line: 12, body: 'Keep this bounded.' }],
+      repository: { host: 'github.example.com', owner: 'acme', repo: 'orca' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { ok: true, action: 'request-changes', submittedComments: 1 }
+    })
+  })
+
+  it('rejects unsafe review submission paths before the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      submitHostedReview: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('hostedReview.submit', {
+        repo: 'repo-1',
+        provider: 'gitlab',
+        number: 51,
+        expectedHead: 'a'.repeat(40),
+        action: 'comment',
+        summary: '',
+        comments: [{ path: '../outside.ts', line: 12, body: 'No traversal.' }],
+        projectRef: { host: 'gitlab.com', path: 'acme/orca' },
+        baseSha: 'b'.repeat(40),
+        startSha: 'c'.repeat(40)
+      })
+    )
+
+    expect(response.ok).toBe(false)
+    expect(runtime.submitHostedReview).not.toHaveBeenCalled()
+  })
+
   it('dispatches stacked creation through a distinct runtime method', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

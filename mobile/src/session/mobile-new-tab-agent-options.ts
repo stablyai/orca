@@ -1,10 +1,6 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
-import {
-  filterEnabledMobileTuiAgents,
-  isMobileTuiAgent,
-  MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
-  MOBILE_TUI_AGENT_LABELS
-} from '../tasks/mobile-tui-agents'
+import { orderDetectedTuiAgents } from '../../../src/shared/tui-agent-selection'
+import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
 
 export type MobileNewTabAgentSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
@@ -21,16 +17,7 @@ export function orderMobileNewTabAgents(
   detectedAgents: Iterable<unknown>,
   disabledAgents?: unknown
 ): TuiAgent[] {
-  const detected = new Set([...detectedAgents].filter(isMobileTuiAgent))
-  const enabledDetected = filterEnabledMobileTuiAgents(
-    MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
-    disabledAgents
-  ).filter((agent) => detected.has(agent))
-
-  if (defaultAgent && defaultAgent !== 'blank' && enabledDetected.includes(defaultAgent)) {
-    return [defaultAgent, ...enabledDetected.filter((agent) => agent !== defaultAgent)]
-  }
-  return enabledDetected
+  return orderDetectedTuiAgents(defaultAgent, detectedAgents, disabledAgents)
 }
 
 export function buildMobileNewTabAgentOptions(

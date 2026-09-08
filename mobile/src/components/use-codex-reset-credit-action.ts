@@ -1,15 +1,9 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from 'react-native'
-import * as ExpoCrypto from 'expo-crypto'
 import type { CodexResetCreditExpectedScope } from '../../../src/shared/codex-reset-credit-scope'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostAccountsOperations } from '../accounts/host-accounts-operations'
 import type { AccountsSnapshot } from './account-usage-state'
-import {
-  getCodexResetCreditOutcomeCopy,
-  getCodexResetCreditScope,
-  requestCodexResetCredit
-} from './codex-reset-credit'
-import { useCodexResetCreditCapability } from './codex-reset-credit-capability'
+import { getCodexResetCreditOutcomeCopy, getCodexResetCreditScope } from './codex-reset-credit'
 
 function describeScope(snapshot: AccountsSnapshot, scope: CodexResetCreditExpectedScope): string {
   const account = snapshot.codex.accounts.find((candidate) => candidate.id === scope.accountId)
@@ -21,16 +15,14 @@ function describeScope(snapshot: AccountsSnapshot, scope: CodexResetCreditExpect
 }
 
 export function useCodexResetCreditAction({
-  client,
+  operations,
   connected,
-  hostId,
   snapshot,
   accountMutationBusy,
   onSnapshot
 }: {
-  client: RpcClient | null
+  operations: HostAccountsOperations | null
   connected: boolean
-  hostId: string | undefined
   snapshot: AccountsSnapshot | null
   accountMutationBusy: boolean
   onSnapshot: (snapshot: AccountsSnapshot) => void
@@ -41,7 +33,7 @@ export function useCodexResetCreditAction({
   scopeLabel: string | null
   confirmReset: () => void
 } {
-  const supported = useCodexResetCreditCapability(client, connected)
+  const [supported, setSupported] = useState(false)
   const [resetting, setResetting] = useState(false)
   const inFlightRef = useRef(false)
   const resetScope = useMemo(
@@ -53,19 +45,34 @@ export function useCodexResetCreditAction({
     [resetScope, snapshot]
   )
 
+  useEffect(() => {
+    let stale = false
+    setSupported(false)
+    if (!operations || !connected) {
+      return
+    }
+    void operations
+      .readCodexResetCreditCapability()
+      .then((nextSupported) => {
+        if (!stale) {
+          setSupported(nextSupported)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      stale = true
+    }
+  }, [connected, operations])
+
   const consume = useCallback(
     async (expectedScope: CodexResetCreditExpectedScope) => {
-      if (!client || !hostId || inFlightRef.current) {
+      if (!operations || inFlightRef.current) {
         return
       }
       inFlightRef.current = true
       setResetting(true)
       try {
-        const result = await requestCodexResetCredit(client, {
-          hostId,
-          expectedScope,
-          createIdempotencyKey: () => ExpoCrypto.randomUUID()
-        })
+        const result = await operations.consumeCodexResetCredit(expectedScope)
         onSnapshot(result.snapshot)
         if ('status' in result) {
           const cleanupWarning = result.attemptJournalRetained
@@ -92,7 +99,7 @@ export function useCodexResetCreditAction({
         setResetting(false)
       }
     },
-    [client, hostId, onSnapshot]
+    [onSnapshot, operations]
   )
 
   const confirmReset = useCallback(() => {

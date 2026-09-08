@@ -1,4 +1,4 @@
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type { RpcFailure } from '../transport/types'
 import { normalizeBrowserUrl } from '../browser/browser-url'
 import { captureMobileFileMutationOwnership } from '../files/mobile-file-mutation-ownership'
 import { isFileExistsErrorMessage } from './mobile-session-route-helpers'
@@ -22,7 +22,9 @@ export function useMobileSessionContentCreateActions(
     scheduleDelayedAction,
     showToast,
     fetchSessionTabs,
-    fetchPendingBrowserSessionTabs
+    fetchPendingBrowserSessionTabs,
+    sessionBrowserOperations,
+    sessionTabOperations
   } = scope
   async function handleCreateMarkdownNote() {
     if (!client || creatingMarkdown) {
@@ -72,7 +74,7 @@ export function useMobileSessionContentCreateActions(
   }
 
   async function handleCreateBrowser(rawUrl = 'about:blank'): Promise<boolean> {
-    if (!client || creatingBrowser) {
+    if (!sessionTabOperations || creatingBrowser) {
       return false
     }
     // Why: read via ref so a tap before the capability probe resolves (or a stale callback) still sees the live value.
@@ -91,21 +93,8 @@ export function useMobileSessionContentCreateActions(
     setCreatingBrowser(true)
     setCreateError('')
     try {
-      const response = await client.sendRequest(
-        'browser.tabCreate',
-        {
-          worktree: `id:${worktreeId}`,
-          url,
-          // The user opened this tab (tapped HTML / address bar) → focus it.
-          activate: true
-        },
-        { timeoutMs: 30_000 }
-      )
-      if (!response.ok) {
-        throw new Error((response as RpcFailure).error.message)
-      }
+      const created = await sessionTabOperations.createBrowser(worktreeId, url)
       // Focus the new browser tab once it syncs; refresh a few times since the desktop registers the tab asynchronously.
-      const created = (response as RpcSuccess).result as { browserPageId?: string }
       if (created.browserPageId) {
         pendingBrowserFocusPageIdRef.current = created.browserPageId
       }
@@ -129,21 +118,18 @@ export function useMobileSessionContentCreateActions(
     tab: Extract<MobileSessionTab, { type: 'browser' }>,
     method: 'browser.back' | 'browser.forward' | 'browser.reload'
   ) {
-    if (!client || !tab.browserPageId) {
+    if (!sessionBrowserOperations || !tab.browserPageId) {
       showToast('Browser page is not available yet.', 1500)
       return
     }
     try {
-      const response = await client.sendRequest(
-        method,
-        {
-          worktree: `id:${worktreeId}`,
-          page: tab.browserPageId
-        },
-        { timeoutMs: 15_000 }
-      )
-      if (!response.ok) {
-        throw new Error((response as RpcFailure).error.message)
+      const target = { workspaceId: worktreeId, pageId: tab.browserPageId }
+      if (method === 'browser.back') {
+        await sessionBrowserOperations.back(target)
+      } else if (method === 'browser.forward') {
+        await sessionBrowserOperations.forward(target)
+      } else {
+        await sessionBrowserOperations.reload(target)
       }
       scheduleDelayedAction(() => void fetchSessionTabs(), 250)
     } catch (err) {

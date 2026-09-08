@@ -12,7 +12,7 @@ class AudioEngine {
     public private(set) var isRecording = false
     private var wasRecordingBeforeInterruption = false
 
-    public var onMicDataCallback: ((Data) -> Void)?
+    public var onMicDataCallback: ((Data, Double) -> Void)?
     public var onInputVolumeCallback: ((Float) -> Void)?
     public var onOutputVolumeCallback: ((Float) -> Void)?
     public var onAudioInterruptionCallback: ((String) -> Void)?
@@ -102,12 +102,17 @@ class AudioEngine {
 
     func setup() {
         let input = avAudioEngine.inputNode
+#if targetEnvironment(simulator)
+        // Voice-processing initialization can deadlock CoreAudio's simulated device.
+        print("Voice processing disabled in Simulator")
+#else
         do {
             try input.setVoiceProcessingEnabled(true)
         } catch {
             print("Could not enable voice processing \(error)")
             return
         }
+#endif
 
         avAudioEngine.inputNode.isVoiceProcessingInputMuted = !isRecording
 
@@ -117,7 +122,13 @@ class AudioEngine {
         avAudioEngine.connect(speechPlayer, to: mainMixer, format: voiceIOFormat)
         avAudioEngine.connect(mainMixer, to: output, format: voiceIOFormat)
 
-        input.installTap(onBus: 0, bufferSize: 2048, format: voiceIOFormat) { [weak self] buffer, when in
+#if targetEnvironment(simulator)
+        // CoreAudio's simulated input rejects forced 16 kHz taps; Desktop resamples this rate.
+        let inputTapFormat: AVAudioFormat? = nil
+#else
+        let inputTapFormat: AVAudioFormat? = voiceIOFormat
+#endif
+        input.installTap(onBus: 0, bufferSize: 2048, format: inputTapFormat) { [weak self] buffer, when in
             // We don't do any input processing (no volume calculation or passing mic data to the callback) if discardRecording == true
             // See comment in the playPCMData function
             if self?.isRecording == true && self?.discardRecording == false {
@@ -156,7 +167,7 @@ class AudioEngine {
         let data = Data(bytes: int16Samples, count: frameCount * MemoryLayout<Int16>.size)
 
         // Send the data to the callback
-        onMicDataCallback?(data)
+        onMicDataCallback?(data, buffer.format.sampleRate)
     }
 
     func processOutputBuffer(_ buffer: AVAudioPCMBuffer) {

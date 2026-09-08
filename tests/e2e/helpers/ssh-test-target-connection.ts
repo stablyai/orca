@@ -11,6 +11,8 @@ type SshTestConnectionOptions = {
   remotePath: string
   displayName: string
   seedInitialTab?: boolean
+  /** Fail the connect attempt (and drop the half-created target) instead of hanging on the spec budget. */
+  connectTimeoutMs?: number
 }
 
 export async function connectSshTestTarget(
@@ -19,7 +21,7 @@ export async function connectSshTestTarget(
   options: SshTestConnectionOptions
 ): Promise<ConnectedSshTestTarget> {
   return page.evaluate(
-    async ({ target, remotePath, displayName, seedInitialTab }) => {
+    async ({ target, remotePath, displayName, seedInitialTab, connectTimeoutMs }) => {
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
@@ -27,12 +29,28 @@ export async function connectSshTestTarget(
       const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
         void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
       })
+      let connectTimer: ReturnType<typeof setTimeout> | null = null
+      let connectTimedOut = false
+      let createdTargetId: string | null = null
       try {
         const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
           target
         })
+        createdTargetId = createdTarget.id
         store.getState().recordSshRepoReadoptions(repoReadoptions)
-        const state = await window.api.ssh.connect({ targetId: createdTarget.id })
+        const connectPromise = window.api.ssh.connect({ targetId: createdTarget.id })
+        const state =
+          connectTimeoutMs === undefined
+            ? await connectPromise
+            : await Promise.race([
+                connectPromise,
+                new Promise<never>((_resolve, reject) => {
+                  connectTimer = setTimeout(() => {
+                    connectTimedOut = true
+                    reject(new Error(`Timed out connecting SSH target after ${connectTimeoutMs}ms`))
+                  }, connectTimeoutMs)
+                })
+              ])
         if (!state || state.status !== 'connected') {
           throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
         }
@@ -141,7 +159,15 @@ export async function connectSshTestTarget(
           repoId: result.repo.id,
           worktreeId: worktree.id
         }
+      } catch (error) {
+        if (connectTimedOut && createdTargetId) {
+          void window.api.ssh.disconnect({ targetId: createdTargetId }).catch(() => undefined)
+        }
+        throw error
       } finally {
+        if (connectTimer !== null) {
+          clearTimeout(connectTimer)
+        }
         credentialUnsub()
       }
     },
@@ -149,7 +175,8 @@ export async function connectSshTestTarget(
       target,
       remotePath: options.remotePath,
       displayName: options.displayName,
-      seedInitialTab: options.seedInitialTab ?? true
+      seedInitialTab: options.seedInitialTab ?? true,
+      connectTimeoutMs: options.connectTimeoutMs
     }
   )
 }

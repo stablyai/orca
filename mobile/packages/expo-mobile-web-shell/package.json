@@ -1,0 +1,14 @@
+{
+  "name": "@orca/expo-mobile-web-shell",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Native verified package cache and private origin for Orca mobile web UI",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

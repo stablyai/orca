@@ -9,6 +9,7 @@ const OrcaRuntimeServiceExport = OrcaRuntimeService as unknown as {
   readonly prototype: OrcaRuntimeServiceExport
 }
 export { OrcaRuntimeServiceExport as OrcaRuntimeService }
+export type { RuntimeNativeChatTranscriptBinding } from './orca-runtime-state-fields'
 installRuntimeLinearCommandSurface(OrcaRuntimeServiceExport.prototype)
 
 export type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker-terminal-recovery-types'

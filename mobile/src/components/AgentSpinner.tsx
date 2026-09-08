@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Activity } from 'lucide-react-native'
-import { Animated, Easing, StyleSheet, View } from 'react-native'
+import { Animated, StyleSheet, View } from 'react-native'
+import { createRotationLoop } from '../animation/animated-rotation-loop'
+import { busyRingColors } from './agent-busy-ring'
 import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 
 type WorktreeStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
@@ -31,14 +33,7 @@ export function AgentSpinner({
 
   useEffect(() => {
     if (status === 'working' && !monitoring) {
-      const animation = Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.linear,
-          useNativeDriver: true
-        })
-      )
+      const animation = createRotationLoop(spinValue)
       animation.start()
       return () => animation.stop()
     }
@@ -62,7 +57,9 @@ export function AgentSpinner({
     })
     return (
       <View style={styles.wrapper}>
-        <Animated.View style={[styles.spinner, { borderColor: color, transform: [{ rotate }] }]} />
+        <Animated.View
+          style={[styles.spinner, busyRingColors(color), { transform: [{ rotate }] }]}
+        />
       </View>
     )
   }
@@ -94,7 +91,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    borderWidth: 2,
-    borderTopColor: 'transparent'
+    borderWidth: 2
   }
 })

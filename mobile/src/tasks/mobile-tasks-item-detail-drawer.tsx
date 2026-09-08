@@ -9,7 +9,7 @@ import {
   RefreshCw
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
-import { taskKindLabel } from './mobile-tasks-legacy-foundation'
+import { taskKindLabel } from './mobile-tasks-model'
 import { renderMobileTasksItemDetailContent } from './mobile-tasks-item-detail-content'
 import { renderMobileTasksItemActions } from './mobile-tasks-item-actions'
 

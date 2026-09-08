@@ -160,11 +160,12 @@ public class ExpoTwoWayAudioModule: Module {
     }
 
     private func setupMicrophoneCallback() {
-        audioEngine?.onMicDataCallback = { [weak self] data in
+        audioEngine?.onMicDataCallback = { [weak self] data, sampleRate in
             self?.sendEvent(
                 ON_MIC_DATA_EVENT_NAME,
                 [
-                    "data": data
+                    "data": data,
+                    "sampleRate": sampleRate
                 ])
         }
     }

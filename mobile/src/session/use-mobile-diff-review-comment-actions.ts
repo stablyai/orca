@@ -1,6 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
-import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { addMobileDiffComment, removeMobileDiffComments } from './mobile-diff-comments'
@@ -19,6 +18,7 @@ import {
   nextReviewIndexAfterMarkReviewed,
   reviewDescriptorFromItem
 } from './mobile-diff-review-screen-model'
+import type { HostDiffReviewDeviceOperations } from './host-diff-review-binding'
 
 type CommentActionsInput = {
   client: RpcClient | null
@@ -38,6 +38,7 @@ type CommentActionsInput = {
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
   setShowCompletion: Dispatch<SetStateAction<boolean>>
+  device: HostDiffReviewDeviceOperations
 }
 
 export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
@@ -58,7 +59,8 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     setComposer,
     setComposerBody,
     setActionError,
-    setShowCompletion
+    setShowCompletion,
+    device
   } = input
 
   const persistMetadata = useCallback(
@@ -91,17 +93,17 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       updateReadyState((state) => ({ ...state, comments, reviewState }))
       try {
         await persistMetadata(comments, reviewState)
-        triggerSuccess()
+        device.success()
       } catch (err) {
         if (previous.kind === 'ready') {
           setScreenState(previous)
         }
-        triggerError()
+        device.error()
         setActionError(err instanceof Error ? err.message : 'Failed to save review')
         throw err
       }
     },
-    [persistMetadata, screenState, setActionError, setScreenState, updateReadyState]
+    [device, persistMetadata, screenState, setActionError, setScreenState, updateReadyState]
   )
 
   const openComposer = useCallback(

@@ -4,9 +4,9 @@ import { hostScreenStyles as styles } from './host-screen-styles'
 import { HostScreenHeader } from './host-screen-header'
 import { HostScreenOverlays } from './host-screen-overlays'
 import { HostWorkspaceList } from './host-workspace-list'
-import type { HostScreenController } from './use-host-screen-controller'
+import type { HybridHostScreenController } from './use-hybrid-host-screen-controller'
 
-export function HostScreenView({ controller }: { controller: HostScreenController }) {
+export function HostScreenView({ controller }: { controller: HybridHostScreenController }) {
   if (controller.state.error) {
     return (
       <View style={styles.centered}>

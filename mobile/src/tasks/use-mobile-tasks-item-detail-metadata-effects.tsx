@@ -1,11 +1,9 @@
 import type { ListAndDetailEffectsModel } from './use-mobile-tasks-list-and-detail-effects'
 import { useEffect } from './mobile-tasks-dependencies'
-import { type GitHubAssignableUser, isSuccess } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffectsModel) {
   const {
     actionItem,
-    client,
     detailPayload,
     setItemAssignableUsers,
     setItemAssignableUsersError,
@@ -14,6 +12,7 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
     setItemBodyDraft,
     setItemLabelsError,
     setItemLabelsLoading,
+    taskDetailOperations,
     tasksSupported
   } = model
   useEffect(() => {
@@ -25,9 +24,8 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
       detailPayload.provider === 'linear' ? detailPayload.description : detailPayload.body
     )
   }, [detailPayload])
-
   useEffect(() => {
-    if (!tasksSupported || !client || actionItem?.provider !== 'github') {
+    if (!tasksSupported || !taskDetailOperations || actionItem?.provider !== 'github') {
       setItemAvailableLabels([])
       setItemLabelsLoading(false)
       setItemLabelsError('')
@@ -42,20 +40,13 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
       setItemAvailableLabels([])
       setItemLabelsError('')
       setItemLabelsLoading(true)
-      void client
-        .sendRequest(
-          'github.listLabels',
-          { repo: `id:${actionItem.source.repoId}` },
-          { timeoutMs: 30_000 }
-        )
-        .then((response) => {
+      void taskDetailOperations
+        .listGitHubLabels(actionItem.source.repoId)
+        .then((labels) => {
           if (stale) {
             return
           }
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          setItemAvailableLabels(response.result as string[])
+          setItemAvailableLabels(labels)
         })
         .catch((err) => {
           if (!stale) {
@@ -76,20 +67,13 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
     setItemAssignableUsers([])
     setItemAssignableUsersError('')
     setItemAssignableUsersLoading(true)
-    void client
-      .sendRequest(
-        'github.listAssignableUsers',
-        { repo: `id:${actionItem.source.repoId}` },
-        { timeoutMs: 30_000 }
-      )
-      .then((response) => {
+    void taskDetailOperations
+      .listGitHubAssignableUsers(actionItem.source.repoId)
+      .then((users) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        setItemAssignableUsers(response.result as GitHubAssignableUser[])
+        setItemAssignableUsers(users)
       })
       .catch((err) => {
         if (!stale) {
@@ -107,8 +91,8 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
     return () => {
       stale = true
     }
-  }, [actionItem, client, tasksSupported])
-  return model
+  }, [actionItem, taskDetailOperations, tasksSupported])
+  return Object.assign(model, {})
 }
 
 export type ItemDetailMetadataEffectsModel = ReturnType<

@@ -1,10 +1,8 @@
 import type { WorkspaceCreateProjectionModel } from './use-mobile-tasks-workspace-create-projection'
-import { type BaseRefSearchResult, type SparsePreset, useEffect } from './mobile-tasks-dependencies'
-import { isSuccess } from './mobile-tasks-legacy-foundation'
+import { useEffect } from './mobile-tasks-dependencies'
 
 export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProjectionModel) {
   const {
-    client,
     setWorkspaceBaseBranchError,
     setWorkspaceBaseBranchLoading,
     setWorkspaceBaseBranchResults,
@@ -15,6 +13,7 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     setWorkspaceSparsePresetsLoaded,
     setWorkspaceSparsePresetsLoading,
     showWorkspaceBaseBranchPicker,
+    taskWorkspaceCreationOperations,
     tasksSupported,
     workspaceBaseBranchQuery,
     workspaceCreateDraft,
@@ -22,7 +21,12 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     workspaceSparseReloadKey
   } = model
   useEffect(() => {
-    if (!tasksSupported || !client || !workspaceCreateDraft || !workspaceCreateTargetRepo) {
+    if (
+      !tasksSupported ||
+      !taskWorkspaceCreationOperations ||
+      !workspaceCreateDraft ||
+      !workspaceCreateTargetRepo
+    ) {
       setWorkspaceSparsePresets([])
       setWorkspaceSparsePresetsLoading(false)
       setWorkspaceSparsePresetsLoaded(false)
@@ -45,16 +49,12 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     setWorkspaceSparsePresetsLoading(true)
     setWorkspaceSparsePresetsLoaded(false)
     setWorkspaceSparsePresetsError('')
-    void client
-      .sendRequest('repo.sparsePresets', { repo: `id:${workspaceCreateTargetRepo.id}` })
-      .then((response) => {
+    void taskWorkspaceCreationOperations
+      .listSparsePresets(workspaceCreateTargetRepo.id)
+      .then((presets) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const presets = (response.result as { presets?: SparsePreset[] }).presets ?? []
         setWorkspaceSparsePresets(presets)
         setWorkspaceSparsePresetsLoaded(true)
         setWorkspaceSparsePresetId((current) =>
@@ -81,16 +81,15 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
       stale = true
     }
   }, [
-    client,
+    taskWorkspaceCreationOperations,
     tasksSupported,
     workspaceCreateDraft,
     workspaceCreateTargetRepo,
     workspaceSparseReloadKey
   ])
-
   useEffect(() => {
     if (
-      !client ||
+      !taskWorkspaceCreationOperations ||
       !tasksSupported ||
       !workspaceCreateDraft ||
       !workspaceCreateTargetRepo ||
@@ -112,27 +111,13 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     let stale = false
     setWorkspaceBaseBranchLoading(true)
     setWorkspaceBaseBranchError('')
-    void client
-      .sendRequest(
-        'repo.searchRefs',
-        { repo: `id:${workspaceCreateTargetRepo.id}`, query, limit: 20 },
-        { timeoutMs: 30_000 }
-      )
-      .then((response) => {
+    void taskWorkspaceCreationOperations
+      .searchBranches(workspaceCreateTargetRepo.id, query)
+      .then((results) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          refDetails?: BaseRefSearchResult[]
-          refs?: string[]
-        }
-        setWorkspaceBaseBranchResults(
-          result.refDetails ??
-            (result.refs ?? []).map((refName) => ({ refName, localBranchName: refName }))
-        )
+        setWorkspaceBaseBranchResults(results)
       })
       .catch((err) => {
         if (!stale) {
@@ -152,14 +137,14 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
       stale = true
     }
   }, [
-    client,
     tasksSupported,
     showWorkspaceBaseBranchPicker,
     workspaceBaseBranchQuery,
     workspaceCreateDraft,
-    workspaceCreateTargetRepo
+    workspaceCreateTargetRepo,
+    taskWorkspaceCreationOperations
   ])
-  return model
+  return Object.assign(model, {})
 }
 
 export type WorkspaceSourceEffectsModel = ReturnType<typeof useMobileTasksWorkspaceSourceEffects>

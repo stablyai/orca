@@ -1,6 +1,6 @@
 import { publicKeyFromBase64 } from './e2ee'
 import { RpcClientSocketSession } from './rpc-client-socket-session'
-import { redactSocketEndpoint } from './socket-event-debug'
+import { redactedWebSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
 
 type SocketFactoryOptions = {
@@ -40,7 +40,7 @@ export class RpcClientSocketFactory {
     this.constructionCount++
     console.log('[net] openConnection', {
       attempt: this.options.getReconnectAttempt(),
-      endpoint: redactSocketEndpoint(this.options.endpoint),
+      endpoint: redactedWebSocketEndpoint(this.options.endpoint),
       wsCount: this.constructionCount,
       msSinceLastConnected: lastConnectedAt !== null ? now - lastConnectedAt : null,
       msSinceLastClose: this.lastSocketClosedAt !== null ? now - this.lastSocketClosedAt : null,
@@ -52,7 +52,7 @@ export class RpcClientSocketFactory {
       this.options.getReconnectAttempt() > 0
         ? `Reconnecting (attempt ${this.options.getReconnectAttempt() + 1})`
         : 'Opening WebSocket',
-      redactSocketEndpoint(this.options.endpoint)
+      redactedWebSocketEndpoint(this.options.endpoint)
     )
     return new RpcClientSocketSession({
       endpoint: this.options.endpoint,

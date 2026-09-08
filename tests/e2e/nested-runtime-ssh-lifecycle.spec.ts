@@ -7,10 +7,8 @@ import {
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
-import {
-  connectDockerSshRelayTarget,
-  reconnectDisconnectedDockerSshRelayTarget
-} from './helpers/docker-ssh-relay-connection'
+import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
+import { reconnectDisconnectedDockerSshRelayTarget } from './helpers/docker-ssh-relay-reconnect'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,

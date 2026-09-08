@@ -243,15 +243,17 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         armWebReadyWatchdog()
         pendingPingIdRef.current = sendToWebView({ type: 'ping' })
       },
-      write(data: string) {
-        writeCoalescer.write(data)
+      write(data: string | Uint8Array, onParsed?: () => void) {
+        writeCoalescer.write(typeof data === 'string' ? data : new TextDecoder().decode(data))
+        onParsed?.()
       },
       init(
         cols: number,
         rows: number,
-        initialData?: string,
+        initialData?: string | Uint8Array,
         preserveScroll?: boolean,
-        oscLinks?: TerminalOscLinkRange[]
+        oscLinks?: TerminalOscLinkRange[],
+        onParsed?: () => void
       ) {
         // Why: arm a fresh ready promise BEFORE posting init. The WebView
         // resolves it via the 'ready' notify at the end of its rAF chain.
@@ -276,12 +278,18 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
           type: 'init',
           cols,
           rows,
-          initialData,
+          initialData:
+            typeof initialData === 'string'
+              ? initialData
+              : initialData
+                ? new TextDecoder().decode(initialData)
+                : undefined,
           oscLinks,
           terminalTheme,
           fontScale: textScale,
           preserveScroll
         })
+        onParsed?.()
       },
       resize(cols: number, rows: number) {
         // Why: resize/reflow must observe all prior writes or bytes reorder.

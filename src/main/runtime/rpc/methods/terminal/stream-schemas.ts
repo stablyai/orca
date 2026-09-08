@@ -32,6 +32,7 @@ export const TerminalSubscribe = TerminalHandle.extend({
       terminalBinaryStream: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       mobileInputLeaseOnly: z.literal(1).optional(),
+      queryReply: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional()
     })
     .optional()
@@ -54,6 +55,7 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       ackOutputSourceRanges: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       outputPause: z.literal(1).optional(),
+      queryReply: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional()
     })
     .optional()

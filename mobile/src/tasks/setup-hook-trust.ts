@@ -1,5 +1,5 @@
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcRequestSender } from '../transport/rpc-client'
 
 export type SetupHookTrust = {
   contentHash: string
@@ -38,7 +38,7 @@ export function trustedOrcaHooksWithSetupApproval(args: {
 }
 
 export async function persistSetupHookTrustApproval(args: {
-  client: RpcClient
+  client: RpcRequestSender
   trust: PersistedTrustedOrcaHooks
   repoId: string
   contentHash: string
@@ -47,7 +47,7 @@ export async function persistSetupHookTrustApproval(args: {
   const next = trustedOrcaHooksWithSetupApproval(args)
   const response = await args.client.sendRequest('ui.set', { trustedOrcaHooks: next })
   if (!response.ok) {
-    throw new Error(response.error.message)
+    throw new Error(response.error?.message ?? 'Hook trust update failed')
   }
   return next
 }

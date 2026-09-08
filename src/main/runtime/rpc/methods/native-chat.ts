@@ -1,122 +1,81 @@
 import { z } from 'zod'
-import type { NativeChatMessage, AgentType } from '../../../../shared/native-chat-types'
+import type { AgentType } from '../../../../shared/native-chat-types'
 import {
   readNativeChatTranscriptTail,
   subscribeNativeChatTranscript,
   type NativeChatTranscriptSubscription,
   type SubscribeNativeChatTranscriptArgs
 } from '../../../native-chat/transcript-watch'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
-import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
+import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { resolveNativeChatTranscriptSource } from '../native-chat-transcript-source'
+import {
+  MOBILE_NATIVE_CHAT_DEFAULT_WINDOW,
+  MOBILE_NATIVE_CHAT_MAX_WINDOW,
+  sanitizeAppendForClient,
+  windowForClient
+} from './native-chat-rpc-message-sanitizer'
 
 // Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
 // desktop reaches the readers via Electron IPC; mobile/web clients reach the
 // same pure readers through these runtime RPC methods so the native chat view
 // works over the paired connection, not just in the desktop renderer.
 
-const NativeChatSession = z.object({
-  agent: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing agent'))
-    .transform((v) => v as AgentType),
-  sessionId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing session id')),
-  // How many of the most-recent messages to return. Clients start small for a
-  // fast first paint and raise it to page older history in as the user scrolls.
-  // Clamp (don't reject) a limit past the max window so a client paging beyond it
-  // gets the capped tail and pagination stops cleanly — a hard `.max` rejection
-  // would fail the read and stall "load earlier" at the boundary.
-  limit: z
-    .number()
-    .int()
-    .positive()
-    .transform((value) => Math.min(value, MOBILE_NATIVE_CHAT_MAX_WINDOW))
-    .optional(),
-  // Optional client-supplied cleanup token. When present, the subscribe handler
-  // keys the fs-watcher cleanup under it so registration and unsubscribe derive
-  // from the SAME token (back-compat: falls back to `agent:sessionId` when absent,
-  // which is exactly what existing mobile clients rely on).
-  subscriptionId: z.string().min(1).optional(),
-  // Authoritative transcript path from the agent hook (providerSession), used to
-  // locate the file directly when the session id no longer names it (recent
-  // Claude Code). Optional for back-compat with older clients.
-  transcriptPath: z.string().min(1).optional(),
-  // A pending snapshot is not authoritative transcript history. Only clients
-  // that advertise this semantic may receive one; legacy clients treat it as a
-  // settled empty read and can overwrite retention / unblock launch drafts.
-  capabilities: z.object({ transcriptPending: z.literal(1).optional() }).optional(),
-  beforeOffset: z.number().int().nonnegative().optional()
-})
+const NativeChatSession = z
+  .object({
+    agent: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing agent'))
+      .transform((v) => v as AgentType),
+    sessionId: z
+      .unknown()
+      .transform((v) => (typeof v === 'string' ? v : ''))
+      .pipe(z.string().min(1, 'Missing session id')),
+    // How many of the most-recent messages to return. Clients start small for a
+    // fast first paint and raise it to page older history in as the user scrolls.
+    // Clamp (don't reject) a limit past the max window so a client paging beyond it
+    // gets the capped tail and pagination stops cleanly — a hard `.max` rejection
+    // would fail the read and stall "load earlier" at the boundary.
+    limit: z
+      .number()
+      .int()
+      .positive()
+      .transform((value) => Math.min(value, MOBILE_NATIVE_CHAT_MAX_WINDOW))
+      .optional(),
+    // Optional client-supplied cleanup token. When present, the subscribe handler
+    // keys the fs-watcher cleanup under it so registration and unsubscribe derive
+    // from the SAME token (back-compat: falls back to `agent:sessionId` when absent,
+    // which is exactly what existing mobile clients rely on).
+    subscriptionId: z.string().min(1).optional(),
+    // Authoritative transcript path from the agent hook (providerSession), used to
+    // locate the file directly when the session id no longer names it (recent
+    // Claude Code). Optional for back-compat with older clients.
+    transcriptPath: z.string().min(1).optional(),
+    capabilities: z.object({ transcriptPending: z.literal(1).optional() }).optional(),
+    worktreeId: z.string().min(1).optional(),
+    terminal: z.string().min(1).optional(),
+    beforeOffset: z.number().int().nonnegative().optional()
+  })
+  .refine((value) => Boolean(value.worktreeId) === Boolean(value.terminal), {
+    message: 'Worktree and terminal must be provided together'
+  })
 
 const NativeChatUnsubscribe = z.object({
   subscriptionId: z.string().min(1).optional()
 })
 
-// Why: a long agent session can hold thousands of turns (with full tool I/O).
-// Shipping all of them over the paired connection and rendering them at once
-// freezes the mobile app, so the runtime RPC windows to the most recent slice —
-// the conversation tail is what the chat view shows first. The desktop IPC path
-// is unaffected (it reads locally with a virtualized list).
-// Small first page for a fast initial paint; the client raises `limit` to load
-// older history as the user scrolls back.
-const MOBILE_NATIVE_CHAT_DEFAULT_WINDOW = 40
-const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
-
-function sanitizeMessage(
-  message: NativeChatMessage,
-  clientKind: RpcContext['clientKind']
-): NativeChatMessage {
-  return {
-    ...message,
-    blocks: message.blocks.map((block) => sanitizeNativeChatRpcBlock(block, clientKind))
-  }
-}
-
-function sanitizeAppendForClient(
-  messages: readonly NativeChatMessage[],
-  clientKind: RpcContext['clientKind']
-): NativeChatMessage[] {
-  return messages.map((message) => sanitizeMessage(message, clientKind))
-}
-
-/** Window a transcript to its most recent `limit` messages so a long session
- *  can't freeze the client. Windowing by count applies to ALL RPC clients —
- *  shipping thousands of turns over the paired link is bad for web and mobile
- *  alike. Char-clipping (the mobile-only payload diet) is applied separately. */
-function windowTranscript(
-  messages: readonly NativeChatMessage[],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-): NativeChatMessage[] {
-  const window = Math.min(Math.max(limit, 1), MOBILE_NATIVE_CHAT_MAX_WINDOW)
-  return messages.length > window ? messages.slice(-window) : messages.slice()
-}
-
-/** Apply the windowed slice and keep inline image bytes off every RPC transport.
- *  Mobile clients additionally receive bounded text and tool bodies; runtime
- *  clients keep those bodies intact. */
-function windowForClient(
-  messages: readonly NativeChatMessage[],
-  clientKind: RpcContext['clientKind'],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-): NativeChatMessage[] {
-  const windowed = windowTranscript(messages, limit)
-  return windowed.map((message) => sanitizeMessage(message, clientKind))
-}
-
 export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'nativeChat.readSession',
     params: NativeChatSession,
-    handler: async (params, { clientKind, signal }) => {
+    handler: async (params, { runtime, clientKind, signal }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const transcriptSource = resolveNativeChatTranscriptSource(runtime, params)
       const result = await readNativeChatTranscriptTail(
         {
           agent: params.agent,
           sessionId: params.sessionId,
-          transcriptPath: params.transcriptPath,
+          ...transcriptSource,
           limit,
           beforeOffset: params.beforeOffset
         },
@@ -152,6 +111,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const transcriptSource = resolveNativeChatTranscriptSource(runtime, params)
       const cleanup = (): void => {
         if (closed) {
           return
@@ -177,7 +137,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
         agent: params.agent,
         sessionId: params.sessionId,
-        transcriptPath: params.transcriptPath,
+        ...transcriptSource,
         initialLimit: limit,
         onInitialSnapshot: (messages, hasMore, beforeOffset, error, lifecycle) => {
           if (closed) {
@@ -251,17 +211,21 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       unsubscribe = subscription.unsubscribe
     }
   }),
-  defineMethod({
-    name: 'nativeChat.unsubscribe',
-    params: NativeChatUnsubscribe,
-    handler: async (params, { runtime, connectionId }) => {
-      const connection = connectionId ?? 'local'
-      if (params.subscriptionId) {
-        runtime.cleanupSubscription(`nativeChat:${connection}:${params.subscriptionId}`)
+  // The hybrid page derives its cancel name from `mobileWeb.nativeChat.subscribe`; the released
+  // native app still calls `nativeChat.unsubscribe`, so both names share one handler.
+  ...['nativeChat.unsubscribe', 'mobileWeb.nativeChat.unsubscribe'].map((name) =>
+    defineMethod({
+      name,
+      params: NativeChatUnsubscribe,
+      handler: async (params, { runtime, connectionId }) => {
+        const connection = connectionId ?? 'local'
+        if (params.subscriptionId) {
+          runtime.cleanupSubscription(`nativeChat:${connection}:${params.subscriptionId}`)
+          return { unsubscribed: true }
+        }
+        runtime.cleanupSubscriptionsByPrefix(`nativeChat:${connection}:`)
         return { unsubscribed: true }
       }
-      runtime.cleanupSubscriptionsByPrefix(`nativeChat:${connection}:`)
-      return { unsubscribed: true }
-    }
-  })
+    })
+  )
 ]

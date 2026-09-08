@@ -1,15 +1,16 @@
 import type { WorkspaceAndProjectStateModel } from './use-mobile-tasks-workspace-and-project-state'
 import {
+  type ProjectGroup,
   filterGitHubProjectRowsForRepos,
   findRepoForGitHubProjectRepository,
   githubProjectHost,
+  groupRows,
   hasSettledHostRepoList,
   isHostedTaskRepo,
+  sortRows,
   useCallback,
   useMemo
 } from './mobile-tasks-dependencies'
-import { groupRows, sortRows } from '../../../src/shared/github/project-group-sort'
-import type { ProjectGroup } from '../../../src/shared/github/project-group-sort'
 import {
   type GitHubProjectRow,
   type ProjectListEntry,
@@ -19,12 +20,11 @@ import {
   normalizeProjectTableForMobileSort,
   projectFieldVisibilityKey,
   projectSummaryFields
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateModel) {
   const {
     actionItem,
-    client,
     collapsedGitHubProjectGroups,
     connState,
     githubProjectHiddenFieldIdsByView,
@@ -37,12 +37,11 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
     repoList,
     repos,
     selectedRepoIds,
+    taskReadOperations,
     taskSource,
     taskStateHydrated,
     tasksSupportState
   } = model
-  // Why: project detail text inputs rerender this screen while comments stay
-  // unchanged; keep grouping out of the typing path.
   const projectDetailCommentGroups = useMemo(
     () =>
       groupDetailComments(projectRowDetail?.provider === 'github' ? projectRowDetail.comments : []),
@@ -55,14 +54,14 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
   const linearMetadataItem = actionItem?.provider === 'linear' ? actionItem : linearStatusPickerItem
   const tasksSupported =
     connState === 'connected' &&
-    client != null &&
+    taskReadOperations != null &&
     tasksSupportState.kind === 'supported' &&
-    tasksSupportState.client === client
+    tasksSupportState.operations === taskReadOperations
   const tasksUnsupported =
     connState === 'connected' &&
-    client != null &&
+    taskReadOperations != null &&
     tasksSupportState.kind === 'unsupported' &&
-    tasksSupportState.client === client
+    tasksSupportState.operations === taskReadOperations
   const taskUiReady = tasksSupported && taskStateHydrated
   const activeGitHubProject = githubProjectSettings.activeProject
   const activeGitHubProjectHost = githubProjectHost(
@@ -88,9 +87,6 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       ) as RepoSummary | null,
     [activeGitHubProjectHost, githubRepoSlugCache, hostedRepos]
   )
-  // Why: `every` is vacuously true on an empty repo list, so readiness has to ask
-  // the resource whether that list is real yet. Otherwise the board renders
-  // "No project items" for a board whose repos simply have not arrived.
   const githubProjectRepoSlugReady = useMemo(
     () =>
       hasSettledHostRepoList(repoList.state) &&
@@ -171,27 +167,27 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
     [githubProjectAvailableSummaryFields, githubProjectHiddenFieldIds]
   )
   return Object.assign(model, {
-    projectDetailCommentGroups,
-    requestedTaskSource,
-    linearMetadataItem,
-    tasksSupported,
-    tasksUnsupported,
-    taskUiReady,
     activeGitHubProject,
     activeGitHubProjectHost,
-    hostedRepos,
-    workspaceRepos,
-    reposById,
-    selectedHostedRepos,
     findProjectRowRepo,
-    githubProjectRepoSlugReady,
-    visibleGitHubProjectRows,
-    visibleGitHubProjectGroups,
-    githubProjectListEntries,
     githubProjectAvailableSummaryFields,
     githubProjectFieldVisibilityScope,
     githubProjectHiddenFieldIds,
-    githubProjectSummaryFields
+    githubProjectListEntries,
+    githubProjectRepoSlugReady,
+    githubProjectSummaryFields,
+    hostedRepos,
+    linearMetadataItem,
+    projectDetailCommentGroups,
+    reposById,
+    requestedTaskSource,
+    selectedHostedRepos,
+    taskUiReady,
+    tasksSupported,
+    tasksUnsupported,
+    visibleGitHubProjectGroups,
+    visibleGitHubProjectRows,
+    workspaceRepos
   })
 }
 

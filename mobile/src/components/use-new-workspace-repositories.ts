@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import { getCachedRepos, setCachedRepos } from '../cache/repo-cache'
 import { useLastVisitedWorktreeRepoId } from '../worktree/use-last-visited-worktree-repo'
 import {
@@ -8,10 +6,15 @@ import {
   refreshMobileNewWorkspaceDialogSelectedRepo,
   resolveMobileNewWorkspaceDialogRepoId
 } from '../worktree/new-workspace-dialog-repo-selection'
-import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
+import type {
+  HostWorkspaceCreationOperations,
+  NewWorkspaceRepository
+} from '../worktree/host-workspace-creation-operations'
+
+type MobileWorkspaceRepo = NewWorkspaceRepository
 
 export function useNewWorkspaceRepositories(args: {
-  client: RpcClient | null
+  operations: HostWorkspaceCreationOperations | null
   hostId?: string
   visible: boolean
 }): {
@@ -20,7 +23,7 @@ export function useNewWorkspaceRepositories(args: {
   setSelectedRepo: (repo: MobileWorkspaceRepo | null) => void
   loading: boolean
 } {
-  const { client, hostId, visible } = args
+  const { operations, hostId, visible } = args
   const [initialRepos] = useState(() =>
     hostId ? (getCachedRepos(hostId) as MobileWorkspaceRepo[] | null) : null
   )
@@ -45,24 +48,23 @@ export function useNewWorkspaceRepositories(args: {
   }, [lastVisitedRepo.loaded, lastVisitedRepo.repoId, repos, selectedRepo, visible])
 
   useEffect(() => {
-    if (!visible || !client) {
+    if (!visible || !operations) {
       return
     }
     let stale = false
     setLoading(true)
-    void client
-      .sendRequest('repo.list')
-      .then((response) => {
-        if (stale || !response.ok) {
+    void operations
+      .listRepositories()
+      .then((nextRepos) => {
+        if (stale) {
           return
         }
-        const result = (response as RpcSuccess).result as { repos: MobileWorkspaceRepo[] }
-        setRepos(result.repos)
+        setRepos(nextRepos)
         if (hostId) {
-          setCachedRepos(hostId, result.repos)
+          setCachedRepos(hostId, nextRepos)
         }
         setSelectedRepo((current) =>
-          refreshMobileNewWorkspaceDialogSelectedRepo(result.repos, current)
+          refreshMobileNewWorkspaceDialogSelectedRepo(nextRepos, current)
         )
       })
       .catch(() => undefined)
@@ -74,7 +76,7 @@ export function useNewWorkspaceRepositories(args: {
     return () => {
       stale = true
     }
-  }, [visible, client, hostId])
+  }, [visible, operations, hostId])
 
   return { repos, selectedRepo, setSelectedRepo, loading: loading && repos.length === 0 }
 }

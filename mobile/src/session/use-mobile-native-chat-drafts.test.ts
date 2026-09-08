@@ -2,6 +2,8 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { HostSessionChatDraftOperations } from './host-session-chat-draft-operations'
+import type { HostSessionChatPendingDeliveryOperations } from './host-session-chat-pending-delivery-operations'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
@@ -43,6 +45,8 @@ describe('useMobileNativeChatDrafts', () => {
     launchDraft = null,
     chatActive = true,
     transcriptLoading = false,
+    persistence,
+    pendingPersistence,
     transcriptSettled = !transcriptLoading
   }: {
     tabId: string
@@ -51,6 +55,8 @@ describe('useMobileNativeChatDrafts', () => {
     launchDraft?: string | null
     chatActive?: boolean
     transcriptLoading?: boolean
+    persistence?: HostSessionChatDraftOperations
+    pendingPersistence?: HostSessionChatPendingDeliveryOperations
     transcriptSettled?: boolean
   }): null {
     state = useMobileNativeChatDrafts({
@@ -62,6 +68,8 @@ describe('useMobileNativeChatDrafts', () => {
       launchDraft,
       chatActive,
       transcriptLoading,
+      persistence,
+      pendingPersistence,
       transcriptSettled
     })
     return null
@@ -231,6 +239,140 @@ describe('useMobileNativeChatDrafts', () => {
     }
   })
 
+  it('hydrates and coalesces shell-owned draft persistence without changing composer state', async () => {
+    vi.useFakeTimers()
+    const persistence: HostSessionChatDraftOperations = {
+      load: vi.fn().mockResolvedValue('restored draft'),
+      save: vi.fn().mockResolvedValue(undefined)
+    }
+    try {
+      const original = console.error
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+        if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
+          return
+        }
+        original(...args)
+      })
+      try {
+        await act(async () => {
+          renderer = create(createElement(Harness, { tabId: 'a', persistence }))
+        })
+      } finally {
+        consoleSpy.mockRestore()
+      }
+
+      expect(state?.composerText).toBe('restored draft')
+      act(() => state?.setComposerText('edited draft'))
+      await act(async () => vi.advanceTimersByTimeAsync(250))
+      expect(persistence.save).toHaveBeenLastCalledWith('worktree', 'a', 'edited draft')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('hydrates and reconciles shell-owned pending delivery state', async () => {
+    const pendingPersistence: HostSessionChatPendingDeliveryOperations = {
+      load: vi.fn().mockResolvedValue([{ text: 'restored pending', expectedOccurrence: 1 }]),
+      save: vi.fn().mockResolvedValue(undefined)
+    }
+    const original = console.error
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
+        return
+      }
+      original(...args)
+    })
+    try {
+      await act(async () => {
+        renderer = create(createElement(Harness, { tabId: 'a', pendingPersistence }))
+      })
+    } finally {
+      consoleSpy.mockRestore()
+    }
+
+    expect(state?.pending.map((pending) => pending.text)).toEqual(['restored pending'])
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          pendingPersistence,
+          messages: [userTextMessage('landed', 'restored pending')]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+    expect(pendingPersistence.save).toHaveBeenLastCalledWith('worktree', 'a', 'session-a', [])
+  })
+
+  it('persists an accepted send under its originating session after a tab switch', async () => {
+    const pendingPersistence: HostSessionChatPendingDeliveryOperations = {
+      load: vi.fn().mockResolvedValue([]),
+      save: vi.fn().mockResolvedValue(undefined)
+    }
+    const original = console.error
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
+        return
+      }
+      original(...args)
+    })
+    try {
+      await act(async () => {
+        renderer = create(createElement(Harness, { tabId: 'a', pendingPersistence }))
+      })
+    } finally {
+      consoleSpy.mockRestore()
+    }
+    const origin = state?.captureSendOrigin('from a')
+    await act(async () =>
+      renderer?.update(createElement(Harness, { tabId: 'b', pendingPersistence }))
+    )
+    await act(async () => {
+      if (origin) {
+        state?.acceptSend(origin, 'from a')
+      }
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(pendingPersistence.save).toHaveBeenCalledWith('worktree', 'a', 'session-a', [
+      { text: 'from a', expectedOccurrence: 1 }
+    ])
+  })
+
+  it('normalizes a multi-line prompt so its transcript echo can retire it', async () => {
+    const prompt = 'first line\nsecond  line'
+    // The transcript records the prompt with whitespace runs collapsed.
+    const echo = userTextMessage('m1', 'first line second line')
+    await mount('a')
+    // An identical earlier turn must be counted, or the pending retires against it.
+    await act(async () =>
+      renderer?.update(createElement(Harness, { tabId: 'a', messages: [echo] }))
+    )
+    expect(state?.captureSendOrigin(prompt)).toMatchObject({
+      normalizedText: 'first line second line',
+      baselineOccurrences: 1
+    })
+
+    const origin = state?.captureSendOrigin(prompt)
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, prompt)
+      }
+    })
+    expect(state?.pending.map((pending) => pending.text)).toEqual([prompt])
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [echo, userTextMessage('m2', 'first line second line')]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+  })
+
   it('clears one pending per landed message so duplicate sends are not all dropped', async () => {
     await mount('a')
     const origin = state?.captureSendOrigin('ping')
@@ -248,6 +390,26 @@ describe('useMobileNativeChatDrafts', () => {
       )
     )
     expect(state?.pending.map((pending) => pending.text)).toEqual(['ping'])
+  })
+
+  it('gives a caption-less photo its own ordinal after a marker-only caption', async () => {
+    await mount('a')
+    // Why: '[Image #1]' normalizes to empty, so it takes an image ordinal; counting it by a
+    // raw trim instead would hand the next photo ordinal 1 again and cross-match the echoes.
+    const first = state?.captureSendOrigin('[Image #1]')
+    act(() => {
+      if (first) {
+        state?.acceptSend(first, '[Image #1]', ['file:///a.jpg'])
+      }
+    })
+    const second = state?.captureSendOrigin('')
+    act(() => {
+      if (second) {
+        state?.acceptSend(second, '', ['file:///b.jpg'])
+      }
+    })
+
+    expect(state?.pending.map((pending) => pending.expectedOccurrence)).toEqual([1, 2])
   })
 
   it('keeps an image-only echo through an agent reply, clearing only when the user turn lands', async () => {
@@ -593,280 +755,5 @@ describe('useMobileNativeChatDrafts', () => {
       )
     )
     expect(state?.pending.map((pending) => pending.images)).toEqual([['file:///b.jpg']])
-  })
-
-  it('registers no deadline when the transcript echo beat the ambiguous RPC rejection', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'ping')] })
-        )
-      )
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      expect(vi.getTimerCount()).toBe(0)
-      act(() => vi.advanceTimersByTime(30_000))
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('surfaces uncertainty when no echo lands before the deadline', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      act(() => vi.advanceTimersByTime(19_999))
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-      act(() => vi.advanceTimersByTime(1))
-      expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not confirm an unconfirmed send against an older identical turn', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [userTextMessage('old', 'ping')] })
-        )
-      )
-      act(() => state?.setComposerText('ping'))
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, {
-            tabId: 'a',
-            messages: [userTextMessage('old', 'ping'), assistantTextMessage('other', 'working')]
-          })
-        )
-      )
-      expect(state?.composerText).toBe('ping')
-
-      act(() => vi.advanceTimersByTime(30_000))
-      expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not confirm an unconfirmed send when pagination prepends an older identical turn', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const anchor = assistantTextMessage('anchor', 'working')
-      await act(async () =>
-        renderer?.update(createElement(Harness, { tabId: 'a', messages: [anchor] }))
-      )
-      act(() => state?.setComposerText('ping'))
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, {
-            tabId: 'a',
-            messages: [userTextMessage('older', 'ping'), anchor]
-          })
-        )
-      )
-      expect(state?.composerText).toBe('ping')
-
-      act(() => vi.advanceTimersByTime(30_000))
-      expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('requires one new transcript echo per repeated unconfirmed send', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      act(() => state?.setComposerText('ping'))
-      const origin = state?.captureSendOrigin('ping')
-      const firstUnconfirmed = vi.fn()
-      const secondUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', firstUnconfirmed)
-          state?.holdUnconfirmedSend(origin, 'ping', secondUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, { tabId: 'a', messages: [userTextMessage('echo-1', 'ping')] })
-        )
-      )
-      act(() => vi.advanceTimersByTime(30_000))
-
-      expect(firstUnconfirmed).not.toHaveBeenCalled()
-      expect(secondUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not retain a deadline when an ambiguous send settles after unmount', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      const origin = state?.captureSendOrigin('ping')
-      const holdUnconfirmedSend = state?.holdUnconfirmedSend
-      const onUnconfirmed = vi.fn()
-      act(() => renderer?.unmount())
-      renderer = null
-
-      act(() => {
-        if (origin) {
-          holdUnconfirmedSend?.(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      expect(vi.getTimerCount()).toBe(0)
-      act(() => vi.advanceTimersByTime(30_000))
-      expect(onUnconfirmed).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('does not erase newer edits when an unconfirmed send lands', async () => {
-    await mount('a')
-    act(() => state?.setComposerText('submitted'))
-    const origin = state?.captureSendOrigin('submitted')
-    act(() => {
-      if (origin) {
-        state?.holdUnconfirmedSend(origin, 'submitted', vi.fn())
-      }
-    })
-    act(() => state?.setComposerText('new edit'))
-
-    await act(async () =>
-      renderer?.update(
-        createElement(Harness, { tabId: 'a', messages: [userTextMessage('m1', 'submitted')] })
-      )
-    )
-    expect(state?.composerText).toBe('new edit')
-  })
-
-  it('does not confirm an old session send from an identical turn in its replacement', async () => {
-    vi.useFakeTimers()
-    try {
-      await mount('a')
-      act(() => state?.setComposerText('ping'))
-      const origin = state?.captureSendOrigin('ping')
-      const onUnconfirmed = vi.fn()
-      act(() => {
-        if (origin) {
-          state?.holdUnconfirmedSend(origin, 'ping', onUnconfirmed)
-        }
-      })
-
-      await act(async () =>
-        renderer?.update(
-          createElement(Harness, {
-            tabId: 'a',
-            sessionId: 'replacement',
-            messages: [userTextMessage('replacement-message', 'ping')]
-          })
-        )
-      )
-
-      expect(state?.composerText).toBe('ping')
-      act(() => vi.advanceTimersByTime(30_000))
-      expect(onUnconfirmed).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('preserves first-send images through session assignment and transcript replacement', async () => {
-    await mount('a')
-    await act(async () => renderer?.update(createElement(Harness, { tabId: 'a', sessionId: null })))
-    const images = ['file:///a.jpg', 'file:///b.jpg', 'file:///c.jpg']
-    act(() => state?.setComposerText('look'))
-
-    const origin = state?.captureSendOrigin('look')
-    expect(origin).toMatchObject({ pendingKey: null })
-    act(() => {
-      if (origin) {
-        state?.clearDraftForSend(origin, 'look')
-        state?.acceptSend(origin, 'look', images)
-      }
-    })
-
-    expect(state?.composerText).toBe('')
-    expect(state?.pending.map((pending) => pending.images)).toEqual([images])
-
-    await act(async () =>
-      renderer?.update(createElement(Harness, { tabId: 'a', sessionId: 'assigned' }))
-    )
-    expect(state?.pending.map((pending) => pending.images)).toEqual([images])
-
-    await act(async () =>
-      renderer?.update(
-        createElement(Harness, {
-          tabId: 'a',
-          sessionId: 'assigned',
-          messages: [
-            userTextMessage('source-1', '[Image: source: /tmp/a.png]'),
-            userTextMessage('source-2', '[Image: source: /tmp/b.png]'),
-            userTextMessage('source-3', '[Image: source: /tmp/c.png]')
-          ]
-        })
-      )
-    )
-    expect(state?.pending.map((pending) => pending.images)).toEqual([images])
-
-    await act(async () =>
-      renderer?.update(
-        createElement(Harness, {
-          tabId: 'a',
-          sessionId: 'assigned',
-          messages: [
-            userTextMessage('source-1', '[Image: source: /tmp/a.png]'),
-            userTextMessage('source-2', '[Image: source: /tmp/b.png]'),
-            userTextMessage('source-3', '[Image: source: /tmp/c.png]'),
-            userTextMessage('prompt', '[Image #1] [Image #2] [Image #3] look')
-          ]
-        })
-      )
-    )
-    expect(state?.pending).toEqual([])
-    expect(state?.imagePreviewsByMessageId).toEqual({ prompt: images })
   })
 })

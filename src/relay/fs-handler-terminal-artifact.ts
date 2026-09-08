@@ -10,6 +10,7 @@ import {
   MAX_PREVIEWABLE_BINARY_SIZE,
   MAX_TEXT_FILE_SIZE
 } from './fs-handler-utils'
+import { RELAY_FILE_CHUNK_MAX_BYTES } from './fs-handler-file-chunk'
 
 type TerminalArtifactStat = {
   size: number
@@ -49,6 +50,34 @@ export async function readVerifiedTerminalArtifact(params: Record<string, unknow
       return { content: '', isBinary: true }
     }
     return { content: buffer.toString('utf-8'), isBinary: false }
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function readVerifiedTerminalArtifactChunk(params: Record<string, unknown>) {
+  const filePath = stringParam(params.filePath)
+  const offset = boundedIntegerParam(params.offset, 0, Number.MAX_SAFE_INTEGER)
+  const length = boundedIntegerParam(params.length, 1, RELAY_FILE_CHUNK_MAX_BYTES)
+  const options = verifiedTerminalArtifactOptions(params)
+  const handle = await openVerifiedTerminalArtifact(filePath, options, constants.O_RDONLY)
+  try {
+    const stats = await verifiedHandleStat(handle, options)
+    const fileLimit = Math.min(
+      options.maxBytes ?? MAX_PREVIEWABLE_BINARY_SIZE,
+      MAX_PREVIEWABLE_BINARY_SIZE
+    )
+    if (stats.size > fileLimit) {
+      throw new Error('file_too_large')
+    }
+    const available = Math.max(0, stats.size - offset)
+    const buffer = Buffer.alloc(Math.min(length, available))
+    const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
+    return {
+      contentBase64: buffer.subarray(0, bytesRead).toString('base64'),
+      bytesRead,
+      eof: offset + bytesRead >= stats.size
+    }
   } finally {
     await handle.close()
   }
@@ -245,6 +274,18 @@ function verifiedTerminalArtifactOptions(
 
 function stringParam(value: unknown): string {
   if (typeof value !== 'string') {
+    throw new Error('invalid_terminal_artifact_request')
+  }
+  return value
+}
+
+function boundedIntegerParam(value: unknown, minimum: number, maximum: number): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
     throw new Error('invalid_terminal_artifact_request')
   }
   return value

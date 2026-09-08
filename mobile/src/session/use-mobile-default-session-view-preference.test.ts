@@ -2,9 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  loadDefaultSessionView,
+  readDefaultSessionViewPreference,
   saveDefaultSessionView,
-  type MobileSessionView
+  type DefaultSessionViewPreference
 } from '../storage/session-view-preferences'
 import {
   useMobileDefaultSessionViewPreference,
@@ -21,7 +21,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 vi.mock('../storage/session-view-preferences', () => ({
   DEFAULT_SESSION_VIEW: 'terminal',
-  loadDefaultSessionView: vi.fn(),
+  readDefaultSessionViewPreference: vi.fn(),
   saveDefaultSessionView: vi.fn()
 }))
 
@@ -30,7 +30,9 @@ describe('useMobileDefaultSessionViewPreference', () => {
   let preference: MobileDefaultSessionViewPreference | null = null
 
   beforeEach(() => {
-    vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
+    vi.mocked(readDefaultSessionViewPreference)
+      .mockReset()
+      .mockResolvedValue({ value: 'terminal', loaded: true, hasStoredValue: true })
     vi.mocked(saveDefaultSessionView).mockReset().mockResolvedValue(undefined)
   })
 
@@ -51,16 +53,50 @@ describe('useMobileDefaultSessionViewPreference', () => {
     })
   }
 
+  it('keeps unreadable storage disabled and reports the load failure', async () => {
+    vi.mocked(readDefaultSessionViewPreference).mockResolvedValue({
+      value: null,
+      loaded: false,
+      hasStoredValue: false
+    })
+    await mount()
+    expect(preference?.busy).toBe(true)
+    expect(preference?.error).toContain('Could not load chat preferences')
+  })
+
+  it('exposes loading and save completion before the control becomes enabled', async () => {
+    const initialLoad = deferred<DefaultSessionViewPreference>()
+    const save = deferred<void>()
+    vi.mocked(readDefaultSessionViewPreference).mockReturnValue(initialLoad.promise)
+    vi.mocked(saveDefaultSessionView).mockReturnValue(save.promise)
+    await mount()
+    expect(preference?.busy).toBe(true)
+    await act(async () => {
+      initialLoad.resolve({ value: 'terminal', loaded: true, hasStoredValue: true })
+      await initialLoad.promise
+    })
+    expect(preference?.busy).toBe(false)
+    act(() => preference?.setDefaultView('chat'))
+    expect(preference?.busy).toBe(true)
+    await act(async () => {
+      save.resolve()
+      await save.promise
+    })
+    expect(preference?.busy).toBe(false)
+    expect(preference?.defaultView).toBe('chat')
+  })
+
   it('keeps a fast toggle authoritative over the initial read', async () => {
-    const initialLoad = deferred<MobileSessionView>()
-    vi.mocked(loadDefaultSessionView).mockReturnValue(initialLoad.promise)
+    const initialLoad = deferred<DefaultSessionViewPreference>()
+    vi.mocked(readDefaultSessionViewPreference).mockReturnValue(initialLoad.promise)
     await mount()
 
+    expect(preference?.busy).toBe(true)
     act(() => preference?.setDefaultView('chat'))
     expect(preference?.defaultView).toBe('chat')
 
     await act(async () => {
-      initialLoad.resolve('terminal')
+      initialLoad.resolve({ value: 'terminal', loaded: true, hasStoredValue: true })
       await initialLoad.promise
     })
 
@@ -97,9 +133,9 @@ describe('useMobileDefaultSessionViewPreference', () => {
   })
 
   it('reloads the persisted value when the latest write fails', async () => {
-    vi.mocked(loadDefaultSessionView)
-      .mockResolvedValueOnce('terminal')
-      .mockResolvedValueOnce('terminal')
+    vi.mocked(readDefaultSessionViewPreference)
+      .mockResolvedValueOnce({ value: 'terminal', loaded: true, hasStoredValue: true })
+      .mockResolvedValueOnce({ value: 'terminal', loaded: true, hasStoredValue: true })
     vi.mocked(saveDefaultSessionView).mockRejectedValue(new Error('storage unavailable'))
     await mount()
 
@@ -111,13 +147,15 @@ describe('useMobileDefaultSessionViewPreference', () => {
     })
 
     expect(preference?.defaultView).toBe('terminal')
-    expect(loadDefaultSessionView).toHaveBeenCalledTimes(2)
+    expect(preference?.error).toBe('Could not save chat preferences. Try again.')
+    expect(preference?.busy).toBe(false)
+    expect(readDefaultSessionViewPreference).toHaveBeenCalledTimes(2)
   })
 
   it('does not let an older failed write roll back a newer choice', async () => {
-    const recoveryLoad = deferred<MobileSessionView>()
-    vi.mocked(loadDefaultSessionView)
-      .mockResolvedValueOnce('terminal')
+    const recoveryLoad = deferred<DefaultSessionViewPreference>()
+    vi.mocked(readDefaultSessionViewPreference)
+      .mockResolvedValueOnce({ value: 'terminal', loaded: true, hasStoredValue: true })
       .mockReturnValueOnce(recoveryLoad.promise)
     vi.mocked(saveDefaultSessionView)
       .mockRejectedValueOnce(new Error('storage unavailable'))
@@ -132,7 +170,7 @@ describe('useMobileDefaultSessionViewPreference', () => {
     act(() => preference?.setDefaultView('terminal'))
 
     await act(async () => {
-      recoveryLoad.resolve('chat')
+      recoveryLoad.resolve({ value: 'chat', loaded: true, hasStoredValue: true })
       await recoveryLoad.promise
       await Promise.resolve()
     })

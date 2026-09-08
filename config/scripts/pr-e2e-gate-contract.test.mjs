@@ -378,8 +378,12 @@ describe('PR E2E gate contract', () => {
     // the lanes move.
     // The remaining exemption needs performance validation before routine CI, recorded in
     // run-ssh-docker-e2e.mjs so the gap stays legible rather than looking like coverage.
-    const unreachableSpecs = new Set(['tests/e2e/ssh-docker-relay-perf.spec.ts'])
-    // Why comments are stripped: the runner documents the exempt spec by name in a
+    const unreachableSpecs = new Set([
+      'tests/e2e/ssh-docker-relay-perf.spec.ts',
+      // Hosted mobile WebView SSH requires a macOS iOS simulator; the Docker lane is Linux.
+      'tests/e2e/hosted-mobile-webview-ssh.spec.ts'
+    ])
+    // Why comments are stripped: the runner documents the exempt specs by name in a
     // prose comment. A substring scan over raw text would count any spec merely *discussed* in a
     // runner as claimed by it -- the silent skip this assertion exists to catch, re-entering
     // through the documentation.

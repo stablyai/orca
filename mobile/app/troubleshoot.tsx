@@ -1,18 +1,11 @@
-import { useState, useCallback, useRef } from 'react'
-import { View, Text, Pressable, ScrollView, ActivityIndicator, Platform } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
 import {
-  ChevronLeft,
-  ChevronDown,
-  ChevronUp,
-  Activity,
-  CheckCircle2,
-  ScrollText,
-  XCircle,
-  AlertTriangle
-} from 'lucide-react-native'
-import { colors, spacing } from '../src/theme/mobile-theme'
+  TroubleshootView,
+  type DiagnosticStatus,
+  type CheckResult
+} from '../src/diagnostics/troubleshoot-view'
+import { useState, useCallback, useRef } from 'react'
+import { View, Platform } from 'react-native'
+import { useRouter } from 'expo-router'
 import { loadHosts } from '../src/transport/host-store'
 import {
   startDiagnosticFetchTimeout,
@@ -23,32 +16,9 @@ import {
   testHostReachability,
   unreachableHostDetail
 } from '../src/diagnostics/host-reachability'
-import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
-import { troubleshootScreenStyles as styles } from '../src/diagnostics/troubleshoot-screen-styles'
-
-type DiagnosticStatus = 'idle' | 'running' | 'done'
-
-type CheckResult = {
-  label: string
-  status: 'pass' | 'fail' | 'warn'
-  detail: string
-}
-
-function StatusIcon({ status }: { status: CheckResult['status'] }) {
-  switch (status) {
-    case 'pass':
-      return <CheckCircle2 size={14} color={colors.statusGreen} />
-    case 'fail':
-      return <XCircle size={14} color={colors.statusRed} />
-    case 'warn':
-      return <AlertTriangle size={14} color={colors.textMuted} />
-  }
-}
 
 export default function TroubleshootScreen() {
   const router = useRouter()
-  const insets = useSafeAreaInsets()
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [diagnosticStatus, setDiagnosticStatus] = useState<DiagnosticStatus>('idle')
   const [checks, setChecks] = useState<CheckResult[]>([])
   const abortRef = useRef(false)
@@ -65,10 +35,6 @@ export default function TroubleshootScreen() {
     diagnosticRunRef.current += 1
     activeInternetCheckRef.current?.dispose()
     activeInternetCheckRef.current = null
-  }, [])
-
-  const toggleSection = useCallback((id: string) => {
-    setExpandedId((prev) => (prev === id ? null : id))
   }, [])
 
   const runDiagnostics = useCallback(async () => {
@@ -168,109 +134,13 @@ export default function TroubleshootScreen() {
   }, [])
 
   return (
-    <View
-      ref={setTroubleshootRootRef}
-      style={[styles.container, { paddingTop: insets.top + spacing.sm }]}
-    >
-      <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Troubleshooting</Text>
-      </View>
-
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Pressable
-          style={({ pressed }) => [
-            styles.diagnosticButton,
-            pressed && styles.diagnosticButtonPressed,
-            diagnosticStatus === 'running' && styles.diagnosticButtonDisabled
-          ]}
-          onPress={runDiagnostics}
-          disabled={diagnosticStatus === 'running'}
-        >
-          {diagnosticStatus === 'running' ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
-          ) : (
-            <Activity size={16} color={colors.textPrimary} />
-          )}
-          <Text style={styles.diagnosticButtonLabel}>
-            {diagnosticStatus === 'running'
-              ? 'Running…'
-              : diagnosticStatus === 'done'
-                ? 'Run again'
-                : 'Run diagnostics'}
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={({ pressed }) => [
-            styles.diagnosticButton,
-            pressed && styles.diagnosticButtonPressed
-          ]}
-          onPress={() => router.push('/connection-log')}
-        >
-          <ScrollText size={16} color={colors.textPrimary} />
-          <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
-        </Pressable>
-
-        {checks.length > 0 && (
-          <View style={styles.section}>
-            {checks.map((check, i) => (
-              <View key={i}>
-                {i > 0 && <View style={styles.separator} />}
-                <View style={styles.checkRow}>
-                  <StatusIcon status={check.status} />
-                  <Text style={styles.checkLabel}>{check.label}</Text>
-                  <Text
-                    style={[styles.checkDetail, check.status === 'fail' && styles.checkDetailFail]}
-                  >
-                    {check.detail}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        <Text style={styles.sectionHeading}>Common issues</Text>
-
-        <View style={styles.section}>
-          {troubleshootCommonIssues.map((section, i) => (
-            <View key={section.id}>
-              {i > 0 && <View style={styles.separator} />}
-              <Pressable
-                style={({ pressed }) => [styles.accordionHeader, pressed && styles.rowPressed]}
-                onPress={() => toggleSection(section.id)}
-              >
-                {section.icon}
-                <Text style={styles.accordionTitle}>{section.title}</Text>
-                {expandedId === section.id ? (
-                  <ChevronUp size={16} color={colors.textMuted} />
-                ) : (
-                  <ChevronDown size={16} color={colors.textMuted} />
-                )}
-              </Pressable>
-              {expandedId === section.id && (
-                <View style={styles.accordionBody}>
-                  {section.steps.map((step, j) => (
-                    <View key={j} style={styles.stepRow}>
-                      <Text style={styles.bullet}>•</Text>
-                      <Text style={styles.stepText}>{step}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          ))}
-        </View>
-
-        <View style={{ height: spacing.xl }} />
-      </ScrollView>
-    </View>
+    <TroubleshootView
+      rootRef={setTroubleshootRootRef}
+      diagnosticStatus={diagnosticStatus}
+      checks={checks}
+      runDiagnostics={() => void runDiagnostics()}
+      onBack={() => router.back()}
+      onConnectionLog={() => router.push('/connection-log')}
+    />
   )
 }

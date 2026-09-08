@@ -9,7 +9,17 @@ export enum TerminalStreamOpcode {
   SnapshotEnd = 4,
   Resized = 5,
   Error = 6,
-  Metadata = 12
+  Input = 7,
+  Resize = 8,
+  Subscribe = 9,
+  Unsubscribe = 10,
+  SnapshotRequest = 11,
+  Metadata = 12,
+  Ack = 13,
+  ClaimViewport = 14,
+  OutputSpan = 15,
+  // Why: query replies must bypass input-floor claims while remaining distinguishable for Desktop authorization.
+  QueryReply = 18
 }
 
 export type TerminalStreamFrame = {
@@ -64,6 +74,14 @@ export function decodeTerminalStreamJson<T>(payload: Uint8Array): T | null {
   }
 }
 
+export function encodeTerminalStreamJson(value: unknown): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify(value))
+}
+
+export function encodeTerminalStreamText(value: string): Uint8Array {
+  return new TextEncoder().encode(value)
+}
+
 export function decodeTerminalStreamText(payload: Uint8Array): string {
   return new TextDecoder().decode(payload)
 }
@@ -76,6 +94,15 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.SnapshotEnd ||
     value === TerminalStreamOpcode.Resized ||
     value === TerminalStreamOpcode.Error ||
-    value === TerminalStreamOpcode.Metadata
+    value === TerminalStreamOpcode.Input ||
+    value === TerminalStreamOpcode.Resize ||
+    value === TerminalStreamOpcode.Subscribe ||
+    value === TerminalStreamOpcode.Unsubscribe ||
+    value === TerminalStreamOpcode.SnapshotRequest ||
+    value === TerminalStreamOpcode.Metadata ||
+    value === TerminalStreamOpcode.Ack ||
+    value === TerminalStreamOpcode.ClaimViewport ||
+    value === TerminalStreamOpcode.OutputSpan ||
+    value === TerminalStreamOpcode.QueryReply
   )
 }

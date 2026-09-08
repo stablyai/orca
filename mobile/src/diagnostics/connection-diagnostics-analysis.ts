@@ -12,7 +12,8 @@ export type ConnectionDiagnosis = {
 }
 
 type DiagnoseConnectionArgs = {
-  endpoint: string
+  endpoint?: string
+  endpointIsTailscale?: boolean
   state: ConnectionState
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
@@ -82,9 +83,10 @@ export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiag
 
   if (/connect-timeout|websocket connect timeout/i.test(evidence)) {
     return {
-      likelyCause: isTailscaleEndpoint(args.endpoint)
-        ? 'The saved Tailscale endpoint did not answer before the connection timeout.'
-        : 'The saved direct endpoint did not answer before the connection timeout.',
+      likelyCause:
+        (args.endpointIsTailscale ?? isTailscaleEndpoint(args.endpoint ?? ''))
+          ? 'The saved Tailscale endpoint did not answer before the connection timeout.'
+          : 'The saved direct endpoint did not answer before the connection timeout.',
       nextStep:
         args.pendingPath === 'relay'
           ? 'Relay recovery is in progress; keep Orca open while it retries.'

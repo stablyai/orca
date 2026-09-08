@@ -1,7 +1,7 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { View, MobileSearchField } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
-import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-model'
 
 export function renderMobileTasksSearchControl(model: ConnectionPresentationModel) {
   const {

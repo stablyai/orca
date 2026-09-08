@@ -7,6 +7,7 @@ type Props = {
   onClose: () => void
   onAfterClose?: () => void
   children: ReactNode
+  dismissible?: boolean
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
   // Why: smart-source (and similar) need a stable outer frame so a docked
@@ -24,6 +25,7 @@ export function BottomDrawer({
   onClose,
   onAfterClose,
   children,
+  dismissible = true,
   dragContentToDismiss = true,
   contentScrollable = true,
   fillAvailable = false,
@@ -81,6 +83,7 @@ export function BottomDrawer({
       visible={visible}
       onClose={onClose}
       onHidden={handleHidden}
+      dismissible={dismissible}
       dragContentToDismiss={dragContentToDismiss}
       contentScrollable={contentScrollable}
       fillAvailable={fillAvailable}

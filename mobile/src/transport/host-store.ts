@@ -1,3 +1,4 @@
+import { deleteMobileWebPagePreferences } from '../mobile-web/mobile-web-page-preferences-store'
 import { HostProfileSchema } from './types'
 import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
 import { getNextHostNameFromHosts } from './host-names'
@@ -27,9 +28,9 @@ import { createUnpairedHostCredentialDeletion } from './unpaired-host-credential
 import {
   loadStoredHostProfiles,
   readStoredHostProfilesForMutation,
-  toStoredHostProfile,
-  writeStoredHostProfiles
+  toStoredHostProfile
 } from './host-metadata-store'
+import * as hostListMutations from './host-list-mutation-queue'
 
 async function commitDeviceToken(hostId: string, token: string): Promise<void> {
   markHostCredentialWrite(hostId)
@@ -40,16 +41,12 @@ async function commitDeviceToken(hostId: string, token: string): Promise<void> {
 
 // Why: Keychain reads are slow (50-200ms) and loadHosts() runs on every screen mount; cache per-hostId in memory, invalidate on save/remove.
 const tokenCache = new Map<string, string>()
-// Why: serialize host metadata RMW so concurrent writers cannot drop updates.
-let hostListMutation: Promise<void> = Promise.resolve()
-
 export const loadHosts = async (): Promise<HostProfile[]> => (await loadHostListSnapshot()).profiles
 export const loadHostCatalog = async (): Promise<HostCatalogEntry[]> =>
   (await loadHostListSnapshot()).catalog
 
 async function loadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
-  // Why: writers hold the mutation chain across their full RMW; wait so a load doesn't race a half-written list.
-  await hostListMutation
+  await hostListMutations.waitForHostListMutations()
   // Why: deduplicate concurrent loadHosts() calls so simultaneously mounting screens share one Keychain read pass.
   return hostListLoads.shareHostListLoad(doLoadHostListSnapshot)
 }
@@ -85,7 +82,7 @@ export async function resolvePairingHostIdentity(
   newHostId: string
 ): Promise<{ id: string; name: string }> {
   // Why: one durable read both preserves an existing identity and names a new host, avoiding duplicate cards.
-  await hostListMutation
+  await hostListMutations.waitForHostListMutations()
   const hosts = await readStoredHostProfilesForMutation()
   const match = hosts.find((host) => host.publicKeyB64 === publicKeyB64)
   return match
@@ -94,7 +91,7 @@ export async function resolvePairingHostIdentity(
 }
 
 const deleteUnpairedHostCredentials = createUnpairedHostCredentialDeletion({
-  waitForHostMutations: () => hostListMutation,
+  waitForHostMutations: hostListMutations.waitForHostListMutations,
   hasStoredHost: async (hostId) =>
     (await readStoredHostProfilesForMutation()).some(({ id }) => id === hostId),
   onDeleted: (hostId) => {
@@ -111,51 +108,37 @@ function scheduleUnpairedHostCredentialCleanup(hostId: string): Promise<void> {
 }
 
 function cancelCleanupForStoredHost(hostId: string): void {
-  const cancellation = hostListMutation.then(async () => {
-    const hosts = await readStoredHostProfilesForMutation()
-    if (hosts.some(({ id }) => id === hostId)) {
-      // Register before later removals enqueue their intent, without blocking host loads on cleanup storage.
-      void cancelPendingHostCredentialCleanup(hostId).catch(() => undefined)
-    }
-  })
-  hostListMutation = cancellation.catch(() => {})
+  void hostListMutations
+    .enqueueHostListMutation(async () => {
+      const hosts = await readStoredHostProfilesForMutation()
+      if (hosts.some(({ id }) => id === hostId)) {
+        // Register before later removals enqueue their intent, without blocking host loads on cleanup storage.
+        void cancelPendingHostCredentialCleanup(hostId).catch(() => undefined)
+      }
+    })
+    .catch(() => undefined)
 }
 
 async function cancelCleanupForDurablyStoredHosts(hostIds: Iterable<string>): Promise<void> {
   const targets = [...hostIds]
-  return enqueueHostListMutation(async () => {
-    const storedIds = new Set((await readStoredHostProfilesForMutation()).map(({ id }) => id))
-    await Promise.all(
-      targets
-        .filter((hostId) => storedIds.has(hostId))
-        .map((hostId) => cancelPendingHostCredentialCleanup(hostId).catch(() => undefined))
-    )
-  }).catch(() => undefined)
-}
-
-function enqueueHostListMutation(operation: () => Promise<void>): Promise<void> {
-  const mutation = hostListMutation.then(operation)
-  hostListMutation = mutation.catch(() => {})
-  return mutation
+  return hostListMutations
+    .enqueueHostListMutation(async () => {
+      const storedIds = new Set((await readStoredHostProfilesForMutation()).map(({ id }) => id))
+      await Promise.all(
+        targets
+          .filter((hostId) => storedIds.has(hostId))
+          .map((hostId) => cancelPendingHostCredentialCleanup(hostId).catch(() => undefined))
+      )
+    })
+    .catch(() => undefined)
 }
 
 function removeOrphanOverlayIfUnpaired(hostId: string): Promise<void> {
-  return enqueueHostListMutation(async () => {
+  return hostListMutations.enqueueHostListMutation(async () => {
     const hosts = await readStoredHostProfilesForMutation()
     if (!hosts.some(({ id }) => id === hostId)) {
       await removeMobileRelayHostOverlay(hostId)
     }
-  })
-}
-
-async function mutateStoredHosts(
-  update: (hosts: StoredHostProfile[]) => StoredHostProfile[] | Promise<StoredHostProfile[]>
-): Promise<void> {
-  return enqueueHostListMutation(async () => {
-    const current = await readStoredHostProfilesForMutation()
-    const next = await update(current)
-    await writeStoredHostProfiles(next)
-    hostListLoads.dropSharedHostListLoad()
   })
 }
 
@@ -174,7 +157,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   let cleanupIntentRecordedBeforeMetadata = false
   let tokenCommittedBeforeMetadata = false
   try {
-    await mutateStoredHosts(async (hosts) => {
+    await hostListMutations.mutateStoredHosts(async (hosts) => {
       const index = hosts.findIndex((h) => h.id === stored.id)
       for (const candidate of hosts) {
         if (candidate.id !== stored.id && candidate.publicKeyB64 === stored.publicKeyB64) {
@@ -256,15 +239,22 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
 
 export async function removeHost(hostId: string): Promise<void> {
   let cleanupIntentRecorded = false
+  let orphanedPublicKeyB64: string | null = null
   try {
-    await mutateStoredHosts(async (hosts) => {
+    await hostListMutations.mutateStoredHosts(async (hosts) => {
       try {
         await recordHostCredentialCleanupIntent(hostId)
         cleanupIntentRecorded = true
       } catch {
         // Removal remains authoritative when cleanup intent storage is unavailable.
       }
-      return hosts.filter((h) => h.id !== hostId)
+      const removedKey = hosts.find((h) => h.id === hostId)?.publicKeyB64
+      const remaining = hosts.filter((h) => h.id !== hostId)
+      // Hosted page preferences are keyed by a pairing key a sibling row may still hold.
+      if (removedKey && !remaining.some((h) => h.publicKeyB64 === removedKey)) {
+        orphanedPublicKeyB64 = removedKey
+      }
+      return remaining
     })
   } catch (error) {
     if (cleanupIntentRecorded) {
@@ -278,6 +268,13 @@ export async function removeHost(hostId: string): Promise<void> {
     hostListLoads.dropSharedHostListLoad()
   } catch {
     // Base removal is authoritative; a retained overlay can't resurrect the host and is cleaned on a later retry.
+  }
+  try {
+    if (orphanedPublicKeyB64) {
+      await deleteMobileWebPagePreferences(orphanedPublicKeyB64)
+    }
+  } catch {
+    // Base removal is authoritative; an orphaned preference blob is inert without the pairing.
   }
   // Why: keychain delete can stall/reject; await only the durable cleanup intent so removeHost can't freeze the UI.
   try {
@@ -302,7 +299,7 @@ export async function updateHostNameAndEndpoint(
   hostId: string,
   updates: { name?: string; endpoint?: string }
 ): Promise<void> {
-  await mutateStoredHosts((hosts) => {
+  await hostListMutations.mutateStoredHosts((hosts) => {
     const index = hosts.findIndex((host) => host.id === hostId)
     if (index === -1) {
       throw new Error('Host not found')
@@ -319,7 +316,7 @@ export async function updateHostNameAndEndpoint(
 
 export async function updateLastConnected(hostId: string): Promise<void> {
   try {
-    await mutateStoredHosts((hosts) => {
+    await hostListMutations.mutateStoredHosts((hosts) => {
       const index = hosts.findIndex((h) => h.id === hostId)
       if (index === -1) {
         return hosts
@@ -335,7 +332,7 @@ export async function updateLastConnected(hostId: string): Promise<void> {
 
 /** Test-only: drain module mutation chain between cases. */
 export function resetHostStoreForTests(): void {
-  hostListMutation = Promise.resolve()
+  hostListMutations.resetHostListMutationQueueForTests()
   tokenCache.clear()
   resetHostCredentialWriteRevisionsForTests()
   hostListLoads.dropSharedHostListLoad()

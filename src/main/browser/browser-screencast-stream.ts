@@ -5,6 +5,7 @@ import { createBrowserScreencastMessageHandler } from './browser-screencast-cdp-
 import { sendDebuggerCommand } from './browser-screencast-debugger-command'
 import { createBrowserScreencastDeviceMetrics } from './browser-screencast-device-metrics'
 import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
+import { readGuestCdpNavigationState } from './browser-guest-navigation-state'
 import { createBrowserScreencastSnapshotCapture } from './browser-screencast-snapshot-capture'
 import type {
   BrowserScreencastFrameBudget,
@@ -42,6 +43,23 @@ export async function startBrowserScreencast(
   })
   const isClosed = (): boolean => closed
   const isStopping = (): boolean => stopping
+  let navigationStateGeneration = 0
+  const emitNavigationState = (): void => {
+    const generation = ++navigationStateGeneration
+    void readGuestCdpNavigationState(webContents).then((navigationState) => {
+      if (closed || generation !== navigationStateGeneration) {
+        return
+      }
+      options.onEvent?.({
+        type: 'navigation',
+        tab: {
+          url: webContents.getURL(),
+          title: webContents.getTitle(),
+          ...navigationState
+        }
+      })
+    })
+  }
 
   const deviceMetrics = createBrowserScreencastDeviceMetrics(webContents, dbg, options)
   const framePacer = createBrowserScreencastFramePacer({ dbg, options, isClosed, isStopping })
@@ -63,6 +81,7 @@ export async function startBrowserScreencast(
     queueFrame: framePacer.queueFrame,
     ackScreencastFrame: framePacer.ackFrame,
     scheduleNavigationFrameCapture: snapshotCapture.scheduleNavigationFrameCapture,
+    emitNavigationState,
     clearNavigationCaptureTimer: snapshotCapture.clearNavigationCaptureTimer,
     bumpSnapshotGeneration: snapshotCapture.bumpGeneration
   })
@@ -85,6 +104,8 @@ export async function startBrowserScreencast(
     framePacer.clearPending()
     dbg.removeListener('message', handleMessage as never)
     dbg.removeListener('detach', handleDetach as never)
+    webContents.removeListener('did-navigate', emitNavigationState)
+    webContents.removeListener('did-navigate-in-page', emitNavigationState)
     debuggerLease?.release()
     debuggerLease = null
     resolveDone()
@@ -97,6 +118,8 @@ export async function startBrowserScreencast(
 
   dbg.on('message', handleMessage as never)
   dbg.on('detach', handleDetach as never)
+  webContents.on('did-navigate', emitNavigationState)
+  webContents.on('did-navigate-in-page', emitNavigationState)
 
   try {
     await sendDebuggerCommand(dbg, 'Page.enable')

@@ -1,5 +1,5 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
+import type { MobileBrowserRpcClient } from './mobile-browser-rpc-client'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 import { assertRpcOk } from './mobile-browser-frame-state'
 import {
@@ -28,7 +28,7 @@ type SendBrowserRequest = (
 ) => Promise<unknown | null>
 
 type MobileBrowserCommandArgs = {
-  client: RpcClient | null
+  client: MobileBrowserRpcClient | null
   frameMetadataRef: { current: BrowserScreencastFrameMetadata | null }
   keyboardValue: string
   layoutRef: { current: BrowserTouchLayout | null }

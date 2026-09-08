@@ -20,6 +20,7 @@ import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import type { ResolvedTerminalWorkspaceLaunchTarget } from './orca-runtime-core'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from './orca-runtime-core'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import { loadRuntimeMobileSessionAgentOptions } from './runtime-mobile-session-agent-options'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from './runtime-worktree-selection'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
@@ -27,6 +28,14 @@ import { WorktreeIdRequiresFullPathError } from './runtime-worktree-lineage-reso
 import { triggerTerminalSpawnPushTargetMaterialization } from './runtime-terminal-spawn-push-target-materialization'
 
 export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extends OrcaRuntimeWithTransitionGraphReloadToTerminalState {
+  async getMobileSessionAgentOptions(selector: string) {
+    const scope = await this.resolveTerminalWorkspaceLaunchScope(selector)
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    return loadRuntimeMobileSessionAgentOptions(scope.connectionId, this.store.getSettings())
+  }
+
   protected resolveBrowserNetworkExecutionHostForWorktree(worktree?: {
     id: string
     repoId?: string

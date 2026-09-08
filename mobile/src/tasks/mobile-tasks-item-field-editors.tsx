@@ -1,8 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import {
-  SHOW_MOBILE_DETAIL_METADATA_EDITORS,
-  splitCommaList
-} from './mobile-tasks-legacy-foundation'
+import { SHOW_MOBILE_DETAIL_METADATA_EDITORS, splitCommaList } from './mobile-tasks-model'
 import {
   View,
   Text,

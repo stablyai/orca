@@ -14,7 +14,7 @@ import {
   hasGitHubIssueSourceChoice,
   issueSourceSlug,
   taskRepositoryMeta
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function useMobileTasksPickerProjection(model: DetailCommentRenderersModel) {
@@ -215,30 +215,30 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
   )
   return Object.assign(model, {
     createTargetOptions,
-    selectedCreateTarget,
-    selectedCreateTargetLabel,
-    providerLabel,
-    showHeaderCreateTask,
-    providerOptions,
-    selectedCreateRepo,
-    selectedCreateGitHubSources,
-    selectedCreateIssuePreference,
-    githubIssueSourceRows,
+    displayedEntries,
     githubIssueSourceLabel,
+    githubIssueSourceRows,
+    githubProjectFields,
+    githubProjectFieldsLabel,
+    githubProjectSortDirection,
+    githubProjectSortField,
+    githubProjectSortLabel,
+    githubProjectSortOptions,
+    githubProjectViewOptions,
+    githubProjectViewSort,
+    providerLabel,
+    providerOptions,
     repoPickerLabel,
     repoPickerSelectedRepo,
-    workspaceRepoOptions,
-    sortedItems,
-    displayedEntries,
+    selectedCreateGitHubSources,
+    selectedCreateIssuePreference,
+    selectedCreateRepo,
+    selectedCreateTarget,
+    selectedCreateTargetLabel,
+    showHeaderCreateTask,
     sortLabel,
-    githubProjectFields,
-    githubProjectViewSort,
-    githubProjectSortField,
-    githubProjectSortDirection,
-    githubProjectSortLabel,
-    githubProjectFieldsLabel,
-    githubProjectSortOptions,
-    githubProjectViewOptions
+    sortedItems,
+    workspaceRepoOptions
   })
 }
 

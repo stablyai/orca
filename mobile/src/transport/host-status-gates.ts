@@ -3,6 +3,7 @@ import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcSuccess } from './types'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import type { DesktopStatus } from '../worktree/host-worktree-rpc-types'
+import { parseRuntimeStatusCapabilities } from './runtime-capability-probe'
 import { normalizeHostAppVersion, recordHostAppVersion } from './host-app-version-store'
 
 export type HostStatusGates = {
@@ -60,9 +61,7 @@ export function useHostStatusGates(args: {
           })
           return
         }
-        const status = (response as RpcSuccess).result as DesktopStatus & {
-          capabilities?: string[]
-        }
+        const status = (response as RpcSuccess).result as DesktopStatus
         const verdict = evaluateCompat({
           desktopProtocolVersion: status.protocolVersion,
           desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
@@ -72,7 +71,7 @@ export function useHostStatusGates(args: {
           void recordHostAppVersion(hostId, desktopAppVersion)
         }
         settle({
-          hostCapabilities: status.capabilities ?? [],
+          hostCapabilities: parseRuntimeStatusCapabilities(status) ?? [],
           floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
           desktopAppVersion,
           compatVerdict: verdict

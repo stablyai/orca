@@ -3,7 +3,7 @@ import {
   extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
   resolveTerminalFileLink
-} from '@/lib/terminal-links'
+} from '../../../../shared/terminal-links'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { isRemoteRuntimeFileOperation, runtimePathExists } from '@/runtime/runtime-file-client'
 import {

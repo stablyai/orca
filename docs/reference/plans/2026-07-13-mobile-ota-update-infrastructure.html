@@ -1,0 +1,1489 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Architecture decision for desktop-served hybrid mobile UI and signed React Native OTA updates for Orca."
+    />
+    <title>Orca Mobile Delivery Architecture Plan</title>
+    <style>
+      @font-face {
+        font-family: 'Geist';
+        src: url('../../../src/renderer/src/assets/fonts/Geist-Variable.woff2') format('woff2');
+        font-weight: 100 900;
+        font-style: normal;
+        font-display: swap;
+      }
+
+      /* Why: this standalone plan mirrors the canonical Orca roles from main.css. */
+      :root {
+        color-scheme: light dark;
+        --background: #fff;
+        --foreground: #0a0a0a;
+        --card: #fff;
+        --card-foreground: #0a0a0a;
+        --secondary: #f5f5f5;
+        --secondary-foreground: #171717;
+        --muted: #f5f5f5;
+        --muted-foreground: #737373;
+        --accent: #f5f5f5;
+        --accent-foreground: #171717;
+        --border: #e5e5e5;
+        --ring: #a1a1a1;
+        --status-success: #15803d;
+        --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+        --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+        --radius: 0.625rem;
+        --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --font-mono:
+          'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas,
+          'Liberation Mono', monospace;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #0a0a0a;
+          --foreground: #fafafa;
+          --card: #171717;
+          --card-foreground: #fafafa;
+          --secondary: #262626;
+          --secondary-foreground: #fafafa;
+          --muted: #262626;
+          --muted-foreground: #a1a1a1;
+          --accent: #404040;
+          --accent-foreground: #fafafa;
+          --border: rgb(255 255 255 / 0.07);
+          --ring: #737373;
+          --status-success: #86efac;
+          --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+          --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+        }
+      }
+
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.65;
+        letter-spacing: 0.01em;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      a {
+        color: inherit;
+        text-decoration-color: var(--ring);
+        text-underline-offset: 3px;
+      }
+
+      a:hover {
+        text-decoration-color: currentColor;
+      }
+
+      code,
+      pre {
+        font-family: var(--font-mono);
+      }
+
+      code {
+        padding: 0.1rem 0.3rem;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 0.6);
+        background: var(--muted);
+        font-size: 0.9em;
+      }
+
+      .shell {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 56px 0 96px;
+      }
+
+      .eyebrow,
+      .label,
+      .phase-label {
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin-top: 0;
+        color: var(--foreground);
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+      }
+
+      h1 {
+        max-width: 820px;
+        margin-bottom: 18px;
+        font-size: clamp(2rem, 5vw, 3.5rem);
+        font-weight: 680;
+      }
+
+      h2 {
+        margin-bottom: 18px;
+        font-size: 1.55rem;
+        font-weight: 650;
+      }
+
+      h3 {
+        margin-bottom: 8px;
+        font-size: 1rem;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+
+      p {
+        margin: 0 0 14px;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 1.25rem;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      .lede,
+      .section-intro {
+        max-width: 800px;
+        color: var(--muted-foreground);
+      }
+
+      .lede {
+        margin-bottom: 20px;
+        font-size: 1.05rem;
+      }
+
+      .meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 34px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 3px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--secondary);
+        color: var(--secondary-foreground);
+        font-size: 12px;
+        font-weight: 550;
+      }
+
+      .badge.recommended {
+        border-color: var(--status-success-border);
+        background: var(--status-success-background);
+        color: var(--status-success);
+      }
+
+      .decision {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 16px;
+        padding: 20px;
+        border: 1px solid var(--status-success-border);
+        border-radius: calc(var(--radius) * 1.4);
+        background: var(--status-success-background);
+      }
+
+      .decision-mark {
+        display: grid;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--status-success);
+        color: var(--background);
+        font-weight: 750;
+      }
+
+      .decision p:last-child,
+      .card p:last-child,
+      .card ul:last-child,
+      .callout p:last-child {
+        margin-bottom: 0;
+      }
+
+      .page-grid {
+        display: grid;
+        grid-template-columns: 230px minmax(0, 1fr);
+        gap: 54px;
+        margin-top: 44px;
+      }
+
+      nav {
+        position: sticky;
+        top: 24px;
+        align-self: start;
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 1.4);
+        background: var(--card);
+      }
+
+      nav p {
+        margin-bottom: 10px;
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      nav ol {
+        padding: 0;
+        list-style: none;
+      }
+
+      nav li + li {
+        margin-top: 1px;
+      }
+
+      nav a {
+        display: block;
+        padding: 6px 8px;
+        border-radius: calc(var(--radius) * 0.8);
+        color: var(--muted-foreground);
+        font-size: 12px;
+        text-decoration: none;
+      }
+
+      nav a:hover,
+      nav a:focus-visible {
+        background: var(--accent);
+        color: var(--accent-foreground);
+        outline: none;
+      }
+
+      nav a:focus-visible {
+        box-shadow: 0 0 0 2px var(--ring);
+      }
+
+      main {
+        min-width: 0;
+      }
+
+      section {
+        padding: 42px 0;
+        border-top: 1px solid var(--border);
+        scroll-margin-top: 24px;
+      }
+
+      section:first-child {
+        padding-top: 0;
+        border-top: 0;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 22px;
+      }
+
+      .card {
+        padding: 18px;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 1.4);
+        background: var(--card);
+        color: var(--card-foreground);
+      }
+
+      .label {
+        margin-bottom: 7px;
+      }
+
+      .callout {
+        margin-top: 18px;
+        padding: 16px 18px;
+        border-left: 3px solid var(--ring);
+        border-radius: 0 calc(var(--radius) * 0.8) calc(var(--radius) * 0.8) 0;
+        background: var(--muted);
+      }
+
+      .table-wrap {
+        margin-top: 20px;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 1.4);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--card);
+        font-size: 13px;
+      }
+
+      th,
+      td {
+        padding: 13px 14px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        background: var(--muted);
+        color: var(--muted-foreground);
+        font-size: 11px;
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      td:first-child {
+        font-weight: 600;
+      }
+
+      .architecture {
+        margin-top: 22px;
+        padding: 22px;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 1.4);
+        background: var(--card);
+        color: var(--card-foreground);
+        font-size: 12px;
+        line-height: 1.55;
+        white-space: pre;
+      }
+
+      .flow-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 22px;
+        padding: 0;
+        list-style: none;
+        counter-reset: flow;
+      }
+
+      .flow-list li {
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr);
+        gap: 12px;
+        margin: 0;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 0.8);
+        background: var(--card);
+        counter-increment: flow;
+      }
+
+      .flow-list li::before {
+        display: grid;
+        width: 26px;
+        height: 26px;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--secondary);
+        color: var(--secondary-foreground);
+        content: counter(flow);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .phase {
+        display: grid;
+        grid-template-columns: 108px minmax(0, 1fr);
+        gap: 18px;
+        padding: 20px 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .phase:last-child {
+        border-bottom: 0;
+      }
+
+      .checklist {
+        padding-left: 0;
+        list-style: none;
+      }
+
+      .checklist li {
+        position: relative;
+        padding-left: 24px;
+      }
+
+      .checklist li::before {
+        position: absolute;
+        top: 0.15em;
+        left: 0;
+        color: var(--muted-foreground);
+        content: '□';
+        font-size: 15px;
+      }
+
+      footer {
+        margin-top: 44px;
+        padding-top: 22px;
+        border-top: 1px solid var(--border);
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+
+      @media (max-width: 820px) {
+        .shell {
+          width: min(100% - 28px, 760px);
+          padding-top: 32px;
+        }
+
+        .page-grid,
+        .phase {
+          grid-template-columns: 1fr;
+        }
+
+        .page-grid {
+          gap: 28px;
+        }
+
+        .phase {
+          gap: 7px;
+        }
+
+        nav {
+          position: static;
+        }
+
+        nav ol {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .cards {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 520px) {
+        .decision,
+        nav ol {
+          grid-template-columns: 1fr;
+        }
+
+        th,
+        td {
+          padding: 11px;
+        }
+      }
+
+      @media print {
+        :root {
+          color-scheme: light;
+        }
+
+        .shell {
+          width: 100%;
+          padding: 0;
+        }
+
+        nav {
+          display: none;
+        }
+
+        .page-grid {
+          display: block;
+          margin-top: 32px;
+        }
+
+        section,
+        .card,
+        .table-wrap,
+        .flow-list li {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <p class="eyebrow">Architecture decision · Revised July 21, 2026</p>
+        <h1>Orca Mobile delivery architecture</h1>
+        <p class="lede">
+          A comparison of a desktop-served hybrid mobile application and signed React Native OTA
+          updates, with a staged recommendation that tests the highest-risk assumptions before Orca
+          commits to either implementation.
+        </p>
+        <div class="meta-row" aria-label="Plan status">
+          <span class="badge recommended">Recommended: prototype Option B</span>
+          <span class="badge">Fallback: signed OTA</span>
+          <span class="badge">Decision gate: App Store submission</span>
+          <span class="badge">Status: planning only</span>
+        </div>
+
+        <div class="decision">
+          <div class="decision-mark" aria-hidden="true">✓</div>
+          <div>
+            <h3>Recommended decision</h3>
+            <p>
+              Prototype Option B: keep a useful native companion shell, but deliver each paired
+              desktop's matching mobile web application through the authenticated connection and
+              render it in a locked-down WebView. Benchmark terminal and interaction performance,
+              complete a security review, and validate the product through an actual App Store
+              submission before a full rewrite. If any gate fails, proceed with Option A, the
+              self-hosted signed <code>expo-updates</code> design documented here.
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <div class="page-grid">
+        <nav aria-label="Document sections">
+          <p>Contents</p>
+          <ol>
+            <li><a href="#decision">Decision</a></li>
+            <li><a href="#current-state">Current state</a></li>
+            <li><a href="#architectures">Architectures</a></li>
+            <li><a href="#comparison">Comparison</a></li>
+            <li><a href="#security">Option B security</a></li>
+            <li><a href="#bridge">Native bridge</a></li>
+            <li><a href="#performance">Performance</a></li>
+            <li><a href="#app-store">App Store risk</a></li>
+            <li><a href="#ota-fallback">Option A fallback</a></li>
+            <li><a href="#delivery">Validation plan</a></li>
+            <li><a href="#acceptance">Decision gates</a></li>
+          </ol>
+        </nav>
+
+        <main>
+          <section id="decision">
+            <p class="eyebrow">01 · Decision</p>
+            <h2>Test Option B before building central OTA infrastructure</h2>
+            <p class="section-intro">
+              Option B attacks the larger long-term cost: Orca currently has separate desktop and
+              mobile feature implementations connected by a compatibility-sensitive RPC boundary.
+              Option A improves delivery speed but leaves that boundary and duplicated UI in place.
+              Option B can remove most of both, but only if WebView performance, security, and App
+              Review are acceptable.
+            </p>
+
+            <div class="cards">
+              <article class="card">
+                <p class="label">Near-term action</p>
+                <h3>Build a bounded vertical slice</h3>
+                <p>
+                  Prototype host switching, source control, a sustained-output terminal, one file or
+                  diff flow, and one native capability. Do not rewrite the full mobile app before
+                  these paths pass the decision gates.
+                </p>
+              </article>
+              <article class="card">
+                <p class="label">Fallback</p>
+                <h3>Option A remains viable</h3>
+                <p>
+                  The signed OTA architecture still provides materially faster React Native fixes.
+                  Its GCP, KMS, approval, runtime-version, and recovery design can proceed if the
+                  hybrid approach fails validation.
+                </p>
+              </article>
+            </div>
+
+            <div class="callout">
+              <strong>This is a sequencing recommendation, not approval to rearchitect.</strong>
+              Migration cost is intentionally excluded from the architecture preference, but it
+              remains relevant to scheduling after the prototype and store-review gates pass.
+            </div>
+          </section>
+
+          <section id="current-state">
+            <p class="eyebrow">02 · Current state</p>
+            <h2>Orca already has pieces of both designs</h2>
+            <p class="section-intro">
+              The mobile project uses Expo 55, React Native 0.83, Expo Router, and the new
+              architecture. Most frequently changed behavior is TS/TSX. The repository also has a
+              desktop-served web client, a same-server static asset handler, mobile-scoped RPC, and
+              paired E2EE transports, but those pieces are not yet a secure privileged WebView
+              delivery system.
+            </p>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Area</th>
+                    <th>Current fact</th>
+                    <th>Architecture implication</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>High-change features</td>
+                    <td>Source control, terminal, tasks, files, diffs, sessions, and UI polish</td>
+                    <td>Option A can update them; Option B can ship them with the desktop.</td>
+                  </tr>
+                  <tr>
+                    <td>Native boundary</td>
+                    <td>
+                      Pairing, notifications, camera, image picking, clipboard, haptics, and audio
+                    </td>
+                    <td>These remain in a store-delivered shell under either option.</td>
+                  </tr>
+                  <tr>
+                    <td>Terminal</td>
+                    <td>The React Native app already embeds xterm in a WebView</td>
+                    <td>
+                      Web technology is proven, but bridge and streaming cost are known risks.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Connectivity</td>
+                    <td>
+                      Direct and Relay paths use paired identity, secure storage, and E2EE RPC
+                    </td>
+                    <td>
+                      Option B should reuse this trust relationship instead of adding open HTTP.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Desktop web build</td>
+                    <td>A bundled full-desktop web client and static handler already exist</td>
+                    <td>A dedicated mobile web entry is still required.</td>
+                  </tr>
+                  <tr>
+                    <td>Relay delivery</td>
+                    <td>Relay transports E2EE RPC frames, not HTTP web assets</td>
+                    <td>Option B needs an authenticated manifest and chunked asset protocol.</td>
+                  </tr>
+                  <tr>
+                    <td>OTA client</td>
+                    <td>
+                      <code>expo-updates</code> and runtime-version targeting are not configured
+                    </td>
+                    <td>Option A still requires a new store shell before the first OTA release.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="callout">
+              <strong>Important existing gap:</strong> the current browser web flow can import
+              pairing material from a URL, and static assets may be served separately from E2EE RPC.
+              Option B must not reuse those behaviors inside the privileged native shell.
+            </div>
+          </section>
+
+          <section id="architectures">
+            <p class="eyebrow">03 · Candidate architectures</p>
+            <h2>Two ways to shorten the mobile delivery loop</h2>
+
+            <h3>Option B · Stable hybrid shell with desktop-served web UI</h3>
+            <pre class="architecture" aria-label="Option B architecture">
+Store-delivered native shell
+ pairing · secure credentials · host selection · recovery
+ notifications · deep links · camera · audio · image picker
+ clipboard · haptics · versioned capability bridge
+                         │
+             paired identity + E2EE session
+                         │
+                         ▼
+ Desktop release ──► dedicated mobile web bundle + matching RPC API
+                         │
+                         ▼
+ authenticated bundle descriptor + immutable asset chunks
+                         │
+                         ▼
+ app-controlled, per-host WebView origin and cache</pre
+            >
+            <p>
+              The desktop build owns host-specific workspace UI and its API contract. A desktop
+              update therefore carries the matching mobile UI. The shell owns long-lived secrets,
+              networking policy, lifecycle, and native capabilities; web content receives only
+              negotiated capabilities and host-scoped operations.
+            </p>
+
+            <h3 style="margin-top: 28px">Option A · Signed React Native OTA updates</h3>
+            <pre class="architecture" aria-label="Option A architecture">
+CI builds compatible React Native bundle + assets
+                         │
+             preview automatic / production approved
+                         │
+                         ▼
+ Cloud KMS signs manifest ──► GCS immutable objects + CDN
+                         │
+                         ▼
+ Cloud Run selects release from Firestore channel state
+                         │
+                         ▼
+ expo-updates verifies, downloads, and caches
+                         │
+                         ▼
+ apply on next cold launch; embedded bundle remains fallback</pre
+            >
+            <p>
+              The existing React Native application remains the feature UI. Compatible JS bundles
+              can ship between store releases, while native modules, permissions, entitlements, Expo
+              or React Native upgrades, and custom audio code still require store binaries.
+            </p>
+          </section>
+
+          <section id="comparison">
+            <p class="eyebrow">04 · Long-term comparison</p>
+            <h2>Option B removes more maintenance, but has harder gates</h2>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Dimension</th>
+                    <th>Option B · Hybrid web UI</th>
+                    <th>Option A · Signed OTA</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Primary benefit</td>
+                    <td>
+                      Desktop UI and API release together; much less feature duplication and skew
+                    </td>
+                    <td>Fast JS/TS fixes while preserving the existing native application</td>
+                  </tr>
+                  <tr>
+                    <td>Compatibility boundary</td>
+                    <td>Narrow native bridge; each desktop serves its matching host UI</td>
+                    <td>Every supported mobile runtime must remain compatible with desktop RPC</td>
+                  </tr>
+                  <tr>
+                    <td>Remaining version matrix</td>
+                    <td>Native shell × bridge version × desktop-served UI × OS WebView</td>
+                    <td>Native runtime × OTA bundle × desktop/API version</td>
+                  </tr>
+                  <tr>
+                    <td>Central operations</td>
+                    <td>No OTA control plane; desktop packaging includes the web build</td>
+                    <td>Cloud Run, GCS/CDN, Firestore, KMS, CI approval, retention, telemetry</td>
+                  </tr>
+                  <tr>
+                    <td>Security center</td>
+                    <td>Paired identity, authenticated assets, origin isolation, bridge policy</td>
+                    <td>
+                      OTA key, CI promotion, manifest service, storage, CDN, runtime targeting
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Compromise scope</td>
+                    <td>
+                      A desktop controls its UI; a narrow bridge limits access to phone capabilities
+                    </td>
+                    <td>A compromised OTA publisher can target compatible installed runtimes</td>
+                  </tr>
+                  <tr>
+                    <td>Performance risk</td>
+                    <td>
+                      Higher: startup, memory, gestures, accessibility, high-rate bridge traffic
+                    </td>
+                    <td>Lower architectural change; existing React Native behavior remains</td>
+                  </tr>
+                  <tr>
+                    <td>Offline behavior</td>
+                    <td>Native recovery works; host UI needs a verified per-host cache</td>
+                    <td>Current, cached, or embedded app launches without the update service</td>
+                  </tr>
+                  <tr>
+                    <td>Rollback unit</td>
+                    <td>
+                      Desktop and matching UI; prior cached UI also needs compatible server APIs
+                    </td>
+                    <td>Republished known-good update or rollback-to-embedded directive</td>
+                  </tr>
+                  <tr>
+                    <td>User consistency</td>
+                    <td>Different paired desktop versions may show different mobile UI</td>
+                    <td>One mobile channel can present a more uniform UI across hosts</td>
+                  </tr>
+                  <tr>
+                    <td>Store-review posture</td>
+                    <td>
+                      Meaningful uncertainty under minimum-functionality and remote-code rules
+                    </td>
+                    <td>
+                      More established pattern, still constrained by downloaded-functionality rules
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Security-fix reach</td>
+                    <td>Host UI fixes reach desktops that take the matching desktop update</td>
+                    <td>A compatible fix can be promoted centrally to active mobile runtimes</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="callout">
+              <strong>What Option B does not eliminate:</strong> store releases for native changes,
+              a versioned native capability contract, WebView and OS regressions, desktop release
+              rollback, or testing across supported shell and desktop versions. It eliminates the
+              largest compatibility boundary, not every boundary.
+            </div>
+          </section>
+
+          <section id="security">
+            <p class="eyebrow">05 · Option B security</p>
+            <h2>Treat the served UI as privileged code</h2>
+            <p class="section-intro">
+              Source-control, terminal, and file UI can issue consequential operations and invoke
+              native capabilities. Authenticating RPC alone is insufficient: replaced HTML or
+              JavaScript could operate through the user's legitimate session.
+            </p>
+
+            <ol class="flow-list">
+              <li>
+                <div>
+                  <h3>Authenticate content to the paired desktop</h3>
+                  <p>
+                    Prefer an immutable bundle descriptor and bounded asset chunks inside the
+                    existing authenticated E2EE connection. Pinned HTTPS/WSS tied to paired identity
+                    is an alternative only if it also works through direct, Relay, and SSH
+                    topologies. Never load privileged content over unauthenticated plain HTTP.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <h3>Keep credentials in the native shell</h3>
+                  <p>
+                    Never place pairing tokens or long-lived credentials in a URL, fragment, WebView
+                    storage, page source, navigation history, or logs. The web UI receives a
+                    host-scoped channel handle, not the pairing secret.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <h3>Use an app-controlled origin per paired host</h3>
+                  <p>
+                    Verify every asset hash before atomic activation and key the cache by paired
+                    desktop identity plus web build ID, not by a changing endpoint URL. Isolate web
+                    storage and service-worker scope between hosts.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <h3>Lock navigation and the web platform surface</h3>
+                  <p>
+                    Allow only the active Orca document and verified assets. Block iframes, popups,
+                    arbitrary navigation, mixed content, file access, and unnecessary permissions.
+                    Route approved external links through the native system browser.
+                  </p>
+                </div>
+              </li>
+              <li>
+                <div>
+                  <h3>Apply a strict content security policy</h3>
+                  <p>
+                    Default sources to none, permit only immutable self assets, prohibit inline
+                    evaluation, and constrain connections to the native broker or exact paired
+                    endpoint. Render untrusted repository HTML in a separate bridge-less sandbox.
+                  </p>
+                </div>
+              </li>
+            </ol>
+
+            <div class="cards">
+              <article class="card">
+                <p class="label">Failure behavior</p>
+                <h3>Fail closed to native recovery</h3>
+                <p>
+                  Hash mismatches, unknown required bridge versions, navigation attempts, or WebView
+                  crashes return to a native retry screen, never an unverified network page.
+                </p>
+              </article>
+              <article class="card">
+                <p class="label">Cache behavior</p>
+                <h3>Keep last-known-good per host</h3>
+                <p>
+                  Bound retention by paired identity and build ID, validate archive paths and size
+                  limits, remove the cache with the pairing, and never reuse it for another host.
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section id="bridge">
+            <p class="eyebrow">06 · Native capability bridge</p>
+            <h2>Small, typed, negotiated, and auditable</h2>
+            <p>
+              The handshake should exchange <code>shellProtocolVersion</code>,
+              <code>uiBuildId</code>, active host identity, WebView-instance session ID, and
+              supported capability versions. Optional unsupported capabilities stay hidden; an
+              unsupported required baseline returns to native recovery with a store-update
+              explanation.
+            </p>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Capability family</th>
+                    <th>Bridge contract</th>
+                    <th>Guardrails</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Host RPC</td>
+                    <td>
+                      Mobile-scoped typed request, response, stream, cancel, and connection events
+                    </td>
+                    <td>Server allowlist, schemas, host binding, backpressure, size limits</td>
+                  </tr>
+                  <tr>
+                    <td>Images</td>
+                    <td>System camera or image picker returns a bounded result or scoped stream</td>
+                    <td>User gesture, MIME and size limits, no arbitrary device paths</td>
+                  </tr>
+                  <tr>
+                    <td>Microphone and audio</td>
+                    <td>Explicit start/stop session and bounded audio stream</td>
+                    <td>Visible state, permission gate, one owner, cleanup on background</td>
+                  </tr>
+                  <tr>
+                    <td>Clipboard</td>
+                    <td>Separate read and write operations</td>
+                    <td>User gesture for reads, payload limits, platform privacy behavior</td>
+                  </tr>
+                  <tr>
+                    <td>Haptics</td>
+                    <td>Small enum of semantic feedback types</td>
+                    <td>Rate limit; no arbitrary vibration patterns</td>
+                  </tr>
+                  <tr>
+                    <td>External links</td>
+                    <td>Request native open for an absolute URL</td>
+                    <td>Scheme allowlist and confirmation where appropriate</td>
+                  </tr>
+                  <tr>
+                    <td>Notifications and deep links</td>
+                    <td>Native shell routes typed events to the active host UI</td>
+                    <td>No credentials in payloads; validate host and route</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="callout">
+              <strong>Do not expose:</strong> JavaScript evaluation, arbitrary filesystem access,
+              unrestricted URL loading, generic native-module invocation, secure-storage reads, or
+              an RPC escape hatch around the server's mobile-method allowlist. Revoke capabilities
+              on navigation, host switch, backgrounding, document reload, or WebView replacement.
+            </div>
+          </section>
+
+          <section id="performance">
+            <p class="eyebrow">07 · Performance and reliability</p>
+            <h2>Measure the paths that make an IDE feel immediate</h2>
+            <p class="section-intro">
+              WebView is likely adequate for lists, forms, files, and diffs, but Orca should not
+              infer whole-app performance from its current terminal WebView. That terminal also
+              shows that frequent native-to-WebView messages require careful coalescing.
+            </p>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Risk</th>
+                    <th>Prototype requirement</th>
+                    <th>Failure signal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Cold and warm start</td>
+                    <td>Load a verified per-host cache; fetch only when the build ID changes</td>
+                    <td>Blank UI, routine network-gated launch, or visible multi-stage flicker</td>
+                  </tr>
+                  <tr>
+                    <td>Terminal throughput</td>
+                    <td>Batch frames, enforce backpressure, test output, input, and reconnect</td>
+                    <td>
+                      Dropped bytes, ordering errors, high battery use, input lag, scroll jank
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Large diffs and files</td>
+                    <td>Virtualize rows, stream content, and cap retained document state</td>
+                    <td>Memory pressure, WebView termination, or long main-thread tasks</td>
+                  </tr>
+                  <tr>
+                    <td>Mobile interaction</td>
+                    <td>
+                      Test keyboard, IME, selection, safe areas, rotation, gestures, accessibility
+                    </td>
+                    <td>A desktop-responsive UI that remains awkward or inaccessible on touch</td>
+                  </tr>
+                  <tr>
+                    <td>Host switching</td>
+                    <td>Revoke streams and capabilities, isolate storage, load matching UI</td>
+                    <td>Cross-host state, stale actions, or credentials surviving the switch</td>
+                  </tr>
+                  <tr>
+                    <td>SSH and Relay latency</td>
+                    <td>Run direct, Relay, SSH-hosted, interrupted, and resumed paths</td>
+                    <td>Assets or RPC that work only on a local LAN</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="cards">
+              <article class="card">
+                <p class="label">Preferred data path</p>
+                <h3>Keep long-lived secrets native</h3>
+                <p>
+                  Start with a native E2EE broker and batched typed bridge. If terminal throughput
+                  is inadequate, evaluate a short-lived host-scoped page channel, never the durable
+                  pairing credential.
+                </p>
+              </article>
+              <article class="card">
+                <p class="label">Recovery ownership</p>
+                <h3>Native UI remains available</h3>
+                <p>
+                  Pairing, host selection, offline state, credential repair, crash recovery, and
+                  incompatible-shell messaging must not depend on served web content.
+                </p>
+              </article>
+            </div>
+          </section>
+
+          <section id="app-store">
+            <p class="eyebrow">08 · App Store risk</p>
+            <h2>Submission is a product gate, not a paperwork step</h2>
+            <p>
+              Apple guideline 4.2 says an app should provide utility and UI beyond a repackaged
+              website. Guideline 2.5.2 restricts downloaded code that changes functionality, and
+              4.7.2 can restrict exposing native APIs to remotely delivered HTML5 or JavaScript
+              software without prior permission. Orca should not characterize Option B as remote
+              desktop under 4.2.7: the UI is rendered on the phone and connections may traverse the
+              internet. A genuine native companion is more defensible than a wrapper, but acceptance
+              is discretionary and may change between reviews.
+            </p>
+
+            <div class="cards">
+              <article class="card">
+                <p class="label">Review package</p>
+                <h3>Make the app fully reviewable</h3>
+                <ul>
+                  <li>
+                    Provide a stable internet-accessible review host with representative data.
+                  </li>
+                  <li>Supply durable credentials, a sample QR code, and exact pairing steps.</li>
+                  <li>
+                    Explain the native features and why host-specific workspace UI is required.
+                  </li>
+                  <li>Describe content delivery and native capability boundaries accurately.</li>
+                </ul>
+              </article>
+              <article class="card">
+                <p class="label">Validation order</p>
+                <h3>Submit before full migration</h3>
+                <ul>
+                  <li>Use a production-shaped vertical slice, not an empty wrapper.</li>
+                  <li>
+                    Exercise pairing, recovery, notification, camera or picker, and audio flows.
+                  </li>
+                  <li>
+                    Treat rejection, required redesign, or unresolved permission as a failed gate.
+                  </li>
+                  <li>Revalidate after material changes to remotely delivered functionality.</li>
+                </ul>
+              </article>
+            </div>
+
+            <div class="callout">
+              <strong>Approval is evidence, not a permanent exemption.</strong> TestFlight is not
+              the gate. Record the production submission, notes, review environment, questions, and
+              accepted behavior so later changes can be evaluated against concrete review history.
+            </div>
+          </section>
+
+          <section id="ota-fallback">
+            <p class="eyebrow">09 · Option A fallback</p>
+            <h2>Signed self-hosted OTA remains the implementation-ready alternative</h2>
+            <p class="section-intro">
+              If Option B fails, use the open-source <code>expo-updates</code> client and Expo
+              Updates Protocol with a small GCP control plane and immutable CDN delivery plane.
+              Expo's sample custom server is a protocol demonstration, so Orca owns production
+              hardening.
+            </p>
+
+            <div class="cards">
+              <article class="card">
+                <p class="label">Manifest selection</p>
+                <h3>Cloud Run + Firestore</h3>
+                <p>
+                  Select by platform, explicit runtime version, and channel. Keep manifests and
+                  release objects immutable; mutable state records active releases and audit events.
+                </p>
+              </article>
+              <article class="card">
+                <p class="label">Static delivery</p>
+                <h3>GCS behind a CDN</h3>
+                <p>
+                  Store content-addressed bundles and assets with immutable cache lifetimes. Service
+                  failure delays checks but does not block cached or embedded app launch.
+                </p>
+              </article>
+              <article class="card">
+                <p class="label">Signing</p>
+                <h3>Dedicated Cloud KMS RSA key</h3>
+                <p>
+                  Use <code>RSA_SIGN_PKCS1_2048_SHA256</code> with an embedded compatible X.509
+                  trust root. Sign the exact manifest or directive bytes after production approval.
+                </p>
+              </article>
+              <article class="card">
+                <p class="label">Release behavior</p>
+                <h3>Quiet download, cold-launch apply</h3>
+                <p>
+                  Preview releases publish automatically. Production uses a protected CI approval
+                  with Slack notification. Routine updates apply on the next cold launch.
+                </p>
+              </article>
+            </div>
+
+            <h3 style="margin-top: 28px">Rollback semantics</h3>
+            <div class="callout">
+              <strong>An older channel pointer is not a reliable downgrade.</strong> A client that
+              already installed the bad update normally continues to select the newer update in its
+              local database. Republish known-good content as a new signed update with a newer
+              identity, or serve a newer signed <code>rollBackToEmbedded</code> directive when the
+              embedded store bundle is the intended recovery. A pointer change can contain exposure
+              for clients that have not installed the release; it is not complete rollback.
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Incident action</th>
+                    <th>Effect</th>
+                    <th>Required control</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Contain</td>
+                    <td>Stop offering the bad release to clients that have not installed it</td>
+                    <td>Move or disable the channel pointer and audit the change</td>
+                  </tr>
+                  <tr>
+                    <td>Republish known-good</td>
+                    <td>Installed clients receive old content under a newer update identity</td>
+                    <td>Create and sign a new manifest, verify assets, then promote</td>
+                  </tr>
+                  <tr>
+                    <td>Return to embedded</td>
+                    <td>Client makes downloaded updates ineligible and uses the store bundle</td>
+                    <td>Newer signed directive and tested multipart server/client support</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 style="margin-top: 28px">Signing and approval are separate</h3>
+            <p>
+              Desktop Windows signing uses SignPath's OSS program, whose key is SignPath-controlled
+              and manually approved. SignPath documents arbitrary hash signing as a Code Signing
+              Gateway feature, so the OSS arrangement should not be assumed to sign Expo manifests.
+              Use a separate non-exportable RSA key in Cloud KMS. CI enforces human production
+              approval; KMS performs the cryptographic operation after approval.
+            </p>
+
+            <div class="callout">
+              <strong>Expo pricing clarification:</strong> the discussed Production tier is about
+              $199/month, subject to current terms. Its 50K allowance refers to unique users who
+              download an update during the month, not downloads. Five thousand users downloading
+              ten releases are roughly 5K update MAUs and 50K downloads.
+            </div>
+          </section>
+
+          <section id="delivery">
+            <p class="eyebrow">10 · Validation plan</p>
+            <h2>Resolve risk in the cheapest useful order</h2>
+
+            <div class="phase">
+              <div class="phase-label">Phase 0</div>
+              <div>
+                <h3>Write the contracts and threat model</h3>
+                <ul class="checklist">
+                  <li>
+                    Define authenticated asset delivery, chunk limits, and per-host cache identity.
+                  </li>
+                  <li>
+                    Define bridge capabilities, versions, schemas, limits, revocation, and recovery.
+                  </li>
+                  <li>Map direct, Relay, SSH, offline, host-switch, and pairing-removal flows.</li>
+                  <li>Prepare App Review claims and a production-shaped review environment.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="phase">
+              <div class="phase-label">Phase 1</div>
+              <div>
+                <h3>Build the Option B vertical slice</h3>
+                <ul class="checklist">
+                  <li>Keep pairing, secrets, host selection, connection, and recovery native.</li>
+                  <li>
+                    Deliver a verified mobile web build without credentials in URLs or page storage.
+                  </li>
+                  <li>
+                    Implement source control, terminal, one diff/file flow, and one native
+                    capability.
+                  </li>
+                  <li>
+                    Apply CSP, origin isolation, navigation blocking, schemas, and server
+                    authorization.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="phase">
+              <div class="phase-label">Phase 2</div>
+              <div>
+                <h3>Benchmark and attack the prototype</h3>
+                <ul class="checklist">
+                  <li>Test real low- and high-memory iOS and Android phones and tablets.</li>
+                  <li>
+                    Measure terminal throughput, input, startup, battery, memory, and large diffs.
+                  </li>
+                  <li>
+                    Test direct, Relay, SSH-hosted, offline, interrupted, resumed, and host
+                    switching.
+                  </li>
+                  <li>
+                    Attempt XSS, asset substitution, cache confusion, navigation, and bridge
+                    fuzzing.
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="callout">
+              <strong>Prototype checkpoint · July 22, 2026:</strong> the first bounded vertical
+              slice now delivers a content-addressed HTML package over paired E2EE RPC, validates
+              bounded chunks and the final document, keeps a verified per-host last-known-good
+              cache, locks navigation and network access with native policy plus a hash-based CSP,
+              and exposes only workspace-list and selection-haptic bridge capabilities. It is
+              intentionally read-only and behind an Experimental settings entry. An iPhone 17 Pro
+              simulator check validated paired delivery, workspace rendering and bridge interaction,
+              verified-cache startup while the desktop was offline, reconnect after desktop restart,
+              cold launch, background/foreground, and rotation without prototype errors. It has not
+              yet validated a physical device or App Review; those remain Phase 3 gates rather than
+              inferred successes. <br /><br />
+              A bounded Phase 2 simulator probe subsequently delivered a 330 KiB package in seven
+              verified chunks, then repeated 120-frame terminal-style updates and a 4,000-row diff
+              workload ten times without a WebView process loss or progressive slowdown. Terminal
+              runs took 1.98–2.00 seconds at the display cadence, with 17–33 ms longest frames and
+              at most one frame over 24 ms; diff layout took 68–78 ms. The final package also
+              cold-started from its verified cache, ran the workload with the desktop offline, and
+              survived rotation. This is synthetic DOM churn, not yet Orca's real terminal engine,
+              diff parser, or live terminal transport, so those integrations still need
+              production-shaped validation.
+              <br /><br />
+              The production bridge audit on July 24 aligned the shared contract and both native
+              WebView transports on a 640 KiB serialized-envelope ceiling. Negotiated operation
+              payloads are capped at 600 KiB, leaving a 40 KiB reserve for authenticated envelope
+              metadata. This closes an earlier mismatch where broker-valid large Tasks file-content
+              responses could exceed the native Swift/Kotlin 256 KiB ceiling. Cross-language source
+              tests now guard the limits, and a signed iOS Simulator rebuild retained secure
+              credentials and automatically restored Host 37's existing workspace. Android Debug
+              Kotlin/Java compilation and module unit tests also pass; Android runtime and
+              physical-device performance remain explicit open gates.
+              <br /><br />
+              A follow-up compatibility audit now checks the shell bridge version against both
+              manifest bounds before download and again inside the Swift/Kotlin verified cache
+              before initial open or rollback. This prevents a native store update from loading an
+              older cached page outside its declared <code>testedThrough</code> range. Automated
+              range and native-source checks, both native compilers, and signed iOS cold restoration
+              pass; the actual older/newer store-binary and Desktop-package matrix remains a release
+              gate.
+            </div>
+
+            <div class="phase">
+              <div class="phase-label">Phase 3</div>
+              <div>
+                <h3>Submit the hybrid companion to App Review</h3>
+                <ul class="checklist">
+                  <li>
+                    Provide a reliable external review host, account, sample QR, and workspace.
+                  </li>
+                  <li>Include accurate notes for native functions and desktop-served host UI.</li>
+                  <li>
+                    Record reviewer questions, requested changes, and accepted product behavior.
+                  </li>
+                  <li>Do not authorize full migration until the production submission passes.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="phase">
+              <div class="phase-label">Phase 4</div>
+              <div>
+                <h3>Choose and implement one architecture</h3>
+                <ul class="checklist">
+                  <li>
+                    If every Option B gate passes, plan incremental migration and shell support
+                    policy.
+                  </li>
+                  <li>
+                    If a gate fails, stop expansion and implement the Option A shell and GCP path.
+                  </li>
+                  <li>
+                    Do not operate both delivery systems by default; that retains both burdens.
+                  </li>
+                  <li>
+                    Keep native capability changes on the store path under either architecture.
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <section id="acceptance">
+            <p class="eyebrow">11 · Decision gates</p>
+            <h2>Conditions for choosing Option B</h2>
+            <ul class="checklist">
+              <li>The production-shaped companion is accepted through an App Store submission.</li>
+              <li>
+                Privileged web assets are authenticated to paired identity and activate atomically.
+              </li>
+              <li>
+                No long-lived credential appears in a URL, WebView storage, logs, or page state.
+              </li>
+              <li>
+                Navigation, origin isolation, CSP, and bridge validation fail closed under attack.
+              </li>
+              <li>
+                Older shells negotiate capabilities and degrade safely against newer desktops.
+              </li>
+              <li>
+                Terminal output, input, reconnect, and backpressure meet agreed device benchmarks.
+              </li>
+              <li>
+                Large diffs, keyboard, selection, rotation, gestures, and accessibility remain
+                usable.
+              </li>
+              <li>Direct, Relay, SSH-hosted, offline, resume, removal, and host switching pass.</li>
+              <li>Native recovery works after missing assets or WebView process termination.</li>
+              <li>The team accepts version-specific UI differences between paired desktops.</li>
+            </ul>
+
+            <div class="callout">
+              <strong>Decision rule:</strong> choose Option B only when every gate passes. Otherwise
+              choose Option A. A failed App Review or security gate is an architecture constraint,
+              not an implementation detail.
+            </div>
+          </section>
+
+          <section id="references">
+            <p class="eyebrow">References</p>
+            <h2>Primary specifications and policies</h2>
+            <ul>
+              <li>
+                <a href="https://developer.apple.com/app-store/review/guidelines/"
+                  >Apple App Review Guidelines 2.1, 2.5.2, 4.2, 4.2.7, and 4.7.2</a
+                >
+              </li>
+              <li>
+                <a href="https://webkit.org/blog/10882/app-bound-domains/"
+                  >WebKit App-Bound Domains</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://developer.android.com/privacy-and-security/risks/insecure-webview-native-bridges"
+                  >Android WebView native-bridge security</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://developer.android.com/privacy-and-security/risks/webview-unsafe-file-inclusion"
+                  >Android safe WebView local content guidance</a
+                >
+              </li>
+              <li>
+                <a
+                  href="https://github.com/react-native-webview/react-native-webview/blob/master/docs/Reference.md"
+                  >React Native WebView reference</a
+                >
+              </li>
+              <li>
+                <a href="https://docs.expo.dev/technical-specs/expo-updates-1/"
+                  >Expo Updates Protocol, directives, and code signing</a
+                >
+              </li>
+              <li>
+                <a href="https://docs.expo.dev/eas-update/rollbacks/">Expo rollback behavior</a>
+              </li>
+              <li>
+                <a href="https://docs.expo.dev/versions/latest/config/app/#codesigningcertificate"
+                  >Expo update code-signing configuration</a
+                >
+              </li>
+              <li>
+                <a href="https://cloud.google.com/kms/docs/algorithms#rsa_signing_algorithms"
+                  >Cloud KMS RSA signing algorithms</a
+                >
+              </li>
+              <li><a href="https://expo.dev/pricing">Expo plan pricing</a></li>
+              <li>
+                <a href="https://docs.signpath.io/editions-explained#hash-based-signing"
+                  >SignPath editions and hash signing</a
+                >
+              </li>
+              <li>
+                <a href="https://github.com/expo/custom-expo-updates-server"
+                  >Expo custom update server demonstration</a
+                >
+              </li>
+            </ul>
+          </section>
+        </main>
+      </div>
+
+      <footer>
+        Planning document for the Orca mobile companion app. No mobile rearchitecture is authorized
+        by this document. Revalidate policy, pricing, platform behavior, and threat assumptions
+        before implementation.
+      </footer>
+    </div>
+  </body>
+</html>

@@ -181,7 +181,7 @@ function createMobileClient(authority: Authority) {
 
 function readMobileViewSettingsHookSource(): string {
   return readFileSync(
-    join(__dirname, '../../../../mobile/src/host-screen/use-host-view-settings.ts'),
+    join(__dirname, '../../../../mobile/src/host-screen/use-hybrid-host-screen-settings.ts'),
     'utf-8'
   )
 }

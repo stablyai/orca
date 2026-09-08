@@ -4,6 +4,19 @@ import type { MobileFilePreviewSource } from './mobile-file-preview-request'
 export function previewSourceFromRoute(
   params: MobileFilePreviewRouteParams
 ): MobileFilePreviewSource | null {
+  if (params.source === 'webArtifact') {
+    if (!params.terminal || !params.pathText || !params.previewKind || !params.name) {
+      return null
+    }
+    return {
+      source: 'webArtifact',
+      worktreeId: params.worktreeId,
+      tabId: params.terminal,
+      pathText: params.pathText,
+      displayName: params.name,
+      previewKind: params.previewKind
+    }
+  }
   if (params.source === 'terminalArtifact') {
     if (!params.absolutePath || !params.grantId) {
       return null
@@ -37,6 +50,9 @@ export function sourceKeyForPreview(source: MobileFilePreviewSource | null): str
   if (!source) {
     return null
   }
+  if (source.source === 'webArtifact') {
+    return JSON.stringify(source)
+  }
   if (source.source !== 'terminalArtifact') {
     return JSON.stringify(['worktree', source.worktreeId, source.relativePath])
   }
@@ -45,4 +61,24 @@ export function sourceKeyForPreview(source: MobileFilePreviewSource | null): str
     key.push(source.nativeChatContext.tabId, source.nativeChatContext.sessionId)
   }
   return JSON.stringify(key)
+}
+
+export function sourceRevisionForPreview(source: MobileFilePreviewSource | null): string | null {
+  if (!source) {
+    return null
+  }
+  if (source.source === 'webArtifact') {
+    return sourceKeyForPreview(source)
+  }
+  return source.source === 'terminalArtifact'
+    ? JSON.stringify([
+        'terminal',
+        source.worktreeId,
+        source.absolutePath,
+        source.grantId,
+        source.terminalHandle ?? '',
+        source.pathText ?? '',
+        source.cwd ?? ''
+      ])
+    : JSON.stringify(['worktree', source.worktreeId, source.relativePath])
 }

@@ -1,7 +1,6 @@
 import { useEffect, useCallback } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
-import { triggerError } from '../platform/haptics'
 import {
   appendBufferedDictation,
   routeDictationTranscript
@@ -17,6 +16,7 @@ import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-erro
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
+import type { RpcClient } from '../transport/rpc-client'
 
 export function useMobileSessionNativeChatDictation(
   scope: MobileSessionFeedbackCapabilitiesModel,
@@ -43,14 +43,25 @@ export function useMobileSessionNativeChatDictation(
     canSend,
     liveInputEnabled,
     showToast,
-    resetLiveInputFocus
+    resetLiveInputFocus,
+    sessionChatDraftOperations,
+    sessionChatPendingDeliveryOperations,
+    sessionDictationOperations,
+    sessionNativeChatOperations,
+    workspaceTransportState,
+    triggerError
   } = scope
   const nativeChatScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
   const nativeChatSendError = useMobileNativeChatSendError({
     scopeKey: nativeChatScopeKey,
     showToast
   })
-  const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(client, worktreeId)
+  const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(
+    sessionNativeChatOperations,
+    worktreeId
+  )
+  const nativeChatTransportConnected =
+    connState === 'connected' && workspaceTransportState === 'available'
   const {
     ready: nativeChatInputLeaseReady,
     readyRef: nativeChatInputLeaseReadyRef,
@@ -59,10 +70,14 @@ export function useMobileSessionNativeChatDictation(
     clear: clearNativeChatInputLease
   } = useMobileNativeChatInputLease({
     activeHandle,
-    connected: connState === 'connected'
+    connected: nativeChatTransportConnected
   })
   const nativeChatController = useMobileNativeChatController({
+    operations: sessionNativeChatOperations,
     client,
+    draftOperations: sessionChatDraftOperations,
+    pendingDeliveryOperations: sessionChatPendingDeliveryOperations,
+    connected: nativeChatTransportConnected,
     hostId,
     worktreeId,
     activeSessionTab,
@@ -71,7 +86,6 @@ export function useMobileSessionNativeChatDictation(
     deviceTokenRef,
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
-    connState,
     onSendError: nativeChatSendError.show,
     onSendResolved: nativeChatSendError.clear
   })
@@ -91,6 +105,7 @@ export function useMobileSessionNativeChatDictation(
 
   const dictation = useMobileDictation({
     client,
+    operations: sessionDictationOperations,
     enabled: canSend,
     onTranscript: (text) => {
       // Why: dictation belongs to the visible composer — native chat consumes it locally, terminal mode keeps live-input routing.
@@ -130,10 +145,8 @@ export function useMobileSessionNativeChatDictation(
     },
     onError: (err) => {
       dictationRouteContextRef.current = null
-      // Dictation not set up on desktop → open the setup sheet instead of a dead-end toast.
       if (isDictationSetupRequiredError(err.message)) {
-        setShowDictationSetup(true)
-        return
+        return setShowDictationSetup(true)
       }
       triggerError()
       showToast(err.message)
@@ -149,8 +162,12 @@ export function useMobileSessionNativeChatDictation(
       if (dictationRouteContextRef.current === routeContext) {
         dictationRouteContextRef.current = null
       }
+      const message = err instanceof Error ? err.message : String(err)
+      if (isDictationSetupRequiredError(message)) {
+        return setShowDictationSetup(true)
+      }
       triggerError()
-      showToast(err instanceof Error ? err.message : String(err))
+      showToast(message)
     })
   }, [activeHandle, dictation, liveInputTerminalHandles, triggerError, showToast])
 
@@ -189,16 +206,18 @@ export function useMobileSessionNativeChatDictation(
   }, [cancelDictation, dictation])
 
   const refreshDictationMode = useCallback(async () => {
-    if (!client) {
+    if (!client && !sessionDictationOperations) {
       return
     }
     try {
-      const setup = await fetchDictationSetup(client)
+      const setup = sessionDictationOperations
+        ? await sessionDictationOperations.loadSetup()
+        : await fetchDictationSetup(client as RpcClient)
       setDictationMode(setup.dictationMode)
     } catch {
       // Non-fatal: fall back to the default toggle behavior.
     }
-  }, [client])
+  }, [client, sessionDictationOperations])
 
   // Re-read on focus so a Settings ▸ Voice dictation-mode change is reflected on return.
   useFocusEffect(

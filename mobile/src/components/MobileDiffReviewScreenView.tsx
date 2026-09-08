@@ -124,6 +124,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               gitStatus={gitStatus}
               headSha={controller.prSidebarHeadSha}
               bottomInset={insets.bottom}
+              shellOperations={controller.device}
             />
           </View>
         ) : null}
@@ -144,6 +145,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             gitBranch={controller.prSidebarBranch}
             gitStatus={gitStatus}
             headSha={controller.prSidebarHeadSha}
+            shellOperations={controller.device}
           />
         </RightDrawer>
       ) : null}

@@ -1,9 +1,7 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
-import * as Clipboard from 'expo-clipboard'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { triggerSuccess } from '../platform/haptics'
 import { formatDiffComments, formatMobileDiffReviewPrompt } from './mobile-diff-comments'
 import { clearSentMobileDiffComments, markMobileDiffCommentsSent } from './mobile-diff-comment-edit'
 import {
@@ -13,6 +11,7 @@ import {
 } from './mobile-diff-review-rpc'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
+import type { HostDiffReviewDeviceOperations } from './host-diff-review-binding'
 
 type SendActionsInput = {
   client: RpcClient | null
@@ -25,6 +24,7 @@ type SendActionsInput = {
     comments: DiffComment[],
     reviewState: MobileDiffReviewState
   ) => Promise<void>
+  device: HostDiffReviewDeviceOperations
 }
 
 export function useMobileDiffReviewSendActions(input: SendActionsInput) {
@@ -35,17 +35,18 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     screenState,
     setActionError,
     setSendSheet,
-    saveCommentsAndReviewState
+    saveCommentsAndReviewState,
+    device
   } = input
 
   const copyNotes = useCallback(async () => {
     if (screenState.kind !== 'ready' || screenState.comments.length === 0) {
       return
     }
-    await Clipboard.setStringAsync(formatDiffComments(screenState.comments))
-    triggerSuccess()
+    await device.writeClipboard(formatDiffComments(screenState.comments))
+    device.success()
     setActionError('Review notes copied')
-  }, [screenState, setActionError])
+  }, [device, screenState, setActionError])
 
   const clearSentNotes = useCallback(async () => {
     if (screenState.kind !== 'ready') {
@@ -92,11 +93,11 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         throw new Error('Terminal input is locked')
       }
       await markNotesSent(comments)
-      triggerSuccess()
+      device.success()
       setActionError('Review notes sent')
       setSendSheet(null)
     },
-    [client, connState, markNotesSent, setActionError, setSendSheet]
+    [client, connState, device, markNotesSent, setActionError, setSendSheet]
   )
 
   const createTerminalAndSend = useCallback(

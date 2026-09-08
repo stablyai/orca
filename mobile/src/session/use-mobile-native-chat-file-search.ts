@@ -1,41 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import { rankSuggestions } from './mobile-native-chat-autocomplete'
+import type {
+  HostSessionNativeChatOperations,
+  HostSessionNativeChatTarget
+} from './host-session-native-chat-operations'
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
-const FILE_SEARCH_RESULT_LIMIT = 16
 const FILE_SEARCH_QUERY_CACHE_LIMIT = 20
-
-function extractPaths(result: unknown): string[] {
-  const files = (result as { files?: Array<{ relativePath?: string }> }).files ?? []
-  return files
-    .map((file) => file.relativePath ?? '')
-    .filter((path): path is string => path.length > 0)
-}
+const FILE_SEARCH_RESULT_LIMIT = 16
 
 /** Debounces current-host path searches, bounds the mobile result/cache, and
  *  falls back to the legacy one-time full list when paired to an older host. */
 export function useMobileNativeChatFileSearch(args: {
-  client: RpcClient | null
-  worktreeId: string
+  operations: HostSessionNativeChatOperations | null
+  target: HostSessionNativeChatTarget | null
 }): { nativeChatFilePaths: string[]; loadNativeChatFiles: (query: string) => void } {
-  const { client, worktreeId } = args
+  const { operations, target } = args
   const [nativeChatFilePaths, setNativeChatFilePaths] = useState<string[]>([])
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sequenceRef = useRef(0)
-  const generationRef = useRef(0)
   const queryCacheRef = useRef(new Map<string, string[]>())
-  const legacyPathsRef = useRef<string[] | null>(null)
-  const legacyLoadRef = useRef<Promise<string[] | null> | null>(null)
-  const searchSupportedRef = useRef<boolean | null>(null)
 
   useEffect(() => {
     sequenceRef.current++
-    generationRef.current++
     queryCacheRef.current.clear()
-    legacyPathsRef.current = null
-    legacyLoadRef.current = null
-    searchSupportedRef.current = null
     setNativeChatFilePaths([])
     return () => {
       if (timerRef.current) {
@@ -43,11 +30,11 @@ export function useMobileNativeChatFileSearch(args: {
         timerRef.current = null
       }
     }
-  }, [client, worktreeId])
+  }, [operations, target?.workspaceId, target?.sessionId])
 
   const loadNativeChatFiles = useCallback(
     (query: string) => {
-      if (!client) {
+      if (!operations || !target) {
         return
       }
       const normalizedQuery = query.trim().toLowerCase().slice(0, 256)
@@ -67,7 +54,6 @@ export function useMobileNativeChatFileSearch(args: {
         clearTimeout(timerRef.current)
       }
       const sequence = ++sequenceRef.current
-      const generation = generationRef.current
       setNativeChatFilePaths([])
       timerRef.current = setTimeout(() => {
         timerRef.current = null
@@ -85,61 +71,13 @@ export function useMobileNativeChatFileSearch(args: {
           }
           setNativeChatFilePaths(paths)
         }
-        const loadLegacyPaths = async (): Promise<void> => {
-          if (!legacyPathsRef.current) {
-            if (!legacyLoadRef.current) {
-              const request = client
-                .sendRequest('files.list', { worktree: `id:${worktreeId}` })
-                .then((response) => {
-                  if (!response.ok || generationRef.current !== generation) {
-                    return null
-                  }
-                  const paths = extractPaths(response.result)
-                  legacyPathsRef.current = paths
-                  return paths
-                })
-                .finally(() => {
-                  if (legacyLoadRef.current === request && !legacyPathsRef.current) {
-                    legacyLoadRef.current = null
-                  }
-                })
-              // Why: older hosts expose only the full inventory RPC; queries that
-              // overlap its slow local/SSH read must share one request.
-              legacyLoadRef.current = request
-            }
-            const paths = await legacyLoadRef.current
-            if (!paths) {
-              return
-            }
-          }
-          const legacyPaths = legacyPathsRef.current
-          if (legacyPaths) {
-            applyPaths(rankSuggestions(legacyPaths, normalizedQuery, FILE_SEARCH_RESULT_LIMIT))
-          }
-        }
-        void (async () => {
-          if (searchSupportedRef.current === false) {
-            await loadLegacyPaths()
-            return
-          }
-          const response = await client.sendRequest('files.searchPaths', {
-            worktree: `id:${worktreeId}`,
-            query: normalizedQuery,
-            limit: FILE_SEARCH_RESULT_LIMIT
-          })
-          if (response.ok) {
-            searchSupportedRef.current = true
-            applyPaths(extractPaths(response.result))
-            return
-          }
-          if (response.error.code === 'method_not_found') {
-            searchSupportedRef.current = false
-            await loadLegacyPaths()
-          }
-        })().catch(() => {})
+        void operations
+          .searchFiles(target, normalizedQuery)
+          .then((paths) => applyPaths(paths.slice(0, FILE_SEARCH_RESULT_LIMIT)))
+          .catch(() => {})
       }, FILE_SEARCH_DEBOUNCE_MS)
     },
-    [client, worktreeId]
+    [operations, target]
   )
 
   return { nativeChatFilePaths, loadNativeChatFiles }

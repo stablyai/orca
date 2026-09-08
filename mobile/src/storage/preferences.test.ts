@@ -483,6 +483,13 @@ describe('terminal link open mode preference', () => {
     await expect(loadTerminalLinkOpenMode()).resolves.toBe('orca-browser')
   })
 
+  it('can inherit the native mode before a hosted preference is saved', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(loadTerminalLinkOpenMode('phone-browser')).resolves.toBe('phone-browser')
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('orca-browser')
+    await expect(loadTerminalLinkOpenMode('phone-browser')).resolves.toBe('orca-browser')
+  })
+
   it('persists the selected mode', async () => {
     await saveTerminalLinkOpenMode('phone-browser')
 

@@ -96,6 +96,25 @@ describe('gh exec deadline', () => {
     expect(options.shell).toBe(false)
   })
 
+  it('passes bounded JSON input to gh over stdin', async () => {
+    const child = mockChild()
+    spawnMock.mockImplementation(() => {
+      queueMicrotask(() => settleChild(child, '{"id":1}'))
+      return child
+    })
+
+    await ghExecFileAsync(
+      ['api', '-X', 'POST', 'repos/acme/orca/pulls/1/reviews', '--input', '-'],
+      {
+        cwd: '/repo',
+        timeout: 15_000,
+        stdin: '{"event":"APPROVE"}'
+      }
+    )
+
+    expect(child.stdin?.end).toHaveBeenCalledWith('{"event":"APPROVE"}')
+  })
+
   it('fails rather than returning a clipped answer when gh overruns maxBuffer', async () => {
     const child = mockChild()
     spawnMock.mockImplementation(() => {

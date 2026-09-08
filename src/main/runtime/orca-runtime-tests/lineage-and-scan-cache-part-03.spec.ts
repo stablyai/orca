@@ -289,6 +289,41 @@ describe('OrcaRuntimeService', () => {
     expect(reposChanged).not.toHaveBeenCalled()
   })
 
+  // A repo added while a resolved snapshot was warm stayed invisible for the whole TTL, so a
+  // worktree-scoped call landing in that window resolved nothing for the freshly added host.
+  it('notifyReposChangedForRemoteClients retires the warm resolved-worktree snapshot', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockResolvedValue([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+    const localRepo = store.getRepo(TEST_REPO_ID)!
+    const lateRepo = {
+      ...localRepo,
+      id: 'repo-registered-late',
+      path: '/remote/repo',
+      connectionId: 'ssh-late'
+    }
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([makeWorktreeInfo('/remote/worktree')])
+    }
+    registerSshGitProvider('ssh-late', provider as never)
+    let repos = [localRepo]
+    const runtime = new OrcaRuntimeService({ ...store, getRepos: () => repos } as never)
+
+    try {
+      const warm = await runtime.listManagedWorktrees()
+      expect(warm.worktrees.map((worktree) => worktree.path)).not.toContain('/remote/worktree')
+
+      repos = [localRepo, lateRepo]
+      runtime.notifyReposChangedForRemoteClients()
+
+      const afterRegistration = await runtime.listManagedWorktrees()
+      expect(afterRegistration.worktrees.map((worktree) => worktree.path)).toContain(
+        '/remote/worktree'
+      )
+    } finally {
+      unregisterSshGitProvider('ssh-late')
+    }
+  })
+
   it('persists changed worktree order once and emits targeted invalidations', () => {
     const firstId = `${TEST_REPO_ID}::/tmp/first`
     const secondId = `${TEST_REPO_ID}::/tmp/second`

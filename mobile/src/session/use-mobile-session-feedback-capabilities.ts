@@ -1,7 +1,9 @@
 import { useState, useRef, useCallback } from 'react'
 import { Animated } from 'react-native'
+import { useFocusEffect } from 'expo-router'
 import { reconcileMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
 import type { MobileSessionTerminalRuntimeModel } from './use-mobile-session-terminal-runtime'
+import type { HostSessionTabOperations } from './host-session-tab-operations'
 
 export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTerminalRuntimeModel) {
   const {
@@ -24,14 +26,34 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     connStateRef,
     activeSessionTabTypeRef,
     delayedActionTimersRef,
-    activeSessionTab
+    activeSessionTab,
+    resetLiveInputFocus,
+    sessionTabOperations,
+    quickCommandsOpenFor
   } = scope
-  const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
-  // Why: hosts without aiVault.v1 reject listSessions, so hide the header entry instead of a dead-end "update this host" panel.
-  const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
-    null
+  useFocusEffect(
+    useCallback(() => {
+      // Expo retains this route while pushed screens are visible.
+      return resetLiveInputFocus
+    }, [resetLiveInputFocus])
   )
-  const [quickCommandsSupported, setQuickCommandsSupported] = useState<boolean | null>(null)
+  const [runtimeCapabilitySnapshot, setRuntimeCapabilitySnapshot] = useState<{
+    operations: HostSessionTabOperations
+    browserScreencastSupported: boolean
+    agentSessionHistorySupported: boolean
+    quickCommandsSupported: boolean
+  } | null>(null)
+  const currentRuntimeCapabilities =
+    connState === 'connected' && runtimeCapabilitySnapshot?.operations === sessionTabOperations
+      ? runtimeCapabilitySnapshot
+      : null
+  const browserScreencastSupported = currentRuntimeCapabilities?.browserScreencastSupported ?? null
+  // Why: hosts without aiVault.v1 reject listSessions, so hide the header entry instead of a dead-end "update this host" panel.
+  const agentSessionHistorySupported =
+    currentRuntimeCapabilities?.agentSessionHistorySupported ?? null
+  const quickCommandsSupported = currentRuntimeCapabilities?.quickCommandsSupported ?? null
+  const showQuickCommands =
+    quickCommandsOpenFor !== null && quickCommandsOpenFor === sessionTabOperations
   // Why: stable callbacks (handleFileTap) read the live value via this ref, since
   // the capability probe resolves after the callbacks are created.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
@@ -110,11 +132,10 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   )
   return {
     browserScreencastSupported,
-    setBrowserScreencastSupported,
     agentSessionHistorySupported,
-    setAgentSessionHistorySupported,
     quickCommandsSupported,
-    setQuickCommandsSupported,
+    setRuntimeCapabilitySnapshot,
+    showQuickCommands,
     browserScreencastSupportedRef,
     reconciledCreateWarningState,
     createWarning,

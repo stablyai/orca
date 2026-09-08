@@ -1,10 +1,10 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
-import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
 import { mobileReviewCountLabel } from './mobile-diff-review-screen-model'
+import type { HostDiffReviewDeviceOperations } from './host-diff-review-binding'
 
 type GitActionsInput = {
   client: RpcClient | null
@@ -14,11 +14,20 @@ type GitActionsInput = {
   setActionError: Dispatch<SetStateAction<string | null>>
   setBusyAction: Dispatch<SetStateAction<string | null>>
   loadReviewData: () => Promise<void>
+  device: HostDiffReviewDeviceOperations
 }
 
 export function useMobileDiffReviewGitActions(input: GitActionsInput) {
-  const { client, connState, worktreeId, queue, setActionError, setBusyAction, loadReviewData } =
-    input
+  const {
+    client,
+    connState,
+    worktreeId,
+    queue,
+    setActionError,
+    setBusyAction,
+    loadReviewData,
+    device
+  } = input
 
   const runGitMutation = useCallback(
     async (method: GitMutationMethod, item: MobileDiffReviewQueueItem) => {
@@ -36,16 +45,16 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
         if (!response.ok) {
           throw new Error(response.error?.message || 'Source control action failed')
         }
-        triggerSuccess()
+        device.success()
         await loadReviewData()
       } catch (err) {
-        triggerError()
+        device.error()
         setActionError(err instanceof Error ? err.message : 'Source control action failed')
       } finally {
         setBusyAction(null)
       }
     },
-    [client, connState, loadReviewData, setActionError, setBusyAction, worktreeId]
+    [client, connState, device, loadReviewData, setActionError, setBusyAction, worktreeId]
   )
 
   const stageReviewedFiles = useCallback(async () => {
@@ -75,14 +84,14 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
       }
     }
     setBusyAction(null)
-    triggerSuccess()
+    device.success()
     setActionError(
       failed > 0
         ? `${staged} staged, ${failed} failed`
         : `${mobileReviewCountLabel(staged, 'reviewed file', 'reviewed files')} staged`
     )
     await loadReviewData()
-  }, [client, connState, loadReviewData, queue, setActionError, setBusyAction, worktreeId])
+  }, [client, connState, device, loadReviewData, queue, setActionError, setBusyAction, worktreeId])
 
   return { runGitMutation, stageReviewedFiles }
 }

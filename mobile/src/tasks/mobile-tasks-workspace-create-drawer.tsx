@@ -19,7 +19,7 @@ import {
   TASK_SECONDARY_DRAWER_Z_INDEX,
   getRepoBadgeColor,
   workspaceAgentIconId
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 import { styles } from './mobile-tasks-legacy-styles'
 
 export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresentationModel) {

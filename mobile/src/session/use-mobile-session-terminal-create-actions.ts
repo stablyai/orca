@@ -1,16 +1,15 @@
-import {
-  buildMobileQuickCommandLaunch,
-  type MobileQuickCommandLaunch
-} from '../terminal/quick-commands'
+import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
-import { triggerSuccess, triggerError } from '../platform/haptics'
-import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { Terminal, TerminalCreateResult } from './mobile-session-route-types'
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import {
+  buildTerminalSendParams,
+  TERMINAL_INPUT_SEND_OPTIONS
+} from '../terminal/terminal-send-request'
+import { createSessionQuickCommandLauncher } from './session-quick-command-launch'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
@@ -41,7 +40,12 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     showToast,
     unsubscribeTerminal,
     subscribeToTerminal,
-    fetchSessionTabs
+    fetchSessionTabs,
+    applySessionTabs,
+    sessionTabOperations,
+    pendingQuickCommandInputRef,
+    triggerError,
+    triggerSuccess
   } = scope
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
@@ -50,7 +54,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       errorToast?: string
     }
   ) {
-    if (!client || creatingTerminalRef.current) {
+    const hostedAdapterCreate = !client && sessionTabOperations && !options
+    if ((!client && !hostedAdapterCreate) || creatingTerminalRef.current) {
       return
     }
     creatingTerminalRef.current = true
@@ -64,6 +69,17 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       .slice(2, 10)}`
 
     try {
+      if (hostedAdapterCreate) {
+        applySessionTabs(
+          await (agent
+            ? sessionTabOperations.createAgent(worktreeId, agent)
+            : sessionTabOperations.createBlank(worktreeId))
+        )
+        return
+      }
+      if (!client) {
+        return
+      }
       // Bare structured-provider launches follow host createSupport; prompted launches keep their startup semantics.
       if (isAgentSessionHandleProvider(agent) && options === undefined) {
         const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)
@@ -161,7 +177,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
                   text: options.initialPrompt,
                   enter: options.enter !== false,
                   deviceToken: deviceTokenRef.current
-                })
+                }),
+                TERMINAL_INPUT_SEND_OPTIONS
               )
               .then((sendResponse) => {
                 if (!sendResponse.ok) {
@@ -219,32 +236,22 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     }
   }
 
-  // Quick commands spawn a fresh terminal tab, mirroring desktop's
-  // run-quick-command-in-new-tab: agent prompts and runnable terminal commands
-  // use the host's shell-ready startup path; insert-only commands stay drafts.
-  function launchQuickCommand(command: TerminalQuickCommand): boolean {
-    if (
-      !client ||
-      connState !== 'connected' ||
-      creatingTerminalRef.current ||
-      creatingBrowser ||
-      creatingMarkdown
-    ) {
-      return false
-    }
-    const launch = buildMobileQuickCommandLaunch(command)
-    if (!launch) {
-      triggerError()
-      showToast('Edit this quick command before running it', 1800)
-      return false
-    }
-    const label = command.label.trim() || 'Quick command'
-    void handleCreateTerminal(launch.agent, {
-      ...launch.options,
-      errorToast: `Couldn't run ${label}`
-    })
-    return true
-  }
+  const launchQuickCommand = createSessionQuickCommandLauncher({
+    nativeClientAvailable: Boolean(client),
+    connected: connState === 'connected',
+    creatingBrowser,
+    creatingMarkdown,
+    operations: sessionTabOperations,
+    workspaceId: worktreeId,
+    creatingRef: creatingTerminalRef,
+    pendingInputByTabId: pendingQuickCommandInputRef.current,
+    applySnapshot: applySessionTabs,
+    setCreating,
+    setCreateError,
+    showErrorFeedback: triggerError,
+    showToast,
+    launchNative: (agent, options) => void handleCreateTerminal(agent, options)
+  })
   return {
     handleCreateTerminal,
     launchQuickCommand

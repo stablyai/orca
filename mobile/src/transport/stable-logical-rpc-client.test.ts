@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import type { ConnectionState, RpcResponse } from './types'
-import type { RpcClient } from './rpc-client'
+import type { RpcClient, SendRequestOptions } from './rpc-client'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import {
   createStableLogicalRpcClient,
@@ -12,7 +12,7 @@ import {
 class FakeSession implements RpcClient {
   readonly sendRequest =
     vi.fn<
-      (method: string, params?: unknown, options?: { timeoutMs?: number }) => Promise<RpcResponse>
+      (method: string, params?: unknown, options?: SendRequestOptions) => Promise<RpcResponse>
     >()
   readonly subscribe = vi.fn<RpcClient['subscribe']>()
   readonly updateTerminalSubscriptionViewport =
@@ -163,6 +163,24 @@ describe('stable logical RPC client', () => {
       undefined
     )
     await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
+  })
+
+  it('prevents a retired physical request from writing after logical cutover', async () => {
+    const initial = new FakeSession('connected')
+    const replacement = new FakeSession('connected')
+    const waiting = deferred<RpcResponse>()
+    initial.sendRequest.mockReturnValue(waiting.promise)
+    const client = createStableLogicalRpcClient(initial, 'lan')
+    const beforeSend = vi.fn()
+    const pending = client.sendRequest('future.write', {}, { beforeSend })
+    const rejection = expect(pending).rejects.toBeInstanceOf(LogicalClientCutoverError)
+    await client.migrateTo(replacement, 'relay')
+    await rejection
+    const options = initial.sendRequest.mock.calls[0]![2]!
+    expect(() => options.beforeSend?.()).toThrow(LogicalClientCutoverError)
+    expect(beforeSend).not.toHaveBeenCalled()
+    waiting.resolve(success('late'))
+    client.close()
   })
 
   it('preserves delivery ambiguity without replaying a mutation after relay replacement', async () => {

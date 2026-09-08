@@ -8,6 +8,11 @@ import {
 } from '../navigation/host-stack-navigation'
 
 const homeSource = readFileSync(new URL('../home/MobileHomeScreen.tsx', import.meta.url), 'utf8')
+const resumeSource = [
+  readFileSync(new URL('../home/MobileHomeListFooter.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('../home/MobileHomeResumeCard.tsx', import.meta.url), 'utf8'),
+  readFileSync(new URL('../home/MobileHomeAccountUsageCards.tsx', import.meta.url), 'utf8')
+].join('\n')
 
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
@@ -96,19 +101,26 @@ describe('mobile session route', () => {
     })
   })
 
-  it('routes the home Resume card through the cold-navigator-safe transition', () => {
-    expect(homeSource).toContain('onOpenResume={openResume}')
+  it('routes the home Resume card through the coordinated host-target opener', () => {
+    expect(resumeSource).toContain('Resume')
+    expect(resumeSource).toContain('onOpenResume')
 
-    // The tap handler itself must go through the coordinated transition; its only
-    // direct push is the shallow noticed host-index route for a proven-missing target.
     const handlerStart = homeSource.indexOf('const openResume = useCallback(')
-    const handlerEnd = homeSource.indexOf('[data.router, openMobileSession]', handlerStart)
+    const handlerEnd = homeSource.indexOf('[openMobileHostTarget]', handlerStart)
     expect(handlerStart).toBeGreaterThanOrEqual(0)
     expect(handlerEnd).toBeGreaterThan(handlerStart)
 
     const openResume = homeSource.slice(handlerStart, handlerEnd)
-    expect(openResume).toContain('openMobileSession({')
-    expect(openResume.match(/router\.push\(/g)).toHaveLength(1)
-    expect(openResume).toContain('data.router.push(hostRouteWithNotice(')
+    // Why the opener and not a bare push: on a native build it drives the host stack through
+    // the mount-then-replace coordinator, which keeps the session screen from mounting blank.
+    expect(homeSource).toContain(
+      "import { useOpenMobileHostTarget } from '../mobile-web/use-open-mobile-host-target'"
+    )
+    expect(openResume).toContain(
+      "openMobileHostTarget(card.hostId, { kind: 'workspaceList', notice: 'worktree-missing' })"
+    )
+    expect(openResume).toContain("kind: 'session',")
+    expect(openResume).toContain('name: card.worktree.displayName || card.worktree.repo')
+    expect(openResume).not.toContain('router.push(')
   })
 })

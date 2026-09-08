@@ -4,6 +4,7 @@ import type {
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
 import type { ResolveSessionFileOptions } from './session-file-resolver'
+import type { TranscriptFileSource } from './transcript-file-source'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
@@ -30,6 +31,7 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   ) => void
   initialLimit?: number
   filePath?: string
+  fileSource?: TranscriptFileSource
   debounceMs?: number
   /** Test-only override for the production resolve-poll backoff. */
   resolvePollIntervalMs?: number

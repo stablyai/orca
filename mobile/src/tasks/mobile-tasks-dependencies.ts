@@ -1,9 +1,8 @@
 export { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-export type { ReactNode } from 'react'
+export type { Dispatch, ReactNode, SetStateAction } from 'react'
 export {
   ActivityIndicator,
   FlatList,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -13,8 +12,7 @@ export {
   View
 } from 'react-native'
 export { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-export * as Clipboard from 'expo-clipboard'
-export { useLocalSearchParams, useRouter } from 'expo-router'
+export { useRouter } from 'expo-router'
 export {
   AlertTriangle,
   Check,
@@ -32,15 +30,9 @@ export {
   Send,
   X
 } from 'lucide-react-native'
-export type { RpcClient } from '../transport/rpc-client'
-export type { RpcSuccess } from '../transport/types'
-export { useHostClient } from '../transport/client-context'
-export {
-  useLastConnectedAt,
-  useRelayRecoveryStatus,
-  useReconnectAttempt
-} from '../transport/client-context-connection-metrics'
 export { classifyConnection } from '../transport/connection-health'
+export type { ConnectionState } from '../transport/types'
+export { mobileLogErrorKind } from '../diagnostics/mobile-log-error-kind'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
 export { BottomDrawer } from '../components/BottomDrawer'
@@ -62,13 +54,12 @@ export {
 export { buildGitHubCheckSummary } from './github-check-summary'
 export { buildGitLabCheckSummary } from './gitlab-check-summary'
 export {
+  getHostedChecksLabel,
   getHostedMergeLabel,
   getHostedReviewLabel,
-  getHostedReviewSignalTone,
-  getHostedChecksLabel
+  getHostedReviewSignalTone
 } from './mobile-hosted-check-status'
-export { buildTaskWorkspaceCreateParams } from './workspace-create-params'
-export { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
+export type { MobileComposerCreateSelection } from './mobile-composer-source-types'
 export {
   filterWorkspaceAgents,
   isWorkspaceAgentEnabled,
@@ -87,7 +78,6 @@ export {
 export type { GitHubRepoSlugCacheEntry } from './github-project-repo-match'
 export { parseGitHubProjectInput as parseProjectInput } from './github-project-reference'
 export type {
-  GitHubProjectOwnerType,
   GitHubProjectPartialFailure,
   GitHubProjectRef,
   GitHubProjectSettings,
@@ -104,15 +94,49 @@ export type {
 } from './github-work-item-source-errors'
 export { parseSparsePresetDirectories } from './sparse-preset-draft'
 export { deriveWorkspaceSshGate, workspaceSshStatusLabel } from './workspace-ssh-gate'
-export { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 export {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
-  trustedOrcaHooksWithSetupApproval,
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
 export { colors, radii, spacing, typography } from '../theme/mobile-theme'
-export { triggerMediumImpact } from '../platform/haptics'
+export type { HostTaskDeviceOperations } from './host-task-device-operations'
+export type {
+  HostTaskBootstrap,
+  HostTaskLinearContext,
+  HostTaskReadOperations,
+  HostTaskRepository
+} from './host-task-read-operations'
+export type { HostTaskPreferenceOperations } from './host-task-preference-operations'
+export type { HostTaskListOperations } from './host-task-list-operations'
+export type { HostTaskDetailOperations } from './host-task-detail-operations'
+export type {
+  HostTaskGitHubItemTarget,
+  HostTaskGitLabItemTarget,
+  HostTaskItemMutationOperations,
+  HostTaskItemMutationTarget
+} from './host-task-item-mutation-operations'
+export type { HostTaskItemReviewOperations } from './host-task-item-review-operations'
+export type { HostTaskItemFileOperations } from './host-task-item-file-operations'
+export type { HostTaskLinearOperations, HostTaskLinearTarget } from './host-task-linear-operations'
+export type { HostTaskProviderWriteOperations } from './host-task-provider-write-operations'
+export type { HostTaskProjectReadOperations } from './host-task-project-read-operations'
+export type {
+  HostTaskProjectItemTarget,
+  HostTaskProjectMutationOperations
+} from './host-task-project-mutation-operations'
+export type { HostTaskProjectFileOperations } from './host-task-project-file-operations'
+export type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
+export {
+  groupRows,
+  isIterationCurrent,
+  sortRows
+} from '../../../src/shared/github/project-group-sort'
+export type { ProjectGroup } from '../../../src/shared/github/project-group-sort'
+export type {
+  GitHubProjectSortDirection,
+  GitHubProjectTable as SharedGitHubProjectTable
+} from '../../../src/shared/github/project-types'
 export {
   CROSS_REPO_DISPLAY_LIMIT,
   isGitHubWorkItemsSshRemoteRequiredError,
@@ -127,22 +151,19 @@ export type { TaskProvider } from './mobile-task-providers'
 export { hasSettledHostRepoList } from './host-repo-list'
 export { useHostRepoList } from './use-host-repo-list'
 export { isHostedTaskRepo, reconcileRepoSelection } from './hosted-repo-selection'
-export { extractLinearIssueReadItems } from './linear-mobile-issue-read'
 export type { LinearMobileIssue } from './linear-mobile-issue-read'
 export { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from './mobile-tui-agents'
 export { resolveComposerBranchSelection } from './mobile-composer-branch-selection'
-export {
-  clearMobileTaskCopyFeedbackTimer,
-  scheduleMobileTaskCopyFeedbackReset
-} from './mobile-task-copy-feedback-timer'
-export type { BaseRefSearchResult } from '../../../src/shared/repo-types'
+export { clearMobileTaskCopyFeedbackTimer } from './mobile-task-copy-feedback-timer'
+export { useMobileTaskCopyFeedback } from './use-mobile-task-copy-feedback'
 export type {
   GitHubOwnerRepo,
   ProviderCheckSummary
 } from '../../../src/shared/github/pull-request-types'
 export type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-export type { SparsePreset } from '../../../src/shared/worktree/create-types'
+export type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 export type { TuiAgent } from '../../../src/shared/tui-agent'
+export type { SparsePreset } from '../../../src/shared/worktree/create-types'
 export type { SshConnectionState } from '../../../src/shared/ssh-types'
 export type { HostedReviewDecision } from '../../../src/shared/hosted-review'
 export {

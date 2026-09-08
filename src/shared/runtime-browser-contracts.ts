@@ -40,12 +40,21 @@ export type BrowserScreencastDialogResult = { type: 'dialog'; dialogType: string
 export type BrowserScreencastDialogClosedResult = { type: 'dialogClosed' }
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
+/** Rule 3, ungated: every decoder routes screencast results through an if/else-if chain with no
+ * else, so a client that predates this member ignores it. The host emits it, so the union has to
+ * name it or an exhaustive consumer compiles against a shape the wire does not have. */
+export type BrowserScreencastNavigationResult = {
+  type: 'navigation'
+  tab: { url: string; title: string; canGoBack: boolean; canGoForward: boolean }
+}
+
 export type BrowserScreencastResult =
   | BrowserScreencastReadyResult
   | BrowserScreencastEndResult
   | BrowserScreencastDialogResult
   | BrowserScreencastDialogClosedResult
   | BrowserScreencastErrorResult
+  | BrowserScreencastNavigationResult
 
 export type BrowserEvalResult = { result: string; origin: string }
 

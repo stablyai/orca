@@ -7,6 +7,8 @@ import {
   TERMINAL_HTTP_URL_REGEX_SOURCE,
   URL_TAP_WEBVIEW_JS,
   findFileUrlAtColumn,
+  findTerminalFileUrls,
+  findTerminalHttpUrls,
   findUrlAtColumn,
   resolveTerminalOscFileTap,
   resolveTerminalFileUrlTap
@@ -136,6 +138,15 @@ describe.each([
 })
 
 describe('findUrlAtColumn', () => {
+  it('returns bounded ranges for direct xterm link providers', () => {
+    expect(findTerminalHttpUrls('see https://example.com now')).toEqual([
+      { url: 'https://example.com', startIndex: 4, endIndex: 23 }
+    ])
+    expect(findTerminalFileUrls('open file:///tmp/a.ts#L4')).toEqual([
+      { url: 'file:///tmp/a.ts#L4', startIndex: 5, endIndex: 24 }
+    ])
+  })
+
   it('returns the URL when the tapped column falls inside it', () => {
     const line = 'see https://example.com/path for details'
     const start = line.indexOf('https')

@@ -1,8 +1,5 @@
 import { useEffect } from 'react'
 import { AppState, type AppStateStatus } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
-import { triggerSelection, triggerError } from '../platform/haptics'
-import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
@@ -37,6 +34,12 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     nativeChatController,
     getActiveWorktreeConnectionId,
     refreshCanPaste,
+    sessionDeviceOperations,
+    sessionNativeChatOperations,
+    sessionTabOperations,
+    sessionTerminalOperations,
+    triggerError,
+    triggerSelection,
     activeSessionTab
   } = scope
   const handlePaste = useMobileTerminalPaste({
@@ -55,7 +58,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     onSuccess: triggerSelection,
     ptyModesRef,
     refreshCanPaste,
-    showToast
+    showToast,
+    terminalOperations: sessionTerminalOperations
   })
 
   const flushPendingLiveInputBeforeAttachmentSend = useMobileAttachmentInputLeaseGate({
@@ -78,6 +82,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     deviceTokenRef,
     nativeChatScopeKey,
     nativeChatInputLeaseReady,
+    nativeChatOperations: sessionNativeChatOperations,
+    nativeChatTargetRef: nativeChatController.nativeChatTargetRef,
     getActiveWorktreeConnectionId,
     beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,
     nativeChatBaseSend: nativeChatController.handleNativeChatSendWithOutcome,
@@ -86,21 +92,26 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     showToast,
     onNativeChatSendError: nativeChatSendError.show,
     onSuccess: triggerSelection,
-    onError: triggerError
+    onError: triggerError,
+    terminalOperations: sessionTerminalOperations
   })
 
   // Why: refresh canPaste on mount, AppState active, after paste.
   useEffect(() => {
     let mounted = true
     const refresh = () => {
-      void Promise.all([
-        Clipboard.hasStringAsync().catch(() => false),
-        Clipboard.hasImageAsync().catch(() => false)
-      ]).then(([hasString, hasImage]) => {
-        if (mounted) {
-          setCanPaste(hasString || hasImage)
-        }
-      })
+      void sessionDeviceOperations
+        ?.clipboardAvailability()
+        .then(({ hasText, hasImage }) => {
+          if (mounted) {
+            setCanPaste(hasText || hasImage)
+          }
+        })
+        .catch(() => {
+          if (mounted) {
+            setCanPaste(false)
+          }
+        })
     }
     refresh()
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
@@ -114,16 +125,17 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       mounted = false
       sub.remove()
     }
-  }, [selectModeActive])
+  }, [selectModeActive, sessionDeviceOperations])
 
   useEffect(() => {
-    const shouldLoadAgentOptions = showCreateTabDrawer || pendingDiffNotesDelivery !== null
+    const shouldLoadAgentOptions =
+      showCreateTabDrawer || (Boolean(client) && pendingDiffNotesDelivery !== null)
     if (!shouldLoadAgentOptions) {
       setCreateTabAgentLoadState('idle')
       setCreateTabAgentOptions([])
       return
     }
-    if (!client || connState !== 'connected') {
+    if (!sessionTabOperations || connState !== 'connected') {
       setCreateTabAgentLoadState('idle')
       setCreateTabAgentOptions([])
       return
@@ -134,10 +146,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     setCreateTabAgentOptions([])
 
     void (async () => {
-      const options = await loadMobileNewTabAgentOptions({
-        client,
-        worktreeId
-      })
+      const options = await sessionTabOperations.agentOptions(worktreeId)
       if (stale) {
         return
       }
@@ -153,7 +162,14 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     return () => {
       stale = true
     }
-  }, [client, connState, pendingDiffNotesDelivery, showCreateTabDrawer, worktreeId])
+  }, [
+    client,
+    connState,
+    pendingDiffNotesDelivery,
+    sessionTabOperations,
+    showCreateTabDrawer,
+    worktreeId
+  ])
   return {
     handlePaste,
     flushPendingLiveInputBeforeAttachmentSend,

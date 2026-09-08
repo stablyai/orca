@@ -1,4 +1,4 @@
-import { redactSocketEndpoint } from './socket-event-debug'
+import { redactedWebSocketEndpoint } from './socket-event-debug'
 import type { ConnectionState } from './types'
 
 type ConnectWaiter = {
@@ -48,7 +48,7 @@ export class RpcClientConnectionState {
       to: next,
       dweltMs,
       attempt: this.options.getReconnectAttempt(),
-      endpoint: redactSocketEndpoint(this.options.endpoint)
+      endpoint: redactedWebSocketEndpoint(this.options.endpoint)
     })
     if (next === 'connected') {
       this.lastConnectedAt = Date.now()

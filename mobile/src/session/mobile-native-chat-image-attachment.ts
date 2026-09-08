@@ -5,8 +5,8 @@ import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
 
 /** A picked-and-uploaded image held in the native-chat composer until submit.
- *  `path` is the host temp file pasted into the agent on send; `previewUri` is a
- *  local URI used only to render the composer thumbnail. */
+ *  `path` is a native host path or an opaque hosted reference; `previewUri` is
+ *  used only to render the composer thumbnail. */
 export type PendingNativeChatImage = {
   readonly id: string
   readonly path: string

@@ -72,14 +72,18 @@ describe('AgentExecHandler', () => {
     })
     expect(spawnMock).toHaveBeenCalledWith('agent', ['--flag', '42'], {
       cwd: '/repo',
-      env: expect.objectContaining({
-        ...process.env,
-        GIT_TERMINAL_PROMPT: '0',
-        GCM_INTERACTIVE: 'never'
-      }),
+      env: expect.any(Object),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })
+    const env = spawnMock.mock.calls[0]?.[2]?.env
+    expect(env).toEqual(
+      expect.objectContaining({
+        PATH: process.env.PATH,
+        GIT_TERMINAL_PROMPT: '0',
+        GCM_INTERACTIVE: 'never'
+      })
+    )
     expect(child.stdin.end).toHaveBeenCalledWith('PROMPT')
   })
 
@@ -111,14 +115,16 @@ describe('AgentExecHandler', () => {
     })
     expect(spawnMock).toHaveBeenCalledWith('codex', ['exec'], {
       cwd: '/repo',
-      env: expect.objectContaining({
-        ...process.env,
-        CODEX_HOME: '/managed/codex-home',
-        PATH: '/managed/bin'
-      }),
+      env: expect.any(Object),
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })
+    expect(spawnMock.mock.calls[0]?.[2]?.env).toEqual(
+      expect.objectContaining({
+        CODEX_HOME: '/managed/codex-home',
+        PATH: '/managed/bin'
+      })
+    )
   })
 
   it('consumes an unattended marker and applies the full Git guard on the relay host', async () => {

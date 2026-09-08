@@ -6,15 +6,9 @@ import {
   isSmartWorkspaceSourceQueryWithinLimit,
   type SmartNameMode
 } from '../../../src/shared/new-workspace/smart-workspace-source-results'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 import { isGitHubWorkItemsSshRemoteRequiredError } from './mobile-work-items'
 import type { MrStateFilter } from './mobile-composer-source-types'
-import {
-  searchBranches,
-  searchGitHubItems,
-  searchGitLabItems,
-  searchLinearIssues
-} from './smart-source-search-requests'
 
 export type SmartFanOutResult = {
   githubItems: GitHubWorkItem[]
@@ -49,7 +43,7 @@ function shouldSearchBranches(mode: SmartNameMode, query: string): boolean {
 }
 
 type FanOutArgs = {
-  client: RpcClient
+  operations: HostWorkspaceCreationOperations
   mode: SmartNameMode
   query: string
   repoId: string | null
@@ -71,7 +65,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     return { ...EMPTY, needsGitHubRemote: false, error: '' }
   }
   const {
-    client,
+    operations,
     mode,
     query,
     repoId,
@@ -84,17 +78,17 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
   const tasks = {
     github:
       shouldSearchGitHub(mode, githubAvailable) && repoId
-        ? searchGitHubItems(client, repoId, query)
+        ? operations.searchGitHubItems(repoId, query)
         : null,
     gitlab:
       shouldSearchGitLab(mode, gitlabAvailable) && repoId
-        ? searchGitLabItems(client, repoId, query, mrStateFilter)
+        ? operations.searchGitLabItems(repoId, query, mrStateFilter)
         : null,
     linear: shouldSearchLinear(mode, linearAvailable)
-      ? searchLinearIssues(client, query, args.linearWorkspaceId)
+      ? operations.searchLinearIssues(query, args.linearWorkspaceId)
       : null,
     branches:
-      shouldSearchBranches(mode, query) && repoId ? searchBranches(client, repoId, query) : null
+      shouldSearchBranches(mode, query) && repoId ? operations.searchBranches(repoId, query) : null
   }
   const [github, gitlab, linear, branches] = await Promise.allSettled([
     tasks.github ?? Promise.resolve<GitHubWorkItem[]>([]),

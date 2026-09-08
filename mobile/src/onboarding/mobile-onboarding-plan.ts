@@ -1,10 +1,13 @@
 import { shouldPresentNotificationOptIn } from '../notifications/notification-opt-in-gate'
 import { shouldPresentSessionViewOptIn } from '../session/session-view-opt-in-gate'
+import { mobileHostWorkspaceEntry } from '../mobile-web/mobile-web-home-navigation'
+import { MOBILE_NATIVE_BASELINE_MODE } from '../mobile-web/mobile-native-baseline-mode'
 
 export const MOBILE_ONBOARDING_STEPS = ['session-view', 'notifications'] as const
 export type MobileOnboardingStep = (typeof MOBILE_ONBOARDING_STEPS)[number]
 export type MobileOnboardingDestination =
   | '/'
+  | `/hybrid?hostId=${string}`
   | `/h/${string}`
   | {
       pathname: '/mobile-onboarding'
@@ -29,10 +32,11 @@ export async function loadMobileOnboardingSteps(): Promise<MobileOnboardingStep[
 /** Preserves a paired host while routing through outstanding decisions. */
 export function mobileOnboardingDestination(
   steps: readonly MobileOnboardingStep[],
-  hostId?: string
+  hostId?: string,
+  nativeBaselineEnabled = MOBILE_NATIVE_BASELINE_MODE
 ): MobileOnboardingDestination {
   if (steps.length === 0) {
-    return hostId ? `/h/${hostId}` : '/'
+    return hostId ? mobileHostWorkspaceEntry(hostId, nativeBaselineEnabled) : '/'
   }
   return {
     pathname: '/mobile-onboarding',

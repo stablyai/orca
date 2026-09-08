@@ -1,6 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
 import { ArrowUp, Copy } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
@@ -19,12 +18,14 @@ function Prose({
   block,
   invert,
   fontScale,
-  onOpenFile
+  onOpenFile,
+  onOpenLink
 }: {
   block: NativeChatBlock
   invert?: boolean
   fontScale: number
   onOpenFile?: (relativePath: string) => void
+  onOpenLink?: (url: string) => void
 }): React.JSX.Element | null {
   if (isTextBlock(block)) {
     // Inverted (user) bubbles use a fixed dark-on-light text rather than the
@@ -37,7 +38,12 @@ function Prose({
       )
     }
     return (
-      <MobileMarkdown content={block.text} textScale={1.25 * fontScale} onOpenFile={onOpenFile} />
+      <MobileMarkdown
+        content={block.text}
+        textScale={1.25 * fontScale}
+        onOpenFile={onOpenFile}
+        onOpenLink={onOpenLink}
+      />
     )
   }
   if (isImageRefBlock(block)) {
@@ -103,6 +109,8 @@ function MobileNativeChatMessageImpl({
   messageIndex,
   onScrollToMessage,
   onOpenFile,
+  onOpenLink,
+  onCopyText,
   turnStatus,
   turnExpanded,
   turnKey,
@@ -119,6 +127,8 @@ function MobileNativeChatMessageImpl({
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
+  onOpenLink?: (url: string) => void
+  onCopyText?: (text: string) => Promise<unknown>
   /** This turn's status row, rendered under a user message (desktop parity). */
   turnStatus?: NativeChatTurnStatus | null
   /** Whether the turn caret has disclosed this turn's activity. */
@@ -165,12 +175,12 @@ function MobileNativeChatMessageImpl({
     !toolsExpanded
   const showToolRun = tools.length > 0 && !settledToolsHidden
 
-  const handleCopy = (): void => {
+  const handleCopy = async (): Promise<void> => {
     const text = nativeChatMessageText(message.blocks)
-    if (!text) {
+    if (!text || !onCopyText) {
       return
     }
-    void Clipboard.setStringAsync(text)
+    await onCopyText(text)
     setCopied(true)
     if (copyTimer.current) {
       clearTimeout(copyTimer.current)
@@ -182,7 +192,7 @@ function MobileNativeChatMessageImpl({
   // prose when there are no tools).
   const controls = isAgent ? (
     <AgentControls
-      onCopy={handleCopy}
+      onCopy={() => void handleCopy().catch(() => {})}
       onScrollToTop={
         onScrollToMessage && messageIndex !== undefined
           ? () => onScrollToMessage(messageIndex)
@@ -209,6 +219,7 @@ function MobileNativeChatMessageImpl({
               invert={isUser}
               fontScale={fontScale}
               onOpenFile={onOpenFile}
+              onOpenLink={onOpenLink}
             />
           ))}
           {showToolRun ? (

@@ -4,16 +4,16 @@ import {
   type DetailComment,
   type GitHubProjectRow,
   type GitHubWorkItem,
-  isSuccess,
+  projectRowMutationTarget,
+  projectRowSlugTarget,
   projectRowStatusLabel,
   projectRowType,
   splitRepositorySlug
-} from './mobile-tasks-legacy-foundation'
+} from './mobile-tasks-model'
 
 export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCreateActionsModel) {
   const {
     activeGitHubProjectHost,
-    client,
     findProjectRowRepo,
     openWorkspaceCreate,
     projectCommentDraft,
@@ -29,6 +29,7 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
     setProjectRowDetail,
     setProjectRowDetailError,
     setProjectRowItem,
+    taskProjectMutationOperations,
     tasksSupported
   } = model
   const createWorkspaceFromProjectRow = useCallback(
@@ -84,43 +85,22 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
     },
     [findProjectRowRepo, openWorkspaceCreate, tasksSupported]
   )
-
   const mutateProjectRowIssueOrPr = useCallback(
     async (
       row: GitHubProjectRow,
       updates: { title?: string; body?: string; state?: 'open' | 'closed' }
     ): Promise<void> => {
-      if (!client || projectMutating) {
+      if (!taskProjectMutationOperations || projectMutating) {
         return
       }
-      const type = projectRowType(row)
-      const slug = splitRepositorySlug(row.content.repository)
-      if (!type || !slug || !row.content.number) {
+      const target = projectRowMutationTarget(row, activeGitHubProjectHost)
+      if (!target) {
         setProjectRowDetailError('This project item cannot be edited from mobile.')
         return
       }
       setProjectMutating(true)
       try {
-        const response = await client.sendRequest(
-          type === 'issue'
-            ? 'github.project.updateIssueBySlug'
-            : 'github.project.updatePullRequestBySlug',
-          {
-            owner: slug.owner,
-            repo: slug.repo,
-            host: activeGitHubProjectHost,
-            number: row.content.number,
-            updates
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: { message?: string } }
-        if (result.ok === false) {
-          throw new Error(result.error?.message ?? 'Failed to update GitHub item')
-        }
+        await taskProjectMutationOperations.updateItem(target, updates)
         setProjectRowItem((current) => {
           if (!current || current.id !== row.id) {
             return current
@@ -170,46 +150,26 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, projectMutating]
+    [activeGitHubProjectHost, projectMutating, taskProjectMutationOperations]
   )
-
   const addProjectRowComment = useCallback(
     async (row: GitHubProjectRow): Promise<void> => {
-      if (!client || projectMutating) {
+      if (!taskProjectMutationOperations || projectMutating) {
         return
       }
-      const slug = splitRepositorySlug(row.content.repository)
+      const target = projectRowMutationTarget(row, activeGitHubProjectHost)
       const body = projectCommentDraft.trim()
-      if (!slug || !row.content.number || !body) {
+      if (!target || !body) {
         return
       }
       setProjectMutating(true)
       try {
-        const response = await client.sendRequest(
-          'github.project.addIssueCommentBySlug',
-          {
-            owner: slug.owner,
-            repo: slug.repo,
-            host: activeGitHubProjectHost,
-            number: row.content.number,
-            body
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; comment?: DetailComment }
-          | { ok: false; error?: { message?: string } }
-        if (!result.ok) {
-          throw new Error(result.error?.message ?? 'Failed to add comment')
-        }
+        const comment = await taskProjectMutationOperations.addComment(target, body)
         setProjectCommentDraft('')
-        if (result.comment) {
+        if (comment) {
           setProjectRowDetail((current) =>
             current?.provider === 'github'
-              ? { ...current, comments: [...current.comments, result.comment as DetailComment] }
+              ? { ...current, comments: [...current.comments, comment as DetailComment] }
               : current
           )
         }
@@ -219,49 +179,25 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, projectCommentDraft, projectMutating]
+    [activeGitHubProjectHost, projectCommentDraft, projectMutating, taskProjectMutationOperations]
   )
-
   const updateProjectRowComment = useCallback(
     async (row: GitHubProjectRow, comment: DetailComment): Promise<void> => {
-      if (!client || projectMutating) {
+      if (!taskProjectMutationOperations || projectMutating) {
         return
       }
-      const slug = splitRepositorySlug(row.content.repository)
+      // Why: `updateIssueCommentBySlug` addresses by repository and comment id only.
+      const target = projectRowSlugTarget(row, activeGitHubProjectHost)
       const commentId = Number(comment.id)
       const body = projectEditingCommentDraft.trim()
-      if (!slug || !Number.isInteger(commentId) || commentId <= 0 || !body) {
+      if (!target || !Number.isInteger(commentId) || commentId <= 0 || !body) {
         setProjectRowDetailError('This project comment cannot be edited from mobile.')
         return
       }
       setProjectMutating(true)
       setProjectRowDetailError('')
       try {
-        const response = await client.sendRequest(
-          'github.project.updateIssueCommentBySlug',
-          {
-            owner: slug.owner,
-            repo: slug.repo,
-            host: activeGitHubProjectHost,
-            commentId,
-            body
-          },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          error?: string | { message?: string }
-        }
-        if (result.ok === false) {
-          throw new Error(
-            typeof result.error === 'string'
-              ? result.error
-              : (result.error?.message ?? 'Failed to edit comment')
-          )
-        }
+        await taskProjectMutationOperations.updateComment(target, commentId, body)
         setProjectRowDetail((current) =>
           current?.provider === 'github'
             ? {
@@ -280,12 +216,17 @@ export function useMobileTasksProjectWorkspaceCommentActions(model: WorkspaceCre
         setProjectMutating(false)
       }
     },
-    [activeGitHubProjectHost, client, projectEditingCommentDraft, projectMutating]
+    [
+      activeGitHubProjectHost,
+      projectEditingCommentDraft,
+      projectMutating,
+      taskProjectMutationOperations
+    ]
   )
   return Object.assign(model, {
+    addProjectRowComment,
     createWorkspaceFromProjectRow,
     mutateProjectRowIssueOrPr,
-    addProjectRowComment,
     updateProjectRowComment
   })
 }

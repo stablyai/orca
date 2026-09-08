@@ -6,7 +6,6 @@ export function useMobileSessionTerminalStreamDisplay(
   scope: MobileSessionTerminalSubscriptionModel
 ) {
   const {
-    client,
     activeHandle,
     coveredStreamRevision,
     terminalModes,
@@ -21,7 +20,8 @@ export function useMobileSessionTerminalStreamDisplay(
     nativeChatInputLeaseReady,
     showNativeChat,
     unsubscribeTerminal,
-    subscribeToTerminal
+    subscribeToTerminal,
+    sessionTerminalOperations
   } = scope
   const nativeChatStream = useMobileNativeChatTerminalStream({
     showNativeChat,
@@ -42,7 +42,7 @@ export function useMobileSessionTerminalStreamDisplay(
   const toggleInFlightRef = useRef<Set<string>>(new Set())
   const toggleDisplayMode = useCallback(
     async (handle: string) => {
-      if (!client) {
+      if (!sessionTerminalOperations) {
         return
       }
       if (toggleInFlightRef.current.has(handle)) {
@@ -54,23 +54,19 @@ export function useMobileSessionTerminalStreamDisplay(
         current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
       toggleInFlightRef.current.add(handle)
       try {
-        await client.sendRequest('terminal.setDisplayMode', {
-          terminal: handle,
-          mode: next,
-          // Why: presence-lock take-floor — requesting 'auto' is the explicit "drive at phone dims" gesture.
-          ...(deviceTokenRef.current
-            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-            : {}),
-          // Why: late-bind viewport for terminals subscribed before measurement, or auto toggles no-op on a null stored viewport.
-          ...(viewportRef.current && next === 'auto' ? { viewport: viewportRef.current } : {})
-        })
+        await sessionTerminalOperations.setDisplayMode(
+          handle,
+          next,
+          viewportRef.current,
+          deviceTokenRef.current
+        )
       } catch {
         // Mode change failed — server state unchanged, UI stays in sync.
       } finally {
         toggleInFlightRef.current.delete(handle)
       }
     },
-    [client, terminalModes]
+    [sessionTerminalOperations, terminalModes]
   )
   return {
     nativeChatStream,

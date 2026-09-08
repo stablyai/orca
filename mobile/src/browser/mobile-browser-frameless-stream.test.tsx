@@ -6,7 +6,6 @@ import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
 } from '../transport/browser-screencast-protocol'
-import type { RpcClient } from '../transport/rpc-client'
 import { MobileBrowserPane, type MobileBrowserTab } from './MobileBrowserPane'
 
 vi.mock('react-native', () => ({
@@ -61,18 +60,20 @@ function spinnerCount(renderer: ReactTestRenderer): number {
 async function renderPane(): Promise<{ renderer: ReactTestRenderer; stream: Subscription }> {
   pageCounter += 1
   const subscriptions: Subscription[] = []
-  const client = {
+  const operations = {
     subscribe: (
-      _method: string,
-      _params: unknown,
-      listener: (payload: unknown) => void,
-      options?: { onBinaryFrame?: (frame: BrowserScreencastFrame) => void }
+      _target: unknown,
+      _request: unknown,
+      handlers: {
+        onEvent: (payload: unknown) => void
+        onFrame?: (frame: BrowserScreencastFrame) => void
+      }
     ) => {
-      subscriptions.push({ listener, onBinaryFrame: options?.onBinaryFrame })
+      subscriptions.push({ listener: handlers.onEvent, onBinaryFrame: handlers.onFrame })
       return () => {}
     },
     request: vi.fn()
-  } as unknown as RpcClient
+  }
 
   const tab: MobileBrowserTab = {
     type: 'browser',
@@ -91,7 +92,7 @@ async function renderPane(): Promise<{ renderer: ReactTestRenderer; stream: Subs
   await act(async () => {
     renderer = create(
       createElement(MobileBrowserPane, {
-        client,
+        operations,
         // Why: unique worktree id keeps each test on a cold module-level frame cache.
         worktreeId: `wt-${pageCounter}`,
         tab,

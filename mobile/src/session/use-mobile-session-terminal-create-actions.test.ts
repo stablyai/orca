@@ -60,7 +60,12 @@ function createScope(client: RpcClient) {
     showToast: vi.fn(),
     unsubscribeTerminal: vi.fn(),
     subscribeToTerminal: vi.fn(),
-    fetchSessionTabs: vi.fn(async () => {})
+    fetchSessionTabs: vi.fn(async () => {}),
+    applySessionTabs: vi.fn(),
+    sessionTabOperations: null,
+    pendingQuickCommandInputRef: { current: new Map() },
+    triggerError: vi.fn(),
+    triggerSuccess: vi.fn()
   }
 }
 
