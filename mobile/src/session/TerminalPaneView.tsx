@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { TerminalWebView } from '../terminal/TerminalWebView'
+import { useMobileTerminalTheme } from '../terminal/use-mobile-terminal-theme'
 import type {
   MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
@@ -51,6 +52,7 @@ export function TerminalPaneView({
   onOpenUrl,
   onTextScaleChange
 }: TerminalPaneViewProps) {
+  const resolvedTheme = useMobileTerminalTheme(terminalTheme)
   const setRef = useCallback(
     (ref: TerminalWebViewHandle | null) => {
       onRef(handle, ref)
@@ -71,8 +73,8 @@ export function TerminalPaneView({
     >
       <TerminalWebView
         ref={setRef}
-        style={styles.terminalWebView}
-        terminalTheme={terminalTheme}
+        style={[styles.terminalWebView, { backgroundColor: resolvedTheme?.theme.background }]}
+        terminalTheme={resolvedTheme}
         textScale={textScale}
         onWebReady={() => onWebReady(handle)}
         onSelectionMode={(a) => onSelectionMode(handle, a)}

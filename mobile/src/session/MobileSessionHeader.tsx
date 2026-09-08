@@ -55,8 +55,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     visibleTabs,
     showConnectionRetry,
     terminalSummary,
-    handlePanelTap,
-    showHeaderMoreButton
+    handlePanelTap
   } = controller
   return (
     <SafeAreaView style={styles.sessionChrome} edges={['top']}>
@@ -107,14 +106,12 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             onPress={() => handlePanelTap('sourceControl')}
           />
         )}
-        {showHeaderMoreButton ? (
-          <MobileSessionHeaderIconButton
-            active={activePanel === 'pr'}
-            accessibilityLabel="More session actions"
-            icon={MoreHorizontal}
-            onPress={() => setShowHeaderMoreActions(true)}
-          />
-        ) : null}
+        <MobileSessionHeaderIconButton
+          active={activePanel === 'pr'}
+          accessibilityLabel="More session actions"
+          icon={MoreHorizontal}
+          onPress={() => setShowHeaderMoreActions(true)}
+        />
       </View>
 
       {visibleTabs.length > 0 && (

@@ -1,6 +1,6 @@
-import type { TerminalThemeMap } from './types'
+import type { TerminalColorOverrides } from './terminal-color-overrides'
 
-export const DEFAULT_TERMINAL_THEMES: TerminalThemeMap = {
+export const DEFAULT_TERMINAL_THEMES: Record<string, TerminalColorOverrides> = {
   // Most colors come from Ghostty. Orca raises dark selection contrast because Ghostty's
   // original #3e4451 blends into Codex-style gray instruction blocks.
   'Ghostty Default Style Dark': {

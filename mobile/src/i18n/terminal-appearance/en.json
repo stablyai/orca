@@ -1,0 +1,15 @@
+{
+  "title": "Terminal appearance",
+  "system": "Automatic (phone)",
+  "dark": "Dark",
+  "light": "Light",
+  "desktop": "Match desktop",
+  "systemHint": "Follow your phone’s light or dark setting.",
+  "desktopHint": "Use the connected desktop’s terminal colors.",
+  "saveError": "Couldn’t save terminal appearance. Your selection applies until the app restarts.",
+  "loadError": "Couldn’t load your saved terminal appearance.",
+  "history": "Agent History",
+  "historyHint": "Browse and resume agent sessions",
+  "checks": "Checks",
+  "checksHint": "Open pull request checks"
+}
