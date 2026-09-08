@@ -1,6 +1,10 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
-import { isPassiveCompletedHibernationEvidence } from '../../lib/sleeping-agent-pane-ownership'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import {
+  isPassiveCompletedHibernationEvidence,
+  stablePaneHasLivePty
+} from '../../lib/sleeping-agent-pane-ownership'
 
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
 
@@ -13,7 +17,11 @@ const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
  *  `Object.values` would allocate every record on every store write. */
 export function selectSleepingRecordParkExemptTabIds(
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> | undefined,
-  worktreeId: string
+  worktreeId: string,
+  livePanes: {
+    ptyIdsByTabId: Record<string, string[]>
+    terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
+  }
 ): ReadonlySet<string> {
   if (!sleepingAgentSessionsByPaneKey) {
     return EMPTY_TAB_IDS
@@ -28,10 +36,23 @@ export function selectSleepingRecordParkExemptTabIds(
       continue
     }
     // Why: malformed pane keys must yield no owner instead of a truncated tab id.
+    const stablePane = parsePaneKey(record.paneKey)
     const tabId =
-      record.tabId ??
-      parsePaneKey(record.paneKey)?.tabId ??
-      parseLegacyNumericPaneKey(record.paneKey)?.tabId
+      record.tabId ?? stablePane?.tabId ?? parseLegacyNumericPaneKey(record.paneKey)?.tabId
+    // A live checkpoint needs no restore while its exact pane still owns a PTY.
+    if (
+      record.origin === 'live' &&
+      stablePane &&
+      stablePane.tabId === tabId &&
+      stablePaneHasLivePty(
+        tabId,
+        stablePane.leafId,
+        livePanes.ptyIdsByTabId,
+        livePanes.terminalLayoutsByTabId[tabId]
+      )
+    ) {
+      continue
+    }
     if (tabId) {
       owned ??= new Set()
       owned.add(tabId)
