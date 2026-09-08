@@ -40,13 +40,28 @@ const SKIP_REASON_LABEL: Record<WorktreeConfiguredPathSkipReason, string> = {
 
 // Same named-entry cap as copy-budget prose; keep RPC/JSON from listing every skip.
 const MAX_NAMED_SKIPPED_ENTRIES = 5
+const SKIP_MECHANISMS = ['share', 'include'] as const
 
-function skippedEntryOverflowText(count: number): string | undefined {
+function skippedEntryOverflowText(
+  count: number,
+  mechanism: WorktreeConfiguredPathSkip['mechanism']
+): string | undefined {
   const rest = count - MAX_NAMED_SKIPPED_ENTRIES
   if (rest <= 0) {
     return undefined
   }
-  return `and ${rest.toLocaleString('en-US')} more`
+  return `and ${rest.toLocaleString('en-US')} more ${mechanism} skips`
+}
+
+function overflowWarnings(
+  skips: readonly WorktreeConfiguredPathSkip[]
+): { mechanism: WorktreeConfiguredPathSkip['mechanism']; message: string }[] {
+  const remaining = skips.slice(MAX_NAMED_SKIPPED_ENTRIES)
+  return SKIP_MECHANISMS.flatMap((mechanism) => {
+    const count = remaining.filter((skip) => skip.mechanism === mechanism).length
+    const message = skippedEntryOverflowText(count + MAX_NAMED_SKIPPED_ENTRIES, mechanism)
+    return message ? [{ mechanism, message }] : []
+  })
 }
 
 export function formatWorktreeConfiguredPathSkip(skip: WorktreeConfiguredPathSkip): string {
@@ -77,13 +92,10 @@ export function worktreeShareSkipWarningsFromSkips(
       ...(skip.budgetReason ? { budgetReason: skip.budgetReason } : {})
     }
   }))
-  const overflow = skippedEntryOverflowText(skips.length)
-  const overflowSkip = skips[MAX_NAMED_SKIPPED_ENTRIES]
-  if (overflow && overflowSkip) {
+  for (const overflow of overflowWarnings(skips)) {
     warnings.push({
-      code:
-        overflowSkip.mechanism === 'share' ? 'WORKTREE_SHARE_SKIPPED' : 'WORKTREE_INCLUDE_SKIPPED',
-      message: overflow
+      code: overflow.mechanism === 'share' ? 'WORKTREE_SHARE_SKIPPED' : 'WORKTREE_INCLUDE_SKIPPED',
+      message: overflow.message
     })
   }
   return warnings
@@ -96,10 +108,7 @@ export function joinWorktreeShareSkipWarningText(
     return undefined
   }
   const lines = skips.slice(0, MAX_NAMED_SKIPPED_ENTRIES).map(formatWorktreeConfiguredPathSkip)
-  const overflow = skippedEntryOverflowText(skips.length)
-  if (overflow) {
-    lines.push(overflow)
-  }
+  lines.push(...overflowWarnings(skips).map((overflow) => overflow.message))
   return lines.join('\n')
 }
 

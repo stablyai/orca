@@ -12,11 +12,7 @@ import type {
   RemoveWorktreeResult,
   WorktreeCreateWarning
 } from './worktree/create-types'
-import type {
-  WorkspaceLineage,
-  WorktreeLineage,
-  WorktreeLineageWarning
-} from './worktree/lineage-types'
+import type { WorkspaceLineage, WorktreeLineage } from './worktree/lineage-types'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
 import type { WorkspaceStatusWarning } from './workspace-status-warning'
