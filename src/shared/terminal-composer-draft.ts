@@ -27,6 +27,7 @@ type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
 const COMPOSER_FRAME_LINE = /^[─━-]{8,}\s*$/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[·•]\s+\S.*$/i
 
+/** Keep interior blank draft rows, but stop at composer chrome or the trailing empty region. */
 function composerContinuationRows(
   context: TerminalCursorContext,
   afterCursor: string,
@@ -66,6 +67,7 @@ function composerContinuationRows(
   return continuation
 }
 
+/** Accept styled or recognizable Codex footers without treating wrapped draft rows as chrome. */
 function findCodexFooterIndex(context: TerminalCursorContext): number {
   for (let index = context.rowsBelow.length - 1; index >= 0; index -= 1) {
     const row = context.rowsBelow[index] ?? ''

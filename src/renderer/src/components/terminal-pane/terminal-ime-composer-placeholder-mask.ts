@@ -8,6 +8,7 @@ import {
 
 export const TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS = 'orca-ime-composer-placeholder'
 
+/** Reject malformed lifecycle events so they cannot acquire or clear composition ownership. */
 function compositionSessionId(event: Event): number | null {
   if (!(event instanceof CustomEvent)) {
     return null
@@ -54,7 +55,7 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
     activeSessionId = null
     syncPlaceholderOwnership()
   }
-  // xterm requests the remainder during repaint, before deciding whether to draw its mask.
+  /** xterm requests the remainder during repaint, before deciding whether to draw its mask. */
   const handleRemainder = (event: Event): void => {
     syncPlaceholderOwnership()
     if (element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)) {
