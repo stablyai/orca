@@ -294,6 +294,24 @@ chạy qua đúng 1 `dispatch()`/`makeNotifier()`. Sự khác biệt thật nằ
   làm hôm nay — cho tới khi ai đó xác minh lại vì sao `StreamPty` chặn
   `relay-ssh` và quyết định gỡ chặn đó cho cả 2 API cùng lúc.
 
+**Update 2026-09-08 (BACKLOG-019, đã xác minh):** Mâu thuẫn đã được truy tới
+tận gốc — `StreamPty`'s comment cũ ("no persistent session ... no relay.js
+deployed") đơn giản là **sai**, không phải một lý do thiết kế khác chưa đọc
+ra. `managedExternally=true` (giả thuyết còn để mở ở trên) chỉ đánh dấu
+session không tự redial khi rớt — không liên quan gì tới việc subscription
+dài hạn có hoạt động hay không một khi session đang sống. Không tìm thấy lý
+do kỹ thuật nào khiến relay-ssh không hỗ trợ được `pty.*`/notification dài
+hạn; kiến trúc (agent-session.ts/dispatcher.ts dùng chung, `*session` dùng
+chung) nói ngược lại comment cũ. Đã sửa comment trong `client.go` để không
+còn khẳng định sai sự thật (xem `StreamPty`'s doc comment mới), NHƯNG hành
+vi runtime (chặn `relay-ssh`) **giữ nguyên** — chưa ai kiểm chứng
+`pty.data`/`pty.exit` notification thật sự đến nơi qua duck-typed stdio
+transport trên 1 dev server SSH-relay thật, và đó là thay đổi hành vi thật
+sự (không phải sửa doc) nên cần test trước khi gỡ. Do đó câu hỏi mở #3 ở
+mục 5 dưới đây **vẫn mở** — `StreamExecOutput` khi triển khai vẫn nên kế
+thừa đúng gate hiện tại của `StreamPty`, đồng bộ 2 API, cho tới khi ai đó
+verify end-to-end trên relay-ssh thật và gỡ chặn cho cả hai cùng lúc.
+
 ---
 
 ## 4. Vì sao dừng ở design-only
@@ -316,10 +334,11 @@ chạy qua đúng 1 `dispatch()`/`makeNotifier()`. Sự khác biệt thật nằ
   (CR-001) thì không có chỗ mirror `status_mirror` cho lần chạy Engine 1;
   không có kênh `task.activity:{taskId}` (CR-003) thì §2.3 không có nơi đổ
   event tới — implement §2 trước 2 CR đó là xây ống dẫn không có điểm đến.
-- **§3's mâu thuẫn comment trong `infra-fleet-service` cần người có bối
-  cảnh TASK-192 (merge đã xoá `dialRelaySSH`/`relaySSHHealth`, theo comment
-  dòng 305-311 của `client.go`) xác nhận lại** trước khi quyết định
-  `relay-ssh` có nằm trong phạm vi lần triển khai đầu tiên hay không.
+- ~~§3's mâu thuẫn comment trong `infra-fleet-service` cần người có bối
+  cảnh TASK-192 xác nhận lại~~ — **Đã xác minh (BACKLOG-019, 2026-09-08):**
+  comment cũ sai, đã sửa; `relay-ssh` có nằm trong scope đầu tiên hay không
+  vẫn tuỳ vào việc có ai test streaming thật trên relay-ssh trước khi
+  implement §2.2 hay không (xem update trong §3).
 
 ---
 

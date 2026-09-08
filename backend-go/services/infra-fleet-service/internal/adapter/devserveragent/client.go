@@ -341,17 +341,32 @@ func (c *Client) IsConnected(devServerID string) bool {
 
 // StreamPty subscribes to ptyID's pty.data/pty.exit/pty.replay notifications
 // over devServer's persistent session (see session.go's subscribePty/
-// routeNotification) and translates them into usecase.PtyEvent. relay-ssh
-// mode has no persistent session (see package doc comment) so this always
-// errors for it, same as getInboundSession's absent-session case.
+// routeNotification) and translates them into usecase.PtyEvent.
 //
-// The returned channel is closed once unsubscribe runs (or ctx is done,
-// whichever first) — every caller (usecase.AttachPty, usecase.WaitTerminalSession)
-// MUST call unsubscribe exactly once, typically via defer, to release the
-// session-level subscription slot.
+// relay-ssh is blocked below, but NOT because it lacks a persistent session
+// or the pty.* JSON-RPC surface — it has both. getOrProvisionSession returns
+// the same *session type as the other two modes, and
+// agent-connection-stdio.ts's connectStdio() runs the exact same
+// agent-session.ts/dispatcher.ts (same tool discovery, same pty.* handlers)
+// as relay-websocket/direct-websocket, just over a duck-typed stdio
+// transport instead of a real WebSocket (see that file's own header
+// comment). BACKLOG-019 traced this: an earlier doc-comment revision here
+// claimed the opposite ("no persistent session ... no relay.js deployed"),
+// which directly contradicted this package's own doc comment
+// ("every mode ends up in the same place") and getOrProvisionSession's doc
+// comment — that claim was simply wrong, not a design decision.
+// The block stays for now because nobody has verified pty.* notification
+// delivery actually works end-to-end over the stdio duck-typed transport in
+// a live relay-ssh dev server (StreamScreencast's identical-looking block a
+// few methods down is unrelated — no CDP browser is deployed to a bare
+// relay-ssh target regardless of JSON-RPC surface, that one's real). Lifting
+// this block is a genuine behavior change, not a doc fix — do it only after
+// testing pty streaming against a real relay-ssh dev server, and lift it
+// for both this method and usecase.DevServerAgentClient.StreamExecOutput
+// together (SOL-AG-FLOWTASK-001 §3 deliberately mirrored this gate there).
 func (c *Client) StreamPty(ctx context.Context, devServer domain.DevServer, ptyID string) (<-chan usecase.PtyEvent, func(), error) {
 	if devServer.Mode == domain.ConnectionModeRelaySSH {
-		return nil, nil, fmt.Errorf("%w: relay-ssh mode has no pty.* JSON-RPC surface (no relay.js deployed)", ErrConnectionModeNotImplemented)
+		return nil, nil, fmt.Errorf("%w: relay-ssh pty.* streaming is unverified end-to-end, not architecturally unsupported — see this method's doc comment (BACKLOG-019)", ErrConnectionModeNotImplemented)
 	}
 	sess, err := c.getOrCreateSession(ctx, devServer)
 	if err != nil {
