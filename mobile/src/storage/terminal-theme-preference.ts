@@ -9,10 +9,12 @@ let initialized = false
 let loadPromise: Promise<MobileTerminalThemeMode> | null = null
 let writeBarrier: Promise<void> = Promise.resolve()
 
+/** Supplies the synchronous snapshot so mounted panes share one device preference. */
 export function getMobileTerminalThemeMode(): MobileTerminalThemeMode {
   return mode
 }
 
+/** Keeps active and hidden panes subscribed until their React consumer unmounts. */
 export function subscribeMobileTerminalThemeMode(listener: () => void): () => void {
   listeners.add(listener)
   return () => {
@@ -20,6 +22,7 @@ export function subscribeMobileTerminalThemeMode(listener: () => void): () => vo
   }
 }
 
+/** Avoids redundant pane updates when hydration or saving repeats the current mode. */
 function publish(next: MobileTerminalThemeMode): void {
   if (next === mode) {
     return
@@ -30,6 +33,7 @@ function publish(next: MobileTerminalThemeMode): void {
   }
 }
 
+/** Shares pending storage reads; a newer user selection takes precedence over hydration. */
 export function loadMobileTerminalThemeMode(): Promise<MobileTerminalThemeMode> {
   if (initialized) {
     return Promise.resolve(mode)
@@ -58,6 +62,7 @@ export function loadMobileTerminalThemeMode(): Promise<MobileTerminalThemeMode> 
   return loadPromise
 }
 
+/** Applies immediately and serializes persistence; write failures reject without undoing the UI choice. */
 export function saveMobileTerminalThemeMode(next: MobileTerminalThemeMode): Promise<void> {
   initialized = true
   publish(next)

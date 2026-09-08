@@ -25,6 +25,7 @@ void terminalAppearanceI18n.init({
   }
 })
 
+/** Restricts menu keys to the English catalog while resolving the device locale through i18next. */
 export function terminalAppearanceText(key: keyof typeof en): string {
   return terminalAppearanceI18n.t(key)
 }

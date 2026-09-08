@@ -64,8 +64,6 @@ function paneProps(hostTheme = hostLight): ComponentProps<typeof TerminalPaneVie
     onTerminalInput: noop,
     onTerminalQueryReply: noop,
     onTerminalTap: noop,
-    onTerminalPlainTap: noop,
-    onTerminalPlainTapCancelled: noop,
     onFileTap: noop,
     onOpenUrl: noop,
     onTextScaleChange: noop

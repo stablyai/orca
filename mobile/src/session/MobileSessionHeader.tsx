@@ -23,6 +23,7 @@ import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
+/** Exposes device-local actions for every session, including folder and floating sessions. */
 export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
   const {
     hostId,

@@ -13,6 +13,7 @@ const LOCAL_TERMINAL_THEMES: Record<'dark' | 'light', MobileTerminalTheme> = {
   light: { mode: 'light', theme: DEFAULT_TERMINAL_THEMES['Builtin Tango Light'] }
 }
 
+/** Resolves device overrides before the host palette and reacts to phone appearance changes. */
 export function useMobileTerminalTheme(
   hostTheme: MobileTerminalTheme | undefined
 ): MobileTerminalTheme | undefined {

@@ -23,6 +23,7 @@ type Props = {
   onClose: () => void
 }
 
+/** Keeps device appearance controls available even when the host has no history or checks actions. */
 export function MobileSessionHeaderMoreActionsSheet({
   visible,
   showAgentSessionHistory,

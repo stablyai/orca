@@ -31,6 +31,7 @@ type TerminalPaneViewProps = {
   onTextScaleChange: (scale: number) => void
 }
 
+/** Updates appearance in place so theme changes preserve terminal state, including hidden panes. */
 export function TerminalPaneView({
   handle,
   active,
