@@ -171,6 +171,9 @@ describe('buildActivityEvents', () => {
 
     expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('monitoring')
     expect(threads[0].currentAgentState).toBe('monitoring')
+    // A monitoring turn must not emit a `working` event that contradicts the live snapshot.
+    expect(result.events).toHaveLength(0)
+    expect(threads[0].latestEvent).toBeNull()
     expect(groups[0]).toMatchObject({
       key: 'monitoring',
       label: 'Monitoring background tasks',

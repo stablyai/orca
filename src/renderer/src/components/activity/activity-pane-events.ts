@@ -97,8 +97,11 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
     )
   }
 
+  // Monitoring live turns surface only via the 'monitoring' snapshot, never as a working event.
   const currentState =
-    args.liveState !== null || isHistoricalActivityState(args.entry.state) ? args.entry.state : null
+    args.liveState === 'working' || isHistoricalActivityState(args.entry.state)
+      ? args.entry.state
+      : null
   if (currentState === null || args.entry.sessionBoundary === true) {
     return events
   }
