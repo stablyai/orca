@@ -86,6 +86,14 @@ orca orchestration worker-start --task <taskId> --retry-of <dispatchId> --worktr
 
 Do not leave completed worker terminals open just to re-read output — use `worker-read` after `worker-release`. Do not substitute a broad `terminal close` when release returns `release_pending` or `release_unknown`; follow the receipt's recovery action.
 
+User input reported before worker ownership is recorded still counts as user
+takeover: a later ownership claim must not make that terminal automatically
+releasable. This protection survives runtime restarts and task resets.
+
+An inconsistent remote release receipt (for example, `released` with explicit
+`live` process status) returns `release_unknown` and preserves the Run home's
+terminal references for inspection.
+
 ## Federated workers (optional)
 
 ```bash

@@ -6,6 +6,7 @@ import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { hasWorkerTerminalUserInput } from './worker-terminal-user-input-latch'
 
 // --- Worker terminal resources (schema v23) ---------------------------------------------------
 
@@ -68,13 +69,17 @@ export function createWorkerTerminalResourceStatement(
   }
 ): WorkerTerminalResourceRow {
   const id = generateId('wtr')
+  const userOwned =
+    params.ownership === 'owned' &&
+    params.paneKey !== null &&
+    hasWorkerTerminalUserInput(this, params.paneKey)
   this.db
     .prepare(
       `INSERT INTO worker_terminal_resources (
          id, origin_dispatch_id, owner_dispatch_id, worktree_id, terminal_handle,
          pane_key, process_incarnation, endpoint_id, endpoint_incarnation, host_scope, ownership_state, release_state,
          retained_reason
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'not_requested', ?)`
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       id,
@@ -87,8 +92,9 @@ export function createWorkerTerminalResourceStatement(
       params.endpointId ?? null,
       params.endpointIncarnation ?? params.processIncarnation,
       params.hostScope ?? null,
-      params.ownership,
-      params.ownership === 'external' ? 'external_terminal' : null
+      userOwned ? 'user_owned' : params.ownership,
+      userOwned ? 'retained' : 'not_requested',
+      userOwned ? 'user_takeover' : params.ownership === 'external' ? 'external_terminal' : null
     )
   return this.getWorkerTerminalResource(id) as WorkerTerminalResourceRow
 }

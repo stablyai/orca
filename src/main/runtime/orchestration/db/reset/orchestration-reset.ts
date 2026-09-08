@@ -20,6 +20,7 @@ export function runResetTransaction(this: OrchestrationDb, statements: string): 
 
 export function resetAll(this: OrchestrationDb): void {
   // Why: retain mutation receipts so a lost reset response cannot replay as a new mutation.
+  // Keep worker_terminal_user_inputs: resetting orchestration does not retire terminal panes.
   this.runResetTransaction(`
     DELETE FROM coordinator_runs;
     DELETE FROM decision_gates;
@@ -50,6 +51,7 @@ export function resetAll(this: OrchestrationDb): void {
 }
 
 export function resetTasks(this: OrchestrationDb): void {
+  // Keep worker_terminal_user_inputs: resetting Tasks does not retire terminal panes.
   // Why: messages survive this scope, so question threads are closed rather than deleted — an orphaned
   // question message would otherwise answer as a generic reply while legacy acknowledgment rejects it.
   this.runResetTransaction(`

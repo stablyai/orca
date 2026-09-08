@@ -151,6 +151,13 @@ CREATE TABLE IF NOT EXISTS worker_dispatches (
   updated_at             TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Additive on every open: input can arrive before a resource exists. No historical backfill.
+-- Keep these identity-only latches across Task resets, which do not retire terminal panes.
+CREATE TABLE IF NOT EXISTS worker_terminal_user_inputs (
+  pane_identity  TEXT PRIMARY KEY NOT NULL CHECK(length(pane_identity) = 64),
+  first_input_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS worker_terminal_resources (
   id                       TEXT PRIMARY KEY,
   origin_dispatch_id       TEXT NOT NULL,
