@@ -1,4 +1,3 @@
-import { worktreeInventoryHandler } from './worktree-inventory'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -175,7 +174,6 @@ async function getCreateRepoSelector(
 }
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
-  'worktree inventory': worktreeInventoryHandler,
   'worktree ps': async ({ flags, client, json }) => {
     const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreePsResult>>(
       'worktree.ps',

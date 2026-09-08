@@ -65,9 +65,16 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
   },
   {
+    name: 'worktree-inventory',
+    keys: ['worktree inventory'],
+    load: async () => ({
+      'worktree inventory': (await import('./handlers/worktree-inventory.js'))
+        .worktreeInventoryHandler
+    })
+  },
+  {
     name: 'worktree',
     keys: [
-      'worktree inventory',
       'worktree ps',
       'worktree list',
       'worktree show',

@@ -107,6 +107,7 @@ function fixture() {
     listResolved: async () => [mergeWorktree(repo.id, git, undefined)] as never,
     resolveRepo: async () => repo,
     selectRepos: () => [repo],
+    listKnownHostIds: () => ['local'],
     scanRepo: scan
   })
   const inventory = (params = request) => listWorktreeInventory(store, params, scan)
