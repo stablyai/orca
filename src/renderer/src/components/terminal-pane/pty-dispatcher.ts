@@ -13,6 +13,7 @@ import {
   drainPreHandlerPtyData,
   drainPreHandlerPtyExit
 } from './pty-pre-handler-buffer'
+import { buildPtyDataMeta, type PtyDataPayload } from './pty-data-meta'
 import { deliverPtyExitToHandlers } from './pty-exit-delivery'
 import {
   clearReceivedPtyCharTotal,
@@ -33,6 +34,8 @@ import {
 } from './pty-shutdown-data-suspension'
 import { markCommittedPtyShutdowns } from './pty-shutdown-exit-deferral'
 
+export type { PtyDataMeta } from './pty-data-meta'
+
 export {
   ptyDataHandlers,
   ptyDataSidecars,
@@ -48,15 +51,6 @@ export {
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel (routed by PTY ID) avoids the N-listener MaxListenersExceededWarning with many panes.
-
-export type PtyDataMeta = {
-  seq?: number
-  rawLength?: number
-  transformed?: boolean
-  background?: boolean
-  /** Main dropped this PTY's buffered output at the pending cap; repaint from the main-owned snapshot, not the live stream. */
-  droppedOutput?: boolean
-}
 
 /** Sidecar PTY-data observers, invoked AFTER the primary handler so a side-effect-only watcher can't delay xterm rendering. */
 /** Per-PTY replay handlers on a dedicated pty:replay channel so the renderer can engage the replay guard and suppress xterm auto-replies. */
@@ -92,7 +86,16 @@ export function ensurePtyDispatcher(): void {
   attachPtyPushListeners()
   startTerminalDeliveryWatchdog({
     reattachPushListeners: reattachPtyDispatcherPushListeners,
-    hasAttachedPtys: () => ptyDataHandlers.size > 0 || eagerPtyHandles.size > 0
+    hasAttachedPtys: () => ptyDataHandlers.size > 0 || eagerPtyHandles.size > 0,
+    // Why lazy: resolving ownership reads the app store, whose terminal slice imports this
+    // module, so a static edge would close an import cycle. The lane fires rarely — paying
+    // the import then costs nothing on the data hot path.
+    recoverParkedPanes: (ptyIds) =>
+      import('./terminal-parked-pane-recovery')
+        .then((module) => module.recoverParkedPanes(ptyIds))
+        // Why swallowed: a failed chunk load must not reject out of the tick before the heal
+        // runs. A later tick retries ownership without holding producer credit.
+        .catch(() => {})
   })
 }
 
@@ -110,36 +113,8 @@ function attachPtyPushListeners(): void {
   attachPtySecondaryPushListeners(unsubscribes)
 }
 
-function handleDispatchedPtyData(payload: {
-  id: string
-  data: string
-  seq?: number
-  rawLength?: number
-  transformed?: boolean
-  background?: boolean
-  droppedOutput?: boolean
-}): void {
-  let meta: PtyDataMeta | undefined
-  if (typeof payload.seq === 'number') {
-    meta ??= {}
-    meta.seq = payload.seq
-  }
-  if (typeof payload.rawLength === 'number') {
-    meta ??= {}
-    meta.rawLength = payload.rawLength
-  }
-  if (payload.transformed === true) {
-    meta ??= {}
-    meta.transformed = true
-  }
-  if (payload.background === true) {
-    meta ??= {}
-    meta.background = true
-  }
-  if (payload.droppedOutput === true) {
-    meta ??= {}
-    meta.droppedOutput = true
-  }
+function handleDispatchedPtyData(payload: PtyDataPayload): void {
+  const meta = buildPtyDataMeta(payload)
   const chars = payload.rawLength ?? payload.data.length
   const dispatch = (): void => {
     if (isPtyDataHandlerShutdownPending(payload.id)) {
@@ -151,6 +126,7 @@ function handleDispatchedPtyData(payload: {
     if (handler) {
       handler(payload.data, meta)
     } else {
+      // No consumer owns parse credit; retain a bounded tail and report occupancy separately.
       bufferPreHandlerPtyData(payload.id, payload.data, meta)
     }
     const sidecars = ptyDataSidecars.get(payload.id)
@@ -188,9 +164,6 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
         // Why: host-initiated remote sleep has no requester transaction in this renderer; classify its ordered exit before pane cleanup runs.
         markCommittedPtyShutdowns([payload.id])
       }
-      // Why: main drops its accounting on exit; drop totals too so a reused id restarts at zero on both sides.
-      clearProcessedPtyCharTotal(payload.id)
-      clearReceivedPtyCharTotal(payload.id)
       const sidecars = ptyExitSidecars.get(payload.id)
       if (sidecars) {
         ptyExitSidecars.delete(payload.id)
@@ -200,15 +173,21 @@ function attachPtySecondaryPushListeners(unsubscribes: (() => void)[]): void {
         // Why: one-shot owner — remove before invoking so a throwing callback can't stay registered for a duplicate exit.
         ptyExitHandlers.delete(payload.id)
       }
-      deliverPtyExitToHandlers({
-        ptyId: payload.id,
-        code: payload.code,
-        // Why forwarded: pty ids are reused, so a buffered exit needs the lifetime it describes to
-        // tell "this pane's shell died" from "the id's previous owner died" (#16970).
-        ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {}),
-        ...(primary ? { primary } : {}),
-        sidecars: sidecars ? Array.from(sidecars) : []
-      })
+      try {
+        deliverPtyExitToHandlers({
+          ptyId: payload.id,
+          code: payload.code,
+          // Why forwarded: pty ids are reused, so a buffered exit needs the lifetime it describes to
+          // tell "this pane's shell died" from "the id's previous owner died" (#16970).
+          ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {}),
+          ...(primary ? { primary } : {}),
+          sidecars: sidecars ? Array.from(sidecars) : []
+        })
+      } finally {
+        // Exit callbacks can credit pending writes or throw; neither may retain old-lifetime totals.
+        clearProcessedPtyCharTotal(payload.id)
+        clearReceivedPtyCharTotal(payload.id)
+      }
     })
   )
   // Why: main probes on suspected lost ACKs; replying with processed totals lets it reconcile instead of resetting blindly.

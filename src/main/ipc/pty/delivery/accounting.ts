@@ -5,14 +5,63 @@ import type {
 import { tryGetProviderForPty } from '../provider/registry'
 import { mainDeliveryBreadcrumbs } from './debug'
 import {
+  PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS,
   PTY_DELIVERY_RESYNC_TIMEOUT_MS,
   PTY_RENDERER_ACTIVE_PTY_IN_FLIGHT_RESERVE_CHARS,
   PTY_RENDERER_INTERACTIVE_RESERVE_CHARS,
   PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS,
   PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS
 } from './constants'
-import type { PtyIpcSession } from '../session'
+import type { PtyIpcSession, RendererPtyDeliveryAccounting } from '../session'
 import type { PendingPtyData } from '../../pty-pending-data-drain-queue'
+
+/** Why per-PTY and not the session-global ACK clock this replaced: on a machine with a
+ *  hundred terminals some pty always ACKed a moment ago, so the global gate never opened and
+ *  a single wedged pane's debt was permanently unhealable. This keeps the same protection —
+ *  a foreign or buggy caller still cannot write off a pty that is round-tripping ACKs — but
+ *  decides it one pty at a time. */
+export function isPtyAckSilentForHeal(
+  accounting: RendererPtyDeliveryAccounting,
+  now: number
+): boolean {
+  return (
+    accounting.lastAckAtMs === null ||
+    now - accounting.lastAckAtMs >= PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS
+  )
+}
+
+/** The PTYs that were ACK-silent at a chosen instant.
+ *
+ *  Why sampled rather than read live: `applyCumulativeAck` stamps `lastAckAtMs`, so a report
+ *  that repairs a lost ACK by merging cumulative totals would otherwise stamp the very PTY it
+ *  is reporting on and read as "this one just ACKed" — vetoing the heal that same report was
+ *  sent to request. A merge credit is evidence of an ACK that was LOST, not of a live
+ *  consumer; only a real `pty:ackData` round trip is that. */
+export function collectAckSilentPtyIdsForHeal(session: PtyIpcSession): Set<string> {
+  const now = Date.now()
+  const ackSilentPtyIds = new Set<string>()
+  for (const [id, accounting] of session.rendererDeliveryAccountingByPty) {
+    if (isPtyAckSilentForHeal(accounting, now)) {
+      ackSilentPtyIds.add(id)
+    }
+  }
+  return ackSilentPtyIds
+}
+
+/** True when some PTY holds debt AND was ACK-silent long enough to heal. Debt is read now —
+ *  a merge that fully repaid a PTY must not be written off — while silence comes from the
+ *  pre-merge sample. */
+export function hasAckSilentRendererDeliveryDebt(
+  session: PtyIpcSession,
+  ackSilentPtyIds: ReadonlySet<string>
+): boolean {
+  for (const [id, accounting] of session.rendererDeliveryAccountingByPty) {
+    if (accounting.sentChars - accounting.ackedChars > 0 && ackSilentPtyIds.has(id)) {
+      return true
+    }
+  }
+  return false
+}
 
 export function getRendererInFlightCharsForPty(session: PtyIpcSession, id: string): number {
   const accounting = session.rendererDeliveryAccountingByPty.get(id)
@@ -158,20 +207,32 @@ export function requestDeliveryResyncForGatedPty(session: PtyIpcSession): void {
   session.mainWindow.webContents.send('pty:requestDeliveryResync', { requestId })
 }
 
+function sanitizeReportedChars(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+export function hasUnreceivedRendererDelivery(
+  accounting: RendererPtyDeliveryAccounting,
+  receivedChars: unknown
+): boolean {
+  return (
+    accounting.sentChars > accounting.ackedChars &&
+    sanitizeReportedChars(receivedChars) <= accounting.ackedChars
+  )
+}
+
 export function writeOffLostRendererDelivery(
   session: PtyIpcSession,
-  report: PtyRendererDeliveryStateReport
+  report: PtyRendererDeliveryStateReport,
+  ackSilentPtyIds: ReadonlySet<string>
 ): PtyDeliveryWriteOff[] {
   const writtenOff: PtyDeliveryWriteOff[] = []
   for (const [id, accounting] of session.rendererDeliveryAccountingByPty) {
-    if (accounting.sentChars - accounting.ackedChars <= 0) {
+    if (!ackSilentPtyIds.has(id)) {
       continue
     }
-    const received = report.receivedCharsByPty?.[id]
-    const receivedChars =
-      typeof received === 'number' && Number.isFinite(received) ? Math.max(0, received) : 0
     // Why skip: received-but-unparsed bytes are alive in the renderer write queue; their deferred ACK still repays this debt.
-    if (receivedChars > accounting.ackedChars) {
+    if (!hasUnreceivedRendererDelivery(accounting, report.receivedCharsByPty?.[id])) {
       continue
     }
     const acknowledged = applyCumulativeAck(session, id, accounting.sentChars)

@@ -11,13 +11,22 @@
  * channel that is dead (upstream precedent: electron#37067, one-directional
  * Mojo IPC death). This watchdog is the missing lane: it detects the wedge
  * and heals over invoke — the direction proven alive — with zero cost on the
- * data hot path (one Map upsert per received chunk; a tick does no IPC while
- * output flows or while no PTY delivery is expected).
+ * data hot path (one Map upsert per received chunk; probes run every 15 seconds
+ * while PTY delivery is expected).
  */
 import { e2eConfig } from '@/lib/e2e-config'
 import type { PtyRendererDeliveryHealthReply } from '../../../../shared/pty-renderer-delivery-health'
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 import { deliverPulledPtyModelRestoreMarkers } from './pty-model-restore-channel'
+import {
+  getParkedPreHandlerCharsByPty,
+  discardParkedPtyDataAfterWriteOff
+} from './pty-pre-handler-buffer'
+import {
+  advanceParkedDeliveryStallStreaks,
+  advanceStalledPtyStreaks,
+  resetParkedDeliveryStallStreaks
+} from './terminal-parked-delivery-stall'
 import { getProcessedPtyCharTotals } from './terminal-pty-ack-gate'
 import { recordTerminalFreezeBreadcrumb } from './terminal-freeze-breadcrumbs'
 
@@ -41,6 +50,11 @@ type TerminalDeliveryWatchdogDeps = {
   reattachPushListeners: () => void
   /** True while any PTY handler or eager buffer expects push delivery. */
   hasAttachedPtys: () => boolean
+  /** Remount the tabs owning these parked ptys.
+   *  Injected, and loaded lazily by the dispatcher, because resolving ownership reads the app
+   *  store: a static edge would close an import cycle and drag the store into the
+   *  freeze-report graph, which runs in bare-node contexts. */
+  recoverParkedPanes: (ptyIds: string[]) => Promise<void>
 }
 
 const receivedPtyCharTotals = new Map<string, number>()
@@ -95,51 +109,79 @@ async function runWatchdogTick(): Promise<void> {
     stopTerminalDeliveryWatchdog()
     return
   }
-  if (receivedPtyDataEventCount !== eventCountAtLastTick) {
-    eventCountAtLastTick = receivedPtyDataEventCount
+  // Movement rules out the session-wide wedge only. One pane can still be parked while the
+  // other ninety-nine stream — the case this tick used to return on before asking main.
+  const globalEventsMoved = receivedPtyDataEventCount !== eventCountAtLastTick
+  eventCountAtLastTick = receivedPtyDataEventCount
+  const parkedCharsByPty = getParkedPreHandlerCharsByPty()
+  const hasParked = Object.keys(parkedCharsByPty).length > 0
+  if (!hasParked && !deps.hasAttachedPtys()) {
     stallStreakTicks = 0
+    resetParkedDeliveryStallStreaks()
     return
   }
-  if (!deps.hasAttachedPtys()) {
-    stallStreakTicks = 0
-    return
+  const stalledParkedPtyIds = advanceParkedDeliveryStallStreaks(
+    parkedCharsByPty,
+    watchdogConfig.stallTicksToHeal
+  )
+  // Local consumer recovery does not depend on main's debt or a successful health reply.
+  if (stalledParkedPtyIds.length > 0) {
+    await deps.recoverParkedPanes(stalledParkedPtyIds)
   }
+  // Probe attached panes even while a sibling streams: global movement cannot rule out
+  // a single PTY whose push events never arrive.
   const health = await report({
     receivedCharsByPty: Object.fromEntries(receivedPtyCharTotals),
     processedCharsByPty: getProcessedPtyCharTotals()
   })
-  if (!health || !isMainDeliveryStalled(health)) {
+  if (!health) {
     stallStreakTicks = 0
     return
   }
-  stallStreakTicks += 1
-  recordTerminalFreezeBreadcrumb('watchdog-stall', {
-    stallStreakTicks,
-    inFlightTotalChars: health.inFlightTotalChars,
-    msSinceLastAck: health.msSinceLastAck
-  })
-  if (stallStreakTicks < watchdogConfig.stallTicksToHeal) {
+  const perPtyStalled = advanceStalledPtyStreaks(
+    health.stalledPtys,
+    receivedPtyCharTotals,
+    watchdogConfig.stallTicksToHeal
+  )
+  // The global streak still counts only event-silent ticks: delivery that moved anywhere is
+  // proof the push channel as a whole is alive.
+  if (globalEventsMoved || !isMainDeliveryStalled(health)) {
+    stallStreakTicks = 0
+  } else {
+    stallStreakTicks += 1
+    recordTerminalFreezeBreadcrumb('watchdog-stall', {
+      stallStreakTicks,
+      inFlightTotalChars: health.inFlightTotalChars,
+      msSinceLastAck: health.msSinceLastAck
+    })
+  }
+  const globalWedge = stallStreakTicks >= watchdogConfig.stallTicksToHeal
+  if (!globalWedge && !perPtyStalled) {
     return
   }
   if (lastHealAtMs !== null && Date.now() - lastHealAtMs < watchdogConfig.healCooldownMs) {
     return
   }
-  await healDeadPushDelivery(deps, report, health)
+  await healDeadPushDelivery(deps, report, health, globalWedge)
 }
 
 async function healDeadPushDelivery(
   deps: TerminalDeliveryWatchdogDeps,
   report: NonNullable<Window['api']['pty']['reportRendererDeliveryState']>,
-  stalled: PtyRendererDeliveryHealthReply
+  stalled: PtyRendererDeliveryHealthReply,
+  reattachPushListeners: boolean
 ): Promise<void> {
   lastHealAtMs = Date.now()
   stallStreakTicks = 0
+  resetParkedDeliveryStallStreaks()
   healCount += 1
   // Why read BEFORE re-attach: 0 here = the listener was detached (app-level
   // bug to hunt); ≥1 = events are being dropped below the emitter (channel
   // dead, platform-level). The single most valuable field discriminator.
   const listenerCountBeforeReattach = window.api?.pty?.getPtyDataListenerCount?.() ?? null
-  deps.reattachPushListeners()
+  if (reattachPushListeners) {
+    deps.reattachPushListeners()
+  }
   const healed = await report({
     receivedCharsByPty: Object.fromEntries(receivedPtyCharTotals),
     processedCharsByPty: getProcessedPtyCharTotals(),
@@ -148,6 +190,9 @@ async function healDeadPushDelivery(
   })
   const writtenOff = healed?.writtenOff ?? []
   if (writtenOff.length > 0) {
+    // Order matters: drop the superseded parked bytes before the restore marker repaints,
+    // or a very late bind paints over the snapshot the marker just certified.
+    discardParkedPtyDataAfterWriteOff(writtenOff.map((entry) => entry.id))
     deliverPulledPtyModelRestoreMarkers(
       writtenOff.map((entry) => ({
         id: entry.id,

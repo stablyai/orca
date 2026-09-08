@@ -62,7 +62,8 @@ describe('registerPtyHandlers', () => {
     mainWindow,
     installObservableDaemonTestProvider,
     getPtyAckDataListener,
-    getPtyDataSendCalls
+    getPtyDataSendCalls,
+    reportRendererDeliveryState
   } = setupPtyIpcSuite()
 
   it('pauses and resumes the exact SSH provider generation across reconnect replacement', async () => {
@@ -186,6 +187,44 @@ describe('registerPtyHandlers', () => {
         ptyIncarnation: 'incarnation-51'
       }
     ])
+  })
+  it('pauses the shell for lost push delivery and releases it on write-off', () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      // No push bytes arrive, so main retains credit until the invoke heal recovers delivery.
+      provider.emitData('parked-pty', 'x'.repeat(900 * 1024))
+      vi.advanceTimersByTime(2)
+      for (let index = 0; index < 400; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      expect(provider.pauseProducer).toHaveBeenCalledWith('parked-pty')
+      const sendsWhileParked = getPtyDataSendCalls().length
+
+      provider.emitData('parked-pty', 'flood-that-must-not-land')
+      vi.advanceTimersByTime(2)
+      expect(getPtyDataSendCalls()).toHaveLength(sendsWhileParked)
+
+      const healed = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {},
+        heal: true
+      })
+
+      expect(healed.writtenOff?.map((entry) => entry.id)).toEqual(['parked-pty'])
+      expect(provider.resumeProducer).toHaveBeenCalledWith('parked-pty')
+
+      provider.emitData('parked-pty', 'after-heal')
+      vi.advanceTimersByTime(2)
+      expect(getPtyDataSendCalls().length).toBeGreaterThan(sendsWhileParked)
+    } finally {
+      warnSpy.mockRestore()
+      vi.useRealTimers()
+    }
   })
   it('resumes a paused producer when the PTY exits before draining', async () => {
     vi.useFakeTimers()

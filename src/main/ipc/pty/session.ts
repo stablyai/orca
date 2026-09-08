@@ -170,7 +170,10 @@ export type PtyIpcSession = {
   clearHiddenRendererResizeOutput: (id: string) => void
   clearDeliveredHiddenRendererResizeOutput: (id: string) => void
   schedulePendingDataAfterCreditReport: (creditedAny: boolean) => void
-  writeOffLostRendererDelivery: (report: PtyRendererDeliveryStateReport) => PtyDeliveryWriteOff[]
+  writeOffLostRendererDelivery: (
+    report: PtyRendererDeliveryStateReport,
+    ackSilentPtyIds: ReadonlySet<string>
+  ) => PtyDeliveryWriteOff[]
   getRendererInFlightCharsForPty: (id: string) => number
 }
 

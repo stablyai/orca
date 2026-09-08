@@ -70,7 +70,8 @@ describe('terminal delivery watchdog', () => {
     const restoreChannel = await import('./pty-model-restore-channel')
     watchdog.startTerminalDeliveryWatchdog({
       reattachPushListeners: reattachMock,
-      hasAttachedPtys: () => true
+      hasAttachedPtys: () => true,
+      recoverParkedPanes: async () => {}
     })
     return {
       recordPtyDataReceived: watchdog.recordPtyDataReceived,
@@ -80,7 +81,8 @@ describe('terminal delivery watchdog', () => {
     }
   }
 
-  it('does zero IPC while pty output is flowing', async () => {
+  it('probes per-PTY health while output flows without healing', async () => {
+    reportMock.mockResolvedValue(HEALTHY)
     const { recordPtyDataReceived } = await startWatchdog()
 
     for (let tick = 0; tick < 8; tick++) {
@@ -88,7 +90,8 @@ describe('terminal delivery watchdog', () => {
       await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     }
 
-    expect(reportMock).not.toHaveBeenCalled()
+    expect(reportMock).toHaveBeenCalledTimes(8)
+    expect(reattachMock).not.toHaveBeenCalled()
   })
 
   it('reports during silence but never heals a healthy-idle main', async () => {
@@ -124,11 +127,11 @@ describe('terminal delivery watchdog', () => {
     // Bytes flowed once, then the push channel died: the field shape.
     recordPtyDataReceived('pty-1', 128)
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    expect(reportMock).not.toHaveBeenCalled()
+    expect(reportMock).toHaveBeenCalledTimes(1)
 
     // First silent tick: report only, no heal yet.
     await vi.advanceTimersByTimeAsync(INTERVAL_MS)
-    expect(reportMock).toHaveBeenCalledTimes(1)
+    expect(reportMock).toHaveBeenCalledTimes(2)
     expect(reattachMock).not.toHaveBeenCalled()
 
     // Second silent tick confirms: re-attach precedes the heal report, the
@@ -176,7 +179,8 @@ describe('terminal delivery watchdog', () => {
     const watchdog = await import('./terminal-delivery-watchdog')
     watchdog.startTerminalDeliveryWatchdog({
       reattachPushListeners: reattachMock,
-      hasAttachedPtys: () => false
+      hasAttachedPtys: () => false,
+      recoverParkedPanes: async () => {}
     })
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)
@@ -190,7 +194,8 @@ describe('terminal delivery watchdog', () => {
     const watchdog = await import('./terminal-delivery-watchdog')
     watchdog.startTerminalDeliveryWatchdog({
       reattachPushListeners: reattachMock,
-      hasAttachedPtys: () => true
+      hasAttachedPtys: () => true,
+      recoverParkedPanes: async () => {}
     })
 
     await vi.advanceTimersByTimeAsync(INTERVAL_MS * 3)

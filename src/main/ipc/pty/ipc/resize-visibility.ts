@@ -1,6 +1,5 @@
 import { getPtyIpc } from '../../pty-host-bindings'
 import type {
-  PtyDeliveryWriteOff,
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
 } from '../../../../shared/pty-renderer-delivery-health'
@@ -27,8 +26,11 @@ import {
   mainDeliveryBreadcrumbs,
   resetRendererDeliveryAccountingForLifecycleReset
 } from '../delivery/debug'
-import { PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS } from '../delivery/constants'
 import { applyCumulativeAck } from '../delivery/accounting'
+import {
+  applyRendererProcessedCharTotals,
+  handleRendererDeliveryStateReport
+} from '../delivery/renderer-delivery-state-report'
 import { sendModelRestoreNeededMarker } from '../delivery/payload'
 import { isMainWindowPtyIpcEvent } from './write-input'
 import type { PtyIpcSession } from '../session'
@@ -129,19 +131,9 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
       }
       session.clearDeliveryResyncProbe()
       session.deliveryResyncUnansweredWarnLogged = false
-      // Why max-merge: the renderer's cumulative totals are authoritative for what it processed, draining exactly the in-flight debt from lost ACKs.
-      let creditedAny = false
-      for (const [id, processedChars] of Object.entries(args.processedCharsByPty ?? {})) {
-        if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
-          continue
-        }
-        const acknowledged = applyCumulativeAck(session, id, Math.max(0, processedChars))
-        if (acknowledged > 0) {
-          creditedAny = true
-          tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
-        }
-      }
-      session.schedulePendingDataAfterCreditReport(creditedAny)
+      session.schedulePendingDataAfterCreditReport(
+        applyRendererProcessedCharTotals(session, args.processedCharsByPty)
+      )
     }
   )
 
@@ -149,45 +141,8 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
   ipcMain.removeHandler('pty:reportRendererDeliveryState')
   ipcMain.handle(
     'pty:reportRendererDeliveryState',
-    (_event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply => {
-      // Extra repair lane for the lost-ACK variant: identical max-merge to the resync response, so a heal is only reached when merging cannot drain.
-      let creditedAny = false
-      for (const [id, processedChars] of Object.entries(args?.processedCharsByPty ?? {})) {
-        if (typeof processedChars !== 'number' || !Number.isFinite(processedChars)) {
-          continue
-        }
-        const acknowledged = applyCumulativeAck(session, id, Math.max(0, processedChars))
-        if (acknowledged > 0) {
-          creditedAny = true
-          tryGetProviderForPty(id)?.acknowledgeDataEvent(id, acknowledged)
-        }
-      }
-      let writtenOff: PtyDeliveryWriteOff[] = []
-      // Why the main-side ACK-silence check: requiring main to have also seen no ACK stops a buggy/foreign caller from writing off live delivery.
-      if (
-        args?.heal === true &&
-        session.rendererInFlightTotalChars > 0 &&
-        (session.lastAckReceivedAtMs === null ||
-          Date.now() - session.lastAckReceivedAtMs >= PTY_DELIVERY_HEAL_MIN_ACK_SILENCE_MS)
-      ) {
-        writtenOff = session.writeOffLostRendererDelivery(args)
-        creditedAny ||= writtenOff.length > 0
-      }
-      session.schedulePendingDataAfterCreditReport(creditedAny)
-      let inFlightPtyCount = 0
-      for (const accounting of session.rendererDeliveryAccountingByPty.values()) {
-        if (accounting.sentChars - accounting.ackedChars > 0) {
-          inFlightPtyCount++
-        }
-      }
-      return {
-        inFlightTotalChars: session.rendererInFlightTotalChars,
-        inFlightPtyCount,
-        msSinceLastAck:
-          session.lastAckReceivedAtMs === null ? null : Date.now() - session.lastAckReceivedAtMs,
-        ...(writtenOff.length > 0 ? { writtenOff } : {})
-      }
-    }
+    (_event, args: PtyRendererDeliveryStateReport): PtyRendererDeliveryHealthReply =>
+      handleRendererDeliveryStateReport(session, args)
   )
 
   // Why: renderer signals its pty:data listener is live; until then sends are held so boot-window bytes can't drop into a listener-less page and pin the gate.

@@ -1,4 +1,8 @@
 import { onMock } from './pty-ipc-mock-registry'
+import type {
+  PtyRendererDeliveryHealthReply,
+  PtyRendererDeliveryStateReport
+} from '../../shared/pty-renderer-delivery-health'
 
 type IpcHandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>
 type MainWindowDouble = {
@@ -160,22 +164,14 @@ export function createPtyIpcListenerAccessors(ctx: {
       args: { requestId: number; processedCharsByPty: Record<string, number> }
     ) => void
   }
-  function reportRendererDeliveryState(args: {
-    receivedCharsByPty: Record<string, number>
-    processedCharsByPty: Record<string, number>
-    heal?: boolean
-    rendererPtyDataListenerCount?: number | null
-  }): {
-    inFlightTotalChars: number
-    inFlightPtyCount: number
-    msSinceLastAck: number | null
-    writtenOff?: { id: string; markerSeq?: number; writtenOffChars: number }[]
-  } {
+  function reportRendererDeliveryState(
+    args: PtyRendererDeliveryStateReport
+  ): PtyRendererDeliveryHealthReply {
     const handler = handlers.get('pty:reportRendererDeliveryState')
     if (!handler) {
       throw new Error('missing pty:reportRendererDeliveryState handler')
     }
-    return handler(null, args) as ReturnType<typeof reportRendererDeliveryState>
+    return handler(null, args) as PtyRendererDeliveryHealthReply
   }
 
   return {

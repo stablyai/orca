@@ -105,7 +105,8 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   session.clearDeliveredHiddenRendererResizeOutput = clearDeliveredHiddenRendererResizeOutput
   session.schedulePendingDataAfterCreditReport = (creditedAny) =>
     schedulePendingDataAfterCreditReport(session, creditedAny)
-  session.writeOffLostRendererDelivery = (report) => writeOffLostRendererDelivery(session, report)
+  session.writeOffLostRendererDelivery = (report, ackSilentPtyIds) =>
+    writeOffLostRendererDelivery(session, report, ackSilentPtyIds)
   session.getRendererInFlightCharsForPty = (id) => getRendererInFlightCharsForPty(session, id)
 
   setClearBackgroundedDeliverySyncForPty((id: string) => {

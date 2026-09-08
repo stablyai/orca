@@ -12,6 +12,7 @@ type BufferedPreHandlerPtyState = {
   chunks: BufferedPreHandlerPtyData[]
   head: number
   bytes: number
+  chars: number
   /** Sequence of the newest chunk, used to fence state left by a prior incarnation of a reused id. */
   sequence: number
 }
@@ -147,7 +148,7 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
       : meta
   let state = preHandlerPtyData.get(ptyId)
   if (!state) {
-    state = { chunks: [], head: 0, bytes: 0, sequence: 0 }
+    state = { chunks: [], head: 0, bytes: 0, chars: 0, sequence: 0 }
     preHandlerPtyData.set(ptyId, state)
   }
   state.sequence = nextPreHandlerPtySequence()
@@ -157,10 +158,12 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
     ...(bufferedMeta ? { meta: bufferedMeta } : {})
   })
   state.bytes += chunk.bytes
+  state.chars += chunk.data.length
   // Why: a missing handler can accumulate many small chunks; a stored total
   // and head index keep that failure path linear instead of rescanning/shifting.
   while (state.bytes > PRE_HANDLER_PTY_DATA_MAX_BYTES && state.head < state.chunks.length - 1) {
     state.bytes -= state.chunks[state.head].bytes
+    state.chars -= state.chunks[state.head].data.length
     state.chunks[state.head] = { data: '', bytes: 0 }
     state.head += 1
   }
@@ -371,4 +374,17 @@ export function clearPreHandlerPtyState(ptyId: string): void {
   }
   discardedPreHandlerPtyStates.delete(ptyId)
   warnedLostHandlerPtyIds.delete(ptyId)
+}
+
+/** Buffer occupancy is a pane-health signal, independent of producer delivery credit. */
+export function getParkedPreHandlerCharsByPty(): Record<string, number> {
+  return Object.fromEntries(Array.from(preHandlerPtyData, ([id, state]) => [id, state.chars]))
+}
+
+/** A restore supersedes these bytes, including for a pane that binds later. */
+export function discardParkedPtyDataAfterWriteOff(ptyIds: string[]): void {
+  for (const id of ptyIds) {
+    preHandlerPtyData.delete(id)
+    warnedLostHandlerPtyIds.delete(id)
+  }
 }
