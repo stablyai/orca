@@ -4,6 +4,7 @@ import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
 const mocks = vi.hoisted(() => ({
   connectRegisteredSshTarget: vi.fn(),
   upsertRuntimeOwnedTarget: vi.fn(),
+  getTarget: vi.fn(),
   removeRegisteredSshTarget: vi.fn(),
   disconnectRegisteredSshTarget: vi.fn(),
   getRegisteredSshState: vi.fn(),
@@ -14,7 +15,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./ipc/ssh', () => ({
   connectRegisteredSshTarget: mocks.connectRegisteredSshTarget,
-  getSshConnectionStore: () => ({ upsertRuntimeOwnedTarget: mocks.upsertRuntimeOwnedTarget })
+  getSshConnectionStore: () => ({
+    upsertRuntimeOwnedTarget: mocks.upsertRuntimeOwnedTarget,
+    getTarget: mocks.getTarget
+  })
 }))
 vi.mock('./ipc/ssh-session-teardown', () => ({
   removeRegisteredSshTarget: mocks.removeRegisteredSshTarget,
@@ -32,7 +36,8 @@ vi.mock('./ipc/pty/provider/registry', () => ({ getSshPtyProvider: mocks.getSshP
 import {
   connectRuntimeOwnedSshTarget,
   getRuntimeOwnedSshRelayState,
-  reattachRuntimeOwnedSshTarget
+  reattachRuntimeOwnedSshTarget,
+  runtimeOwnedSshTargetNeedsCredentialPrompt
 } from './ephemeral-vm-runtime-ssh'
 
 const TARGET_ID = 'runtime-ssh-orca-1'
@@ -142,21 +147,55 @@ describe('reattachRuntimeOwnedSshTarget', () => {
     expect(mocks.upsertRuntimeOwnedTarget).not.toHaveBeenCalled()
   })
 
-  it('refuses to dial over a relay that is reconnecting on its own', async () => {
+  it('resolves without dialing over a relay that is reconnecting on its own', async () => {
+    // Why resolve rather than throw: activation awaits this, and a relay that is healing
+    // itself is not a failed wake. Throwing put a red "Failed to wake" toast on a live VM.
     mocks.getRegisteredSshState.mockReturnValue({ status: 'reconnecting' })
-    await expect(reattachRuntimeOwnedSshTarget(runtime)).rejects.toThrow('still reconnecting')
+    await expect(reattachRuntimeOwnedSshTarget(runtime)).resolves.toBeUndefined()
     expect(mocks.connectRegisteredSshTarget).not.toHaveBeenCalled()
+    expect(mocks.upsertRuntimeOwnedTarget).not.toHaveBeenCalled()
   })
 
-  it('waits for providers instead of redialing a connected transport', async () => {
+  it('redials a connected transport whose relay never registered its providers', async () => {
+    // Why: transport `connected` with no PTY provider is the relay-lost grace window or a
+    // half-attached session. Waiting on providers there burned the timeout and never dialed;
+    // the registered connect treats a genuinely live relay as a refresh, so dialing is safe.
     mocks.getRegisteredSshState.mockReturnValue({ status: 'connected' })
-    let ptyReady = false
-    mocks.getSshPtyProvider.mockImplementation(() => (ptyReady ? {} : undefined))
-    const pending = reattachRuntimeOwnedSshTarget(runtime)
+    let dialed = false
+    mocks.connectRegisteredSshTarget.mockImplementation(async () => {
+      dialed = true
+      return { targetId: TARGET_ID, status: 'connected' }
+    })
+    mocks.getSshPtyProvider.mockImplementation(() => (dialed ? {} : undefined))
+
+    await reattachRuntimeOwnedSshTarget(runtime)
+
+    expect(mocks.connectRegisteredSshTarget).toHaveBeenCalledWith(TARGET_ID)
+  })
+
+  it('stops waiting for providers when the caller aborts', async () => {
+    mocks.getRegisteredSshState.mockReturnValue(undefined)
+    mocks.getSshPtyProvider.mockReturnValue(undefined)
+    const abort = new AbortController()
+    const pending = reattachRuntimeOwnedSshTarget(runtime, abort.signal)
+    const rejection = expect(pending).rejects.toThrow('aborted')
     await vi.advanceTimersByTimeAsync(300)
-    ptyReady = true
+    abort.abort()
     await vi.advanceTimersByTimeAsync(200)
-    await pending
+    await rejection
+  })
+})
+
+describe('runtimeOwnedSshTargetNeedsCredentialPrompt', () => {
+  it.each([
+    [true, { lastRequiredPassphrase: true }],
+    [false, { lastRequiredPassphrase: false }],
+    [false, {}],
+    [false, undefined]
+  ])('reads %s from the persisted row %j without dialing', (expected, row) => {
+    mocks.getTarget.mockReturnValue(row ? { id: TARGET_ID, ...row } : undefined)
+    expect(runtimeOwnedSshTargetNeedsCredentialPrompt(TARGET_ID)).toBe(expected)
+    expect(mocks.getTarget).toHaveBeenCalledWith(TARGET_ID)
     expect(mocks.connectRegisteredSshTarget).not.toHaveBeenCalled()
   })
 })

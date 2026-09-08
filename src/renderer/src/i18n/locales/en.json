@@ -16714,6 +16714,12 @@
       "terminalPane": {
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
+        },
+        "ipcPtyConnect": {
+          "runtimeOwnedSshRelayRetry": "Open the workspace again or start a new terminal to retry.",
+          "runtimeOwnedSshRelayMiss": "The SSH relay for this workspace is not attached. {{retry}}",
+          "runtimeOwnedSshRelayReattachFailed": "Could not re-attach the SSH relay for this workspace: {{cause}}. {{retry}}",
+          "runtimeOwnedSshRelayMissWithDetail": "The SSH relay for this workspace is not attached: {{detail}}. {{retry}}"
         }
       },
       "WorktreeBaseFallbackDialog": {

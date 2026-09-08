@@ -45,7 +45,7 @@ export async function connectRuntimeOwnedSshTarget(args: {
   } catch (error) {
     // The target is persisted at upsert, so a failed connect/provider-wait would
     // orphan it; remove it (idempotent) before rethrowing so cleanup is complete.
-    await removeRuntimeOwnedSshTarget(target.id).catch(() => undefined)
+    await removeRegisteredSshTarget(target.id).catch(() => undefined)
     throw error
   }
   return { targetId: target.id, target }
@@ -60,24 +60,29 @@ export function getRuntimeOwnedSshRelayState(targetId: string): RuntimeOwnedSshR
 }
 
 /**
+ * Whether dialing this target would stop on a credential prompt. Read from the persisted
+ * row the same way the renderer's startup restore partitions eager vs deferred targets:
+ * without attempting a connection first. A prompt sent before the renderer has a
+ * listener would only burn the credential timeout.
+ */
+export function runtimeOwnedSshTargetNeedsCredentialPrompt(targetId: string): boolean {
+  return getSshConnectionStore()?.getTarget(targetId)?.lastRequiredPassphrase === true
+}
+
+/**
  * Re-establish the relay for a runtime that is still running. Unlike the provisioning
  * connect, a failure keeps the target row: the workspace still points at it and the
  * VM is up, so the next activation or terminal spawn retries instead of orphaning it.
+ *
+ * Resolves without dialing when the relay is `reconnecting`: it re-registers its
+ * providers itself and a second dial would tear the recovering session down.
  */
 export async function reattachRuntimeOwnedSshTarget(
-  runtime: EphemeralVmRuntimeRecord & { sshTargetId: string }
+  runtime: EphemeralVmRuntimeRecord & { sshTargetId: string },
+  signal?: AbortSignal
 ): Promise<void> {
   const relayState = getRuntimeOwnedSshRelayState(runtime.sshTargetId)
-  if (relayState === 'attached') {
-    return
-  }
-  if (relayState === 'reconnecting') {
-    throw new Error(`SSH relay for runtime "${runtime.id}" is still reconnecting.`)
-  }
-  if (getRegisteredSshState(runtime.sshTargetId)?.status === 'connected') {
-    // Why not dial: the transport is up and the relay is about to register its providers;
-    // a second connect would tear that session down for nothing.
-    await waitForRuntimeSshProviders(runtime.sshTargetId)
+  if (relayState === 'attached' || relayState === 'reconnecting') {
     return
   }
   const store = getSshConnectionStore()
@@ -91,7 +96,11 @@ export async function reattachRuntimeOwnedSshTarget(
   // Why re-upsert: the target row lives in the profile, the runtime record in its own
   // file; recreating the row from the recipe result heals a profile that lost it.
   const target = store.upsertRuntimeOwnedTarget(runtime.id, connection.target)
-  await connectAndAwaitRuntimeSshProviders(target.id)
+  // Why always dial, even over a `connected` transport with no providers: the registered
+  // connect already treats a live relay as a refresh, and a transport whose relay never
+  // came up (relay-lost grace, half-attached after a crash) is exactly what a redial heals.
+  // Waiting on it instead would burn the provider timeout and never recover.
+  await connectAndAwaitRuntimeSshProviders(target.id, signal)
 }
 
 export async function disconnectRuntimeOwnedSshTarget(targetId: string | undefined): Promise<void> {

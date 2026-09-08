@@ -1,6 +1,11 @@
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import type { IPtyProvider } from '../../../providers/types'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../../../providers/ssh-pty-id'
+import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import {
+  formatRuntimeOwnedSshRelayNotAttached,
+  formatSshPtyProviderMissingError
+} from '../../../../shared/ssh-pty-provider-missing'
 import { ptyOwnership } from './ownership-state'
 
 // ─── Provider Registry ──────────────────────────────────────────────
@@ -30,9 +35,15 @@ export function getProvider(connectionId: string | null | undefined): IPtyProvid
   if (!provider) {
     // Why the suffix: this surfaces verbatim in `terminal create` on a reconnecting SSH host; the
     // bare id told the caller nothing about what to do. Keep the prefix — the renderer matches it.
+    // Runtime-owned targets are absent from the host list, so they must not be told to use Reconnect.
     throw new Error(
-      `No PTY provider for connection "${connectionId}": the SSH relay for this host is not attached ` +
-        '(reconnecting or disconnected). Wait for the host to reconnect, or use Reconnect on the SSH target.'
+      isRuntimeOwnedSshTargetId(connectionId)
+        ? formatRuntimeOwnedSshRelayNotAttached(connectionId)
+        : formatSshPtyProviderMissingError(
+            connectionId,
+            'the SSH relay for this host is not attached (reconnecting or disconnected). ' +
+              'Wait for the host to reconnect, or use Reconnect on the SSH target.'
+          )
     )
   }
   return provider

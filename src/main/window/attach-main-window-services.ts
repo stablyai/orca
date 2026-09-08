@@ -21,7 +21,7 @@ import {
 import { registerDaemonManagementHandlers } from '../ipc/pty-management'
 import { registerSshHandlers } from '../ipc/ssh'
 import {
-  installRuntimeOwnedSshPtyProviderRecovery,
+  installRuntimeOwnedSshProviderMissRecovery,
   reattachRuntimeOwnedSshTargetsAtStartup
 } from '../ephemeral-vm-runtime-ssh-reattach'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
@@ -126,7 +126,7 @@ export function attachMainWindowServices(
   // Why after registerSshHandlers: both dial through the registered SSH connect. Runtime-owned
   // targets are skipped by the renderer's startup restore, so main owns their re-attach.
   const getUserDataPath = (): string => app.getPath('userData')
-  installRuntimeOwnedSshPtyProviderRecovery(getUserDataPath)
+  installRuntimeOwnedSshProviderMissRecovery(getUserDataPath)
   void reattachRuntimeOwnedSshTargetsAtStartup(getUserDataPath)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)

@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  formatRuntimeOwnedSshRelayNotAttached,
+  formatRuntimeOwnedSshRelayReattachFailed
+} from '../../../../shared/ssh-pty-provider-missing'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
@@ -119,41 +123,65 @@ describe('createIpcPtyTransport', () => {
     )
   })
 
-  it('surfaces the provider miss verbatim for a runtime-owned (per-workspace-env) target', async () => {
-    // Why: main re-attaches a runtime-owned relay on spawn, so a provider miss that still
-    // reaches the pane is a failed re-attach. Runtime-owned targets have no reconnect
-    // dialog or Settings entry, so the canned "use Settings" line would name a control that
-    // does not exist; the raw message carries the retry instead.
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const spawnMock = vi
-      .fn()
-      .mockRejectedValue(new Error('No PTY provider for connection runtime-ssh-orca-1'))
-    ;(globalThis as { window: typeof window }).window = {
-      ...originalWindow,
-      api: {
-        ...originalWindow?.api,
-        pty: {
-          ...originalWindow?.api?.pty,
-          spawn: spawnMock,
-          write: vi.fn(),
-          resize: vi.fn(),
-          kill: vi.fn(),
-          onData: vi.fn(() => () => {}),
-          onReplay: vi.fn(() => () => {}),
-          onExit: vi.fn(() => () => {})
+  // Why these inputs come from the shared formatters: they are what main's registry and
+  // spawn-time re-attach actually throw (Electron wraps them in the invoke prefix); a
+  // hand-written literal would drift from that shape and keep passing.
+  it.each([
+    [
+      'the relay was never re-attached',
+      formatRuntimeOwnedSshRelayNotAttached('runtime-ssh-orca-1'),
+      'The SSH relay for this workspace is not attached. ' +
+        'Open the workspace again or start a new terminal to retry.'
+    ],
+    [
+      'the spawn-time re-attach failed',
+      formatRuntimeOwnedSshRelayReattachFailed(
+        'runtime-ssh-orca-1',
+        'connect ECONNREFUSED 127.0.0.1:51816'
+      ),
+      'Could not re-attach the SSH relay for this workspace: connect ECONNREFUSED 127.0.0.1:51816. ' +
+        'Open the workspace again or start a new terminal to retry.'
+    ]
+  ])(
+    'tells a runtime-owned (per-workspace-env) pane its real retry when %s',
+    async (_label, mainMessage, expected) => {
+      // Why: runtime-owned targets have no reconnect dialog, Settings entry, or host-list
+      // Reconnect — main excludes them from listTargets — so the canned "use Settings" line
+      // would name a control that does not exist. The pane gets the cause main reported plus
+      // the retry the user actually has, without the internal target id.
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const spawnMock = vi
+        .fn()
+        .mockRejectedValue(new Error(`Error invoking remote method 'pty:spawn': ${mainMessage}`))
+      ;(globalThis as { window: typeof window }).window = {
+        ...originalWindow,
+        api: {
+          ...originalWindow?.api,
+          pty: {
+            ...originalWindow?.api?.pty,
+            spawn: spawnMock,
+            write: vi.fn(),
+            resize: vi.fn(),
+            kill: vi.fn(),
+            onData: vi.fn(() => () => {}),
+            onReplay: vi.fn(() => () => {}),
+            onExit: vi.fn(() => () => {})
+          }
         }
-      }
-    } as unknown as typeof window
+      } as unknown as typeof window
 
-    const onError = vi.fn()
-    await createIpcPtyTransport({ connectionId: 'runtime-ssh-orca-1' }).connect({
-      url: '',
-      callbacks: { onError }
-    })
+      const onError = vi.fn()
+      await createIpcPtyTransport({ connectionId: 'runtime-ssh-orca-1' }).connect({
+        url: '',
+        callbacks: { onError }
+      })
 
-    expect(onError).toHaveBeenCalledWith('No PTY provider for connection runtime-ssh-orca-1')
-    expect(onError).not.toHaveBeenCalledWith(expect.stringContaining('Settings'))
-  })
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError).toHaveBeenCalledWith(expected)
+      expect(onError).not.toHaveBeenCalledWith(expect.stringContaining('runtime-ssh-orca-1'))
+      expect(onError).not.toHaveBeenCalledWith(expect.stringMatching(/Settings|Reconnect on/))
+    }
+  )
 
   it('refuses to call a cross-connection SSH reattach expired, and still raises no error toast', async () => {
     // Retargeted from "…as expired instead of a red error toast" (#7661), which pinned the bug:

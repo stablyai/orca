@@ -8,23 +8,31 @@ import type {
   EphemeralVmRuntimeStatus
 } from '../shared/ephemeral-vm-runtimes'
 
-const { getRelayStateMock, reattachMock } = vi.hoisted(() => ({
+const { getRelayStateMock, reattachMock, needsCredentialPromptMock } = vi.hoisted(() => ({
   getRelayStateMock: vi.fn(),
-  reattachMock: vi.fn()
+  reattachMock: vi.fn(),
+  needsCredentialPromptMock: vi.fn()
 }))
 
 vi.mock('./ephemeral-vm-runtime-ssh', () => ({
   getRuntimeOwnedSshRelayState: getRelayStateMock,
-  reattachRuntimeOwnedSshTarget: reattachMock
+  reattachRuntimeOwnedSshTarget: reattachMock,
+  runtimeOwnedSshTargetNeedsCredentialPrompt: needsCredentialPromptMock
 }))
 
 import {
+  RUNTIME_SSH_REATTACH_TIMEOUT_MS,
+  RUNTIME_SSH_STARTUP_REATTACH_CONCURRENCY,
   ensureRuntimeOwnedSshTargetAttached,
-  installRuntimeOwnedSshPtyProviderRecovery,
+  installRuntimeOwnedSshProviderMissRecovery,
   reattachRuntimeOwnedSshTargetsAtStartup
 } from './ephemeral-vm-runtime-ssh-reattach'
 import { recoverMissingSshPtyProvider } from './ipc/pty/provider/missing-ssh-pty-provider-recovery'
 import { registerSshPtyProvider, unregisterSshPtyProvider } from './ipc/pty/provider/registry'
+import {
+  recoverSshProviderMiss,
+  setSshProviderMissRecovery
+} from './providers/ssh-provider-miss-recovery'
 
 const tempDirs: string[] = []
 
@@ -65,13 +73,16 @@ function sshRuntime(
 beforeEach(() => {
   getRelayStateMock.mockReset().mockReturnValue('detached')
   reattachMock.mockReset().mockResolvedValue(undefined)
+  needsCredentialPromptMock.mockReset().mockReturnValue(false)
 })
 
 afterEach(() => {
+  setSshProviderMissRecovery(null)
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
   vi.restoreAllMocks()
+  vi.useRealTimers()
 })
 
 describe('ensureRuntimeOwnedSshTargetAttached', () => {
@@ -102,6 +113,35 @@ describe('ensureRuntimeOwnedSshTargetAttached', () => {
     await expect(ensureRuntimeOwnedSshTargetAttached(runtime)).resolves.toBeUndefined()
     expect(reattachMock).toHaveBeenCalledTimes(2)
   })
+
+  it('bounds the shared wait so a dial that never settles cannot hold every joiner', async () => {
+    // Why: a passphrase prompt with no listener, or a host that black-holes SYNs, would
+    // otherwise pin every spawn and activation that joined this promise indefinitely.
+    vi.useFakeTimers()
+    let observedSignal: AbortSignal | undefined
+    reattachMock.mockImplementation(
+      (_runtime: unknown, signal?: AbortSignal) =>
+        new Promise<void>(() => {
+          observedSignal = signal
+        })
+    )
+    const runtime = sshRuntime('hang', 'running')
+    const spawnJoiner = ensureRuntimeOwnedSshTargetAttached(runtime)
+    const activationJoiner = ensureRuntimeOwnedSshTargetAttached(runtime)
+    const rejections = Promise.all([
+      expect(spawnJoiner).rejects.toThrow(/did not attach within 15s/),
+      expect(activationJoiner).rejects.toThrow(/did not attach within 15s/)
+    ])
+    await vi.advanceTimersByTimeAsync(RUNTIME_SSH_REATTACH_TIMEOUT_MS - 1)
+    expect(observedSignal?.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await rejections
+    expect(observedSignal?.aborted).toBe(true)
+    // Why: the entry is cleared on timeout so the next gesture re-checks state and redials.
+    reattachMock.mockResolvedValue(undefined)
+    await expect(ensureRuntimeOwnedSshTargetAttached(runtime)).resolves.toBeUndefined()
+    expect(reattachMock).toHaveBeenCalledTimes(2)
+  })
 })
 
 describe('reattachRuntimeOwnedSshTargetsAtStartup', () => {
@@ -129,6 +169,25 @@ describe('reattachRuntimeOwnedSshTargetsAtStartup', () => {
     ])
   })
 
+  it('defers a target whose last connect needed a credential prompt', async () => {
+    // Why: the renderer's startup restore partitions on the persisted flag for the same
+    // reason — no one is listening for the prompt yet, and dialing would only burn the
+    // credential timeout. The first user gesture re-attaches it instead.
+    const userDataPath = makeUserData()
+    upsertEphemeralVmRuntime(userDataPath, sshRuntime('keyless', 'running'))
+    upsertEphemeralVmRuntime(userDataPath, sshRuntime('passphrase', 'running'))
+    needsCredentialPromptMock.mockImplementation(
+      (targetId: string) => targetId === 'runtime-ssh-passphrase'
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await reattachRuntimeOwnedSshTargetsAtStartup(() => userDataPath)
+
+    expect(reattachMock.mock.calls.map(([runtime]) => runtime.id)).toEqual(['keyless'])
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Deferring'))
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('passphrase'))
+  })
+
   it('keeps going when one runtime fails to re-attach', async () => {
     const userDataPath = makeUserData()
     upsertEphemeralVmRuntime(userDataPath, sshRuntime('fails', 'running'))
@@ -148,25 +207,86 @@ describe('reattachRuntimeOwnedSshTargetsAtStartup', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('fails'))
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('host unreachable'))
   })
+
+  it('bounds how many relays it dials at once', async () => {
+    // Why: every record a crash left `running` is dialed here; an unbounded fan-out opens
+    // one SSH transport per record simultaneously.
+    const userDataPath = makeUserData()
+    const total = RUNTIME_SSH_STARTUP_REATTACH_CONCURRENCY * 3
+    for (let i = 0; i < total; i += 1) {
+      upsertEphemeralVmRuntime(userDataPath, sshRuntime(`rt-${i}`, 'running'))
+    }
+    let inFlight = 0
+    let peak = 0
+    const releases: (() => void)[] = []
+    reattachMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          inFlight += 1
+          peak = Math.max(peak, inFlight)
+          releases.push(() => {
+            inFlight -= 1
+            resolve()
+          })
+        })
+    )
+
+    const pass = reattachRuntimeOwnedSshTargetsAtStartup(() => userDataPath)
+    await vi.waitFor(() =>
+      expect(reattachMock).toHaveBeenCalledTimes(RUNTIME_SSH_STARTUP_REATTACH_CONCURRENCY)
+    )
+    // Why drain this way: each release lets a worker start the next dial only after several
+    // microtask hops; wait for that dial to register before releasing again.
+    let released = 0
+    while (released < total) {
+      await vi.waitFor(() => expect(releases.length).toBeGreaterThan(0))
+      releases.shift()!()
+      released += 1
+    }
+    await pass
+
+    expect(reattachMock).toHaveBeenCalledTimes(total)
+    expect(peak).toBe(RUNTIME_SSH_STARTUP_REATTACH_CONCURRENCY)
+  })
 })
 
-describe('installRuntimeOwnedSshPtyProviderRecovery', () => {
-  it('re-attaches a running runtime-owned target on a provider miss', async () => {
+describe('installRuntimeOwnedSshProviderMissRecovery', () => {
+  it('re-attaches a running runtime-owned target on a PTY provider miss', async () => {
     const userDataPath = makeUserData()
     const runtime = sshRuntime('miss', 'running')
     upsertEphemeralVmRuntime(userDataPath, runtime)
-    installRuntimeOwnedSshPtyProviderRecovery(() => userDataPath)
+    installRuntimeOwnedSshProviderMissRecovery(() => userDataPath)
 
     await expect(recoverMissingSshPtyProvider(runtime.sshTargetId)).resolves.toBeUndefined()
 
-    expect(reattachMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'miss' }))
+    expect(reattachMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'miss' }),
+      expect.any(AbortSignal)
+    )
+  })
+
+  it('serves the git and filesystem miss sites through the same recovery', async () => {
+    // Why: the reporter's second string ("Remote connection dropped…") comes from those
+    // dispatchers; a PTY-only hook would leave the sidebar, file tree, and source control
+    // failing after a restart while terminals recovered.
+    const userDataPath = makeUserData()
+    const runtime = sshRuntime('git-miss', 'running')
+    upsertEphemeralVmRuntime(userDataPath, runtime)
+    installRuntimeOwnedSshProviderMissRecovery(() => userDataPath)
+
+    await expect(recoverSshProviderMiss(runtime.sshTargetId)).resolves.toBeUndefined()
+
+    expect(reattachMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'git-miss' }),
+      expect.any(AbortSignal)
+    )
   })
 
   it('does nothing when the provider is already registered', () => {
     const userDataPath = makeUserData()
     const runtime = sshRuntime('registered', 'running')
     upsertEphemeralVmRuntime(userDataPath, runtime)
-    installRuntimeOwnedSshPtyProviderRecovery(() => userDataPath)
+    installRuntimeOwnedSshProviderMissRecovery(() => userDataPath)
     registerSshPtyProvider(runtime.sshTargetId, {} as never)
     try {
       expect(recoverMissingSshPtyProvider(runtime.sshTargetId)).toBeUndefined()
@@ -182,7 +302,7 @@ describe('installRuntimeOwnedSshPtyProviderRecovery', () => {
     ['an unknown runtime-owned id', 'runtime-ssh-not-persisted']
   ])('leaves the ordinary provider miss in place for %s', (_label, connectionId) => {
     const userDataPath = makeUserData()
-    installRuntimeOwnedSshPtyProviderRecovery(() => userDataPath)
+    installRuntimeOwnedSshProviderMissRecovery(() => userDataPath)
     expect(recoverMissingSshPtyProvider(connectionId)).toBeUndefined()
     expect(reattachMock).not.toHaveBeenCalled()
   })
@@ -191,7 +311,7 @@ describe('installRuntimeOwnedSshPtyProviderRecovery', () => {
     const userDataPath = makeUserData()
     const runtime = sshRuntime('asleep', 'suspended')
     upsertEphemeralVmRuntime(userDataPath, runtime)
-    installRuntimeOwnedSshPtyProviderRecovery(() => userDataPath)
+    installRuntimeOwnedSshProviderMissRecovery(() => userDataPath)
     expect(recoverMissingSshPtyProvider(runtime.sshTargetId)).toBeUndefined()
     expect(reattachMock).not.toHaveBeenCalled()
   })
@@ -201,20 +321,24 @@ describe('installRuntimeOwnedSshPtyProviderRecovery', () => {
     const runtime = sshRuntime('self-healing', 'running')
     upsertEphemeralVmRuntime(userDataPath, runtime)
     getRelayStateMock.mockReturnValue('reconnecting')
-    installRuntimeOwnedSshPtyProviderRecovery(() => userDataPath)
+    installRuntimeOwnedSshProviderMissRecovery(() => userDataPath)
     expect(recoverMissingSshPtyProvider(runtime.sshTargetId)).toBeUndefined()
     expect(reattachMock).not.toHaveBeenCalled()
   })
 
-  it('names the retry when the re-attach fails', async () => {
+  it('names the retry, as a separate sentence, when the re-attach fails', async () => {
     const userDataPath = makeUserData()
     const runtime = sshRuntime('refused', 'running')
     upsertEphemeralVmRuntime(userDataPath, runtime)
     reattachMock.mockRejectedValue(new Error('connect ECONNREFUSED 127.0.0.1:2222'))
-    installRuntimeOwnedSshPtyProviderRecovery(() => userDataPath)
+    installRuntimeOwnedSshProviderMissRecovery(() => userDataPath)
 
+    // Why the full string: `orca terminal create` shows it verbatim; the renderer re-renders
+    // it, so its shape is also the contract the renderer parser is pinned against.
     await expect(recoverMissingSshPtyProvider(runtime.sshTargetId)).rejects.toThrow(
-      /ECONNREFUSED 127\.0\.0\.1:2222.*Open the workspace again or start a new terminal/s
+      'No PTY provider for connection "runtime-ssh-refused": the SSH relay for this workspace ' +
+        'could not be re-attached: connect ECONNREFUSED 127.0.0.1:2222. ' +
+        'Open the workspace again or start a new terminal to retry.'
     )
   })
 })

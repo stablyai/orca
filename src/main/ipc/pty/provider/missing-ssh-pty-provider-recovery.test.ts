@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  recoverMissingSshPtyProvider,
-  setMissingSshPtyProviderRecovery
-} from './missing-ssh-pty-provider-recovery'
+import { setSshProviderMissRecovery } from '../../../providers/ssh-provider-miss-recovery'
+import { recoverMissingSshPtyProvider } from './missing-ssh-pty-provider-recovery'
 import { registerSshPtyProvider, unregisterSshPtyProvider } from './registry'
 
 afterEach(() => {
-  setMissingSshPtyProviderRecovery(null)
+  setSshProviderMissRecovery(null)
   unregisterSshPtyProvider('ssh-registered')
 })
 
@@ -19,7 +17,7 @@ describe('recoverMissingSshPtyProvider', () => {
 
   it('consults the installed recovery only for connections with no registered provider', () => {
     const recovery = vi.fn(() => Promise.resolve())
-    setMissingSshPtyProviderRecovery(recovery)
+    setSshProviderMissRecovery(recovery)
     registerSshPtyProvider('ssh-registered', {} as never)
 
     expect(recoverMissingSshPtyProvider('ssh-registered')).toBeUndefined()
@@ -31,7 +29,7 @@ describe('recoverMissingSshPtyProvider', () => {
   })
 
   it('lets the recovery decline a connection it does not own', () => {
-    setMissingSshPtyProviderRecovery(() => undefined)
+    setSshProviderMissRecovery(() => undefined)
     expect(recoverMissingSshPtyProvider('ssh-missing')).toBeUndefined()
   })
 })
