@@ -93,6 +93,55 @@ describe('buildWorktreeShareSkipReport', () => {
     ])
   })
 
+  it('preserves each mechanism in truncated overflow warnings', () => {
+    const shareSkips = Array.from({ length: 6 }, (_, index) => ({
+      mechanism: 'share' as const,
+      path: `share-${index}`,
+      reason: 'missing' as const
+    }))
+
+    const report = buildWorktreeShareSkipReport({
+      shareSkips,
+      includeSkips: [{ mechanism: 'include', path: 'include-0', reason: 'missing' }]
+    })
+
+    expect(report.warning).toBe(
+      [
+        'share: share-0 skipped (missing)',
+        'share: share-1 skipped (missing)',
+        'share: share-2 skipped (missing)',
+        'share: share-3 skipped (missing)',
+        'share: share-4 skipped (missing)',
+        'and 1 more share skips',
+        'and 1 more include skips'
+      ].join('\n')
+    )
+    expect(report.warnings).toEqual([
+      expect.objectContaining({
+        code: 'WORKTREE_SHARE_SKIPPED',
+        details: { path: 'share-0', reason: 'missing' }
+      }),
+      expect.objectContaining({
+        code: 'WORKTREE_SHARE_SKIPPED',
+        details: { path: 'share-1', reason: 'missing' }
+      }),
+      expect.objectContaining({
+        code: 'WORKTREE_SHARE_SKIPPED',
+        details: { path: 'share-2', reason: 'missing' }
+      }),
+      expect.objectContaining({
+        code: 'WORKTREE_SHARE_SKIPPED',
+        details: { path: 'share-3', reason: 'missing' }
+      }),
+      expect.objectContaining({
+        code: 'WORKTREE_SHARE_SKIPPED',
+        details: { path: 'share-4', reason: 'missing' }
+      }),
+      { code: 'WORKTREE_SHARE_SKIPPED', message: 'and 1 more share skips' },
+      { code: 'WORKTREE_INCLUDE_SKIPPED', message: 'and 1 more include skips' }
+    ])
+  })
+
   it('names the first five skips and summarizes the rest', () => {
     const includeSkips = Array.from({ length: 7 }, (_, index) => ({
       mechanism: 'include' as const,
@@ -112,7 +161,7 @@ describe('buildWorktreeShareSkipReport', () => {
         'include: skip-2 skipped (missing)',
         'include: skip-3 skipped (missing)',
         'include: skip-4 skipped (missing)',
-        'and 2 more'
+        'and 2 more include skips'
       ].join('\n')
     )
     expect(report.warnings).toEqual([
@@ -123,7 +172,7 @@ describe('buildWorktreeShareSkipReport', () => {
       expect.objectContaining({ details: { path: 'skip-4', reason: 'missing' } }),
       {
         code: 'WORKTREE_INCLUDE_SKIPPED',
-        message: 'and 2 more'
+        message: 'and 2 more include skips'
       }
     ])
   })
