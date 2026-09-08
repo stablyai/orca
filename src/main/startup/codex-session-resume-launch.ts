@@ -15,21 +15,15 @@ import { resolveCodexAccountSwitchResumeHome } from '../codex/codex-account-swit
 import { transferCodexThreadGoalBetweenHomes } from '../codex/codex-thread-goal-transfer'
 import { mainProcessState as state } from './main-process-state'
 
-/**
- * Repins an account-switch restart onto the selected account, carrying the goal.
- *
- * Returns null when the switch has to give the conversation up: the user asked
- * for an account, and honouring that beats keeping them on the one they left.
- * The caller turns that into a `fresh` outcome, which drops the resume argv and
- * tells the pane its conversation did not come along.
- */
+/** Repins explicit account switches; unsafe moves fail without starting a fresh thread. */
 async function moveCodexResumeToSelectedAccount(args: {
   originHome: string
   transcriptPath: string
   threadId: string
-}): Promise<string | null> {
+}): Promise<string> {
   const selectedHome =
-    state.codexRuntimeHome?.resolveSelectedHostAccountCodexHomePathForResume() ?? null
+    state.codexRuntimeHome?.resolveSelectedHostAccountCodexHomePathForResume() ??
+    (state.codexRuntimeHome?.isHostSystemDefaultRealHome() ? getSystemCodexHomePath() : null)
   const move = resolveCodexAccountSwitchResumeHome({
     originCodexHomePath: args.originHome,
     selectedCodexHomePath: selectedHome,
@@ -39,13 +33,23 @@ async function moveCodexResumeToSelectedAccount(args: {
     return args.originHome
   }
   if (move.outcome === 'unmovable') {
-    return null
+    throw new Error(
+      'Cannot safely resume this conversation in the selected Codex account. The original transcript has been preserved.'
+    )
   }
-  await transferCodexThreadGoalBetweenHomes({
+  const goalTransfer = await transferCodexThreadGoalBetweenHomes({
     threadId: args.threadId,
     originCodexHomePath: args.originHome,
     targetCodexHomePath: move.codexHomePath
   })
+  if (goalTransfer === 'failed') {
+    throw new Error(
+      'Could not transfer the Codex goal. Retry the account switch before continuing this conversation.'
+    )
+  }
+  if (goalTransfer === 'unsupported') {
+    console.warn('[codex-account-switch] This Codex CLI does not support goal transfer.')
+  }
   return move.codexHomePath
 }
 
@@ -72,7 +76,6 @@ export async function prepareCodexSessionResumeForLaunch(args: {
   // readable alias wins. A throw here refuses the whole resume instead
   // (#STA-4422).
   const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
-  let accountSwitchGaveUpResume = false
   // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
   // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
   const preparation = await prepareCodexSessionResume({
@@ -125,10 +128,6 @@ export async function prepareCodexSessionResumeForLaunch(args: {
             threadId: args.providerSession.id
           })
         : originHome
-      if (movedHome === null) {
-        accountSwitchGaveUpResume = true
-        return originHome
-      }
       const resumeHome = movedHome
       if (args.workspacePath) {
         try {
@@ -159,12 +158,6 @@ export async function prepareCodexSessionResumeForLaunch(args: {
       return resumeHome
     }
   })
-  if (accountSwitchGaveUpResume) {
-    // Why claimedCodexProvenance: the rollout is real and was verified — the
-    // account move is what it could not survive — so the pane owes the user the
-    // "your conversation did not come along" notice rather than silence.
-    return { outcome: 'fresh', claimedCodexProvenance: true }
-  }
   return preparation.outcome === 'resume'
     ? {
         ...preparation,

@@ -1,6 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, unlinkSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { codexRolloutContentMatches } from './codex-rollout-content-match'
 import { listCodexSessionRolloutFilesIncrementally } from './codex-session-file-listing'
 import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-listing'
 import {
@@ -127,7 +128,7 @@ export function linkCodexRolloutIntoAccountHome(args: {
     return null
   }
   const targetFilePath = join(targetSessionsRoot, relativePath)
-  if (isCodexResumableRollout(targetFilePath)) {
+  if (codexRolloutContentMatches(cleanRolloutPath, targetFilePath)) {
     return targetFilePath
   }
   try {
@@ -140,19 +141,19 @@ export function linkCodexRolloutIntoAccountHome(args: {
     console.warn('[codex-account-session-bridge] Failed to prepare session path:', error)
     return null
   }
-  if (tryHardlinkCodexSessionFile(args.rolloutFilePath, targetFilePath)) {
-    return targetFilePath
+  if (tryHardlinkCodexSessionFile(cleanRolloutPath, targetFilePath)) {
+    return codexRolloutContentMatches(cleanRolloutPath, targetFilePath) ? targetFilePath : null
   }
   // Why re-check before copy: the background sweep walks the same tree, so it
   // can hardlink this rollout in the gap between removeSymlinkAt and tryHardlink.
   // Returning the freshly-linked rollout preserves the shared inode instead of
   // overwriting it with a diverging copy.
-  if (isCodexResumableRollout(targetFilePath)) {
+  if (codexRolloutContentMatches(cleanRolloutPath, targetFilePath)) {
     return targetFilePath
   }
   // Windows / cross-volume fallback: copy the rollout file so Codex can resume it
-  if (tryCopyCodexSessionFile(args.rolloutFilePath, targetFilePath)) {
-    return targetFilePath
+  if (tryCopyCodexSessionFile(cleanRolloutPath, targetFilePath)) {
+    return codexRolloutContentMatches(cleanRolloutPath, targetFilePath) ? targetFilePath : null
   }
   return null
 }
@@ -167,16 +168,6 @@ function removeSymlinkAt(filePath: string): void {
     return
   }
   unlinkSync(filePath)
-}
-
-/** A path Codex will actually list: a real file, never a symlink to one. */
-function isCodexResumableRollout(filePath: string): boolean {
-  try {
-    const stats = lstatSync(filePath)
-    return stats.isFile() && !stats.isSymbolicLink()
-  } catch {
-    return false
-  }
 }
 
 /**

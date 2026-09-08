@@ -69,7 +69,7 @@ describe('CodexRestartChip pane ownership', () => {
     expect(container.textContent).not.toContain('old-one@example.com')
   })
 
-  it('warns before the press when switching to the system default loses the conversation', async () => {
+  it('describes supported resume and goal verification for system-default switches', async () => {
     useAppStore.setState({
       codexRestartNoticeByPtyId: {
         [PTY_ONE]: {
@@ -84,8 +84,8 @@ describe('CodexRestartChip pane ownership', () => {
       root.render(<CodexRestartChip ptyId={PTY_ONE} />)
     })
 
-    expect(container.textContent).toContain('this conversation will not come along')
-    expect(container.textContent).toContain('add a separate Codex account')
+    expect(container.textContent).toContain('resumes this conversation when supported')
+    expect(container.textContent).toContain('Check /goal after switching')
   })
 
   it('uses configuration wording for a home-route restart', async () => {

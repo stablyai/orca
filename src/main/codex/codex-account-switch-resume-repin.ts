@@ -1,16 +1,7 @@
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { linkCodexRolloutIntoAccountHome } from './codex-account-session-bridge'
 
-/**
- * Where an account-switch restart should resume from.
- *
- * `already-there` is not a move at all: the pane's own account is the selected
- * one, so the ordinary resume is correct and nothing may be given up.
- * `moved` means the conversation is listed under the selected account and can
- * be resumed there. `unmovable` means it cannot be, and the caller has to
- * choose between the account the user asked for and the conversation; it picks
- * the account, because that is what the user pressed the button for.
- */
+/** Result of placing the verified transcript in the selected account home. */
 export type CodexAccountSwitchResumeOutcome =
   | { outcome: 'already-there' }
   | { outcome: 'moved'; codexHomePath: string }
@@ -34,8 +25,7 @@ export function resolveCodexAccountSwitchResumeHome(args: {
   linkRollout?: typeof linkCodexRolloutIntoAccountHome
 }): CodexAccountSwitchResumeOutcome {
   const selected = args.selectedCodexHomePath
-  // Why: the system default runs Codex against the user's own ~/.codex, which
-  // Orca never writes into, so the rollout can never be listed there.
+  // System-default selections supply their resolved home explicitly.
   if (!selected) {
     return { outcome: 'unmovable' }
   }
@@ -54,9 +44,6 @@ export function resolveCodexAccountSwitchResumeHome(args: {
     })
     return linkedPath ? { outcome: 'moved', codexHomePath: selected } : { outcome: 'unmovable' }
   } catch (error) {
-    // Why not fall back to the origin: resuming there relaunches the pane on the
-    // account the user just left, which is the bug this whole path exists to
-    // fix. Losing the conversation is the smaller failure, and the pane says so.
     console.warn('[codex-account-switch] Failed to link rollout into selected home:', error)
     return { outcome: 'unmovable' }
   }

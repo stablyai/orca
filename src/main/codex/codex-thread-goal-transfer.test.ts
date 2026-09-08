@@ -56,9 +56,26 @@ describe('parseCodexThreadGoal', () => {
   it('clears a limit the previous account hit so the goal runs on the new one', () => {
     // Why both spellings: the app-server speaks camelCase and rejects anything
     // else, while the goals DB stores the same states with underscores.
-    for (const status of ['usageLimited', 'budgetLimited', 'usage_limited', 'budget_limited']) {
+    for (const status of ['usageLimited', 'usage_limited']) {
       expect(parseCodexThreadGoal({ objective: 'a', status })?.status).toBe('active')
     }
+  })
+
+  it('preserves budget exhaustion and subtracts consumption', () => {
+    expect(
+      parseCodexThreadGoal({
+        objective: 'a',
+        status: 'budget_limited',
+        tokenBudget: 500,
+        tokensUsed: 500
+      })
+    ).toEqual({ objective: 'a', status: 'budgetLimited', tokenBudget: 1 })
+    expect(
+      parseCodexThreadGoal({ objective: 'a', status: 'active', tokenBudget: 500, tokensUsed: 420 })
+    ).toEqual({ objective: 'a', status: 'active', tokenBudget: 80 })
+    expect(
+      parseCodexThreadGoal({ objective: 'a', status: 'active', tokenBudget: 500 })?.status
+    ).toBe('paused')
   })
 
   it('keeps a status the user chose', () => {
@@ -122,7 +139,7 @@ describe('transferCodexThreadGoalBetweenHomes', () => {
       threadId: THREAD,
       objective: 'ship it',
       status: 'active',
-      tokenBudget: 500
+      tokenBudget: 80
     })
   })
 

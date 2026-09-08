@@ -40,7 +40,7 @@ describe('resolveCodexAccountSwitchResumeHome', () => {
     expect(linkRollout).not.toHaveBeenCalled()
   })
 
-  it('reports the system default as unmovable without attempting a link', () => {
+  it('reports an unresolved selection as unmovable without attempting a link', () => {
     const linkRollout = vi.fn(() => `${SELECTED}/sessions/x.jsonl`)
 
     expect(

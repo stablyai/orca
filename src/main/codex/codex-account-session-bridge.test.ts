@@ -196,7 +196,7 @@ describe('linkCodexRolloutIntoAccountHome', () => {
     const sourceHome = join(workspaceRoot, 'account-a')
     const targetHome = join(workspaceRoot, 'account-b')
     const rolloutFilePath = writeRollout(sourceHome, ROLLOUT_A, 'session\n')
-    writeRollout(targetHome, ROLLOUT_A, 'already-there\n')
+    writeRollout(targetHome, ROLLOUT_A, 'session\n')
 
     expect(
       linkCodexRolloutIntoAccountHome({
@@ -205,8 +205,27 @@ describe('linkCodexRolloutIntoAccountHome', () => {
         rolloutFilePath
       })
     ).toBe(rolloutPath(targetHome, ROLLOUT_A))
-    expect(readFileSync(rolloutPath(targetHome, ROLLOUT_A), 'utf-8')).toBe('already-there\n')
+    expect(readFileSync(rolloutPath(targetHome, ROLLOUT_A), 'utf-8')).toBe('session\n')
   })
+
+  it.each(['', 'divergent history\n', 'sess'])(
+    'refuses and preserves an invalid existing copy: %j',
+    (contents) => {
+      const sourceHome = join(workspaceRoot, 'account-a')
+      const targetHome = join(workspaceRoot, 'account-b')
+      const rolloutFilePath = writeRollout(sourceHome, ROLLOUT_A, 'session\n')
+      const target = writeRollout(targetHome, ROLLOUT_A, contents)
+      expect(
+        linkCodexRolloutIntoAccountHome({
+          sourceCodexHomePath: sourceHome,
+          targetCodexHomePath: targetHome,
+          rolloutFilePath
+        })
+      ).toBeNull()
+      expect(readFileSync(target, 'utf8')).toBe(contents)
+      expect(readFileSync(rolloutFilePath, 'utf8')).toBe('session\n')
+    }
+  )
 
   // skipIf: symlink creation on Windows needs elevation or Developer Mode.
   it.skipIf(process.platform === 'win32')(
@@ -302,7 +321,7 @@ describe('linkCodexRolloutIntoAccountHome', () => {
       .spyOn(sessionLinkModule, 'tryHardlinkCodexSessionFile')
       .mockImplementation(() => {
         // Background sweep placed the file!
-        writeRollout(targetHome, ROLLOUT_B, 'racing linked session\n')
+        writeRollout(targetHome, ROLLOUT_B, 'original session\n')
         return false
       })
 
@@ -314,7 +333,7 @@ describe('linkCodexRolloutIntoAccountHome', () => {
       })
 
       expect(linkedPath).toBe(targetFilePath)
-      expect(readFileSync(targetFilePath, 'utf-8')).toBe('racing linked session\n')
+      expect(readFileSync(targetFilePath, 'utf-8')).toBe('original session\n')
       expect(copySpy).not.toHaveBeenCalled()
     } finally {
       hardlinkSpy.mockRestore()
