@@ -1,10 +1,3 @@
-import { powerMonitor } from 'electron'
+import { isOnBatteryPower } from './electron-battery-power'
 
-/** Absence of the API is not evidence of battery; desktops answer false anyway. */
-export function isAgentAwakeOnBatteryPower(): boolean {
-  try {
-    return powerMonitor.isOnBatteryPower() === true
-  } catch {
-    return false
-  }
-}
+export const isAgentAwakeOnBatteryPower = isOnBatteryPower
