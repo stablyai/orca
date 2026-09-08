@@ -75,15 +75,15 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
 export function useActivityUnreadCount(): number {
   const {
     agentStatusEpoch,
-    agentStatusByPaneKey,
     migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey,
     acknowledgedAgentsByPaneKey,
     activityClearedAtByPaneKey
   } = useAppStore(
     useShallow((state) => ({
-      // Heartbeats can revive working activity without a state transition.
-      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      // Why not the status map: the receipt is keyed on stateStartedAt, so same-turn heartbeats
+      // cannot change the count. The live reducer bumps this epoch on state/turn changes and when
+      // a stale entry revives; the freshness scheduler bumps it at the stale boundary.
       agentStatusEpoch: state.agentStatusEpoch,
       migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
       retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
@@ -95,7 +95,7 @@ export function useActivityUnreadCount(): number {
   return useMemo(() => {
     void agentStatusEpoch
     return countActivityUnread({
-      agentStatusByPaneKey,
+      agentStatusByPaneKey: useAppStore.getState().agentStatusByPaneKey,
       migrationUnsupportedByPtyId,
       retainedAgentsByPaneKey,
       acknowledgedAgentsByPaneKey,
@@ -106,7 +106,6 @@ export function useActivityUnreadCount(): number {
     activityClearedAtByPaneKey,
     migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey,
-    agentStatusEpoch,
-    agentStatusByPaneKey
+    agentStatusEpoch
   ])
 }

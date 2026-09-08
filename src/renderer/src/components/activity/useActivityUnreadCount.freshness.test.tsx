@@ -1,58 +1,81 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 
-vi.mock('@/store', () => ({
-  useAppStore: create(() => ({
-    agentStatusByPaneKey: {},
-    agentStatusEpoch: 0,
-    acknowledgedAgentsByPaneKey: {},
-    activityClearedAtByPaneKey: {},
-    migrationUnsupportedByPtyId: {},
-    retainedAgentsByPaneKey: {}
-  }))
-}))
+// Real slice, not a hand-rolled store: the hook subscribes to agentStatusEpoch alone, so the
+// test must prove the reducer bumps that epoch for every transition the count depends on.
+vi.mock('@/store', async () => {
+  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  return { useAppStore: createTestStore() }
+})
 
 import { useAppStore } from '@/store'
+import { flushMicrotasks } from '@/store/slices/agent-status-test-harness'
 import { useActivityUnreadCount } from './useActivityUnreadCount'
 
-const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+const START = 2_000
 
-afterEach(() => vi.useRealTimers())
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(START)
+})
+afterEach(() => {
+  useAppStore.getState().removeAgentStatus(PANE_KEY)
+  vi.useRealTimers()
+})
+
+function setWorking(updatedAt: number): void {
+  useAppStore
+    .getState()
+    .setAgentStatus(
+      PANE_KEY,
+      { state: 'working', prompt: 'Fix tests', agentType: 'claude' },
+      undefined,
+      { updatedAt, evidenceObservedAt: updatedAt }
+    )
+}
 
 describe('useActivityUnreadCount freshness invalidation', () => {
-  it('decays on the status epoch and revives on a heartbeat without an epoch change', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(2_000)
-    const entry: AgentStatusEntry = {
-      paneKey,
-      state: 'working',
-      prompt: '',
-      updatedAt: 2_000,
-      stateStartedAt: 2_000,
-      stateHistory: [],
-      agentType: 'claude'
-    }
-    useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: entry }, agentStatusEpoch: 1 })
+  it('ignores same-turn heartbeats, decays at the stale boundary, revives on the next heartbeat', async () => {
+    setWorking(START)
     const hook = renderHook(() => useActivityUnreadCount())
     expect(hook.result.current).toBe(1)
-    const expiredAt = 2_001 + AGENT_STATUS_STALE_AFTER_MS
+    const epochAfterStart = useAppStore.getState().agentStatusEpoch
+
+    // Fresh same-turn heartbeat: no epoch bump, count unchanged.
     act(() => {
-      vi.setSystemTime(expiredAt)
-      useAppStore.setState({ agentStatusEpoch: 2 })
+      vi.setSystemTime(START + 1_000)
+      setWorking(START + 1_000)
+    })
+    expect(useAppStore.getState().agentStatusEpoch).toBe(epochAfterStart)
+    expect(hook.result.current).toBe(1)
+
+    // Freshness scheduler bumps the epoch at the stale boundary; the count decays with no write.
+    await act(async () => {
+      await flushMicrotasks()
+      vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
+    })
+    expect(hook.result.current).toBe(0)
+
+    // A heartbeat on a stale entry is sort-relevant, so the reducer bumps the epoch and revives it.
+    const revivedAt = Date.now()
+    act(() => {
+      setWorking(revivedAt)
+    })
+    expect(hook.result.current).toBe(1)
+
+    // Reading it holds across further heartbeats.
+    act(() => {
+      useAppStore.getState().acknowledgeAgents([PANE_KEY])
     })
     expect(hook.result.current).toBe(0)
     act(() => {
-      useAppStore.setState({
-        agentStatusByPaneKey: { [paneKey]: { ...entry, updatedAt: expiredAt } }
-      })
+      vi.setSystemTime(revivedAt + 1_000)
+      setWorking(revivedAt + 1_000)
     })
-    expect(hook.result.current).toBe(1)
+    expect(hook.result.current).toBe(0)
     hook.unmount()
   })
 })
