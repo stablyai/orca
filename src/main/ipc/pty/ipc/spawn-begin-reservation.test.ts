@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { beginPtyIpcSpawn } from './spawn-begin'
 import type { PtyIpcSpawnState } from './spawn-state'
 import {
+  claimRuntimePaneCreate,
+  pendingRuntimePaneCreatesByOwnerKey,
   paneSpawnReservationsByOwnerKey,
   resolvePaneSpawnReservation
 } from '../pane/spawn-reservation'
@@ -25,6 +27,7 @@ function createState(connectionId?: string): PtyIpcSpawnState {
 
 afterEach(() => {
   paneSpawnReservationsByOwnerKey.clear()
+  pendingRuntimePaneCreatesByOwnerKey.clear()
   vi.useRealTimers()
 })
 
@@ -52,6 +55,30 @@ describe('stable-pane admission during a pending spawn', () => {
       })
       await expect(retryResult).resolves.toEqual({ id: 'original-pty', isReattach: true })
       expect(paneSpawnReservationsByOwnerKey.size).toBe(0)
+    }
+  )
+
+  it.each([undefined, 'ssh-1'])(
+    'does not claim after a late runtime release on %s',
+    async (connectionId) => {
+      vi.useFakeTimers()
+      const owner = createState(connectionId)
+      const ownerKey = JSON.stringify([
+        connectionId ?? null,
+        owner.args.worktreeId,
+        `${owner.args.tabId}:${owner.args.leafId}`
+      ])
+      const release = claimRuntimePaneCreate(ownerKey)
+      const assertPreparing = vi.fn(() => {
+        throw new Error('PTY spawn preparation timed out before provider spawn')
+      })
+      const pending = beginPtyIpcSpawn(owner, assertPreparing)
+      release()
+
+      await expect(pending).rejects.toThrow('preparation timed out')
+      expect(assertPreparing).toHaveBeenCalled()
+      expect(paneSpawnReservationsByOwnerKey.size).toBe(0)
+      expect(pendingRuntimePaneCreatesByOwnerKey.size).toBe(0)
     }
   )
 })

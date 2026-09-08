@@ -44,21 +44,35 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
   })
   preparationDeadline.start()
   const operation = (async () => {
-    const early = await beginPtyIpcSpawn(ctx)
-    if (early) {
-      return early
+    try {
+      const early = await beginPtyIpcSpawn(ctx, preparationDeadline.assertPreparing)
+      if (early) {
+        return early
+      }
+      return await runPtyIpcSpawnAfterBegin(ctx, preparationDeadline)
+    } catch (err) {
+      releaseAbandonedAgentTeamsLeader(ctx)
+      if (ctx.preSpawnHiddenMarkId !== null) {
+        ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
+      }
+      if (ctx.pendingRegistrationPtyId) {
+        deps.runtime?.cancelPendingPtyRegistration?.(
+          ctx.pendingRegistrationPtyId,
+          ctx.rejectedRegistrationCandidate?.incarnationId
+        )
+        ctx.pendingRegistrationPtyId = null
+      }
+      rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, err)
+      throw err
     }
-    return await runPtyIpcSpawnAfterBegin(deps, ctx, preparationDeadline)
   })()
   return preparationDeadline.race(operation)
 }
 
 async function runPtyIpcSpawnAfterBegin(
-  deps: PtySpawnIpcDeps,
   ctx: PtyIpcSpawnState,
   preparationDeadline: ReturnType<typeof createPtySpawnPreparationDeadline>
 ) {
-  preparationDeadline.assertPreparing()
   try {
     await preparePtyIpcSpawnPreflight(ctx)
     preparationDeadline.assertPreparing()
@@ -80,26 +94,6 @@ async function runPtyIpcSpawnAfterBegin(
     preparationDeadline.finish()
     await executePtyIpcSpawn(ctx)
     return await commitPtyIpcSpawn(ctx)
-  } catch (err) {
-    releaseAbandonedAgentTeamsLeader(ctx)
-    if (ctx.preSpawnHiddenMarkId !== null) {
-      ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
-    }
-    if (ctx.pendingRegistrationPtyId) {
-      deps.runtime?.cancelPendingPtyRegistration?.(
-        ctx.pendingRegistrationPtyId,
-        ctx.rejectedRegistrationCandidate?.incarnationId
-      )
-      ctx.pendingRegistrationPtyId = null
-    }
-    // Why: once the reservation is created, any later throw —
-    // spawn failure, persist failure, or a post-spawn helper such as
-    // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise
-    // it lingers in paneSpawnReservationsByOwnerKey and every future spawn
-    // for this pane awaits a promise that never resolves. reject is a
-    // no-op once the reservation has already resolved.
-    rejectPaneSpawnReservation(ctx.paneSpawnReservationKey, ctx.paneSpawnReservation, err)
-    throw err
   } finally {
     ctx.releaseWorktreeSpawn?.()
     ctx.finishTerminalInstall()

@@ -47,6 +47,40 @@ describe('createIpcPtyTransport', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
+  it('lets a remount claim a late shared result before predecessor retirement', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { revokePtySpawnRetirement } = await import('./pty-connection/pty-spawn-ownership')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    let resolveOld!: (result: { id: string }) => void
+    let resolveSuccessor!: (result: { id: string; isReattach: true }) => void
+    const oldSpawn = new Promise<{ id: string }>((resolve) => {
+      resolveOld = resolve
+    })
+    const successorSpawn = new Promise<{ id: string; isReattach: true }>((resolve) => {
+      resolveSuccessor = resolve
+    })
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockReset().mockReturnValueOnce(oldSpawn).mockReturnValueOnce(successorSpawn)
+
+    const options = {
+      tabId: 'tab-1',
+      leafId: '44444444-4444-4444-8444-444444444444'
+    }
+    const predecessor = createIpcPtyTransport(options)
+    const successor = createIpcPtyTransport(options)
+    const predecessorConnect = predecessor.connect({ url: '', callbacks: {} })
+    revokePtySpawnRetirement('tab-1:44444444-4444-4444-8444-444444444444')
+    predecessor.detach?.()
+    const successorConnect = successor.connect({ url: '', callbacks: {} })
+
+    resolveOld({ id: 'late-live-pty' })
+    resolveSuccessor({ id: 'late-live-pty', isReattach: true })
+    await Promise.all([predecessorConnect, successorConnect])
+
+    expect(kill).not.toHaveBeenCalled()
+    expect(successor.getPtyId()).toBe('late-live-pty')
+  })
+
   // Why: retained gauges would inflate every later high-water profile.
   it.each(['detach', 'destroy'] as const)(
     'drops its side-effect gauge from the census on %s',

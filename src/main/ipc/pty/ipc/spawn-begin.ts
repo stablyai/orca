@@ -16,7 +16,8 @@ import { resolveStablePaneOwner } from '../pane/stable-owner'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function beginPtyIpcSpawn(
-  ctx: PtyIpcSpawnState
+  ctx: PtyIpcSpawnState,
+  assertPreparing?: () => void
 ): Promise<PtySpawnResult | { isReattach: true } | null> {
   const args = ctx.args
   ctx.codexHomeLaunchStartedAt = !args.connectionId ? new Date() : undefined
@@ -79,6 +80,9 @@ export async function beginPtyIpcSpawn(
     : undefined
   if (pendingRuntimeCreate) {
     await pendingRuntimeCreate.promise
+    // A runtime create may release after this request's deadline. Do not let
+    // the late continuation claim a pane reservation.
+    assertPreparing?.()
   }
   const existingPaneSpawn = earlyReservationKey
     ? paneSpawnReservationsByOwnerKey.get(earlyReservationKey)
@@ -98,6 +102,7 @@ export async function beginPtyIpcSpawn(
       : null
   ctx.earlyWorktreeId = args.worktreeId
   // Reserve early so renderer/runtime materialization cannot start duplicate provider spawns.
+  assertPreparing?.()
   ctx.paneSpawnReservationKey = earlyReservationKey
   ctx.paneSpawnReservation = ctx.paneSpawnReservationKey
     ? reservePaneSpawn(ctx.paneSpawnReservationKey)

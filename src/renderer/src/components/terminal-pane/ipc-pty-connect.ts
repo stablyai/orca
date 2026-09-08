@@ -15,6 +15,11 @@ import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
+import {
+  claimPtySpawnRetirement,
+  clearPtySpawnRetirementHandoff,
+  successorOwnsPtySpawn
+} from './pty-connection/pty-spawn-ownership'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
 
@@ -31,6 +36,7 @@ type IpcPtyConnectContext = {
   isCurrent: (id: string) => boolean
   setCallbacks: (callbacks: PtyConnectOptions['callbacks']) => void
   getCallbacks: () => PtyConnectOptions['callbacks']
+  paneOwnershipKey: string | null
 }
 
 export async function connectIpcPty(
@@ -89,13 +95,28 @@ export async function connectIpcPty(
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     const retireFreshSpawn = async (): Promise<void> => {
+      // Give a watchdog remount's successor one turn to claim the shared
+      // result before retiring it from the disposed predecessor.
+      await Promise.resolve()
       // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
       if (
         !spawnResult.isReattach &&
         !spawnResult.coldRestore &&
-        !context.ownsPtyId(spawnResult.id)
+        !context.ownsPtyId(spawnResult.id) &&
+        !(
+          context.paneOwnershipKey &&
+          successorOwnsPtySpawn(context.paneOwnershipKey, spawnResult.id)
+        )
       ) {
-        await window.api.pty.kill(spawnResult.id)
+        try {
+          await window.api.pty.kill(spawnResult.id)
+        } finally {
+          if (context.paneOwnershipKey) {
+            clearPtySpawnRetirementHandoff(context.paneOwnershipKey)
+          }
+        }
+      } else if (context.paneOwnershipKey) {
+        clearPtySpawnRetirementHandoff(context.paneOwnershipKey)
       }
     }
 
@@ -110,6 +131,11 @@ export async function connectIpcPty(
     if (context.isDestroyed()) {
       await retireFreshSpawn()
       return
+    }
+    if (context.paneOwnershipKey) {
+      // A live successor claims the result before binding; the predecessor's
+      // deferred retirement then observes this exact ownership transfer.
+      claimPtySpawnRetirement(context.paneOwnershipKey, spawnResult.id)
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()

@@ -5,6 +5,7 @@ import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 export {
   ensurePtyDispatcher,
@@ -49,6 +50,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let lastExitGeneration: number | null = null
   let suppressAttentionEvents = false
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
+  const paneOwnershipKey =
+    opts.tabId && opts.leafId
+      ? (() => {
+          try {
+            return makePaneKey(opts.tabId!, opts.leafId!)
+          } catch {
+            return null
+          }
+        })()
+      : null
   const preconnectInputBuffer =
     opts.bufferInputUntilConnect || opts.preconnectInput?.length
       ? createPtyPreconnectInputBuffer(opts.preconnectInput)
@@ -140,7 +151,8 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           bind,
           isCurrent: (id) => lifecycleGeneration === connectGeneration && connected && ptyId === id,
           setCallbacks,
-          getCallbacks: () => storedCallbacks
+          getCallbacks: () => storedCallbacks,
+          paneOwnershipKey
         })
       } finally {
         if (lifecycleGeneration === connectGeneration) {

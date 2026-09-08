@@ -11,6 +11,7 @@ import {
   observeSpawnSettlement,
   settleSpawnThatLeftPaneUnbound
 } from './unbound-pane-spawn-recovery'
+import { resetPtySpawnOwnershipForTests } from './pty-spawn-ownership'
 
 vi.mock('../terminal-pane-recovery', () => ({
   requestTerminalPaneRecovery: vi.fn(),
@@ -45,6 +46,7 @@ function observePinnedSpawn(...args: Parameters<typeof observeSpawnSettlement>):
 describe('settleSpawnThatLeftPaneUnbound', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetPtySpawnOwnershipForTests()
   })
 
   it('remounts the tab so the pane rebinds over its live PTY', () => {
@@ -121,6 +123,7 @@ describe('armSpawnSettlementWatchdog', () => {
   })
 
   afterEach(() => {
+    resetPtySpawnOwnershipForTests()
     vi.useRealTimers()
   })
 
@@ -209,11 +212,13 @@ describe('armSpawnSettlementWatchdog', () => {
 describe('observeSpawnSettlement', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    resetPtySpawnOwnershipForTests()
     vi.useFakeTimers()
     pendingSpawnByPaneKey.clear()
   })
 
   afterEach(() => {
+    resetPtySpawnOwnershipForTests()
     vi.useRealTimers()
   })
 
