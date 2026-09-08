@@ -34,13 +34,16 @@ type ResolvedConnection struct {
 	Connected    bool
 	ConnectionID string
 	RepoPath     string
-	// HiddenTargetID (TASK-BE-EVM-015) mirrors domain.RepoInfo.HiddenTargetID
-	// for the worktree-keyed resolution path (dispatchExecutor below) — see
-	// that field's doc comment. GAP: infrafleetv1.ResolveConnectionResponse
-	// has no equivalent proto field today, so grpcclient.ConnectionResolver
-	// never populates this (always ""); adding one needs a .proto change
-	// out of this task's scope (infrafleet.proto already has unrelated
-	// in-flight changes in this working tree — not touched here).
+	// HiddenTargetID (TASK-BE-EVM-015, populated for real as of
+	// TASK-BE-EVM-018) mirrors domain.RepoInfo.HiddenTargetID for the
+	// worktree-keyed resolution path — see that field's doc comment.
+	// infrafleetv1.ResolveConnectionResponse.hidden_target_id is the wire
+	// source; grpcclient.ConnectionResolver.ResolveConnection maps it here.
+	// Still "" for the overwhelming majority of connections (only non-empty
+	// when the worktree is attached to an ssh-type ephemeral VM runtime),
+	// and dispatchExecutor still deliberately does not thread it into ctx
+	// (see that function's doc comment) — but this field itself is real,
+	// not a stub.
 	HiddenTargetID string
 }
 
@@ -449,12 +452,16 @@ func HiddenTargetIDFromContext(ctx context.Context) (string, bool) {
 // dispatchExecutor deliberately does NOT thread ResolvedConnection.HiddenTargetID
 // into ctx the way dispatchExecutorForRepo does below — its 3-value return
 // (executor, repoPath, err) is depended on by all ~33 worktree-keyed
-// usecases in this package, and ResolvedConnection.HiddenTargetID's own doc
-// comment already notes the real gap (infrafleetv1.ResolveConnectionResponse
-// has no such proto field yet, so conn.HiddenTargetID is always "" from
-// this path today regardless). Widening this function's signature for a
-// value that can never be non-empty yet would only churn 33 call sites for
-// no behavioral change — revisit once the proto gains the field.
+// usecases in this package. TASK-BE-EVM-018 (BE-SOL-EVM-004 §6c) closed
+// the proto gap this comment used to describe (infrafleetv1.ResolveConnectionResponse
+// now carries hidden_target_id, and grpcclient.ConnectionResolver.ResolveConnection
+// maps it into conn.HiddenTargetID for real) — conn.HiddenTargetID CAN be
+// non-empty from this path now. Widening this function's signature to
+// thread it into ctx anyway is still deliberately out of scope here: it
+// would churn all 33 call sites for a routing case
+// (worktree-keyed dispatch of a repo backed by an ssh-type ephemeral VM)
+// dispatchExecutorForRepo below already covers via the repo-scoped path —
+// revisit only if a real worktree-keyed (not repo-scoped) caller needs it.
 func dispatchExecutor(ctx context.Context, resolver ConnectionResolver, local, relay GitExecutor, worktreeID string) (GitExecutor, string, error) {
 	conn, err := resolver.ResolveConnection(ctx, worktreeID)
 	if err != nil {

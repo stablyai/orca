@@ -18,6 +18,14 @@ Nếu backend-go chọn Hướng B (`backend-relay-deploy`, mặc định đề 
 agent/ không cần đổi gì — 3 task này vẫn nên hoàn thành để config có thể
 đổi được, không phải "chỉ 1 trong 2 hướng tồn tại được".
 
+## Track 2 — Fix 4 gap thật (SOL-AG-EVM-003's "Sửa lại Gap 1 + Gap 4")
+
+| Task | Depends on | Status |
+|---|---|---|
+| [TASK-AG-EVM-008](./TASK-AG-EVM-008-local-identity-file-read.md) — Gap 1: đọc `identityFile` cục bộ (Hướng A) | 006 | ✅ DONE |
+| [TASK-AG-EVM-009](./TASK-AG-EVM-009-vm-read-credential-file-handler.md) — Gap 1: handler `vm.readCredentialFile` (cho Hướng B) | 008 | ✅ DONE |
+| [TASK-AG-EVM-010](./TASK-AG-EVM-010-tofu-host-key-hourng-a.md) — Gap 4: TOFU host-key (Hướng A) | 008 | ✅ DONE |
+
 ## Thứ tự thực thi
 
 ```

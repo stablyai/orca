@@ -261,12 +261,17 @@ type RepoInfo struct {
 	// living on a `ssh`-type ephemeral VM's hidden target (Hướng A,
 	// TASK-BE-EVM-014), never a new "host" for ResolveConnection. Empty for
 	// every other repo (the common case), same "empty means unaffected"
-	// convention DevServerID already uses just above. GAP: nothing
-	// populates this yet — project-service's GetRepoResponse proto has no
-	// equivalent field (see usecase.dispatchExecutorForRepo's doc comment
-	// for the full audit); a repo-scoped fs/git dispatch always sees "" here
-	// until that proto gains one, same documented gap as
-	// TASK-BE-EVM-014's connectionID-return simplification.
+	// convention DevServerID already uses just above.
+	//
+	// TASK-BE-EVM-018 (BE-SOL-EVM-004 §6c) added the wire field
+	// (project.proto's GetRepoResponse.hidden_target_id) and this struct's
+	// client-side mapping (grpcclient.ProjectClient.GetRepo) for real — but
+	// project-service's OWN GetRepo handler does not populate a real value
+	// yet (which ephemeral VM runtime, if any, backs a given repo_id is an
+	// infra-fleet-service-owned fact — that cross-service join is a
+	// follow-up, see TASK-BE-EVM-015's "Kết quả thực tế" gap #2 for the
+	// full audit). A repo-scoped fs/git dispatch still always sees "" here
+	// until that join lands.
 	HiddenTargetID string
 }
 

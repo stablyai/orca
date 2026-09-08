@@ -264,3 +264,28 @@ code sau):
 - `specs/agent/tdd/v5/03-connection-modes.md` §1-2
 - [SOL-AG-EVM-002](./SOL-AG-EVM-002-vm-provision-streaming-handler.md) (điểm nối)
 - [BE-SOL-EVM-004](../../../../backend-go/crs/v3/ephemeral-vm/solutions/BE-SOL-EVM-004-ssh-connection-type-backend.md)
+
+## Sửa lại Gap 1 + Gap 4 (2026-09-08, xem BE-SOL-EVM-004 §6a/6d cho thiết kế đầy đủ)
+
+**Gap 1 — quyết định 1 (mục "Quyết định đã chốt") bị đảo ngược**:
+`identityFile` là path cục bộ, không phải Vault secret — agent đã chạy
+TRÊN đúng máy chứa file đó (`Provision` luôn chạy recipe trên agent điều
+phối). Sửa: `vm.sshDial`'s params đổi field `privateKeyPem` (đã resolve)
+→ `identityFilePath` (path thô); `dialOutboundSshTarget`
+(`ssh-outbound-client.ts`) tự đọc file cục bộ bằng `node:fs/promises`'s
+`readFile` khi dial — **không round-trip nào tới backend-go cho phần
+này**. `identityAgent` (socket path) không đổi — đã đúng từ đầu.
+
+Thêm 1 RPC mới `vm.readCredentialFile` — dùng cho Hướng B (backend-go
+gọi TRƯỚC khi tự dial off-machine, cần bytes thật vì không có filesystem
+access) — KHÔNG dùng cho Hướng A (agent không cần gửi content đi đâu cả
+khi tự dial).
+
+**Gap 4 — TOFU host-key verification, chỉ cho `dialOutboundSshTarget`
+(Hướng A)**: lần dial đầu cho 1 `runtimeId`, ghi nhận fingerprint host
+key qua `HostKeyCallback` của `ssh2`; lần sau so khớp, lệch → lỗi rõ
+ràng, không âm thầm chấp nhận. Fingerprint lưu ở backend-go
+(`infra.ephemeral_vm_ssh_targets.host_key_fingerprint`, cột mới) — agent
+đọc/ghi qua `vm.sshDial`'s response (`{hiddenTargetId, hostKeyFingerprint}`)
+để backend-go có nơi lưu, không tự lưu cục bộ (agent không persist gì,
+đúng thiết kế đã chốt mục 3).

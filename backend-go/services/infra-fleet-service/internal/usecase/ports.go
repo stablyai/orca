@@ -357,8 +357,27 @@ type DevServerAgentClient interface {
 	// agent<->Orca channel vm.exec already uses (same RPC-param mechanism,
 	// not a second channel) — never persisted here or expected to be
 	// persisted agent-side (SOL-AG-EVM-003 §2a/§2b, "Quyết định đã chốt"
-	// mục 1).
-	DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (hiddenTargetID string, err error)
+	// mục 1). hostKeyFingerprint is the agent's TOFU-observed SHA256
+	// fingerprint for this dial (TASK-AG-EVM-010) — caller threads
+	// target.KnownHostKeyFingerprint in on subsequent calls and persists
+	// the returned value, mirroring backendrelaysshprovisioner's
+	// knownFingerprint/ObservedFingerprint pattern for Hướng B.
+	DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (hiddenTargetID string, hostKeyFingerprint string, err error)
+
+	// --- Hidden-target credential file read (TASK-BE-EVM-017, Hướng B) ---
+
+	// ReadCredentialFile calls a new agent RPC (vm.readCredentialFile —
+	// BE-SOL-EVM-004 §6a) — reads path's content on devServer's OWN
+	// filesystem (the SAME agent that ran this runtime's vm.provision
+	// `create` command, per EphemeralVmSshProvisioner.Provision's
+	// sourceDevServer contract) and returns it, for Hướng B's off-machine
+	// dial (adapter/backendrelaysshprovisioner, which cannot read the
+	// file itself — it isn't running on that host). Response bytes are
+	// used once, in-memory only by the caller (never logged/persisted) —
+	// see agent-ephemeral-vm-handler.ts's handleVmReadCredentialFile doc
+	// comment for the matching "never log contentPEM" requirement on the
+	// agent side.
+	ReadCredentialFile(ctx context.Context, devServer domain.DevServer, path string) (contentPEM string, err error)
 }
 
 // VmProvisionParams carries vm.provision's request fields — field names on
@@ -405,20 +424,34 @@ type VmProvisionResult struct {
 // EphemeralVmSshProvisioner is TASK-BE-EVM-012/013's abstraction over the 2
 // parallel strategies for reaching an ephemeral VM whose recipe result is
 // `ssh`-type (BE-SOL-EVM-004 §5a): Hướng A (agent-outbound,
-// TASK-BE-EVM-014) and Hướng B (backend-relay-deploy,
-// adapter/backendrelaysshprovisioner, TASK-BE-EVM-013) both implement this
-// same interface — EphemeralVmRelay.applyProvisionResult dispatches through
-// it without knowing which strategy is configured (see config.go's
+// TASK-BE-EVM-014/016) and Hướng B (backend-relay-deploy,
+// adapter/backendrelaysshprovisioner, TASK-BE-EVM-013/017) both implement
+// this same interface — EphemeralVmRelay.applyProvisionResult dispatches
+// through it without knowing which strategy is configured (see config.go's
 // EphemeralVmSshMode). Provision dials the target, gets a reachable Dev
 // Server Agent connection established for it (however the strategy achieves
 // that), and returns the resulting connectionID — a real infra.connections
 // row, ready for ResolveConnection like any other dev server.
 //
+// sourceDevServer (BE-SOL-EVM-004 §6b, TASK-BE-EVM-016 — BREAKING signature
+// change from TASK-BE-EVM-012/013's original, both implementations
+// updated): the Dev Server whose agent ran this runtime's vm.provision
+// `create` command — EphemeralVmRelay.Provision already resolves this via
+// resolveDevServerAndRepoPath and now threads it here, closing
+// TASK-BE-EVM-014's "no way to resolve which dev server should dial"
+// gap (formerly EphemeralVmSshDevServerResolver, now removed — the caller
+// already has this value, a lookup port was never necessary). Hướng A uses
+// it to route DialHiddenSshTarget to the right agent; Hướng B uses it to
+// call ReadCredentialFile against the SAME agent before dialing off-machine
+// (TASK-BE-EVM-017).
+//
 // target is domain.EphemeralVmSshTarget, not the usecase-local
 // EphemeralVmRecipeSshTarget below — see that type's doc comment for why a
-// separate, non-persisted type exists.
+// separate, non-persisted type exists. target.ProjectRoot (new,
+// TASK-BE-EVM-016) is what makes constructing a REAL infra.connections row
+// possible — previously the connectionID returned was a bare convention.
 type EphemeralVmSshProvisioner interface {
-	Provision(ctx context.Context, tenantID, runtimeID string, target domain.EphemeralVmSshTarget) (connectionID string, err error)
+	Provision(ctx context.Context, tenantID, runtimeID string, sourceDevServer domain.DevServer, target domain.EphemeralVmSshTarget) (connectionID string, err error)
 }
 
 // EphemeralVmSshTargetRepository persists infra.ephemeral_vm_ssh_targets
@@ -434,39 +467,17 @@ type EphemeralVmSshTargetRepository interface {
 	Get(ctx context.Context, tenantID, runtimeID string) (record domain.EphemeralVmSshTargetRecord, found bool, err error)
 }
 
-// EphemeralVmSshDevServerResolver resolves which EXISTING domain.DevServer's
-// agent session should receive DialHiddenSshTarget's RPC for runtimeID —
-// per BE-SOL-EVM-004 §4's decision 3, Hướng A never creates a new dev
-// server/host at the connections layer; the SAME Dev Server that ran this
-// runtime's vm.provision is the one whose agent dials outbound SSH.
-//
-// KNOWN GAP (TASK-BE-EVM-014, confirmed by reading TASK-BE-EVM-012's real,
-// landed ephemeral_vm_relay.go): neither domain.EphemeralVmRuntime nor
-// EphemeralVmRuntimeRepository persists a dial-origin devServerID today.
-// EphemeralVmRelay.Provision resolves a devServer from connectionID
-// (resolveDevServerAndRepoPath) but never threads it into
-// applySshProvisionResult/EphemeralVmSshProvisioner.Provision, whose fixed
-// signature (tenantID, runtimeID, target) carries no connectionID either.
-// Closing this gap for real needs either a new domain.EphemeralVmRuntime
-// field (persisted at the same point resolveDevServerAndRepoPath already
-// resolves a devServer in Provision) or a signature change to
-// EphemeralVmSshProvisioner.Provision (shared with Hướng B, out of this
-// task's unilateral authority — see TASK-BE-EVM-014.md's "Kết quả thực
-// tế"). main.go wires a fail-closed resolver for this pass — see
-// unimplementedEphemeralVmSshDevServerResolver below.
-type EphemeralVmSshDevServerResolver interface {
-	ResolveDevServer(ctx context.Context, tenantID, runtimeID string) (domain.DevServer, error)
-}
-
-// EphemeralVmSshVaultResolver is the narrow Vault port
-// AgentOutboundSshProvisioner needs — defined here (consumer-side), not in
-// common/secrets, mirroring sshconn.SSHCertIssuer's identical Dependency
-// Inversion convention in this same codebase. A *secrets.Client's KVRead
-// method (common/secrets/vault.go) satisfies this directly — no new method
-// was needed there, see TASK-BE-EVM-014.md's "Kết quả thực tế" for why.
-type EphemeralVmSshVaultResolver interface {
-	KVRead(ctx context.Context, mount, path string) (map[string]any, error)
-}
+// EphemeralVmSshDevServerResolver/EphemeralVmSshVaultResolver
+// (TASK-BE-EVM-014's original ports) are REMOVED as of TASK-BE-EVM-016 —
+// see BE-SOL-EVM-004 §6a/§6b for the full audit:
+//   - The devServer-resolution gap they described is closed by
+//     EphemeralVmSshProvisioner.Provision's sourceDevServer parameter
+//     instead (EphemeralVmRelay.Provision already has this value from
+//     resolveDevServerAndRepoPath — a separate lookup port was never
+//     necessary, it just hadn't been threaded through yet).
+//   - The Vault-resolve step EphemeralVmSshVaultResolver backed was based
+//     on a wrong premise (§6a: identityFile was never a Vault pointer) —
+//     AgentOutboundSshProvisioner no longer calls Vault at all.
 
 // EphemeralVmRecipeSshTarget mirrors frontend/src/shared/ephemeral-vm-recipes.ts's
 // EphemeralVmRecipeSshTargetSchema field-for-field (BE-SOL-EVM-002 §6's

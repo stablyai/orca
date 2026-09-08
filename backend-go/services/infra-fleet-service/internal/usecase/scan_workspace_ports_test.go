@@ -85,9 +85,21 @@ type fakeDevServerAgentClient struct {
 
 	// dialHiddenSshTarget* drive DialHiddenSshTarget's fake answer —
 	// TASK-BE-EVM-014's AgentOutboundSshProvisioner tests.
-	dialHiddenSshTargetResult string
-	dialHiddenSshTargetErr    error
-	dialHiddenSshTargetCalls  []domain.EphemeralVmSshTarget
+	dialHiddenSshTargetResult      string
+	dialHiddenSshTargetFingerprint string
+	dialHiddenSshTargetErr         error
+	dialHiddenSshTargetCalls       []domain.EphemeralVmSshTarget
+
+	// readCredentialFile* drive ReadCredentialFile's fake answer —
+	// TASK-BE-EVM-017's BackendRelaySshProvisioner tests.
+	readCredentialFileResult string
+	readCredentialFileErr    error
+	readCredentialFileCalls  []readCredentialFileCall
+}
+
+type readCredentialFileCall struct {
+	devServer domain.DevServer
+	path      string
 }
 
 type resizePtyCall struct {
@@ -224,17 +236,28 @@ func (f *fakeDevServerAgentClient) StreamVmProvision(ctx context.Context, devSer
 	return events, unsubscribe, nil
 }
 
-func (f *fakeDevServerAgentClient) DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (string, error) {
+func (f *fakeDevServerAgentClient) DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (string, string, error) {
 	f.mu.Lock()
 	f.dialHiddenSshTargetCalls = append(f.dialHiddenSshTargetCalls, target)
 	f.mu.Unlock()
 	if f.dialHiddenSshTargetErr != nil {
-		return "", f.dialHiddenSshTargetErr
+		return "", "", f.dialHiddenSshTargetErr
 	}
+	hiddenTargetID := runtimeID
 	if f.dialHiddenSshTargetResult != "" {
-		return f.dialHiddenSshTargetResult, nil
+		hiddenTargetID = f.dialHiddenSshTargetResult
 	}
-	return runtimeID, nil
+	return hiddenTargetID, f.dialHiddenSshTargetFingerprint, nil
+}
+
+func (f *fakeDevServerAgentClient) ReadCredentialFile(ctx context.Context, devServer domain.DevServer, path string) (string, error) {
+	f.mu.Lock()
+	f.readCredentialFileCalls = append(f.readCredentialFileCalls, readCredentialFileCall{devServer: devServer, path: path})
+	f.mu.Unlock()
+	if f.readCredentialFileErr != nil {
+		return "", f.readCredentialFileErr
+	}
+	return f.readCredentialFileResult, nil
 }
 
 func TestScanWorkspacePorts_RequiresTenantContext(t *testing.T) {

@@ -20,10 +20,17 @@
 // runtimeId -> OutboundSshSession registry (hiddenTargetRegistry) —
 // mirrors provisionAbortRegistry's precedent just above: no persistence,
 // lost on agent restart by design (backend-go re-dials, see SOL mục 3).
+//
+// vm.readCredentialFile (Hướng B only) — TASK-AG-EVM-009/SOL-AG-EVM-003
+// "Sửa lại Gap 1". Narrow, single-purpose: backend-go's BackendRelaySshProvisioner
+// calls this BEFORE it dials off-machine itself, to get identityFile's bytes
+// from the SAME agent that ran Provision (the only place they exist).
+// Hướng A never calls this — dialOutboundSshTarget reads the file itself.
 
 import type WebSocket from 'ws'
 import { encodeDataFrame } from 'orca-dev-agent-transport'
 import type { WireState } from 'orca-dev-agent-transport'
+import { readFile } from 'node:fs/promises'
 import { runRecipeCommand } from '../shared/ephemeral-vm-recipe-process'
 import type { EphemeralVmRecipeContext } from '../shared/ephemeral-vm-recipe-runner'
 import { parseEphemeralVmRecipeResult } from '../shared/ephemeral-vm-recipes'
@@ -215,9 +222,11 @@ export async function handleVmCancelProvision(params: {
 export type VmSshDialParams = {
   runtimeId: string
   target: SshDialTarget
-  // From backend-go's Vault SSH secrets engine resolve, passed by value as
-  // an RPC param (SOL-AG-EVM-003 "Quyết định đã chốt" mục 1) — agent never
-  // fetches Vault itself. MUST NEVER be logged or written to disk.
+  // Legacy/back-compat path only (SOL-AG-EVM-003 "Sửa lại Gap 1" — Gap 1
+  // reversed the original "Vault resolves, sends content" decision). Hướng
+  // A's primary path is now target.identityFilePath (a local path
+  // ssh-outbound-client.ts reads itself). If a caller ever does send content
+  // directly, it MUST NEVER be logged or written to disk.
   privateKeyPEM?: string
 }
 
@@ -250,7 +259,26 @@ export function validateVmSshDialParams(params: unknown): VmSshDialParams {
     typeof t.identityAgentSocket === 'string' ? t.identityAgentSocket : undefined
   const jumpHost = typeof t.jumpHost === 'string' ? t.jumpHost : undefined
   const proxyCommand = typeof t.proxyCommand === 'string' ? t.proxyCommand : undefined
-  const target: SshDialTarget = { host, port, username, identityAgent, jumpHost, proxyCommand }
+  // TASK-AG-EVM-008/SOL-AG-EVM-003 "Sửa lại Gap 1" — Hướng A's primary
+  // credential path: a local path, read by ssh-outbound-client.ts itself
+  // (node:fs/promises), never round-tripped through backend-go as content.
+  const identityFilePath = typeof t.identityFilePath === 'string' ? t.identityFilePath : undefined
+  // TASK-AG-EVM-010/SOL-AG-EVM-003 "Sửa lại Gap 1 + Gap 4" (Gap 4) — TOFU:
+  // undefined on the first dial for a runtimeId (backend-go has nothing
+  // stored yet); set on every dial after, echoed back from what this same
+  // handler returned on the first one.
+  const knownHostKeyFingerprint =
+    typeof t.knownHostKeyFingerprint === 'string' ? t.knownHostKeyFingerprint : undefined
+  const target: SshDialTarget = {
+    host,
+    port,
+    username,
+    identityAgent,
+    identityFilePath,
+    knownHostKeyFingerprint,
+    jumpHost,
+    proxyCommand
+  }
   // Prefer target.privateKeyPem (backend-go's real nested field); fall back
   // to a top-level privateKeyPEM sibling for forward-compat with any other
   // future caller that sends it that way.
@@ -286,7 +314,7 @@ function scrubPrivateKeyFromError(err: unknown, privateKeyPEM: string | undefine
 
 export async function handleVmSshDial(
   params: VmSshDialParams
-): Promise<{ hiddenTargetId: string }> {
+): Promise<{ hiddenTargetId: string; hostKeyFingerprint: string }> {
   let session: OutboundSshSession
   try {
     session = await dialOutboundSshTarget(params.target, { privateKeyPEM: params.privateKeyPEM })
@@ -303,5 +331,35 @@ export async function handleVmSshDial(
   hiddenTargetRegistry.set(params.runtimeId, session)
   previous?.close()
 
-  return { hiddenTargetId: params.runtimeId }
+  // TASK-AG-EVM-010/SOL-AG-EVM-003 "Sửa lại Gap 1 + Gap 4" (Gap 4) — backend-go
+  // persists this (infra.ephemeral_vm_ssh_targets.host_key_fingerprint) and
+  // sends it back as target.knownHostKeyFingerprint on the next dial. Agent
+  // itself never persists anything (SOL mục 3), just reports what it saw.
+  return { hiddenTargetId: params.runtimeId, hostKeyFingerprint: session.hostKeyFingerprint }
+}
+
+// ─── vm.readCredentialFile (Hướng B only) ──────────────────────────────────
+
+export type VmReadCredentialFileParams = { path: string }
+
+// Mirrors validateVmExecParams/validateVmProvisionParams/validateRuntimeIdParam
+// above — dispatch files call the validate* function from this handler file
+// rather than reaching for the local (non-exported) requiredStringField
+// helper directly.
+export function validateVmReadCredentialFileParams(params: unknown): VmReadCredentialFileParams {
+  const p = (params ?? {}) as Record<string, unknown>
+  return { path: requiredStringField(p, 'path') }
+}
+
+// Why this never needs its own scrub-on-error helper (unlike handleVmSshDial
+// above): the only failure mode is readFile itself rejecting (ENOENT/EACCES)
+// BEFORE any content is read — there is no content to leak into that error's
+// .message. `contentPEM` only ever exists in the success return value, which
+// travels over the already-encrypted+authenticated agent<->Orca channel
+// (not a new exposure) — never through a log line or thrown Error.
+export async function handleVmReadCredentialFile(
+  params: VmReadCredentialFileParams
+): Promise<{ contentPEM: string }> {
+  const contentPEM = await readFile(params.path, 'utf8')
+  return { contentPEM }
 }

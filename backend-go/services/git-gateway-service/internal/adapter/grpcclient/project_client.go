@@ -47,6 +47,14 @@ func (p *ProjectClient) GetRepo(ctx context.Context, repoID string) (domain.Repo
 		URL:         r.GetUrl(),
 		DisplayName: r.GetDisplayName(),
 		DevServerID: resp.GetDevServerId(),
+		// HiddenTargetID (TASK-BE-EVM-018, BE-SOL-EVM-004 §6c — closes
+		// TASK-BE-EVM-015's gap #2 at the wire level): project-service's
+		// GetRepo does not populate a real value yet (see
+		// project.proto's GetRepoResponse.hidden_target_id doc comment for
+		// the still-open architectural join), so this is always "" today —
+		// but the mapping itself is real, not a stub, ready the moment
+		// project-service starts populating it.
+		HiddenTargetID: resp.GetHiddenTargetId(),
 	}, nil
 }
 

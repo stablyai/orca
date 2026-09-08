@@ -21,7 +21,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/stablyai/orca-go/common/apperrors"
 	"github.com/stablyai/orca-go/common/eventbus"
 	"github.com/stablyai/orca-go/common/grpcmw"
 	"github.com/stablyai/orca-go/common/health"
@@ -40,7 +39,6 @@ import (
 	infrapostgres "github.com/stablyai/orca-go/services/infra-fleet-service/internal/adapter/postgres"
 	infrasshconn "github.com/stablyai/orca-go/services/infra-fleet-service/internal/adapter/sshconn"
 	infrasshrelay "github.com/stablyai/orca-go/services/infra-fleet-service/internal/adapter/sshrelay"
-	infradomain "github.com/stablyai/orca-go/services/infra-fleet-service/internal/domain"
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/usecase"
 
 	infrafleetv1 "github.com/stablyai/orca-go/proto/gen/go/orca/infrafleet/v1"
@@ -165,7 +163,6 @@ func run() error {
 
 	registerDevServerUC := usecase.NewRegisterDevServer(repo)
 	resolveDirectWebSocketDevServerUC := usecase.NewResolveDirectWebSocketDevServer(repo)
-	resolveConnectionUC := usecase.NewResolveConnection(repo)
 	createSshTargetUC := usecase.NewCreateSshTarget(sshTargetStore)
 	getFleetHealthUC := usecase.NewGetFleetHealth(repo)
 	pollFleetHealthUC := usecase.NewPollFleetHealth(repo, repo, repo, agentClient, repo, terminalSessionStore, logger)
@@ -193,6 +190,11 @@ func run() error {
 	// needs it too, for TASK-BE-EVM-007's environmentId resolution fallback
 	// — the block below still uses this same instance.
 	ephemeralVmRuntimeStore := infrapostgres.NewEphemeralVmRuntimeStore(pool)
+	// resolveConnectionUC (TASK-BE-EVM-018, BE-SOL-EVM-004 §6c) needs
+	// ephemeralVmRuntimeStore for its HiddenTargetID lookup — constructed
+	// here, after that store exists, rather than up with the rest of the
+	// "core dispatch" usecases above (which predate this dependency).
+	resolveConnectionUC := usecase.NewResolveConnection(repo, ephemeralVmRuntimeStore)
 	spawnTerminalSessionUC := usecase.NewSpawnTerminalSession(repo, repo, agentClient, terminalSessionStore, ephemeralVmRuntimeStore, cfg.ServerDeployment)
 	resizeTerminalSessionUC := usecase.NewResizeTerminalSession(terminalSessionStore, repo, repo, agentClient)
 	killTerminalSessionUC := usecase.NewKillTerminalSession(terminalSessionStore, repo, repo, agentClient)
@@ -244,41 +246,45 @@ func run() error {
 	ephemeralVmSshTargetStore := infrapostgres.NewEphemeralVmSshTargetStore(pool)
 	var ephemeralVmRelayOpts []usecase.EphemeralVmRelayOption
 	if cfg.EphemeralVmSshMode == "agent-outbound" {
-		if vaultClient == nil {
-			logger.Warn("EPHEMERAL_VM_SSH_MODE=agent-outbound but no Vault client is available — ssh-type ephemeral VM recipes will fail closed, same as an unconfigured sshProvisioner")
-		} else {
-			// KNOWN GAP (TASK-BE-EVM-014 — see
-			// usecase.EphemeralVmSshDevServerResolver's doc comment for the
-			// full audit): nothing in this codebase yet maps a runtime to
-			// the Dev Server whose agent should dial its hidden ssh
-			// target, so this resolver fails closed (a clear, typed error,
-			// never a silent misroute) until that linkage lands — same
-			// fail-safe shape EphemeralVmRelay already uses when no
-			// sshProvisioner is configured at all.
-			agentOutboundProvisioner := usecase.NewAgentOutboundSshProvisioner(
-				agentClient, unimplementedEphemeralVmSshDevServerResolver{}, vaultClient, ephemeralVmSshTargetStore)
-			ephemeralVmRelayOpts = append(ephemeralVmRelayOpts, usecase.WithSshProvisioner(agentOutboundProvisioner))
-		}
+		// GAP 1/2 FIX (TASK-BE-EVM-016, BE-SOL-EVM-004 §6a/§6b): no Vault
+		// client and no devServer-resolver placeholder needed anymore —
+		// AgentOutboundSshProvisioner no longer resolves credential
+		// material from Vault (identityFile was never a Vault pointer,
+		// see domain.EphemeralVmSshTarget's doc comment), and
+		// EphemeralVmSshProvisioner.Provision now receives sourceDevServer
+		// directly from EphemeralVmRelay.Provision instead of needing a
+		// separate lookup port. repo satisfies usecase.ConnectionRepository
+		// (used to register a real infra.connections row), same as it
+		// already does for Hướng B just below.
+		agentOutboundProvisioner := usecase.NewAgentOutboundSshProvisioner(
+			agentClient, repo, ephemeralVmSshTargetStore)
+		ephemeralVmRelayOpts = append(ephemeralVmRelayOpts, usecase.WithSshProvisioner(agentOutboundProvisioner))
 	} else {
-		// Hướng B (backend-relay-deploy, TASK-BE-EVM-013) — the default mode
-		// (config.Load's EphemeralVmSshMode fail-safe default). Reuses the
-		// EXACT same agent/out/agent.js deploy+launch+handshake pipeline as
-		// the ordinary relay-ssh wiring just above (infrasshrelay.Provisioner),
-		// only swapping auth (adapter/ephemeralsshconn's recipe-credential
-		// dial instead of adapter/sshconn's Vault-cert dial) — see
-		// adapter/backendrelaysshprovisioner's package doc comment.
-		// Deliberately built independently of the vaultClient!=nil branch
-		// above: this mode does not (yet — see domain.EphemeralVmSshTarget's
-		// doc comment on the still-open identityFile->PrivateKeyPEM Vault
-		// resolution gap) call Vault at all, so it stays available even when
-		// Vault client construction failed.
+		// Hướng B (backend-relay-deploy, TASK-BE-EVM-013/017) — the default
+		// mode (config.Load's EphemeralVmSshMode fail-safe default). Reuses
+		// the EXACT same agent/out/agent.js deploy+launch+handshake
+		// pipeline as the ordinary relay-ssh wiring just above
+		// (infrasshrelay.Provisioner), only swapping auth
+		// (adapter/ephemeralsshconn's recipe-credential dial instead of
+		// adapter/sshconn's Vault-cert dial) — see
+		// adapter/backendrelaysshprovisioner's package doc comment. Does
+		// not call Vault at all (TASK-BE-EVM-017: credential bytes come
+		// from DevServerAgentClient.ReadCredentialFile against the source
+		// dev server instead), so it stays available even when Vault
+		// client construction failed.
 		backendRelaySshRelayCfg := infrasshrelay.LoadConfigFromEnv(agentCfg.OrcaVersion)
 		if backendRelaySshRelayCfg.BundlePath == "" {
 			logger.Warn("ORCA_RELAY_BUNDLE_PATH is not set — EPHEMERAL_VM_SSH_MODE=backend-relay-deploy ssh-type ephemeral VMs will fail to provision until it points at a built agent/out/agent.js")
 		}
+		// ephemeralVmSshTargetStore (TASK-BE-EVM-019, BE-SOL-EVM-004 §6d) is
+		// the SAME store Hướng A's audit row uses (migrations/0015/0016) —
+		// only one of Hướng A/B is active per deployment (EphemeralVmSshMode),
+		// so no write-owner conflict; here it backs TOFU host-key
+		// fingerprint persistence instead of the identity-path audit trail.
 		backendRelaySshProvisioner := infrabackendrelaysshprovisioner.NewProvisioner(
 			repo, repo, ephemeralVmRuntimeStore, agentClient,
-			backendRelaySshRelayCfg, infraephemeralsshconn.LoadConfigFromEnv(), uuid.NewString)
+			backendRelaySshRelayCfg, infraephemeralsshconn.LoadConfigFromEnv(), uuid.NewString,
+			ephemeralVmSshTargetStore)
 		ephemeralVmRelayOpts = append(ephemeralVmRelayOpts, usecase.WithSshProvisioner(backendRelaySshProvisioner))
 	}
 	ephemeralVmRelayUC := usecase.NewEphemeralVmRelay(repo, agentClient, ephemeralVmRuntimeStore, ephemeralVmRelayOpts...)
@@ -440,19 +446,4 @@ func run() error {
 	outboxRelayWG.Wait()
 
 	return nil
-}
-
-// unimplementedEphemeralVmSshDevServerResolver is EPHEMERAL_VM_SSH_MODE=
-// agent-outbound's placeholder usecase.EphemeralVmSshDevServerResolver —
-// TASK-BE-EVM-014 does not close the gap that port's doc comment describes
-// (no domain source yet maps a runtime to the Dev Server that should dial
-// its hidden ssh target), so this always fails closed with a clear,
-// actionable error instead of guessing or silently misrouting the dial.
-// Replace this with a real implementation once that linkage lands (see the
-// port's doc comment for the two candidate fixes).
-type unimplementedEphemeralVmSshDevServerResolver struct{}
-
-func (unimplementedEphemeralVmSshDevServerResolver) ResolveDevServer(ctx context.Context, tenantID, runtimeID string) (infradomain.DevServer, error) {
-	return infradomain.DevServer{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_EPHEMERAL_VM_SSH_DEV_SERVER_RESOLUTION_NOT_IMPLEMENTED",
-		"EPHEMERAL_VM_SSH_MODE=agent-outbound has no way to resolve which dev server should dial this runtime's hidden ssh target yet — see TASK-BE-EVM-014's known gaps", nil)
 }

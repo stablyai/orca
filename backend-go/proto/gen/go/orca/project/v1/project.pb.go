@@ -2149,9 +2149,22 @@ type GetRepoResponse struct {
 	// though it's now redundant with Repo.dev_server_id above. Previously
 	// this was resolved via a join through the OWNING PROJECT's
 	// dev_server_id, since project.repos had no such column of its own.
-	DevServerId   string `protobuf:"bytes,2,opt,name=dev_server_id,json=devServerId,proto3" json:"dev_server_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DevServerId string `protobuf:"bytes,2,opt,name=dev_server_id,json=devServerId,proto3" json:"dev_server_id,omitempty"`
+	// hidden_target_id (TASK-BE-EVM-018, BE-SOL-EVM-004 §4/§6c) mirrors
+	// ResolveConnectionResponse.hidden_target_id's meaning for this repo —
+	// set when this repo is backed by an ssh-type ephemeral VM runtime
+	// (Hướng A), so git-gateway-service's repo-scoped dispatch
+	// (dispatchExecutorForRepo/dispatchFilesystemExecutorForRepo) can route
+	// via the hidden target too. Empty for every ordinary repo. This
+	// service does not populate a real value yet (which ephemeral VM
+	// runtime, if any, backs a given repo_id is an infra-fleet-service-owned
+	// fact — the join this field needs is a follow-up, see
+	// TASK-BE-EVM-015's "Kết quả thực tế" gap #2) — the field exists on the
+	// wire so git-gateway-service's client-side mapping has something real
+	// to read once that join lands.
+	HiddenTargetId string `protobuf:"bytes,3,opt,name=hidden_target_id,json=hiddenTargetId,proto3" json:"hidden_target_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetRepoResponse) Reset() {
@@ -2194,6 +2207,13 @@ func (x *GetRepoResponse) GetRepo() *Repo {
 func (x *GetRepoResponse) GetDevServerId() string {
 	if x != nil {
 		return x.DevServerId
+	}
+	return ""
+}
+
+func (x *GetRepoResponse) GetHiddenTargetId() string {
+	if x != nil {
+		return x.HiddenTargetId
 	}
 	return ""
 }
@@ -6668,10 +6688,11 @@ const file_orca_project_v1_project_proto_rawDesc = "" +
 	"\x1bAssignRepoToProjectResponse\x12)\n" +
 	"\x04repo\x18\x01 \x01(\v2\x15.orca.project.v1.RepoR\x04repo\")\n" +
 	"\x0eGetRepoRequest\x12\x17\n" +
-	"\arepo_id\x18\x01 \x01(\tR\x06repoId\"`\n" +
+	"\arepo_id\x18\x01 \x01(\tR\x06repoId\"\x8a\x01\n" +
 	"\x0fGetRepoResponse\x12)\n" +
 	"\x04repo\x18\x01 \x01(\v2\x15.orca.project.v1.RepoR\x04repo\x12\"\n" +
-	"\rdev_server_id\x18\x02 \x01(\tR\vdevServerId\"m\n" +
+	"\rdev_server_id\x18\x02 \x01(\tR\vdevServerId\x12(\n" +
+	"\x10hidden_target_id\x18\x03 \x01(\tR\x0ehiddenTargetId\"m\n" +
 	"\n" +
 	"RepoMember\x12\x17\n" +
 	"\arepo_id\x18\x01 \x01(\tR\x06repoId\x12\x17\n" +

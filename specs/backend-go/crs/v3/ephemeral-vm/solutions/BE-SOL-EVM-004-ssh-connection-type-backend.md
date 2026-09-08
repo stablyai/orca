@@ -328,3 +328,93 @@ func WrapClient(client *ssh.Client) *Connection { return &Connection{client: cli
 - `specs/backend-go/tdd/services/infra-fleet-service.md` §4, §9
 - `specs/backend-go/tdd/architecture/06-secrets-vault-architecture.md`
 - `frontend/src/shared/ephemeral-vm-recipes.ts:47-` (`EphemeralVmRecipeSshTargetSchema`)
+
+## 6. Sửa lại 4 gap thật (2026-09-08, sau khi implement — phát hiện qua đối chiếu)
+
+### 6a. Gap 1 — "Vault resolution" là giả định SAI, không phải thiếu implement
+
+Audit thật (`desktop/src/main/ssh/system-ssh-args.ts:44-45`: `args.push('-i',
+target.identityFile)`; `SshTargetForm.tsx`'s placeholder
+`~/.ssh/id_ed25519`) xác nhận: `identityFile` trong TOÀN BỘ codebase này
+— kể cả `EphemeralVmRecipeSshTargetSchema` — là **đường dẫn file cục bộ**,
+không phải nội dung key hay Vault secret path. Quyết định 1 gốc (TASK-BE-
+EVM-009/TASK-AG-EVM-004: "backend-go resolve Vault rồi gửi
+`privateKeyPem` qua RPC") giải quyết đúng 1 vấn đề (agent không nên tự
+giữ Vault token) nhưng SAI tiền đề (không có gì trong Vault để resolve —
+key vốn đã nằm sẵn trên đĩa của chính Dev Server Agent đã chạy recipe's
+`create` command, theo TASK-BE-EVM-011's phát hiện: `Provision` luôn
+chạy recipe trên agent điều phối).
+
+**Sửa: bỏ hẳn bước "Vault resolve" cho `identityFile`, thay bằng đọc file
+thật, khác nhau theo hướng:**
+
+- **Hướng A (agent-outbound)**: agent đã chạy TRÊN đúng máy chứa
+  `identityFile` — không cần bất kỳ RPC/round-trip nào. `AgentOutboundSshProvisioner`
+  chỉ forward **path** `identityFile` nguyên vẹn trong `vm.sshDial`'s
+  params (field mới `identityFilePath`, KHÔNG phải `privateKeyPem` đã
+  resolve) — agent's `dialOutboundSshTarget` tự đọc file cục bộ (Node
+  `fs.readFile`) khi dial, y hệt cách `identityAgent` (socket path) đã
+  hoạt động từ đầu (không bao giờ mang secret qua RPC).
+- **Hướng B (backend-relay-deploy)**: backend-go dial off-machine, THẬT
+  SỰ cần bytes — nhưng lấy từ agent (source Dev Server Agent đã chạy
+  `Provision`), không phải Vault. Thêm 1 RPC agent mới, hẹp, có chủ đích
+  (`vm.readCredentialFile`) — backend-go gọi RPC này TRƯỚC khi dial, lấy
+  nội dung file, dùng cho `ephemeralsshconn.Connector`. Response KHÔNG
+  BAO GIỜ được log (cùng yêu cầu bảo mật `privateKeyPEM` đã áp dụng ở
+  `vm.sshDial`).
+
+**Không mở rộng trust boundary**: `identityFile`'s path đến từ chính
+kết quả `create` command của recipe (agent đã tin tưởng đủ để chạy code
+đó) — đọc 1 file recipe tự chỉ định không phải quyền hạn mới.
+
+### 6b. Gap 2 — `Provision`'s usecase thiếu `sourceDevServer` + `ProjectRoot`
+
+`EphemeralVmSshProvisioner.Provision(ctx, tenantID, runtimeID, target)`
+không mang `devServer` (Hướng A cần biết relay `vm.sshDial`/
+`vm.readCredentialFile` tới đúng agent nào) lẫn `ProjectRoot` (cả 2
+hướng cần để tạo `infra.connections` row thật — hiện `connectionID` trả
+về chỉ là quy ước `runtimeID`, không resolve được qua `ResolveConnection`
+thật).
+
+**Sửa**: đổi chữ ký (breaking, cả 2 implementation A/B đều cần cập
+nhật):
+```go
+type EphemeralVmSshProvisioner interface {
+  Provision(ctx context.Context, tenantID, runtimeID string, sourceDevServer domain.DevServer, target EphemeralVmSshTarget) (connectionID string, err error)
+}
+```
+`target` thêm field `ProjectRoot string` (nguồn: `VmProvisionResult.ProjectRoot`,
+đã có sẵn tại call site `applyProvisionResult`/`applySshProvisionResult`,
+chỉ chưa được truyền xuống). Cả 2 implementation dùng `ProjectRoot` để
+gọi `domain.NewConnection(...)` thật, đăng ký `infra.connections` row
+thật, trả `connectionID` thật (không còn quy ước).
+
+### 6c. Gap 3 — `hiddenTargetID` chưa populate (TASK-BE-EVM-015's gap còn lại)
+
+TASK-BE-EVM-015 đã xây xong cơ chế routing (`RelayExecutor.relay()`
+đổi method thành `<method>ViaHiddenTarget` khi `HiddenTargetID` có trong
+ctx) nhưng **chưa có nơi nào set** field đó — cần thêm `hidden_target_id`
+vào `ResolvedConnection` (`infrafleet.proto`) và `domain.RepoInfo`
+(project-service), populate tại đúng chỗ `ResolveConnection` trả về cho
+1 runtime `ssh`-type (Hướng A) đã attach — audit lại 2 proto này TRƯỚC
+KHI sửa (đang dirty từ WIP khác, đọc lại ngay trước khi ghi, chỉ thêm 1
+field mới, không đụng field khác — đúng cách 2 agent song song đã merge
+sạch `ephemeral_vm_ssh_target.go` trước đó trong phiên này).
+
+### 6d. Gap 4 — host-key verification (`InsecureIgnoreHostKey`)
+
+Gap có sẵn từ trước CR-EVM-005 (ghi nhận trong `sshconn/connector.go`'s
+doc comment), CR-EVM-005 kế thừa nguyên vẹn cho cả 2 hướng mới. **Chốt
+phạm vi sửa: chỉ áp dụng cho 2 code path CR-EVM-005 mới tạo
+(`ephemeralsshconn.Connector` Hướng B, `ssh-outbound-client.ts` Hướng
+A) — KHÔNG đụng `sshconn.Connector` dùng chung cho `ssh_targets` thường
+(ngoài phạm vi CR này, gap đó là quyết định cũ, cần 1 CR riêng nếu muốn
+sửa).**
+
+Thiết kế: TOFU (trust-on-first-use), giống hành vi `known_hosts` chuẩn:
+- Lần dial đầu tiên cho 1 `runtimeID`: chấp nhận host key, lưu fingerprint
+  (SHA256) vào `infra.ephemeral_vm_ssh_targets`'s cột mới
+  `host_key_fingerprint`.
+- Lần dial sau (reconnect): so khớp fingerprint presented với đã lưu —
+  khác nhau → lỗi rõ ràng (`INFRA_EPHEMERAL_VM_HOST_KEY_MISMATCH`), KHÔNG
+  âm thầm chấp nhận (nghi ngờ MITM thật cần chặn, không phải cảnh báo).

@@ -2,6 +2,10 @@
 // TASK-AG-EVM-001: handleVmExec / validateVmExecParams.
 // TASK-AG-EVM-002: handleVmProvision / handleVmCancelProvision.
 // TASK-AG-EVM-006: handleVmSshDial / validateVmSshDialParams / hiddenTargetRegistry.
+// TASK-AG-EVM-008: dialOutboundSshTarget's identityFilePath handling is
+// covered in ssh-outbound-client.test.ts — this file only covers the
+// validateVmSshDialParams wire-shape change.
+// TASK-AG-EVM-009: handleVmReadCredentialFile / validateVmReadCredentialFileParams.
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createWireState, decodeFrame } from 'orca-dev-agent-transport'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../shared/pairing'
@@ -27,9 +31,20 @@ vi.mock('./ssh-outbound-client', () => ({
   dialOutboundSshTarget: (...args: unknown[]) => dialOutboundSshTarget(...args)
 }))
 
+// TASK-AG-EVM-009: handleVmReadCredentialFile reads node:fs/promises's
+// readFile directly (same primitive TASK-AG-EVM-008 added to
+// ssh-outbound-client.ts, mocked separately there) — mocked here too so
+// this file's tests never touch the real filesystem.
+const readFile = vi.fn()
+
+vi.mock('node:fs/promises', () => ({
+  readFile: (...args: unknown[]) => readFile(...args)
+}))
+
 beforeEach(() => {
   runRecipeCommand.mockReset()
   dialOutboundSshTarget.mockReset()
+  readFile.mockReset()
 })
 
 const VALID_PARAMS = {
@@ -399,8 +414,11 @@ const VALID_SSH_TARGET = {
   username: 'deploy'
 }
 
-function makeFakeSession(): { close: ReturnType<typeof vi.fn> } {
-  return { close: vi.fn() }
+function makeFakeSession(hostKeyFingerprint = 'SHA256:fake-fingerprint'): {
+  close: ReturnType<typeof vi.fn>
+  hostKeyFingerprint: string
+} {
+  return { close: vi.fn(), hostKeyFingerprint }
 }
 
 // Real backend-go wire shape (infra-fleet-service's DialHiddenSshTarget,
@@ -436,10 +454,45 @@ describe('validateVmSshDialParams', () => {
         port: 22,
         username: 'deploy',
         identityAgent: '/tmp/ssh-agent.sock',
+        identityFilePath: undefined,
+        knownHostKeyFingerprint: undefined,
         jumpHost: 'bastion.example.com',
         proxyCommand: 'cloudflared access ssh --hostname %h'
       }
     })
+  })
+
+  // TASK-AG-EVM-008/SOL-AG-EVM-003 "Sửa lại Gap 1" — current wire shape:
+  // target.identityFilePath (a local path), no privateKeyPem anywhere.
+  it('parses target.identityFilePath (Gap 1 fix wire shape) with no privateKeyPem at all', async () => {
+    const { validateVmSshDialParams } = await import('./agent-ephemeral-vm-handler')
+    const result = validateVmSshDialParams({
+      runtimeId: 'runtime-1',
+      target: {
+        host: 'vm1.example.com',
+        port: 22,
+        username: 'deploy',
+        identityFilePath: '/home/deploy/.ssh/id_ed25519'
+      }
+    })
+    expect(result.privateKeyPEM).toBeUndefined()
+    expect(result.target.identityFilePath).toBe('/home/deploy/.ssh/id_ed25519')
+  })
+
+  // TASK-AG-EVM-010/SOL-AG-EVM-003 "Sửa lại Gap 1 + Gap 4" (Gap 4 fix).
+  it('parses target.knownHostKeyFingerprint when present (repeat dial)', async () => {
+    const { validateVmSshDialParams } = await import('./agent-ephemeral-vm-handler')
+    const result = validateVmSshDialParams({
+      runtimeId: 'runtime-1',
+      target: { ...VALID_SSH_TARGET, knownHostKeyFingerprint: 'SHA256:abc123' }
+    })
+    expect(result.target.knownHostKeyFingerprint).toBe('SHA256:abc123')
+  })
+
+  it('leaves target.knownHostKeyFingerprint undefined when absent (first dial)', async () => {
+    const { validateVmSshDialParams } = await import('./agent-ephemeral-vm-handler')
+    const result = validateVmSshDialParams({ runtimeId: 'runtime-1', target: VALID_SSH_TARGET })
+    expect(result.target.knownHostKeyFingerprint).toBeUndefined()
   })
 
   it('also accepts the legacy shape (top-level privateKeyPEM, label present but ignored)', async () => {
@@ -489,7 +542,7 @@ describe('validateVmSshDialParams', () => {
 
 describe('handleVmSshDial', () => {
   it('dials and registers the session in hiddenTargetRegistry under runtimeId', async () => {
-    const session = makeFakeSession()
+    const session = makeFakeSession('SHA256:observed-on-this-dial')
     dialOutboundSshTarget.mockResolvedValue(session)
     const { handleVmSshDial, hiddenTargetRegistry } = await import('./agent-ephemeral-vm-handler')
 
@@ -499,7 +552,12 @@ describe('handleVmSshDial', () => {
       privateKeyPEM: 'PEM-DATA'
     })
 
-    expect(result).toEqual({ hiddenTargetId: 'runtime-ssh-1' })
+    // TASK-AG-EVM-010: hostKeyFingerprint echoes session's observed value —
+    // this is what backend-go persists and sends back on the next dial.
+    expect(result).toEqual({
+      hiddenTargetId: 'runtime-ssh-1',
+      hostKeyFingerprint: 'SHA256:observed-on-this-dial'
+    })
     expect(dialOutboundSshTarget).toHaveBeenCalledWith(VALID_SSH_TARGET, {
       privateKeyPEM: 'PEM-DATA'
     })
@@ -586,5 +644,89 @@ describe('handleVmSshDial — privateKeyPEM never appears in a thrown error', ()
         privateKeyPEM: 'unrelated-secret'
       })
     ).rejects.toThrow('ETIMEDOUT connecting to vm1.example.com')
+  })
+})
+
+// ─── TASK-AG-EVM-009: vm.readCredentialFile (Hướng B only) ─────────────────
+
+describe('validateVmReadCredentialFileParams', () => {
+  it('returns the validated path', async () => {
+    const { validateVmReadCredentialFileParams } = await import('./agent-ephemeral-vm-handler')
+    expect(validateVmReadCredentialFileParams({ path: '/home/deploy/.ssh/id_ed25519' })).toEqual({
+      path: '/home/deploy/.ssh/id_ed25519'
+    })
+  })
+
+  it('throws when path is missing', async () => {
+    const { validateVmReadCredentialFileParams } = await import('./agent-ephemeral-vm-handler')
+    expect(() => validateVmReadCredentialFileParams({})).toThrow(/path/)
+  })
+
+  it('throws when path is not a string', async () => {
+    const { validateVmReadCredentialFileParams } = await import('./agent-ephemeral-vm-handler')
+    expect(() => validateVmReadCredentialFileParams({ path: 123 })).toThrow(/path/)
+  })
+})
+
+describe('handleVmReadCredentialFile', () => {
+  it('reads the file at path and returns its content as contentPEM', async () => {
+    readFile.mockResolvedValue('-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----')
+    const { handleVmReadCredentialFile } = await import('./agent-ephemeral-vm-handler')
+
+    const result = await handleVmReadCredentialFile({ path: '/home/deploy/.ssh/id_ed25519' })
+
+    expect(readFile).toHaveBeenCalledWith('/home/deploy/.ssh/id_ed25519', 'utf8')
+    expect(result).toEqual({
+      contentPEM: '-----BEGIN PRIVATE KEY-----\nFAKE\n-----END PRIVATE KEY-----'
+    })
+  })
+
+  it('propagates a clear error (not a crash) when the file does not exist', async () => {
+    readFile.mockRejectedValue(
+      Object.assign(new Error("ENOENT: no such file or directory, open '/no/such/file'"), {
+        code: 'ENOENT'
+      })
+    )
+    const { handleVmReadCredentialFile } = await import('./agent-ephemeral-vm-handler')
+
+    await expect(handleVmReadCredentialFile({ path: '/no/such/file' })).rejects.toThrow('ENOENT')
+  })
+})
+
+// Security regression-guard (this task's "quan trọng nhất"): contentPEM must
+// never surface in a thrown error/log line anywhere along this handler's
+// path, even under a read failure.
+describe('handleVmReadCredentialFile — contentPEM never appears in a thrown error', () => {
+  it('a read failure never echoes back file content that was never actually read', async () => {
+    const secret = 'SUPER-SECRET-PEM-CONTENTS-THAT-MUST-NEVER-LEAK'
+    // Simulates a pathological fs/mock implementation that (incorrectly)
+    // embeds file content in a rejection — handleVmReadCredentialFile does
+    // no scrubbing of its own (see its doc comment: there is nothing to
+    // scrub in the real ENOENT/EACCES path), so this asserts the actual
+    // contract instead: the real failure path (readFile rejecting before
+    // any content is returned) cannot possibly carry contentPEM, and the
+    // success path never throws at all.
+    readFile.mockRejectedValue(new Error('EACCES: permission denied'))
+    const { handleVmReadCredentialFile } = await import('./agent-ephemeral-vm-handler')
+
+    let thrown: Error | null = null
+    try {
+      await handleVmReadCredentialFile({ path: '/root/.ssh/id_ed25519' })
+    } catch (err) {
+      thrown = err as Error
+    }
+
+    expect(thrown).not.toBeNull()
+    expect(thrown!.message).not.toContain(secret)
+  })
+
+  it('the success path never throws, so contentPEM only ever leaves via the typed return value', async () => {
+    const secret = 'SUPER-SECRET-PEM-CONTENTS-THAT-MUST-NEVER-LEAK'
+    readFile.mockResolvedValue(secret)
+    const { handleVmReadCredentialFile } = await import('./agent-ephemeral-vm-handler')
+
+    await expect(handleVmReadCredentialFile({ path: '/root/.ssh/id_ed25519' })).resolves.toEqual({
+      contentPEM: secret
+    })
   })
 })

@@ -1341,9 +1341,20 @@ type ResolveConnectionResponse struct {
 	// worktree_id-keyed caller (TestConnection, browser.* channels) has a
 	// valid Relay connection_id without re-deriving it from DevServer.id,
 	// which is a different id space (dev_servers.id, not connections.id).
-	ConnectionId  string `protobuf:"bytes,5,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ConnectionId string `protobuf:"bytes,5,opt,name=connection_id,json=connectionId,proto3" json:"connection_id,omitempty"`
+	// hidden_target_id (TASK-BE-EVM-018, BE-SOL-EVM-004 §4/§6c) is set ONLY
+	// when this connection's worktree is attached to an ephemeral VM runtime
+	// whose connection_type is "ssh" (Hướng A, agent-outbound) — by
+	// convention, equal to that runtime's id. Empty for every other
+	// connection (the overwhelming majority) — an orthogonal routing
+	// attribute, NOT a new dev_server/host: dev_server above still points at
+	// the SAME, ALREADY-EXISTING Dev Server that ran vm.provision (decision
+	// 3 in BE-SOL-EVM-004's "Quyết định đã chốt"). git-gateway-service's
+	// RelayExecutor uses this to pick a "<method>ViaHiddenTarget" agent
+	// method instead of the normal one (TASK-BE-EVM-015).
+	HiddenTargetId string `protobuf:"bytes,6,opt,name=hidden_target_id,json=hiddenTargetId,proto3" json:"hidden_target_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ResolveConnectionResponse) Reset() {
@@ -1407,6 +1418,13 @@ func (x *ResolveConnectionResponse) GetWorktreeId() string {
 func (x *ResolveConnectionResponse) GetConnectionId() string {
 	if x != nil {
 		return x.ConnectionId
+	}
+	return ""
+}
+
+func (x *ResolveConnectionResponse) GetHiddenTargetId() string {
+	if x != nil {
+		return x.HiddenTargetId
 	}
 	return ""
 }
@@ -7367,7 +7385,7 @@ const file_orca_infrafleet_v1_infrafleet_proto_rawDesc = "" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12\"\n" +
 	"\rdev_server_id\x18\x02 \x01(\tR\vdevServerId\x12\x1f\n" +
 	"\vworktree_id\x18\x03 \x01(\tR\n" +
-	"worktreeId\"\xda\x01\n" +
+	"worktreeId\"\x84\x02\n" +
 	"\x19ResolveConnectionResponse\x12\x1c\n" +
 	"\tconnected\x18\x01 \x01(\bR\tconnected\x12<\n" +
 	"\n" +
@@ -7375,7 +7393,8 @@ const file_orca_infrafleet_v1_infrafleet_proto_rawDesc = "" +
 	"\trepo_path\x18\x03 \x01(\tR\brepoPath\x12\x1f\n" +
 	"\vworktree_id\x18\x04 \x01(\tR\n" +
 	"worktreeId\x12#\n" +
-	"\rconnection_id\x18\x05 \x01(\tR\fconnectionId\"J\n" +
+	"\rconnection_id\x18\x05 \x01(\tR\fconnectionId\x12(\n" +
+	"\x10hidden_target_id\x18\x06 \x01(\tR\x0ehiddenTargetId\"J\n" +
 	"\x15ListDevServersRequest\x121\n" +
 	"\x04kind\x18\x01 \x01(\x0e2\x1d.orca.infrafleet.v1.AgentKindR\x04kind\"X\n" +
 	"\x16ListDevServersResponse\x12>\n" +

@@ -85,5 +85,12 @@ func (r *ConnectionResolver) ResolveConnection(ctx context.Context, worktreeID s
 		Connected:    true,
 		ConnectionID: resp.GetConnectionId(),
 		RepoPath:     resp.GetRepoPath(),
+		// HiddenTargetID (TASK-BE-EVM-018, BE-SOL-EVM-004 §6c — closes
+		// TASK-BE-EVM-015's gap #1): infrafleetv1.ResolveConnectionResponse
+		// now carries this field for real. dispatchExecutor (ports.go)
+		// still deliberately does not thread it into ctx — see that
+		// function's own doc comment — but the value itself is no longer
+		// silently dropped here.
+		HiddenTargetID: resp.GetHiddenTargetId(),
 	}, nil
 }

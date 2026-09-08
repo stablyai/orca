@@ -84,15 +84,37 @@ func LoadConfigFromEnv() Config {
 type Connector struct {
 	target domain.EphemeralVmSshTarget
 	cfg    Config
+	// knownFingerprint/observedFingerprint implement TOFU (trust-on-first-use)
+	// host-key verification (TASK-BE-EVM-019, BE-SOL-EVM-004 §6d) — see
+	// hostKeyCallback's doc comment for the full design.
+	knownFingerprint    string
+	observedFingerprint string
 }
 
 // NewConnector builds a Connector scoped to target — construct one fresh
-// per Provision call.
-func NewConnector(target domain.EphemeralVmSshTarget, cfg Config) *Connector {
+// per Provision call. knownFingerprint is the SHA256 host-key fingerprint
+// (ssh.FingerprintSHA256 format) persisted from this runtime's PREVIOUS
+// successful dial, if any — "" means "no dial has ever succeeded for this
+// runtime yet" (TOFU's first-use case, see hostKeyCallback). The caller
+// (backendrelaysshprovisioner.Provisioner) is responsible for reading it
+// from EphemeralVmSshTargetRepository before calling this, and for
+// persisting ObservedFingerprint() after a successful Connect.
+func NewConnector(target domain.EphemeralVmSshTarget, cfg Config, knownFingerprint string) *Connector {
 	if cfg.DialTimeout == 0 {
 		cfg.DialTimeout = DefaultConfig().DialTimeout
 	}
-	return &Connector{target: target, cfg: cfg}
+	return &Connector{target: target, cfg: cfg, knownFingerprint: knownFingerprint}
+}
+
+// ObservedFingerprint returns the SHA256 fingerprint of the host key
+// actually presented during the most recent Connect call that reached the
+// host-key-verification step (set regardless of whether Connect ultimately
+// succeeded — a mismatch still observes a fingerprint, it just also
+// errors) — "" if Connect was never called. The caller persists this after
+// a SUCCESSFUL Connect so the next dial for the same runtime has a
+// knownFingerprint to compare against (see hostKeyCallback).
+func (c *Connector) ObservedFingerprint() string {
+	return c.observedFingerprint
 }
 
 // Connect dials c.target (ignoring the domain.SshTarget parameter — see
@@ -116,7 +138,7 @@ func (c *Connector) Connect(ctx context.Context, _ domain.SshTarget) (*sshconn.C
 	clientConfig := &ssh.ClientConfig{
 		User:            c.target.Username,
 		Auth:            []ssh.AuthMethod{authMethod},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), //nolint:gosec // same documented, deliberate gap as sshconn.Connector.Connect
+		HostKeyCallback: c.hostKeyCallback(),
 		Timeout:         c.cfg.DialTimeout,
 	}
 
@@ -161,6 +183,36 @@ func (c *Connector) authMethod() (ssh.AuthMethod, error) {
 		return nil, fmt.Errorf("ephemeralsshconn: parsing private key: unparseable PEM")
 	}
 	return ssh.PublicKeys(signer), nil
+}
+
+// hostKeyCallback implements TOFU (trust-on-first-use) host-key
+// verification (TASK-BE-EVM-019, BE-SOL-EVM-004 §6d — Gap 4), replacing
+// ssh.InsecureIgnoreHostKey() for the FINAL target's own handshake only
+// (dialViaJumpHost's separate jump-host handshake is deliberately left as
+// ssh.InsecureIgnoreHostKey() — the recipe/schema has no separate
+// fingerprint slot for a jump host, out of this task's scope, same "chốt
+// phạm vi" as the doc comment at BE-SOL-EVM-004 §6d):
+//   - c.knownFingerprint == "" (no successful dial recorded for this
+//     runtime yet): accepts whatever key the target presents — the
+//     caller reads ObservedFingerprint() after Connect succeeds and
+//     persists it, so THIS dial's key becomes the trusted baseline.
+//   - c.knownFingerprint != "": the presented key's SHA256 fingerprint
+//     must match exactly — a mismatch is a hard failure
+//     (INFRA_EPHEMERAL_VM_HOST_KEY_MISMATCH), never silently accepted
+//     (a changed host key on a supposedly-already-known target is real
+//     MITM suspicion, not a warning-level condition).
+func (c *Connector) hostKeyCallback() ssh.HostKeyCallback {
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		observed := ssh.FingerprintSHA256(key)
+		c.observedFingerprint = observed
+		if c.knownFingerprint == "" {
+			return nil
+		}
+		if observed != c.knownFingerprint {
+			return fmt.Errorf("INFRA_EPHEMERAL_VM_HOST_KEY_MISMATCH: host key changed for %s (expected %s, got %s)", hostname, c.knownFingerprint, observed)
+		}
+		return nil
+	}
 }
 
 // agentAuthMethod dials a local ssh-agent UNIX socket and offers every

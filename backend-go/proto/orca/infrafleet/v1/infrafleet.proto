@@ -365,6 +365,17 @@ message ResolveConnectionResponse {
   // valid Relay connection_id without re-deriving it from DevServer.id,
   // which is a different id space (dev_servers.id, not connections.id).
   string connection_id = 5;
+  // hidden_target_id (TASK-BE-EVM-018, BE-SOL-EVM-004 §4/§6c) is set ONLY
+  // when this connection's worktree is attached to an ephemeral VM runtime
+  // whose connection_type is "ssh" (Hướng A, agent-outbound) — by
+  // convention, equal to that runtime's id. Empty for every other
+  // connection (the overwhelming majority) — an orthogonal routing
+  // attribute, NOT a new dev_server/host: dev_server above still points at
+  // the SAME, ALREADY-EXISTING Dev Server that ran vm.provision (decision
+  // 3 in BE-SOL-EVM-004's "Quyết định đã chốt"). git-gateway-service's
+  // RelayExecutor uses this to pick a "<method>ViaHiddenTarget" agent
+  // method instead of the normal one (TASK-BE-EVM-015).
+  string hidden_target_id = 6;
 }
 
 message ListDevServersRequest {

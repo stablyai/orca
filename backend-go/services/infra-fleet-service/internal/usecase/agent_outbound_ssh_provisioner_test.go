@@ -8,46 +8,9 @@ import (
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/domain"
 )
 
-// fakeEphemeralVmSshDevServerResolver is an in-memory
-// EphemeralVmSshDevServerResolver — always resolves to the fixed devServer
-// unless resolveErr is set, matching this package's other fake-repository
-// conventions.
-type fakeEphemeralVmSshDevServerResolver struct {
-	devServer  domain.DevServer
-	resolveErr error
-	calls      []string // runtimeID, for assertions
-}
-
-func (f *fakeEphemeralVmSshDevServerResolver) ResolveDevServer(ctx context.Context, tenantID, runtimeID string) (domain.DevServer, error) {
-	f.calls = append(f.calls, runtimeID)
-	if f.resolveErr != nil {
-		return domain.DevServer{}, f.resolveErr
-	}
-	return f.devServer, nil
-}
-
-// fakeEphemeralVmSshVaultResolver is an in-memory
-// EphemeralVmSshVaultResolver — records every (mount, path) it was asked to
-// read, for TestVaultSshPath_SeparateFromUserRegisteredSshTargets.
-type fakeEphemeralVmSshVaultResolver struct {
-	data       map[string]any
-	readErr    error
-	readMounts []string
-	readPaths  []string
-}
-
-func (f *fakeEphemeralVmSshVaultResolver) KVRead(ctx context.Context, mount, path string) (map[string]any, error) {
-	f.readMounts = append(f.readMounts, mount)
-	f.readPaths = append(f.readPaths, path)
-	if f.readErr != nil {
-		return nil, f.readErr
-	}
-	return f.data, nil
-}
-
 // fakeEphemeralVmSshTargetRepository is an in-memory
-// EphemeralVmSshTargetRepository — TestAgentOutboundSshProvisioner_CredentialNeverPersisted
-// inspects upserted to confirm no PEM/socket value was ever handed to it.
+// EphemeralVmSshTargetRepository — TestAgentOutboundSshProvisioner_CreatesRealConnectionRowWithProjectRoot
+// and friends inspect upserted to confirm the audit row shape.
 type fakeEphemeralVmSshTargetRepository struct {
 	upserted []domain.EphemeralVmSshTargetRecord
 }
@@ -66,20 +29,25 @@ func (f *fakeEphemeralVmSshTargetRepository) Get(ctx context.Context, tenantID, 
 	return domain.EphemeralVmSshTargetRecord{}, false, nil
 }
 
-func TestAgentOutboundSshProvisioner_ResolvesVaultThenCallsAgent(t *testing.T) {
+// TestAgentOutboundSshProvisioner_ForwardsIdentityFilePathRaw_NoVaultCall
+// is TASK-BE-EVM-016's Gap 1 regression guard: the agent receives
+// IdentityFilePath byte-for-byte, and this provisioner never touches Vault
+// (no Vault collaborator even exists in its constructor anymore).
+func TestAgentOutboundSshProvisioner_ForwardsIdentityFilePathRaw_NoVaultCall(t *testing.T) {
 	agent := &fakeDevServerAgentClient{}
-	devServers := &fakeEphemeralVmSshDevServerResolver{devServer: domain.DevServer{ID: "ds-1"}}
-	vault := &fakeEphemeralVmSshVaultResolver{data: map[string]any{"private_key_pem": "-----BEGIN OPENSSH PRIVATE KEY-----\nreal-material\n-----END OPENSSH PRIVATE KEY-----"}}
+	conns := &fakeConnectionRepository{}
 	records := &fakeEphemeralVmSshTargetRepository{}
 
-	p := NewAgentOutboundSshProvisioner(agent, devServers, vault, records)
+	p := NewAgentOutboundSshProvisioner(agent, conns, records)
 
+	sourceDevServer := domain.DevServer{ID: "ds-1"}
 	target := domain.EphemeralVmSshTarget{
 		Host: "10.0.0.5", Port: 22, Username: "orca",
-		PrivateKeyPEM: "recipe-identity-file-pointer", // pre-resolution value
+		ProjectRoot:      "/vm/repo",
+		IdentityFilePath: "/home/orca/.ssh/id_ed25519",
 	}
 
-	connectionID, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", target)
+	connectionID, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", sourceDevServer, target)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -87,170 +55,193 @@ func TestAgentOutboundSshProvisioner_ResolvesVaultThenCallsAgent(t *testing.T) {
 		t.Error("expected a non-empty connectionID")
 	}
 
-	if len(vault.readPaths) != 1 {
-		t.Fatalf("expected exactly 1 vault read, got %d", len(vault.readPaths))
-	}
-	if len(devServers.calls) != 1 || devServers.calls[0] != "runtime-1" {
-		t.Errorf("expected devServer resolved for runtime-1, got %+v", devServers.calls)
-	}
 	if len(agent.dialHiddenSshTargetCalls) != 1 {
 		t.Fatalf("expected exactly 1 agent dial call, got %d", len(agent.dialHiddenSshTargetCalls))
 	}
-	// The agent must receive the VAULT-RESOLVED material, not the raw
-	// pre-resolution recipe pointer string.
 	dialed := agent.dialHiddenSshTargetCalls[0]
-	if dialed.PrivateKeyPEM != "-----BEGIN OPENSSH PRIVATE KEY-----\nreal-material\n-----END OPENSSH PRIVATE KEY-----" {
-		t.Errorf("expected agent to receive vault-resolved PEM material, got %q", dialed.PrivateKeyPEM)
+	if dialed.IdentityFilePath != "/home/orca/.ssh/id_ed25519" {
+		t.Errorf("expected agent to receive the raw identityFile path unchanged, got %q", dialed.IdentityFilePath)
+	}
+	if dialed.PrivateKeyPEM != "" {
+		t.Errorf("expected no resolved PEM material (Hướng A never resolves) — got %q", dialed.PrivateKeyPEM)
 	}
 	if dialed.Host != "10.0.0.5" || dialed.Username != "orca" {
 		t.Errorf("expected host/username to pass through unchanged, got %+v", dialed)
 	}
 }
 
-func TestAgentOutboundSshProvisioner_CredentialNeverPersisted(t *testing.T) {
+// TestAgentOutboundSshProvisioner_CreatesRealConnectionRowWithProjectRoot is
+// TASK-BE-EVM-016's Gap 2 regression guard: Provision registers a real
+// infra.connections row (via ConnectionRepository) keyed by
+// sourceDevServer.ID + target.ProjectRoot, and returns ITS id — not a bare
+// runtimeID convention.
+func TestAgentOutboundSshProvisioner_CreatesRealConnectionRowWithProjectRoot(t *testing.T) {
 	agent := &fakeDevServerAgentClient{}
-	devServers := &fakeEphemeralVmSshDevServerResolver{devServer: domain.DevServer{ID: "ds-1"}}
-	vault := &fakeEphemeralVmSshVaultResolver{data: map[string]any{
-		"private_key_pem":       "super-secret-pem",
-		"identity_agent_socket": "/tmp/ssh-agent.sock",
-	}}
+	conns := &fakeConnectionRepository{}
 	records := &fakeEphemeralVmSshTargetRepository{}
 
-	p := NewAgentOutboundSshProvisioner(agent, devServers, vault, records)
+	p := NewAgentOutboundSshProvisioner(agent, conns, records)
 
+	sourceDevServer := domain.DevServer{ID: "ds-42"}
 	target := domain.EphemeralVmSshTarget{
 		Host: "10.0.0.5", Port: 22, Username: "orca",
-		PrivateKeyPEM:       "recipe-identity-file-pointer",
-		IdentityAgentSocket: "recipe-identity-agent-pointer",
+		ProjectRoot:      "/vm/repo",
+		IdentityFilePath: "/home/orca/.ssh/id_ed25519",
 	}
 
-	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", target); err != nil {
+	connectionID, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", sourceDevServer, target)
+	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// The RPC to the agent DID carry the credential (asserted by the other
-	// test) — this test asserts the ONLY other persistence path this type
-	// touches (the audit-row repository) never sees it, "by value, once,
-	// over the RPC channel only" (BE-SOL-EVM-004 §2/§3's invariant).
+	if len(conns.created) != 1 {
+		t.Fatalf("expected exactly 1 connection row created, got %d", len(conns.created))
+	}
+	created := conns.created[0]
+	if created.DevServerID != "ds-42" {
+		t.Errorf("expected connection.DevServerID == sourceDevServer.ID, got %q", created.DevServerID)
+	}
+	if created.RepoPath != "/vm/repo" {
+		t.Errorf("expected connection.RepoPath == target.ProjectRoot, got %q", created.RepoPath)
+	}
+	if created.TenantID != "tenant-1" {
+		t.Errorf("expected connection.TenantID == tenant-1, got %q", created.TenantID)
+	}
+	if connectionID != created.ID {
+		t.Errorf("expected returned connectionID (%q) to be the real created connection's id (%q)", connectionID, created.ID)
+	}
+	// Regression guard: no longer a bare runtimeID convention.
+	if connectionID == "runtime-1" {
+		t.Error("expected a real generated connectionID, not the runtimeID convention value")
+	}
+}
+
+func TestAgentOutboundSshProvisioner_AuditRowNeverCarriesPrivateKeyPEM(t *testing.T) {
+	agent := &fakeDevServerAgentClient{}
+	conns := &fakeConnectionRepository{}
+	records := &fakeEphemeralVmSshTargetRepository{}
+
+	p := NewAgentOutboundSshProvisioner(agent, conns, records)
+
+	target := domain.EphemeralVmSshTarget{
+		Host: "10.0.0.5", Port: 22, Username: "orca",
+		ProjectRoot:         "/vm/repo",
+		IdentityFilePath:    "/home/orca/.ssh/id_ed25519",
+		IdentityAgentSocket: "/tmp/ssh-agent.sock",
+	}
+
+	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", domain.DevServer{ID: "ds-1"}, target); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
 	if len(records.upserted) != 1 {
 		t.Fatalf("expected exactly 1 upserted audit row, got %d", len(records.upserted))
 	}
 	rec := records.upserted[0]
-	if rec.IdentityFileVaultPath == "" || rec.IdentityAgentVaultPath == "" {
-		t.Errorf("expected both vault PATH pointers to be recorded, got %+v", rec)
+	// domain.EphemeralVmSshTargetRecord has no field a PEM value could even
+	// be assigned to — nothing here to leak. This test guards the audit row
+	// still records the (non-secret) paths actually dialed.
+	if rec.IdentityFileVaultPath != "/home/orca/.ssh/id_ed25519" {
+		t.Errorf("expected audit row to record the identity file path, got %q", rec.IdentityFileVaultPath)
 	}
-
-	// domain.EphemeralVmSshTargetRecord has no field a resolved credential
-	// value could even be assigned to — this loop is a structural guard
-	// against a future field addition silently reintroducing the leak: it
-	// fails to compile (not just fails at runtime) the moment such a field
-	// exists and this test isn't updated to check it.
-	if rec.IdentityFileVaultPath == "super-secret-pem" || rec.IdentityAgentVaultPath == "/tmp/ssh-agent.sock" {
-		t.Error("resolved credential material leaked into the persisted audit row")
-	}
-}
-
-func TestVaultSshPath_SeparateFromUserRegisteredSshTargets(t *testing.T) {
-	agent := &fakeDevServerAgentClient{}
-	devServers := &fakeEphemeralVmSshDevServerResolver{devServer: domain.DevServer{ID: "ds-1"}}
-	vault := &fakeEphemeralVmSshVaultResolver{data: map[string]any{"private_key_pem": "pem"}}
-	records := &fakeEphemeralVmSshTargetRepository{}
-
-	p := NewAgentOutboundSshProvisioner(agent, devServers, vault, records)
-
-	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca", PrivateKeyPEM: "pointer"}
-	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-42", target); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(vault.readPaths) != 1 {
-		t.Fatalf("expected exactly 1 vault read, got %d", len(vault.readPaths))
-	}
-	gotPath := vault.readPaths[0]
-
-	// "Quyết định đã chốt" mục 2: separate KV path family from
-	// infra.ssh_targets' Vault usage (which is the SSH secrets engine's
-	// ssh/sign/<role>, not a KV path at all — see sshconn.Connector.Connect)
-	// AND keyed by runtime_id, never colliding with a user-registered
-	// target's identity.
-	if gotPath == "" {
-		t.Fatal("expected a non-empty vault path")
-	}
-	if wantPrefix := "infra-fleet/ephemeral-vm-ssh-targets/"; len(gotPath) < len(wantPrefix) || gotPath[:len(wantPrefix)] != wantPrefix {
-		t.Errorf("expected vault path to use the ephemeral-vm-ssh-targets prefix, got %q", gotPath)
-	}
-	if gotPath == "infra-fleet/ssh-targets/runtime-42" {
-		t.Errorf("vault path must not reuse infra.ssh_targets' path family, got %q", gotPath)
-	}
-	if gotPath[len(gotPath)-len("runtime-42"):] != "runtime-42" {
-		t.Errorf("expected vault path to be keyed by runtimeID, got %q", gotPath)
-	}
-}
-
-func TestAgentOutboundSshProvisioner_NoIdentityMaterial_SkipsVault(t *testing.T) {
-	agent := &fakeDevServerAgentClient{}
-	devServers := &fakeEphemeralVmSshDevServerResolver{devServer: domain.DevServer{ID: "ds-1"}}
-	vault := &fakeEphemeralVmSshVaultResolver{}
-	records := &fakeEphemeralVmSshTargetRepository{}
-
-	p := NewAgentOutboundSshProvisioner(agent, devServers, vault, records)
-
-	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca"}
-	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", target); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(vault.readPaths) != 0 {
-		t.Errorf("expected no vault read when target carries no identity material, got %d", len(vault.readPaths))
-	}
-}
-
-func TestAgentOutboundSshProvisioner_VaultReadFails_ReturnsError(t *testing.T) {
-	agent := &fakeDevServerAgentClient{}
-	devServers := &fakeEphemeralVmSshDevServerResolver{devServer: domain.DevServer{ID: "ds-1"}}
-	vault := &fakeEphemeralVmSshVaultResolver{readErr: errors.New("vault unreachable")}
-	records := &fakeEphemeralVmSshTargetRepository{}
-
-	p := NewAgentOutboundSshProvisioner(agent, devServers, vault, records)
-
-	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca", PrivateKeyPEM: "pointer"}
-	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", target); err == nil {
-		t.Fatal("expected an error when vault read fails")
-	}
-	if len(agent.dialHiddenSshTargetCalls) != 0 {
-		t.Error("expected no agent dial call when vault resolution failed")
-	}
-}
-
-func TestAgentOutboundSshProvisioner_DevServerResolutionFails_ReturnsError(t *testing.T) {
-	agent := &fakeDevServerAgentClient{}
-	devServers := &fakeEphemeralVmSshDevServerResolver{resolveErr: errors.New("no known dev server for this runtime")}
-	vault := &fakeEphemeralVmSshVaultResolver{}
-	records := &fakeEphemeralVmSshTargetRepository{}
-
-	p := NewAgentOutboundSshProvisioner(agent, devServers, vault, records)
-
-	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca"}
-	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", target); err == nil {
-		t.Fatal("expected an error when devServer resolution fails")
-	}
-	if len(agent.dialHiddenSshTargetCalls) != 0 {
-		t.Error("expected no agent dial call when devServer resolution failed")
+	if rec.IdentityAgentVaultPath != "/tmp/ssh-agent.sock" {
+		t.Errorf("expected audit row to record the identity agent socket path, got %q", rec.IdentityAgentVaultPath)
 	}
 }
 
 func TestAgentOutboundSshProvisioner_AgentDialFails_ReturnsError(t *testing.T) {
 	agent := &fakeDevServerAgentClient{dialHiddenSshTargetErr: errors.New("agent rejected dial")}
-	devServers := &fakeEphemeralVmSshDevServerResolver{devServer: domain.DevServer{ID: "ds-1"}}
-	vault := &fakeEphemeralVmSshVaultResolver{}
+	conns := &fakeConnectionRepository{}
 	records := &fakeEphemeralVmSshTargetRepository{}
 
-	p := NewAgentOutboundSshProvisioner(agent, devServers, vault, records)
+	p := NewAgentOutboundSshProvisioner(agent, conns, records)
 
-	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca"}
-	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", target); err == nil {
+	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca", ProjectRoot: "/vm/repo"}
+	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", domain.DevServer{ID: "ds-1"}, target); err == nil {
 		t.Fatal("expected an error when the agent rejects the dial")
 	}
 	if len(records.upserted) != 0 {
 		t.Error("expected no audit row upserted when the dial itself failed")
+	}
+	if len(conns.created) != 0 {
+		t.Error("expected no connection row created when the dial itself failed")
+	}
+}
+
+func TestAgentOutboundSshProvisioner_CreateConnectionFails_ReturnsError(t *testing.T) {
+	agent := &fakeDevServerAgentClient{}
+	conns := &fakeConnectionRepository{err: errors.New("db unreachable")}
+	records := &fakeEphemeralVmSshTargetRepository{}
+
+	p := NewAgentOutboundSshProvisioner(agent, conns, records)
+
+	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca", ProjectRoot: "/vm/repo"}
+	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", domain.DevServer{ID: "ds-1"}, target); err == nil {
+		t.Fatal("expected an error when creating the connection row fails")
+	}
+}
+
+// TestAgentOutboundSshProvisioner_ThreadsKnownFingerprintOnRepeatDial is
+// Hướng A's Gap 4 completion regression guard (found in the final
+// cross-check after TASK-BE-EVM-019 shipped Hướng B's TOFU but Hướng A's
+// Provision discarded DialHiddenSshTarget's fingerprint entirely): a
+// second Provision call for the same runtimeID must forward the
+// previously-recorded fingerprint as target.KnownHostKeyFingerprint, and
+// persist whatever the agent echoes back on this dial.
+func TestAgentOutboundSshProvisioner_ThreadsKnownFingerprintOnRepeatDial(t *testing.T) {
+	agent := &fakeDevServerAgentClient{dialHiddenSshTargetFingerprint: "SHA256:second-dial"}
+	conns := &fakeConnectionRepository{}
+	records := &fakeEphemeralVmSshTargetRepository{
+		upserted: []domain.EphemeralVmSshTargetRecord{
+			{TenantID: "tenant-1", RuntimeID: "runtime-1", HostKeyFingerprint: "SHA256:first-dial"},
+		},
+	}
+	p := NewAgentOutboundSshProvisioner(agent, conns, records)
+
+	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca", ProjectRoot: "/vm/repo"}
+	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", domain.DevServer{ID: "ds-1"}, target); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(agent.dialHiddenSshTargetCalls) != 1 {
+		t.Fatalf("expected exactly 1 agent dial call, got %d", len(agent.dialHiddenSshTargetCalls))
+	}
+	if got := agent.dialHiddenSshTargetCalls[0].KnownHostKeyFingerprint; got != "SHA256:first-dial" {
+		t.Errorf("expected the previously-recorded fingerprint forwarded to the agent, got %q", got)
+	}
+	if len(records.upserted) != 2 {
+		t.Fatalf("expected a second upsert recording this dial, got %d", len(records.upserted))
+	}
+	if got := records.upserted[1].HostKeyFingerprint; got != "SHA256:second-dial" {
+		t.Errorf("expected the agent's newly-echoed fingerprint persisted, got %q", got)
+	}
+}
+
+// TestAgentOutboundSshProvisioner_AgentOmitsFingerprint_PreservesPrevious
+// guards the defensive fallback: an agent build too old to echo
+// hostKeyFingerprint back must never silently erase a fingerprint a prior
+// dial already recorded (Upsert is a full replace, not a partial merge —
+// erasing it here would make the NEXT dial's TOFU check wrongly see
+// "first use" again).
+func TestAgentOutboundSshProvisioner_AgentOmitsFingerprint_PreservesPrevious(t *testing.T) {
+	agent := &fakeDevServerAgentClient{} // dialHiddenSshTargetFingerprint left empty — simulates an old agent build
+	conns := &fakeConnectionRepository{}
+	records := &fakeEphemeralVmSshTargetRepository{
+		upserted: []domain.EphemeralVmSshTargetRecord{
+			{TenantID: "tenant-1", RuntimeID: "runtime-1", HostKeyFingerprint: "SHA256:must-survive"},
+		},
+	}
+	p := NewAgentOutboundSshProvisioner(agent, conns, records)
+
+	target := domain.EphemeralVmSshTarget{Host: "10.0.0.5", Port: 22, Username: "orca", ProjectRoot: "/vm/repo"}
+	if _, err := p.Provision(withTenant(context.Background(), "tenant-1"), "tenant-1", "runtime-1", domain.DevServer{ID: "ds-1"}, target); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(records.upserted) != 2 {
+		t.Fatalf("expected a second upsert, got %d", len(records.upserted))
+	}
+	if got := records.upserted[1].HostKeyFingerprint; got != "SHA256:must-survive" {
+		t.Errorf("expected the previous fingerprint preserved when the agent omits one, got %q", got)
 	}
 }

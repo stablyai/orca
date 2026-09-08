@@ -11,6 +11,7 @@ import (
 
 	"github.com/stablyai/orca-go/common/tenant"
 	infrafleetv1 "github.com/stablyai/orca-go/proto/gen/go/orca/infrafleet/v1"
+	projectv1 "github.com/stablyai/orca-go/proto/gen/go/orca/project/v1"
 	"github.com/stablyai/orca-go/services/git-gateway-service/internal/domain"
 	"github.com/stablyai/orca-go/services/git-gateway-service/internal/usecase"
 )
@@ -98,6 +99,27 @@ func TestConnectionResolver_ResolveConnection_NotConnected(t *testing.T) {
 	}
 	if fake.gotResolveConnection.GetConnectionId() != "" {
 		t.Errorf("expected ConnectionId to stay unset (worktreeID is not a connections.id uuid), got %q", fake.gotResolveConnection.GetConnectionId())
+	}
+}
+
+// TestConnectionResolver_ResolveConnection_MapsHiddenTargetID is
+// TASK-BE-EVM-018's regression guard for the OTHER of the "2 proto" this
+// task's gap closed (TASK-BE-EVM-015's gap #1): infrafleetv1.ResolveConnectionResponse.hidden_target_id
+// is no longer silently dropped.
+func TestConnectionResolver_ResolveConnection_MapsHiddenTargetID(t *testing.T) {
+	fake := &fakeInfraFleetServiceClient{
+		resolveConnectionResp: &infrafleetv1.ResolveConnectionResponse{
+			Connected: true, RepoPath: "/remote/repo", ConnectionId: "conn-uuid-1", HiddenTargetId: "rt-1",
+		},
+	}
+	r := NewConnectionResolver(fake)
+
+	conn, err := r.ResolveConnection(ctxWithTenant(t), "wt-2")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if conn.HiddenTargetID != "rt-1" {
+		t.Errorf("expected HiddenTargetID=rt-1 from the response, got %q", conn.HiddenTargetID)
 	}
 }
 
@@ -1207,5 +1229,76 @@ func TestGitDispatch_NoHiddenTargetID_UnchangedBehavior(t *testing.T) {
 	}
 	if _, present := params["hiddenTargetId"]; present {
 		t.Errorf("expected no hiddenTargetId param for an ordinary repo, got %+v", params)
+	}
+}
+
+// ─── TASK-BE-EVM-018: project.proto's GetRepoResponse.hidden_target_id ────
+
+// fakeProjectServiceClient implements projectv1.ProjectServiceClient
+// directly (embed: panics on any unimplemented method) — mirrors
+// fakeInfraFleetServiceClient's exact convention above, scoped to just
+// GetRepo (the only RPC ProjectClient.GetRepo/this task's test needs).
+type fakeProjectServiceClient struct {
+	projectv1.ProjectServiceClient
+
+	getRepoResp *projectv1.GetRepoResponse
+	getRepoErr  error
+}
+
+func (f *fakeProjectServiceClient) GetRepo(ctx context.Context, in *projectv1.GetRepoRequest, _ ...grpc.CallOption) (*projectv1.GetRepoResponse, error) {
+	if f.getRepoErr != nil {
+		return nil, f.getRepoErr
+	}
+	return f.getRepoResp, nil
+}
+
+// TestGitGatewayRelay_PopulatesHiddenTargetIDFromRepoInfo is TASK-BE-EVM-018's
+// required test for Gap 3's project-service half: ProjectClient.GetRepo
+// maps project.proto's new GetRepoResponse.hidden_target_id field into
+// domain.RepoInfo.HiddenTargetID — closing TASK-BE-EVM-015's gap #2 at the
+// wire-mapping level (project-service's own GetRepo handler populating a
+// REAL value is a separate, still-open follow-up — see
+// domain.RepoInfo.HiddenTargetID's doc comment).
+func TestGitGatewayRelay_PopulatesHiddenTargetIDFromRepoInfo(t *testing.T) {
+	fake := &fakeProjectServiceClient{
+		getRepoResp: &projectv1.GetRepoResponse{
+			Repo:           &projectv1.Repo{Id: "repo-1", ProjectId: "proj-1", Url: "https://example.com/repo.git", DisplayName: "repo"},
+			DevServerId:    "ds-1",
+			HiddenTargetId: "rt-1",
+		},
+	}
+	client := NewProjectClient(fake)
+
+	info, err := client.GetRepo(ctxWithTenant(t), "repo-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.HiddenTargetID != "rt-1" {
+		t.Errorf("expected HiddenTargetID=rt-1 from the response, got %q", info.HiddenTargetID)
+	}
+	if info.DevServerID != "ds-1" {
+		t.Errorf("expected DevServerID to still map correctly alongside the new field, got %q", info.DevServerID)
+	}
+}
+
+// TestGitGatewayRelay_NoHiddenTargetID_UnchangedBehavior is the regression
+// guard: an ordinary repo (project-service not yet populating
+// hidden_target_id — today's universal case) still gets an empty
+// HiddenTargetID, not a zero-value panic or a spurious non-empty value.
+func TestGitGatewayRelay_NoHiddenTargetID_UnchangedBehavior(t *testing.T) {
+	fake := &fakeProjectServiceClient{
+		getRepoResp: &projectv1.GetRepoResponse{
+			Repo:        &projectv1.Repo{Id: "repo-1", ProjectId: "proj-1", Url: "https://example.com/repo.git"},
+			DevServerId: "ds-1",
+		},
+	}
+	client := NewProjectClient(fake)
+
+	info, err := client.GetRepo(ctxWithTenant(t), "repo-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.HiddenTargetID != "" {
+		t.Errorf("expected empty HiddenTargetID for an ordinary repo, got %q", info.HiddenTargetID)
 	}
 }

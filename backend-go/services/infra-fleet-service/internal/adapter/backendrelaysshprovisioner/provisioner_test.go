@@ -20,6 +20,7 @@ import (
 
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/adapter/backendrelaysshprovisioner"
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/adapter/devserveragent"
@@ -40,6 +41,17 @@ type fakeSSHServer struct {
 	listener    net.Listener
 	deployDir   string
 	badChecksum bool
+	// hostPub is the server's own host public key (TASK-BE-EVM-019
+	// addition) — TOFU tests need it to compute the SAME SHA256
+	// fingerprint ssh.FingerprintSHA256 derives client-side.
+	hostPub ssh.PublicKey
+}
+
+// hostKeyFingerprint returns this server's real host key's SHA256
+// fingerprint, in the exact format ephemeralsshconn.Connector.ObservedFingerprint
+// returns — TASK-BE-EVM-019's TOFU tests compare against this.
+func (s *fakeSSHServer) hostKeyFingerprint() string {
+	return ssh.FingerprintSHA256(s.hostPub)
 }
 
 func genKeyPEM(t *testing.T) (pemStr string, pub ssh.PublicKey) {
@@ -84,7 +96,11 @@ func startFakeSSHServer(t *testing.T, expectUser string, authorizedKey ssh.Publi
 	if err != nil {
 		t.Fatalf("listening: %v", err)
 	}
-	srv := &fakeSSHServer{listener: listener, deployDir: t.TempDir(), badChecksum: badChecksum}
+	hostPub, err := ssh.NewPublicKey(hostPriv.Public())
+	if err != nil {
+		t.Fatalf("building host public key: %v", err)
+	}
+	srv := &fakeSSHServer{listener: listener, deployDir: t.TempDir(), badChecksum: badChecksum, hostPub: hostPub}
 	t.Cleanup(func() { _ = listener.Close() })
 	go srv.serve(t, cfg)
 	return srv
@@ -343,6 +359,32 @@ func (f *fakeRuntimes) SetEnvironmentID(_ context.Context, tenantID, runtimeID, 
 	return domain.EphemeralVmRuntime{ID: runtimeID, EnvironmentID: environmentID}, nil
 }
 
+// fakeSshTargets is an in-memory usecase.EphemeralVmSshTargetRepository —
+// TASK-BE-EVM-019's TOFU tests inspect upserted to confirm the observed
+// host key fingerprint gets persisted, and seed byRuntime to simulate a
+// PREVIOUSLY-recorded baseline for a "second dial" scenario.
+type fakeSshTargets struct {
+	byRuntime map[string]domain.EphemeralVmSshTargetRecord
+	upserted  []domain.EphemeralVmSshTargetRecord
+}
+
+func (f *fakeSshTargets) Upsert(_ context.Context, record domain.EphemeralVmSshTargetRecord) (domain.EphemeralVmSshTargetRecord, error) {
+	f.upserted = append(f.upserted, record)
+	if f.byRuntime == nil {
+		f.byRuntime = map[string]domain.EphemeralVmSshTargetRecord{}
+	}
+	f.byRuntime[record.RuntimeID] = record
+	return record, nil
+}
+
+func (f *fakeSshTargets) Get(_ context.Context, tenantID, runtimeID string) (domain.EphemeralVmSshTargetRecord, bool, error) {
+	rec, ok := f.byRuntime[runtimeID]
+	if !ok || rec.TenantID != tenantID {
+		return domain.EphemeralVmSshTargetRecord{}, false, nil
+	}
+	return rec, true, nil
+}
+
 func sequentialIDs(prefix string) func() string {
 	n := 0
 	return func() string {
@@ -366,7 +408,7 @@ func TestBackendRelaySshProvisioner_DialsDeploysLaunchesAndRegistersDevServer(t 
 		devServers, conns, runtimes, agentClient,
 		sshrelay.Config{BundlePath: bundlePath, HandshakeTimeout: 5 * time.Second, OrcaVersion: "test"},
 		ephemeralsshconn.Config{DialTimeout: 5 * time.Second},
-		sequentialIDs("id"),
+		sequentialIDs("id"), nil,
 	)
 
 	target := domain.EphemeralVmSshTarget{
@@ -374,7 +416,7 @@ func TestBackendRelaySshProvisioner_DialsDeploysLaunchesAndRegistersDevServer(t 
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	connectionID, err := provisioner.Provision(ctx, "tenant-1", "rt-1", target)
+	connectionID, err := provisioner.Provision(ctx, "tenant-1", "rt-1", domain.DevServer{ID: "source-ds-1"}, target)
 	if err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
@@ -428,13 +470,13 @@ func TestBackendRelaySshProvisioner_SetsEnvironmentIdImmediately(t *testing.T) {
 		devServers, conns, runtimes, agentClient,
 		sshrelay.Config{BundlePath: bundlePath, HandshakeTimeout: 5 * time.Second, OrcaVersion: "test"},
 		ephemeralsshconn.Config{DialTimeout: 5 * time.Second},
-		sequentialIDs("id"),
+		sequentialIDs("id"), nil,
 	)
 
 	target := domain.EphemeralVmSshTarget{Host: "127.0.0.1", Port: server.port(t), Username: "deploy", PrivateKeyPEM: pemKey}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if _, err := provisioner.Provision(ctx, "tenant-1", "rt-1", target); err != nil {
+	if _, err := provisioner.Provision(ctx, "tenant-1", "rt-1", domain.DevServer{ID: "source-ds-1"}, target); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 
@@ -462,14 +504,370 @@ func TestBackendRelaySshProvisioner_FailsFastWhenHostEmpty(t *testing.T) {
 
 	provisioner := backendrelaysshprovisioner.NewProvisioner(
 		devServers, conns, runtimes, agentClient,
-		sshrelay.Config{}, ephemeralsshconn.Config{}, sequentialIDs("id"),
+		sshrelay.Config{}, ephemeralsshconn.Config{}, sequentialIDs("id"), nil,
 	)
 
-	_, err := provisioner.Provision(context.Background(), "tenant-1", "rt-1", domain.EphemeralVmSshTarget{})
+	_, err := provisioner.Provision(context.Background(), "tenant-1", "rt-1", domain.DevServer{}, domain.EphemeralVmSshTarget{})
 	if err == nil {
 		t.Fatal("expected Provision to fail fast when target.Host is empty")
 	}
 	if len(devServers.registered) != 0 {
 		t.Error("expected no dev server registration attempt when the target is invalid")
+	}
+}
+
+// ─── TASK-BE-EVM-017: vm.readCredentialFile round-trip (Hướng B, Gap 1) ────
+
+// fakeCredentialTransport is a minimal, real devserveragent.Transport (two
+// buffered channels standing in for the wire) — used to attach a live
+// session for sourceDevServer so agentClient.ReadCredentialFile has
+// something to round-trip against. Mirrors devserveragent's own internal
+// pipeTransport test helper (unexported, so duplicated here) built entirely
+// from devserveragent's exported surface (DecodeFrame/EncodeJSONRPCFrame/
+// JSONRPCRequest/JSONRPCResponse) — no access to that package's internals.
+type fakeCredentialTransport struct {
+	writes chan []byte
+	reads  chan devserveragent.DecodedFrame
+	closed chan struct{}
+}
+
+func newFakeCredentialTransport() *fakeCredentialTransport {
+	return &fakeCredentialTransport{
+		writes: make(chan []byte, 8),
+		reads:  make(chan devserveragent.DecodedFrame, 8),
+		closed: make(chan struct{}),
+	}
+}
+
+func (t *fakeCredentialTransport) ReadFrame(ctx context.Context) (devserveragent.DecodedFrame, error) {
+	select {
+	case f := <-t.reads:
+		return f, nil
+	case <-t.closed:
+		return devserveragent.DecodedFrame{}, fmt.Errorf("fakeCredentialTransport: closed")
+	case <-ctx.Done():
+		return devserveragent.DecodedFrame{}, ctx.Err()
+	}
+}
+
+func (t *fakeCredentialTransport) WriteFrame(_ context.Context, frame []byte) error {
+	select {
+	case t.writes <- frame:
+		return nil
+	case <-t.closed:
+		return fmt.Errorf("fakeCredentialTransport: closed")
+	}
+}
+
+func (t *fakeCredentialTransport) Close(_ string) error {
+	select {
+	case <-t.closed:
+	default:
+		close(t.closed)
+	}
+	return nil
+}
+
+// respondToReadCredentialFile reads exactly one outgoing JSON-RPC request,
+// records its method + "path" param into the returned struct, and answers
+// with {"contentPEM": contentPEM}. Runs on its own goroutine in every
+// caller (session.call blocks synchronously waiting for the response), so
+// it reports failures via tb.Errorf, not the Fatal family — matching
+// devserveragent's own pipeTransport.respondToNextCall precedent.
+type observedRPCCall struct {
+	method string
+	path   string
+}
+
+func (t *fakeCredentialTransport) respondToReadCredentialFile(tb testing.TB, contentPEM string, observed *observedRPCCall) {
+	tb.Helper()
+	frame := <-t.writes
+	decoded, err := devserveragent.DecodeFrame(frame)
+	if err != nil {
+		tb.Errorf("decoding frame written by session.call: %v", err)
+		return
+	}
+	var req devserveragent.JSONRPCRequest
+	if err := json.Unmarshal(decoded.Payload, &req); err != nil {
+		tb.Errorf("unmarshaling request: %v", err)
+		return
+	}
+	observed.method = req.Method
+	var params map[string]any
+	if err := json.Unmarshal(req.Params, &params); err == nil {
+		if p, ok := params["path"].(string); ok {
+			observed.path = p
+		}
+	}
+	resultJSON, err := json.Marshal(map[string]any{"contentPEM": contentPEM})
+	if err != nil {
+		tb.Errorf("marshaling fake result: %v", err)
+		return
+	}
+	resp := devserveragent.JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: resultJSON}
+	respFrame, err := devserveragent.EncodeJSONRPCFrame(resp, decoded.ID, decoded.ID)
+	if err != nil {
+		tb.Errorf("encoding fake response: %v", err)
+		return
+	}
+	respDecoded, err := devserveragent.DecodeFrame(respFrame)
+	if err != nil {
+		tb.Errorf("decoding fake response frame: %v", err)
+		return
+	}
+	t.reads <- respDecoded
+}
+
+// TestBackendRelaySshProvisioner_ReadsCredentialFileFromSourceDevServer is
+// TASK-BE-EVM-017's core Gap 1 test: when target.IdentityFilePath is set,
+// Provision calls ReadCredentialFile against sourceDevServer BEFORE dialing
+// (with the exact path), and dials using the bytes that call returns — the
+// fake SSH server below only accepts the key ReadCredentialFile answers
+// with, so a successful Provision proves the returned bytes were actually
+// used for auth, not just fetched and discarded.
+func TestBackendRelaySshProvisioner_ReadsCredentialFileFromSourceDevServer(t *testing.T) {
+	pemKey, pub := genKeyPEM(t)
+	server := startFakeSSHServer(t, "deploy", pub, false)
+	bundlePath := writeLocalBundle(t, "// fake agent bundle\n")
+
+	devServers := &fakeDevServers{}
+	conns := &fakeConnections{nextID: "conn-ssh-1"}
+	runtimes := &fakeRuntimes{}
+	agentClient := devserveragent.New(devserveragent.DefaultConfig(), slog.Default())
+	t.Cleanup(agentClient.Close)
+
+	sourceDevServer, err := domain.NewDevServer("source-ds-1", "tenant-1", "source-host", domain.ConnectionModeDirectWebSocket, "")
+	if err != nil {
+		t.Fatalf("NewDevServer: %v", err)
+	}
+	credTransport := newFakeCredentialTransport()
+	agentClient.AttachTransport(sourceDevServer.ID, sourceDevServer.Host, credTransport, devserveragent.HandshakeInfo{})
+
+	provisioner := backendrelaysshprovisioner.NewProvisioner(
+		devServers, conns, runtimes, agentClient,
+		sshrelay.Config{BundlePath: bundlePath, HandshakeTimeout: 5 * time.Second, OrcaVersion: "test"},
+		ephemeralsshconn.Config{DialTimeout: 5 * time.Second},
+		sequentialIDs("id"), nil,
+	)
+
+	target := domain.EphemeralVmSshTarget{
+		Host: "127.0.0.1", Port: server.port(t), Username: "deploy",
+		IdentityFilePath: "/home/deploy/.ssh/id_ed25519",
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var observed observedRPCCall
+	go credTransport.respondToReadCredentialFile(t, pemKey, &observed)
+
+	connectionID, err := provisioner.Provision(ctx, "tenant-1", "rt-1", sourceDevServer, target)
+	if err != nil {
+		t.Fatalf("Provision: %v", err)
+	}
+	if connectionID != "conn-ssh-1" {
+		t.Errorf("connectionID = %q, want conn-ssh-1", connectionID)
+	}
+	if observed.method != "vm.readCredentialFile" {
+		t.Errorf("observed RPC method = %q, want vm.readCredentialFile", observed.method)
+	}
+	if observed.path != "/home/deploy/.ssh/id_ed25519" {
+		t.Errorf("observed RPC path = %q, want target.IdentityFilePath unchanged", observed.path)
+	}
+}
+
+// TestBackendRelaySshProvisioner_IdentityAgentSocket_SkipsCredentialFileRead
+// is TASK-BE-EVM-017's regression guard: the identityAgent branch needs no
+// ReadCredentialFile round-trip at all (only the socket PATH travels) —
+// sourceDevServer here has NO attached session, so any attempt to call
+// ReadCredentialFile against it would fail loudly (no live session for that
+// dev server), making a successful Provision proof the call was skipped.
+func TestBackendRelaySshProvisioner_IdentityAgentSocket_SkipsCredentialFileRead(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating agent keypair: %v", err)
+	}
+	keyring := agent.NewKeyring()
+	if err := keyring.Add(agent.AddedKey{PrivateKey: priv}); err != nil {
+		t.Fatalf("adding key to fake agent keyring: %v", err)
+	}
+	signer, err := ssh.NewSignerFromSigner(priv)
+	if err != nil {
+		t.Fatalf("wrapping signer: %v", err)
+	}
+
+	sockPath := t.TempDir() + "/agent.sock"
+	agentListener, err := net.Listen("unix", sockPath)
+	if err != nil {
+		t.Fatalf("listening on fake agent socket: %v", err)
+	}
+	t.Cleanup(func() { _ = agentListener.Close() })
+	go func() {
+		for {
+			conn, err := agentListener.Accept()
+			if err != nil {
+				return
+			}
+			go func() { _ = agent.ServeAgent(keyring, conn) }()
+		}
+	}()
+
+	server := startFakeSSHServer(t, "deploy", signer.PublicKey(), false)
+	bundlePath := writeLocalBundle(t, "// fake agent bundle\n")
+
+	devServers := &fakeDevServers{}
+	conns := &fakeConnections{nextID: "conn-ssh-1"}
+	runtimes := &fakeRuntimes{}
+	agentClient := devserveragent.New(devserveragent.DefaultConfig(), slog.Default())
+	t.Cleanup(agentClient.Close)
+
+	// Deliberately NOT attached to agentClient — no live session exists for
+	// this dev server at all.
+	sourceDevServer, err := domain.NewDevServer("source-ds-2", "tenant-1", "source-host-2", domain.ConnectionModeDirectWebSocket, "")
+	if err != nil {
+		t.Fatalf("NewDevServer: %v", err)
+	}
+
+	provisioner := backendrelaysshprovisioner.NewProvisioner(
+		devServers, conns, runtimes, agentClient,
+		sshrelay.Config{BundlePath: bundlePath, HandshakeTimeout: 5 * time.Second, OrcaVersion: "test"},
+		ephemeralsshconn.Config{DialTimeout: 5 * time.Second},
+		sequentialIDs("id"), nil,
+	)
+
+	target := domain.EphemeralVmSshTarget{
+		Host: "127.0.0.1", Port: server.port(t), Username: "deploy",
+		IdentityAgentSocket: sockPath,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := provisioner.Provision(ctx, "tenant-1", "rt-1", sourceDevServer, target); err != nil {
+		t.Fatalf("Provision: %v (a non-nil error here means it tried to call ReadCredentialFile against an unattached source dev server)", err)
+	}
+}
+
+// TestBackendRelaySshProvisioner_CredentialFileContentNeverLogged is
+// TASK-BE-EVM-017's core security regression-guard, mirroring
+// ephemeralsshconn's TestEphemeralSshConnector_CredentialNeverLoggedOrPersisted
+// convention exactly: static-scan provisioner.go's source, not a runtime
+// log capture (this package's real logger is devserveragent's, which never
+// receives the resolved contentPEM/target.PrivateKeyPEM value at all — see
+// the source scan below for why that's structurally true, not just
+// incidental).
+func TestBackendRelaySshProvisioner_CredentialFileContentNeverLogged(t *testing.T) {
+	src, err := os.ReadFile("provisioner.go")
+	if err != nil {
+		t.Fatalf("reading provisioner.go: %v", err)
+	}
+	text := string(src)
+
+	if strings.Contains(text, `"log"`) || strings.Contains(text, `"log/slog"`) {
+		t.Fatal("backendrelaysshprovisioner/provisioner.go must not import a logging package — credential material must never reach a log statement")
+	}
+
+	for i, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "//") {
+			continue // doc comments may legitimately name the field/variable
+		}
+		lower := strings.ToLower(line)
+		mentionsFormatCall := strings.Contains(lower, "errorf(") || strings.Contains(lower, "sprintf(") ||
+			strings.Contains(lower, "println(") || strings.Contains(lower, "print(")
+		if mentionsFormatCall && (strings.Contains(line, ".PrivateKeyPEM") || strings.Contains(line, "contentPEM")) {
+			t.Errorf("provisioner.go:%d appears to format credential material's VALUE into a string: %s", i+1, line)
+		}
+		if strings.Contains(line, "%+v") && strings.Contains(line, "target") {
+			t.Errorf("provisioner.go:%d formats the whole target struct with %%+v, which would include credential material: %s", i+1, line)
+		}
+	}
+}
+
+// ─── TASK-BE-EVM-019: TOFU host-key fingerprint persistence (Hướng B) ──────
+
+// TestBackendRelaySshProvisioner_PersistsFingerprintAfterFirstDial is
+// TASK-BE-EVM-019's required Provisioner-level test: after a successful
+// first dial (no prior EphemeralVmSshTargetRepository row for this
+// runtime), Provision persists the REAL observed host-key fingerprint —
+// not a placeholder, not left unset — keyed by (tenantID, runtimeID), so
+// the NEXT dial for the same runtime has a baseline to verify against.
+func TestBackendRelaySshProvisioner_PersistsFingerprintAfterFirstDial(t *testing.T) {
+	pemKey, pub := genKeyPEM(t)
+	server := startFakeSSHServer(t, "deploy", pub, false)
+	bundlePath := writeLocalBundle(t, "// fake agent bundle\n")
+
+	devServers := &fakeDevServers{}
+	conns := &fakeConnections{nextID: "conn-ssh-1"}
+	runtimes := &fakeRuntimes{}
+	sshTargets := &fakeSshTargets{}
+	agentClient := devserveragent.New(devserveragent.DefaultConfig(), slog.Default())
+	t.Cleanup(agentClient.Close)
+
+	provisioner := backendrelaysshprovisioner.NewProvisioner(
+		devServers, conns, runtimes, agentClient,
+		sshrelay.Config{BundlePath: bundlePath, HandshakeTimeout: 5 * time.Second, OrcaVersion: "test"},
+		ephemeralsshconn.Config{DialTimeout: 5 * time.Second},
+		sequentialIDs("id"), sshTargets,
+	)
+
+	target := domain.EphemeralVmSshTarget{
+		Host: "127.0.0.1", Port: server.port(t), Username: "deploy", PrivateKeyPEM: pemKey,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := provisioner.Provision(ctx, "tenant-1", "rt-1", domain.DevServer{}, target); err != nil {
+		t.Fatalf("Provision (first dial): %v", err)
+	}
+
+	if len(sshTargets.upserted) != 1 {
+		t.Fatalf("expected exactly 1 upserted ssh target row, got %d", len(sshTargets.upserted))
+	}
+	rec := sshTargets.upserted[0]
+	if rec.TenantID != "tenant-1" || rec.RuntimeID != "rt-1" {
+		t.Errorf("unexpected upsert key: %+v", rec)
+	}
+	wantFingerprint := server.hostKeyFingerprint()
+	if rec.HostKeyFingerprint != wantFingerprint {
+		t.Errorf("HostKeyFingerprint = %q, want %q (the fake server's real host key fingerprint)", rec.HostKeyFingerprint, wantFingerprint)
+	}
+	if rec.HostKeyFingerprint == "" {
+		t.Error("expected a non-empty fingerprint to be persisted after a successful first dial")
+	}
+}
+
+// TestBackendRelaySshProvisioner_SecondDial_UsesStoredFingerprint proves
+// Provision reads a PREVIOUSLY-persisted fingerprint back out and passes it
+// to the connector as knownFingerprint — a reconnect to the SAME server
+// (same host key) succeeds, and the stored row is re-written with the same
+// value (idempotent).
+func TestBackendRelaySshProvisioner_SecondDial_UsesStoredFingerprint(t *testing.T) {
+	pemKey, pub := genKeyPEM(t)
+	server := startFakeSSHServer(t, "deploy", pub, false)
+	bundlePath := writeLocalBundle(t, "// fake agent bundle\n")
+
+	devServers := &fakeDevServers{}
+	conns := &fakeConnections{nextID: "conn-ssh-1"}
+	runtimes := &fakeRuntimes{}
+	sshTargets := &fakeSshTargets{byRuntime: map[string]domain.EphemeralVmSshTargetRecord{
+		"rt-1": {TenantID: "tenant-1", RuntimeID: "rt-1", HostKeyFingerprint: server.hostKeyFingerprint()},
+	}}
+	agentClient := devserveragent.New(devserveragent.DefaultConfig(), slog.Default())
+	t.Cleanup(agentClient.Close)
+
+	provisioner := backendrelaysshprovisioner.NewProvisioner(
+		devServers, conns, runtimes, agentClient,
+		sshrelay.Config{BundlePath: bundlePath, HandshakeTimeout: 5 * time.Second, OrcaVersion: "test"},
+		ephemeralsshconn.Config{DialTimeout: 5 * time.Second},
+		sequentialIDs("id"), sshTargets,
+	)
+
+	target := domain.EphemeralVmSshTarget{
+		Host: "127.0.0.1", Port: server.port(t), Username: "deploy", PrivateKeyPEM: pemKey,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if _, err := provisioner.Provision(ctx, "tenant-1", "rt-1", domain.DevServer{}, target); err != nil {
+		t.Fatalf("Provision (second dial, matching stored fingerprint): %v", err)
 	}
 }

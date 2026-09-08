@@ -15,6 +15,8 @@ import { Client as Ssh2Client } from 'ssh2'
 import type { ClientChannel, ConnectConfig } from 'ssh2'
 import { spawn } from 'node:child_process'
 import { Duplex } from 'node:stream'
+import { readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 
 // Why a narrower type than the full EphemeralVmRecipeSshTargetSchema (which
 // requires `label` and carries display-only fields like `configHost`/
@@ -27,11 +29,25 @@ import { Duplex } from 'node:stream'
 // during CR-EVM-005 cross-side reconciliation, 2026-09-08). A full
 // EphemeralVmRecipeSshTarget still satisfies this structurally, so no
 // existing caller/fixture breaks.
+// Why identityFilePath (path, not content) belongs on the wire target and
+// not OutboundSshCredential: SOL-AG-EVM-003's "Sửa lại Gap 1 + Gap 4" (Gap 1)
+// reverses the earlier "Vault resolves, agent receives content" decision —
+// Provision always runs the recipe's create command on THIS same agent, so
+// the identity file already lives on this host's disk. Reading it here
+// avoids the round-trip to backend-go this task doc requires removing.
+// Why knownHostKeyFingerprint lives on the target, not as a separate
+// dialOutboundSshTarget parameter: TASK-AG-EVM-010/SOL-AG-EVM-003 "Sửa lại
+// Gap 1 + Gap 4" (Gap 4) — this is per-target TOFU state backend-go persists
+// (infra.ephemeral_vm_ssh_targets.host_key_fingerprint) and round-trips
+// alongside the target's other per-dial fields (host/identityFilePath/etc),
+// not a standalone credential-like value.
 export type SshDialTarget = {
   host: string
   port: number
   username: string
   identityAgent?: string
+  identityFilePath?: string
+  knownHostKeyFingerprint?: string
   jumpHost?: string
   proxyCommand?: string
 }
@@ -47,6 +63,11 @@ export type OutboundSshCredential = {
 
 export type OutboundSshSession = {
   client: Ssh2Client
+  // TASK-AG-EVM-010: the host key fingerprint OBSERVED on this dial — always
+  // set (first dial or a matching repeat dial), never empty on a resolved
+  // session. backend-go persists it and sends it back as
+  // target.knownHostKeyFingerprint on the next vm.sshDial for this runtimeId.
+  hostKeyFingerprint: string
   close(): void
 }
 
@@ -65,6 +86,36 @@ function scrubCredentialFromError(err: unknown, credential: OutboundSshCredentia
   const scrubbed = new Error(original.message.split(credential.privateKeyPEM).join('[REDACTED]'))
   scrubbed.stack = original.stack?.split(credential.privateKeyPEM).join('[REDACTED]')
   return scrubbed
+}
+
+// Why credential.privateKeyPEM still wins when both are present: it is the
+// backward-compat path (some other future caller — e.g. Hướng B's
+// vm.readCredentialFile round-trip — may still send resolved content
+// directly over RPC) and content already in hand should never trigger an
+// extra disk read. identityFilePath is Hướng A's primary path (Gap 1 fix) —
+// read once per dial, never cached, never written back to disk.
+async function resolvePrivateKey(
+  target: SshDialTarget,
+  credential: OutboundSshCredential
+): Promise<string | undefined> {
+  if (credential.privateKeyPEM) {
+    return credential.privateKeyPEM
+  }
+  if (target.identityFilePath) {
+    return readFile(target.identityFilePath, 'utf8')
+  }
+  return undefined
+}
+
+// TASK-AG-EVM-010/SOL-AG-EVM-003 "Sửa lại Gap 1 + Gap 4" (Gap 4). Format
+// mirrors OpenSSH/golang's ssh.FingerprintSHA256 convention ("SHA256:" +
+// unpadded base64) — not required for cross-language comparison (Hướng A
+// always computes AND compares on this same agent, never against
+// backend-go's own Go-computed value), but keeps it human-recognizable if
+// ever surfaced in a UI/log.
+function computeSha256Fingerprint(hostKey: Buffer): string {
+  const digestBase64 = createHash('sha256').update(hostKey).digest('base64')
+  return `SHA256:${digestBase64.replace(/=+$/, '')}`
 }
 
 function connectSsh2Client(client: Ssh2Client, config: ConnectConfig): Promise<void> {
@@ -172,7 +223,8 @@ function spawnProxyCommandDuplex(proxyCommand: string, host: string, port: numbe
 function buildConnectConfig(
   target: SshDialTarget,
   credential: OutboundSshCredential,
-  sock: ClientChannel | Duplex | undefined
+  sock: ClientChannel | Duplex | undefined,
+  onHostKeyVerified: (fingerprint: string) => void
 ): ConnectConfig {
   return {
     host: sock ? undefined : target.host,
@@ -180,7 +232,22 @@ function buildConnectConfig(
     username: target.username,
     privateKey: credential.privateKeyPEM,
     agent: target.identityAgent,
-    sock
+    sock,
+    // TASK-AG-EVM-010/SOL-AG-EVM-003 "Sửa lại Gap 1 + Gap 4" (Gap 4) — ssh2
+    // does NO host-key verification at all when hostVerifier is omitted
+    // (confirmed via @types/ssh2@1.15.5's real ConnectConfig, not assumed:
+    // SyncHostVerifier = (key: Buffer) => boolean, synchronous). TOFU: no
+    // knownHostKeyFingerprint yet (first dial for this runtimeId, nothing
+    // stored on backend-go's side) → accept and report what was observed;
+    // every later dial for the same runtimeId compares against it.
+    hostVerifier: (hostKey: Buffer): boolean => {
+      const observed = computeSha256Fingerprint(hostKey)
+      onHostKeyVerified(observed)
+      if (!target.knownHostKeyFingerprint) {
+        return true
+      }
+      return observed === target.knownHostKeyFingerprint
+    }
   }
 }
 
@@ -190,11 +257,22 @@ export async function dialOutboundSshTarget(
 ): Promise<OutboundSshSession> {
   let jumpClient: Ssh2Client | undefined
   let client: Ssh2Client | undefined
+  // Resolved once up front so both the jump-host hop and the real target
+  // connect with the same material — and so the catch block below always
+  // has the actual (possibly file-read) secret to scrub, not just whatever
+  // was passed in over RPC.
+  let resolvedCredential: OutboundSshCredential = credential
+  // Set by buildConnectConfig's hostVerifier callback once ssh2 actually
+  // calls it during the handshake — empty until then.
+  let hostKeyFingerprint = ''
 
   try {
+    const privateKeyPEM = await resolvePrivateKey(target, credential)
+    resolvedCredential = { privateKeyPEM }
+
     let sock: ClientChannel | Duplex | undefined
     if (target.jumpHost) {
-      const hop = await dialViaJumpHost(target, credential)
+      const hop = await dialViaJumpHost(target, resolvedCredential)
       sock = hop.sock
       jumpClient = hop.jumpClient
     } else if (target.proxyCommand) {
@@ -207,16 +285,26 @@ export async function dialOutboundSshTarget(
     // ready. Constructing it earlier would leave an unconnected client
     // dangling if the jump hop itself fails.
     client = new Ssh2Client()
-    await connectSsh2Client(client, buildConnectConfig(target, credential, sock))
+    const config = buildConnectConfig(target, resolvedCredential, sock, (fingerprint) => {
+      hostKeyFingerprint = fingerprint
+    })
+    await connectSsh2Client(client, config)
   } catch (err) {
     jumpClient?.end()
     client?.end()
-    throw scrubCredentialFromError(err, credential)
+    // Why NOT scrub target.identityFilePath here: the task's security note
+    // scopes the "don't log" requirement to file CONTENT, not the path — a
+    // readFile ENOENT/EACCES error naturally embeds the path in its message
+    // (Node's own error format), and that is acceptable to surface (helps
+    // diagnose a real misconfiguration); only resolvedCredential.privateKeyPEM
+    // (the file's actual bytes, once read) is scrubbed.
+    throw scrubCredentialFromError(err, resolvedCredential)
   }
 
   const readyClient = client
   return {
     client: readyClient,
+    hostKeyFingerprint,
     close: (): void => {
       readyClient.end()
       jumpClient?.end()

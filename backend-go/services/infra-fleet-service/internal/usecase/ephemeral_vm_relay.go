@@ -236,7 +236,7 @@ func (uc *EphemeralVmRelay) Provision(ctx context.Context, connectionID, recipeI
 		for event := range events {
 			switch event.Type {
 			case "result":
-				uc.applyProvisionResult(ctx, tenantID, runtimeID, event.Result)
+				uc.applyProvisionResult(ctx, tenantID, runtimeID, devServer, event.Result)
 			case "error":
 				_, _ = uc.runtimes.UpdateStatus(ctx, tenantID, runtimeID, "error", "", event.ErrorMsg)
 			}
@@ -267,12 +267,12 @@ func (uc *EphemeralVmRelay) Provision(ctx context.Context, connectionID, recipeI
 // set environment_id ngay lập tức... không có độ trễ/sự kiện async tách
 // biệt nào" — the whole point is there IS no gap between receiving the ssh
 // result and dialing it).
-func (uc *EphemeralVmRelay) applyProvisionResult(ctx context.Context, tenantID, runtimeID string, result VmProvisionResult) {
+func (uc *EphemeralVmRelay) applyProvisionResult(ctx context.Context, tenantID, runtimeID string, devServer domain.DevServer, result VmProvisionResult) {
 	switch result.Type {
 	case "orca-server":
 		_, _ = uc.runtimes.UpdateProvisionResult(ctx, tenantID, runtimeID, "provisioning", "orca-server", "")
 	case "ssh":
-		uc.applySshProvisionResult(ctx, tenantID, runtimeID, result)
+		uc.applySshProvisionResult(ctx, tenantID, runtimeID, devServer, result)
 	default:
 		_, _ = uc.runtimes.UpdateProvisionResult(ctx, tenantID, runtimeID, "error", result.Type,
 			"unrecognized vm.provision result type: "+result.Type)
@@ -286,14 +286,19 @@ func (uc *EphemeralVmRelay) applyProvisionResult(ctx context.Context, tenantID, 
 // connection_type == 'ssh'" rule) stays in force ONLY as the fallback when
 // no provisioner was wired (uc.sshProvisioner == nil), e.g. a deployment
 // that hasn't set EPHEMERAL_VM_SSH_MODE's target implementation up yet.
-func (uc *EphemeralVmRelay) applySshProvisionResult(ctx context.Context, tenantID, runtimeID string, result VmProvisionResult) {
+//
+// devServer (TASK-BE-EVM-016, BE-SOL-EVM-004 §6b) is the SAME Dev Server
+// this whole Provision call already resolved via resolveDevServerAndRepoPath
+// — threaded through here (and into EphemeralVmSshProvisioner.Provision's
+// new sourceDevServer parameter) rather than re-resolved.
+func (uc *EphemeralVmRelay) applySshProvisionResult(ctx context.Context, tenantID, runtimeID string, devServer domain.DevServer, result VmProvisionResult) {
 	if uc.sshProvisioner == nil {
 		_, _ = uc.runtimes.UpdateProvisionResult(ctx, tenantID, runtimeID, "error", "ssh",
 			"ssh-type ephemeral VM recipes require an EphemeralVmSshProvisioner to be configured — see TASK-BE-EVM-012/013")
 		return
 	}
-	target := buildEphemeralVmSshTarget(result.SshTarget)
-	if _, err := uc.sshProvisioner.Provision(ctx, tenantID, runtimeID, target); err != nil {
+	target := buildEphemeralVmSshTarget(result.SshTarget, result.ProjectRoot)
+	if _, err := uc.sshProvisioner.Provision(ctx, tenantID, runtimeID, devServer, target); err != nil {
 		_, _ = uc.runtimes.UpdateProvisionResult(ctx, tenantID, runtimeID, "error", "ssh", err.Error())
 		return
 	}
@@ -307,21 +312,36 @@ func (uc *EphemeralVmRelay) applySshProvisionResult(ctx context.Context, tenantI
 // buildEphemeralVmSshTarget converts the wire-normalized recipe result
 // (EphemeralVmRecipeSshTarget, adapter/devserveragent's
 // normalizeVmProvisionResult) into domain.EphemeralVmSshTarget, the type
-// EphemeralVmSshProvisioner.Provision actually takes — see that type's doc
-// comment for the still-open identityFile->PrivateKeyPEM Vault-resolution
-// gap this conversion does not close. sshTarget is never nil when called
-// from applySshProvisionResult (VmProvisionResult.Type == "ssh" is only set
-// alongside a non-nil SshTarget, see normalizeVmProvisionResult), but a nil
-// guard keeps this safe to call standalone (e.g. from tests) too.
-func buildEphemeralVmSshTarget(sshTarget *EphemeralVmRecipeSshTarget) domain.EphemeralVmSshTarget {
+// EphemeralVmSshProvisioner.Provision actually takes.
+//
+// GAP 1 FIX (TASK-BE-EVM-016, BE-SOL-EVM-004 §6a): sshTarget.IdentityFile is
+// a raw filesystem PATH (see domain.EphemeralVmSshTarget's doc comment) —
+// this now maps to IdentityFilePath, NOT PrivateKeyPEM (the old mapping
+// treated the path string as if it were already-resolved PEM content,
+// which TASK-BE-EVM-012/013's own doc comments flagged as an open gap).
+// PrivateKeyPEM is populated later, only by Hướng B, after
+// DevServerAgentClient.ReadCredentialFile resolves IdentityFilePath's bytes
+// (TASK-BE-EVM-017) — never here.
+//
+// projectRoot (TASK-BE-EVM-016, §6b) is VmProvisionResult.ProjectRoot,
+// passed separately (not part of EphemeralVmRecipeSshTarget's own wire
+// shape) so EphemeralVmSshProvisioner.Provision can register a real
+// infra.connections row.
+//
+// sshTarget is never nil when called from applySshProvisionResult
+// (VmProvisionResult.Type == "ssh" is only set alongside a non-nil
+// SshTarget, see normalizeVmProvisionResult), but a nil guard keeps this
+// safe to call standalone (e.g. from tests) too.
+func buildEphemeralVmSshTarget(sshTarget *EphemeralVmRecipeSshTarget, projectRoot string) domain.EphemeralVmSshTarget {
 	if sshTarget == nil {
-		return domain.EphemeralVmSshTarget{}
+		return domain.EphemeralVmSshTarget{ProjectRoot: projectRoot}
 	}
 	return domain.EphemeralVmSshTarget{
 		Host:                sshTarget.Host,
 		Port:                int(sshTarget.Port),
 		Username:            sshTarget.Username,
-		PrivateKeyPEM:       sshTarget.IdentityFile,
+		ProjectRoot:         projectRoot,
+		IdentityFilePath:    sshTarget.IdentityFile,
 		IdentityAgentSocket: sshTarget.IdentityAgent,
 		JumpHost:            sshTarget.JumpHost,
 		ProxyCommand:        sshTarget.ProxyCommand,

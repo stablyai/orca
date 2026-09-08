@@ -381,6 +381,19 @@ message GetRepoResponse {
   // this was resolved via a join through the OWNING PROJECT's
   // dev_server_id, since project.repos had no such column of its own.
   string dev_server_id = 2;
+  // hidden_target_id (TASK-BE-EVM-018, BE-SOL-EVM-004 §4/§6c) mirrors
+  // ResolveConnectionResponse.hidden_target_id's meaning for this repo —
+  // set when this repo is backed by an ssh-type ephemeral VM runtime
+  // (Hướng A), so git-gateway-service's repo-scoped dispatch
+  // (dispatchExecutorForRepo/dispatchFilesystemExecutorForRepo) can route
+  // via the hidden target too. Empty for every ordinary repo. This
+  // service does not populate a real value yet (which ephemeral VM
+  // runtime, if any, backs a given repo_id is an infra-fleet-service-owned
+  // fact — the join this field needs is a follow-up, see
+  // TASK-BE-EVM-015's "Kết quả thực tế" gap #2) — the field exists on the
+  // wire so git-gateway-service's client-side mapping has something real
+  // to read once that join lands.
+  string hidden_target_id = 3;
 }
 
 enum RepoRole {

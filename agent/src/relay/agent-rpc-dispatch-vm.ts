@@ -73,6 +73,25 @@ export async function dispatchVmRpc(
       }
     }
 
+    // ── vm.readCredentialFile (Hướng B only) ──────────────────────────────
+    // CR-EVM-005/TASK-AG-EVM-009: backend-go's BackendRelaySshProvisioner
+    // calls this BEFORE dialing off-machine itself, to read identityFile's
+    // bytes from the same agent that ran Provision. Hướng A never calls
+    // this — dialOutboundSshTarget (vm.sshDial's handler) reads the file
+    // itself, see TASK-AG-EVM-008.
+    case 'vm.readCredentialFile': {
+      try {
+        const { handleVmReadCredentialFile, validateVmReadCredentialFileParams } =
+          await import('./agent-ephemeral-vm-handler')
+        const params = validateVmReadCredentialFileParams(rpc.params)
+        const result = await handleVmReadCredentialFile(params)
+        return { jsonrpc: '2.0', id: rpc.id, result }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return makeError(rpc.id, AgentErrorCode.ServerError, `vm.readCredentialFile failed: ${msg}`)
+      }
+    }
+
     default:
       return null
   }

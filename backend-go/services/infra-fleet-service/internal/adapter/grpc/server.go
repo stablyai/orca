@@ -270,6 +270,7 @@ func (s *Server) ResolveConnection(ctx context.Context, req *infrafleetv1.Resolv
 		resp.RepoPath = out.RepoPath
 		resp.WorktreeId = out.WorktreeID
 		resp.ConnectionId = out.ConnectionID
+		resp.HiddenTargetId = out.HiddenTargetID
 	}
 	return resp, nil
 }

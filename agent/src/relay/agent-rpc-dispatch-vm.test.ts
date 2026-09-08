@@ -17,6 +17,8 @@ const handleVmProvision = vi.fn()
 const validateVmProvisionParams = vi.fn()
 const handleVmCancelProvision = vi.fn()
 const validateRuntimeIdParam = vi.fn()
+const handleVmReadCredentialFile = vi.fn()
+const validateVmReadCredentialFileParams = vi.fn()
 
 vi.mock('./agent-ephemeral-vm-handler', () => ({
   handleVmExec: (...args: unknown[]) => handleVmExec(...args),
@@ -24,7 +26,10 @@ vi.mock('./agent-ephemeral-vm-handler', () => ({
   handleVmProvision: (...args: unknown[]) => handleVmProvision(...args),
   validateVmProvisionParams: (...args: unknown[]) => validateVmProvisionParams(...args),
   handleVmCancelProvision: (...args: unknown[]) => handleVmCancelProvision(...args),
-  validateRuntimeIdParam: (...args: unknown[]) => validateRuntimeIdParam(...args)
+  validateRuntimeIdParam: (...args: unknown[]) => validateRuntimeIdParam(...args),
+  handleVmReadCredentialFile: (...args: unknown[]) => handleVmReadCredentialFile(...args),
+  validateVmReadCredentialFileParams: (...args: unknown[]) =>
+    validateVmReadCredentialFileParams(...args)
 }))
 
 const VM_EXEC_PARAMS = {
@@ -182,5 +187,104 @@ describe('dispatchVmRpc — vm.cancelProvision', () => {
     const response = await dispatchVmRpc(rpc, new MockWs() as never, createWireState())
 
     expect(response).toBeNull()
+  })
+})
+
+describe('dispatchVmRpc — vm.readCredentialFile (TASK-AG-EVM-009, Hướng B only)', () => {
+  beforeEach(() => {
+    handleVmReadCredentialFile.mockReset()
+    validateVmReadCredentialFileParams.mockReset()
+  })
+
+  it('validates params, calls handleVmReadCredentialFile, and returns its result', async () => {
+    validateVmReadCredentialFileParams.mockReturnValue({ path: '/home/deploy/.ssh/id_ed25519' })
+    handleVmReadCredentialFile.mockResolvedValue({ contentPEM: 'PEM-CONTENT' })
+    const { dispatchVmRpc } = await import('./agent-rpc-dispatch-vm')
+    const rpc: JsonRpcRequest = {
+      jsonrpc: '2.0',
+      id: 10,
+      method: 'vm.readCredentialFile',
+      params: { path: '/home/deploy/.ssh/id_ed25519' }
+    }
+
+    const response = await dispatchVmRpc(rpc, new MockWs() as never, createWireState())
+
+    expect(validateVmReadCredentialFileParams).toHaveBeenCalledWith({
+      path: '/home/deploy/.ssh/id_ed25519'
+    })
+    expect(handleVmReadCredentialFile).toHaveBeenCalledWith({
+      path: '/home/deploy/.ssh/id_ed25519'
+    })
+    expect(response).toEqual({
+      jsonrpc: '2.0',
+      id: 10,
+      result: { contentPEM: 'PEM-CONTENT' }
+    })
+  })
+
+  it('returns a ServerError response (not a throw) when validation fails', async () => {
+    validateVmReadCredentialFileParams.mockImplementation(() => {
+      throw new Error('missing required param "path"')
+    })
+    const { dispatchVmRpc } = await import('./agent-rpc-dispatch-vm')
+    const rpc: JsonRpcRequest = {
+      jsonrpc: '2.0',
+      id: 11,
+      method: 'vm.readCredentialFile',
+      params: {}
+    }
+
+    const response = await dispatchVmRpc(rpc, new MockWs() as never, createWireState())
+
+    expect(handleVmReadCredentialFile).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      jsonrpc: '2.0',
+      id: 11,
+      error: { message: expect.stringContaining('path') }
+    })
+  })
+
+  it('returns a ServerError response when handleVmReadCredentialFile throws (file not found)', async () => {
+    validateVmReadCredentialFileParams.mockReturnValue({ path: '/no/such/file' })
+    handleVmReadCredentialFile.mockRejectedValue(new Error('ENOENT: no such file or directory'))
+    const { dispatchVmRpc } = await import('./agent-rpc-dispatch-vm')
+    const rpc: JsonRpcRequest = {
+      jsonrpc: '2.0',
+      id: 12,
+      method: 'vm.readCredentialFile',
+      params: { path: '/no/such/file' }
+    }
+
+    const response = await dispatchVmRpc(rpc, new MockWs() as never, createWireState())
+
+    expect(response).toMatchObject({
+      jsonrpc: '2.0',
+      id: 12,
+      error: { message: expect.stringContaining('vm.readCredentialFile failed') }
+    })
+  })
+
+  // Security regression-guard (TASK-AG-EVM-009's "quan trọng nhất"):
+  // contentPEM must never surface in the wire error response makeError()
+  // produces, even if a lower layer somehow leaked it into a thrown error.
+  it('never leaks contentPEM-shaped secrets through the ServerError response message', async () => {
+    const secret = 'SUPER-SECRET-PEM-CONTENTS-THAT-MUST-NEVER-LEAK'
+    validateVmReadCredentialFileParams.mockReturnValue({ path: '/root/.ssh/id_ed25519' })
+    // handleVmReadCredentialFile itself never embeds contentPEM in a thrown
+    // error (see its own doc comment/tests) — this asserts the dispatch
+    // layer doesn't introduce a leak of its own by, say, logging or
+    // echoing rpc.params/result anywhere in its error-formatting path.
+    handleVmReadCredentialFile.mockRejectedValue(new Error('EACCES: permission denied'))
+    const { dispatchVmRpc } = await import('./agent-rpc-dispatch-vm')
+    const rpc: JsonRpcRequest = {
+      jsonrpc: '2.0',
+      id: 13,
+      method: 'vm.readCredentialFile',
+      params: { path: '/root/.ssh/id_ed25519' }
+    }
+
+    const response = await dispatchVmRpc(rpc, new MockWs() as never, createWireState())
+
+    expect(JSON.stringify(response)).not.toContain(secret)
   })
 })

@@ -465,11 +465,12 @@ type fakeEphemeralVmSshProvisioner struct {
 
 type fakeEphemeralVmSshProvisionerCall struct {
 	tenantID, runtimeID string
+	sourceDevServer     domain.DevServer
 	target              domain.EphemeralVmSshTarget
 }
 
-func (f *fakeEphemeralVmSshProvisioner) Provision(_ context.Context, tenantID, runtimeID string, target domain.EphemeralVmSshTarget) (string, error) {
-	f.calls = append(f.calls, fakeEphemeralVmSshProvisionerCall{tenantID: tenantID, runtimeID: runtimeID, target: target})
+func (f *fakeEphemeralVmSshProvisioner) Provision(_ context.Context, tenantID, runtimeID string, sourceDevServer domain.DevServer, target domain.EphemeralVmSshTarget) (string, error) {
+	f.calls = append(f.calls, fakeEphemeralVmSshProvisionerCall{tenantID: tenantID, runtimeID: runtimeID, sourceDevServer: sourceDevServer, target: target})
 	if f.err != nil {
 		return "", f.err
 	}
@@ -526,6 +527,56 @@ func TestEphemeralVmRelay_Provision_SshResultDispatchesToConfiguredProvisioner(t
 	got := runtimes.updateProvisionResultCalls[0]
 	if got.status != "provisioning" || got.connectionType != "ssh" || got.id != "rt-1" {
 		t.Errorf("unexpected UpdateProvisionResult call: %+v", got)
+	}
+}
+
+// TestEphemeralVmRelay_SshProvision_PassesSourceDevServerAndProjectRoot is
+// TASK-BE-EVM-016's Gap 2 regression guard: Provision's own devServer
+// resolution (resolveDevServerAndRepoPath, reused for the vm.provision
+// relay itself) must be threaded into EphemeralVmSshProvisioner.Provision's
+// sourceDevServer parameter, and VmProvisionResult.ProjectRoot into
+// target.ProjectRoot — neither the identity of the dev server nor the
+// project root the recipe reported may be silently dropped.
+func TestEphemeralVmRelay_SshProvision_PassesSourceDevServerAndProjectRoot(t *testing.T) {
+	ds := testEmulatorDevServer(t)
+	resolver := &fakeConnectionResolver{
+		byConnectionID: map[string]domain.DevServer{"conn-1": ds},
+		connByID:       map[string]domain.Connection{"conn-1": {RepoPath: "/repo"}},
+	}
+	events := make(chan VmProvisionEvent, 1)
+	agent := &fakeDevServerAgentClient{streamVmProvisionEvents: events}
+	runtimes := &fakeEphemeralVmRuntimeRepository{}
+	sshProvisioner := &fakeEphemeralVmSshProvisioner{connectionID: "conn-ssh-1"}
+	uc := NewEphemeralVmRelay(resolver, agent, runtimes, WithSshProvisioner(sshProvisioner))
+
+	ctx := withTenant(context.Background(), "tenant-1")
+	events <- VmProvisionEvent{Type: "result", Result: VmProvisionResult{
+		Type: "ssh", ProjectRoot: "/vm/repo",
+		SshTarget: &EphemeralVmRecipeSshTarget{Host: "10.0.0.9", Port: 22, Username: "dev", IdentityFile: "/home/dev/.ssh/id_ed25519"},
+	}}
+	close(events)
+	out, unsubscribe, err := uc.Provision(ctx, "conn-1", "recipe-1", "rt-1", "create.sh")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer unsubscribe()
+	drainProvisionEvents(t, out)
+
+	if len(sshProvisioner.calls) != 1 {
+		t.Fatalf("expected exactly one Provision call, got %+v", sshProvisioner.calls)
+	}
+	call := sshProvisioner.calls[0]
+	if call.sourceDevServer.ID != ds.ID {
+		t.Errorf("expected sourceDevServer to be the SAME devServer resolveDevServerAndRepoPath resolved (%q), got %q", ds.ID, call.sourceDevServer.ID)
+	}
+	if call.target.ProjectRoot != "/vm/repo" {
+		t.Errorf("expected target.ProjectRoot to carry VmProvisionResult.ProjectRoot, got %q", call.target.ProjectRoot)
+	}
+	if call.target.IdentityFilePath != "/home/dev/.ssh/id_ed25519" {
+		t.Errorf("expected target.IdentityFilePath to carry the recipe's raw identityFile path (not PrivateKeyPEM), got %q", call.target.IdentityFilePath)
+	}
+	if call.target.PrivateKeyPEM != "" {
+		t.Errorf("expected target.PrivateKeyPEM to stay empty at build time (resolved later, only by Hướng B), got %q", call.target.PrivateKeyPEM)
 	}
 }
 

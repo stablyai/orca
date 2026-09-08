@@ -35,6 +35,15 @@
 | [TASK-BE-EVM-014](./TASK-BE-EVM-014-agent-outbound-ssh-provisioner-backend.md) — **Hướng A**: hidden-target table, Vault, RPC tới agent | 012 | 🟡 PARTIAL — lõi chạy thật, test pass; 2 gap kiến trúc còn mở (xem task's "Kết quả thực tế") |
 | [TASK-BE-EVM-015](./TASK-BE-EVM-015-git-gateway-hidden-target-routing.md) — **Hướng A**: `hiddenTargetID` routing trong `git-gateway-service` | 014 | 🟡 PARTIAL — cơ chế routing chạy thật + test pass; populate `HiddenTargetID` thật cần 2 thay đổi proto ngoài phạm vi (xem task's "Kết quả thực tế") |
 
+## Track 6 — Fix 4 gap thật (BE-SOL-EVM-004 §6a-6d)
+
+| Task | Depends on | Status |
+|---|---|---|
+| [TASK-BE-EVM-016](./TASK-BE-EVM-016-fix-identity-file-passthrough-hourng-a.md) — Gap 1+2: Hướng A bỏ Vault-resolve sai, thread `sourceDevServer`/`ProjectRoot` | 014 | ✅ DONE |
+| [TASK-BE-EVM-017](./TASK-BE-EVM-017-fix-credential-read-hourng-b.md) — Gap 1+2: Hướng B gọi `vm.readCredentialFile` | 016 | ✅ DONE |
+| [TASK-BE-EVM-018](./TASK-BE-EVM-018-populate-hidden-target-id.md) — Gap 3: populate `hiddenTargetID` (2 proto) | 015 | ✅ DONE |
+| [TASK-BE-EVM-019](./TASK-BE-EVM-019-tofu-host-key-hourng-b.md) — Gap 4: TOFU host-key (Hướng B) | 013 | ✅ DONE |
+
 ## Track 5 — Response shape audit (phát hiện từ FE-TASK-EVM-001)
 
 | Task | Depends on | Status |

@@ -210,9 +210,9 @@ func (c *Client) AgentStatus(ctx context.Context, devServer domain.DevServer, pt
 	return usecase.AgentStatusResult{AgentRunning: running, AgentKind: kind, ReadyForInput: running}, nil
 }
 
-// DialHiddenSshTarget calls vm.sshDial (BE-SOL-EVM-004 §3 / "Quyết định đã
-// chốt" mục 1) — credential material in target is sent as ordinary RPC
-// params over the SAME agent<->Orca channel vm.exec already uses (Exec,
+// DialHiddenSshTarget calls vm.sshDial (BE-SOL-EVM-004 §3 / §6a, "Quyết
+// định đã chốt" mục 1) — credential material in target is sent as ordinary
+// RPC params over the SAME agent<->Orca channel vm.exec already uses (Exec,
 // not a new streaming/session mechanism), mirroring how vm.exec's
 // recipeId/runtimeId params already travel (TASK-BE-EVM-001). The agent
 // method itself does not exist yet as of this pass (TASK-AG-EVM-006,
@@ -221,26 +221,43 @@ func (c *Client) AgentStatus(ctx context.Context, devServer domain.DevServer, pt
 // domain.ErrAgentMethodNotFound (see Exec's own doc comment), letting
 // usecase.AgentOutboundSshProvisioner.Provision surface a clear
 // FailedPrecondition instead of a raw transport error.
-func (c *Client) DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (string, error) {
+//
+// GAP 1 FIX (TASK-BE-EVM-016, §6a): the wire field is `identityFilePath`
+// (a raw path — the agent reads it locally with fs.readFile), NOT
+// `privateKeyPem` — this backend never resolves/reads the file itself for
+// Hướng A. identityAgentSocket is unchanged (was never routed through
+// Vault either way).
+//
+// GAP 4 COMPLETION (found during final cross-check after TASK-BE-EVM-019,
+// BE-SOL-EVM-004 §6d): the agent's TOFU host-key check (TASK-AG-EVM-010)
+// was fully built and returns a real `hostKeyFingerprint`, but this
+// method used to discard both the response's fingerprint AND never sent
+// `knownHostKeyFingerprint` in the request — so Hướng A's TOFU was
+// agent-side-only, never actually enforced end-to-end (every dial looked
+// like "first use" to the agent). Now threads it both ways, mirroring
+// backendrelaysshprovisioner's knownFingerprint/ObservedFingerprint
+// pattern for Hướng B.
+func (c *Client) DialHiddenSshTarget(ctx context.Context, devServer domain.DevServer, runtimeID string, target domain.EphemeralVmSshTarget) (hiddenTargetID string, hostKeyFingerprint string, err error) {
 	params := map[string]any{
 		"runtimeId": runtimeID,
 		"target": map[string]any{
-			"host":                target.Host,
-			"port":                target.Port,
-			"username":            target.Username,
-			"privateKeyPem":       target.PrivateKeyPEM,
-			"identityAgentSocket": target.IdentityAgentSocket,
-			"jumpHost":            target.JumpHost,
-			"proxyCommand":        target.ProxyCommand,
+			"host":                    target.Host,
+			"port":                    target.Port,
+			"username":                target.Username,
+			"identityFilePath":        target.IdentityFilePath,
+			"identityAgentSocket":     target.IdentityAgentSocket,
+			"jumpHost":                target.JumpHost,
+			"proxyCommand":            target.ProxyCommand,
+			"knownHostKeyFingerprint": target.KnownHostKeyFingerprint,
 		},
 	}
 
 	result, err := c.Exec(ctx, devServer, "vm.sshDial", params)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	hiddenTargetID, _ := result["hiddenTargetId"].(string)
+	hiddenTargetID, _ = result["hiddenTargetId"].(string)
 	if hiddenTargetID == "" {
 		// Convention: hiddenTargetID == runtimeID (BE-SOL-EVM-004 §4) — an
 		// agent build that acks without echoing one back still counts as a
@@ -248,7 +265,26 @@ func (c *Client) DialHiddenSshTarget(ctx context.Context, devServer domain.DevSe
 		// than treating a missing echo as an error.
 		hiddenTargetID = runtimeID
 	}
-	return hiddenTargetID, nil
+	hostKeyFingerprint, _ = result["hostKeyFingerprint"].(string)
+	return hiddenTargetID, hostKeyFingerprint, nil
+}
+
+// ReadCredentialFile calls vm.readCredentialFile (BE-SOL-EVM-004 §6a,
+// TASK-BE-EVM-017) — Hướng B's answer to "identityFile is a path on the
+// SOURCE dev server's disk, but this backend dials off-machine and needs
+// actual bytes". Wire params/result shape matches TASK-AG-EVM-009's real,
+// landed agent handler exactly (agent-ephemeral-vm-handler.ts's
+// handleVmReadCredentialFile: `{path} -> {contentPEM}`), confirmed by
+// reading that file directly, not assumed from the design doc's sketch.
+// The returned PEM string is never logged here, matching
+// DialHiddenSshTarget's identical credential-handling rule.
+func (c *Client) ReadCredentialFile(ctx context.Context, devServer domain.DevServer, path string) (string, error) {
+	result, err := c.Exec(ctx, devServer, "vm.readCredentialFile", map[string]any{"path": path})
+	if err != nil {
+		return "", err
+	}
+	contentPEM, _ := result["contentPEM"].(string)
+	return contentPEM, nil
 }
 
 func agentKindFromTitle(title string) string {

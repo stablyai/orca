@@ -35,17 +35,18 @@ func (s *EphemeralVmSshTargetStore) Upsert(ctx context.Context, record domain.Ep
 	}
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO infra.ephemeral_vm_ssh_targets
-			(id, tenant_id, runtime_id, host, port, username, identity_file_vault_path, identity_agent_vault_path, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+			(id, tenant_id, runtime_id, host, port, username, identity_file_vault_path, identity_agent_vault_path, host_key_fingerprint, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
 		ON CONFLICT (runtime_id) DO UPDATE SET
 			host = EXCLUDED.host,
 			port = EXCLUDED.port,
 			username = EXCLUDED.username,
 			identity_file_vault_path = EXCLUDED.identity_file_vault_path,
 			identity_agent_vault_path = EXCLUDED.identity_agent_vault_path,
+			host_key_fingerprint = EXCLUDED.host_key_fingerprint,
 			updated_at = now()
 	`, record.ID, record.TenantID, record.RuntimeID, record.Host, record.Port, record.Username,
-		nullableText(record.IdentityFileVaultPath), nullableText(record.IdentityAgentVaultPath))
+		nullableText(record.IdentityFileVaultPath), nullableText(record.IdentityAgentVaultPath), nullableText(record.HostKeyFingerprint))
 	if err != nil {
 		return domain.EphemeralVmSshTargetRecord{}, fmt.Errorf("postgres: upsert ephemeral vm ssh target: %w", err)
 	}
@@ -58,14 +59,15 @@ func (s *EphemeralVmSshTargetStore) Upsert(ctx context.Context, record domain.Ep
 func (s *EphemeralVmSshTargetStore) Get(ctx context.Context, tenantID, runtimeID string) (domain.EphemeralVmSshTargetRecord, bool, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT id, tenant_id, runtime_id, host, port, username,
-		       COALESCE(identity_file_vault_path, ''), COALESCE(identity_agent_vault_path, '')
+		       COALESCE(identity_file_vault_path, ''), COALESCE(identity_agent_vault_path, ''),
+		       COALESCE(host_key_fingerprint, '')
 		FROM infra.ephemeral_vm_ssh_targets
 		WHERE tenant_id = $1 AND runtime_id = $2
 	`, tenantID, runtimeID)
 
 	var rec domain.EphemeralVmSshTargetRecord
 	if err := row.Scan(&rec.ID, &rec.TenantID, &rec.RuntimeID, &rec.Host, &rec.Port, &rec.Username,
-		&rec.IdentityFileVaultPath, &rec.IdentityAgentVaultPath); err != nil {
+		&rec.IdentityFileVaultPath, &rec.IdentityAgentVaultPath, &rec.HostKeyFingerprint); err != nil {
 		if err == pgx.ErrNoRows {
 			return domain.EphemeralVmSshTargetRecord{}, false, nil
 		}

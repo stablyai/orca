@@ -50,15 +50,24 @@ func genKeyPEM(t *testing.T) (pemStr string, pub ssh.PublicKey) {
 // authenticated against THIS server. authorizedKeys may list more than one
 // key (ssh-agent tests offer the agent's key; direct-PrivateKeyPEM tests
 // offer the parsed signer's key) — either being accepted is fine.
-func startFakePlainSSHServer(t *testing.T, expectUser, marker string, authorizedKeys ...ssh.PublicKey) net.Listener {
+// startFakePlainSSHServer's second return value is the server's own HOST
+// public key (TASK-BE-EVM-019 addition) — TOFU tests need it to compute
+// the SAME SHA256 fingerprint ssh.FingerprintSHA256 would derive
+// client-side, and/or to start a SECOND server with a DIFFERENT host key
+// for the mismatch case.
+func startFakePlainSSHServer(t *testing.T, expectUser, marker string, authorizedKeys ...ssh.PublicKey) (net.Listener, ssh.PublicKey) {
 	t.Helper()
-	_, hostPriv, err := ed25519.GenerateKey(rand.Reader)
+	hostPub, hostPriv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatalf("generating host keypair: %v", err)
 	}
 	hostSigner, err := ssh.NewSignerFromSigner(hostPriv)
 	if err != nil {
 		t.Fatalf("wrapping host signer: %v", err)
+	}
+	hostSSHPub, err := ssh.NewPublicKey(hostPub)
+	if err != nil {
+		t.Fatalf("building host public key: %v", err)
 	}
 
 	cfg := &ssh.ServerConfig{
@@ -91,7 +100,7 @@ func startFakePlainSSHServer(t *testing.T, expectUser, marker string, authorized
 			go handlePlainConn(rawConn, cfg, marker)
 		}
 	}()
-	return listener
+	return listener, hostSSHPub
 }
 
 func handlePlainConn(rawConn net.Conn, cfg *ssh.ServerConfig, marker string) {
@@ -228,12 +237,12 @@ func listenerPort(t *testing.T, l net.Listener) int {
 
 func TestEphemeralSshConnector_AuthenticatesWithPrivateKeyPEM(t *testing.T) {
 	pemKey, pub := genKeyPEM(t)
-	listener := startFakePlainSSHServer(t, "deploy", "hello-from-target", pub)
+	listener, _ := startFakePlainSSHServer(t, "deploy", "hello-from-target", pub)
 
 	connector := ephemeralsshconn.NewConnector(domain.EphemeralVmSshTarget{
 		Host: "127.0.0.1", Port: listenerPort(t, listener), Username: "deploy",
 		PrivateKeyPEM: pemKey,
-	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second})
+	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second}, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -282,12 +291,12 @@ func TestEphemeralSshConnector_AuthenticatesWithIdentityAgentSocket(t *testing.T
 		}
 	}()
 
-	listener := startFakePlainSSHServer(t, "deploy", "hello-from-target", signer.PublicKey())
+	listener, _ := startFakePlainSSHServer(t, "deploy", "hello-from-target", signer.PublicKey())
 
 	connector := ephemeralsshconn.NewConnector(domain.EphemeralVmSshTarget{
 		Host: "127.0.0.1", Port: listenerPort(t, listener), Username: "deploy",
 		IdentityAgentSocket: sockPath,
-	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second})
+	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second}, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -314,13 +323,13 @@ func TestEphemeralSshConnector_AuthenticatesWithIdentityAgentSocket(t *testing.T
 func TestEphemeralSshConnector_JumpHost_DoubleHopViaForwardOut(t *testing.T) {
 	pemKey, pub := genKeyPEM(t)
 	jumpListener := startFakeJumpHost(t, "deploy", pub)
-	targetListener := startFakePlainSSHServer(t, "deploy", "hello-from-real-target", pub)
+	targetListener, _ := startFakePlainSSHServer(t, "deploy", "hello-from-real-target", pub)
 
 	connector := ephemeralsshconn.NewConnector(domain.EphemeralVmSshTarget{
 		Host: "127.0.0.1", Port: listenerPort(t, targetListener), Username: "deploy",
 		PrivateKeyPEM: pemKey,
 		JumpHost:      fmt.Sprintf("deploy@127.0.0.1:%d", listenerPort(t, jumpListener)),
-	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second})
+	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second}, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -342,7 +351,7 @@ func TestEphemeralSshConnector_JumpHost_DoubleHopViaForwardOut(t *testing.T) {
 func TestEphemeralSshConnector_FailsWhenNoCredentialConfigured(t *testing.T) {
 	connector := ephemeralsshconn.NewConnector(domain.EphemeralVmSshTarget{
 		Host: "127.0.0.1", Port: 22, Username: "deploy",
-	}, ephemeralsshconn.Config{DialTimeout: time.Second})
+	}, ephemeralsshconn.Config{DialTimeout: time.Second}, "")
 
 	_, err := connector.Connect(context.Background(), domain.SshTarget{})
 	if err == nil {
@@ -387,5 +396,103 @@ func TestEphemeralSshConnector_CredentialNeverLoggedOrPersisted(t *testing.T) {
 		if strings.Contains(line, "%+v") && (strings.Contains(line, "c.target") || strings.Contains(line, "target)")) {
 			t.Errorf("connector.go:%d formats the whole target struct with %%+v, which would include credential material: %s", i+1, line)
 		}
+	}
+}
+
+// ─── TASK-BE-EVM-019: TOFU (trust-on-first-use) host-key verification ──────
+
+// TestEphemeralSshConnector_FirstDial_AcceptsAndReturnsFingerprint is
+// TASK-BE-EVM-019's core Gap 4 test: knownFingerprint == "" (no prior
+// successful dial recorded) accepts whatever host key the server presents,
+// and ObservedFingerprint() afterward returns the REAL SHA256 fingerprint
+// of that key (not empty, not a placeholder) — the value the caller
+// (backendrelaysshprovisioner.Provisioner) persists as the new baseline.
+func TestEphemeralSshConnector_FirstDial_AcceptsAndReturnsFingerprint(t *testing.T) {
+	pemKey, pub := genKeyPEM(t)
+	listener, hostPub := startFakePlainSSHServer(t, "deploy", "hello-from-target", pub)
+	wantFingerprint := ssh.FingerprintSHA256(hostPub)
+
+	connector := ephemeralsshconn.NewConnector(domain.EphemeralVmSshTarget{
+		Host: "127.0.0.1", Port: listenerPort(t, listener), Username: "deploy",
+		PrivateKeyPEM: pemKey,
+	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second}, "")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := connector.Connect(ctx, domain.SshTarget{})
+	if err != nil {
+		t.Fatalf("Connect (first dial, no known fingerprint): %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if got := connector.ObservedFingerprint(); got != wantFingerprint {
+		t.Errorf("ObservedFingerprint() = %q, want %q (the server's real host key fingerprint)", got, wantFingerprint)
+	}
+}
+
+// TestEphemeralSshConnector_SecondDial_MatchingFingerprint_Succeeds proves
+// a reconnect to the SAME server (same host key) with knownFingerprint set
+// to the PREVIOUS dial's observed value succeeds — TOFU's "known and
+// matching" path, the common case for every dial after the first.
+func TestEphemeralSshConnector_SecondDial_MatchingFingerprint_Succeeds(t *testing.T) {
+	pemKey, pub := genKeyPEM(t)
+	listener, hostPub := startFakePlainSSHServer(t, "deploy", "hello-from-target", pub)
+	knownFingerprint := ssh.FingerprintSHA256(hostPub)
+
+	connector := ephemeralsshconn.NewConnector(domain.EphemeralVmSshTarget{
+		Host: "127.0.0.1", Port: listenerPort(t, listener), Username: "deploy",
+		PrivateKeyPEM: pemKey,
+	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second}, knownFingerprint)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := connector.Connect(ctx, domain.SshTarget{})
+	if err != nil {
+		t.Fatalf("Connect (second dial, matching known fingerprint): %v", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	stdout, _, err := conn.RunCommand(ctx, "irrelevant")
+	if err != nil {
+		t.Fatalf("RunCommand: %v", err)
+	}
+	if stdout != "hello-from-target" {
+		t.Errorf("stdout = %q, want the fake server's marker", stdout)
+	}
+	if got := connector.ObservedFingerprint(); got != knownFingerprint {
+		t.Errorf("ObservedFingerprint() = %q, want %q (re-observes the same, still-matching key)", got, knownFingerprint)
+	}
+}
+
+// TestEphemeralSshConnector_SecondDial_MismatchedFingerprint_FailsClearError
+// is TASK-BE-EVM-019's core security test: a DIFFERENT fake SSH server
+// (genuinely different host key, not a mocked mismatch) presenting a key
+// that does not match knownFingerprint must FAIL the handshake with a
+// clear, greppable error — never silently accept it (real MITM suspicion).
+func TestEphemeralSshConnector_SecondDial_MismatchedFingerprint_FailsClearError(t *testing.T) {
+	pemKey, pub := genKeyPEM(t)
+	// Two genuinely separate fake SSH servers — startFakePlainSSHServer
+	// generates a fresh ed25519 host keypair per call, so these two have
+	// DIFFERENT host keys even though both accept the same client key.
+	_, firstHostPub := startFakePlainSSHServer(t, "deploy", "hello-from-target", pub)
+	secondListener, _ := startFakePlainSSHServer(t, "deploy", "hello-from-target", pub)
+	knownFingerprint := ssh.FingerprintSHA256(firstHostPub)
+
+	// Dial the SECOND server (a different host key) while claiming the
+	// FIRST server's fingerprint as "known" — simulates a reconnect to a
+	// runtime whose host key changed since the last successful dial.
+	connector := ephemeralsshconn.NewConnector(domain.EphemeralVmSshTarget{
+		Host: "127.0.0.1", Port: listenerPort(t, secondListener), Username: "deploy",
+		PrivateKeyPEM: pemKey,
+	}, ephemeralsshconn.Config{DialTimeout: 5 * time.Second}, knownFingerprint)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := connector.Connect(ctx, domain.SshTarget{})
+	if err == nil {
+		t.Fatal("expected Connect to fail when the presented host key does not match knownFingerprint")
+	}
+	if !strings.Contains(err.Error(), "INFRA_EPHEMERAL_VM_HOST_KEY_MISMATCH") {
+		t.Errorf("expected a clear INFRA_EPHEMERAL_VM_HOST_KEY_MISMATCH error, got: %v", err)
 	}
 }
