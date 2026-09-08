@@ -66,6 +66,23 @@ describe('tui agent permissions', () => {
     )
   })
 
+  it('switches Muse between yolo and manual arguments', () => {
+    expect(
+      applyAgentPermissionMode({
+        mode: 'yolo',
+        agentDefaultArgs: { muse: '' },
+        agentDefaultEnv: {}
+      }).agentDefaultArgs.muse
+    ).toBe('--yolo')
+    expect(
+      applyAgentPermissionMode({
+        mode: 'manual',
+        agentDefaultArgs: { muse: '--yolo' },
+        agentDefaultEnv: {}
+      }).agentDefaultArgs.muse
+    ).toBe('')
+  })
+
   it('resolves custom Codex permission arguments as mixed', () => {
     expect(
       resolveTuiAgentPermissionMode({

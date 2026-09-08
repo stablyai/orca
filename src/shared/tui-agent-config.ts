@@ -288,10 +288,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   },
   muse: {
     detectCmd: 'muse',
-    // Why: supervised workers cannot answer approval prompts or a first-launch
-    // workspace-trust menu (both swallow the drafted preamble); --yolo covers
-    // trust plus approval/sandbox, matching agy --dangerously-skip-permissions.
-    launchCmd: 'muse --yolo',
+    // Why: skip the trust menu so it cannot consume the drafted task; permission bypass remains configurable.
+    launchCmd: 'muse --trust-workspace',
     // Why: bare-TUI launch plus paste-after-start, verified end-to-end via
     // `orca terminal send` against Muse Code 1.0.3; positional-prompt
     // auto-submit is undocumented, so argv is not used.
