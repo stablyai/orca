@@ -66,10 +66,17 @@ describe('findSkillFiles', () => {
 
     expect(await findSkillFiles(root, 4)).toEqual([join(edge, 'SKILL.md')])
     expect(statPaths).toEqual([])
-    expect(await findSkillFiles(root, 5)).toEqual([
-      join(edge, 'SKILL.md'),
-      join(edge, 'link00', 'SKILL.md')
-    ])
+    // Why not a fixed array: `readdir` order is filesystem-dependent, and both
+    // the result order and which link survives dedup follow it. NTFS enumerates
+    // its name index alphabetically, so `link00` precedes `SKILL.md` on Windows
+    // and follows it on APFS/ext4. All 32 links share one realpath, so the
+    // visited set collapses them to a single entry beside the real file.
+    const withinDepth = await findSkillFiles(root, 5)
+    expect(withinDepth).toContain(join(edge, 'SKILL.md'))
+    expect(withinDepth.filter((path) => /[\\/]link\d{2}[\\/]SKILL\.md$/.test(path))).toHaveLength(
+      1
+    )
+    expect(withinDepth).toHaveLength(2)
     expect(statPaths).toHaveLength(32)
   })
 
