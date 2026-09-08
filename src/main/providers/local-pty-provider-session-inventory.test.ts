@@ -116,6 +116,14 @@ vi.mock('../shell-prompt-readiness-probe', () => ({
 
 import { LocalPtyProvider } from './local-pty-provider'
 import {
+  clearPtyState,
+  ptyProcesses,
+  ptyWslDistroById,
+  ptyWslShellAnchors
+} from './local-pty-provider-state'
+import { wslRelayIdentityReader } from './wsl-relay-identity-reader'
+import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
   installLocalPtyProviderEnvSandbox,
@@ -196,6 +204,90 @@ describe('LocalPtyProvider', () => {
 
       expect(processes.find((process) => process.id === native.id)?.wslDistro).toBeNull()
       expect(processes.find((process) => process.id === wsl.id)?.wslDistro).toBe('Ubuntu')
+    })
+
+    it('keeps batch identity results attached when a pane exits mid-read', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24 })
+      const second = await provider.spawn({ cols: 80, rows: 24 })
+      const anchor = (pid: number) => ({
+        distro: 'Ubuntu',
+        bootId: '11111111-1111-1111-1111-111111111111',
+        shellPid: pid,
+        shellStartTime: 1,
+        tty: '/dev/pts/1'
+      })
+      const firstAnchor = anchor(100)
+      const secondAnchor = anchor(200)
+      for (const [id, shellAnchor] of [
+        [first.id, firstAnchor],
+        [second.id, secondAnchor]
+      ] as const) {
+        ptyWslDistroById.set(id, 'Ubuntu')
+        ptyWslShellAnchors.set(id, shellAnchor)
+      }
+      const readBatch = vi
+        .spyOn(wslRelayIdentityReader, 'readBatch')
+        .mockImplementation(async (_distro, anchors) => {
+          clearPtyState(first.id)
+          return anchors.map((current, index) => ({
+            status: 'live' as const,
+            processName: index === 0 ? 'claude' : 'shell',
+            anchor: current,
+            capturedAgeMs: 0
+          }))
+        })
+      try {
+        const processes = await provider.listProcesses()
+        const surviving = processes.find((process) => process.id === second.id)
+        expect(processes.some((process) => process.id === first.id)).toBe(false)
+        expect(surviving).toMatchObject({
+          id: second.id,
+          title: 'shell',
+          foregroundProcessEvidence: { verdict: 'live', processName: 'shell' }
+        })
+        expect(ptyWslShellAnchors.get(second.id)).toEqual(secondAnchor)
+        expect(ptyProcesses.has(second.id)).toBe(true)
+      } finally {
+        readBatch.mockRestore()
+      }
+    })
+
+    it('coalesces repeated WSL list-process bursts until a PTY event resets identity', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const spawned = await provider.spawn({ cols: 80, rows: 24, cwd: '/tmp/wsl-owned-cwd' })
+      const anchor = {
+        distro: 'Ubuntu',
+        bootId: '11111111-1111-1111-1111-111111111111',
+        shellPid: 100,
+        shellStartTime: 1,
+        tty: '/dev/pts/1'
+      }
+      ptyWslDistroById.set(spawned.id, 'Ubuntu')
+      ptyWslShellAnchors.set(spawned.id, anchor)
+      wslRelayIdentityReader.reset()
+      const identityRequest = vi
+        .spyOn(wslHookRelayManager, 'readProcessIdentity')
+        .mockResolvedValue([
+          {
+            status: 'unverifiable' as const,
+            reason: 'relay_unavailable',
+            capturedAgeMs: 0
+          }
+        ])
+      try {
+        await Promise.all(Array.from({ length: 5 }, () => provider.listProcesses()))
+        expect(identityRequest).toHaveBeenCalledOnce()
+
+        await Promise.all(Array.from({ length: 5 }, () => provider.listProcesses()))
+        expect(identityRequest).toHaveBeenCalledOnce()
+
+        wslRelayIdentityReader.reset()
+        await provider.listProcesses()
+        expect(identityRequest).toHaveBeenCalledTimes(2)
+      } finally {
+        identityRequest.mockRestore()
+        clearPtyState(spawned.id)
+      }
     })
   })
 

@@ -33,6 +33,7 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
+    this.invalidatePtyLivenessSnapshot()
     let pty = this.ptysById.get(ptyId)
     if (!pty) {
       const titleObservedAt = state.title ? this.nextTitleObservationSequence() : null

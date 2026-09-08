@@ -166,6 +166,36 @@ describe('Session', () => {
   })
 
   describe('data flow', () => {
+    it('captures and strips the complete WSL shell anchor from live output', () => {
+      createSession({ wslDistro: 'Ubuntu' })
+      const marker =
+        '\x1b]777;orca-shell-start:v2:Ubuntu:01234567-89ab-cdef-0123-456789abcdef:123:456:/dev/pts/8\x07'
+      const received: string[] = []
+      session.attachClient({ onData: (data) => received.push(data), onExit: () => {} })
+      subprocess.simulateData(`before${marker}after`)
+      expect(received.join('')).toContain('beforeafter')
+      expect(received.join('')).not.toContain('orca-shell-start')
+      expect(session.getWslShellAnchor()).toEqual({
+        distro: 'Ubuntu',
+        bootId: '01234567-89ab-cdef-0123-456789abcdef',
+        shellPid: 123,
+        shellStartTime: 456,
+        tty: '/dev/pts/8'
+      })
+    })
+
+    it('drains a partial WSL identity marker when the subprocess exits', () => {
+      createSession({ wslDistro: 'Ubuntu' })
+      const received: string[] = []
+      session.attachClient({ onData: (data) => received.push(data), onExit: () => {} })
+      const partial = '\x1b]777;orca-shell-start:v2:Ubuntu:01234567'
+
+      subprocess.simulateData(partial)
+      subprocess.simulateExit(0)
+
+      expect(received.join('')).toContain(partial)
+    })
+
     it('does not confirm shell ownership from historical replay bytes', () => {
       createSession({
         historySeedChunks: ['\x1b[?1049hOLD-TUI\x1b]133;D;137\x07old-shell-marker']

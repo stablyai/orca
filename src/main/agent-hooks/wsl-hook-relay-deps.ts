@@ -81,6 +81,19 @@ export function isWslHookRelayAllowed(deps: WslHookRelayManagerDeps): boolean {
   )
 }
 
+/** Residency gate: unlike hook installation, the relay is available in every
+ * resolvable WSL distro so process identity remains active when hooks are off. */
+export function isWslRelayAllowed(
+  deps: Pick<WslHookRelayManagerDeps, 'platform'>,
+  distro: string | null | undefined
+): boolean {
+  return deps.platform() === 'win32' && typeof distro === 'string' && distro.trim().length > 0
+}
+
+export function isWslRelayHooksAllowed(deps: WslHookRelayManagerDeps): boolean {
+  return deps.remoteHooksEnabled() && isAgentStatusHooksEnabled(deps.managedHookSettings())
+}
+
 export const defaultWslHookRelayDeps: WslHookRelayManagerDeps = {
   platform: () => process.platform,
   remoteHooksEnabled: () => isRemoteAgentHooksEnabled(),

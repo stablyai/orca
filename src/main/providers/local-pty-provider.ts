@@ -146,8 +146,8 @@ export class LocalPtyProvider implements IPtyProvider {
     /* re-spawning handles local revival */
   }
 
-  listProcesses(): Promise<PtyProcessInfo[]> {
-    return listLocalPtyProcesses()
+  listProcesses(opts?: { deadlineMs?: number; signal?: AbortSignal }): Promise<PtyProcessInfo[]> {
+    return listLocalPtyProcesses(opts)
   }
 
   getDefaultShell(): Promise<string> {

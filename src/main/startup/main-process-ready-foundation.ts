@@ -48,7 +48,6 @@ import { syncMacMenuBarIcon } from './main-window-actions'
 import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
 import { reconcileManagedWslCliRegistrations } from '../cli/wsl-cli-registration-reconciliation'
 import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
-import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -232,15 +231,10 @@ export async function initializeReadyFoundation(): Promise<void> {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
+    // Hook settings only alter the hook capability. Relay residency and
+    // foreground identity continue across an opt-out.
     if ('agentStatusHooksEnabled' in updates) {
-      // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running
-      // guest process and timers, and on must restart them — otherwise open WSL panes report no
-      // status until their next spawn.
-      if (isAgentStatusHooksEnabled(settings)) {
-        wslHookRelayManager.resumeStoppedRelays()
-      } else {
-        wslHookRelayManager.disposeAll({ permanent: false })
-      }
+      wslHookRelayManager.refreshHookCapability()
     }
   })
   // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.

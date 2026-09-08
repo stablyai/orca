@@ -13,7 +13,44 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
+    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p:ORCA_SHELL_FEATURES/u')
+  })
+
+  it('drops all inherited shell features before deriving the WSL launch', () => {
+    const env: Record<string, string> = {
+      ORCA_SHELL_FEATURES: 'overlay,history,ready,startup,markers,identity'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.ORCA_SHELL_FEATURES).toBe('markers,identity')
+  })
+
+  it('derives readiness features from the current startup intent', () => {
+    const env: Record<string, string> = {
+      ORCA_SHELL_FEATURES: 'history,ready',
+      ORCA_CODEX_HOME: '/home/jin/.codex'
+    }
+
+    addOrcaWslInteropEnv(env, {
+      hasStartupCommand: true,
+      waitsForShellReady: true,
+      emitsStartupIdentity: true
+    })
+
+    expect(env.ORCA_SHELL_FEATURES).toBe('overlay,history,markers,ready,identity')
+  })
+
+  it('does not derive relay features from inherited overlay state', () => {
+    const env: Record<string, string> = {
+      ORCA_SHELL_FEATURES: 'overlay,history,ready,startup',
+      ORCA_HISTFILE: '/home/jin/.zsh_history',
+      ORCA_CODEX_HOME: '/home/jin/.codex'
+    }
+
+    addOrcaWslInteropEnv(env, { shellPath: 'bash', overlay: false })
+
+    expect(env.ORCA_SHELL_FEATURES).toBe('markers,identity')
   })
 
   // Why this is published at all: the wrapper tree is content-addressed, so the
@@ -42,6 +79,7 @@ describe('addOrcaWslInteropEnv', () => {
 
     expect(env.WSLENV?.split(':')).toEqual([
       'ORCA_SHELL_READY_ROOT/p',
+      'ORCA_SHELL_FEATURES/u',
       `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
       `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`
     ])
@@ -54,7 +92,9 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('FOO/u:ORCA_TERMINAL_HANDLE/u:BAR/p:ORCA_SHELL_READY_ROOT/p')
+    expect(env.WSLENV).toBe(
+      'FOO/u:ORCA_TERMINAL_HANDLE/u:BAR/p:ORCA_SHELL_READY_ROOT/p:ORCA_SHELL_FEATURES/u'
+    )
   })
 
   it('marks OMP status and hook env for Windows to WSL import', () => {
@@ -195,7 +235,7 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_WORKSPACE_NAME/u')
+    expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_SHELL_FEATURES/u:ORCA_WORKSPACE_NAME/u')
   })
 
   it('does not register setup vars that are absent from the env', () => {
@@ -203,7 +243,7 @@ describe('addOrcaWslInteropEnv', () => {
 
     addOrcaWslInteropEnv(env)
 
-    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p')
+    expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u:ORCA_SHELL_READY_ROOT/p:ORCA_SHELL_FEATURES/u')
   })
 
   it('marks the WSL hook relay version for import on relay spawn envs', () => {
@@ -211,7 +251,9 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_WSL_HOOK_RELAY_VERSION: '0.1.0+abc'
     }
     addOrcaWslInteropEnv(env)
-    expect(env.WSLENV).toBe('ORCA_SHELL_READY_ROOT/p:ORCA_WSL_HOOK_RELAY_VERSION/u')
+    expect(env.WSLENV).toBe(
+      'ORCA_SHELL_READY_ROOT/p:ORCA_SHELL_FEATURES/u:ORCA_WSL_HOOK_RELAY_VERSION/u'
+    )
   })
 
   it('crosses a guest-side OpenCode config overlay untranslated (/u)', () => {

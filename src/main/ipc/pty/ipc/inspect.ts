@@ -56,6 +56,9 @@ export function installPtyInspectIpcHandlers(deps: {
             id: session.id,
             cwd: session.cwd,
             title: session.title,
+            ...(session.foregroundProcessEvidence
+              ? { foregroundProcessEvidence: session.foregroundProcessEvidence }
+              : {}),
             // Why: the renderer's binding map is empty during restore, so ownership is the only
             // liveness evidence it has. Absence is authoritative only from a provider that
             // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).

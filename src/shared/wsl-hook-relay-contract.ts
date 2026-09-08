@@ -10,6 +10,39 @@ export const WSL_HOOK_RELAY_DIR = '.orca-wsl/hook-relay'
 export const WSL_HOOK_RELAY_BUNDLE_NAME = 'wsl-agent-hook-relay.js'
 export const WSL_HOOK_RELAY_VERSION_FILE = '.version'
 
+import type { WslShellProcessAnchor } from './wsl-shell-process-anchor'
+
+/** Capabilities advertised by the resident WSL relay. Keep process identity
+ * separate from hooks so disabling hooks never disables foreground evidence. */
+export const WSL_RELAY_CAPABILITIES = {
+  hooks: 'hooks',
+  fs: 'fs.home',
+  processIdentity: 'process.identity'
+} as const
+
+export const WSL_RELAY_PROCESS_METHODS = {
+  identityRead: 'process.identity.read'
+} as const
+export const WSL_RELAY_HOOKS_SET_ENABLED_METHOD = 'hooks.setEnabled'
+
+export type WslRelayIdentityRequest = {
+  distro: string
+  anchors: readonly WslShellProcessAnchor[]
+}
+
+export type WslRelayIdentityResult =
+  | {
+      status: 'live'
+      processName: string | null
+      anchor: WslShellProcessAnchor
+      capturedAgeMs: number
+    }
+  | {
+      status: 'unverifiable'
+      reason: string
+      capturedAgeMs: number
+    }
+
 /** Host-expected bundle version, crossed into the guest launch script via
  *  WSLENV so a stale guest install is detected by the guest itself. Also
  *  namespaces the guest install dir, so concurrent Orca instances with

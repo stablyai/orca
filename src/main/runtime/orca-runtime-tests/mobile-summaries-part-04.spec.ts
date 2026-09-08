@@ -2,13 +2,197 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   OrcaRuntimeService,
   registerSshGitProvider,
+  resetPlatform,
   setPlatform,
   worktreePathComparison
 } from '../orca-runtime-test-mocks.spec'
 import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import { makeWorktreeMeta, store, syncSinglePty } from '../orca-runtime-test-fixtures.spec'
+import {
+  getWslRelayIdentityRpcCount,
+  resetWslRelayIdentityRpcCount
+} from '../../agent-hooks/wsl-hook-relay-manager'
+import { listLocalPtyProcesses } from '../../providers/local-pty-session-operations'
+import {
+  clearPtyState,
+  ptyInitialCwd,
+  ptyProcesses,
+  ptyWslDistroById,
+  ptyWslShellAnchors,
+  ptyWorktreeId
+} from '../../providers/local-pty-provider-state'
+import { wslRelayIdentityReader } from '../../providers/wsl-relay-identity-reader'
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
 
 describe('OrcaRuntimeService', () => {
+  it('does not read guest inventories on idle worktree poll ticks', async () => {
+    resetWslRelayIdentityRpcCount()
+    const relayProcessReads = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => {
+        relayProcessReads()
+        return []
+      }
+    })
+
+    // Several sustained mobile ticks must remain completely read-free while no
+    // PTY lifecycle/output event invalidates the census.
+    for (let tick = 0; tick < 10; tick += 1) {
+      await runtime.getWorktreePs()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    expect(relayProcessReads).not.toHaveBeenCalled()
+    expect(getWslRelayIdentityRpcCount()).toBe(0)
+
+    runtime.notifyBranchRenamed('repo-1')
+    await runtime.getWorktreePs()
+    expect(relayProcessReads).toHaveBeenCalledOnce()
+    await runtime.getWorktreePs()
+    expect(relayProcessReads).toHaveBeenCalledOnce()
+  })
+
+  it('coalesces concurrent and repeated worktree polls after one reconciliation', async () => {
+    resetWslRelayIdentityRpcCount()
+    const relayInventory =
+      deferred<{ id: string; cwd: string; title: string; worktreeId: string }[]>()
+    const relayProcessReads = vi.fn(() => relayInventory.promise)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: relayProcessReads
+    })
+    syncSinglePty(runtime)
+
+    const concurrentPolls = [
+      runtime.getWorktreePs(),
+      runtime.getWorktreePs(),
+      runtime.getWorktreePs()
+    ]
+    await vi.waitFor(() => expect(relayProcessReads).toHaveBeenCalledOnce())
+    relayInventory.resolve([
+      {
+        id: 'pty-1',
+        cwd: '/tmp/worktree-a',
+        title: 'shell',
+        worktreeId: 'repo-1::/tmp/worktree-a'
+      }
+    ])
+    await Promise.all(concurrentPolls)
+
+    const identityRpcCountAfterFirstReconciliation = getWslRelayIdentityRpcCount()
+    expect(identityRpcCountAfterFirstReconciliation).toBe(0)
+    for (let poll = 0; poll < 5; poll += 1) {
+      await runtime.getWorktreePs()
+    }
+    expect(relayProcessReads).toHaveBeenCalledOnce()
+    expect(getWslRelayIdentityRpcCount()).toBe(identityRpcCountAfterFirstReconciliation)
+  })
+
+  it('keeps WSL inventory reads stable across repeated worktree polls', async () => {
+    setPlatform('win32')
+    resetWslRelayIdentityRpcCount()
+    const ptyId = 'wsl-pty-1'
+    const anchor = {
+      distro: 'Ubuntu',
+      bootId: '11111111-1111-1111-1111-111111111111',
+      shellPid: 1,
+      shellStartTime: 1,
+      tty: '/dev/pts/1'
+    }
+    const guestIdentityReads = vi.spyOn(wslRelayIdentityReader, 'readBatch').mockResolvedValue([
+      {
+        status: 'unverifiable' as const,
+        reason: 'relay_unavailable',
+        capturedAgeMs: 0
+      }
+    ])
+    const fakePty = { process: 'bash' }
+    ptyProcesses.set(ptyId, fakePty as never)
+    ptyInitialCwd.set(ptyId, '/tmp/worktree-a')
+    ptyWorktreeId.set(ptyId, 'repo-1::/tmp/worktree-a')
+    ptyWslDistroById.set(ptyId, 'Ubuntu')
+    ptyWslShellAnchors.set(ptyId, anchor)
+    const guestReads = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => {
+        guestReads()
+        return listLocalPtyProcesses()
+      }
+    })
+    syncSinglePty(runtime)
+
+    try {
+      await runtime.getWorktreePs()
+      const identityRpcCountAfterFirstReconciliation = getWslRelayIdentityRpcCount()
+      const guestReadsAfterFirstReconciliation = guestReads.mock.calls.length
+      expect(guestIdentityReads).toHaveBeenCalledOnce()
+      expect(guestReadsAfterFirstReconciliation).toBe(1)
+      for (let poll = 0; poll < 5; poll += 1) {
+        await runtime.getWorktreePs()
+      }
+      expect(guestReads).toHaveBeenCalledTimes(guestReadsAfterFirstReconciliation)
+      expect(guestIdentityReads).toHaveBeenCalledOnce()
+      expect(getWslRelayIdentityRpcCount()).toBe(identityRpcCountAfterFirstReconciliation)
+    } finally {
+      guestIdentityReads.mockRestore()
+      clearPtyState(ptyId)
+      resetPlatform()
+    }
+  })
+
+  it('does not let targeted liveness satisfy a pending aggregate poll', async () => {
+    const relayInventory =
+      deferred<{ id: string; cwd: string; title: string; worktreeId: string }[]>()
+    const relayProcessReads = vi.fn(() => relayInventory.promise)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: relayProcessReads
+    })
+    syncSinglePty(runtime)
+    const refresh = (
+      runtime as unknown as {
+        refreshPtyWorktreeRecordsFromController: (
+          worktrees: readonly unknown[],
+          targetWorktreeId: string
+        ) => Promise<Set<string> | null>
+      }
+    ).refreshPtyWorktreeRecordsFromController
+
+    const targeted = refresh.call(runtime, [], 'repo-1::/tmp/worktree-a')
+    await vi.waitFor(() => expect(relayProcessReads).toHaveBeenCalledOnce())
+    relayInventory.resolve([
+      {
+        id: 'pty-1',
+        cwd: '/tmp/worktree-a',
+        title: 'shell',
+        worktreeId: 'repo-1::/tmp/worktree-a'
+      }
+    ])
+    await targeted
+
+    await runtime.getWorktreePs()
+    expect(relayProcessReads).toHaveBeenCalledTimes(2)
+  })
   it('keeps pinned and unread worktrees when active rows fill the mobile summary limit', async () => {
     setPlatform('win32')
     const remoteRepo = {

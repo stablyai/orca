@@ -70,6 +70,9 @@ describePosix('daemon shell-ready bash wrapper', () => {
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
     expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+    expect(bashRc).toContain(
+      'printf "\\033]777;orca-shell-start:v2:%s:%s:%s:%s:%s\\007" "$_orca_distro" "$_orca_boot" "$$" "$_orca_start" "$_orca_tty"'
+    )
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
     expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
     expect(bashRc).toContain('__orca_append_prompt_command "__orca_osc133_epilogue"')

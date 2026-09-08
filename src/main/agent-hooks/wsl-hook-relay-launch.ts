@@ -277,21 +277,31 @@ export function formatWslRelayFailure(failure: WslRelayStartupFailure): string {
 export function buildWslRelaySpawnEnv(
   coords: Record<string, string>,
   bundleVersion: string,
-  instanceKey: string
+  instanceKey: string,
+  distro?: string,
+  hooksEnabled = true
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     WSL_UTF8: '1',
-    ORCA_AGENT_HOOK_PORT: coords.ORCA_AGENT_HOOK_PORT,
-    ORCA_AGENT_HOOK_TOKEN: coords.ORCA_AGENT_HOOK_TOKEN,
-    ORCA_AGENT_HOOK_ENV: coords.ORCA_AGENT_HOOK_ENV,
-    ORCA_AGENT_HOOK_VERSION: coords.ORCA_AGENT_HOOK_VERSION,
+    ...(coords.ORCA_AGENT_HOOK_PORT ? { ORCA_AGENT_HOOK_PORT: coords.ORCA_AGENT_HOOK_PORT } : {}),
+    ...(coords.ORCA_AGENT_HOOK_TOKEN
+      ? { ORCA_AGENT_HOOK_TOKEN: coords.ORCA_AGENT_HOOK_TOKEN }
+      : {}),
+    ...(coords.ORCA_AGENT_HOOK_ENV ? { ORCA_AGENT_HOOK_ENV: coords.ORCA_AGENT_HOOK_ENV } : {}),
+    ...(coords.ORCA_AGENT_HOOK_VERSION
+      ? { ORCA_AGENT_HOOK_VERSION: coords.ORCA_AGENT_HOOK_VERSION }
+      : {}),
+    ORCA_WSL_RELAY_HOOKS_ENABLED: hooksEnabled ? '1' : '0',
+    ...(distro ? { ORCA_WSL_RELAY_DISTRO: distro } : {}),
     [WSL_HOOK_RELAY_VERSION_ENV]: bundleVersion,
     [WSL_HOOK_RELAY_INSTANCE_ENV]: instanceKey
   }
   // Why: the relay derives its own guest endpoint path; a /p-translated
   // Windows endpoint here would only add WSLENV noise.
   delete env.ORCA_AGENT_HOOK_ENDPOINT
-  addOrcaWslInteropEnv(env as Record<string, string>)
+  // The relay is a non-interactive helper, not a nested terminal. Inherited
+  // feature values (including overlay) must not change its wrapper behavior.
+  addOrcaWslInteropEnv(env as Record<string, string>, { shellPath: 'bash', overlay: false })
   return env
 }

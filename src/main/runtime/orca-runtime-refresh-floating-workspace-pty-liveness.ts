@@ -67,11 +67,13 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
         const binding = persistedBindingByPtyId.get(ptyId)
         if (!pty && binding) {
           // Why: a live daemon PTY restored from disk needs its pane identity before mobile can issue a safe handle.
-          pty = this.recordPtyWorktree(ptyId, FLOATING_TERMINAL_WORKTREE_ID, {
-            connected: true,
-            tabId: binding.tabId,
-            paneKey: binding.paneKey
-          })
+          pty = this.withPtyLivenessRefreshBookkeeping(() =>
+            this.recordPtyWorktree(ptyId, FLOATING_TERMINAL_WORKTREE_ID, {
+              connected: true,
+              tabId: binding.tabId,
+              paneKey: binding.paneKey
+            })
+          )
         }
         if (pty) {
           pty.connected = true

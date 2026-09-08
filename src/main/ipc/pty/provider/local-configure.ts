@@ -4,10 +4,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { isAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { isPwshAvailableAsync } from '../../../pwsh'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
-import {
-  addOrcaWslInteropEnv,
-  stampWslOrchestrationCompatibilityHost
-} from '../../../pty/wsl-orca-env'
+import { stampWslOrchestrationCompatibilityHost } from '../../../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import { markClaudePtyExited } from '../../../claude-accounts/live-pty-gate'
 import { buildPtyHostEnv } from '../host-env/assembly'
@@ -92,9 +89,6 @@ export function configureLocalPtyProvider(args: {
         runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx?.isWsl === true ? ctx.wslDistro : null
       )
-      if (ctx?.isWsl === true) {
-        addOrcaWslInteropEnv(env)
-      }
       return env
     },
     onSpawned: (id, incarnationId) => runtime?.onPtySpawned(id, incarnationId),

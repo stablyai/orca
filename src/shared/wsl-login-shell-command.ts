@@ -49,6 +49,11 @@ export type WslCapturedLoginShellCommand = {
   endMarker: string
 }
 
+export type WslCapturedLoginShellOptions = {
+  /** Supply the nonce through this env var instead of embedding it in argv. */
+  nonceEnvVar?: string
+}
+
 // Why: the fence has to be absent from both the rc output ahead of it and the
 // payload behind it. A per-call nonce is the only spelling that guarantees
 // both -- `cat`-ing a file that happens to quote a fixed marker would otherwise
@@ -70,8 +75,12 @@ function nextWslCaptureNonce(): string {
  */
 export function buildWslCapturedLoginShellCommand(
   command: string,
-  nonce: string = nextWslCaptureNonce()
+  nonce: string = nextWslCaptureNonce(),
+  options: WslCapturedLoginShellOptions = {}
 ): WslCapturedLoginShellCommand {
+  if (options.nonceEnvVar) {
+    return buildWslCapturedLoginShellCommandFromEnv(command, options.nonceEnvVar, nonce)
+  }
   const begin = `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__`
   const end = `__ORCA_WSL_CAPTURE_END_${nonce}__`
   return {
@@ -99,6 +108,49 @@ export function buildWslCapturedLoginShellCommand(
       const endIndex = stdout.indexOf(end, payloadStart)
       // A payload that exited early never prints the closing fence; the rest of
       // the stream is still its output, and login shells run exit hooks after it.
+      return endIndex === -1 ? stdout.slice(payloadStart) : stdout.slice(payloadStart, endIndex)
+    }
+  }
+}
+
+/**
+ * Variant of the capture fence that receives its nonce from an environment
+ * variable. This keeps the nonce out of the wsl.exe command line (which is
+ * visible to other Windows processes) while retaining the login-shell fence.
+ */
+export function buildWslCapturedLoginShellCommandFromEnv(
+  command: string,
+  nonceEnvVar: string,
+  nonce: string = nextWslCaptureNonce()
+): WslCapturedLoginShellCommand {
+  const begin = `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__`
+  const end = `__ORCA_WSL_CAPTURE_END_${nonce}__`
+  const envName = nonceEnvVar
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(envName)) {
+    throw new Error('invalid_capture_nonce_env')
+  }
+  const fenced = [
+    `_orca_capture_nonce="\${${envName}:-}"`,
+    '[ -n "$_orca_capture_nonce" ] || exit 125',
+    '_orca_capture_begin="__ORCA_WSL_CAPTURE_BEGIN_${_orca_capture_nonce}__"',
+    '_orca_capture_end="__ORCA_WSL_CAPTURE_END_${_orca_capture_nonce}__"',
+    'printf %s "$_orca_capture_begin"',
+    command,
+    '_orca_capture_status=$?',
+    'printf %s "$_orca_capture_end"',
+    'exit $_orca_capture_status'
+  ].join('\n')
+  return {
+    beginMarker: begin,
+    endMarker: end,
+    command: buildWslLoginShellCommand(fenced),
+    readStdout: (stdout) => {
+      const beginIndex = stdout.lastIndexOf(begin)
+      if (beginIndex === -1) {
+        return null
+      }
+      const payloadStart = beginIndex + begin.length
+      const endIndex = stdout.indexOf(end, payloadStart)
       return endIndex === -1 ? stdout.slice(payloadStart) : stdout.slice(payloadStart, endIndex)
     }
   }

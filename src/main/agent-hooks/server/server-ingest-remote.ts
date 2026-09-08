@@ -19,6 +19,19 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
+// Diagnostics seam for the WSL hooks-off contract. This counts relay posts
+// reaching the host boundary; local loopback hook traffic is intentionally not
+// included.
+let agentHookRemotePostCount = 0
+
+export function getAgentHookRemotePostCount(): number {
+  return agentHookRemotePostCount
+}
+
+export function resetAgentHookRemotePostCount(): void {
+  agentHookRemotePostCount = 0
+}
+
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestTerminal {
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
   ingestRemote(
@@ -49,6 +62,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
     },
     connectionId: string | null
   ): void {
+    agentHookRemotePostCount++
     // Why: wire crosses a trust boundary — re-check/trim so an empty connectionId can't poison caches.
     if (connectionId !== null && typeof connectionId !== 'string') {
       return

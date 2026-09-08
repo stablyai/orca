@@ -12,13 +12,14 @@
 // period and no daemon socket.
 import { homedir } from 'node:os'
 
-import { RELAY_SENTINEL } from './protocol'
+import { RELAY_SENTINEL, RELAY_VERSION } from './protocol'
 import { RelayDispatcher } from './dispatcher'
 import { RelayAgentHookServer } from './agent-hook-server'
 import { registerWslHookFsHandlers } from './wsl-hook-fs-bridge'
 import { PluginOverlayManager } from './plugin-overlay'
 import { createInstallPluginsHandler } from './wsl-install-plugins-handler'
 import { PreflightHandler } from './preflight-handler'
+import { registerWslRelayProcessHandlers } from './wsl-relay-process'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
@@ -26,6 +27,8 @@ import {
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 import {
   sanitizeWslHookInstanceKey,
+  WSL_RELAY_CAPABILITIES,
+  WSL_RELAY_HOOKS_SET_ENABLED_METHOD,
   WSL_HOOK_RELAY_INSTANCE_ENV,
   wslHookRelayEndpointDir
 } from '../shared/wsl-hook-relay-contract'
@@ -33,12 +36,14 @@ import {
 async function main(): Promise<void> {
   const windowsPort = Number(process.env.ORCA_AGENT_HOOK_PORT ?? '')
   const token = process.env.ORCA_AGENT_HOOK_TOKEN ?? ''
-  if (!Number.isInteger(windowsPort) || windowsPort <= 0 || token.length === 0) {
-    process.stderr.write('[wsl-hook-relay] missing ORCA_AGENT_HOOK_PORT/TOKEN in env\n')
-    process.exit(1)
+  const hooksEnabled = process.env.ORCA_WSL_RELAY_HOOKS_ENABLED !== '0'
+  const relayDistro = process.env.ORCA_WSL_RELAY_DISTRO?.trim() || null
+  if (hooksEnabled && (!Number.isInteger(windowsPort) || windowsPort <= 0 || token.length === 0)) {
+    process.stderr.write('[wsl-relay] hook capability disabled: missing port/token\n')
   }
 
   let stdoutAlive = true
+  let hookCapabilityEnabled = hooksEnabled
   const dispatcher = new RelayDispatcher(
     (data, onSettled) => {
       if (!stdoutAlive) {
@@ -64,51 +69,89 @@ async function main(): Promise<void> {
   // across app restarts so surviving agents re-coordinate off its rewrite.
   const instanceKey =
     sanitizeWslHookInstanceKey(process.env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? `port${windowsPort}`
-  const hookServer = new RelayAgentHookServer({
-    endpointDir: wslHookRelayEndpointDir(homedir(), instanceKey),
-    token,
-    preferredPort: windowsPort,
-    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
-  })
+  const hookServer =
+    Number.isInteger(windowsPort) && windowsPort > 0 && token.length > 0
+      ? new RelayAgentHookServer({
+          endpointDir: wslHookRelayEndpointDir(homedir(), instanceKey),
+          token,
+          preferredPort: windowsPort,
+          forward: (envelope) => {
+            if (hookCapabilityEnabled) {
+              publishAgentHookEnvelope(dispatcher, envelope)
+            }
+          }
+        })
+      : null
   new PreflightHandler(dispatcher)
-
-  dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
-    replayed: hookServer.replayCachedPayloadsForPanes()
+  registerWslRelayProcessHandlers(dispatcher, relayDistro)
+  dispatcher.onRequest('relay.capabilities', async () => ({
+    protocolMajor: 1,
+    protocolMinor: 0,
+    bundleVersion: RELAY_VERSION,
+    capabilities: Object.values(WSL_RELAY_CAPABILITIES)
   }))
+  dispatcher.onRequest(WSL_RELAY_HOOKS_SET_ENABLED_METHOD, async (params) => {
+    const enabled = params.enabled === true
+    if (enabled === hookCapabilityEnabled) {
+      return { enabled: hookCapabilityEnabled }
+    }
+    hookCapabilityEnabled = enabled
+    if (!hookServer) {
+      hookCapabilityEnabled = false
+      return { enabled: false }
+    }
+    return { enabled: hookCapabilityEnabled }
+  })
+
+  if (hookServer) {
+    dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
+      replayed: hookCapabilityEnabled ? hookServer.replayCachedPayloadsForPanes() : 0
+    }))
+  }
 
   // Why: OpenCode reports status via a plugin (not a hooks.json script), so the
   // host ships its source over the wire and the guest materializes a config
   // overlay here — the same PluginOverlayManager path the SSH relay uses. One
   // handler for the relay's life: it remembers the materialized overlay so
   // repeat installs don't rebuild it under running agents.
-  const installPlugins = createInstallPluginsHandler(new PluginOverlayManager(), process.env)
-  dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => installPlugins(params))
+  if (hookServer) {
+    const installPlugins = createInstallPluginsHandler(new PluginOverlayManager(), process.env)
+    dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) =>
+      hookCapabilityEnabled ? installPlugins(params) : { overlayDirs: {} }
+    )
+  }
 
-  registerWslHookFsHandlers(dispatcher, homedir(), () => ({
-    portFallback: hookServer.usedPortFallback,
-    boundPort: hookServer.getCoordinates().port
-  }))
+  registerWslHookFsHandlers(
+    dispatcher,
+    homedir(),
+    hookServer
+      ? () => ({
+          portFallback: hookServer.usedPortFallback,
+          boundPort: hookServer.getCoordinates().port
+        })
+      : undefined
+  )
 
   try {
-    await hookServer.start()
+    await hookServer?.start()
   } catch (err) {
     process.stderr.write(
-      `[wsl-hook-relay] hook server bind failed: ${err instanceof Error ? err.message : String(err)}\n`
+      `[wsl-relay] hook server bind failed: ${err instanceof Error ? err.message : String(err)}\n`
     )
     process.exit(1)
   }
-  if (hookServer.usedPortFallback) {
+  if (hookServer?.usedPortFallback) {
     // Why: diagnosable breadcrumb — hook clients are fail-open silent, the
     // relay must not be. Fallback is expected under mirrored networking.
     process.stderr.write(
-      `[wsl-hook-relay] port ${windowsPort} occupied; bound ${hookServer.getCoordinates().port} (endpoint-file re-coordination)\n`
+      `[wsl-relay] port ${windowsPort} occupied; bound ${hookServer.getCoordinates().port} (endpoint-file re-coordination)\n`
     )
   }
 
   const shutdown = (): void => {
     stdoutAlive = false
     dispatcher.dispose()
-    hookServer.stop()
+    hookServer?.stop()
     process.exit(0)
   }
 
@@ -123,11 +166,11 @@ async function main(): Promise<void> {
   // relay; a stray rejection is logged and survived (hook delivery must not
   // die for a non-fatal async error).
   process.on('uncaughtException', (err) => {
-    process.stderr.write(`[wsl-hook-relay] uncaught exception: ${err.message}\n`)
+    process.stderr.write(`[wsl-relay] uncaught exception: ${err.message}\n`)
     process.exit(1)
   })
   process.on('unhandledRejection', (reason) => {
-    process.stderr.write(`[wsl-hook-relay] unhandled rejection: ${String(reason)}\n`)
+    process.stderr.write(`[wsl-relay] unhandled rejection: ${String(reason)}\n`)
   })
 
   // Signal readiness — the host watches for this exact string before

@@ -534,6 +534,24 @@ describe('LocalPtyProvider', () => {
       )
     })
 
+    it('does not let inherited canonical features change local WSL launch intent', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+        env: { ORCA_SHELL_FEATURES: 'overlay,history,ready,startup' }
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(spawnCall[2].env.ORCA_SHELL_FEATURES).not.toContain('startup')
+      expect(spawnCall[2].env.ORCA_SHELL_FEATURES).toContain('markers')
+      expect(spawnCall[2].env.ORCA_SHELL_FEATURES).toContain('identity')
+    })
+
     it('does not mark deleted Powerlevel10k wizard env for WSL import', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
