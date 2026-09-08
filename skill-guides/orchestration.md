@@ -95,6 +95,13 @@ The injected preamble is authoritative. A dispatched worker must:
 A direct user instruction after completion starts new user-owned work and takes
 precedence over the idle rule. Do not reuse the settled lifecycle IDs.
 
+If Orca rejects a lifecycle report (wrong dispatch, invalid outcome, authority
+mismatch), the coordinator inbox shows a `Rejected …` subject **and** the worker
+receives a high-priority `status` bounce on the mailbox `check` actually reads
+(`dispatch:<id>` when a payload or active Dispatch exists, otherwise the
+terminal handle). A failed `ORCA orchestration send` also surfaces `Rejected…`
+on stderr — do not assume silence means acceptance.
+
 ## Canonical supervised loop
 
 Confirm the runtime, bind one Run, and start the full independent wave before
