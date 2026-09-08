@@ -114,12 +114,14 @@ async function probeReflink(
   try {
     await deps.reflinkFileOrFail(probeSource, probeTarget)
     return true
-  } catch (error) {
-    // Why: EAGAIN is OpenZFS declining a block still in the open transaction
-    // group — the filesystem understood the request. A filesystem without the
-    // feature answers ENOTSUP, a pool with block cloning off ENOTTY, a
-    // different filesystem EXDEV.
-    return (error as { code?: unknown })?.code === 'EAGAIN'
+  } catch {
+    // Why "no" even for EAGAIN (OpenZFS declining a block still in the open
+    // transaction group): the filesystem may well reflink, but this
+    // materialization's clones would then be unforced and could quietly copy
+    // bytes the budget never charged. The charged byte-copy path is the safe
+    // answer; the next materialization probes again. ENOTSUP (no feature),
+    // ENOTTY (block cloning off) and EXDEV (other filesystem) are plain "no".
+    return false
   } finally {
     await rm(probeTarget, { force: true }).catch(() => undefined)
   }

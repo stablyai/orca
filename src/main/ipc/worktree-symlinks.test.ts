@@ -554,20 +554,23 @@ describe('createWorktreeLinkedPaths', () => {
     expect(error).not.toHaveBeenCalled()
   })
 
-  it('keeps symlink sources as symlinks instead of reflinking their targets on Linux', async () => {
-    writeFileSync(join(primary, '.env.real'), 'SECRET=1\n')
-    symlinkSync(join(primary, '.env.real'), join(primary, '.env'), 'file')
-    const deps = createReflinkCloneDeps({ supported: true })
+  posixIt(
+    'keeps symlink sources as symlinks instead of reflinking their targets on Linux',
+    async () => {
+      writeFileSync(join(primary, '.env.real'), 'SECRET=1\n')
+      symlinkSync(join(primary, '.env.real'), join(primary, '.env'), 'file')
+      const deps = createReflinkCloneDeps({ supported: true })
 
-    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
-      platform: 'linux',
-      reflinkCloneDeps: deps
-    })
+      await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+        platform: 'linux',
+        reflinkCloneDeps: deps
+      })
 
-    expect(vi.mocked(deps.reflinkFileOrFail)).not.toHaveBeenCalled()
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
-    expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
-  })
+      expect(vi.mocked(deps.reflinkFileOrFail)).not.toHaveBeenCalled()
+      expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
+      expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
+    }
+  )
 })
 
 // Why: a plain `fs.symlink` needs Developer Mode or admin on Windows, so an

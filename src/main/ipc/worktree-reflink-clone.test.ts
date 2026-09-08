@@ -118,15 +118,16 @@ describe('canCloneWithReflink', () => {
   })
 
   // Why: EAGAIN is OpenZFS refusing a block still in the open transaction
-  // group. The filesystem understood the request, so the pair can reflink;
-  // the unforced clone copies that one file's bytes and shares the rest.
-  it('treats EAGAIN as support', async () => {
+  // group. The filesystem may reflink, but saying "yes" would let unforced
+  // clones copy bytes the budget never charged — so it is a "no" for this
+  // materialization, and the charged byte-copy path runs instead.
+  it('answers no for EAGAIN so an uncharged clone cannot degrade into a byte copy', async () => {
     const source = join(primary, '.env')
     writeFileSync(source, 'SECRET=1\n')
 
     await expect(
       canCloneWithReflink(source, worktree, createDeps({ probeError: 'EAGAIN' }))
-    ).resolves.toBe(true)
+    ).resolves.toBe(false)
   })
 
   it('probes with a non-empty file found inside a directory source', async () => {
