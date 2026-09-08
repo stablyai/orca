@@ -27,6 +27,13 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
         ON messages(to_handle, sequence)
         WHERE read = 0 AND pointer_enter_pending > 0;
     `)
+    if (this.hasColumn('messages', 'pointer_pty_id')) {
+      // Working-title frames release one PTY's reservations, including already-read rows.
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_messages_pending_pointer_pty
+          ON messages(pointer_pty_id) WHERE pointer_enter_pending > 0;
+      `)
+    }
   }
 
   if (

@@ -431,7 +431,9 @@ describe('OrchestrationDb version-skew migration', () => {
 
     const raw = new Database(dbPath)
     raw.exec(
-      'DROP INDEX IF EXISTS idx_messages_pending_pointer_enter; ALTER TABLE messages DROP COLUMN pointer_enter_pending;'
+      `DROP INDEX IF EXISTS idx_messages_pending_pointer_enter;
+       DROP INDEX IF EXISTS idx_messages_pending_pointer_pty;
+       ALTER TABLE messages DROP COLUMN pointer_enter_pending;`
     )
     raw.pragma('user_version = 33')
     expect(resolveOrchestrationMigrationStartVersion(raw, 33, SCHEMA_VERSION)).toBe(6)

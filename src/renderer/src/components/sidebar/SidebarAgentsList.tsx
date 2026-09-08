@@ -40,24 +40,27 @@ export default function SidebarAgentsList({
 }: SidebarAgentsListProps): React.JSX.Element {
   // The search row is owned here and mounts conditionally, so subscribe this host to locale changes.
   useTranslation()
-  // Why store-backed: these are persisted preferences (agents* UI fields), unlike the momentary search.
   const compactMode = useAppStore((s) => s.agentsCompactMode)
   const setCompactMode = useAppStore((s) => s.setAgentsCompactMode)
+  const showSearch = useAppStore((s) => s.agentsShowSearch)
+  const setShowSearch = useAppStore((s) => s.setAgentsShowSearch)
   const showChildAgents = useAppStore((s) => s.agentsShowChildAgents)
   const setShowChildAgents = useAppStore((s) => s.setAgentsShowChildAgents)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
-  const [searchOpen, setSearchOpen] = useState(false)
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
 
-  useEffect(() => {
-    if (!searchOpen) {
-      return
-    }
-    // Radix restores focus to the menu trigger after selection; focus on the
-    // next frame so the newly mounted search field wins that race.
-    const frame = requestAnimationFrame(() => activityFilterInputRef.current?.focus())
-    return () => cancelAnimationFrame(frame)
-  }, [searchOpen])
+  const handleShowSearchChange = useCallback(
+    (visible: boolean) => {
+      setShowSearch(visible)
+      if (!visible) {
+        setQuery('')
+        return
+      }
+      // Wait for the newly visible input to mount before focusing it.
+      requestAnimationFrame(() => activityFilterInputRef.current?.focus())
+    },
+    [setQuery, setShowSearch]
+  )
 
   const {
     storeData,
@@ -109,24 +112,22 @@ export default function SidebarAgentsList({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {searchOpen ? (
+      {showSearch ? (
         <div className="shrink-0 border-b border-border px-2 py-1.5">
           <Input
             ref={activityFilterInputRef}
-            autoFocus
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
-                setSearchOpen(false)
-                setQuery('')
+                handleShowSearchChange(false)
               }
             }}
             placeholder={translate(
               'auto.components.activity.ActivityPrototypePage.795cbf26e2',
               'Filter...'
             )}
-            className="h-7 w-full text-[11px]"
+            className="h-7 w-full text-[11px] shadow-none focus-visible:ring-0"
             aria-label={translate(
               'auto.components.activity.ActivityPrototypePage.search',
               'Search'
@@ -178,7 +179,8 @@ export default function SidebarAgentsList({
               onShowChildAgentsChange={setShowChildAgents}
               onMarkAllThreadsRead={markAllThreadsRead}
               onClearCompleted={handleClearCompleted}
-              onSearch={() => setSearchOpen(true)}
+              showSearch={showSearch}
+              onShowSearchChange={handleShowSearchChange}
               unreadOnly={readFilter === 'unread'}
               onToggleUnread={() => setReadFilter(readFilter === 'unread' ? 'all' : 'unread')}
             />,

@@ -16,6 +16,7 @@ import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
 import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
+import { WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD } from './hook-stdin-contract'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -131,7 +132,10 @@ export function wrapWindowsHookCommand(
     options.fallbackStdout === undefined
       ? ''
       : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
-  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; ${fallback}exit 0`
+  // Why the order: answer first (a gate event reads silence as deny), then the shared
+  // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
+  // pipe, and ReadToEnd would strand the launcher there forever (#11549).
+  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${fallback}${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
   return wrapWindowsPowerShellEncodedCommand(command)
 }
 

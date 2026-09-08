@@ -30,6 +30,7 @@ export function migrate(this: OrchestrationDb): void {
     migrateV37.call(this, current)
     migrateV38.call(this, current)
     migrateV39.call(this, current)
+    this.createMailboxDeliveryIndexesIfPossible()
     this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this.db.exec('COMMIT')
   } catch (err) {

@@ -139,6 +139,7 @@ export function hostStub(): StructuredAgentSessionHost {
         unconfirmedClientMessageIds: []
       }
     })),
+    rewind: vi.fn(async () => ({ ok: true, value: { itemId: 'chosen', epoch: 'next' } })),
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),

@@ -116,9 +116,11 @@ export function extractPartialEscapeTail(stream: string): string {
         if (code === 0x5c) {
           state = 'ground' // ESC \ = ST terminates the OSC
         } else {
-          // The ESC aborted the OSC and opened a new sequence at i-1.
-          start = i - 1
-          state = code === ESC ? 'esc' : stateAfterEscByte(code)
+          // The ESC aborted the OSC and opened a new sequence at i-1 — except a
+          // second ESC starts its own sequence at i, and CAN/SUB abort to ground.
+          start = code === ESC ? i : i - 1
+          state =
+            code === ESC ? 'esc' : code === CAN || code === SUB ? 'ground' : stateAfterEscByte(code)
         }
         break
       case 'string':
@@ -132,8 +134,9 @@ export function extractPartialEscapeTail(stream: string): string {
         if (code === 0x5c) {
           state = 'ground'
         } else {
-          start = i - 1
-          state = code === ESC ? 'esc' : stateAfterEscByte(code)
+          start = code === ESC ? i : i - 1
+          state =
+            code === ESC ? 'esc' : code === CAN || code === SUB ? 'ground' : stateAfterEscByte(code)
         }
         break
     }

@@ -1,3 +1,7 @@
+import type {
+  AgentSessionRewindReason,
+  AgentSessionRewindSupport
+} from '../../../shared/agent-session-rewind'
 // What the wire needs from a provider adapter.
 //
 // Phase 2 implements this over the Codex app-server and the Claude Agent SDK;
@@ -8,6 +12,7 @@
 
 import type {
   AgentJournalItemIdentity,
+  AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
@@ -31,6 +36,12 @@ export class AgentSessionAcquisitionRefusal extends Error {
   ) {
     super(message)
     this.name = 'AgentSessionAcquisitionRefusal'
+  }
+}
+
+export class AgentSessionRewindRefusal extends AgentSessionAcquisitionRefusal {
+  constructor(readonly rewindReason: AgentSessionRewindReason) {
+    super(`agent_session_rewind:${rewindReason}`)
   }
 }
 
@@ -97,6 +108,14 @@ export type StructuredAgentSessionLifecycleEvent = {
 
 export type StructuredAgentSessionAcquireInput = {
   identity: AgentSessionJournalIdentity
+  rewind?: {
+    targetUuid: string
+    previousLeafUuid: string
+    dropsTurn?: string
+    onProved?: (leafUuid: string) => Promise<void>
+  }
+  /** Recovery restores an unproved rewind's original cursor with ordinary branch proof. */
+  rewindRecovery?: { leafUuid: string; onProved: () => Promise<void> }
   fence: number
   spawnToken: string
   options?: Readonly<Record<string, string>>
@@ -131,6 +150,27 @@ export type StructuredAgentSessionAdapter = {
     body: AgentJournalMessageItem
     fence: number
   }): Promise<AgentSessionDispatchOutcome>
+  rewindSupport?(sessionId: string): AgentSessionRewindSupport
+  recoverRewind?(input: {
+    sessionId: string
+    fence: number
+    beforeTurnId: string
+  }): Promise<
+    | { ok: true; items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
+    | { ok: false; reason: AgentSessionRewindReason }
+  >
+  rewind?(input: {
+    sessionId: string
+    fence: number
+    beforeTurnId: string
+    onPrepared?: (
+      items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]
+    ) => Promise<void>
+    onReverted?: () => Promise<void>
+  }): Promise<
+    | { ok: true; items?: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
+    | { ok: false; reason: AgentSessionRewindReason }
+  >
   compact?(input: {
     turnId: string
     sessionId: string

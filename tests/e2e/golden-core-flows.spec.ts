@@ -1,4 +1,7 @@
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import {
+  openSidebarProjectDialog,
+  openSidebarWorkspaceComposer
+} from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -231,7 +234,7 @@ async function addProjectFromSidebar(
 }
 
 async function createWorkspace(page: Page, workspaceName: string): Promise<void> {
-  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(page)
   const dialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible()
   const nameInput = dialog.getByPlaceholder(/Type a name/i)
@@ -468,11 +471,12 @@ test.describe('New-user golden core flow', () => {
       .locator('[data-contextual-tour-target="workspace-create-control"]')
       .first()
     await expect(createControl).toBeVisible()
-    await expect(createControl).toHaveAttribute('aria-label', 'New workspace')
+    await expect(createControl).toHaveAttribute('aria-label', 'Create')
     const createControlBox = await createControl.boundingBox()
     expect(createControlBox?.width ?? 0).toBeGreaterThan(0)
     expect(createControlBox?.height ?? 0).toBeGreaterThan(0)
     await createControl.click()
+    await orcaPage.getByRole('menuitem', { name: /^New workspace/ }).click()
 
     const workspaceName = `golden-new-${Date.now()}`
     await completeWorkspaceCreationTour(orcaPage, workspaceName)

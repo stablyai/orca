@@ -7,16 +7,16 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
 import type { OpenFile } from '../types/open-file'
 import { buildValidWorktreeIdsForSessionHydration } from '../../degraded-repo-worktree-validity'
-import { buildOwnedEditorFileId, isSameEditorOwner } from '../file-ids/editor-file-ids'
+import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
+import { resolveHydratedEditorFileSelection } from '../file-ids/hydrated-editor-file-selection'
+import { resolveHydratedEditorFrontmatter } from '../file-ids/hydrated-editor-frontmatter'
 import { isEditorTextDirectionOverride } from '../../../../../../shared/editor-text-direction'
 import { hydrateFileKeyedOverrides } from './hydrate-file-keyed-overrides'
 import {
   addEditorFileIdMigration,
-  migrateEditorFileId,
   migrateHydratedEditorTabsAndGroups,
-  resolveLegacyHydratedEditorFileId,
-  shouldHydrateWithOwnedEditorFileId,
-  type LegacyHydratedEditorFile
+  LegacyHydratedEditorFileIndex,
+  shouldHydrateWithOwnedEditorFileId
 } from '../file-ids/hydrated-editor-file-ids'
 
 export function createHydrateEditorSession(
@@ -45,7 +45,7 @@ export function createHydrateEditorSession(
         const openFiles: OpenFile[] = []
         const editorDrafts: Record<string, string> = {}
         const usedOpenFileIds = new Set<string>()
-        const legacyHydratedOpenFiles: LegacyHydratedEditorFile[] = []
+        const legacyFileIndex = new LegacyHydratedEditorFileIndex()
         const editorFileIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
         for (const [worktreeId, files] of Object.entries(openFilesByWorktree)) {
           if (!validWorktreeIds.has(worktreeId)) {
@@ -53,20 +53,10 @@ export function createHydrateEditorSession(
           }
           for (const pf of files) {
             // Split tabs share one OpenFile; repeated records for the same owner are corruption.
-            if (
-              legacyHydratedOpenFiles.some(
-                (file) =>
-                  file.filePath === pf.filePath &&
-                  isSameEditorOwner(file, worktreeId, pf.runtimeEnvironmentId)
-              )
-            ) {
+            if (legacyFileIndex.hasOwner(pf, worktreeId)) {
               continue
             }
-            const legacyId = resolveLegacyHydratedEditorFileId(
-              legacyHydratedOpenFiles,
-              pf,
-              worktreeId
-            )
+            const legacyId = legacyFileIndex.resolve(pf, worktreeId)
             // Why: floating/runtime-owned files need IDs that survive peers disappearing between restarts; collision-based IDs drift when the path is no longer open elsewhere.
             const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
             const id =
@@ -81,7 +71,7 @@ export function createHydrateEditorSession(
             usedOpenFileIds.add(id)
             // Why: map from the collision-derived legacy id; keying by filePath would collapse same-path local/runtime tabs onto the last owner to hydrate.
             addEditorFileIdMigration(editorFileIdMigrationsByWorktree, worktreeId, legacyId, id)
-            legacyHydratedOpenFiles.push({
+            legacyFileIndex.add({
               id: legacyId,
               filePath: pf.filePath,
               worktreeId,
@@ -120,47 +110,21 @@ export function createHydrateEditorSession(
 
         // Why: use the store's activeWorktreeId — hydrateWorkspaceSession may have nulled an invalid ID, and we must respect that.
         const activeWorktreeId = s.activeWorktreeId
-        const fallbackActiveFileId = activeWorktreeId
-          ? (openFiles.find((f) => f.worktreeId === activeWorktreeId)?.id ?? null)
-          : null
-        const persistedActiveFileId = activeWorktreeId
-          ? migrateEditorFileId(
-              editorFileIdMigrationsByWorktree,
-              activeWorktreeId,
-              persistedActiveFileIdByWorktree[activeWorktreeId]
-            )
-          : null
-        // Why: the persisted active file may be gone (worktree validation or stale path), so verify it exists in the restored set.
-        const activeFileExists = persistedActiveFileId
-          ? openFiles.some(
-              (f) => f.id === persistedActiveFileId && f.worktreeId === activeWorktreeId
-            )
-          : false
-        // Why: the previous active surface may have been a transient diff/conflict tab (not restored), so promote the first restored edit file.
-        const nextActiveFileId = activeFileExists ? persistedActiveFileId : fallbackActiveFileId
+        const {
+          activeFileId: nextActiveFileId,
+          activeFileIdByWorktree: filteredActiveFileIdByWorktree
+        } = resolveHydratedEditorFileSelection({
+          openFiles,
+          validWorktreeIds,
+          activeWorktreeId,
+          persistedActiveFileIds: persistedActiveFileIdByWorktree,
+          migrations: editorFileIdMigrationsByWorktree
+        })
         const activeTabType: WorkspaceVisibleTabType =
           activeWorktreeId && persistedActiveTabTypeByWorktree[activeWorktreeId]
             ? persistedActiveTabTypeByWorktree[activeWorktreeId]
             : 'terminal'
 
-        // Filter per-worktree maps to only valid worktrees with valid file references
-        const filteredActiveFileIdByWorktree = Object.fromEntries(
-          [...validWorktreeIds].flatMap((wId) => {
-            const persistedFileId = migrateEditorFileId(
-              editorFileIdMigrationsByWorktree,
-              wId,
-              persistedActiveFileIdByWorktree[wId]
-            )
-            if (
-              persistedFileId &&
-              openFiles.some((f) => f.id === persistedFileId && f.worktreeId === wId)
-            ) {
-              return [[wId, persistedFileId]]
-            }
-            const fallbackFileId = openFiles.find((f) => f.worktreeId === wId)?.id
-            return fallbackFileId ? [[wId, fallbackFileId]] : []
-          })
-        )
         const filteredActiveTabTypeByWorktree = Object.fromEntries(
           Object.entries(persistedActiveTabTypeByWorktree).filter(([wId, tabType]) => {
             if (!validWorktreeIds.has(wId)) {
@@ -177,17 +141,16 @@ export function createHydrateEditorSession(
         // Why: transient diff/conflict surfaces aren't restored, so clear a stale "editor" marker and fall back to terminal.
         const nextActiveTabType =
           nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
-        const openFileIds = new Set(openFiles.map((file) => file.id))
-        const markdownFrontmatterVisible = hydrateFileKeyedOverrides(
+        // Why: upstream's frontmatter resolver hardcodes the visible-by-default filter, so the
+        // direction override keeps the generic helper rather than reshaping their tuned path.
+        const markdownFrontmatterVisible = resolveHydratedEditorFrontmatter(
           persistedMarkdownFrontmatterVisible,
-          openFileIds,
-          editorFileIdMigrationsByWorktree,
-          // Why: visible is the default, so restore only per-file hide overrides (`false`); legacy `true` entries collapse to the default.
-          (visible) => (visible === false ? false : undefined)
+          usedOpenFileIds,
+          editorFileIdMigrationsByWorktree
         )
         const editorTextDirectionByFile = hydrateFileKeyedOverrides(
           persistedEditorTextDirectionByFile,
-          openFileIds,
+          usedOpenFileIds,
           editorFileIdMigrationsByWorktree,
           (direction) => (isEditorTextDirectionOverride(direction) ? direction : undefined)
         )

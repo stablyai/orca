@@ -26,9 +26,11 @@ export type StructuredNativeChatBlocker =
   | 'floating-workspace'
   | 'tui-launch-customization'
   | 'remote-execution-host'
-  | 'codex-on-windows'
   | 'project-runtime'
   | 'runtime-capability'
+  /** The owning host has not answered yet. Distinct from `runtime-capability`, which is the
+   *  host saying no: an unestablished answer must not read as a refusal. */
+  | 'runtime-capability-unknown'
 
 export type StructuredNativeChatSupport =
   | { supported: true }
@@ -37,8 +39,8 @@ export type StructuredNativeChatSupport =
 export type StructuredNativeChatSupportInput = {
   agent: TuiAgent
   executionHostId: string
-  platform: NodeJS.Platform
-  hostCapabilities: readonly string[]
+  /** Capabilities of the host this launch would run on. `null` = not yet established. */
+  hostCapabilities: readonly string[] | null
   workspaceKind?: 'git-worktree' | 'folder' | 'floating'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   /** A draft stays terminal-backed: the composer, not a turn, owns unsent text. */
@@ -82,15 +84,12 @@ export function resolveStructuredNativeChatSupport(
   if (input.executionHostId !== 'local') {
     return { supported: false, blocker: 'remote-execution-host' }
   }
-  // Codex's Windows refusal is deliberate and settled elsewhere, so it stays a client-side answer.
-  // Claude's is measured by the executing host at create time (agentSession.createSupport) because
-  // only that host knows whether it can read a provider child's start time.
-  if (input.agent === 'codex' && input.platform === 'win32') {
-    return { supported: false, blocker: 'codex-on-windows' }
-  }
   const projectRuntime = input.projectRuntime
   if (projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl') {
     return { supported: false, blocker: 'project-runtime' }
+  }
+  if (input.hostCapabilities === null) {
+    return { supported: false, blocker: 'runtime-capability-unknown' }
   }
   if (!input.hostCapabilities.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)) {
     return { supported: false, blocker: 'runtime-capability' }

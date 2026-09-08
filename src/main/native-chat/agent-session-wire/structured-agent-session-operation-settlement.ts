@@ -26,7 +26,11 @@ export async function runSettledAgentSessionMutation<TValue>(input: {
             status: 'succeeded',
             sessionId: input.envelope.sessionId
           })
-        : { status: 'failed', code: outcome.refusal.code }
+        : {
+            status: 'failed',
+            code: outcome.refusal.code,
+            ...(outcome.refusal.rewindReason ? { rewindReason: outcome.refusal.rewindReason } : {})
+          }
     )
     return outcome
   } catch (error) {

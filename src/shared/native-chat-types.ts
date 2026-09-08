@@ -7,6 +7,7 @@
 // instances, Maps, or Dates.
 
 import type { AgentType } from './agent-status-types'
+import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 
 export type { AgentType }
 
@@ -31,6 +32,9 @@ export type NativeChatRole = (typeof NATIVE_CHAT_ROLES)[number]
 export type NativeChatTextBlock = {
   type: 'text'
   text: string
+  /** Optional journal display hints; readers narrow only the values they know. */
+  presentation?: string
+  tone?: string
   /** Optional structured detail for an otherwise ordinary fallback line. */
   providerFrame?: {
     provider: string
@@ -47,7 +51,7 @@ export type NativeChatTextBlock = {
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
  *  argument payload; kept as `unknown` because each tool's shape differs and
  *  the renderer only previews it. */
-export type NativeChatToolCallBlock = {
+export type NativeChatToolCallBlock = NativeChatToolMetadata & {
   type: 'tool-call'
   name: string
   input: unknown
@@ -91,11 +95,51 @@ export type NativeChatImageRefBlock = {
   alt?: string
 }
 
+/** Lifecycle of one spawned child agent, as the display collapses it.
+ *  `unverifiable` is the repo's loss-of-contact verdict (see
+ *  docs/reference/ssh-execution-boundary.md): the child stopped reporting and
+ *  nothing proves it exited. Every in-flight provider state collapses to
+ *  `working`; `idle` is a child that exists but is not currently working. */
+export const NATIVE_CHAT_SUBAGENT_STATES = [
+  'working',
+  'idle',
+  'completed',
+  'failed',
+  'stopped',
+  'unverifiable'
+] as const
+export type NativeChatSubagentState = (typeof NATIVE_CHAT_SUBAGENT_STATES)[number]
+
+/** One child agent in a spawn group. */
+export type NativeChatSubagentEntry = {
+  /** Provider's child id (Codex: the child thread id). The roster key. */
+  id: string
+  /** Row label — the provider's task name, disambiguated by ordinal on collision. */
+  label: string
+  state: NativeChatSubagentState
+  /** Latest total tokens the provider reported FOR THIS CHILD, never a running sum. */
+  tokens?: number
+  /** Epoch ms of the first event that created the entry. */
+  startedAt?: number
+  /** Epoch ms the entry latched terminal. */
+  settledAt?: number
+}
+
+/** One spawn group's roster, revised in place as its children report activity.
+ *  Provider-agnostic on purpose: the Codex and Claude lanes both feed this. */
+export type NativeChatSubagentGroupBlock = {
+  type: 'subagent-group'
+  /** Stable group key — the parent turn that spawned these children. */
+  groupId: string
+  agents: NativeChatSubagentEntry[]
+}
+
 export type NativeChatBlock =
   | NativeChatTextBlock
   | NativeChatToolCallBlock
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
+  | NativeChatSubagentGroupBlock
 
 export type NativeChatMessage = {
   /** Stable across re-reads/appends so the assembler and the renderer list can
@@ -178,4 +222,10 @@ export function isInterruptedStatusMessage(message: NativeChatMessage): boolean 
 
 export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {
   return block.type === 'image-ref'
+}
+
+export function isSubagentGroupBlock(
+  block: NativeChatBlock
+): block is NativeChatSubagentGroupBlock {
+  return block.type === 'subagent-group'
 }

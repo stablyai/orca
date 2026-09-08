@@ -130,6 +130,7 @@ const UiUpdateFields = z
     agentsFilterRepoIds: StringArray.optional(),
     agentsShowChildAgents: z.boolean().optional(),
     agentsCompactMode: z.boolean().optional(),
+    agentsShowSearch: z.boolean().optional(),
     agentsReadFilter: z.enum(THREAD_READ_FILTER_VALUES).optional(),
     agentsGroupBy: z.enum(ACTIVITY_GROUP_BY_VALUES).optional(),
     workspaceHostOrder: z.array(z.string()).optional(),

@@ -8,6 +8,7 @@
 // journal rather than skipping or compacting past it.
 
 import type { AgentType } from './agent-status-types'
+import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 export { type AgentType }
@@ -81,7 +82,7 @@ export type AgentJournalMessageItem = {
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
 
-export type AgentJournalToolCallItem = {
+export type AgentJournalToolCallItem = NativeChatToolMetadata & {
   kind: 'tool-call'
   name: string
   input: unknown
@@ -147,6 +148,9 @@ export type AgentJournalQuestionItem = {
 export type AgentJournalStatusItem = {
   kind: 'status'
   text: string
+  /** Optional display hints; unknown values retain the ordinary text fallback. */
+  presentation?: string
+  tone?: string
   /** Durable root-turn lifecycle used by clients to expose cancellation only
    *  while the provider can still accept it. */
   turnLifecycle?: { turnId: string; state: 'running' | 'completed' }

@@ -7,6 +7,9 @@ export function conversationCommandBlocked(
   record: AgentSessionRecord
 ): string | null {
   const items = ctx.journal.snapshot().items
+  if (record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded') {
+    return 'agent_session_rewind:outcome-unknown'
+  }
   if (
     record.conversationCommand?.command === 'clear' &&
     record.conversationCommand.phase === 'committed' &&

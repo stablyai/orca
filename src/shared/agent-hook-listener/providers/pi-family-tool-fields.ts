@@ -1,7 +1,7 @@
 import type { ToolSnapshot } from '../listener-event'
 import { isAskUserQuestionTool } from '../../agent-question-answered-intent'
 import { deriveToolInputPreview, hasOwnField, readString, toolUpdate } from '../tool-input-preview'
-import { deriveInteractivePrompt } from '../interactive-tool'
+import { clearActiveToolFieldsUpdate, deriveInteractivePrompt } from '../interactive-tool'
 
 /** OMP's `ask` carries the same questions/options payload as Pi's question tool. */
 function serializeQuestionPrompt(toolInput: unknown): string | undefined {
@@ -29,6 +29,15 @@ export function extractPiToolFields(
   hookPayload: Record<string, unknown>,
   agentKind: 'pi' | 'omp' | 'prime-agent'
 ): ToolSnapshot {
+  // Why: arbitrary modals are not tool approvals or structured question cards.
+  if (
+    agentKind === 'pi' &&
+    (hookPayload.ui_prompt_active === true ||
+      eventName === 'ui_prompt_start' ||
+      eventName === 'ui_prompt_end')
+  ) {
+    return clearActiveToolFieldsUpdate()
+  }
   if (
     eventName === 'tool_call' ||
     eventName === 'tool_execution_start' ||

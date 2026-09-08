@@ -46,6 +46,7 @@ import {
   HandoffStatusParams,
   OptionsParams,
   RespondParams,
+  RewindParams,
   SendParams,
   SetOptionParams,
   SubscribeParams,
@@ -82,6 +83,15 @@ async function attachClientSuppliedLocation(
 }
 
 export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
+  defineMethod({
+    name: 'agentSession.rewind',
+    params: RewindParams,
+    handler: async (params, ctx) => {
+      requireStructuredCapability(ctx)
+      await ensureHostInstalled(ctx)
+      return requireHost(ctx).rewind(callerFor(ctx), params)
+    }
+  }),
   defineMethod({
     name: 'agentSession.conversationCommand',
     params: ConversationCommandParams,

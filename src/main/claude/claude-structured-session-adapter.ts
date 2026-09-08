@@ -4,7 +4,6 @@ import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   answerClaudePrompt,
   cancelClaudeTurn,
@@ -58,6 +57,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   supportsLocation = supportsClaudeStructuredLocation
 
+  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = () =>
+    this.deps.readTranscriptLeaf ? { supported: true } : { supported: false, reason: 'unsupported' }
+
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
     acquireClaudeSession({
       input,
@@ -67,7 +69,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       exits: this.exits,
       callbacks: {
         deliver: (attempt, sessionId, event) => this.deliver(attempt, sessionId, event),
-        emit: (session, events, event) => this.emit(session, events, event),
+        emit: (session, _events, event) => this.emit(session, event),
         handleExit: (sessionId, attempt, error) => this.handleExit(sessionId, attempt, error),
         settleExit: (sessionId, exit) => this.settleUnexpectedExit(sessionId, exit)
       }
@@ -155,7 +157,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         acquisitionGeneration: exit.session.acquisitionGeneration
       }
       try {
-        this.emit(exit.session, exit.session.events, ended)
+        this.emit(exit.session, ended)
       } finally {
         settleClaudeExitedSession(exit.session)
       }
@@ -187,11 +189,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
   }
 
-  private emit(
-    session: ClaudeSession | null,
-    _events: StructuredAgentSessionEventSink | undefined,
-    event: ClaudeStructuredSessionEvent
-  ): void {
+  private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
     const backgroundTasksChanged =
       event.type === 'ended'
         ? (session?.backgroundTasks.clear() ?? false)

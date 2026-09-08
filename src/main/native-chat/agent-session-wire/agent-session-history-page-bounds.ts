@@ -22,15 +22,28 @@ export function historyEntryBytes(
   return Buffer.byteLength(JSON.stringify(item), 'utf8') + (submissionBytes.get(item.itemId) ?? 0)
 }
 
+// Keyed on the snapshot's own submissions array, which the reducer rebuilds on
+// every change, so a paged read over one snapshot serializes submissions once.
+const bytesBySubmissions = new WeakMap<
+  readonly AgentJournalSubmission[],
+  ReadonlyMap<string, number>
+>()
+
 export function submissionBytesByItemId(
   submissions: readonly AgentJournalSubmission[]
-): Map<string, number> {
-  return new Map(
+): ReadonlyMap<string, number> {
+  const cached = bytesBySubmissions.get(submissions)
+  if (cached) {
+    return cached
+  }
+  const bytes = new Map(
     submissions.map((submission) => [
       agentJournalSubmissionKey(submission.clientMessageId),
       Buffer.byteLength(JSON.stringify(submission), 'utf8')
     ])
   )
+  bytesBySubmissions.set(submissions, bytes)
+  return bytes
 }
 
 export function oversizedHistoryItem(

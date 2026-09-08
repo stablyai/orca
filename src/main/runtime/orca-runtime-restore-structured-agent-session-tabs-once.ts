@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
 import { OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript } from './orca-runtime-resolve-recovered-structured-tui-transcript'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
@@ -123,16 +124,16 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         ),
         tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
       }
-      this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+      const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
       if (input.notify !== false) {
-        this.emitMobileSessionTabsSnapshot(snapshot)
+        this.emitMobileSessionTabsSnapshot(stored)
       }
       return
     }
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: input.agent === 'claude' ? 'Claude Chat' : 'Codex Chat',
+      title: defaultAgentChatLabel(input.agent),
       sessionId: input.sessionId,
       ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
       agent: input.agent,
@@ -173,9 +174,9 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+    const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
     if (input.notify !== false) {
-      this.emitMobileSessionTabsSnapshot(snapshot)
+      this.emitMobileSessionTabsSnapshot(stored)
     }
   }
 

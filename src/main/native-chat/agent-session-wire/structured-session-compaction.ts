@@ -11,6 +11,13 @@ function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
 }
 
+export function isCodexCompactionComplete(method: string, params: unknown): boolean {
+  return (
+    method === 'thread/compacted' ||
+    (method === 'item/completed' && record(record(params).item).type === 'contextCompaction')
+  )
+}
+
 /** A receipt is not completion; keep listening through the provider's terminal frame. */
 export class StructuredSessionCompaction {
   private readonly pending = new Map<string, PendingCompaction>()
@@ -95,10 +102,7 @@ export class StructuredSessionCompaction {
     if (method === 'turn/started' && typeof turn.id === 'string') {
       pending.turnId = turn.id
     }
-    if (
-      method === 'thread/compacted' ||
-      (method === 'item/completed' && record(params.item).type === 'contextCompaction')
-    ) {
+    if (isCodexCompactionComplete(method, params)) {
       pending.compacted = true
     }
     if (method === 'turn/completed' && turn.id === pending.turnId) {

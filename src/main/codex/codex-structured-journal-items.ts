@@ -78,6 +78,9 @@ export class CodexJournalItems {
     if (source === 'live' && item.type === 'userMessage') {
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
     }
+    if (item.type === 'contextCompaction' && event.method === 'item/started') {
+      return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
+    }
     const translated = codexJournalItem(item)
     const command = readCodexJournalString(item, 'command')
     if (command) {
