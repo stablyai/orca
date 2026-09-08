@@ -12,6 +12,10 @@ describe('hasBinaryFileExtension', () => {
     expect(hasBinaryFileExtension('assets/map.svg')).toBe(false)
   })
 
+  it('treats epub as binary because it is a zip container', () => {
+    expect(hasBinaryFileExtension('books/novel.epub')).toBe(true)
+  })
+
   it('rejects text files, dotfiles, and extensionless paths', () => {
     expect(hasBinaryFileExtension('src/index.ts')).toBe(false)
     expect(hasBinaryFileExtension('.gitignore')).toBe(false)
