@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
+import { ArrowDown } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { colors } from '../theme/mobile-theme'
@@ -23,9 +23,13 @@ import {
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
-import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
+import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
+import {
+  MobileNativeChatBackgroundTasks,
+  type MobileNativeChatBackgroundTasksProps
+} from './MobileNativeChatBackgroundTasks'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
@@ -113,6 +117,8 @@ type Props = {
   onCancelAsk?: () => Promise<boolean>
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string) => Promise<boolean>
+  /** Work still running after the turn ended; absent on the legacy PTY lane. */
+  backgroundTasks?: MobileNativeChatBackgroundTasksProps
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
   /** Open a worktree file tapped in agent markdown. */
@@ -165,6 +171,7 @@ export function MobileNativeChatView({
   onCancelAsk,
   question,
   onAnswerQuestion,
+  backgroundTasks,
   permission,
   onRespondPermission,
   onOpenFile,
@@ -396,36 +403,14 @@ export function MobileNativeChatView({
         question={question}
         onAnswerQuestion={onAnswerQuestion}
       />
-      {/* Chrome row above the composer: the working indicator and the global
-          tool-calls expand/collapse toggle on the left, Stop in the far corner. */}
-      <View style={styles.chromeRow}>
-        <View style={styles.chromeLeft}>
-          {agentWorking && !structuredActivityUi ? <MobileAgentWorkingIndicator /> : null}
-          <Pressable
-            style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
-            onPress={() => setToolsExpanded((v) => !v)}
-            hitSlop={8}
-          >
-            {toolsExpanded ? (
-              <ChevronsDownUp size={14} color={colors.textMuted} strokeWidth={2} />
-            ) : (
-              <ChevronsUpDown size={14} color={colors.textMuted} strokeWidth={2} />
-            )}
-            <Text style={styles.chromeToggleLabel}>{toolsExpanded ? 'Collapse' : 'Tools'}</Text>
-          </Pressable>
-        </View>
-        {agentWorking ? (
-          <Pressable
-            style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
-            onPress={onStop}
-            hitSlop={8}
-            accessibilityLabel="Stop the agent"
-          >
-            <Square size={13} color={colors.statusRed} strokeWidth={2.4} fill={colors.statusRed} />
-            <Text style={styles.stopLabel}>Stop</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <MobileNativeChatChromeRow
+        agentWorking={agentWorking}
+        structuredActivityUi={structuredActivityUi}
+        toolsExpanded={toolsExpanded}
+        onToggleTools={() => setToolsExpanded((v) => !v)}
+        onStop={onStop}
+      />
+      <MobileNativeChatBackgroundTasks {...backgroundTasks} />
       {sendErrorMessage ? (
         // This banner is the only channel for a send failure — announce it.
         <View

@@ -1,10 +1,14 @@
+import { compactCodexSession } from './codex-structured-compact'
 import * as codexRewind from './codex-structured-rewind'
 import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
-import { isCodexAppServerRequestError } from './codex-app-server-connection'
+import {
+  createCodexBackgroundTerminalChannel,
+  type CodexBackgroundTerminalChannel
+} from './codex-structured-background-terminals'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
@@ -52,10 +56,16 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   private readonly compactions = new StructuredSessionCompaction()
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
+  private readonly backgroundTerminals: CodexBackgroundTerminalChannel
   private readonly turnCancellation: CodexStructuredTurnCancellation
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
+    this.backgroundTerminals = createCodexBackgroundTerminalChannel({
+      sessions: this.sessions,
+      requestTimeoutMs: deps.requestTimeoutMs,
+      onChanged: (sessionId, state) => deps.onBackgroundTasksChanged?.(sessionId, state)
+    })
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
       translate: (sessionId, session, method, params) =>
@@ -140,9 +150,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     }
     if (event.type === 'notification') {
       this.compactions.codex(event.sessionId, event.method, event.params)
+      this.backgroundTerminals.observe(session, event)
     }
     if (event.type === 'ended') {
       this.compactions.ended(event.sessionId)
+      this.deps.onBackgroundTasksChanged?.(event.sessionId, null)
     }
     this.deps.onEvent?.(event)
     return admission
@@ -198,6 +210,11 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     return turnId ? this.turnCancellation.cancel(session, turnId) : { cancelled: false }
   }
 
+  backgroundTaskState = (sessionId: string) => this.backgroundTerminals.state(sessionId)
+
+  stopBackgroundTasks: CodexBackgroundTerminalChannel['stop'] = (input) =>
+    this.backgroundTerminals.stop(input)
+
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
     this.sessions.get(sessionId)?.historyMode === 'legacy'
       ? { supported: false, reason: 'history-not-paginated' }
@@ -209,30 +226,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     codexRewind.recoverCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 
-  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
-    const session = this.session(input.sessionId)
-    return this.compactions.run(
-      input.sessionId,
-      session.threadId,
-      async () => {
-        await this.turnCancellation.captureBaseline(session)
-        return session.connection
-          .request(
-            'thread/compact/start',
-            { threadId: session.threadId },
-            { timeoutMs: this.deps.requestTimeoutMs }
-          )
-          .catch((error) => {
-            if (isCodexAppServerRequestError(error)) {
-              return { error: error.message }
-            }
-            throw error
-          })
-      },
-      input.onLateResult,
-      input.turnId
-    )
-  }
+  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
+    compactCodexSession({
+      compactions: this.compactions,
+      turnCancellation: this.turnCancellation,
+      session: this.session(input.sessionId),
+      requestTimeoutMs: this.deps.requestTimeoutMs,
+      input
+    })
 
   async answerPrompt(input: {
     sessionId: string

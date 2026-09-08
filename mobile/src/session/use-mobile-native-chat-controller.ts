@@ -15,6 +15,7 @@ import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
+import { NO_BACKGROUND_TASKS } from './use-mobile-structured-stop'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -302,6 +303,8 @@ export function useMobileNativeChatController(args: {
     nativeChatStreamingText,
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,
+    // Legacy PTY chat has no background-task lifecycle to report.
+    nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat : NO_BACKGROUND_TASKS,
     nativeChatPermission: activeChatStructured
       ? structuredNativeChat.permission
       : legacyNativeChatPermission,

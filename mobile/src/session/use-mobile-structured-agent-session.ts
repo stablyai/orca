@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
-import type {
-  AgentSessionCancelResult,
-  AgentSessionSendResult
-} from '../../../src/shared/agent-session-wire'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
@@ -31,25 +28,27 @@ import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredStop, type MobileStructuredStop } from './use-mobile-structured-stop'
 
 type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
 
-type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> & {
-  session: MobileNativeChatSession
-  isWorking: boolean
-  turnId: string | null
-  sendWithOutcome: (
-    text: string,
-    images?: string[],
-    deadline?: number,
-    attachments?: readonly StructuredMobileAttachment[]
-  ) => Promise<MobileNativeChatSendOutcome>
-  cancel: () => void
-  permission: MobileChatPermission | null
-  question: MobileChatQuestion | null
-  respondPermission: (optionId: string) => Promise<boolean>
-  respondQuestion: (answer: string) => Promise<boolean>
-}
+type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
+  MobileStructuredStop & {
+    session: MobileNativeChatSession
+    isWorking: boolean
+    turnId: string | null
+    sendWithOutcome: (
+      text: string,
+      images?: string[],
+      deadline?: number,
+      attachments?: readonly StructuredMobileAttachment[]
+    ) => Promise<MobileNativeChatSendOutcome>
+    cancel: () => void
+    permission: MobileChatPermission | null
+    question: MobileChatQuestion | null
+    respondPermission: (optionId: string) => Promise<boolean>
+    respondQuestion: (answer: string) => Promise<boolean>
+  }
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -233,38 +232,6 @@ export function useMobileStructuredAgentSession(args: {
     onSendError
   })
 
-  const cancel = useCallback(() => {
-    const current = stateRef.current
-    const turnId = activeStructuredAgentSessionTurnId(current.items)
-    if (!client || !sessionId || !enabled || current.fence === null || !turnId) {
-      onSendError('Stop not sent')
-      return
-    }
-    const fields = { turnId }
-    const key = `${sessionKey}:agentSession.cancel:${JSON.stringify(fields)}`
-    const clientOperationId = retainOperationId(key, operationIdsRef.current.get(key))
-    void requestStructuredAgentSessionMutation<AgentSessionCancelResult>({
-      client,
-      method: 'agentSession.cancel',
-      fingerprintMethod: 'agentSession.cancel',
-      sessionId,
-      expectedRuntimeFence: current.fence,
-      fields,
-      clientOperationId
-    }).then((result) => {
-      if (result.status !== 'unknown') {
-        operationIdsRef.current.delete(key)
-      }
-      if (result.status === 'unknown') {
-        onSendError('Stop unconfirmed — check chat before retrying')
-      } else if (result.status === 'refused') {
-        onSendError(result.message)
-      } else if (result.status === 'failed') {
-        onSendError(result.message === 'Request not sent' ? 'Stop not sent' : result.message)
-      }
-    })
-  }, [client, enabled, onSendError, sessionId, sessionKey])
-
   const messages = useMemo(
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
     [state.items, state.submissions]
@@ -279,7 +246,20 @@ export function useMobileStructuredAgentSession(args: {
     [state.items]
   )
 
+  const stop = useMobileStructuredStop({
+    client,
+    sessionId,
+    enabled,
+    sessionKey,
+    stateRef,
+    backgroundTaskState: state.backgroundTasks,
+    turnId: activeStructuredAgentSessionTurnId(state.items),
+    operationIdsRef,
+    onSendError
+  })
+
   return {
+    ...stop,
     conversationCommands,
     optionPickerRequest,
     session: {
@@ -294,7 +274,6 @@ export function useMobileStructuredAgentSession(args: {
     isWorking: activeStructuredAgentSessionTurnId(state.items) !== null,
     turnId: activeStructuredAgentSessionTurnId(state.items),
     sendWithOutcome,
-    cancel,
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
     optionSnapshot,

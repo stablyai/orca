@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { NO_BACKGROUND_TASKS } from './use-mobile-structured-stop'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
 vi.mock('react-native', () => ({
@@ -38,7 +39,8 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     chatPending: [],
     chatImagePreviewsByMessageId: {},
     chatComposerText: '',
-    setChatComposerText: vi.fn()
+    setChatComposerText: vi.fn(),
+    nativeChatBackgroundTasks: NO_BACKGROUND_TASKS
   } as unknown as MobileNativeChatController
   return createElement(MobileNativeChatOverlay, {
     controller,

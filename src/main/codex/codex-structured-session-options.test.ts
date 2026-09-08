@@ -7,6 +7,7 @@ import {
   reportedCodexThreadOptions,
   restoredCodexSessionOptions
 } from './codex-structured-session-options'
+import { createCodexBackgroundTerminals } from './codex-structured-background-terminals'
 import type { CodexSession } from './codex-structured-session-state'
 
 function optionSession(request: CodexAppServerConnection['request']): CodexSession {
@@ -20,6 +21,7 @@ function optionSession(request: CodexAppServerConnection['request']): CodexSessi
       respondWithError: () => {},
       close: async () => true
     },
+    backgroundTerminals: createCodexBackgroundTerminals(),
     ended: false,
     requestedClose: false,
     fence: 1,

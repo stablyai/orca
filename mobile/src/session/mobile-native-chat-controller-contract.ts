@@ -1,3 +1,4 @@
+import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-stop'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type {
   AskAnswerSelection,
@@ -33,6 +34,8 @@ export type MobileNativeChatController = {
   nativeChatStreamLive: boolean
   /** Host/workspace/tab/session scope for stateful streaming suppression. */
   nativeChatStreamScopeKey: string
+  /** Work left running after the turn ended; inert unless the host reports it. */
+  nativeChatBackgroundTasks: MobileStructuredBackgroundTasks
   nativeChatPermission: ReturnType<typeof detectAgentPermission>
   nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
   /** The pending ask, already null while dismissed (dismissal lives here so it

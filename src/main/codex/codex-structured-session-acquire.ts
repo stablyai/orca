@@ -21,6 +21,7 @@ import {
   reportedCodexThreadOptions,
   restoredCodexSessionOptions
 } from './codex-structured-session-options'
+import { createCodexBackgroundTerminals } from './codex-structured-background-terminals'
 import {
   codexSessionLifecycle,
   mintCodexAcquisitionGeneration,
@@ -198,6 +199,7 @@ export async function acquireCodexStructuredSession(input: {
       options: restoredCodexSessionOptions(acquireInput.options),
       reportedOptions: reportedCodexThreadOptions(opened),
       turnIdWaiters: [],
+      backgroundTerminals: createCodexBackgroundTerminals(),
       translator,
       forceCloseUnexpected: (reason) =>
         input.forceCloseUnexpected(

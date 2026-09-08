@@ -81,6 +81,13 @@ export function MobileNativeChatOverlay({
         onCancelAsk={controller.handleNativeChatCancelAsk}
         question={controller.nativeChatQuestion}
         onAnswerQuestion={controller.handleNativeChatQuestionAnswer}
+        backgroundTasks={{
+          tasks: controller.nativeChatBackgroundTasks.isMonitoringBackgroundTasks
+            ? controller.nativeChatBackgroundTasks.backgroundTasks
+            : [],
+          supportsTaskStop: controller.nativeChatBackgroundTasks.supportsBackgroundTaskStop,
+          onStop: controller.nativeChatBackgroundTasks.stopBackgroundTask
+        }}
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
         onOpenFile={onOpenFile}
