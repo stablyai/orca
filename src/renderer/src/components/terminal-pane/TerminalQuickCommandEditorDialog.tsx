@@ -1,5 +1,9 @@
 import { useAppStore } from '../../store'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { TerminalQuickCommandDialog } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 
@@ -25,6 +29,7 @@ export function TerminalQuickCommandEditorDialog({
       mode="add"
       command={command}
       repos={hostRepos}
+      showBackgroundPreference={hostId === LOCAL_EXECUTION_HOST_ID}
       onOpenChange={onOpenChange}
       onSave={onSave}
     />

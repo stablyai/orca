@@ -10,6 +10,12 @@ const mocks = vi.hoisted(() => ({
 const store = {
   activeRepoId: 'repo-1',
   activeWorktreeId: 'wt-1',
+  activeTabId: 'tab-1' as string | null,
+  activeTabIdByWorktree: { 'wt-1': 'tab-1' } as Record<string, string | null>,
+  groupsByWorktree: {} as Record<
+    string,
+    { id: string; activeTabId: string | null; tabOrder: string[]; worktreeId: string }[]
+  >,
   settings: {
     agentCmdOverrides: {} as Record<string, string>,
     agentDefaultArgs: {} as Record<string, string>,
@@ -72,6 +78,9 @@ describe('launchAgentInNewTab paired web runtime', () => {
       activeRuntimeEnvironmentId: 'web-runtime'
     }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
+    store.activeTabId = 'tab-1'
+    store.activeTabIdByWorktree = { 'wt-1': 'tab-1' }
+    store.groupsByWorktree = {}
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
   })
 
@@ -91,6 +100,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
       activate: true,
+      selectWorktree: true,
       agentSessionKind: 'fresh',
       agent: 'claude',
       viewMode: 'terminal'
@@ -119,6 +129,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
       activate: true,
+      selectWorktree: true,
       agentSessionKind: 'fresh',
       launchAgent: 'codex',
       command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
@@ -134,5 +145,110 @@ describe('launchAgentInNewTab paired web runtime', () => {
       viewMode: 'terminal'
     })
     expect(mocks.createTab).not.toHaveBeenCalled()
+  })
+
+  it('reports paired background prompt delivery without selecting the workspace', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      prompt: 'review this diff',
+      activate: false
+    })
+
+    expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ activate: false, selectWorktree: false })
+    )
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+    expect(mocks.setActiveTabType).not.toHaveBeenCalled()
+  })
+
+  it('preserves selected local agent tabs during paired background creation', async () => {
+    store.tabsByWorktree['wt-1'] = [
+      { id: 'global-active-agent-tab', launchAgent: 'claude' },
+      { id: 'remembered-agent-tab', launchAgent: 'claude' },
+      { id: 'group-agent-tab-1', launchAgent: 'claude' },
+      { id: 'group-agent-tab-2', launchAgent: 'claude' },
+      { id: 'inactive-agent-tab', launchAgent: 'codex' }
+    ]
+    store.activeTabId = 'global-active-agent-tab'
+    store.activeTabIdByWorktree['wt-1'] = 'remembered-agent-tab'
+    store.groupsByWorktree['wt-1'] = [
+      {
+        id: 'group-1',
+        activeTabId: 'group-agent-tab-1',
+        tabOrder: ['group-agent-tab-1'],
+        worktreeId: 'wt-1'
+      },
+      {
+        id: 'group-2',
+        activeTabId: 'group-agent-tab-2',
+        tabOrder: ['group-agent-tab-2'],
+        worktreeId: 'wt-1'
+      }
+    ]
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'review this diff',
+      activate: false
+    })
+
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+    await result?.promptDeliveryResult
+    expect(mocks.closeTab).not.toHaveBeenCalledWith('global-active-agent-tab', expect.anything())
+    expect(mocks.closeTab).not.toHaveBeenCalledWith('remembered-agent-tab', expect.anything())
+    expect(mocks.closeTab).not.toHaveBeenCalledWith('group-agent-tab-1', expect.anything())
+    expect(mocks.closeTab).not.toHaveBeenCalledWith('group-agent-tab-2', expect.anything())
+    expect(mocks.closeTab).toHaveBeenCalledWith('inactive-agent-tab', { reason: 'cleanup' })
+  })
+
+  it('keeps all local agent tabs when paired background creation fails', async () => {
+    store.tabsByWorktree['wt-1'] = [
+      { id: 'active-agent-tab', launchAgent: 'claude' },
+      { id: 'inactive-agent-tab', launchAgent: 'codex' }
+    ]
+    store.activeTabId = 'active-agent-tab'
+    store.activeTabIdByWorktree['wt-1'] = 'active-agent-tab'
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+      status: 'failed',
+      message: 'Host disconnected'
+    })
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'review this diff',
+      activate: false
+    })
+
+    await result?.promptDeliveryResult
+    expect(mocks.closeTab).not.toHaveBeenCalled()
+  })
+
+  it('keeps foreground cleanup for stale rows added while creation is pending', async () => {
+    let resolveCreation: (outcome: { status: 'failed'; message: string }) => void = () => undefined
+    mocks.createWebRuntimeSessionTerminal.mockReturnValue(
+      new Promise((resolve) => {
+        resolveCreation = resolve
+      })
+    )
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    store.tabsByWorktree['wt-1'].push({ id: 'late-stale-agent-tab', launchAgent: 'claude' })
+    resolveCreation({ status: 'failed', message: 'Host disconnected' })
+
+    await vi.waitFor(() =>
+      expect(mocks.closeTab).toHaveBeenCalledWith('late-stale-agent-tab', { reason: 'cleanup' })
+    )
   })
 })

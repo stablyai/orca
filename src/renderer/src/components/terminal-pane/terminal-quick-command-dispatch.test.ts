@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
-import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatch'
+import {
+  sendTerminalQuickCommandToPane,
+  shouldRunTerminalQuickCommandInNewTab
+} from './terminal-quick-command-dispatch'
 
 function createPane() {
   return {
@@ -132,5 +135,39 @@ describe('sendTerminalQuickCommandToPane', () => {
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
+  })
+})
+
+describe('shouldRunTerminalQuickCommandInNewTab', () => {
+  it('routes background terminal commands and agent prompts to new tabs', () => {
+    expect(
+      shouldRunTerminalQuickCommandInNewTab({
+        id: 'background',
+        label: 'Background',
+        command: 'pnpm test',
+        appendEnter: true,
+        openInBackground: true
+      })
+    ).toBe(true)
+    expect(
+      shouldRunTerminalQuickCommandInNewTab({
+        id: 'agent',
+        label: 'Agent',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this'
+      })
+    ).toBe(true)
+  })
+
+  it('keeps foreground terminal commands in the current pane', () => {
+    expect(
+      shouldRunTerminalQuickCommandInNewTab({
+        id: 'foreground',
+        label: 'Foreground',
+        command: 'git status',
+        appendEnter: true
+      })
+    ).toBe(false)
   })
 })

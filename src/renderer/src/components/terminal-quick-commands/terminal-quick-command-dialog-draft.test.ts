@@ -115,6 +115,61 @@ describe('terminal quick command dialog draft transitions', () => {
       appendEnter: true
     })
   })
+
+  it('preserves background presentation across action changes', () => {
+    const command: TerminalQuickCommand = {
+      id: 'qc-1',
+      label: 'Background work',
+      action: 'terminal-command',
+      command: 'pnpm test',
+      appendEnter: true,
+      scope: { type: 'global' },
+      openInBackground: true
+    }
+
+    const toAgent = switchTerminalQuickCommandDialogAction(
+      command,
+      'agent-prompt',
+      createTerminalQuickCommandDialogDraftMemory(command, 'codex')
+    )
+    const backToTerminal = switchTerminalQuickCommandDialogAction(
+      toAgent.draft,
+      'terminal-command',
+      toAgent.memory
+    )
+
+    expect(toAgent.draft.openInBackground).toBe(true)
+    expect(backToTerminal.draft.openInBackground).toBe(true)
+  })
+
+  it('restores the authored append-enter preference for background commands', () => {
+    const command: TerminalQuickCommand = {
+      id: 'qc-1',
+      label: 'Background work',
+      action: 'terminal-command',
+      command: 'pnpm test',
+      appendEnter: false,
+      scope: { type: 'global' },
+      openInBackground: true
+    }
+
+    const toAgent = switchTerminalQuickCommandDialogAction(
+      command,
+      'agent-prompt',
+      createTerminalQuickCommandDialogDraftMemory(command, 'codex')
+    )
+    const backToTerminal = switchTerminalQuickCommandDialogAction(
+      toAgent.draft,
+      'terminal-command',
+      toAgent.memory
+    )
+
+    expect(backToTerminal.draft).toMatchObject({
+      action: 'terminal-command',
+      appendEnter: false,
+      openInBackground: true
+    })
+  })
 })
 
 describe('terminal quick command dialog scope transitions', () => {

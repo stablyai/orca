@@ -16,7 +16,8 @@ describe('OrcaRuntimeService', () => {
         action: 'agent-prompt' as const,
         agent: 'codex' as const,
         prompt: 'Review this diff',
-        scope: { type: 'global' as const }
+        scope: { type: 'global' as const },
+        openInBackground: true
       }
     ]
     const runtime = new OrcaRuntimeService({
@@ -48,7 +49,47 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getClientSettings().hostSettingOverrides).toEqual({
       'ssh:target-1': { displayLabel: 'Build host' }
     })
-    expect(runtime.getClientTerminalQuickCommands()).toEqual(terminalQuickCommands)
+    expect(runtime.getClientTerminalQuickCommands()).toEqual([
+      {
+        id: 'review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff',
+        scope: { type: 'global' }
+      }
+    ])
+  })
+
+  it('preserves desktop background presentation across paired-client edits', () => {
+    const existing = {
+      id: 'status',
+      label: 'Status',
+      action: 'terminal-command' as const,
+      command: 'git status',
+      appendEnter: true,
+      scope: { type: 'global' as const },
+      openInBackground: true
+    }
+    let settings = { ...store.getSettings(), terminalQuickCommands: [existing] }
+    const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
+      settings = { ...settings, ...updates }
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => settings,
+      updateSettings
+    } as never)
+
+    runtime.updateClientTerminalQuickCommands({
+      type: 'upsert',
+      command: { ...existing, label: 'Edited', openInBackground: undefined }
+    })
+
+    expect(settings.terminalQuickCommands).toEqual([
+      { ...existing, label: 'Edited', openInBackground: true }
+    ])
+    expect(runtime.getClientTerminalQuickCommands()[0]).not.toHaveProperty('openInBackground')
   })
 
   it('updates quick commands without widening general paired settings payloads', () => {

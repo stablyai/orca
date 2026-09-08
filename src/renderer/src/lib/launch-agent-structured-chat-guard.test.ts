@@ -182,6 +182,27 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockWaitForAgentReady).not.toHaveBeenCalled()
   })
 
+  it('keeps background agent launches inactive when structured chat is the default', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      activate: false,
+      prompt: 'Review this diff'
+    })
+
+    expect(result?.tabId).toBe('tab-1')
+    expect(mockCreateStructuredCodexSessionLaunchIntent).not.toHaveBeenCalled()
+    expect(mockCreateTab).toHaveBeenCalledWith(
+      'wt-1',
+      undefined,
+      undefined,
+      expect.objectContaining({ activate: false })
+    )
+    expect(store.setActiveTabType).not.toHaveBeenCalled()
+  })
+
   // Routing only: the host seeds the saved values, so preservation is pinned there.
   it('takes the structured path when a Codex model and effort are already saved', async () => {
     store.settings.nativeChatSessionOptions = {

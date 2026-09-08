@@ -13,10 +13,20 @@ import type { AgentPromptDelivery } from '../../../shared/agent-session-host-aut
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
 
-function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
+function removeStaleLocalAgentTabsForWebHostLaunch(
+  worktreeId: string,
+  preserveSelectedTabs = false
+): void {
   const state = useAppStore.getState()
+  const selectedTabIds = preserveSelectedTabs
+    ? new Set([
+        state.activeTabId,
+        state.activeTabIdByWorktree[worktreeId],
+        ...(state.groupsByWorktree[worktreeId] ?? []).map((group) => group.activeTabId)
+      ])
+    : null
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-    if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
+    if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id) && !selectedTabIds?.has(tab.id)) {
       // Why: pruning a stale local agent tab is a system close — keep it out of
       // the Cmd+Shift+T reopen stack.
       state.closeTab(tab.id, { reason: 'cleanup' })
@@ -37,6 +47,7 @@ export function launchAgentInWebHostTab(args: {
   worktreeId: string
   environmentId: string | null
   groupId?: string
+  activate?: boolean
   cwd?: string | null
   startupPlan: AgentStartupPlan
   prompt: string
@@ -52,6 +63,7 @@ export function launchAgentInWebHostTab(args: {
     worktreeId,
     environmentId,
     groupId,
+    activate = true,
     cwd,
     startupPlan,
     prompt,
@@ -66,12 +78,15 @@ export function launchAgentInWebHostTab(args: {
   const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
   const structuredPromptDelivery: AgentPromptDelivery =
     promptDelivery === 'draft' ? 'draft' : 'auto-submit'
-  removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+  if (activate) {
+    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+  }
   const launch = {
     worktreeId,
     environmentId,
     targetGroupId: groupId,
-    activate: true,
+    activate,
+    selectWorktree: activate,
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',
@@ -101,9 +116,9 @@ export function launchAgentInWebHostTab(args: {
     outcome: Awaited<ReturnType<typeof createWebRuntimeSessionTerminal>>
     promptDelivered: boolean
   }): { delivered: boolean; failureNotified: boolean } => {
-    // Why: created means the host accepted the launch, not that a local tab
-    // exists; keep pruning stale local rows until the snapshot mirrors.
-    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+    if (activate) {
+      removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+    }
     if (outcome.status === 'failed') {
       toast.error(
         outcome.message ||
@@ -115,7 +130,14 @@ export function launchAgentInWebHostTab(args: {
       )
       return { delivered: false, failureNotified: true }
     }
-    useAppStore.getState().setActiveTabType('terminal')
+    // Why: background launches must not close selected tabs, and failed host
+    // creation must leave all existing local sessions untouched.
+    if (!activate) {
+      removeStaleLocalAgentTabsForWebHostLaunch(worktreeId, true)
+    }
+    if (activate) {
+      useAppStore.getState().setActiveTabType('terminal')
+    }
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }

@@ -60,7 +60,9 @@ export function TerminalQuickCommandsSubmenu({
         />
       )}
       <span className="min-w-0 flex-1 truncate">{command.label}</span>
-      {!isTerminalAgentQuickCommand(command) && !command.appendEnter ? (
+      {!isTerminalAgentQuickCommand(command) &&
+      !command.appendEnter &&
+      !command.openInBackground ? (
         <DropdownMenuShortcut className="shrink-0">
           {translate('auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d', 'Insert')}
         </DropdownMenuShortcut>

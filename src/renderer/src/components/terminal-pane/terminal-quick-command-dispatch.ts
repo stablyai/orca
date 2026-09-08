@@ -2,7 +2,8 @@ import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-com
 import {
   buildTerminalQuickCommandInput,
   flattenTerminalQuickCommand,
-  isTerminalAgentQuickCommand
+  isTerminalAgentQuickCommand,
+  shouldOpenTerminalQuickCommandInBackground
 } from '../../../../shared/terminal-quick-commands'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 
@@ -15,6 +16,10 @@ type QuickCommandPane = {
 
 type QuickCommandTransport = {
   sendInput: (data: string) => boolean
+}
+
+export function shouldRunTerminalQuickCommandInNewTab(command: TerminalQuickCommand): boolean {
+  return isTerminalAgentQuickCommand(command) || shouldOpenTerminalQuickCommandInBackground(command)
 }
 
 export function sendTerminalQuickCommandToPane({

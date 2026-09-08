@@ -151,14 +151,18 @@ export class RuntimeClientSettingsController {
     if (!this.store?.getSettings) {
       throw new Error('runtime_unavailable')
     }
-    return this.store.getSettings().terminalQuickCommands ?? []
+    return (this.store.getSettings().terminalQuickCommands ?? []).map((command) => {
+      // Why: paired v1 clients reject desktop-only presentation fields.
+      const { openInBackground: _openInBackground, ...clientCommand } = command
+      return clientCommand
+    })
   }
 
   updateTerminalQuickCommands(mutation: TerminalQuickCommandMutation): TerminalQuickCommand[] {
     if (!this.store?.getSettings || !this.store.updateSettings) {
       throw new Error('runtime_unavailable')
     }
-    const current = this.getTerminalQuickCommands()
+    const current = this.store.getSettings().terminalQuickCommands ?? []
     if (
       mutation.type === 'upsert' &&
       !current.some((command) => command.id === mutation.command.id) &&
