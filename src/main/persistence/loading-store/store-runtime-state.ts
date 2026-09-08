@@ -1,4 +1,5 @@
 import { removeStaleDurableWriteTempFiles } from '../../durable-file-write'
+import type { DurableBindingRecords } from './pty-binding-durability-records'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ActiveViewPreference } from '../../active-view-preference'
@@ -45,6 +46,7 @@ export class StoreRuntimeState {
   quitFlushPromise: Promise<void> | null = null
   lastWrittenStateHash: string | null = null
   lastDurableWriteGeneration = -1
+  readonly durableBindingRecords: DurableBindingRecords = new Map()
   firstPendingSaveAt: number | null = null
   githubCacheDirty = false
   githubCacheGeneration = 0

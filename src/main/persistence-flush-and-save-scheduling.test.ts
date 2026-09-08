@@ -582,6 +582,50 @@ describe('Store', () => {
       expect(flushSpy).not.toHaveBeenCalled()
     })
 
+    it('stays on the fast lane while unrelated state is dirty', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      expect(store.persistPtyBinding(binding)).toBe(true)
+      // A workspace switch dirties unrelated state constantly; the binding is still on disk.
+      store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
+      const flushSpy = vi.spyOn(store, 'flushOrThrow')
+
+      expect(store.persistPtyBinding(binding)).toBe(true)
+      expect(store.persistPtyBinding(binding)).toBe(true)
+
+      expect(flushSpy).not.toHaveBeenCalled()
+    })
+
+    it('flushes again once the session object is replaced', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      store.persistPtyBinding(binding)
+      // A renderer publish installs a fresh session object, so the record no longer describes it.
+      store.setWorkspaceSession({ ...store.getWorkspaceSession() })
+      store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
+      const flushSpy = vi.spyOn(store, 'flushOrThrow')
+
+      expect(store.persistPtyBinding(binding)).toBe(true)
+
+      expect(flushSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('flushes a changed pty for a pane whose old binding was durable', async () => {
+      const store = await createStore()
+      store.setWorkspaceSession(boundSession())
+      store.persistPtyBinding(binding)
+      store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
+      const flushSpy = vi.spyOn(store, 'flushOrThrow')
+
+      expect(store.persistPtyBinding({ ...binding, ptyId: 'pty-next' })).toBe(true)
+
+      expect(flushSpy).toHaveBeenCalledTimes(1)
+      const persisted = readDataFile() as { workspaceSession: WorkspaceSessionState }
+      expect(
+        persisted.workspaceSession.terminalLayoutsByTabId?.tab1?.ptyIdsByLeafId?.[TEST_LEAF_1]
+      ).toBe('pty-next')
+    })
+
     it('lets every pane of a split tab hit the fast lane', async () => {
       const store = await createStore()
       store.setWorkspaceSession(
