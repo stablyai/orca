@@ -474,6 +474,36 @@ describe('MobileNativeChatComposer', () => {
     expect(onChangeText).toHaveBeenCalledWith('/to-spec ')
   })
 
+  it('keeps a command that collides with a skill name as the described command row', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          structuredCommands: [],
+          sessionCommands: [
+            { name: 'clear', kind: 'command' },
+            { name: 'clear', kind: 'skill' },
+            { name: 'to-spec', kind: 'skill' }
+          ]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    expect(texts.filter((text) => text === '/clear')).toHaveLength(1)
+    expect(texts).toContain('Clear conversation history')
+  })
+
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()

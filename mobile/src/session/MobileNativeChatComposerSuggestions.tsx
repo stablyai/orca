@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     borderRadius: radii.row,
-    paddingHorizontal: 4,
+    paddingHorizontal: spacing.xs,
     overflow: 'hidden'
   },
   suggestionPressed: {
