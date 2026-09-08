@@ -129,7 +129,56 @@ describe('terminal IME composer placeholder mask', () => {
     rig.compose()
 
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
-    expect(rig.compositionView.querySelector('.xterm-composition-remainder')).not.toBeNull()
+    expect(rig.compositionView.querySelector('.xterm-composition-remainder')).toBeNull()
+    expect(rig.element.querySelector('.xterm-composition-mask')).not.toBeNull()
+  })
+
+  it.each([
+    ['RGB', '\x1b[48;2;57;59;65m', '#393b41'],
+    ['light RGB', '\x1b[48;2;240;240;240m', '#f0f0f0'],
+    ['palette', '\x1b[48;5;236m', '#303030'],
+    ['inverse', '\x1b[38;2;57;59;65m\x1b[7m', '#393b41']
+  ])(
+    'clears the placeholder using its %s cell background without sending input',
+    async (_case, sgr, background) => {
+      const rig = openTerminal()
+      await rig.write(codexPlaceholderFrame().replace('\x1b[1m›', `${sgr}\x1b[1m›`))
+      const original = rig.terminal.buffer.active.getLine(0)?.translateToString(true)
+      const onData = vi.fn()
+      rig.terminal.onData(onData)
+
+      rig.compose('ni')
+
+      expect(rig.compositionView.querySelector('.xterm-composition-remainder')).toBeNull()
+      expect(rig.compositionView.textContent).not.toContain(CODEX_PLACEHOLDER)
+      expect(rig.compositionView.style.backgroundColor).toBe(background)
+      const piece = rig.element.querySelector<HTMLElement>('.xterm-composition-mask > div')
+      expect(piece?.style.backgroundColor).toBe(background)
+      expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe(original)
+      expect(onData).not.toHaveBeenCalled()
+
+      rig.textarea.value = ''
+      await rig.endComposition('')
+      expect(rig.element.querySelector('.xterm-composition-mask')).toBeNull()
+      expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe(original)
+      expect(onData).not.toHaveBeenCalled()
+    }
+  )
+
+  it('clears wrapped placeholder rows and removes the mask after one committed input', async () => {
+    const rig = openTerminal()
+    rig.terminal.resize(20, 12)
+    await rig.write(codexPlaceholderFrame())
+    const onData = vi.fn()
+    rig.terminal.onData(onData)
+
+    rig.compose('ni')
+
+    expect(rig.compositionView.querySelector('.xterm-composition-remainder')).toBeNull()
+    expect(rig.element.querySelector('.xterm-composition-mask')?.children).toHaveLength(2)
+    await rig.endComposition('你')
+    expect(rig.element.querySelector('.xterm-composition-mask')).toBeNull()
+    expect(onData.mock.calls).toEqual([['你']])
   })
 
   it.each([
@@ -215,6 +264,10 @@ describe('terminal IME composer placeholder mask', () => {
       `\x1b[K\x1b[2m${ordinaryDimOutput}\x1b[22m\x1b[${ordinaryDimOutput.length}D`
     )
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
+    expect(rig.compositionView.querySelector('.xterm-composition-remainder')?.textContent).toBe(
+      ordinaryDimOutput
+    )
+    expect(rig.element.querySelector('.xterm-composition-mask')).toBeNull()
 
     await rig.writeAwaitingRender(
       `\x1b[K\x1b[2m${CODEX_PLACEHOLDER}\x1b[22m\x1b[${CODEX_PLACEHOLDER.length}D`

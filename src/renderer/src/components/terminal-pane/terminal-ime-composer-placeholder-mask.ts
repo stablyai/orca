@@ -53,7 +53,14 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
     activeSessionId = null
     syncPlaceholderOwnership()
   }
+  const handleRemainder = (event: Event): void => {
+    syncPlaceholderOwnership()
+    if (element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)) {
+      event.preventDefault()
+    }
+  }
 
+  element.addEventListener('xterm-composition-remainder', handleRemainder)
   element.addEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, handleSessionStart)
   element.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, handleSessionEnd)
   element.addEventListener('blur', handleBlur, true)
@@ -67,6 +74,7 @@ export function installTerminalImeComposerPlaceholderMask(terminal: Terminal): I
     dispose: () => {
       activeSessionId = null
       element.classList.remove(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)
+      element.removeEventListener('xterm-composition-remainder', handleRemainder)
       element.removeEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, handleSessionStart)
       element.removeEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, handleSessionEnd)
       element.removeEventListener('blur', handleBlur, true)

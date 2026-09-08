@@ -89,10 +89,14 @@ function isStockPlaceholder(
   afterCursor: string,
   continuationRows: { text: string; wrapped: boolean }[]
 ): boolean {
-  const text = [afterCursor, ...continuationRows.map((row) => row.text)]
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+  let text = afterCursor
+  for (const row of continuationRows) {
+    if (!row.wrapped) {
+      text += ' '
+    }
+    text += row.text
+  }
+  text = text.replace(/\s+/g, ' ').trim()
   return (
     /^Try\s+["“]/.test(text) ||
     text === 'Ask Codex to do anything' ||
