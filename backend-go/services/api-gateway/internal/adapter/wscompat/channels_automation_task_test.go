@@ -241,15 +241,18 @@ func TestAutomationRunsChannel_PropagatesError(t *testing.T) {
 type fakeTaskServiceClient struct {
 	taskv1.TaskServiceClient
 
-	createTaskFunc      func(ctx context.Context, in *taskv1.CreateTaskRequest) (*taskv1.CreateTaskResponse, error)
-	getTaskFunc         func(ctx context.Context, in *taskv1.GetTaskRequest) (*taskv1.GetTaskResponse, error)
-	executeFunc         func(ctx context.Context, in *taskv1.TaskServiceExecuteRequest) (*taskv1.TaskServiceExecuteResponse, error)
-	listTasksFunc       func(ctx context.Context, in *taskv1.ListTasksRequest) (*taskv1.ListTasksResponse, error)
-	updateTaskFunc      func(ctx context.Context, in *taskv1.UpdateTaskRequest) (*taskv1.UpdateTaskResponse, error)
-	deleteTaskFunc      func(ctx context.Context, in *taskv1.DeleteTaskRequest) (*emptypb.Empty, error)
-	getDependenciesFunc func(ctx context.Context, in *taskv1.GetDependenciesRequest) (*taskv1.GetDependenciesResponse, error)
-	aiDecomposeFunc     func(ctx context.Context, in *taskv1.AIDecomposeRequest) (*taskv1.AIDecomposeResponse, error)
-	aiApplyFunc         func(ctx context.Context, in *taskv1.AIApplyRequest) (*taskv1.AIApplyResponse, error)
+	createTaskFunc        func(ctx context.Context, in *taskv1.CreateTaskRequest) (*taskv1.CreateTaskResponse, error)
+	getTaskFunc           func(ctx context.Context, in *taskv1.GetTaskRequest) (*taskv1.GetTaskResponse, error)
+	executeFunc           func(ctx context.Context, in *taskv1.TaskServiceExecuteRequest) (*taskv1.TaskServiceExecuteResponse, error)
+	listTasksFunc         func(ctx context.Context, in *taskv1.ListTasksRequest) (*taskv1.ListTasksResponse, error)
+	updateTaskFunc        func(ctx context.Context, in *taskv1.UpdateTaskRequest) (*taskv1.UpdateTaskResponse, error)
+	deleteTaskFunc        func(ctx context.Context, in *taskv1.DeleteTaskRequest) (*emptypb.Empty, error)
+	getDependenciesFunc   func(ctx context.Context, in *taskv1.GetDependenciesRequest) (*taskv1.GetDependenciesResponse, error)
+	aiDecomposeFunc       func(ctx context.Context, in *taskv1.AIDecomposeRequest) (*taskv1.AIDecomposeResponse, error)
+	aiApplyFunc           func(ctx context.Context, in *taskv1.AIApplyRequest) (*taskv1.AIApplyResponse, error)
+	addEdgeFunc           func(ctx context.Context, in *taskv1.AddEdgeRequest) (*taskv1.AddEdgeResponse, error)
+	grantFunc             func(ctx context.Context, in *taskv1.GrantRequest) (*taskv1.GrantResponse, error)
+	resolvePermissionFunc func(ctx context.Context, in *taskv1.ResolvePermissionRequest) (*taskv1.ResolvePermissionResponse, error)
 }
 
 func (f *fakeTaskServiceClient) CreateTask(ctx context.Context, in *taskv1.CreateTaskRequest, _ ...grpc.CallOption) (*taskv1.CreateTaskResponse, error) {
@@ -286,6 +289,18 @@ func (f *fakeTaskServiceClient) AIDecompose(ctx context.Context, in *taskv1.AIDe
 
 func (f *fakeTaskServiceClient) AIApply(ctx context.Context, in *taskv1.AIApplyRequest, _ ...grpc.CallOption) (*taskv1.AIApplyResponse, error) {
 	return f.aiApplyFunc(ctx, in)
+}
+
+func (f *fakeTaskServiceClient) AddEdge(ctx context.Context, in *taskv1.AddEdgeRequest, _ ...grpc.CallOption) (*taskv1.AddEdgeResponse, error) {
+	return f.addEdgeFunc(ctx, in)
+}
+
+func (f *fakeTaskServiceClient) Grant(ctx context.Context, in *taskv1.GrantRequest, _ ...grpc.CallOption) (*taskv1.GrantResponse, error) {
+	return f.grantFunc(ctx, in)
+}
+
+func (f *fakeTaskServiceClient) ResolvePermission(ctx context.Context, in *taskv1.ResolvePermissionRequest, _ ...grpc.CallOption) (*taskv1.ResolvePermissionResponse, error) {
+	return f.resolvePermissionFunc(ctx, in)
 }
 
 // TestTaskCreateGetChannels_StillRegistered guards the "keep, don't
@@ -332,6 +347,79 @@ func TestTaskExecuteChannel_Success(t *testing.T) {
 	}
 	resp, ok := result.(*taskv1.TaskServiceExecuteResponse)
 	if !ok || resp.GetExecutionRef() != "exec-1" {
+		t.Errorf("unexpected result: %+v", result)
+	}
+}
+
+// TestTaskAddEdgeChannel_ParsesTypeAndForwards covers BACKLOG-015's wiring
+// addition — task.addEdge previously wasn't registered at all.
+func TestTaskAddEdgeChannel_ParsesTypeAndForwards(t *testing.T) {
+	var gotReq *taskv1.AddEdgeRequest
+	fake := &fakeTaskServiceClient{
+		addEdgeFunc: func(ctx context.Context, in *taskv1.AddEdgeRequest) (*taskv1.AddEdgeResponse, error) {
+			gotReq = in
+			return &taskv1.AddEdgeResponse{}, nil
+		},
+	}
+	r := NewRegistry()
+	registerTaskCRUDChannels(r, fake)
+
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "task.addEdge", argsJSON(t, map[string]any{
+		"fromTaskId": "t1", "toTaskId": "t2", "type": "depends_on",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotReq.FromTaskId != "t1" || gotReq.ToTaskId != "t2" || gotReq.Type != taskv1.EdgeType_EDGE_TYPE_DEPENDS_ON {
+		t.Errorf("unexpected request: %+v", gotReq)
+	}
+	if m, ok := result.(map[string]bool); !ok || !m["success"] {
+		t.Errorf("unexpected result: %+v", result)
+	}
+}
+
+func TestTaskGrantChannel_ParsesLevelAndForwards(t *testing.T) {
+	var gotReq *taskv1.GrantRequest
+	fake := &fakeTaskServiceClient{
+		grantFunc: func(ctx context.Context, in *taskv1.GrantRequest) (*taskv1.GrantResponse, error) {
+			gotReq = in
+			return &taskv1.GrantResponse{}, nil
+		},
+	}
+	r := NewRegistry()
+	registerTaskCRUDChannels(r, fake)
+
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "task.grant", argsJSON(t, map[string]any{
+		"taskId": "t1", "subjectId": "user-1", "level": "admin", "applyTree": true,
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotReq.TaskId != "t1" || gotReq.SubjectId != "user-1" || gotReq.Level != taskv1.GrantLevel_GRANT_LEVEL_ADMIN || !gotReq.ApplyTree {
+		t.Errorf("unexpected request: %+v", gotReq)
+	}
+	if m, ok := result.(map[string]bool); !ok || !m["success"] {
+		t.Errorf("unexpected result: %+v", result)
+	}
+}
+
+func TestTaskResolvePermissionChannel_ReturnsLowercaseLevel(t *testing.T) {
+	fake := &fakeTaskServiceClient{
+		resolvePermissionFunc: func(ctx context.Context, in *taskv1.ResolvePermissionRequest) (*taskv1.ResolvePermissionResponse, error) {
+			return &taskv1.ResolvePermissionResponse{EffectiveLevel: taskv1.GrantLevel_GRANT_LEVEL_TEAM}, nil
+		},
+	}
+	r := NewRegistry()
+	registerTaskCRUDChannels(r, fake)
+
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "task.resolvePermission", argsJSON(t, map[string]any{
+		"taskId": "t1", "userId": "user-1",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	m, ok := result.(map[string]string)
+	if !ok || m["effectiveLevel"] != "team" {
 		t.Errorf("unexpected result: %+v", result)
 	}
 }

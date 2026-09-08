@@ -57,6 +57,32 @@ func parseStepType(v string) workflowv1.StepType {
 	return workflowv1.StepType_STEP_TYPE_UNSPECIFIED
 }
 
+// parseEdgeType mirrors parseStepType's convention for taskv1.EdgeType —
+// see task.addEdge below.
+func parseEdgeType(v string) taskv1.EdgeType {
+	name := strings.ToUpper(v)
+	if !strings.HasPrefix(name, "EDGE_TYPE_") {
+		name = "EDGE_TYPE_" + name
+	}
+	if n, ok := taskv1.EdgeType_value[name]; ok {
+		return taskv1.EdgeType(n)
+	}
+	return taskv1.EdgeType_EDGE_TYPE_UNSPECIFIED
+}
+
+// parseGrantLevel mirrors parseStepType's convention for taskv1.GrantLevel —
+// see task.grant below.
+func parseGrantLevel(v string) taskv1.GrantLevel {
+	name := strings.ToUpper(v)
+	if !strings.HasPrefix(name, "GRANT_LEVEL_") {
+		name = "GRANT_LEVEL_" + name
+	}
+	if n, ok := taskv1.GrantLevel_value[name]; ok {
+		return taskv1.GrantLevel(n)
+	}
+	return taskv1.GrantLevel_GRANT_LEVEL_UNSPECIFIED
+}
+
 // registerAutomationTaskChannels registers every automation.*/task.*
 // channel this scope (TASK-217/219/222/225) adds. See this file's package
 // doc comment for the wiring call site this still needs in channels.go and
@@ -314,6 +340,68 @@ func registerTaskCRUDChannels(r *Registry, client taskv1.TaskServiceClient) {
 			return nil, err
 		}
 		return resp.GetDependencies(), nil
+	})
+
+	// BACKLOG-015: AddEdge/Grant/ResolvePermission already exist as real
+	// proto/usecase RPCs (task-service.md) but were never registered here —
+	// wiring only, same pattern as every other handler in this function.
+	r.Register("task.addEdge", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		type addEdgeArgs struct {
+			FromTaskID string `json:"fromTaskId"`
+			ToTaskID   string `json:"toTaskId"`
+			// Type: "parent_child" | "depends_on" — parsed the same
+			// STEP_TYPE_-prefix-and-uppercase way parseStepType above does,
+			// against taskv1.EdgeType_value.
+			Type string `json:"type"`
+		}
+		in, err := decodeArg[addEdgeArgs](args, 0)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := client.AddEdge(ctx, &taskv1.AddEdgeRequest{
+			FromTaskId: in.FromTaskID, ToTaskId: in.ToTaskID, Type: parseEdgeType(in.Type),
+		}); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"success": true}, nil
+	})
+
+	r.Register("task.grant", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		type grantArgs struct {
+			TaskID    string `json:"taskId"`
+			SubjectID string `json:"subjectId"`
+			// Level: "owner" | "admin" | "user" | "team" | "company" —
+			// parsed against taskv1.GrantLevel_value, same convention as
+			// EdgeType above.
+			Level     string `json:"level"`
+			ApplyTree bool   `json:"applyTree"`
+		}
+		in, err := decodeArg[grantArgs](args, 0)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := client.Grant(ctx, &taskv1.GrantRequest{
+			TaskId: in.TaskID, SubjectId: in.SubjectID, Level: parseGrantLevel(in.Level), ApplyTree: in.ApplyTree,
+		}); err != nil {
+			return nil, err
+		}
+		return map[string]bool{"success": true}, nil
+	})
+
+	r.Register("task.resolvePermission", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		type resolvePermArgs struct {
+			TaskID string `json:"taskId"`
+			UserID string `json:"userId"`
+		}
+		in, err := decodeArg[resolvePermArgs](args, 0)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := client.ResolvePermission(ctx, &taskv1.ResolvePermissionRequest{TaskId: in.TaskID, UserId: in.UserID})
+		if err != nil {
+			return nil, err
+		}
+		return map[string]string{"effectiveLevel": strings.ToLower(strings.TrimPrefix(resp.GetEffectiveLevel().String(), "GRANT_LEVEL_"))}, nil
 	})
 
 	r.Register("task.aiDecompose", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
