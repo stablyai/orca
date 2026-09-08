@@ -40,14 +40,28 @@ export function scheduleSshProviderMissRecovery(connectionId: string): void {
   if (startedAt !== undefined && now - startedAt < BACKGROUND_RECOVERY_THROTTLE_MS) {
     return
   }
-  backgroundRecoveryStartedAt.set(connectionId, now)
+  // Why prune before recording: an expired entry no longer throttles anything, and these
+  // dispatchers are called with every SSH connection id in the app.
+  for (const [id, at] of backgroundRecoveryStartedAt) {
+    if (now - at >= BACKGROUND_RECOVERY_THROTTLE_MS) {
+      backgroundRecoveryStartedAt.delete(id)
+    }
+  }
   const pending = recovery(connectionId)
   if (!pending) {
+    // Declined: the owner does not claim this connection, so there is nothing to throttle
+    // and recording it would retain an id this map will never act on.
     return
   }
+  backgroundRecoveryStartedAt.set(connectionId, now)
   pending.catch((error: unknown) => {
     console.warn(
       `[ssh] Background provider re-attach failed for ${connectionId}: ${error instanceof Error ? error.message : String(error)}`
     )
   })
+}
+
+/** Test-only: the throttle map is a memory bound, which is not observable from behaviour. */
+export function sshProviderMissRecoveryThrottleEntryCount(): number {
+  return backgroundRecoveryStartedAt.size
 }

@@ -7,7 +7,8 @@ import { SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE, requireSshGitProvider } from './s
 import {
   recoverSshProviderMiss,
   scheduleSshProviderMissRecovery,
-  setSshProviderMissRecovery
+  setSshProviderMissRecovery,
+  sshProviderMissRecoveryThrottleEntryCount
 } from './ssh-provider-miss-recovery'
 
 const TARGET = 'runtime-ssh-orca-1'
@@ -84,5 +85,33 @@ describe('scheduleSshProviderMissRecovery', () => {
     scheduleSshProviderMissRecovery('ssh-user-target')
     expect(recovery).toHaveBeenCalledWith('ssh-user-target')
     expect(recoverSshProviderMiss('ssh-user-target')).toBeUndefined()
+  })
+
+  it('keeps re-consulting the owner for declined connections and retains none of them', () => {
+    // Why: these dispatchers are called with every SSH connection id in the app, most of
+    // which no owner claims. A declined id was never dialed, so there is nothing to back
+    // off from — throttling it would both retain it forever and swallow the next miss.
+    const recovery = vi.fn(() => undefined)
+    setSshProviderMissRecovery(recovery)
+
+    scheduleSshProviderMissRecovery('ssh-user-a')
+    scheduleSshProviderMissRecovery('ssh-user-a')
+    scheduleSshProviderMissRecovery('ssh-user-b')
+
+    expect(recovery).toHaveBeenCalledTimes(3)
+    expect(sshProviderMissRecoveryThrottleEntryCount()).toBe(0)
+  })
+
+  it('prunes claimed connections once their throttle interval has passed', () => {
+    setSshProviderMissRecovery(() => Promise.resolve())
+
+    scheduleSshProviderMissRecovery('runtime-ssh-orca-1')
+    scheduleSshProviderMissRecovery('runtime-ssh-orca-2')
+    expect(sshProviderMissRecoveryThrottleEntryCount()).toBe(2)
+
+    vi.advanceTimersByTime(5_000)
+    scheduleSshProviderMissRecovery('runtime-ssh-orca-3')
+
+    expect(sshProviderMissRecoveryThrottleEntryCount()).toBe(1)
   })
 })
