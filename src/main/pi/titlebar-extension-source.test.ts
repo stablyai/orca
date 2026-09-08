@@ -243,8 +243,9 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(harness.lastTitle()).toBe(IDLE_TITLE)
 
     await harness.callHook('agent_start')
+    const titleCount = harness.titles.length
     await harness.callHook('session_shutdown')
     expect(vi.getTimerCount()).toBe(0)
-    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+    expect(harness.titles).toHaveLength(titleCount)
   })
 })
