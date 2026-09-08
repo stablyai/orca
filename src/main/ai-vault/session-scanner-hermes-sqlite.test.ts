@@ -361,4 +361,38 @@ describe('Hermes 0.19 SQLite support & legacy backwards compatibility', () => {
     expect(parsed?.title).toBe('Activity')
     expect(parsed?.messageCount).toBe(1)
   })
+
+  it('keeps the legacy JSON when the migration left a message-less SQLite shell', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-hermes-shell-dedup-'))
+    cleanupDirs.push(root)
+    const roots = isolatedScanRoots(root)
+
+    const dbPath = join(root, 'state.db')
+    const db = createTestDb(dbPath)
+    // Migrated shell: the session row came over, its turns did not.
+    db.prepare(
+      `INSERT INTO sessions (id, updated_at) VALUES ('sess-shell', '2026-07-01T10:00:00Z')`
+    ).run()
+    db.close()
+
+    await mkdir(roots.hermesSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.hermesSessionsDir, 'session_sess-shell.json'),
+      JSON.stringify({
+        session_id: 'sess-shell',
+        messages: [{ role: 'user', content: 'Turns only the JSON still has' }]
+      })
+    )
+
+    const scanResult = await scanAiVaultSessions({
+      ...roots,
+      hermesStateDbPaths: [dbPath],
+      platform: 'darwin',
+      limit: 10
+    })
+
+    const shell = scanResult.sessions.find((s) => s.sessionId === 'sess-shell')
+    expect(shell).toBeDefined()
+    expect(shell?.messageCount).toBe(1)
+  })
 })

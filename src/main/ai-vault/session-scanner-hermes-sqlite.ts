@@ -106,16 +106,20 @@ function resolveSessionColumns(db: SyncDatabase): SessionColumns {
  * Builds the predicate that drops zero-turn session shells created by CLI startup,
  * so they do not clutter the AI Vault session list.
  */
-function buildSessionListQuery(db: SyncDatabase): string {
-  const { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol } = resolveSessionColumns(db)
-
-  // Why: filter out zero-turn empty sessions that have no recorded messages in the messages table
-  // so empty session shells created by CLI startup do not clutter the AI Vault session list.
+function messagesPredicateFor(db: SyncDatabase, idCol: string): string {
   const msgSessionIdCol =
     tableExists(db, 'messages') && columnExists(db, 'messages', 'session_id') ? 'session_id' : null
-  const messagesPredicate = msgSessionIdCol
+  return msgSessionIdCol
     ? `AND EXISTS (SELECT 1 FROM messages WHERE ${msgSessionIdCol} = sessions.${idCol})`
     : ''
+}
+
+/**
+ * Builds the SQL SELECT query string used to discover Hermes sessions.
+ */
+function buildSessionListQuery(db: SyncDatabase): string {
+  const { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol } = resolveSessionColumns(db)
+  const messagesPredicate = messagesPredicateFor(db, idCol)
 
   return `SELECT ${idCol} AS id,
                  ${titleCol} AS title,
@@ -130,7 +134,9 @@ function buildSessionListQuery(db: SyncDatabase): string {
 }
 
 /**
- * Reads all session IDs present in Hermes state.db databases for deduplication.
+ * Reads the session IDs the SQLite scanner actually surfaces, for deduplication.
+ * Unlimited but filtered exactly like the list query: a shell the migration left
+ * without messages must not evict the legacy JSON file that still holds the turns.
  */
 export function listHermesSqliteSessionIds(dbPaths: readonly string[]): Set<string> {
   const ids = new Set<string>()
@@ -142,7 +148,9 @@ export function listHermesSqliteSessionIds(dbPaths: readonly string[]): Set<stri
         continue
       }
       const idCol = columnExists(db, 'sessions', 'id') ? 'id' : 'session_id'
-      const rows = db.prepare(`SELECT ${idCol} AS id FROM sessions`).all() as { id: string }[]
+      const query = `SELECT ${idCol} AS id FROM sessions
+                     WHERE 1=1 ${messagesPredicateFor(db, idCol)}`
+      const rows = db.prepare(query).all() as { id: string }[]
       for (const row of rows) {
         if (row.id) {
           ids.add(row.id)
