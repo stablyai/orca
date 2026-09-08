@@ -10,7 +10,7 @@ import { toWindowsWslPath } from '../../../shared/wsl-paths'
 import { discoverClaudePluginSkillSources } from '../claude-plugin-skill-sources'
 import { discoverClaudePluginSkillSourcesInWsl } from '../claude-plugin-skill-sources-wsl'
 import { buildSkillDiscoverySources, type SkillScanRoot } from '../skill-discovery-sources'
-import type { ResolvedSkillDiscoveryTarget } from '../skill-discovery-target'
+import type { LocalSkillDiscoveryTarget } from '../skill-discovery-target'
 import type { SkillProviderRootOverrides } from '../skill-provider-destinations'
 
 /**
@@ -27,7 +27,7 @@ export type SkillDeleteRootSet = {
 }
 
 export async function buildSkillDeleteRootSet(input: {
-  target: ResolvedSkillDiscoveryTarget
+  target: LocalSkillDiscoveryTarget
   repos: readonly Repo[]
   providerRootOverrides?: SkillProviderRootOverrides
   homeDir?: string
@@ -53,6 +53,13 @@ export async function buildSkillDeleteRootSet(input: {
     }
   }
 
+  // Why an explicit check rather than treating "not wsl" as native: a new target
+  // variant must fail here loudly instead of silently reading a missing `cwd`
+  // and rebuilding this host's roots for another machine's paths.
+  if (input.target.kind !== 'native-host') {
+    const unreachable: never = input.target
+    throw new Error(`skill-delete-unsupported-target:${(unreachable as { kind: string }).kind}`)
+  }
   const home = input.homeDir ?? homedir()
   const cwd = input.target.cwd
   return {

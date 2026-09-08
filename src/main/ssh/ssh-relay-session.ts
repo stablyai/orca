@@ -67,6 +67,7 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import { forgetSshSkillDiscoveryCapabilities } from '../skills/skill-discovery-target'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
@@ -1696,6 +1697,7 @@ export class SshRelaySession {
     unregisterSshPtyProvider(this.targetId)
     unregisterSshFilesystemProvider(this.targetId)
     unregisterSshGitProvider(this.targetId)
+    forgetSshSkillDiscoveryCapabilities(this.targetId)
     this.sourceIdentityByRelayPtyId.clear()
     this.retiredSourceDeliveries.clear()
     this.rejectedPtyRecoveryAttempts.clear()

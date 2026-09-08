@@ -14673,6 +14673,7 @@
         "skills": "スキル",
         "loadingSkills": "スキルを読み込み中…",
         "skillsUnavailableHost": "このホストではスキルが利用できません",
+        "skillsSshRelayUpgrade": "スキルを有効にするには、このSSHホストに再接続してください。",
         "skillsLoadFailed": "このホストからスキルを読み込めませんでした",
         "retrySkills": "再試行",
         "skillCommandCollision": "スキル名でもあります - Agent が判断します",

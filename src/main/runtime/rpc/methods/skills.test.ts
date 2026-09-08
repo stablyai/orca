@@ -29,11 +29,16 @@ const WSL_RUNTIME = {
 
 function makeContext(overrides: {
   resolveProjectRuntimeForWorktree?: (worktreeId: string | null | undefined) => unknown
+  resolveSkillDiscoverySshTarget?: (worktreeId: string | null | undefined) => Promise<unknown>
 }): RpcContext {
   return {
     runtime: {
       listRepos: () => [],
       resolveSkillDiscoveryProviderRoots: async () => ({}),
+      // Null is "this workspace is not SSH-owned", which is what sends the scan
+      // down the native path these cases exercise.
+      resolveSkillDiscoverySshTarget:
+        overrides.resolveSkillDiscoverySshTarget ?? (async () => null),
       resolveProjectRuntimeForWorktree:
         overrides.resolveProjectRuntimeForWorktree ?? (() => undefined)
     }
@@ -105,6 +110,36 @@ describe('skills.discover RPC', () => {
 
   it('accepts a params payload from an older client that cannot send refresh', () => {
     expect(discoverMethod().params?.parse({ cwd: '/repo' })).toEqual({ cwd: '/repo' })
+  })
+})
+
+describe('skills.discover RPC on an SSH workspace', () => {
+  it('scans the SSH host and never falls through to a native scan', async () => {
+    const provider = () => ({}) as never
+    const resolveSkillDiscoverySshTarget = vi.fn(async () => ({
+      connectionId: 'target-1',
+      workspace: { kind: 'worktree' as const, id: 'worktree-1', path: '/remote/repo' },
+      provider
+    }))
+
+    vi.mocked(resolveSkillDiscoveryTarget).mockClear()
+    await discoverMethod().handler(
+      { cwd: '/local/decoy', worktreeId: 'worktree-1' },
+      makeContext({ resolveSkillDiscoverySshTarget })
+    )
+
+    // Why the decoy cwd matters: the caller's path must not select what a remote
+    // host scans — only the workspace this runtime resolved may.
+    expect(vi.mocked(discoverSkillsOnTarget)).toHaveBeenLastCalledWith(
+      {
+        kind: 'ssh',
+        connectionId: 'target-1',
+        workspace: { kind: 'worktree', id: 'worktree-1', path: '/remote/repo' }
+      },
+      [],
+      expect.objectContaining({ sshProvider: provider })
+    )
+    expect(vi.mocked(resolveSkillDiscoveryTarget)).not.toHaveBeenCalled()
   })
 })
 

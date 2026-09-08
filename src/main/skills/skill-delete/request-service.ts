@@ -6,7 +6,7 @@ import type {
   SkillDeleteResult
 } from '../../../shared/skill-delete-contract'
 import { deleteSkills, previewSkillDeletion, type SkillDeleteServiceInput } from './service'
-import type { ResolvedSkillDiscoveryTarget } from '../skill-discovery-target'
+import type { LocalSkillDiscoveryTarget } from '../skill-discovery-target'
 import { nativeSkillInstallFilesystem } from '../skill-install-filesystem'
 import type { SkillProviderRootOverrides } from '../skill-provider-destinations'
 import { WslSkillInstallFilesystem } from '../skill-wsl-install-filesystem'
@@ -16,7 +16,7 @@ import { WslSkillInstallFilesystem } from '../skill-wsl-install-filesystem'
 export type SkillDeleteRequestDependencies = {
   repos: () => readonly Repo[]
   resolveProviderRootOverrides?: (
-    target: ResolvedSkillDiscoveryTarget
+    target: LocalSkillDiscoveryTarget
   ) => Promise<SkillProviderRootOverrides | undefined>
   /** `app.getPath('userData')`; the skill-install state root hangs off it. */
   userDataPath: string
@@ -24,7 +24,7 @@ export type SkillDeleteRequestDependencies = {
 
 async function serviceInput(
   request: SkillDeleteRequest,
-  target: ResolvedSkillDiscoveryTarget,
+  target: LocalSkillDiscoveryTarget,
   dependencies: SkillDeleteRequestDependencies
 ): Promise<SkillDeleteServiceInput> {
   const providerRootOverrides = await dependencies.resolveProviderRootOverrides?.(target)
@@ -47,7 +47,7 @@ async function serviceInput(
 
 export async function previewSkillDeleteRequest(
   request: SkillDeleteRequest,
-  target: ResolvedSkillDiscoveryTarget,
+  target: LocalSkillDiscoveryTarget,
   dependencies: SkillDeleteRequestDependencies
 ): Promise<SkillDeletePlan> {
   return previewSkillDeletion(await serviceInput(request, target, dependencies))
@@ -55,7 +55,7 @@ export async function previewSkillDeleteRequest(
 
 export async function runSkillDeleteRequest(
   request: SkillDeleteRequest,
-  target: ResolvedSkillDiscoveryTarget,
+  target: LocalSkillDiscoveryTarget,
   dependencies: SkillDeleteRequestDependencies
 ): Promise<SkillDeleteResult> {
   return deleteSkills(await serviceInput(request, target, dependencies))

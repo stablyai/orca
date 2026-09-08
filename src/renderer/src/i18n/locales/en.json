@@ -17017,6 +17017,7 @@
         "loadingSkills": "Loading skills...",
         "skillsLoaded": "Skills loaded",
         "skillsUnavailableHost": "Skills are unavailable for this host",
+        "skillsSshRelayUpgrade": "Reconnect this SSH host to enable skills.",
         "skillsLoadFailed": "Could not load skills from this host",
         "retrySkills": "Retry",
         "skillCommandCollision": "Also a skill name - agent decides",

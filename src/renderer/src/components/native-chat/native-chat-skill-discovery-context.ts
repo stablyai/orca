@@ -19,6 +19,7 @@ export type NativeChatSkillStateInputs = Pick<
   | 'repos'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'settings'
+  | 'sshConnectionStates'
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
@@ -50,6 +51,7 @@ export function selectNativeChatSkillStateInputs(state: AppState): NativeChatSki
     repos: state.repos,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
     settings: state.settings,
+    sshConnectionStates: state.sshConnectionStates,
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
     worktreesByRepo: state.worktreesByRepo
@@ -102,8 +104,12 @@ export function resolveNativeChatSkillDiscoveryContext(
   const hostId = getExecutionHostIdForWorktree(state, worktreeId)
   const parsedHost = parseExecutionHostId(hostId)
   if (parsedHost?.kind === 'ssh') {
+    // Why the generation: a dropped and restored connection is a different host
+    // session, so its cached scan must not survive the reconnect.
+    const connectionGeneration =
+      state.sshConnectionStates?.get(parsedHost.targetId)?.connectionGeneration ?? 0
     return {
-      key: JSON.stringify(['ssh', hostId, cwd]),
+      key: JSON.stringify(['ssh', hostId, connectionGeneration, cwd]),
       cwd,
       executionHostKind: 'ssh',
       runtimeTarget: { kind: 'local' },

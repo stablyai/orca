@@ -21,7 +21,7 @@ import {
   type SkillDeleteGuardContext
 } from './guards'
 import { buildSkillDeleteRootSet } from './roots'
-import type { ResolvedSkillDiscoveryTarget } from '../skill-discovery-target'
+import type { LocalSkillDiscoveryTarget } from '../skill-discovery-target'
 import type { SkillInstallFilesystem } from '../skill-install-filesystem'
 import type { SkillProviderRootOverrides } from '../skill-provider-destinations'
 import type { SkillScanRoot } from '../skill-discovery-sources'
@@ -53,7 +53,7 @@ function blockedEntry(
 
 export type SkillDeletePlanInput = {
   request: SkillDeleteRequest
-  target: ResolvedSkillDiscoveryTarget
+  target: LocalSkillDiscoveryTarget
   repos: readonly Repo[]
   providerRootOverrides?: SkillProviderRootOverrides
   filesystem: SkillInstallFilesystem

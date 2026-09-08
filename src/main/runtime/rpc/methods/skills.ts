@@ -64,6 +64,23 @@ export const SKILL_METHODS: RpcMethod[] = [
     name: 'skills.discover',
     params: SkillDiscoveryTargetSchema.default({}),
     handler: async (params, { runtime }) => {
+      // Why the SSH probe comes first: an SSH-owned workspace has no meaning on
+      // this filesystem, so resolving it as a native target is what made a remote
+      // pane scan the wrong machine and report the user's skills as missing.
+      // The directory comes from the runtime's own workspace record, so the
+      // caller's `cwd` never selects what a remote host scans.
+      const sshTarget = await runtime.resolveSkillDiscoverySshTarget(params.worktreeId)
+      if (sshTarget) {
+        return discoverSkillsOnTarget(
+          {
+            kind: 'ssh',
+            connectionId: sshTarget.connectionId,
+            workspace: sshTarget.workspace
+          },
+          [],
+          { refresh: params.refresh === true, sshProvider: sshTarget.provider }
+        )
+      }
       // Why: the executing runtime owns WSL project preferences. Remote callers
       // send worktree identity only; trusting their projectRuntime absence
       // would scan this host's native filesystem for a WSL-configured project.

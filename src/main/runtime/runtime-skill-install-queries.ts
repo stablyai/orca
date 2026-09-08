@@ -18,6 +18,7 @@ import {
 import { toLinuxPath } from '../wsl'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type {
   SkillBundleInstallPreviewRequest,
   SkillInstallPreviewRequest,
@@ -186,6 +187,29 @@ export class RuntimeSkillInstallQueries extends RuntimeSkillInstallCommands {
   }
   async skillInstallDestinationUsesSsh(destination: SkillInstallRequest['destination']) {
     return Boolean(await this.sshTarget(destination))
+  }
+  /** Why it reuses the install authority: discovery must scan the same directory
+   *  the installer would write to, resolved from this runtime's own state — a
+   *  caller-supplied path must never reach a remote host. */
+  async resolveSkillDiscoverySshTarget(worktreeId: string | null | undefined) {
+    if (!worktreeId) {
+      return null
+    }
+    const scope = parseWorkspaceKey(worktreeId)
+    const destination =
+      scope?.type === 'folder'
+        ? { scope: 'workspace' as const, folderWorkspaceId: scope.folderWorkspaceId }
+        : { scope: 'workspace' as const, worktreeId }
+    const target = await this.sshTarget(
+      destination as unknown as Parameters<typeof this.sshTarget>[0]
+    )
+    return target?.workspace
+      ? {
+          connectionId: target.connectionId,
+          workspace: target.workspace,
+          provider: target.provider
+        }
+      : null
   }
   async resolveSkillDiscoveryProviderRoots(target: {
     kind: 'native-host' | 'wsl'

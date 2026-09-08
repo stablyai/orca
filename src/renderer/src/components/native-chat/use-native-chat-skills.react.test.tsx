@@ -3,6 +3,7 @@
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatSkillDiscovery } from './use-native-chat-skills'
+import { SKILL_DISCOVER_UPDATE_REQUIRED_MESSAGE } from '../../../../shared/skill-install-capability'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
@@ -42,6 +43,9 @@ function stateForHost(hostId: string) {
       }
     ],
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
+    sshConnectionStates: new Map([
+      ['connection-1', { targetId: 'connection-1', status: 'connected', connectionGeneration: 3 }]
+    ]),
     settings: { activeRuntimeEnvironmentId: null },
     tabsByWorktree: { 'worktree-1': [{ id: 'tab-1' }] },
     unifiedTabsByWorktree: {},
@@ -163,11 +167,60 @@ describe('useNativeChatSkills', () => {
     expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1)
   })
 
-  it('marks SSH discovery unavailable without scanning another host', async () => {
+  // STA-2961: an SSH pane used to refuse outright, so a user's remote skills were
+  // undiscoverable. It now scans, and the owning runtime routes it to the host.
+  it('discovers skills for an SSH pane instead of refusing', async () => {
     mocks.state = stateForHost('ssh:connection-1')
     render(<Probe enabled />)
-    await waitFor(() => expect(mocks.snapshots.at(-1)?.errorKind).toBe('unavailable'))
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+    expect(mocks.snapshots.at(-1)?.skills.map((skill) => skill.name)).toEqual(['browser'])
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'skills.discover',
+      { cwd: '/repo/worktree', worktreeId: 'worktree-1' },
+      { timeoutMs: 10_000 }
+    )
+  })
+
+  // Capability skew stays broken until the user reconnects, so it must not be
+  // classified as the retryable kind — the picker offers Retry for everything
+  // except the non-retryable kinds.
+  it('classifies relay skew as non-retryable rather than a retryable host error', async () => {
+    mocks.state = stateForHost('ssh:connection-1')
+    mocks.callRuntimeRpc.mockRejectedValue(new Error(SKILL_DISCOVER_UPDATE_REQUIRED_MESSAGE))
+    render(<Probe enabled />)
+
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('error'))
+    expect(mocks.snapshots.at(-1)?.errorKind).toBe('relay-upgrade-required')
+  })
+
+  // Why 'host' and not the non-retryable kind: a reachable host that failed one
+  // scan must stay retryable.
+  it('keeps Retry available when an SSH scan fails', async () => {
+    mocks.state = stateForHost('ssh:connection-1')
+    mocks.callRuntimeRpc.mockRejectedValue(new Error('relay refused'))
+    render(<Probe enabled />)
+
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('error'))
+    expect(mocks.snapshots.at(-1)?.errorKind).toBe('host')
+  })
+
+  it('re-scans after the SSH connection generation changes', async () => {
+    mocks.state = stateForHost('ssh:connection-1')
+    const view = render(<Probe enabled />)
+    await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(1)
+
+    mocks.state = {
+      ...stateForHost('ssh:connection-1'),
+      sshConnectionStates: new Map([
+        ['connection-1', { targetId: 'connection-1', status: 'connected', connectionGeneration: 4 }]
+      ])
+    }
+    view.rerender(<Probe enabled />)
+
+    await waitFor(() => expect(mocks.callRuntimeRpc).toHaveBeenCalledTimes(2))
   })
 
   it('makes Retry reach disk instead of the host shared scan', async () => {

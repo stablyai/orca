@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
   SKILL_BUNDLE_PREVIEW_CAPABILITY,
+  SKILL_DISCOVER_CAPABILITY,
   SKILL_INSTALL_CAPABILITY,
   SKILL_INSTALL_PROVIDERS_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
@@ -15,6 +16,7 @@ import {
   SKILL_SSH_RELAY_BEGIN_UPLOAD_METHOD,
   SKILL_SSH_RELAY_CANCEL_UPLOAD_METHOD,
   SKILL_SSH_RELAY_COMMIT_UPLOAD_METHOD,
+  SKILL_SSH_RELAY_DISCOVER_METHOD,
   SKILL_SSH_RELAY_INSTALL_BUNDLE_METHOD,
   SKILL_SSH_RELAY_INSTALL_METHOD,
   SKILL_SSH_RELAY_GET_INSTALL_PROGRESS_METHOD,
@@ -24,6 +26,7 @@ import {
   SKILL_SSH_RELAY_REMOVE_METHOD,
   SKILL_SSH_RELAY_UPLOAD_CHUNK_METHOD,
   SkillSshInstallBundleParamsSchema,
+  SkillSshDiscoverParamsSchema,
   SkillSshInstallProgressParamsSchema,
   SkillSshInstallParamsSchema,
   SkillSshListParamsSchema,
@@ -51,6 +54,7 @@ import {
   removeSharedSkillInstall
 } from '../main/skills/skill-install-management-service'
 import { listManagedSkillInstalls } from '../main/skills/skill-install-provenance'
+import { discoverSkills } from '../main/skills/discovery'
 import { executeSkillInstallRequest } from '../main/skills/skill-install-request-service'
 import { executeSkillBundleInstallRequest } from '../main/skills/skill-bundle-install-request-service'
 import { SkillUploadSessionService } from '../main/skills/skill-upload-session-service'
@@ -71,7 +75,8 @@ export const SKILL_RELAY_CAPABILITIES = [
   SKILL_BUNDLE_PREVIEW_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY,
-  SKILL_MANAGEMENT_CAPABILITY
+  SKILL_MANAGEMENT_CAPABILITY,
+  SKILL_DISCOVER_CAPABILITY
 ] as const
 
 export class SkillInstallHandler {
@@ -178,6 +183,16 @@ export class SkillInstallHandler {
           resolveProviderRootOverrides: () => resolveEnvironmentSkillProviderRoots()
         })
       )
+    })
+    this.dispatcher.onRequest(SKILL_SSH_RELAY_DISCOVER_METHOD, async (params) => {
+      const input = SkillSshDiscoverParamsSchema.parse(params)
+      // Why repos []: the caller's repo list describes its own machine. Only the
+      // workspace this runtime resolved, plus this host's home roots, are scanned.
+      return discoverSkills({
+        repos: [],
+        cwd: input.workspace.path,
+        homeDir: this.homeDirectory
+      })
     })
     this.dispatcher.onRequest(SKILL_SSH_RELAY_LIST_METHOD, async (params) => {
       const input = SkillSshListParamsSchema.parse(params)

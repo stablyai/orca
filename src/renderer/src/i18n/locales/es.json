@@ -14638,6 +14638,7 @@
         "skills": "Habilidades",
         "loadingSkills": "Cargando habilidades…",
         "skillsUnavailableHost": "Las habilidades no están disponibles para este host",
+        "skillsSshRelayUpgrade": "Reconecta este host SSH para habilitar las habilidades.",
         "skillsLoadFailed": "No se pudieron cargar las habilidades de este host",
         "retrySkills": "Reintentar",
         "skillCommandCollision": "También es un nombre de habilidad - el agente decide",

@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type { NativeChatSkillDiscoveryErrorKind } from './native-chat-picker-items'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,
@@ -72,18 +73,8 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
       ) : null}
       {autocomplete.skillStatus === 'error' ? (
         <PickerStatus>
-          <span className="min-w-0 flex-1">
-            {autocomplete.skillErrorKind === 'unavailable'
-              ? translate(
-                  'components.native-chat.composer.skillsUnavailableHost',
-                  'Skills are unavailable for this host'
-                )
-              : translate(
-                  'components.native-chat.composer.skillsLoadFailed',
-                  'Could not load skills from this host'
-                )}
-          </span>
-          {autocomplete.skillErrorKind !== 'unavailable' ? (
+          <span className="min-w-0 flex-1">{skillErrorText(autocomplete.skillErrorKind)}</span>
+          {canRetrySkillDiscovery(autocomplete.skillErrorKind) ? (
             <button
               type="button"
               onPointerDown={(event) => event.preventDefault()}
@@ -116,10 +107,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
         {autocomplete.skillStatus === 'loading'
           ? translate('components.native-chat.composer.loadingSkills', 'Loading skills...')
           : autocomplete.skillStatus === 'error'
-            ? translate(
-                'components.native-chat.composer.skillsLoadFailed',
-                'Could not load skills from this host'
-              )
+            ? skillErrorText(autocomplete.skillErrorKind)
             : emptyText
               ? emptyText
               : autocomplete.skillsEnabled
@@ -138,6 +126,34 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
     </div>
   )
 })
+
+/** One resolver for both the visible row and the aria-live announcement: they
+ *  disagreed before, so a screen reader heard a different failure than the one
+ *  on screen. */
+function skillErrorText(errorKind: NativeChatSkillDiscoveryErrorKind | undefined): string {
+  if (errorKind === 'relay-upgrade-required') {
+    return translate(
+      'components.native-chat.composer.skillsSshRelayUpgrade',
+      'Reconnect this SSH host to enable skills.'
+    )
+  }
+  if (errorKind === 'unavailable') {
+    return translate(
+      'components.native-chat.composer.skillsUnavailableHost',
+      'Skills are unavailable for this host'
+    )
+  }
+  return translate(
+    'components.native-chat.composer.skillsLoadFailed',
+    'Could not load skills from this host'
+  )
+}
+
+/** Retry is offered only where retrying can change the answer. Relay skew stays
+ *  broken until the user reconnects, so a button here would fail forever. */
+function canRetrySkillDiscovery(errorKind: NativeChatSkillDiscoveryErrorKind | undefined): boolean {
+  return errorKind !== 'unavailable' && errorKind !== 'relay-upgrade-required'
+}
 
 function getPickerEmptyText(
   autocomplete: Extract<ComposerAutocomplete, { mode: 'slash' | 'skill' }>

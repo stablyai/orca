@@ -24,7 +24,7 @@ import {
 } from './staging'
 import {
   clearSkillDiscoveryCaches,
-  type ResolvedSkillDiscoveryTarget
+  type LocalSkillDiscoveryTarget
 } from '../skill-discovery-target'
 import { acquireSkillInstallLock, skillInstallLockPath } from '../skill-install-lock'
 import { removeSkillInstallReceipt } from '../skill-install-provenance'
@@ -34,7 +34,7 @@ import { recordSkillDeleteOperation } from '../skill-operation-observability'
 
 export type SkillDeleteServiceInput = {
   request: SkillDeleteRequest
-  target: ResolvedSkillDiscoveryTarget
+  target: LocalSkillDiscoveryTarget
   repos: readonly Repo[]
   providerRootOverrides?: SkillProviderRootOverrides
   filesystem: SkillInstallFilesystem

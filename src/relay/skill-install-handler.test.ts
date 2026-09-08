@@ -121,8 +121,29 @@ describe('SkillInstallHandler', () => {
       'skills.preview.bundle.v1',
       'skills.install-progress.v1',
       'skills.upload.v1',
-      'skills.manage.v1'
+      'skills.manage.v1',
+      'skills.discover.v1'
     ])
+  })
+
+  // Why the workspace authority and not a cwd: the scanned directory is the one
+  // the calling runtime already resolved, so a caller cannot name an arbitrary
+  // path on this host.
+  it('scans only the workspace the caller was granted', async () => {
+    const { call } = await fixture()
+
+    const result = (await call('skills.discover', {
+      workspace: { kind: 'worktree', id: 'worktree-1', path: '/remote/repo' }
+    })) as { skills: unknown[]; sources: { path: string }[] }
+
+    expect(Array.isArray(result.skills)).toBe(true)
+    expect(result.sources.some((source) => source.path.startsWith('/remote/repo'))).toBe(true)
+  })
+
+  it('rejects a discover request that names no workspace', async () => {
+    const { call } = await fixture()
+
+    await expect(call('skills.discover', { cwd: '/etc' })).rejects.toThrow()
   })
 
   it('previews a bundle with one provider detection pass', async () => {

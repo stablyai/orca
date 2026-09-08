@@ -107,6 +107,53 @@ describe('NativeChatPickerMenu', () => {
     expect(onRetry).toHaveBeenCalledOnce()
   })
 
+  function renderSkillError(skillErrorKind: 'host' | 'unavailable' | 'relay-upgrade-required') {
+    const onRetry = vi.fn()
+    render(
+      <NativeChatPickerMenu
+        autocomplete={autocomplete({ items: [], skillStatus: 'error', skillErrorKind })}
+        activeIndex={0}
+        listboxId="picker"
+        onChoose={vi.fn()}
+        onRetry={onRetry}
+      />
+    )
+    return { onRetry }
+  }
+
+  // Two matches is the point, not an artifact: the visible row and the aria-live
+  // region must carry the same text. They diverged before, so a screen reader
+  // announced a different failure than the one on screen.
+  it('announces the same relay-upgrade text that it displays', () => {
+    renderSkillError('relay-upgrade-required')
+
+    expect(screen.getAllByText('Reconnect this SSH host to enable skills.')).toHaveLength(2)
+    expect(screen.queryByText('Could not load skills from this host')).toBeNull()
+  })
+
+  // Relay skew is permanent until the user reconnects, so a Retry here would
+  // fail identically forever.
+  it('offers no Retry for relay skew', () => {
+    renderSkillError('relay-upgrade-required')
+
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  it('offers no Retry for a permanently unavailable host', () => {
+    renderSkillError('unavailable')
+
+    expect(screen.getAllByText('Skills are unavailable for this host')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+  })
+
+  // The counterpart: a reachable host that failed one scan stays retryable, so
+  // suppression must be keyed to the kind rather than applied to every error.
+  it('still offers Retry for an ordinary host failure', () => {
+    renderSkillError('host')
+
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+  })
+
   it('uses command-only empty copy for a picker without skill support', () => {
     render(
       <NativeChatPickerMenu

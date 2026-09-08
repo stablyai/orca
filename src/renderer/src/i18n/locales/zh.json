@@ -14717,6 +14717,7 @@
         "skills": "技能",
         "loadingSkills": "正在加载技能…",
         "skillsUnavailableHost": "此主机上无法使用技能",
+        "skillsSshRelayUpgrade": "重新连接此 SSH 主机以启用技能。",
         "skillsLoadFailed": "无法从此主机加载技能",
         "retrySkills": "重试",
         "skillCommandCollision": "也是技能名称 — 由智能体决定",

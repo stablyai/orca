@@ -29,10 +29,17 @@ export type NativeChatPickerItem =
       sources: { sourceKind: SkillSourceKind; skillFilePath: string }[]
     }
 
+export type NativeChatSkillDiscoveryErrorKind =
+  | 'unavailable'
+  | 'relay-upgrade-required'
+  | 'timeout'
+  | 'host'
+  | 'unknown'
+
 export type NativeChatSkillDiscoverySnapshot = {
   status: 'idle' | 'loading' | 'ready' | 'error'
   skills: readonly DiscoveredSkill[]
-  errorKind?: 'unavailable' | 'timeout' | 'host' | 'unknown'
+  errorKind?: NativeChatSkillDiscoveryErrorKind
 }
 
 const PICKER_RESULT_LIMIT = 50

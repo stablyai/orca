@@ -16,6 +16,7 @@ import type {
   SkillUploadChunkRequest
 } from '../../shared/skill-upload-session-contract'
 import type { IPtyProvider } from '../providers/types'
+import type { SkillSshWorkspaceAuthority } from '../../shared/skill-ssh-relay-contract'
 import type { SkillUploadSessionService } from '../skills/skill-upload-session-service'
 import type { RuntimeSkillCommands } from './runtime-skill-command-surface'
 import type {
@@ -115,6 +116,13 @@ export type RuntimeSkillCommandSurface = {
   commitSkillUpload(uploadId: string): ReturnType<SkillUploadSessionService['commit']>
   cancelSkillUpload(uploadId: string): ReturnType<SkillUploadSessionService['cancel']>
   disposeSkillUploadSessions(): Promise<void>
+  /** Resolves an SSH-owned workspace to its relay transport and the directory
+   *  this runtime recorded for it, or null when the workspace is not SSH-owned. */
+  resolveSkillDiscoverySshTarget(worktreeId: string | null | undefined): Promise<{
+    connectionId: string
+    workspace: SkillSshWorkspaceAuthority
+    provider: () => IPtyProvider
+  } | null>
 }
 
 export function installRuntimeSkillCommandSurface(

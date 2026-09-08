@@ -15,6 +15,7 @@ export const SKILL_SSH_RELAY_PREVIEW_METHOD = 'skills.previewInstall' as const
 export const SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD = 'skills.previewBundleInstall' as const
 export const SKILL_SSH_RELAY_REMOVE_METHOD = 'skills.removeInstall' as const
 export const SKILL_SSH_RELAY_LIST_METHOD = 'skills.listManagedInstalls' as const
+export const SKILL_SSH_RELAY_DISCOVER_METHOD = 'skills.discover' as const
 export const SKILL_SSH_RELAY_BEGIN_UPLOAD_METHOD = 'skills.beginUpload' as const
 export const SKILL_SSH_RELAY_UPLOAD_CHUNK_METHOD = 'skills.uploadChunk' as const
 export const SKILL_SSH_RELAY_COMMIT_UPLOAD_METHOD = 'skills.commitUpload' as const
@@ -67,6 +68,13 @@ export const SkillSshRemoveParamsSchema = z
   })
   .strict()
 
+/** Why a workspace authority and not a cwd: the scanned directory is the one
+ *  this runtime already resolved for the workspace, so a caller cannot name an
+ *  arbitrary path on the remote host. */
+export const SkillSshDiscoverParamsSchema = z
+  .object({ workspace: SkillSshWorkspaceAuthoritySchema })
+  .strict()
+
 export const SkillSshListParamsSchema = z
   .object({ workspaces: z.array(SkillSshWorkspaceAuthoritySchema).max(4096) })
   .strict()
@@ -77,3 +85,4 @@ export type SkillSshInstallBundleParams = z.infer<typeof SkillSshInstallBundlePa
 export type SkillSshPreviewParams = z.infer<typeof SkillSshPreviewParamsSchema>
 export type SkillSshPreviewBundleParams = z.infer<typeof SkillSshPreviewBundleParamsSchema>
 export type SkillSshRemoveParams = z.infer<typeof SkillSshRemoveParamsSchema>
+export type SkillSshDiscoverParams = z.infer<typeof SkillSshDiscoverParamsSchema>

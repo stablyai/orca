@@ -107,6 +107,79 @@ export const SkillDiscoveryTargetSchema: z.ZodType<SkillDiscoveryTarget> = z.obj
   refresh: z.boolean().optional()
 })
 
+export const SKILL_DISCOVERY_LIMITS = {
+  descriptionLength: 8192,
+  nameLength: 512,
+  pathLength: 4096,
+  rootPaths: 64,
+  skills: 5000,
+  sources: 1000
+} as const
+
+const SKILL_PROVIDER_VALUES = ['codex', 'claude', 'agent-skills'] as const
+const SKILL_SOURCE_KIND_VALUES = ['home', 'repo', 'bundled', 'plugin'] as const
+
+/** Identity and paths must be well-formed to be usable, so an over-long one is
+ *  rejected rather than truncated into a different path. */
+const boundedString = (max: number): z.ZodString => z.string().max(max)
+
+/** Free text is display-only, so an over-long value is clamped rather than
+ *  failing the whole scan — a remote user's genuinely long description must not
+ *  empty their picker, while a hostile host still cannot grow renderer state. */
+const clampedString = (max: number): z.ZodType<string> =>
+  z.string().transform((value) => (value.length > max ? value.slice(0, max) : value))
+
+/** Validates untrusted skill metadata at the SSH relay boundary before it can
+ *  enter renderer state.
+ *
+ *  Field-for-field with `DiscoveredSkill`/`SkillDiscoverySource` above —
+ *  `discovery-wire-contract.test.ts` parses a real scan so the two cannot drift.
+ */
+export const SkillDiscoveryResultSchema = z.object({
+  skills: z
+    .array(
+      z.object({
+        id: boundedString(512),
+        name: clampedString(SKILL_DISCOVERY_LIMITS.nameLength),
+        description: clampedString(SKILL_DISCOVERY_LIMITS.descriptionLength).nullable(),
+        providers: z.array(z.enum(SKILL_PROVIDER_VALUES)).max(8),
+        sourceKind: z.enum(SKILL_SOURCE_KIND_VALUES),
+        sourceLabel: clampedString(1024),
+        rootPath: boundedString(SKILL_DISCOVERY_LIMITS.pathLength),
+        rootPaths: z
+          .array(boundedString(SKILL_DISCOVERY_LIMITS.pathLength))
+          .max(SKILL_DISCOVERY_LIMITS.rootPaths)
+          .optional(),
+        directoryPath: boundedString(SKILL_DISCOVERY_LIMITS.pathLength),
+        skillFilePath: boundedString(SKILL_DISCOVERY_LIMITS.pathLength),
+        installed: z.boolean(),
+        updatedAt: z.number().finite().nullable()
+      })
+    )
+    .max(SKILL_DISCOVERY_LIMITS.skills),
+  sources: z
+    .array(
+      z.object({
+        id: boundedString(512),
+        label: clampedString(1024),
+        path: boundedString(SKILL_DISCOVERY_LIMITS.pathLength),
+        sourceKind: z.enum(SKILL_SOURCE_KIND_VALUES),
+        providers: z.array(z.enum(SKILL_PROVIDER_VALUES)).max(8),
+        owner: boundedString(64).nullable(),
+        exists: z.boolean(),
+        skippedReason: z.enum(['missing', 'remote-repo', 'unavailable']).optional()
+      })
+    )
+    .max(SKILL_DISCOVERY_LIMITS.sources),
+  scannedAt: z.number().finite()
+})
+
+export function parseSkillDiscoveryResult(value: unknown): SkillDiscoveryResult {
+  // Why: an unrecognized source owner only fails provider filtering, so the
+  // schema keeps owner as a bounded string rather than pinning AgentType.
+  return SkillDiscoveryResultSchema.parse(value) as SkillDiscoveryResult
+}
+
 export type SkillFrontmatterSummary = {
   name: string | null
   description: string | null
