@@ -149,6 +149,15 @@ var ErrEmptyHandle = errors.New("domain: assignee_handle is required")
 type DispatchContext struct {
 	ID       string
 	TenantID string
+	// UserID is the caller who initiated this dispatch (from the
+	// authenticated identity at CreateDispatchContext time, never a
+	// client-supplied field) — added for CR-STORAGE-006/007's
+	// "list active dispatch contexts for the current user" need. Nullable:
+	// a dispatch context created by a system process with no end-user
+	// caller legitimately has none. See
+	// specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
+	// for why this lives here rather than on coordinator_runs.
+	UserID string
 	// OrchestrationTaskID is the owning task. May be empty in this
 	// scaffold — see README "Known gaps": the generated
 	// CreateDispatchContextRequest proto message does not carry an
@@ -166,13 +175,14 @@ type DispatchContext struct {
 }
 
 // NewDispatchContext constructs a DispatchContext in DispatchStatusPending.
-func NewDispatchContext(id, tenantID, orchestrationTaskID, handle, coordinatorRunID string) (DispatchContext, error) {
+func NewDispatchContext(id, tenantID, userID, orchestrationTaskID, handle, coordinatorRunID string) (DispatchContext, error) {
 	if handle == "" {
 		return DispatchContext{}, ErrEmptyHandle
 	}
 	return DispatchContext{
 		ID:                  id,
 		TenantID:            tenantID,
+		UserID:              userID,
 		OrchestrationTaskID: orchestrationTaskID,
 		Handle:              handle,
 		CoordinatorRunID:    coordinatorRunID,
