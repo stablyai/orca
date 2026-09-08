@@ -386,11 +386,15 @@ describe('TailcatSocksProxy', () => {
       '--listen=127.0.0.1:0'
     ])
     child.stderr.write('2026/09/02 21:31:59 SOCKS running at socks5h://127.0.0.1:60809\n')
-    await expect(started).resolves.toBe(60809)
+    await expect(started).resolves.toEqual({ generation: 1, port: 60809 })
     expect(proxy.getPort()).toBe(60809)
     await expect(
-      (proxy as unknown as { ensureStarted: () => Promise<number> }).ensureStarted()
-    ).resolves.toBe(60809)
+      (
+        proxy as unknown as {
+          ensureStarted: () => Promise<{ generation: number; port: number }>
+        }
+      ).ensureStarted()
+    ).resolves.toEqual({ generation: 1, port: 60809 })
     expect(children).toHaveLength(1)
 
     child.exit(0)
@@ -449,16 +453,16 @@ describe('TailcatSocksProxy', () => {
       `--key=${tailcatKeyPathArgument(keyPath)}`
     ])
     children[0]!.stderr.write('SOCKS running at socks5h://127.0.0.1:5\n')
-    await expect(started).resolves.toBe(5)
+    await expect(started).resolves.toEqual({ generation: 1, port: 5 })
     await proxy.stop()
   })
 
   it('retries a dial the proxy refused, but not a proxy that is unreachable', async () => {
     const { spawn, children } = fakeSpawner()
-    const socket = {} as Socket
+    const socket = new EventEmitter() as Socket
     const connect = vi
       .fn<() => Promise<Socket>>()
-      .mockRejectedValueOnce(new Socks5RefusalError('general SOCKS server failure'))
+      .mockRejectedValueOnce(new Socks5RefusalError(0x01, 'general SOCKS server failure'))
       .mockResolvedValueOnce(socket)
       .mockRejectedValueOnce(new Error('connect ECONNREFUSED'))
     const proxy = new TailcatSocksProxy({

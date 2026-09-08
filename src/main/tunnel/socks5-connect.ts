@@ -43,21 +43,26 @@ export function encodeSocks5ConnectRequest(host: string, port: number): Buffer {
 }
 
 export class Socks5RefusalError extends Error {
-  constructor(message: string) {
+  constructor(
+    readonly replyCode: number,
+    message: string
+  ) {
     super(message)
     this.name = 'Socks5RefusalError'
   }
 }
 
-/** True for a reply the proxy sent on purpose, as opposed to a dead proxy or a timeout. */
-export function isSocks5RefusalError(error: unknown): boolean {
-  return error instanceof Socks5RefusalError
+export class Socks5NegotiationTimeoutError extends Error {
+  constructor() {
+    super('Timed out negotiating with the SOCKS proxy')
+    this.name = 'Socks5NegotiationTimeoutError'
+  }
 }
 
 export type Socks5ConnectReply =
   | { kind: 'incomplete' }
   | { kind: 'ok'; consumed: number }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; replyCode?: number }
 
 /** Parses a CONNECT reply; `consumed` is the reply's byte length once it is complete. */
 export function parseSocks5ConnectReply(buffer: Buffer): Socks5ConnectReply {
@@ -71,7 +76,8 @@ export function parseSocks5ConnectReply(buffer: Buffer): Socks5ConnectReply {
   if (status !== 0x00) {
     return {
       kind: 'error',
-      message: `SOCKS proxy refused the connection: ${REPLY_MESSAGES[status] ?? `reply ${status}`}`
+      message: `SOCKS proxy refused the connection: ${REPLY_MESSAGES[status] ?? `reply ${status}`}`,
+      replyCode: status
     }
   }
   const addressType = buffer[3]
@@ -99,6 +105,7 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
     const socket = connect({ host: options.proxyHost ?? '127.0.0.1', port: options.proxyPort })
     let stage: 'greeting' | 'connect' | 'done' = 'greeting'
     let buffered = Buffer.alloc(0)
+    let deadline: ReturnType<typeof setTimeout> | null = null
 
     const fail = (error: Error): void => {
       if (stage === 'done') {
@@ -109,7 +116,6 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
       socket.destroy()
       reject(error)
     }
-    const onTimeout = (): void => fail(new Error('Timed out negotiating with the SOCKS proxy'))
     const onClose = (): void =>
       fail(new Error('SOCKS proxy closed the connection during negotiation'))
     const onData = (chunk: Buffer): void => {
@@ -132,7 +138,11 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
           return
         }
         if (reply.kind === 'error') {
-          fail(new Socks5RefusalError(reply.message))
+          fail(
+            reply.replyCode === undefined
+              ? new Error(reply.message)
+              : new Socks5RefusalError(reply.replyCode, reply.message)
+          )
           return
         }
         // Why: the WebSocket server never speaks first, so bytes after the reply mean a broken proxy;
@@ -150,12 +160,17 @@ export function connectThroughSocks5(options: Socks5ConnectOptions): Promise<Soc
       socket.off('data', onData)
       socket.off('error', fail)
       socket.off('close', onClose)
-      socket.off('timeout', onTimeout)
-      socket.setTimeout(0)
+      if (deadline) {
+        clearTimeout(deadline)
+        deadline = null
+      }
     }
 
-    socket.setTimeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
-    socket.on('timeout', onTimeout)
+    // An inactivity timeout can be kept alive forever by a proxy that drip-feeds an incomplete reply.
+    deadline = setTimeout(
+      () => fail(new Socks5NegotiationTimeoutError()),
+      options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    )
     socket.on('error', fail)
     socket.on('close', onClose)
     socket.on('data', onData)

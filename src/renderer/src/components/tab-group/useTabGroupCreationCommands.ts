@@ -15,6 +15,7 @@ import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-op
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { showClientCreationActionError } from '@/lib/client-creation-action-error'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
@@ -156,7 +157,11 @@ export function useTabGroupCreationCommands({
           command: shellOverride,
           activate: true
         })
-        if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
+        if (outcome.status === 'created') {
+          return
+        }
+        if (isWebRuntimeSessionActive(environmentId)) {
+          showClientCreationActionError(outcome.message)
           return
         }
         const terminal = createTab(worktreeId, groupId, shellOverride)

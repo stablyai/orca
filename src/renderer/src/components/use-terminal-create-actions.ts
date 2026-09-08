@@ -46,6 +46,10 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           targetGroupId,
           command: shellOverride,
           activate: true
+        }).then((outcome) => {
+          if (outcome.status === 'failed') {
+            showClientCreationActionError(outcome.message)
+          }
         })
         return
       }

@@ -129,7 +129,8 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
-          activate: opts.activate
+          activate: opts.activate,
+          ...(opts.activate === false ? { presentation: 'background' as const } : {})
         })
       })
 

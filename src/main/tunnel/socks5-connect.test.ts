@@ -78,7 +78,8 @@ describe('parseSocks5ConnectReply', () => {
   it('maps refusal codes to messages', () => {
     expect(parseSocks5ConnectReply(Buffer.from([5, 5, 0, 1, 0, 0, 0, 0, 0, 0]))).toEqual({
       kind: 'error',
-      message: 'SOCKS proxy refused the connection: connection refused'
+      message: 'SOCKS proxy refused the connection: connection refused',
+      replyCode: 5
     })
   })
 })
@@ -133,5 +134,32 @@ describe('connectThroughSocks5', () => {
     await expect(connectThroughSocks5({ proxyPort, host: 'tcTOKEN', port: 1 })).rejects.toThrow(
       /closed the connection|ECONNRESET/
     )
+  })
+
+  it('applies an absolute deadline to a drip-fed negotiation', async () => {
+    const proxyPort = await listen((socket) => {
+      let greeted = false
+      let offset = 0
+      let drip: ReturnType<typeof setInterval> | null = null
+      socket.on('error', () => {})
+      socket.on('data', () => {
+        if (!greeted) {
+          greeted = true
+          socket.write(Buffer.from([5, 0]))
+          return
+        }
+        drip = setInterval(() => {
+          socket.write(OK_REPLY_IPV4.subarray(offset, ++offset))
+        }, 5)
+      })
+      socket.once('close', () => {
+        if (drip) {
+          clearInterval(drip)
+        }
+      })
+    })
+    await expect(
+      connectThroughSocks5({ proxyPort, host: 'tcTOKEN', port: 1, timeoutMs: 20 })
+    ).rejects.toThrow(/Timed out negotiating/)
   })
 })

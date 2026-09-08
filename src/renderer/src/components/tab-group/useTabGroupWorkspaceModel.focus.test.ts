@@ -32,7 +32,8 @@ const mocks = vi.hoisted(() => ({
   setActiveTabType: vi.fn(),
   setActiveWorktree: vi.fn(),
   setTabColor: vi.fn(),
-  setTabCustomTitle: vi.fn()
+  setTabCustomTitle: vi.fn(),
+  toastError: vi.fn()
 }))
 
 const storeBox = vi.hoisted(() => ({
@@ -105,7 +106,7 @@ vi.mock('../../lib/ipc-error', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { error: vi.fn() }
+  toast: { error: (...args: unknown[]) => mocks.toastError(...args) }
 }))
 
 function resetStore(): void {
@@ -273,6 +274,23 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
     expect(mocks.createTab).toHaveBeenCalledWith('wt-1', 'group-1', 'zsh')
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-new')
+  })
+
+  it('reports the host message without creating a local shell when remote creation fails', async () => {
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+      status: 'failed',
+      message: 'host rejected this shell'
+    })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.newTerminalWithShell('zsh')
+
+    await vi.waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith('host rejected this shell')
+    )
+    expect(mocks.createTab).not.toHaveBeenCalled()
   })
 
   it('returns keyboard focus to the active split pane leaf when a terminal tab is activated', async () => {

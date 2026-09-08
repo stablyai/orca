@@ -1,6 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { showClientCreationActionError } from '@/lib/client-creation-action-error'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -30,12 +31,15 @@ export function createActiveWorkspaceTerminalActions(
         : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       if (runtimeEnvironmentId) {
         const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
-        await createWebRuntimeSessionTerminal({
+        const outcome = await createWebRuntimeSessionTerminal({
           worktreeId,
           environmentId: runtimeEnvironmentId,
           targetGroupId: groupId,
           activate: true
         })
+        if (outcome.status === 'failed') {
+          showClientCreationActionError(outcome.message)
+        }
         return
       }
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
