@@ -31,6 +31,7 @@ type createDispatchContextRequestBody struct {
 	Handle              string `json:"handle"`
 	CoordinatorRunID    string `json:"coordinator_run_id"`
 	OrchestrationTaskID string `json:"orchestration_task_id"`
+	WorktreeID          string `json:"worktree_id"`
 }
 
 func handleCreateDispatchContext(client orchestrationv1.OrchestrationServiceClient) http.HandlerFunc {
@@ -48,6 +49,7 @@ func handleCreateDispatchContext(client orchestrationv1.OrchestrationServiceClie
 			Handle:              body.Handle,
 			CoordinatorRunId:    body.CoordinatorRunID,
 			OrchestrationTaskId: body.OrchestrationTaskID,
+			WorktreeId:          body.WorktreeID,
 		})
 		if err != nil {
 			writeGRPCError(w, err)

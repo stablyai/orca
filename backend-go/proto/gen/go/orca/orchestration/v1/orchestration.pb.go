@@ -37,8 +37,14 @@ type DispatchContext struct {
 	Status          string `protobuf:"bytes,6,opt,name=status,proto3" json:"status,omitempty"`
 	FailureCount    int32  `protobuf:"varint,7,opt,name=failure_count,json=failureCount,proto3" json:"failure_count,omitempty"`
 	LastHeartbeatAt string `protobuf:"bytes,8,opt,name=last_heartbeat_at,json=lastHeartbeatAt,proto3" json:"last_heartbeat_at,omitempty"` // RFC3339; empty if never heartbeated
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// worktree_id: the frontend worktree this dispatch is running for,
+	// caller-supplied on CreateDispatchContextRequest (like handle/
+	// coordinator_run_id/orchestration_task_id, unlike user_id). Empty for a
+	// dispatch with no worktree association. See
+	// specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+	WorktreeId    string `protobuf:"bytes,9,opt,name=worktree_id,json=worktreeId,proto3" json:"worktree_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DispatchContext) Reset() {
@@ -127,6 +133,13 @@ func (x *DispatchContext) GetLastHeartbeatAt() string {
 	return ""
 }
 
+func (x *DispatchContext) GetWorktreeId() string {
+	if x != nil {
+		return x.WorktreeId
+	}
+	return ""
+}
+
 type CreateDispatchContextRequest struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Handle           string                 `protobuf:"bytes,1,opt,name=handle,proto3" json:"handle,omitempty"`
@@ -138,8 +151,13 @@ type CreateDispatchContextRequest struct {
 	// and CreateGate could never resolve a task to block, failing closed with
 	// ORCH_DISPATCH_CONTEXT_NO_TASK for every dispatch context.
 	OrchestrationTaskId string `protobuf:"bytes,3,opt,name=orchestration_task_id,json=orchestrationTaskId,proto3" json:"orchestration_task_id,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// worktree_id: the frontend worktree this dispatch is running for.
+	// Optional — an ad-hoc dispatch with no worktree association
+	// legitimately omits it. See
+	// specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+	WorktreeId    string `protobuf:"bytes,4,opt,name=worktree_id,json=worktreeId,proto3" json:"worktree_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateDispatchContextRequest) Reset() {
@@ -189,6 +207,13 @@ func (x *CreateDispatchContextRequest) GetCoordinatorRunId() string {
 func (x *CreateDispatchContextRequest) GetOrchestrationTaskId() string {
 	if x != nil {
 		return x.OrchestrationTaskId
+	}
+	return ""
+}
+
+func (x *CreateDispatchContextRequest) GetWorktreeId() string {
+	if x != nil {
+		return x.WorktreeId
 	}
 	return ""
 }
@@ -931,7 +956,7 @@ var File_orca_orchestration_v1_orchestration_proto protoreflect.FileDescriptor
 
 const file_orca_orchestration_v1_orchestration_proto_rawDesc = "" +
 	"\n" +
-	")orca/orchestration/v1/orchestration.proto\x12\x15orca.orchestration.v1\"\x9d\x02\n" +
+	")orca/orchestration/v1/orchestration.proto\x12\x15orca.orchestration.v1\"\xbe\x02\n" +
 	"\x0fDispatchContext\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12,\n" +
@@ -940,11 +965,15 @@ const file_orca_orchestration_v1_orchestration_proto_rawDesc = "" +
 	"\auser_id\x18\x05 \x01(\tR\x06userId\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x12#\n" +
 	"\rfailure_count\x18\a \x01(\x05R\ffailureCount\x12*\n" +
-	"\x11last_heartbeat_at\x18\b \x01(\tR\x0flastHeartbeatAt\"\x98\x01\n" +
+	"\x11last_heartbeat_at\x18\b \x01(\tR\x0flastHeartbeatAt\x12\x1f\n" +
+	"\vworktree_id\x18\t \x01(\tR\n" +
+	"worktreeId\"\xb9\x01\n" +
 	"\x1cCreateDispatchContextRequest\x12\x16\n" +
 	"\x06handle\x18\x01 \x01(\tR\x06handle\x12,\n" +
 	"\x12coordinator_run_id\x18\x02 \x01(\tR\x10coordinatorRunId\x122\n" +
-	"\x15orchestration_task_id\x18\x03 \x01(\tR\x13orchestrationTaskId\"a\n" +
+	"\x15orchestration_task_id\x18\x03 \x01(\tR\x13orchestrationTaskId\x12\x1f\n" +
+	"\vworktree_id\x18\x04 \x01(\tR\n" +
+	"worktreeId\"a\n" +
 	"\x1dCreateDispatchContextResponse\x12@\n" +
 	"\acontext\x18\x01 \x01(\v2&.orca.orchestration.v1.DispatchContextR\acontext\"\x9c\x01\n" +
 	"\fDecisionGate\x12\x0e\n" +

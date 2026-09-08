@@ -59,7 +59,7 @@ func TestTaskStatus_Valid(t *testing.T) {
 }
 
 func TestDispatchContext_RecordFailure_TripsCircuitBreakerAtThreshold(t *testing.T) {
-	d, err := NewDispatchContext("d1", "tenant-1", "user-1", "t1", "handle-1", "run-1")
+	d, err := NewDispatchContext("d1", "tenant-1", "user-1", "wt-1", "t1", "handle-1", "run-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestDispatchContext_RecordFailure_TripsCircuitBreakerAtThreshold(t *testing
 }
 
 func TestNewDispatchContext_RequiresHandle(t *testing.T) {
-	if _, err := NewDispatchContext("d1", "tenant-1", "user-1", "t1", "", "run-1"); !errors.Is(err, ErrEmptyHandle) {
+	if _, err := NewDispatchContext("d1", "tenant-1", "user-1", "wt-1", "t1", "", "run-1"); !errors.Is(err, ErrEmptyHandle) {
 		t.Fatalf("expected ErrEmptyHandle, got %v", err)
 	}
 }

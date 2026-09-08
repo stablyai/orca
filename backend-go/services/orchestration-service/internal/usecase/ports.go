@@ -75,7 +75,11 @@ type DispatchContextRepository interface {
 	// userID may be empty — a dispatch context created by a system process
 	// with no authenticated end-user caller legitimately has none (see
 	// domain.DispatchContext.UserID's doc comment).
-	CreateDispatchContext(ctx context.Context, tenantID, userID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error)
+	//
+	// worktreeID may also be empty — an ad-hoc dispatch with no worktree
+	// association legitimately has none (see
+	// domain.DispatchContext.WorktreeID's doc comment).
+	CreateDispatchContext(ctx context.Context, tenantID, userID, worktreeID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error)
 
 	// GetLatestForTask returns the most recently created dispatch_contexts
 	// row for orchestrationTaskID, or ErrDispatchContextNotFound if none

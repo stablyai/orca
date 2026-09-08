@@ -158,6 +158,16 @@ type DispatchContext struct {
 	// specs/backlog/BACKLOG-006-dispatch-context-user-linkage-decision.md
 	// for why this lives here rather than on coordinator_runs.
 	UserID string
+	// WorktreeID is the frontend worktree this dispatch is running for —
+	// caller-supplied at CreateDispatchContext time (like Handle/
+	// CoordinatorRunID/OrchestrationTaskID, unlike UserID), since the
+	// server has no way to derive "which worktree" from identity alone.
+	// Nullable: an ad-hoc/system dispatch with no worktree association
+	// legitimately has none. Added so agentSession.listActive's dispatch
+	// contexts can be keyed onto the frontend's worktreeId-keyed
+	// remoteAgentSessions slice — see
+	// specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+	WorktreeID string
 	// OrchestrationTaskID is the owning task. May be empty in this
 	// scaffold — see README "Known gaps": the generated
 	// CreateDispatchContextRequest proto message does not carry an
@@ -175,7 +185,7 @@ type DispatchContext struct {
 }
 
 // NewDispatchContext constructs a DispatchContext in DispatchStatusPending.
-func NewDispatchContext(id, tenantID, userID, orchestrationTaskID, handle, coordinatorRunID string) (DispatchContext, error) {
+func NewDispatchContext(id, tenantID, userID, worktreeID, orchestrationTaskID, handle, coordinatorRunID string) (DispatchContext, error) {
 	if handle == "" {
 		return DispatchContext{}, ErrEmptyHandle
 	}
@@ -183,6 +193,7 @@ func NewDispatchContext(id, tenantID, userID, orchestrationTaskID, handle, coord
 		ID:                  id,
 		TenantID:            tenantID,
 		UserID:              userID,
+		WorktreeID:          worktreeID,
 		OrchestrationTaskID: orchestrationTaskID,
 		Handle:              handle,
 		CoordinatorRunID:    coordinatorRunID,

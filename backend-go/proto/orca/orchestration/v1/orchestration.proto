@@ -57,6 +57,12 @@ message DispatchContext {
   string status = 6;
   int32 failure_count = 7;
   string last_heartbeat_at = 8; // RFC3339; empty if never heartbeated
+  // worktree_id: the frontend worktree this dispatch is running for,
+  // caller-supplied on CreateDispatchContextRequest (like handle/
+  // coordinator_run_id/orchestration_task_id, unlike user_id). Empty for a
+  // dispatch with no worktree association. See
+  // specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+  string worktree_id = 9;
 }
 
 message CreateDispatchContextRequest {
@@ -69,6 +75,11 @@ message CreateDispatchContextRequest {
   // and CreateGate could never resolve a task to block, failing closed with
   // ORCH_DISPATCH_CONTEXT_NO_TASK for every dispatch context.
   string orchestration_task_id = 3;
+  // worktree_id: the frontend worktree this dispatch is running for.
+  // Optional — an ad-hoc dispatch with no worktree association
+  // legitimately omits it. See
+  // specs/backlog/BACKLOG-013-dispatch-context-handle-worktree-linkage.md.
+  string worktree_id = 4;
 }
 
 message CreateDispatchContextResponse {

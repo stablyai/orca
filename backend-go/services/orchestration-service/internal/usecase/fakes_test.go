@@ -112,7 +112,7 @@ type fakeDispatchContextRepository struct {
 	recordFailureFunc func(tenantID, dispatchContextID, reason string) (domain.DispatchContext, error)
 }
 
-func (f *fakeDispatchContextRepository) CreateDispatchContext(_ context.Context, tenantID, userID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error) {
+func (f *fakeDispatchContextRepository) CreateDispatchContext(_ context.Context, tenantID, userID, worktreeID, handle, coordinatorRunID, orchestrationTaskID string) (domain.DispatchContext, error) {
 	if f.err != nil {
 		return domain.DispatchContext{}, f.err
 	}
@@ -120,6 +120,7 @@ func (f *fakeDispatchContextRepository) CreateDispatchContext(_ context.Context,
 		ID:                  "dc-" + handle,
 		TenantID:            tenantID,
 		UserID:              userID,
+		WorktreeID:          worktreeID,
 		Handle:              handle,
 		CoordinatorRunID:    coordinatorRunID,
 		OrchestrationTaskID: orchestrationTaskID,

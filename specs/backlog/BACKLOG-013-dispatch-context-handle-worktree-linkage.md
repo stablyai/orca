@@ -1,8 +1,48 @@
-# BACKLOG-013: `agentSession.listActive`'s dispatch contexts can't be keyed onto `remoteAgentSessions` (worktreeId vs. assigneeHandle)
+# BACKLOG-013: `agentSession.listActive`'s dispatch contexts can't be keyed onto `remoteAgentSessions` (worktreeId vs. assigneeHandle) — RESOLVED (backend half)
 
 **Origin:** `specs/frontend/crs/v3/storage/tasks/FE-TASK-STORAGE-012-hydrate-dev-servers-and-agent-sessions.md` (remote-agent-sessions.ts half)
-**Priority:** Low-Medium — the RPC itself is real and working (`TASK-BE-STORAGE-007`/`008`, done 2026-09-08); only the frontend's specific hydrate target is blocked
-**Blocked on:** No existing field links a dispatch context to a `worktreeId` — needs either a new field or a redesigned hydrate target
+**Priority:** Low — backend-side blocker is gone; only the frontend mapping (`mapDispatchContextsToSessions`) remains, a small, unblocked wiring task
+**Status:** Backend RESOLVED 2026-09-08 — user picked option 1 ("add a `worktree_id` field to `dispatch_contexts`")
+
+---
+
+> **Update 2026-09-08:** Implemented option 1 exactly as sketched below,
+> mirroring BACKLOG-006's `user_id` precedent:
+>
+> - `migrations/0003_dispatch_context_worktree_id`: adds
+>   `dispatch_contexts.worktree_id TEXT NULL` + a partial index
+>   (`WHERE worktree_id IS NOT NULL`), same shape as `user_id`'s.
+> - `orchestration.proto`: `worktree_id` added to both `DispatchContext`
+>   (round-trips on every read) and `CreateDispatchContextRequest` (new
+>   optional input field, field 4) — **caller-supplied**, unlike `user_id`
+>   (from identity): the server has no way to derive "which worktree" on
+>   its own, same treatment as `handle`/`coordinator_run_id`/
+>   `orchestration_task_id`.
+> - `domain.DispatchContext.WorktreeID` + `NewDispatchContext` signature
+>   updated; `usecase.CreateDispatchContextInput.WorktreeID` threaded
+>   through to `DispatchContextRepository.CreateDispatchContext` (now takes
+>   a `worktreeID` param) and persisted.
+> - Read paths updated to round-trip it: `ListActiveDispatchContextsForUser`,
+>   `GetLatestForTask`, `toProtoDispatchContext`.
+> - `api-gateway`'s real REST caller (`POST /v1/orchestration/dispatch-contexts`,
+>   `orchestration_routes.go`) now accepts `worktree_id` in the request body
+>   and threads it through — this is the actual, already-existing caller
+>   path CreateDispatchContext's other fields (handle/coordinator_run_id)
+>   already flow through, not a new integration point.
+> - New test: `TestCreateDispatchContext_ThreadsWorktreeID`. `go build`/
+>   `go vet`/`go test` clean for both `orchestration-service` and
+>   `api-gateway`.
+>
+> **What's NOT done — the actual remaining work**: the frontend side
+> (`FE-TASK-STORAGE-012`'s `mapDispatchContextsToSessions`, reading
+> `agentSession.listActive`'s results and populating
+> `remoteAgentSessions: Record<worktreeId, RemoteAgentSession>`) was not
+> touched this session — this file's scope was backend-go only. Whoever
+> creates a dispatch context (still not traced in this session — likely
+> wherever `POST /v1/orchestration/dispatch-contexts` is actually called
+> from) also needs to start passing `worktree_id` for existing dispatches
+> to start showing up keyed correctly; new ones will round-trip
+> automatically once that caller is updated.
 
 ---
 

@@ -16,6 +16,7 @@ type CreateDispatchContextInput struct {
 	Handle              string
 	CoordinatorRunID    string
 	OrchestrationTaskID string // optional; see ports.go's DispatchContextRepository doc comment
+	WorktreeID          string // optional, caller-supplied — see domain.DispatchContext.WorktreeID
 }
 
 // CreateDispatchContext is routed through the HandleSerializer keyed by
@@ -48,7 +49,7 @@ func (uc *CreateDispatchContext) Execute(ctx context.Context, in CreateDispatchC
 
 	var result domain.DispatchContext
 	err = uc.serializer.Do(ctx, in.Handle, func() error {
-		created, err := uc.repo.CreateDispatchContext(ctx, tenantID, userID, in.Handle, in.CoordinatorRunID, in.OrchestrationTaskID)
+		created, err := uc.repo.CreateDispatchContext(ctx, tenantID, userID, in.WorktreeID, in.Handle, in.CoordinatorRunID, in.OrchestrationTaskID)
 		if err != nil {
 			return err
 		}

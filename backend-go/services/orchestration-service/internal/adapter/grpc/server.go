@@ -54,6 +54,7 @@ func (s *Server) CreateDispatchContext(ctx context.Context, req *orchestrationv1
 		Handle:              req.GetHandle(),
 		CoordinatorRunID:    req.GetCoordinatorRunId(),
 		OrchestrationTaskID: req.GetOrchestrationTaskId(),
+		WorktreeID:          req.GetWorktreeId(),
 	})
 	if err != nil {
 		return nil, apperrors.ToGRPCStatus(err)
@@ -90,6 +91,7 @@ func toProtoDispatchContext(dc domain.DispatchContext) *orchestrationv1.Dispatch
 		CoordinatorRunId:    dc.CoordinatorRunID,
 		OrchestrationTaskId: dc.OrchestrationTaskID,
 		UserId:              dc.UserID,
+		WorktreeId:          dc.WorktreeID,
 		Status:              string(dc.Status),
 		FailureCount:        dc.FailureCount,
 		LastHeartbeatAt:     lastHeartbeatAt,

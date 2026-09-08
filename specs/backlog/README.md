@@ -30,7 +30,7 @@ for closed-item history.
 | [BACKLOG-007](./BACKLOG-007-dev-server-bootstrap-status-proto-field.md) | `bootstrap.ts` can't hydrate mid-bootstrap progress — `DevServer` proto has no bootstrap-step field | **Schema/product decision** (add a field, reuse coarse `status`, or descope) | Low-Medium |
 | [BACKLOG-009](./BACKLOG-009-orchestration-service-fail-dispatch-missing.md) | `FailDispatch` RPC now built and tested (circuit-breaker for real) — still no real caller found anywhere in backend-go | Which component makes the actual dispatch/relay-to-agent call this would hook into (not found in this deployment yet) | Low-Medium |
 | [BACKLOG-012](./BACKLOG-012-worktree-missing-infra-connections-row-local-exec-fallback.md) | Dev-server-backed worktree with no `infra.connections` row falls back to running `git status` LOCALLY inside git-gateway-service's own (distroless, repo-less) container — `GITGATEWAY_STATUS_FAILED` | Root cause not yet diagnosed | Medium-High |
-| [BACKLOG-013](./BACKLOG-013-dispatch-context-handle-worktree-linkage.md) | `agentSession.listActive` (real RPC, done) can't be hydrated into `remoteAgentSessions` — no field links a dispatch context to a `worktreeId` | **Decision** (add a field, resolve via an existing handle→worktree registry if one exists, or redesign the hydrate target) | Low-Medium |
+| [BACKLOG-013](./BACKLOG-013-dispatch-context-handle-worktree-linkage.md) | Backend RESOLVED 2026-09-08: `dispatch_contexts.worktree_id` added, threaded end-to-end. Frontend `mapDispatchContextsToSessions` wiring still open (small, unblocked) | Frontend wiring only — no backend blocker remains | Low |
 
 ## Status of everything else
 
