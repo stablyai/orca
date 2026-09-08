@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
 import * as Linking from 'expo-linking'
+import { loadMobileTerminalThemeMode } from '../src/storage/terminal-theme-preference'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
@@ -154,6 +155,10 @@ export default function RootLayout() {
   // Previously the splash hid when a placeholder View rendered, leaving a
   // grey gap before the real screen appeared.
   const onNavigatorLayout = useCallback(async () => {
+    // Keep the native splash over the first render until the saved appearance has been published.
+    await loadMobileTerminalThemeMode().catch((error) => {
+      console.warn('Failed to load terminal appearance preference', error)
+    })
     await SplashScreen.hideAsync()
   }, [])
 
