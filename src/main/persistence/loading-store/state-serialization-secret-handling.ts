@@ -7,6 +7,9 @@ import {
   type ProtectedSecretRetentionUpdate
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
+import { omitDefaultWorktreeMetaFieldsInMap } from '../../../shared/worktree/meta-persisted-defaults'
+import { projectWorktreeMetaByIdentityOntoLocators } from './worktree-meta-alias-projection'
+import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session-host-field-ownership'
 
 import {
   applySecretSentinelSubstitutions,
@@ -66,9 +69,41 @@ export class StateSerializationSecretHandlingOperations {
       const encrypted = encryptToSentinel(slot, plaintext ?? '')
       return encrypted || null
     }
+    // Ordered before the default omission on purpose: the two maps hold the SAME row object, so
+    // the projection settles almost every row on a reference check. Omitting first rebuilds each
+    // row twice into two distinct objects and forces a deep compare per row instead. Omission is
+    // a pure function of the value, so a pair equal here is equal after it too -- and it never
+    // touches `hostId`/`instanceId`, which is what the reader re-derives the omitted key from.
+    const projectedWorktreeMetaByIdentity =
+      this.runtime.state.worktreeMetaByIdentity === undefined
+        ? undefined
+        : projectWorktreeMetaByIdentityOntoLocators(
+            this.runtime.state.worktreeMetaByIdentity,
+            this.runtime.state
+          )
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
+      // Default-valued metadata slots are re-filled at load (normalizeWorktreeLinkedItemMetadata),
+      // so omitting them here is lossless and drops ~12% of the file on a heavy install.
+      worktreeMeta: omitDefaultWorktreeMetaFieldsInMap(this.runtime.state.worktreeMeta),
+      ...(projectedWorktreeMetaByIdentity !== undefined
+        ? {
+            worktreeMetaByIdentity: omitDefaultWorktreeMetaFieldsInMap(
+              projectedWorktreeMetaByIdentity
+            )
+          }
+        : {}),
+      // 'local' owns these globals and is the only slice any read takes them from; the load path
+      // re-seeds each partition's default, so writing them per host is pure file weight.
+      ...(this.runtime.state.workspaceSessionsByHostId !== undefined
+        ? {
+            workspaceSessionsByHostId: withoutRedundantPartitionGlobals(
+              this.runtime.state.workspaceSessionsByHostId,
+              this.runtime.state.workspaceSession
+            )
+          }
+        : {}),
       // Why both keys unconditionally: the explicit keys always win over the spread, and
       // JSON.stringify drops the `undefined` value so a note-free profile gains no key on disk.
       // The strip builds a new array here only; this.state records keep their notes in memory.

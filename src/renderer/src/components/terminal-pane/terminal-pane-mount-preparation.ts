@@ -1,6 +1,7 @@
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
+import { httpLinkActionDestinationsFor } from '@/lib/http-link-destinations'
 import {
   canOpenWorkspaceBrowserTabOnRuntime,
   canOpenWorkspaceBrowserTabOnSsh
@@ -8,7 +9,6 @@ import {
 import { resolvePaneWslDistro } from './terminal-pane-wsl-distro'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
 import {
-  terminalHttpLinkActionDestinationsFor,
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint,
   terminalUrlOpenHintOptionsFor
@@ -124,7 +124,7 @@ export function prepareTerminalPaneMount(
     )
   }
   const getHttpLinkActionDestinations = (paneId: number): TerminalHttpLinkActionDestinations =>
-    terminalHttpLinkActionDestinationsFor(
+    httpLinkActionDestinationsFor(
       deps.settingsRef.current,
       getHttpLinkSourceOwnerForPane(paneId),
       canOpenOwnedBrowserForPane(paneId)

@@ -172,7 +172,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     windowsShiftEnterEncoding: 'csi-u',
     ctrlEnterEncoding: 'csi-u'
   },
-  kimi: stdinAgent('kimi'),
+  kimi: {
+    // Why: the `kimi` launcher runs as `kimi-code`, so foreground-process recognition never
+    // matches the agent without the alias — terminal reuse and `dispatch --inject` fail.
+    detectCmd: 'kimi',
+    detectCmdAliases: ['kimi-code'],
+    promptInjectionMode: 'stdin-after-start'
+  },
   'mistral-vibe': {
     // Why: installer exposes binary `vibe` though the package is mistral-vibe; keep old name as alias for wrapped installs.
     detectCmd: 'vibe',

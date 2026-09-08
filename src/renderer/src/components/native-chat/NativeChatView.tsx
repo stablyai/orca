@@ -9,7 +9,7 @@ export type { NativeChatViewProps } from './native-chat-view-types'
 /** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   if (props.mode === 'structured') {
-    return <NativeChatStructuredSession {...props} />
+    return <NativeChatStructuredSession key={props.sessionId} {...props} />
   }
   return <NativeChatBridgeView {...props} />
 }
@@ -24,8 +24,7 @@ function NativeChatBridgeView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions,
-  orchestrationDispatchStatus
+  contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
     terminalTabId,
@@ -52,7 +51,6 @@ function NativeChatBridgeView({
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
-          orchestrationDispatchStatus={orchestrationDispatchStatus}
         />
       )}
     </NativeChatSessionGate>

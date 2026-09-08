@@ -52,10 +52,6 @@ vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
-vi.mock('./ssh-relay-endpoint-credential', () => ({
-  writeRelayEndpointCredential: vi.fn().mockResolvedValue(undefined)
-}))
-
 // Why: the versioned-install modules shell out for install state, locking,
 // and GC. Stub them so deploy tests need no real SSH connection.
 vi.mock('./ssh-relay-versioned-install', () => ({

@@ -3,8 +3,15 @@
 const READY_MARKER = 'GOLDEN_STUB_AGENT_READY'
 const EXIT_MARKER = 'GOLDEN_STUB_AGENT_EXITED'
 
+// The interactive fixture does not implement Codex's JSONL app-server API.
+if (process.argv[2] === 'app-server') {
+  process.stderr.write("error: unrecognized subcommand 'app-server'\n")
+  process.exit(2)
+}
+
 const ESC = '\x1b'
 const keyboardProtocolMode = process.argv.includes('--keyboard-protocol')
+const keyboardProtocolAgent = process.argv.includes('--grok') ? 'Grok' : 'Codex'
 // Both match the bytes after ESC, so the control character stays out of the
 // pattern: a CSI/SS3 introducer still missing its final byte, and a complete
 // CSI/SS3 sequence. Shift+Enter is matched before either is consulted.
@@ -20,7 +27,7 @@ function render() {
   const lines = composer.split('\n')
   const renderedComposer = lines.map((line, index) => `${index === 0 ? '> ' : '  '}${line}`)
   process.stdout.write(
-    `${keyboardProtocolMode ? '\x1b]0;\u280b Codex is thinking\x07\x1b[>1u' : '\x1b]0;Golden Stub Agent\x07'}${[
+    `${keyboardProtocolMode ? `\x1b]0;\u280b ${keyboardProtocolAgent} is thinking\x07\x1b[>1u` : '\x1b]0;Golden Stub Agent\x07'}${[
       '\x1b[H\x1b[2JGolden Stub Agent',
       `[${READY_MARKER}]`,
       '',
@@ -40,7 +47,7 @@ function exitCleanly() {
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(false)
   }
-  const idleTitle = keyboardProtocolMode ? '\x1b]0;Codex\x07' : ''
+  const idleTitle = keyboardProtocolMode ? `\x1b]0;${keyboardProtocolAgent}\x07` : ''
   process.stdout.write(`${idleTitle}\x1b[?1049l[${EXIT_MARKER}]\r\n`, () => process.exit(0))
 }
 

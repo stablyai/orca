@@ -82,7 +82,12 @@ export function useDiffCommentDecorator({
 
   // Key on the values, not the array identity: review surfaces re-fetch PR/MR file data on every
   // refresh and hand us a fresh-but-equal number[], which would otherwise churn every consumer.
-  const commentableLineKey = commentableLineNumbers?.join(',')
+  // Memoized on the array identity: the join walks every commentable line of the patch (thousands
+  // on a large file) and every mounted diff row runs this hook on every render.
+  const commentableLineKey = useMemo(
+    () => commentableLineNumbers?.join(','),
+    [commentableLineNumbers]
+  )
   const commentableLineSet = useMemo(
     () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -95,6 +95,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       parentTabId,
       leafId,
       ptyId: livePty.pty.ptyId,
+      incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
@@ -119,7 +120,8 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
     }
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
+      // Why: a fresh epoch retires the current publisher, so clients drop its later tab updates.
+      publicationEpoch: existing?.publicationEpoch ?? `headless:${Date.now().toString(36)}`,
       snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
       // Why: activating the new tab also focuses its group, so a "+" targeting a specific split group makes that group active too.
       activeGroupId:
@@ -139,7 +141,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    this.mobileSessionTabsByWorktree.set(worktreeId, next)
+    this.storeMobileSessionSnapshot(worktreeId, next)
     const result = this.toMobileSessionTabsResult(next)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {

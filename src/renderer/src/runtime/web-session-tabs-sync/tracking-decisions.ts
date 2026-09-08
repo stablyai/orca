@@ -9,7 +9,9 @@ import {
 import {
   acceptSessionTabsRuntimeId,
   isRetiredSessionTabsPublicationEpoch,
-  noteSessionTabsPublicationEpoch
+  isHeadlessMergeSessionTabsPublication,
+  noteSessionTabsPublicationEpoch,
+  sameSessionTabsPublicationLineage
 } from './publisher-identity-fences'
 import {
   sessionTabsFreshnessKey,
@@ -78,7 +80,20 @@ export function decideWebSessionTabsSnapshot(
     return WEB_SESSION_TABS_FRAME_UNMIRRORED
   }
   const current = latestSessionTabsSnapshotByWorktree.get(key)
-  if (isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)) {
+  const currentSharesPublicationLineage = Boolean(
+    current &&
+    sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch)
+  )
+  const currentIsHeadlessMerge = current
+    ? isHeadlessMergeSessionTabsPublication(current.publicationEpoch)
+    : false
+  const comparePublicationVersions =
+    currentSharesPublicationLineage &&
+    (currentIsHeadlessMerge || !isHeadlessMergeSessionTabsPublication(snapshot.publicationEpoch))
+  if (
+    isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch) &&
+    !currentSharesPublicationLineage
+  ) {
     return WEB_SESSION_TABS_FRAME_OUTRANKED
   }
   const replayable = replayableSessionTabsSnapshotByWorktree.get(key)
@@ -93,7 +108,8 @@ export function decideWebSessionTabsSnapshot(
   // Why: reject stale snapshots only within an epoch; host restarts create a new epoch.
   if (
     current &&
-    current.publicationEpoch === snapshot.publicationEpoch &&
+    comparePublicationVersions &&
+    sameSessionTabsPublicationLineage(current.publicationEpoch, snapshot.publicationEpoch) &&
     snapshot.snapshotVersion <= current.snapshotVersion &&
     !isExactCurrentReplay
   ) {

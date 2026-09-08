@@ -16,7 +16,7 @@ export function activateStructuredAgentSessionTab(args: {
   }
   state.focusGroup(args.worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
-  state.setActiveTabType('agent-session')
+  state.setActiveTabType('agent-session', args.worktreeId)
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
   void callRuntimeRpc(
     getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),

@@ -469,6 +469,9 @@ describe('web UI preload API', () => {
     agentsFilterRepoIds: ['repo-b'],
     agentsShowChildAgents: true,
     agentsCompactMode: false,
+    agentsShowSearch: false,
+    agentsReadFilter: 'unread',
+    agentsGroupBy: 'project',
     activityClearedAtByPaneKey: { 'tab-1:leaf-1': 123 },
     manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
   }
@@ -481,6 +484,9 @@ describe('web UI preload API', () => {
     agentsFilterRepoIds: ['repo-a'],
     agentsShowChildAgents: false,
     agentsCompactMode: true,
+    agentsShowSearch: true,
+    agentsReadFilter: 'all',
+    agentsGroupBy: 'status',
     activityClearedAtByPaneKey: { 'tab-2:leaf-2': 456 },
     manuallyUnreadTurnsByPaneKey: { 'tab-2:leaf-2': 654 }
   }

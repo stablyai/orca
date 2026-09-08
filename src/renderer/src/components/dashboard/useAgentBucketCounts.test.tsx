@@ -37,11 +37,12 @@ vi.mock('./build-dashboard-bucket-counts', () => ({
   })
 }))
 
-import { useAgentBucketCounts } from './useAgentBucketCounts'
+import { resetAgentBucketCountStateForTests, useAgentBucketCounts } from './useAgentBucketCounts'
 
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+  resetAgentBucketCountStateForTests()
   mocks.state.acknowledgedAgentsByPaneKey = {}
   mocks.state.unrelatedEpoch = 0
 })

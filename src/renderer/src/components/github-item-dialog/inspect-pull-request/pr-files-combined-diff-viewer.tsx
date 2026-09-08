@@ -119,6 +119,12 @@ function PRFilesCombinedDiffSections({
     }))
   )
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
+  // Why: an inline arrow here re-keys every mounted row's comment decorator on every render.
+  const getCommentableLineNumbers = useCallback(
+    (section: DiffSection): readonly number[] | undefined =>
+      fileByPath.get(section.path)?.reviewCommentLineNumbers,
+    [fileByPath]
+  )
   const inlineReviewComments = useMemo<DecoratedDiffComment[]>(
     () =>
       comments.flatMap((comment): DecoratedDiffComment[] => {
@@ -356,7 +362,7 @@ function PRFilesCombinedDiffSections({
       openFilesOnGitHub={openFilesOnGitHub}
       renderViewedCheckbox={renderViewedCheckbox}
       handleAddLineComment={handleAddLineComment}
-      fileByPath={fileByPath}
+      getCommentableLineNumbers={getCommentableLineNumbers}
       setSectionHeights={setSectionHeights}
       setSections={setSections}
       modifiedEditorsRef={modifiedEditorsRef}

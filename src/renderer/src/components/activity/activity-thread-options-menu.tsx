@@ -26,7 +26,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { ActivityScopeFilterMenuSections } from './activity-scope-filter-controls'
+import {
+  ActivityScopeFilterMenuSections,
+  useActivityScopeFilterActive
+} from './activity-scope-filter-controls'
 import type { ActivityGroupBy } from './activity-thread-types'
 
 const ALIGNED_CHECKBOX_ITEM_CLASS = 'pl-2 [&>span.absolute]:hidden'
@@ -57,7 +60,8 @@ export function ActivityThreadOptionsMenu({
   onShowChildAgentsChange,
   onMarkAllThreadsRead,
   onClearCompleted,
-  onSearch,
+  showSearch = false,
+  onShowSearchChange,
   unreadOnly = false,
   onToggleUnread
 }: {
@@ -71,11 +75,19 @@ export function ActivityThreadOptionsMenu({
   onShowChildAgentsChange?: (showChildAgents: boolean) => void
   onMarkAllThreadsRead?: () => void
   onClearCompleted?: () => void
-  onSearch?: () => void
+  showSearch?: boolean
+  onShowSearchChange?: (showSearch: boolean) => void
   unreadOnly?: boolean
   onToggleUnread?: () => void
 }): React.JSX.Element {
   const skipCloseAutoFocusRef = React.useRef(false)
+  const scopeFilterActive = useActivityScopeFilterActive()
+  const optionsLabel = scopeFilterActive
+    ? translate(
+        'auto.components.activity.ActivityPrototypePage.threadListOptionsFiltered',
+        'Thread list options, filters active'
+      )
+    : translate('auto.components.activity.ActivityPrototypePage.db8a1878b5', 'Thread list options')
 
   return (
     <DropdownMenu>
@@ -88,13 +100,17 @@ export function ActivityThreadOptionsMenu({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="text-muted-foreground"
-                aria-label={translate(
-                  'auto.components.activity.ActivityPrototypePage.db8a1878b5',
-                  'Thread list options'
-                )}
+                className="relative text-muted-foreground"
+                aria-label={optionsLabel}
               >
                 <ListFilter className="size-3.5" strokeWidth={2.25} />
+                {scopeFilterActive ? (
+                  <span
+                    className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-foreground"
+                    aria-hidden="true"
+                    data-scope-filter-dot=""
+                  />
+                ) : null}
               </Button>
             </DropdownMenuTrigger>
           </span>
@@ -118,20 +134,26 @@ export function ActivityThreadOptionsMenu({
           }
         }}
       >
-        {onSearch || onToggleUnread ? (
+        {onShowSearchChange || onToggleUnread ? (
           <>
-            {onSearch ? (
-              <DropdownMenuItem
-                onSelect={() => {
-                  skipCloseAutoFocusRef.current = true
-                  onSearch()
+            {onShowSearchChange ? (
+              <DropdownMenuCheckboxItem
+                checked={showSearch}
+                className={ALIGNED_CHECKBOX_ITEM_CLASS}
+                onCheckedChange={(checked) => {
+                  skipCloseAutoFocusRef.current = checked === true
+                  onShowSearchChange(checked === true)
                 }}
               >
                 <Search className="size-3.5 text-muted-foreground" />
-                <span>
-                  {translate('auto.components.activity.ActivityPrototypePage.search', 'Search')}
+                <span className="min-w-0 flex-1 truncate">
+                  {translate(
+                    'auto.components.activity.ActivityPrototypePage.showSearch',
+                    'Show search'
+                  )}
                 </span>
-              </DropdownMenuItem>
+                {showSearch ? <Check className="size-3.5" /> : null}
+              </DropdownMenuCheckboxItem>
             ) : null}
             {onToggleUnread ? (
               <Tooltip>
@@ -149,13 +171,6 @@ export function ActivityThreadOptionsMenu({
                         'Show unread only'
                       )}
                     </span>
-                    {hasUnreadThreads ? (
-                      <span
-                        className="size-1.5 shrink-0 rounded-full bg-primary"
-                        aria-hidden="true"
-                        data-unread-dot=""
-                      />
-                    ) : null}
                     {unreadOnly ? <Check className="size-3.5" /> : null}
                   </DropdownMenuCheckboxItem>
                 </TooltipTrigger>

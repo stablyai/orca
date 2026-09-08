@@ -173,20 +173,26 @@ function runCase(caseName) {
 
 function buildImage() {
   console.log(`Building ${tag}…`)
-  docker(
-    [
-      'build',
-      ...dockerPlatformArgs,
-      '--build-arg',
-      `BASE_IMAGE=${base}`,
-      '-f',
-      'config/docker/cli-launch-contract/Dockerfile',
-      '-t',
-      tag,
-      'config/docker/cli-launch-contract'
-    ],
-    { timeoutMs: BUILD_TIMEOUT_MS }
-  )
+  const buildArgs = [
+    'build',
+    ...dockerPlatformArgs,
+    '--build-arg',
+    `BASE_IMAGE=${base}`,
+    '-f',
+    'config/docker/cli-launch-contract/Dockerfile',
+    '-t',
+    tag,
+    'config/docker/cli-launch-contract'
+  ]
+  // Why: apt fetches from archive.ubuntu.com stall or fail mid-sync; a second build usually lands on a healthy index.
+  try {
+    docker(buildArgs, { timeoutMs: BUILD_TIMEOUT_MS })
+  } catch (error) {
+    console.error(
+      `${error instanceof Error ? error.message : String(error)}\nRetrying docker build once…`
+    )
+    docker(buildArgs, { timeoutMs: BUILD_TIMEOUT_MS })
+  }
 }
 
 // Extract unprivileged so chrome-sandbox is not root-owned setuid.

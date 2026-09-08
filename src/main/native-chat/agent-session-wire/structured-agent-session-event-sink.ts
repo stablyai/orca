@@ -3,12 +3,11 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
-
-export type StructuredAgentSessionJournalBlob = { digest: string; payload: string }
 
 export type StructuredAgentSessionSinkAdmission =
   | { accepted: true }
@@ -24,7 +23,7 @@ export type StructuredAgentSessionSinkState = {
 export type StructuredAgentSessionSinkBarrier = { ok: true } | { ok: false; error: unknown }
 
 export type StructuredAgentSessionAppendOptions = {
-  /** Pending checkpoints with this key replace one another before blob writes. */
+  /** Pending checkpoints with this key replace one another before they run. */
   coalescingKey?: string
   /** Marks a critical lifecycle operation for lifecycle barriers and diagnostics. */
   lifecycle?: boolean
@@ -34,7 +33,6 @@ export type StructuredAgentSessionEventSink = {
   appendItem(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    blobs?: readonly StructuredAgentSessionJournalBlob[],
     options?: StructuredAgentSessionAppendOptions
   ): void
   appendTombstone(
@@ -46,10 +44,10 @@ export type StructuredAgentSessionEventSink = {
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   publish(options?: StructuredAgentSessionAppendOptions): void
+  setActivity?(activity: AgentSessionTurnActivity | null): void
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
-    blobs?: readonly StructuredAgentSessionJournalBlob[],
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   appendLifecycleBatch?(
@@ -70,7 +68,7 @@ export type StructuredAgentSessionEventSink = {
 export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
   fence: number
-  publish: () => void
+  publish: (activity?: AgentSessionTurnActivity | null) => void
 }
 
 export type DeferredStructuredAgentSessionEventSink = {
@@ -159,32 +157,22 @@ export function createDeferredStructuredAgentSessionEventSink(
 
   return {
     sink: {
-      appendItem: (identity, body, blobs = [], options = {}) => {
+      appendItem: (identity, body, options = {}) => {
         queue.submit(
           {
-            bytes: estimateStructuredAgentSessionItemBytes(identity, body, blobs),
+            bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
-            run: (bound) =>
-              blobs.length > 0 && typeof bound.journal.appendItemWithBlobs === 'function'
-                ? bound.journal.appendItemWithBlobs(identity, body, blobs, {
-                    fence: bound.fence
-                  })
-                : bound.journal.appendItem(identity, body, { fence: bound.fence })
+            run: (bound) => bound.journal.appendItem(identity, body, { fence: bound.fence })
           },
           options
         )
       },
-      tryAppendItem: (identity, body, blobs = [], options = {}) =>
+      tryAppendItem: (identity, body, options = {}) =>
         queue.submit(
           {
-            bytes: estimateStructuredAgentSessionItemBytes(identity, body, blobs),
+            bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
-            run: (bound) =>
-              blobs.length > 0 && typeof bound.journal.appendItemWithBlobs === 'function'
-                ? bound.journal.appendItemWithBlobs(identity, body, blobs, {
-                    fence: bound.fence
-                  })
-                : bound.journal.appendItem(identity, body, { fence: bound.fence })
+            run: (bound) => bound.journal.appendItem(identity, body, { fence: bound.fence })
           },
           options
         ),
@@ -222,6 +210,13 @@ export function createDeferredStructuredAgentSessionEventSink(
         ),
       publish: (options = {}) => {
         publish(options)
+      },
+      setActivity: (activity) => {
+        queue.submit({
+          bytes: Buffer.byteLength(JSON.stringify(activity), 'utf8') + 64,
+          coalescingKey: 'turn-activity',
+          run: (bound) => bound.publish(activity)
+        })
       },
       tryPublish: publish
     },

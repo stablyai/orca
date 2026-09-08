@@ -90,7 +90,9 @@ export async function terminateCodexProbeChild(
     try {
       // npm-installed Codex runs beneath cmd.exe; killing only that wrapper can
       // leave app-server alive after the credential-home lock is released.
-      await (options?.killWindowsProcessTree ?? terminateWindowsProcessTree)(child.pid)
+      await (options?.killWindowsProcessTree ?? terminateWindowsProcessTree)(child.pid, {
+        site: 'codex-rate-limit-probe'
+      })
     } catch {
       // The direct-child fallback still applies if an injected killer rejects.
     }

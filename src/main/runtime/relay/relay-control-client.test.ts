@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { E2EEKeypair } from '../e2ee-keypair'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
 import { RelayControlClient } from './relay-control-client'
 
 const encoder = new TextEncoder()
@@ -184,17 +185,21 @@ describe('RelayControlClient', () => {
       .update(hostKeys.publicKey)
       .digest('base64url')
       .slice(0, 16)
-    const accepted = new Promise<{ socket: WebSocket; authorization: string; path: string }>(
-      (resolve) => {
-        server.once('connection', (socket, request) =>
-          resolve({
-            socket,
-            authorization: String(request.headers.authorization),
-            path: request.url ?? ''
-          })
-        )
-      }
-    )
+    const accepted = new Promise<{
+      socket: WebSocket
+      authorization: string
+      capabilities: string
+      path: string
+    }>((resolve) => {
+      server.once('connection', (socket, request) =>
+        resolve({
+          socket,
+          authorization: String(request.headers.authorization),
+          capabilities: String(request.headers['x-orca-host-capabilities']),
+          path: request.url ?? ''
+        })
+      )
+    })
     const onConnectionOpen = vi.fn()
     const onDrain = vi.fn()
     const onClose = vi.fn()
@@ -212,8 +217,11 @@ describe('RelayControlClient', () => {
     })
     clients.push(client)
     const connecting = client.connect()
-    const { socket, authorization, path } = await accepted
+    const { socket, authorization, capabilities, path } = await accepted
     expect(authorization).toBe('Bearer scoped-token')
+    // Advertised on the upgrade, never in host-hello: a cell that predates the
+    // capability parses host-hello strictly and would refuse the handshake.
+    expect(capabilities).toBe('pending-conn-details')
     expect(path).toBe('/v1/host/control')
     const hello = await nextJson(socket)
     expect(hello).toMatchObject({
@@ -410,6 +418,7 @@ class FakeControlSocket extends EventEmitter {
 function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: number } = {}): {
   client: RelayControlClient
   socket: FakeControlSocket
+  onConnectionOpen: ReturnType<typeof vi.fn>
   onClose: ReturnType<typeof vi.fn>
 } {
   const hostKeys = nacl.box.keyPair()
@@ -477,6 +486,7 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
     }
   }
   const onClose = vi.fn()
+  const onConnectionOpen = vi.fn()
   const client = new RelayControlClient({
     cellUrl: origin,
     relayJwt: 'scoped-token',
@@ -485,13 +495,13 @@ function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: n
     identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
     keypair,
     appVersion: '1.2.3',
-    onConnectionOpen: vi.fn(),
+    onConnectionOpen,
     onDrain: vi.fn(),
     onClose,
     createSocket: () => socket as unknown as WebSocket
   })
   queueMicrotask(() => socket.emit('open'))
-  return { client, socket, onClose }
+  return { client, socket, onConnectionOpen, onClose }
 }
 
 describe('RelayControlClient scripted-socket lifecycle', () => {
@@ -549,5 +559,72 @@ describe('RelayControlClient scripted-socket lifecycle', () => {
 
     vi.advanceTimersByTime(91_000)
     expect(client.isLive()).toBe(false)
+  })
+
+  it('ignores an unrecognized control message without closing the active control', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+    expect(client.isLive()).toBe(true)
+
+    // A newer relay opcode the desktop schema does not know. Rule 2 of
+    // remote-wire-compatibility: an unknown-but-well-formed frame is dropped,
+    // never fatal to a live control.
+    socket.deliver({ type: 'relay-hint', v: 2, hint: 'future-feature' })
+
+    expect(client.isLive()).toBe(true)
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('ignores a reply whose request already timed out instead of self-closing', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+
+    // A relay control-error carrying a reqId with no live waiter — e.g. a late
+    // reply that arrived after the desktop's request deadline deleted it, or the
+    // relay's no-op error for a command it could not route. Must not be fatal.
+    socket.deliver({ type: 'control-error', reqId: 'expired-req', code: 'unknown_control_message' })
+
+    expect(client.isLive()).toBe(true)
+    expect(socket.readyState).toBe(1)
+    expect(onClose).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('still opens a connection the relay handed over before it asked us to drain', async () => {
+    const { client, socket, onConnectionOpen } = scriptedControl()
+    await client.connect()
+    socket.deliver({ type: 'drain', graceMs: 5_000, recovery: 'resolve-director' })
+
+    // A drain-only cell refuses new phones, so this conn-open was issued before
+    // the drain and only this cell holds the phone waiting on it.
+    socket.deliver({
+      type: 'conn-open',
+      connId: 'conn-1',
+      connTicket: 'T'.repeat(43),
+      kind: 'resume',
+      relayDeviceId: 'device-1',
+      attachDeadlineMs: 10_000
+    })
+
+    expect(onConnectionOpen).toHaveBeenCalledOnce()
+    expect(onConnectionOpen).toHaveBeenCalledWith(
+      expect.objectContaining({ connId: 'conn-1', connTicket: 'T'.repeat(43) })
+    )
+    expect(client.isLive()).toBe(true)
+  })
+
+  it('still tears down a malformed (non-JSON) control frame', async () => {
+    const { client, socket, onClose } = scriptedControl()
+    await client.connect()
+
+    socket.emit('message', 'not-json{', false)
+
+    expect(client.isLive()).toBe(false)
+    expect(socket.readyState).toBe(3)
+    expect(onClose).toHaveBeenCalledWith(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
   })
 })

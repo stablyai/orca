@@ -229,6 +229,10 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
+  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 13%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 26%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 11%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 22%, transparent);
   --git-graph-ref: #007acc;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -341,6 +345,10 @@
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
   --git-decoration-ignored: #6e6e6e;
+  --diff-added-ground: color-mix(in srgb, var(--git-decoration-added) 16%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--git-decoration-added) 30%, transparent);
+  --diff-removed-ground: color-mix(in srgb, var(--git-decoration-deleted) 18%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--git-decoration-deleted) 32%, transparent);
   --git-graph-ref: #3794ff;
   --git-graph-remote-ref: #b66dff;
   --git-graph-base-ref: #ea5c00;
@@ -392,9 +400,9 @@
   z-index: 40 !important;
 }
 
-/* Keep interruption controls above unrelated updater/onboarding chrome. */
+/* Above the z-40 updater/onboarding chrome, below the floating workspace panel's z-45. */
 .native-chat-pane-shell:has([data-native-chat-working='true']) {
-  z-index: 50;
+  z-index: 44;
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] {

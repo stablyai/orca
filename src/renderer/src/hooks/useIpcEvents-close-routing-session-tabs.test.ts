@@ -123,7 +123,8 @@ describe('useIpcEvents browser tab close routing', () => {
     listenerRef.current?.({
       requestId: 'close-1',
       tabId: 'terminal-1',
-      localPtyTeardownOwnedExternally: true
+      localPtyTeardownOwnedExternally: true,
+      force: true
     })
     await Promise.resolve()
 
@@ -131,6 +132,7 @@ describe('useIpcEvents browser tab close routing', () => {
       'terminal-1',
       expect.objectContaining({
         rejectPinned: true,
+        force: true,
         localPtyTeardownOwnedExternally: true
       })
     )

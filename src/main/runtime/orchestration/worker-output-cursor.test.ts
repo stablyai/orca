@@ -3,15 +3,32 @@ import { decodeWorkerOutputCursor, encodeWorkerOutputCursor } from './worker-out
 
 describe('worker output cursors', () => {
   it('round-trips a source-pinned cursor without exposing source details', () => {
-    const cursor = encodeWorkerOutputCursor('dispatch_1', 'transcript', 'source_digest', 42)
+    const cursor = encodeWorkerOutputCursor(
+      'dispatch_1',
+      'transcript',
+      'source_digest',
+      42,
+      'boundary_digest'
+    )
 
     expect(cursor).toMatch(/^owr1_/)
     expect(cursor).not.toContain('source_digest')
+    expect(cursor).not.toContain('boundary_digest')
     expect(decodeWorkerOutputCursor(cursor, 'dispatch_1')).toEqual({
       source: 'transcript',
       sourceIdentity: 'source_digest',
       position: 42,
+      boundaryCheckpoint: 'boundary_digest',
       legacy: false
+    })
+  })
+
+  it('decodes pre-checkpoint transcript cursors for conservative migration handling', () => {
+    const cursor = encodeWorkerOutputCursor('dispatch_1', 'transcript', 'source_digest', 42)
+
+    expect(decodeWorkerOutputCursor(cursor, 'dispatch_1')).toMatchObject({
+      source: 'transcript',
+      boundaryCheckpoint: null
     })
   })
 

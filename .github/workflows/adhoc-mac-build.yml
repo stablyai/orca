@@ -127,9 +127,12 @@ jobs:
           esac
           # Bare: a work-tree repo refuses to fetch over its own checked-out
           # branch. tree:0 keeps the fetch to the commit graph — no trees, no
-          # blobs — so this stays cheap next to the build it fronts.
+          # blobs — so this stays cheap next to the build it fronts. reftable
+          # because this repo has branches that differ only in casing, and the
+          # files backend cannot store both on a case-insensitive runner disk —
+          # it fails the entire fetch, not just the one ref.
           scratch="$RUNNER_TEMP/vet-requested-ref"
-          git init -q --bare "$scratch"
+          git init -q --bare --ref-format=reftable "$scratch"
           git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
           # Branch first to keep actions/checkout's old tie-break: bare
           # rev-parse would prefer the tag when a branch shares its name.
@@ -157,6 +160,9 @@ jobs:
 
       - name: Checkout the requested ref
         uses: actions/checkout@v6
+        env:
+          # Full-history checkout must also preserve case-twin branch and tag names.
+          GIT_DEFAULT_REF_FORMAT: reftable
         with:
           # Why an input at all rather than just github.ref: the whole point is to
           # build code that has not landed, and the workflow definition itself

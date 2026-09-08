@@ -1,12 +1,12 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
+import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import {
-  collectDescendantsFromIndex,
   getFreshProcessTableSnapshot,
-  getProcessTableIndex,
-  getProcessTableSnapshot,
-  type ProcessTableRow
-} from '../../shared/process-table-snapshot'
+  getFreshShellForegroundSnapshot,
+  getProcessTableSnapshot
+} from '../../shared/process-table-snapshot-reader'
+import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import {
   resolveWindowsAgentForegroundProcessWithAvailability,
   shouldInspectWindowsAgentForeground,
@@ -19,6 +19,7 @@ export type { AgentForegroundResolutionOptions } from './windows-agent-foregroun
 export {
   resolveAgentForegroundProcessesBatch,
   resolveAgentForegroundProcessesFromIndex,
+  resolveRemoteForegroundEvidence,
   toForegroundProcessEvidence,
   type BatchedForegroundProcessOptions,
   type BatchedForegroundProcessRequest,
@@ -76,7 +77,7 @@ export async function confirmShellForegroundProcess(
     }
   }
   try {
-    const index = getProcessTableIndex(await getFreshProcessTableSnapshot())
+    const index = getProcessTableIndex(await getFreshShellForegroundSnapshot())
     const root = index.byPid.get(shellPid)
     if (!root) {
       return false

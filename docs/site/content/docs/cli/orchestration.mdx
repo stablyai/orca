@@ -145,7 +145,7 @@ orca orchestration ask \
   --json
 ```
 
-With `--json`, `ask` prints a single JSON object so workers can pipe it to `jq -r .answer`.
+With `--json`, `ask` prints the standard `{id, ok, result, _meta}` envelope, so workers read the answer with `jq -r .result.answer`.
 
 ## Decision gates
 
