@@ -1,3 +1,4 @@
+import { isHistoricalActivityState } from './activity-event-state'
 import type {
   AgentStateHistoryEntry,
   AgentStatusEntry
@@ -11,12 +12,6 @@ import type {
   ActivityLiveAgentState
 } from './activity-thread-types'
 import { EVENTS_PER_PANE_CAP } from './activity-event-cap'
-
-function isHistoricalActivityState(
-  state: string
-): state is Extract<ActivityEventState, 'done' | 'blocked' | 'waiting'> {
-  return state === 'done' || state === 'blocked' || state === 'waiting'
-}
 
 function historyEntrySnapshot(
   entry: AgentStatusEntry,

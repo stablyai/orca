@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status-types'
 import { countActivityUnread } from './useActivityUnreadCount'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
@@ -107,5 +110,57 @@ describe('countActivityUnread source overlap', () => {
       migrationUnsupportedByPtyId: {}
     }
     expect(countActivityUnread(source)).toBe(1)
+  })
+})
+
+describe('countActivityUnread working turns', () => {
+  it('counts fresh working and monitoring, but not historical or retained working', () => {
+    const entry = makeEntry({
+      state: 'working',
+      stateHistory: [{ state: 'working', prompt: 'old', startedAt: 1_000 }]
+    })
+    expect(countActivityUnread(makeSource(entry), 2_000)).toBe(1)
+    expect(countActivityUnread(makeSource({ ...entry, workingMode: 'monitoring' }), 2_000)).toBe(1)
+    expect(
+      countActivityUnread(
+        {
+          ...makeSource(entry),
+          agentStatusByPaneKey: {},
+          retainedAgentsByPaneKey: {
+            [PANE]: {
+              entry,
+              worktreeId: 'wt-1',
+              tab: {} as never,
+              agentType: 'claude',
+              startedAt: 1_000
+            }
+          }
+        },
+        2_000
+      )
+    ).toBe(0)
+  })
+
+  it('preserves receipts across heartbeats and counts the next turn', () => {
+    const entry = makeEntry({ state: 'working', updatedAt: 3_000 })
+    expect(countActivityUnread(makeSource(entry, 2_000), 3_000)).toBe(0)
+    expect(countActivityUnread(makeSource({ ...entry, stateStartedAt: 3_000 }, 2_000), 3_000)).toBe(
+      1
+    )
+    expect(
+      countActivityUnread(
+        { ...makeSource(entry), activityClearedAtByPaneKey: { [PANE]: 2_000 } },
+        3_000
+      )
+    ).toBe(0)
+  })
+
+  it('drops stale or unconfirmed working and revives only on fresh evidence', () => {
+    const entry = makeEntry({ state: 'working' })
+    expect(countActivityUnread(makeSource(entry), 2_000 + AGENT_STATUS_STALE_AFTER_MS)).toBe(1)
+    const expiredAt = 2_001 + AGENT_STATUS_STALE_AFTER_MS
+    expect(countActivityUnread(makeSource(entry), expiredAt)).toBe(0)
+    expect(countActivityUnread(makeSource({ ...entry, updatedAt: expiredAt }), expiredAt)).toBe(1)
+    expect(countActivityUnread(makeSource({ ...entry, restoredUnconfirmed: true }), 2_000)).toBe(0)
   })
 })
