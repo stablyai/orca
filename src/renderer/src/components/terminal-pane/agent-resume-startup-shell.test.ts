@@ -5,21 +5,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * runs. Without it the host resolves the shell from the global
  * `terminalWindowsShell` setting alone, so a tab with a per-tab override is
  * quoted for the wrong shell after an app restart (#12320, #13095).
+ *
+ * The value must also be withheld whenever the client cannot classify the
+ * target, so the host keeps its own platform-aware resolution.
  */
 
 const storeState: {
   tabsByWorktree: Record<string, { id: string; shellOverride?: string }[]>
   settings?: { terminalWindowsShell?: string | null }
-} = { tabsByWorktree: {}, settings: {} }
+  worktreesByRepo: unknown
+} = { tabsByWorktree: {}, settings: {}, worktreesByRepo: {} }
 
-vi.mock('@/store', () => ({
-  useAppStore: { getState: () => storeState }
-}))
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: () => null
-}))
+let connectionId: string | null = null
+let executionHostId: string | null = 'local'
+let worktreePath: string | undefined = 'C:\\repo\\feature'
+
+vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState } }))
+vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => connectionId }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () => 'local'
+  getExecutionHostIdForWorktree: () => executionHostId
+}))
+vi.mock('@/store/worktree-repo-index', () => ({
+  getIndexedWorktreeById: () => (worktreePath ? { path: worktreePath } : undefined)
 }))
 
 function setNavigatorUserAgent(userAgent: string): () => void {
@@ -55,11 +62,14 @@ async function resolveShell(args: {
   )
 }
 
-describe('resolveAgentResumeStartupShellForPane on a Windows client', () => {
+describe('resolveAgentResumeStartupShellForPane on a local Windows pane', () => {
   let restoreNavigator: () => void
 
   beforeEach(() => {
     vi.resetModules()
+    connectionId = null
+    executionHostId = 'local'
+    worktreePath = 'C:\\repo\\feature'
     restoreNavigator = setNavigatorUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
   })
 
@@ -91,11 +101,45 @@ describe('resolveAgentResumeStartupShellForPane on a Windows client', () => {
   })
 })
 
+describe('resolveAgentResumeStartupShellForPane withholds a shell it cannot classify', () => {
+  let restoreNavigator: () => void
+
+  beforeEach(() => {
+    vi.resetModules()
+    connectionId = null
+    executionHostId = 'local'
+    worktreePath = 'C:\\repo\\feature'
+    restoreNavigator = setNavigatorUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+  })
+
+  afterEach(() => {
+    restoreNavigator()
+  })
+
+  it('sends nothing for a WSL worktree, which runs a POSIX shell', async () => {
+    worktreePath = '\\\\wsl.localhost\\Ubuntu-24.04\\home\\dev\\repo'
+    expect(await resolveShell({ tabShellOverride: 'cmd.exe' })).toBeUndefined()
+  })
+
+  it('sends nothing for an SSH workspace', async () => {
+    connectionId = 'conn-1'
+    expect(await resolveShell({ tabShellOverride: 'cmd.exe' })).toBeUndefined()
+  })
+
+  it('sends nothing for a non-local execution host', async () => {
+    executionHostId = 'environment:env-1'
+    expect(await resolveShell({ tabShellOverride: 'cmd.exe' })).toBeUndefined()
+  })
+})
+
 describe('resolveAgentResumeStartupShellForPane on a non-Windows client', () => {
   let restoreNavigator: () => void
 
   beforeEach(() => {
     vi.resetModules()
+    connectionId = null
+    executionHostId = 'local'
+    worktreePath = '/home/dev/repo'
     restoreNavigator = setNavigatorUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)')
   })
 

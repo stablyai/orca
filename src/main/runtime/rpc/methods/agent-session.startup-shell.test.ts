@@ -6,6 +6,9 @@ import { EnsureAgentSessionParams } from './agent-session'
  * per-tab override survives an app restart (#12320, #13095). The field is
  * optional: an older client omits it and the host keeps resolving the shell
  * from the global `terminalWindowsShell` setting.
+ *
+ * The host additionally honours it only for a local win32 target; the schema's
+ * job is to keep the value inside the known shell union.
  */
 describe('ensureAgentSession startupShell', () => {
   const base = {
