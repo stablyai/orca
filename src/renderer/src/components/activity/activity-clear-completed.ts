@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AgentStatusCacheIdentity } from '../../../../shared/agent-status-types'
-import { threadStatusGroupId } from './activity-thread-grouping'
+import { activityThreadStatusId } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export type ClearCompletedActivityPlan = {
@@ -21,8 +21,8 @@ export type ClearCompletedActivityPlan = {
 /** A thread is clearable when it needs nothing from the user: completed or interrupted,
  *  with no fresh live working/monitoring/blocked/waiting state. */
 export function isClearableActivityThread(thread: AgentPaneThread): boolean {
-  const groupId = threadStatusGroupId(thread)
-  return groupId === 'done' || groupId === 'interrupted'
+  const id = activityThreadStatusId(thread)
+  return id === 'done' || id === 'interrupted'
 }
 
 export function planClearCompletedActivity(

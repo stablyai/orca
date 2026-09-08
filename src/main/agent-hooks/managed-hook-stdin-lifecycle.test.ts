@@ -63,12 +63,26 @@ import { KimiHookService } from '../kimi/hook-service'
 
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
-import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
+import {
+  POSIX_HOOK_STDIN_READER,
+  WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
+} from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 
+/** The launchers ship their command base64'd; assert the shape they actually run. */
+function decodeEncodedPowerShellCommand(command: string): string {
+  const encoded = command.match(/-EncodedCommand\s+(\S+)/)
+  expect(encoded, 'launcher carries an encoded command').not.toBeNull()
+  return Buffer.from(encoded![1], 'base64').toString('utf16le')
+}
+
 const REMOTE_HOME = '/home/dev'
+// Why all three: Windows reports a write to a pipe whose reader is gone as any of these,
+// depending on whether the read handle, the pipe, or the process went first. Enumerating
+// them keeps the guard-exit legs from failing on which race the host happened to run.
+const WRITER_BROKEN_BY_EARLY_EXIT = ['EPIPE', 'ECONNRESET', 'EOF']
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')
 
 // Why: a developer box may set HKCU\...\Command Processor\AutoRun, which cmd.exe runs before any
@@ -156,7 +170,10 @@ type HookRun = {
 function runHookProcess(
   executable: string,
   args: string[],
-  env: NodeJS.ProcessEnv
+  env: NodeJS.ProcessEnv,
+  // Why: `abandon` leaves the pipe open and unwritten — the shape a caller outside an Orca
+  // pane produces, and the only one that can catch a read-to-EOF that never returns (#11549).
+  stdin: 'close' | 'abandon' = 'close'
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, args, { env, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -164,8 +181,9 @@ function runHookProcess(
     let stderr = ''
     let stdout = ''
     const timeout = setTimeout(() => {
+      child.stdin.destroy()
       child.kill('SIGKILL')
-      reject(new Error('hook did not finish after stdin closed'))
+      reject(new Error(`hook did not finish with stdin ${stdin}d`))
     }, 10_000)
     child.on('error', (error) => {
       clearTimeout(timeout)
@@ -182,7 +200,9 @@ function runHookProcess(
       clearTimeout(timeout)
       resolve({ exitCode, stdinErrors, stderr, stdout })
     })
-    child.stdin.end(LARGE_PAYLOAD)
+    if (stdin === 'close') {
+      child.stdin.end(LARGE_PAYLOAD)
+    }
   })
 }
 
@@ -303,6 +323,31 @@ describe('Windows managed hook stdin structure', () => {
       expect(copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')).toBeLessThan(
         copilot.indexOf('[Console]::In.ReadToEnd()')
       )
+      // Why: the two encoded-PowerShell launchers own stdin themselves when the managed
+      // script is missing, so the same guard has to precede their ReadToEnd — and the
+      // fallback answer has to precede the guard, or a gate event outside a pane is
+      // answered with silence, which reads as deny (#2426/#15462).
+      for (const [name, command] of [
+        [
+          'wrapWindowsHookCommand',
+          wrapWindowsHookCommand('C:\\missing\\orca-hook.cmd', {}, { fallbackStdout: '{}' })
+        ],
+        [
+          'wrapRuntimeHomeHookCommand',
+          wrapRuntimeHomeHookCommand('missing-orca-hook', { neutralJsonWhenMissing: true })
+        ]
+      ] as const) {
+        const decoded = decodeEncodedPowerShellCommand(command)
+        expect(decoded, `${name} decoded`).toContain(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
+        expect(decoded.indexOf("Write-Output '{}'"), `${name} answers first`).toBeLessThan(
+          decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
+        )
+        expect(
+          decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD),
+          `${name} guards before owning stdin`
+        ).toBeLessThan(decoded.indexOf('[Console]::In.ReadToEnd()'))
+      }
+
       const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
       expect(kimi.indexOf('if [ -z "$ORCA_AGENT_HOOK_PORT" ]')).toBeGreaterThan(-1)
       expect(kimi.indexOf('if [ -z "$ORCA_AGENT_HOOK_PORT" ]')).toBeLessThan(
@@ -365,12 +410,11 @@ describe('Windows managed hook stdin structure', () => {
           const result = await runHookProcess(executable, args, hookEnvironment())
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
           // Why (#11549 class): every Windows-local hook exits before owning stdin when the
-          // Orca env is missing, so the writer may break — EPIPE, or ECONNRESET when Windows
-          // tears the pipe down first. hookEnvironment() strips every ORCA_* var, so this
-          // relaxation only ever covers the missing-env path — a happy-path case added to
-          // this loop must not reuse it.
+          // Orca env is missing, so the writer may break. hookEnvironment() strips every
+          // ORCA_* var, so this relaxation only ever covers the missing-env path — a
+          // happy-path case added to this loop must not reuse it.
           for (const error of result.stdinErrors) {
-            expect(['EPIPE', 'ECONNRESET'], `${fileName} stdin error`).toContain(error.code)
+            expect(WRITER_BROKEN_BY_EARLY_EXIT, `${fileName} stdin error`).toContain(error.code)
           }
         }
 
@@ -395,9 +439,42 @@ describe('Windows managed hook stdin structure', () => {
           }
         ]
         for (const launcher of launcherCases) {
-          const result = await runHookProcess(launcher.executable, launcher.args, hookEnvironment())
-          expect(result.exitCode, `${launcher.name} exit code`).toBe(0)
-          expect(result.stdinErrors, `${launcher.name} stdin errors`).toHaveLength(0)
+          // Why (#11549 class): a launcher that reaches an interpreter owns stdin for a
+          // missing script exactly like a managed script does, so it obeys the same rule —
+          // drain inside a pane, exit before reading outside one. Its writer may therefore
+          // break on the missing-env leg, and must not on the in-pane leg.
+          const outside = await runHookProcess(
+            launcher.executable,
+            launcher.args,
+            hookEnvironment()
+          )
+          expect(outside.exitCode, `${launcher.name} exit code`).toBe(0)
+          for (const error of outside.stdinErrors) {
+            expect(WRITER_BROKEN_BY_EARLY_EXIT, `${launcher.name} stdin error`).toContain(
+              error.code
+            )
+          }
+          const insideAPane = await runHookProcess(
+            launcher.executable,
+            launcher.args,
+            hookEnvironment({
+              ORCA_AGENT_HOOK_PORT: '59999',
+              ORCA_AGENT_HOOK_TOKEN: 'token',
+              ORCA_PANE_KEY: 'tab:leaf'
+            })
+          )
+          expect(insideAPane.exitCode, `${launcher.name} in-pane exit code`).toBe(0)
+          expect(insideAPane.stdinErrors, `${launcher.name} in-pane stdin errors`).toHaveLength(0)
+          // Why this leg and not a shape assertion: an unguarded ReadToEnd exits fine when
+          // the writer closes the pipe. Only a caller that abandons it strands the launcher,
+          // which is what left a console per hook event on the reporting hosts.
+          const abandoned = await runHookProcess(
+            launcher.executable,
+            launcher.args,
+            hookEnvironment(),
+            'abandon'
+          )
+          expect(abandoned.exitCode, `${launcher.name} abandoned-stdin exit code`).toBe(0)
         }
       } finally {
         homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())

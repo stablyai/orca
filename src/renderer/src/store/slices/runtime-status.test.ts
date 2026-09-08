@@ -181,7 +181,8 @@ describe('runtime-status slice', () => {
 
     const map = store.getState().runtimeStatusByEnvironmentId
     expect(map.size).toBe(1)
-    expect(map.get('env-a')).toEqual({ status: null, checkedAt: 5, connectionGeneration: 1 })
+    // Generation 0: a first publication is not a reconnect, and going offline never bumps.
+    expect(map.get('env-a')).toEqual({ status: null, checkedAt: 5, connectionGeneration: 0 })
   })
 
   it('retains a learned paired device id after disconnecting a legacy environment', () => {
@@ -302,7 +303,8 @@ describe('runtime-status slice', () => {
     })
 
     expect(store.getState().runtimeStatusByEnvironmentId).not.toBe(before)
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(2)
+    // The first publication holds 0; only the runtime-id change advances it.
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
   })
 
   it('does not toast when the first probe finds a saved server offline', () => {
@@ -525,14 +527,16 @@ describe('runtime-status slice', () => {
       status: makeStatus({ runtimeId: 'runtime-a' }),
       checkedAt: 2
     })
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
+    // Neither the first publication nor a stable re-poll is a connection change.
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(0)
 
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 3 })
     store.getState().setRuntimeEnvironmentStatus('env-a', {
       status: makeStatus({ runtimeId: 'runtime-a' }),
       checkedAt: 4
     })
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(2)
+    // Offline -> online is a real reconnect, so recovery still advances.
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(1)
   })
 
   it('keeps stored and canonical generations aligned after same-id re-pairing', () => {
@@ -552,7 +556,9 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
       getRuntimeEnvironmentConnectionGeneration('env-a')
     )
-    expect(getRuntimeEnvironmentConnectionGeneration('env-a')).toBe(3)
+    // The re-pair itself advanced the generation and dropped the entry; the first
+    // publication under the new pairing must not advance it a second time.
+    expect(getRuntimeEnvironmentConnectionGeneration('env-a')).toBe(1)
   })
 
   it('invalidates provider state only when the active runtime session changes', () => {

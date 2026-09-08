@@ -113,6 +113,7 @@ export function installActiveSessionTabsSubscription({
       environmentId,
       {
         expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
+        expectedRuntimeId: runtimeId,
         getCurrentState: () => useAppStore.getState()
       }
     )

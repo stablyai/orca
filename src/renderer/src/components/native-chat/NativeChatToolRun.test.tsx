@@ -23,6 +23,16 @@ function leadingGlyphs(container: HTMLElement): (string | null)[] {
   )
 }
 
+/** The run header — the first button in a run, above its member rows. Its
+ *  members render as separate pills, so it has no single joined summary node. */
+function runHeader(container: HTMLElement): HTMLElement {
+  const header = container.querySelector('button')
+  if (!header) {
+    throw new Error('run header did not render')
+  }
+  return header
+}
+
 describe('NativeChatToolRun', () => {
   it('uses the shared clean label for a desktop tool row', () => {
     const blocks: NativeChatBlock[] = [
@@ -244,6 +254,107 @@ describe('NativeChatToolRun', () => {
     expect(writeClipboardText).toHaveBeenCalledWith(' ctx\n-was\n+now\n+tail')
   })
 
+  describe('reading a batch as a group', () => {
+    const batch: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'mcp__linear__list_issues',
+        input: { query: 'todo' },
+        state: 'completed',
+        mcpIdentity: { server: 'linear', tool: 'list_issues' }
+      },
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls -la' }, state: 'completed' },
+      {
+        type: 'tool-call',
+        name: 'tools/read',
+        input: { file_path: 'README.md' },
+        state: 'completed'
+      }
+    ]
+
+    it('gives each member its own glyph-led segment instead of one joined string', () => {
+      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
+
+      const pills = runHeader(container).querySelectorAll('[data-tool-run-member]')
+      expect([...pills].map((pill) => pill.textContent)).toEqual([
+        'mcp__linear__list_issues todo',
+        'Bash ls -la',
+        'tools/read README.md'
+      ])
+    })
+
+    // The header still prints the raw identifier while the row beneath it prints
+    // the split MCP name. Pinned, not endorsed: reconciling the two changes what
+    // a tool is called, which is a naming decision rather than a layout one.
+    it('leaves the header naming a member differently from the row below it', () => {
+      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal />)
+
+      expect(runHeader(container)).toHaveTextContent('mcp__linear__list_issues')
+      expect(screen.getByText('Linear')).toBeInTheDocument()
+    })
+
+    it('names each member with its own glyph, not the run-wide fallback', () => {
+      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
+
+      const header = runHeader(container)
+      expect(header.querySelector('[data-tool-run-member] .lucide-plug')).toBeInTheDocument()
+      expect(
+        header.querySelector('[data-tool-run-member] .lucide-square-terminal')
+      ).toBeInTheDocument()
+      // The run-wide glyph still reads generic, the categories being mixed.
+      expect(header.firstElementChild?.querySelector('.lucide-wrench')).toBeInTheDocument()
+    })
+
+    it('counts the members it could not show rather than ending mid-name', () => {
+      const wide: NativeChatBlock[] = [
+        ...batch,
+        { type: 'tool-call', name: 'Grep', input: { pattern: 'todo' }, state: 'completed' },
+        { type: 'tool-call', name: 'Write', input: { file_path: 'a.ts' }, state: 'completed' }
+      ]
+
+      const { container } = render(<NativeChatToolRun blocks={wide} expandSignal={false} />)
+
+      expect(runHeader(container)).toHaveTextContent('+2 more')
+      expect(runHeader(container).querySelectorAll('[data-tool-run-member]')).toHaveLength(3)
+    })
+
+    // A margin is invisible to a copied selection and to the accessible name, so
+    // the boundary needs a real space too — otherwise the header reads
+    // `ls -latools/read`.
+    it('separates members with real whitespace, not only a margin', () => {
+      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
+
+      expect(runHeader(container).textContent).toBe(
+        '3\u00d7mcp__linear__list_issues todo Bash ls -la tools/read README.md'
+      )
+    })
+
+    it('leaves no remainder marker when every member is shown', () => {
+      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal={false} />)
+
+      expect(runHeader(container)).not.toHaveTextContent('more')
+    })
+
+    it('indents opened members so the run has a visible end', () => {
+      const { container } = render(<NativeChatToolRun blocks={batch} expandSignal />)
+
+      const members = runHeader(container).parentElement?.querySelector('.pl-4')
+      expect(members).toBeInTheDocument()
+      expect(members?.querySelectorAll('button').length).toBe(batch.length)
+    })
+
+    it('falls back to the call count when a run names no tool', () => {
+      const { container } = render(
+        <NativeChatToolRun
+          blocks={[{ type: 'tool-call', name: '   ', input: {}, state: 'completed' }]}
+          expandSignal={false}
+        />
+      )
+
+      expect(runHeader(container)).toHaveTextContent('1 tool call')
+    })
+  })
+
   it('keeps a grouped active run to one stable row showing only the latest tool', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'date' }, state: 'completed' },
@@ -293,7 +404,9 @@ describe('NativeChatToolRun', () => {
     const runningBlocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'sleep 1' }, state: 'running' }
     ]
-    const { rerender } = render(<NativeChatToolRun blocks={runningBlocks} expandSignal={false} />)
+    const { rerender, container } = render(
+      <NativeChatToolRun blocks={runningBlocks} expandSignal={false} />
+    )
 
     expect(screen.getByText('Running sleep 1')).toBeInTheDocument()
 
@@ -308,7 +421,7 @@ describe('NativeChatToolRun', () => {
     )
 
     expect(screen.queryByText('Running sleep 1')).toBeNull()
-    expect(screen.getByText('shell sleep 1')).toBeInTheDocument()
+    expect(runHeader(container)).toHaveTextContent('shell sleep 1')
   })
 
   it('never animates a settled tool row with its completion check', () => {
@@ -323,9 +436,10 @@ describe('NativeChatToolRun', () => {
       />
     )
 
-    const settledRow = screen.getByText('shell pnpm test').closest('button')
-    expect(settledRow?.querySelector('.lucide-check')).toBeInTheDocument()
-    expect(settledRow?.querySelector('.animate-pulse')).toBeNull()
+    const settledRow = runHeader(container)
+    expect(settledRow).toHaveTextContent('shell pnpm test')
+    expect(settledRow.querySelector('.lucide-check')).toBeInTheDocument()
+    expect(settledRow.querySelector('.animate-pulse')).toBeNull()
     expect(container.querySelector('.animate-pulse')).toBeNull()
   })
 
@@ -348,7 +462,7 @@ describe('NativeChatToolRun', () => {
       { type: 'tool-result', output: 'exit 128', isError: true }
     ]
 
-    const { rerender } = render(
+    const { rerender, container } = render(
       <NativeChatToolRun
         blocks={blocks}
         expandSignal={false}
@@ -369,7 +483,7 @@ describe('NativeChatToolRun', () => {
       />
     )
 
-    expect(screen.getByText('shell git log -1')).toBeInTheDocument()
+    expect(runHeader(container)).toHaveTextContent('shell git log -1')
   })
 
   it('settles an orphaned running call when its turn lifecycle has ended', () => {
@@ -401,7 +515,7 @@ describe('NativeChatToolRun', () => {
     const glyph = container.querySelector('.lucide-eye')
     expect(glyph).toBeInTheDocument()
     expect(glyph).toHaveAttribute('aria-hidden')
-    expect(screen.getByText('read')).toBeInTheDocument()
+    expect(screen.getByText('read', { selector: 'code' })).toBeInTheDocument()
   })
 
   it('holds one glyph for a category across running, completed, and failed', () => {

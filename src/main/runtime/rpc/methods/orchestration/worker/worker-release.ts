@@ -10,7 +10,6 @@ import {
   type WorkerReleaseReceipt
 } from './worker-release-completion'
 import { WorkerDispatchParams, WorkerRetainParams } from './worker-release-schemas'
-import { sweepSettledWorkerResumeFences } from '../../settled-worker-resume-fence-sweep'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
   defineMethod({
@@ -148,11 +147,6 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS: RpcMethod[] = [
       const changed = paneKey
         ? runtime.getOrchestrationDb().markWorkerTerminalUserOwned(paneKey)
         : 0
-      if (changed > 0) {
-        // Only a real takeover retires the resource; ordinary panes report here too and must not
-        // pay for a plan read on every keystroke window.
-        sweepSettledWorkerResumeFences(runtime)
-      }
       return { changed }
     }
   })

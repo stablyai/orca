@@ -8,6 +8,7 @@ export function createRemoteDispatchAttachment(
   this: OrchestrationDb,
   params: {
     dispatchId: string
+    runId: string
     taskId: string
     homePeerFingerprint: string
     protocolVersion: number
@@ -43,6 +44,16 @@ export function createRemoteDispatchAttachment(
         `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
       )
     }
+    if (!params.runId?.trim()) {
+      throw new OrchestrationError('invalid_argument', 'Missing Run ID')
+    }
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO runs (id, objective, home_database, consumer_generation, legacy)
+         VALUES (?, ?, 'remote', 0, 0)`
+      )
+      .run(params.runId, `Coordinated from ${params.homePeerFingerprint}`)
+    this.requireRun(params.runId)
     ensureMutationReceiptCapacity(this.db)
     this.db
       .prepare(
@@ -59,6 +70,7 @@ export function createRemoteDispatchAttachment(
       )
     insertRemoteDispatchAttachmentRow(this.db, {
       dispatchId: params.dispatchId,
+      runId: params.runId,
       taskId: params.taskId,
       homePeerFingerprint: params.homePeerFingerprint,
       protocolVersion: params.protocolVersion,

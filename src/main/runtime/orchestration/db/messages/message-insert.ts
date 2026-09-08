@@ -1,5 +1,4 @@
 import type { MessageType, MessagePriority, MessageDeliveryContract, MessageRow } from '../../types'
-import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -26,7 +25,10 @@ export type MessageInsert = {
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
-  const runId = msg.runId ?? LEGACY_RUN_ID
+  const runId = msg.runId
+  if (!runId) {
+    throw new Error('Run is required')
+  }
   const deliveryContract = msg.deliveryContract ?? 'current_delivery'
   this.requireRun(runId)
   const id = msg.id ?? generateId('msg')

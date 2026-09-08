@@ -168,6 +168,9 @@ describe('PR E2E gate contract', () => {
     expect(changedRun.env.TEST_FILES_JSON).toBe('${{ inputs.test_files }}')
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-startup-exec-readiness.spec.ts"')
     expect(changedRun.run).toContain('. != "tests/e2e/paired-startup-exec-readiness.spec.ts"')
+    expect(changedRun.run).toContain(
+      '. != "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts"'
+    )
     expect(changedRun.run).toContain('. != "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts"')
     expect(changedRun.run).toContain('if [ "${#TEST_FILES[@]}" -eq 0 ]')
     expect(changedRun.run).toContain('grep -l \'@headful\' "${TEST_FILES[@]}"')

@@ -23,7 +23,7 @@ import type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 
-export class OrcaRuntimeWithFenceAutomationOwner extends OrcaRuntimeWithPtyForegroundProcessReads {
+export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForegroundProcessReads {
   protected fenceAutomationOwner(
     id: string,
     expectedOwner: AutomationOwnerPrecondition | undefined,
@@ -165,10 +165,6 @@ export class OrcaRuntimeWithFenceAutomationOwner extends OrcaRuntimeWithPtyForeg
     this._orchestrationDb = db
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
-  }
-
-  prepareLegacyWorkerTerminalRecovery(): LegacyWorkerTerminalRecoveryPlan {
-    return this.legacyWorkerRecovery.prepare()
   }
 
   protected async flushWorkspaceSessionOrThrowAsync(): Promise<void> {

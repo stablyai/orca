@@ -11,6 +11,79 @@
   },
   "gates": [
     {
+      "id": "agent-session.history-forward-read-budget",
+      "title": "Journal catch-up reads only the next page and one lookahead row",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "runtime-unit",
+      "surfaces": ["structured agent history", "structured agent subscriptions"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "ssh", "remote-runtime"],
+      "coverageNotes": "The real SQLite journal and production subscriber delivery are exercised with a folder workspace and remote host identity. The SQL and pagination code is shared across execution hosts; live SSH transport and Linux/Windows runtime execution are not exercised. PTY, daemon, WSL execution, and mobile rendering are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.ts"
+      ],
+      "invariant": "Forward catch-up preserves every item, revision, tombstone, sequence cursor, page byte bound, and reset behavior while reading at most the requested row count plus one from SQLite for each page.",
+      "oracle": "Reconnect a real subscriber to a 2,000-row journal and receive all 2,000 item identities in order through the live cursor; count the actual SQL rows returned and parsed as 2,009 instead of 11,000. Assert exact final-page hasNewer, unlimited reader compatibility, gap detection at the next page, and parse-stop behavior at the lookahead row. Existing history tests cover revisions, tombstones, byte-bound shrinking, epochs, and schema resets.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-journal"
+      ],
+      "testFiles": [
+        "src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts",
+        "src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts",
+          "assertions": [
+            "reconnects through every page with one lookahead row per page",
+            "keeps an exact final page final and preserves unlimited journal readers",
+            "reports a sequence gap when the next page reaches it",
+            "preserves parse-stop behavior at lookahead: %s"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-journal",
+          "result": "passed",
+          "durationSeconds": 9.94,
+          "summary": "214 tests passed across 19 files, including actual SQLite row and JSON parse counts through production subscriber catch-up."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Real SQLite journal unit and production subscriber tests; no launched app."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Initial deterministic local validation; CI soak has not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Before the change, SQL returned 2,000, 1,800, 1,600 through 200 rows across ten pages, failing the count assertion. The bounded query returns nine pages of 201 rows and a final 200, with exactly 2,009 row parses and identical item delivery."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Catch-up materialization and JSON parsing are linear in unseen journal rows plus page lookaheads. A cached parameterized LIMIT adds no polling, cache invalidation, output loss, protocol change, or provider calls."
+      },
+      "knownGaps": [
+        "Linux and Windows execution and live SSH transport have not been exercised.",
+        "The existing full reduced-state snapshot and batch projection cost are outside this SQL read budget."
+      ],
+      "promotionCriteria": [
+        "Complete CI soak requirements while preserving the deterministic row budget and pagination oracles."
+      ],
+      "demotionRule": "Keep experimental until CI soak; investigate fidelity or count failures without relaxing the row budget."
+    },
+    {
       "id": "terminal-performance.padded-fullscreen-redraw",
       "title": "Fullscreen redraw padding does not stall terminal delivery",
       "maturity": "experimental",
@@ -267,6 +340,106 @@
         "Mixed-version snapshots without sequence proof intentionally retain legacy behavior."
       ],
       "demotionRule": "Keep experimental or demote if adoption duplicates covered output, drops newer or unproven output, changes terminal ownership, or flakes without explanation."
+    },
+    {
+      "id": "terminal-session.io-failure-cleanup",
+      "title": "Native PTY I/O failures preserve termination ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "provider-contract",
+      "surfaces": ["daemon PTY teardown"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local-daemon", "ssh-daemon", "paired-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "Real TerminalHost, Session, and subprocess wrapper with injected native I/O failures and mocked OS signals. Local non-daemon and SSH-relay implementations are unaffected; daemon consumers on SSH, WSL, paired runtimes, and mobile retain host-owned semantics. Live Linux/Windows/WSL and remote runs remain gaps. No git or folder-workspace assumptions. The fault-injection suite also runs with simulated darwin/linux/win32 platform branches; these do not constitute native OS coverage. Native macOS coverage now proves shell exit and PTY master-fd closure, input/output round trips, and teardown of a paused producer for both graceful and immediate cleanup. Windows single-close/job escalation and pre-listener output/status are fault-injected contracts.",
+      "motivatingLinks": ["docs/terminal-daemon-session-leak-investigation.md"],
+      "invariant": "I/O errors must not establish physical exit or disable termination of an owned PTY. Session and native handle disposal require the exit event.",
+      "oracle": "Inject write and resize failures, require graceful and forced signals to reach the native owner, keep producer resume available, suppress repeated failed I/O, deliver output and exit, and suppress signals after exit. Across 32 create/close cycles per failure, retain each session before exit and release its native handle and emulator exactly once afterwards. Mark physical exit before notifying listeners; reentrant kill/forceKill/signal from those listeners must never signal the retired PID. A native POSIX test performs input/output and resize, pauses the producer, injects each I/O failure, then gracefully or immediately closes 16 real shells; require ESRCH for each child PID and EBADF for each PTY master fd.",
+      "commands": [
+        "pnpm test src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts",
+        "pnpm test src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts src/main/daemon/pty-subprocess-handle-lifecycle.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/daemon/terminal-host-teardown-recreate.test.ts src/main/daemon/terminal-session-teardown.test.ts src/main/daemon/session.test.ts",
+        "pnpm test src/main/daemon/pty-subprocess-io-failure-native.test.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts",
+        "src/main/daemon/pty-subprocess-handle-lifecycle.test.ts",
+        "src/main/daemon/terminal-host-session-reaping-leak.test.ts",
+        "src/main/daemon/terminal-host-teardown-recreate.test.ts",
+        "src/main/daemon/terminal-session-teardown.test.ts",
+        "src/main/daemon/session.test.ts",
+        "src/main/daemon/pty-subprocess-io-failure-native.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts",
+          "assertions": [
+            "keeps graceful and forced termination available until physical exit",
+            "reaps every session and native handle across 32 failed-I/O create/close cycles",
+            "suppresses repeated native I/O failures while still delivering output and exit",
+            "blocks reentrant termination from an exit listener after I/O failure"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess-io-failure-native.test.ts",
+          "assertions": ["reaps real shells and master fds after %s failure (immediate=%s)"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts src/main/daemon/pty-subprocess-handle-lifecycle.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/daemon/terminal-host-teardown-recreate.test.ts src/main/daemon/terminal-session-teardown.test.ts src/main/daemon/session.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.617,
+          "summary": "136 tests passed across six files; failed-I/O cycle tests cover 64 closures."
+        },
+        {
+          "date": "2026-09-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/main/daemon/pty-subprocess-io-failure-cleanup.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.71,
+          "summary": "32 tests passed with 4 Windows-only cases skipped; simulated macOS/Linux/Windows branches include 192 failed-I/O create/close cycles and exit-listener reentrancy."
+        },
+        {
+          "date": "2026-09-07",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm test src/main/daemon/pty-subprocess-io-failure-native.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.52,
+          "summary": "Four native cases pass across 16 real shells, including input/output, pause before teardown, confirmed PID absence, and closed PTY master fds."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused daemon teardown contract tests"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Initial deterministic local run; no soak history."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "All four original regression cases failed before the fix because native kill was never called; the unchanged cases passed after separating I/O failure from exit. Two additional output/flow-control cases also pass. Review added two failing exit-listener reentrancy cases; publishing physical exit before callbacks made them pass."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "One boolean per PTY; no new timers, scans, retries, or subprocesses. Existing failed-I/O suppression remains. 192 closures under three simulated platform branches return session inventory to zero and dispose each emulator/native handle once."
+      },
+      "promotionCriteria": [
+        "Collect remaining native cross-platform evidence plus the standard soak history."
+      ],
+      "knownGaps": [
+        "Fault injection proves a leak mechanism, not causality for the historical 427-session incident.",
+        "Real Linux/Windows/WSL, remote, startup-close, login-wrapper descendants, and multi-day load evidence remain outstanding. Native tests inject synchronous I/O errors; they do not model every asynchronous node-pty pipe failure.",
+        "No output throughput change or interactive latency benchmark is included."
+      ],
+      "demotionRule": "Keep experimental; investigate any lost cleanup signal, premature exit, or unexplained flake."
     },
     {
       "id": "cmd-j-tabs.host-qualified-candidate-ownership",
@@ -5825,7 +5998,7 @@
       "invariant": "After a TUI exits or is killed, reveal, reattach, snapshot replay, or renderer remount must not deliver terminal-owned mouse or alternate-screen protocol bytes to the surviving shell. Recovery is an ordered output barrier in the daemon session data path: an OSC 133;D completing while the alternate screen is still active pauses the stream at that exact byte boundary, a fresh execution-host process inspection proves shell ownership, and on proof a mode reset is injected as in-stream output so every consumer converges by parsing the same bytes and the queued post-boundary shell output (the prompt) lands on the normal buffer. Snapshots are pure reads. Any failure — refuted proof, timeout, queue overflow, session death, disposal — flushes the queue unmodified, preserving incumbent behavior; later command or mode bytes revoke proof. Clean alternate-screen exits prove ownership asynchronously without pausing.",
       "oracle": "Run one fixed child-TUI journey for normal exit and cleanup-free SIGKILL. Assert renderer and host normal-buffer/non-mouse state, host snapshot terminalOwner metadata, exact PTY writes with no post-exit mouse report, unrelated-pane survival, post-boundary prompt output preserved (normal exit), ordered proof invalidation, bounded settlement and bail-out flush, one inspection per unclean episode with zero scans for ordinary output, split-escape safety at every chunk boundary, and old/new client-host fallback parity.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/terminal-shell-lifecycle-scanner.test.ts src/main/daemon/terminal-shell-recovery-barrier.test.ts src/main/daemon/session-shell-recovery.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host-concurrent-create.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-restore-scrollback-depth.test.ts src/main/daemon/terminal-checkpoint-serializer.test.ts src/main/providers/agent-foreground-process.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/mobile-subscribe-integration.test.ts src/main/runtime/rpc/terminal-multiplex-escape-tail.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-codex-queries.test.ts src/renderer/src/components/terminal-pane/pty-connection-reattach-mode-reset.test.ts src/renderer/src/components/terminal-pane/pty-connection-daemon-snapshot-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-snapshot-escape-tail.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/terminal-shell-lifecycle-scanner.test.ts src/main/daemon/terminal-shell-recovery-barrier.test.ts src/main/daemon/session-shell-recovery.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host-concurrent-create.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-restore-scrollback-depth.test.ts src/main/daemon/terminal-checkpoint-serializer.test.ts src/main/providers/agent-foreground-process.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/mobile-subscribe-integration.test.ts src/main/runtime/rpc/terminal-multiplex-escape-tail.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-codex-queries.test.ts src/renderer/src/components/terminal-pane/pty-connection-reattach-mode-reset.test.ts src/renderer/src/components/terminal-pane/pty-connection-daemon-snapshot-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-snapshot-escape-tail.test.ts src/shared/terminal-partial-escape-tail.test.ts src/shared/terminal-partial-escape-tail.fuzz.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-hidden-child-tui-kill-mode-reset.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -5847,6 +6020,8 @@
         "src/renderer/src/components/terminal-pane/pty-connection-reattach-mode-reset.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-daemon-snapshot-replay.test.ts",
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-snapshot-escape-tail.test.ts",
+        "src/shared/terminal-partial-escape-tail.test.ts",
+        "src/shared/terminal-partial-escape-tail.fuzz.test.ts",
         "tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts",
         "tests/e2e/terminal-hidden-child-tui-kill-mode-reset.spec.ts"
       ],
@@ -5866,6 +6041,13 @@
           "assertions": [
             "post-kill shell output survives into the normalized snapshot instead of the discarded alt buffer",
             "a snapshot taken during a split escape keeps the pending tail intact and stale proof is revoked by the completing bytes"
+          ]
+        },
+        {
+          "file": "src/shared/terminal-partial-escape-tail.fuzz.test.ts",
+          "assertions": [
+            "the pending tail this gate threads over the wire folds identically at every code-unit split of the combined stream, including boundaries landing inside oscEsc/stringEsc",
+            "the split sweep runs over an alphabet carrying CAN, SUB, doubled ESC inside OSC/DCS/SOS/PM/APC, BEL, C1 ST, NUL, DEL, intermediates, CJK, astral, and lone surrogates"
           ]
         },
         {
@@ -13476,6 +13658,7 @@
       "invariant": "Starting a worker in the coordinator's current workspace must materialize one inactive terminal tab before worker-start returns, preserve coordinator focus, and remain exactly once after workspace re-entry. After an app update or restart, an exact live legacy worker must fence automatic provider resume, adopt its original PTY into its original background pane, retain readable output, and clear the resume record without spawning, writing, signalling, interrupting, replacing, or focusing the worker. A current-contract worker whose renderer graph identity is temporarily absent must retain its Dispatch capability and settle exactly once from exact hook-attested handle, pane, and process evidence; otherwise only an exact attested coordinator may take over. A worker_done caller may report success only after the owning runtime returns an explicit lifecycle verdict or authoritative reads prove that the exact Task, Dispatch, and worker report receipt settled the expected outcome. Federated terminal settlement must remain replay-eligible until the worker durably acknowledges it, and identical same-outcome retries must converge idempotently. Independently updated clients and worker servers must preserve the negotiated protocol: current peers use Run-home lifecycle settlement, while protocol v1/v2 peers retain their legacy completion path without receiving newer-only fields. A federated worker may accept only the authority defined by its negotiated protocol. An exact existing target workspace must receive a discoverable tab without stealing coordinator focus; if renderer reveal fails, worker-start must expose that the live worker remains background-only. Run and Dispatch checks must resolve through the caller's stable pane identity when a terminal handle is reminted, while a live handle outranks mismatched pane metadata. A nested worker's creator edge requires the current creator pane, process incarnation, and owning Run generation; reminting and rebinding that pane to another Run must remove the stale edge. Explicit legacy terminal inspection remains handle-scoped, and remote or headless worker presentation remains background-only.",
       "oracle": "Drive Run create, Task create, and worker-start through production Electron runtimes with a deterministic Codex fixture. Require append-only ledgers with one still-live PID and no interruption, a visible inactive worker tab while the coordinator stays active, Run delivery through stable pane identity, and stable PTY/incarnation, tab, leaf, worktree, Task, and Dispatch across workspace re-entry. In a restart journey, retain the original daemon PTY and PID, remove renderer ownership, retain sleeping-session evidence, mark the Dispatch legacy, relaunch, and require exact inactive tab adoption, readable ACK output, cleared resume state, one spawn, and no resume argv or Conversation interrupted text after another workspace round trip. The service oracle removes renderer lookup identity from current-contract callers while retaining real restored-PTY and hook commitments, replays authenticated completion and takeover across fresh runtimes, and requires one Task, Dispatch, terminal authority, message, mutation, ordinary-mail delivery, remote process fencing, and unchanged fixture marker bytes while foreign pane evidence remains rejected. Unit tests separately remint a creator pane and process from Run A into Run B, require the nested Run A worker to fall back to its current coordinator, require indexed query plans, and bound 300 Task reads with 50,000 retained Runs. They also assert authority-specific legacy affordances, exact identity and owner matching, retained-output fallback, pane-stable routing, federated non-activation, and SSH fallback parity.",
       "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 npx vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration/messaging/check-worker-federated-attachment.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration/worker/composed-workers.test.ts src/main/runtime/rpc/methods/orchestration/messaging/check.test.ts src/main/runtime/rpc/methods/orchestration/messaging/send.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-lifecycle-json-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts",
@@ -13490,6 +13673,7 @@
         "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
+        "src/main/runtime/rpc/methods/orchestration/messaging/check-worker-federated-attachment.test.ts",
         "src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts",
         "src/main/runtime/orchestration/formatter.test.ts",
         "src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
@@ -13513,6 +13697,13 @@
         "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration/messaging/check-worker-federated-attachment.test.ts",
+          "assertions": [
+            "replays the coordinator instruction and takes its ack after the app restarts",
+            "files loopback mail once under the local Dispatch Run without replacing its owner"
+          ]
+        },
         {
           "file": "src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts",
           "assertions": [
@@ -18301,7 +18492,7 @@
       "providers": ["ssh"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["ssh"],
-      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075. Deterministic remote Codex fixture validation passed three normal restores and three forced reconnects with zero retries on merged main plus the replay probe correction (run 34050117471). The original forced-reconnect probe missed nonempty replay returned in pty:spawn reattach replies. Routine coverage now includes both modes by default; real Codex service execution remains opt-in.",
+      "coverageNotes": "A macOS Electron client drives a Linux Docker SSH execution host. The six-spec suite passed ten enabled cases with clean worker exit (5.2m). The formerly skipped frozen-host input case now waits for recovered authority before sending input and passed four separate executions (one initial and three repetitions). The existing flooded-shell fixme remains an explicitly reproduced application gap. The bulk-open freeze reproduction runs in Linux headed CI with SwiftShader on Xvfb: headless Linux schedules idle animation frames about 1s apart, invalidating the foreground interaction measurement. Original uninstrumented five-pane workload passed all ten repetitions with zero retries/skips in 6.6m; bulk-open lag 79.3–147.8ms and interaction 127.1–155.9ms, unchanged 2500ms/5000ms budgets. Run 34037669843, head f25eab3fd7d723509ced026633f80b193a139b76, excludes unmerged replay-input application fix #19075. Deterministic remote Codex fixture validation passed three normal restores and three forced reconnects with zero retries on merged main plus the replay probe correction (run 34050117471). The original forced-reconnect probe missed nonempty replay returned in pty:spawn reattach replies. Routine coverage now includes both modes by default; real Codex service execution remains opt-in. The added five-pane input spec passed in Linux CI run 34033353595, and diagnostic run 34034754815 reproduced real input loss during scrollback replay; application fix #19075 (98b0c329ff3) has since merged and this spec now guards it.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/18018",
         "https://github.com/stablyai/orca/pull/18546",
@@ -18319,7 +18510,8 @@
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1 --repeat-each=10",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-codex-display-artifacts-repro.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts --config tests/playwright.config.ts --project=electron-headless --workers=1"
       ],
       "testFiles": [
         "tests/e2e/ssh-docker-transport-drop-recovery.spec.ts",
@@ -18331,7 +18523,8 @@
         "tests/e2e/helpers/electron-process-shutdown.unit.test.ts",
         "tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts",
         "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts",
-        "tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts"
+        "tests/e2e/ssh-codex-replay-reply-probe.unit.test.ts",
+        "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -18384,6 +18577,12 @@
           ]
         },
         {
+          "file": "tests/e2e/ssh-docker-five-pane-input-under-flood.spec.ts",
+          "assertions": [
+            "five distinct SSH PTYs acknowledge actual keyboard input after two rendered hide/reopen cycles while all five producers flood"
+          ]
+        },
+        {
           "file": "tests/e2e/ssh-codex-display-artifacts-repro.spec.ts",
           "assertions": [
             "normal restore and forced SSH reconnect leave no stale or duplicate status rows; forced reconnect preserves the original PTY and requires nonempty replay from that PTY through an event or reattach reply"
@@ -18431,7 +18630,7 @@
       },
       "flakeHistory": {
         "status": "flaky",
-        "evidence": "Baseline: ten enabled tests passed, two fixme skipped, worker teardown timed out (7.3m). After pipe cleanup: ten passed and worker exited cleanly (5.2m); two half-open repeats passed (1.7m). The formerly skipped thaw-input case failed before its recovered-authority wait and passed 1+3 executions afterward (56.9s + 2.6m). Flood failed both its original input oracle and a strengthened producer-completion oracle after recovery."
+        "evidence": "Baseline: ten enabled tests passed, two fixme skipped, worker teardown timed out (7.3m). After pipe cleanup: ten passed and worker exited cleanly (5.2m); two half-open repeats passed (1.7m). The formerly skipped thaw-input case failed before its recovered-authority wait and passed 1+3 executions afterward (56.9s + 2.6m). Flood failed both its original input oracle and a strengthened producer-completion oracle after recovery. Five-pane input diagnostics additionally failed 1/5 in run 34034754815: the intended focused PTY emitted the full input, the replay guard discarded 31 characters, and the remote ACK contained exactly the remaining suffix. PR #19075 addresses that application bug; passing repetitions alone do not establish its resolution."
       },
       "redGreenEvidence": {
         "status": "partial",
@@ -18447,6 +18646,7 @@
         "Collect CI runtime and flake history plus product red/green evidence before blocking."
       ],
       "knownGaps": [
+        "Five-pane simultaneous flood input was reproduced as a real application bug in run 34034754815 (replay discarded the first 31 characters of correctly focused keyboard input); fix #19075 (98b0c329ff3) merged and the spec now guards it, but the retries: 0 Docker SSH lane is the only repetition evidence against the merged fix so far. Freeze performance coverage was restored separately in #19081, with its isolated headless timer-lag outlier still documented.",
         "The disconnected 48MB flood still loses its relay channel: original post-flood input marker failed in 60s, and waiting for the finite producer completion marker failed in 120s. It remains an explicit #18018 fixme reproduction; frozen-host input is re-enabled after four successful runs.",
         "Linux headed CI covers the bulk-open freeze reproduction; Windows clients, WSL, folder workspaces, paired runtimes and live agent CLIs are not covered by that result.",
         "Some legacy assertions inspect terminal serialization or backing state rather than rendered DOM; no blanket visual coverage claim.",

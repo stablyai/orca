@@ -1,14 +1,11 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
 export function migrateV40(this: OrchestrationDb, current: number): void {
-  if (current >= 40) {
+  if (current >= 40 || this.hasColumn('remote_dispatch_attachments', 'home_run_id')) {
     return
   }
-  if (!this.hasColumn('tasks', 'worktree_id')) {
-    this.db.exec('ALTER TABLE tasks ADD COLUMN worktree_id TEXT')
-  }
-  if (!this.hasColumn('tasks', 'branch')) {
-    this.db.exec('ALTER TABLE tasks ADD COLUMN branch TEXT')
-  }
-  this.db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_worktree ON tasks(worktree_id)')
+  // Federation is unreleased; any development-only rows fail Run validation until reattached.
+  this.db.exec(
+    "ALTER TABLE remote_dispatch_attachments ADD COLUMN home_run_id TEXT NOT NULL DEFAULT ''"
+  )
 }

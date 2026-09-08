@@ -1,3 +1,4 @@
+import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 
 const MAX_PREVIEW_LENGTH = 80
@@ -260,8 +261,20 @@ function summarizePrimaryToolArg(input: unknown): string | null {
   return null
 }
 
-export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
-  const parts: string[] = []
+/** One named call in a run header, kept apart rather than pre-joined so a
+ *  surface can draw the boundary between members itself. */
+export type ToolRunMember = {
+  name: string
+  /** Brief argument, or '' when the call has none worth showing. */
+  arg: string
+  mcpIdentity?: NativeChatMcpIdentity
+}
+
+/** The run header's leading calls. Capped at the same limit the joined string
+ *  has always used, so the two can never disagree about which calls speak for
+ *  a run. */
+export function toolRunSummaryMembers(blocks: readonly NativeChatBlock[]): ToolRunMember[] {
+  const members: ToolRunMember[] = []
   for (const block of blocks) {
     if (!isToolCallBlock(block)) {
       continue
@@ -270,13 +283,18 @@ export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
     if (!name) {
       continue
     }
-    const detail = briefToolArg(block.input)
-    parts.push(detail ? `${name} ${detail}` : name)
-    if (parts.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
+    members.push({ name, arg: briefToolArg(block.input), mcpIdentity: block.mcpIdentity })
+    if (members.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
       break
     }
   }
-  return parts.join('  ·  ')
+  return members
+}
+
+export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
+  return toolRunSummaryMembers(blocks)
+    .map((member) => (member.arg ? `${member.name} ${member.arg}` : member.name))
+    .join('  ·  ')
 }
 
 export function countToolCalls(blocks: readonly NativeChatBlock[]): number {

@@ -4409,11 +4409,11 @@
           "92154beb7e": "Nuevo espacio de trabajo",
           "49f62c5665": "Tablero de espacios de trabajo",
           "5c9c7c16aa": "Agregar un proyecto para crear espacios de trabajo",
-          "ca6f729da2": "Nuevo espacio de trabajo ({{value0}})",
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
-          "25a95899c9": "Agregar proyecto",
           "spaces": "Espacios",
-          "views": "Vista de la barra lateral"
+          "views": "Vista de la barra lateral",
+          "createMenu": "Crear",
+          "addProject": "Agregar proyecto"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",

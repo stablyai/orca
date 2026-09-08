@@ -22,7 +22,7 @@ describe('dispatch mailbox consumer fencing', () => {
   afterEach(() => db.close())
 
   function dispatchWithMail(subjects: string[]): { id: string; runId: string } {
-    const task = db.createTask({ spec: 'fenced worker work' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'fenced worker work' })
     const dispatch = createRootDispatch(db, task.id, 'term_worker', PANE_A)
     for (const subject of subjects) {
       db.insertMessage({
@@ -116,7 +116,10 @@ describe('dispatch mailbox consumer fencing', () => {
   })
 
   it('bumps and fences on the worker-start attach path', () => {
-    const task = db.createTask({ spec: 'worker-start attach' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'worker-start attach'
+    })
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -149,6 +152,7 @@ describe('dispatch mailbox consumer fencing', () => {
   it('gives a federated attachment its own generation on the worker host', () => {
     const dispatchId = 'ctx_remote_fence'
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: 'task_remote',
       homePeerFingerprint: 'home-peer',
@@ -187,7 +191,10 @@ describe('dispatch mailbox consumer fencing', () => {
   })
 
   it('starts a retry Dispatch on a fresh mailbox address rather than sharing the old one', () => {
-    const task = db.createTask({ spec: 'work that fails once' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'work that fails once'
+    })
     const first = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

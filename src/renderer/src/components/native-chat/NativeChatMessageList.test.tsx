@@ -200,7 +200,7 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    const settledTool = screen.getByText('shell pnpm test')
+    const settledTool = screen.getByText('shell')
     const activity = screen.getByText('Working…')
     expect(activity.textContent).not.toBe(settledTool.textContent)
     expect(activity).not.toHaveTextContent('shell')
@@ -243,7 +243,8 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    const settledTool = screen.getByText('shell pnpm test')
+    const settledTool = screen.getByText('shell')
+    expect(settledTool).toHaveTextContent('shell pnpm test')
     expect(settledTool.closest('button')?.querySelector('.animate-pulse')).toBeNull()
     expect(settledTool.closest('button')?.querySelector('.lucide-check')).toBeInTheDocument()
     const activity = screen.getByText('Preparing the answer')

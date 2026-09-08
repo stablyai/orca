@@ -122,6 +122,11 @@ export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const
+// Why: a client advertising this retains every terminal retirement proof it receives until the
+// surface is published live again, so a session-tabs stream sends each proof once instead of
+// repeating the host's whole bounded list on every title tick.
+export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
+  'session-tabs.retirement-proof-delta.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
@@ -206,7 +211,9 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  // Why: only the renderer runs the retirement-proof ledger; CLI and mobile must keep full lists.
+  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
 ] as const
 
 export const RUNTIME_CAPABILITIES = [

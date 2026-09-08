@@ -90,7 +90,7 @@ function projectField(): HTMLInputElement {
 
 function addOption(): HTMLElement {
   return Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((option) =>
-    option.textContent?.includes('Add a new project')
+    option.textContent?.includes('Add project')
   )!
 }
 

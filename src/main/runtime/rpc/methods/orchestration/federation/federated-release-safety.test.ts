@@ -152,6 +152,7 @@ describe('federated worker release ownership', () => {
 
   function createAttachment(dispatchId: string, terminalOwnership?: 'created' | 'external'): void {
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: `task_${dispatchId}`,
       homePeerFingerprint: HOME_FINGERPRINT,

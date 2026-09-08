@@ -34,10 +34,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         }
       }
     }
-    if (session.isLegacyWorkerAutomaticResumeBlocked()) {
-      releaseDeferredCwdFence()
-      return Promise.resolve(null)
-    }
+
     if (useAppStore.getState().deleteStateByWorktreeId?.[session.deps.worktreeId]?.isDeleting) {
       // Why: the worktree is being deleted; its PTYs were just killed for the
       // filesystem teardown. A fresh shell must not spawn into a directory the

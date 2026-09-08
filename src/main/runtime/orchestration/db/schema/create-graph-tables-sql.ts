@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS federated_dispatches (
 );
 
 CREATE TABLE IF NOT EXISTS remote_dispatch_attachments (
+  home_run_id             TEXT NOT NULL,
   dispatch_id             TEXT PRIMARY KEY,
   task_id                 TEXT NOT NULL,
   home_peer_fingerprint   TEXT NOT NULL,

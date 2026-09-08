@@ -173,9 +173,17 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     }
     set((s) => {
       const sessionEnded = status.status === null && previous?.status != null
-      const connectionChanged =
+      // A reachable answer where we held none (never asked, or recorded unreachable) or
+      // where the runtime id moved starts a runtime session.
+      const runtimeSessionStarted =
         status.status !== null &&
         (previous?.status == null || previous.status.runtimeId !== status.status.runtimeId)
+      // Why narrower than the session start: a first publication has no prior connection to
+      // differ from, so it is not a reconnect. Advancing the generation there retires reads
+      // already issued against this very connection — a startup worktree scan that had
+      // already answered was discarded, leaving those repos absent until an unrelated
+      // refresh (#19241).
+      const connectionChanged = runtimeSessionStarted && previous !== undefined
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       const connectionGeneration = connectionChanged
         ? runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(
@@ -186,7 +194,9 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(
             environmentId
           ))
-      if (activeEnvironmentId === environmentId && (sessionEnded || connectionChanged)) {
+      // Why the session flag and not `connectionChanged`: integration-readiness caches key
+      // off the runtime session, for which a first publication is a real transition.
+      if (activeEnvironmentId === environmentId && (sessionEnded || runtimeSessionStarted)) {
         bumpProviderRuntimeSessionGeneration()
       }
       const nextEntry = { ...status, connectionGeneration }

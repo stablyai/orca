@@ -18,7 +18,7 @@ import {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
-  readAgentSessionHistory,
+  createAgentSessionCatchUpReader,
   readAgentSessionHydrationPage
 } from './agent-session-history-page'
 
@@ -229,14 +229,13 @@ export class AgentSessionSubscribers {
     backgroundTasks?: AgentSessionBackgroundTaskState | null,
     activity?: AgentSessionTurnActivity | null
   ): void {
-    const publishedActivity =
-      activity !== undefined
-        ? activity
-        : emitCheckpoint
-          ? (this.activityBySession.get(subscriber.sessionId) ?? null)
-          : undefined
+    const checkpointActivity = emitCheckpoint
+      ? this.activityField(subscriber.sessionId).activity
+      : undefined
+    const publishedActivity = activity !== undefined ? activity : checkpointActivity
+    const readPage = createAgentSessionCatchUpReader(journal)
     while (true) {
-      const result = readAgentSessionHistory(journal, {
+      const result = readPage({
         sessionId: subscriber.sessionId,
         direction: 'after',
         cursor: subscriber.cursor,

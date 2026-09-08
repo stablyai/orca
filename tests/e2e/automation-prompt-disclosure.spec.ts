@@ -25,7 +25,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
       }
       const base = {
         agentId: 'codex' as const,
-        projectId: repo.id,
+        repo: `id:${repo.id}`,
         workspaceMode: 'new_per_run' as const,
         reuseSession: false,
         timezone: 'UTC',
@@ -34,17 +34,8 @@ test('automation detail keeps short prompts readable and reveals a very long pro
         enabled: false,
         missedRunGraceMinutes: 720
       }
-      const createAutomation = async (input: typeof base & { name: string; prompt: string }) => {
-        const response = await window.api.runtime.call({
-          method: 'automation.create',
-          params: {
-            ...input,
-            // Runtime RPC resolves the project selector and stores the resulting
-            // host/workspace context; the removed preload CRUD method did this
-            // implicitly for old E2E fixtures.
-            repo: `id:${input.projectId}`
-          }
-        })
+      const createAutomation = async (params: typeof base & { name: string; prompt: string }) => {
+        const response = await window.api.runtime.call({ method: 'automation.create', params })
         if (!response.ok) {
           throw new Error(`${response.error.code}: ${response.error.message}`)
         }
