@@ -1,3 +1,5 @@
+import { queuedReviewPushTargetNumber } from '../../worktrees/metadata/queued-review-push-target'
+import { linkedReviewOperationTarget } from './linked-review-operation-target'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { toast } from 'sonner'
@@ -27,6 +29,12 @@ export function createGitRemoteSync(
       let pushed = false
       const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
       try {
+        const worktree = get().getKnownWorktreeById?.(worktreeId)
+        pushTarget = linkedReviewOperationTarget(
+          worktree,
+          pushTarget,
+          worktree ? queuedReviewPushTargetNumber(get(), worktree) : undefined
+        )
         const context = { settings: runtimeSettings, worktreeId, worktreePath, connectionId }
         await fetchRuntimeGit(context, pushTarget)
         const upstreamStatusBeforePull = await getRuntimeGitUpstreamStatus(context, pushTarget)

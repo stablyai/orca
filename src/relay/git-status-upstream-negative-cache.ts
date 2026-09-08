@@ -62,7 +62,6 @@ function trimNoEffectiveUpstreamWriteGeneration(): void {
 function cacheNoEffectiveUpstreamStatus(
   cacheKey: string,
   status: GitUpstreamStatus,
-  probedSameNameOriginRef: boolean,
   writeGeneration: number,
   nowMs = Date.now()
 ): void {
@@ -75,11 +74,6 @@ function cacheNoEffectiveUpstreamStatus(
     return
   }
   if ((noEffectiveUpstreamWriteGeneration.get(cacheKey) ?? 0) !== writeGeneration) {
-    return
-  }
-  // Why: only cache negatives after probing origin/<branch>; other resolution
-  // paths can fail without proving the same-name publish branch is absent.
-  if (!probedSameNameOriginRef) {
     return
   }
   noEffectiveUpstreamByIdentity.set(cacheKey, {
@@ -115,16 +109,10 @@ export async function readOrProbeNoEffectiveUpstreamStatus(
     }
   }
 
-  let probedSameNameOriginRef = false
   const snapshotRunner = createGitConfigSnapshotRunner(runGit)
   const writeGeneration = noEffectiveUpstreamWriteGeneration.get(cacheKey) ?? 0
-  const probe = getEffectiveGitUpstreamStatus((args) => {
-    if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${identity.branchName}`)) {
-      probedSameNameOriginRef = true
-    }
-    return snapshotRunner(args)
-  }).then((status) => {
-    cacheNoEffectiveUpstreamStatus(cacheKey, status, probedSameNameOriginRef, writeGeneration)
+  const probe = getEffectiveGitUpstreamStatus(snapshotRunner).then((status) => {
+    cacheNoEffectiveUpstreamStatus(cacheKey, status, writeGeneration)
     return status
   })
   if (options.bypassCache !== true) {

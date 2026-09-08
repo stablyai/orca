@@ -225,3 +225,20 @@ describe('createGitConfigSnapshotRunner', () => {
     expect(countCalls(runGit, ['symbolic-ref', '--quiet', '--short', 'HEAD'])).toBe(1)
   })
 })
+
+it('preserves all fetch mappings while coalescing --get and --get-all reads', async () => {
+  const git = vi.fn().mockResolvedValue({
+    stdout: listSnapshot([
+      'remote.Origin.fetch\n+refs/heads/main:refs/custom/main',
+      'remote.Origin.fetch\n+refs/heads/feature*:refs/heads/tracking/feature*'
+    ])
+  })
+  const run = createGitConfigSnapshotRunner(git)
+  expect((await run(['config', '--get-all', 'remote.Origin.fetch'])).stdout).toBe(
+    '+refs/heads/main:refs/custom/main\n+refs/heads/feature*:refs/heads/tracking/feature*'
+  )
+  expect((await run(['config', '--get', 'remote.Origin.fetch'])).stdout).toBe(
+    '+refs/heads/feature*:refs/heads/tracking/feature*'
+  )
+  expect(git).toHaveBeenCalledOnce()
+})

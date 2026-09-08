@@ -2,121 +2,110 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveGitStatusUpstreamRef } from './status-upstream-ref'
 
 const signal = (): AbortSignal => new AbortController().signal
+const metadata = (ref: string, remote = 'origin') => ({
+  stdout: `${ref}\0=\0refs/heads/feature\0${remote}\0refs/heads/feature\n`
+})
 
 describe('resolveGitStatusUpstreamRef', () => {
-  it('preserves the exact namespace for a slash-containing remote name', async () => {
-    const execGit = vi.fn().mockResolvedValue({
-      stdout:
-        'refs/heads/feature/main\0refs/remotes/team/fork/feature/main\0team/fork/feature/main\n'
-    })
-
-    await expect(
-      resolveGitStatusUpstreamRef(
-        execGit,
+  it.each(['refs/remotes/team/fork/feature', 'refs/custom/feature', 'refs/heads/tracking/feature'])(
+    'retains host-owned remote tracking ref %s for old publishers',
+    async (ref) => {
+      const exec = vi.fn().mockResolvedValue(metadata(ref))
+      const label = ref.replace(/^refs\/(remotes|heads)\//, '')
+      expect(
+        await resolveGitStatusUpstreamRef(exec, '/repo', 'refs/heads/feature', label, signal())
+      ).toBe(ref)
+      expect(exec).toHaveBeenCalledOnce()
+    }
+  )
+  it('corroborates explicit canonical metadata against the configured fetch mapping', async () => {
+    const exec = vi.fn().mockImplementation(async (args: string[]) => ({
+      stdout: args[0] === 'config' ? '+refs/heads/*:refs/custom/fork/*' : 'oid'
+    }))
+    const identity = {
+      selector: { kind: 'named-remote' as const, value: 'fork' },
+      mergeRef: 'refs/heads/feature',
+      trackingRef: 'refs/custom/fork/feature'
+    }
+    expect(
+      await resolveGitStatusUpstreamRef(
+        exec,
         '/repo',
-        'refs/heads/feature/main',
-        'team/fork/feature/main',
+        'refs/heads/feature',
+        'unrelated/display',
+        signal(),
+        identity.trackingRef,
+        identity
+      )
+    ).toBe(identity.trackingRef)
+    expect(
+      await resolveGitStatusUpstreamRef(
+        exec,
+        '/repo',
+        'refs/heads/feature',
+        'unrelated/display',
+        signal(),
+        'refs/remotes/fork/feature',
+        identity
+      )
+    ).toBeUndefined()
+  })
+  it('resolves legacy overrides through configured fetch mappings', async () => {
+    const exec = vi
+      .fn()
+      .mockResolvedValueOnce({
+        stdout: 'refs/remotes/origin/main\0=\0refs/heads/feature\0origin\0refs/heads/main\n'
+      })
+      .mockResolvedValueOnce({ stdout: '+refs/heads/*:refs/custom/origin/*' })
+      .mockResolvedValueOnce({ stdout: 'oid' })
+    expect(
+      await resolveGitStatusUpstreamRef(
+        exec,
+        '/repo',
+        'refs/heads/feature',
+        'refs/custom/origin/feature',
         signal()
       )
-    ).resolves.toBe('refs/remotes/team/fork/feature/main')
-    expect(execGit).toHaveBeenCalledWith(
-      [
-        'for-each-ref',
-        '--format=%(refname)%00%(upstream)%00%(upstream:short)',
-        '--count=1',
-        'refs/heads/feature/main'
-      ],
-      '/repo',
-      expect.any(AbortSignal)
-    )
+    ).toBe('refs/custom/origin/feature')
   })
-
-  it('returns a slash-named local upstream for the binding validator to reject', async () => {
-    const execGit = vi.fn().mockResolvedValue({
-      stdout: 'refs/heads/feature/topic\0refs/heads/feature/base\0feature/base\n'
-    })
-
-    await expect(
-      resolveGitStatusUpstreamRef(
-        execGit,
+  it('excludes local upstream provenance regardless of namespace', async () => {
+    const exec = vi.fn().mockResolvedValue(metadata('refs/heads/feature/base', '.'))
+    expect(
+      await resolveGitStatusUpstreamRef(
+        exec,
         '/repo',
-        'refs/heads/feature/topic',
+        'refs/heads/feature',
         'feature/base',
         signal()
       )
-    ).resolves.toBe('refs/heads/feature/base')
-  })
-
-  it('returns a missing custom refspec destination from branch configuration', async () => {
-    const execGit = vi.fn().mockResolvedValue({
-      stdout: 'refs/heads/feature/main\0refs/custom/origin/main\0custom/origin/main\n'
-    })
-
-    await expect(
-      resolveGitStatusUpstreamRef(
-        execGit,
+    ).toBeUndefined()
+    expect(
+      await resolveGitStatusUpstreamRef(
+        exec,
         '/repo',
-        'refs/heads/feature/main',
-        'custom/origin/main',
-        signal()
+        'refs/heads/feature',
+        'feature/base',
+        signal(),
+        'refs/custom/local',
+        {
+          selector: { kind: 'local' },
+          mergeRef: 'refs/heads/feature',
+          trackingRef: 'refs/custom/local'
+        }
       )
-    ).resolves.toBe('refs/custom/origin/main')
-    expect(execGit).toHaveBeenCalledOnce()
+    ).toBeUndefined()
   })
-
-  it('resolves an accepted effective upstream override explicitly', async () => {
-    const execGit = vi
-      .fn()
-      .mockResolvedValueOnce({
-        stdout: 'refs/heads/feature/prompts\0refs/remotes/origin/main\0origin/main\n'
-      })
-      .mockResolvedValueOnce({
-        stdout: '--end-of-options\nrefs/remotes/origin/feature/prompts\n'
-      })
-
-    await expect(
-      resolveGitStatusUpstreamRef(
-        execGit,
+  it('rejects unsafe metadata without interpreting labels', async () => {
+    const exec = vi.fn().mockResolvedValue(metadata('refs/remotes/origin/feature'))
+    expect(
+      await resolveGitStatusUpstreamRef(
+        exec,
         '/repo',
-        'refs/heads/feature/prompts',
-        'origin/feature/prompts',
-        signal()
+        'refs/heads/feature',
+        'origin/feature',
+        signal(),
+        'refs/../bad'
       )
-    ).resolves.toBe('refs/remotes/origin/feature/prompts')
-    expect(execGit).toHaveBeenNthCalledWith(
-      2,
-      ['rev-parse', '--symbolic-full-name', '--end-of-options', 'origin/feature/prompts'],
-      '/repo',
-      expect.any(AbortSignal)
-    )
-  })
-
-  it('fails safe when an effective override is ambiguous', async () => {
-    const execGit = vi
-      .fn()
-      .mockResolvedValueOnce({
-        stdout: 'refs/heads/feature/main\0refs/remotes/origin/main\0origin/main\n'
-      })
-      .mockResolvedValueOnce({
-        stdout: 'refs/heads/origin/feature/main\nrefs/remotes/origin/feature/main\n'
-      })
-
-    await expect(
-      resolveGitStatusUpstreamRef(
-        execGit,
-        '/repo',
-        'refs/heads/feature/main',
-        'origin/feature/main',
-        signal()
-      )
-    ).resolves.toBeUndefined()
-  })
-
-  it('rejects a stale status whose accepted branch no longer exists', async () => {
-    const execGit = vi.fn().mockResolvedValue({ stdout: '' })
-
-    await expect(
-      resolveGitStatusUpstreamRef(execGit, '/repo', 'refs/heads/old', 'origin/old', signal())
-    ).resolves.toBeUndefined()
+    ).toBeUndefined()
   })
 })

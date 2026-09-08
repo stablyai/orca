@@ -59,7 +59,7 @@ function createHistoryExecutor(limitRecords = 2): {
       return { stdout: `${REMOTE_OID}\n` }
     }
     if (command === 'symbolic-ref') {
-      return { stdout: 'feature\n' }
+      return { stdout: 'refs/heads/feature\n' }
     }
     if (command === 'for-each-ref') {
       return { stdout: 'refs/remotes/origin/feature\0origin/feature\n' }
@@ -225,7 +225,7 @@ describe('git history loader', () => {
         return { stdout: 'refs/remotes/origin/main\n' }
       }
       if (command === 'symbolic-ref') {
-        return { stdout: 'old-workspace\n' }
+        return { stdout: 'refs/heads/old-workspace\n' }
       }
       if (command === 'for-each-ref') {
         return { stdout: 'refs/remotes/origin/main\0origin/main\n' }
@@ -319,7 +319,7 @@ describe('symbolic full-name resolution', () => {
         return { stdout: `${HEAD_OID}\n` }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'main\n' }
+        return { stdout: 'refs/heads/main\n' }
       }
       if (args[0] === 'for-each-ref' || args[0] === 'merge-base') {
         return { stdout: '' }

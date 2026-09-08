@@ -163,6 +163,8 @@ export type GitLabMRReviewersUpdateResult =
   | { ok: false; error: string }
 
 export type GitLabWorkItem = {
+  /** Present only when provider project IDs establish the source repository. */
+  headProjectRef?: GitLabProjectRef
   id: string
   type: 'issue' | 'mr'
   number: number

@@ -245,6 +245,11 @@ export function mapMRToWorkItem(
     labels,
     updatedAt: data.updated_at ?? '',
     author: data.author?.username ?? null,
+    ...(projectRef &&
+    data.source_project_id !== undefined &&
+    data.source_project_id === data.target_project_id
+      ? { headProjectRef: projectRef }
+      : {}),
     branchName: data.source_branch,
     baseRefName: data.target_branch,
     isCrossRepository:

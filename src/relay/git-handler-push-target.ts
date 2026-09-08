@@ -1,3 +1,4 @@
+import { assertGitReviewPushAuthority } from '../shared/git-review-push-authority'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import {
   resolveConfiguredGitPushTarget,
@@ -20,8 +21,9 @@ export async function resolveRelayPushTarget(
   // Why here and not in the shared resolver: an explicit target arrives over the wire,
   // so the host re-validates its shape and asks Git to vet the branch name itself.
   await git(['check-ref-format', '--branch', explicitTarget.branchName], worktreePath)
+  await assertGitReviewPushAuthority((args) => git(args, worktreePath), explicitTarget)
   return {
     remote: explicitTarget.remoteName,
-    refspec: `HEAD:${explicitTarget.branchName}`
+    refspec: `HEAD:refs/heads/${explicitTarget.branchName}`
   }
 }

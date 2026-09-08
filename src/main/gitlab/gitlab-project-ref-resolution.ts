@@ -1,9 +1,9 @@
 import { glabExecFileAsync } from '../git/runner'
-import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import type { IssueSourcePreference } from '../../shared/repo-types'
+import { _resetGitOperationRemoteRoleCache } from '../git/git-operation-remote-roles'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
   _resetGlabUnauthenticatedHosts,
@@ -20,9 +20,12 @@ import {
   parseRemoteProjectRefCandidate,
   type ProjectRef
 } from './project-ref-parser'
+import { resolveGitLabIssueSourceRole } from './gitlab-issue-source-role-resolution'
+import { glabHostnameArgs, glabRepoExecOptions } from './gitlab-exec-options'
 
 export { DEFAULT_GITLAB_HOSTS, parseGitLabProjectRef }
 export type { ProjectRef }
+export { glabHostnameArgs, glabRepoExecOptions }
 export {
   _resetKnownHostsCache,
   getGlabKnownHosts,
@@ -41,6 +44,7 @@ export function _resetProjectRefCache(): void {
   projectRefCache.clear()
   clearProjectRefInFlight()
   _resetGlabUnauthenticatedHosts()
+  _resetGitOperationRemoteRoleCache()
 }
 
 /** @internal - exposed for tests only */
@@ -180,23 +184,44 @@ export async function getIssueProjectRef(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  const upstream = await getProjectRefForRemote(
-    repoPath,
-    'upstream',
-    knownHosts,
-    connectionId,
-    localGitOptions
-  )
-  return (
-    upstream ??
-    getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
-  )
+  return (await resolveIssueSource(repoPath, 'auto', knownHosts, connectionId, localGitOptions))
+    .source
 }
 
 export type ResolvedIssueSource = {
   source: ProjectRef | null
   /** True when explicit upstream is gone and resolver fell back to origin. */
   fellBack: boolean
+  ambiguousRemoteNames?: string[]
+}
+
+async function resolveAutomaticIssueSource(
+  repoPath: string,
+  knownHosts: readonly string[] | undefined,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<ResolvedIssueSource> {
+  const authenticatedHosts = knownHosts ?? DEFAULT_GITLAB_HOSTS
+  return resolveGitLabIssueSourceRole({
+    repoPath,
+    knownHosts: authenticatedHosts,
+    connectionId,
+    localGitOptions,
+    resolveUrl: async (url) => {
+      const known = parseGitLabProjectRef(url, authenticatedHosts)
+      if (known) {
+        return { kind: 'verified', repository: known }
+      }
+      const candidate = parseRemoteProjectRefCandidate(url)
+      if (!candidate) {
+        return { kind: 'non-provider' }
+      }
+      if (await isGlabConfiguredForRemoteHost(repoPath, candidate, connectionId, localGitOptions)) {
+        return { kind: 'verified', repository: candidate }
+      }
+      return { kind: 'unverifiable' }
+    }
+  })
 }
 
 export async function resolveIssueSource(
@@ -238,31 +263,7 @@ export async function resolveIssueSource(
       fellBack: false
     }
   }
-  return {
-    source: await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions),
-    fellBack: false
-  }
-}
-
-export function glabRepoExecOptions(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): { cwd?: string; wslDistro?: string; admissionTier?: GitAdmissionTier } {
-  return connectionId
-    ? {}
-    : {
-        cwd: repoPath,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-        ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
-      }
-}
-
-export function glabHostnameArgs(
-  projectRef: Pick<ProjectRef, 'host'> | null | undefined,
-  connectionId?: string | null
-): string[] {
-  return connectionId && projectRef?.host ? ['--hostname', projectRef.host] : []
+  return resolveAutomaticIssueSource(repoPath, knownHosts, connectionId, localGitOptions)
 }
 
 async function isGlabConfiguredForRemoteHost(

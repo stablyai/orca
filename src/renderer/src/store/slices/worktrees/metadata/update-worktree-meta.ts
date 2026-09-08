@@ -83,7 +83,7 @@ export function createUpdateWorktreeMeta(
       linkedPrForPushTarget !== null &&
       normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
-      !existingWorktree.pushTarget
+      !existingWorktree.pushTarget?.reviewHead
         ? trySettingsForWorktreeOwner(get(), worktreeId, executionHostId)
         : null
     const resolvedPushTarget =

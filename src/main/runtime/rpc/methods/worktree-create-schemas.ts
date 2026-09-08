@@ -1,3 +1,4 @@
+import { GitPushTargetParam } from './git-push-target-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
@@ -61,13 +62,7 @@ export const WorktreeCreate = z
         presetId: OptionalString
       })
       .optional(),
-    pushTarget: z
-      .object({
-        remoteName: z.string(),
-        branchName: z.string(),
-        remoteUrl: OptionalString
-      })
-      .optional(),
+    pushTarget: GitPushTargetParam.optional(),
     runHooks: OptionalBoolean,
     activate: OptionalBoolean,
     // Why: activation on create is view intent, so it is addressed like worktree.activate.

@@ -1,3 +1,6 @@
+import { reviewTarget } from '../../../../shared/__fixtures__/git-review-target'
+import type { GitUpstreamStatus } from '../../../../shared/git-status-types'
+import { hasUsableHostedReviewPushTarget } from '../../../../shared/hosted-review-push-target-admission'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorStore } from './editor-slice-test-harness'
 
@@ -561,4 +564,54 @@ describe('createEditorSlice conflict status reconciliation', () => {
     ])
     expect(store.getState().trackedConflictPathsByWorktree['wt-1']).toEqual({})
   })
+})
+
+it('preserves identity-only upstream delivery and old-peer uncertainty', () => {
+  const store = createEditorStore()
+  const publish = (upstreamStatus: GitUpstreamStatus) =>
+    store.getState().setUpstreamStatus('wt-identity', upstreamStatus)
+  const usable = () =>
+    hasUsableHostedReviewPushTarget({
+      pushTarget: reviewTarget('origin/team', 'feature'),
+      upstreamStatus: store.getState().remoteStatusesByWorktree['wt-identity']
+    })
+  const oldPeer = { hasUpstream: true, upstreamName: 'origin/team/feature', ahead: 1, behind: 0 }
+  const canonical: GitUpstreamStatus = {
+    ...oldPeer,
+    reviewPushAuthority: {
+      kind: 'verified',
+      reviewHead: reviewTarget('origin/team', 'feature').reviewHead
+    },
+    upstreamIdentity: {
+      selector: { kind: 'named-remote', value: 'origin/team' },
+      mergeRef: 'refs/heads/feature',
+      trackingRef: 'refs/custom/published'
+    }
+  }
+  publish(oldPeer)
+  expect(usable()).toBe(false)
+  publish(canonical)
+  expect(usable()).toBe(true)
+  expect(store.getState().remoteStatusesByWorktree['wt-identity']).toEqual(canonical)
+  for (const upstreamIdentity of [
+    {
+      ...canonical.upstreamIdentity!,
+      selector: { kind: 'named-remote' as const, value: 'origin' }
+    },
+    { ...canonical.upstreamIdentity!, mergeRef: 'refs/heads/team/feature' },
+    { ...canonical.upstreamIdentity!, selector: { kind: 'literal-url' as const } },
+    { ...canonical.upstreamIdentity!, selector: { kind: 'local' as const } },
+    undefined
+  ]) {
+    publish({ ...canonical, upstreamIdentity })
+    expect(usable()).toBe(false)
+    publish(canonical)
+    expect(usable()).toBe(true)
+  }
+  const moved = {
+    ...canonical,
+    upstreamIdentity: { ...canonical.upstreamIdentity!, trackingRef: 'refs/custom/new' }
+  }
+  publish(moved)
+  expect(store.getState().remoteStatusesByWorktree['wt-identity']).toEqual(moved)
 })

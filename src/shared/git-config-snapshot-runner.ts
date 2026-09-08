@@ -5,6 +5,7 @@ type GitConfigSnapshot = Map<string, string[]>
 // Why: mirror `git config --get`'s exit-1-on-absent-key so an intercepted miss
 // rejects (matching real git) instead of resolving an empty success value.
 export class GitConfigSnapshotKeyNotFoundError extends Error {
+  readonly code = 1
   constructor(key: string) {
     super(`git config --get found no value for '${key}'`)
     this.name = 'GitConfigSnapshotKeyNotFoundError'
@@ -12,7 +13,9 @@ export class GitConfigSnapshotKeyNotFoundError extends Error {
 }
 
 function isConfigGetCommand(args: string[]): boolean {
-  return args.length === 3 && args[0] === 'config' && args[1] === '--get'
+  return (
+    args.length === 3 && args[0] === 'config' && (args[1] === '--get' || args[1] === '--get-all')
+  )
 }
 
 function canonicalizeGitConfigLookupKey(key: string): string {
@@ -98,7 +101,7 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
     }
 
     // Why: git config --get resolves multivar keys using the last occurrence.
-    return { stdout: values.at(-1) ?? '' }
+    return { stdout: args[1] === '--get-all' ? values.join('\n') : (values.at(-1) ?? '') }
   }
 }
 import { iterateNulDelimitedFields } from './nul-delimited-fields'

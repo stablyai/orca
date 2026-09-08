@@ -1,3 +1,4 @@
+import { linkedReviewOperationTarget } from '../../shared/linked-review-operation-target'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
@@ -201,6 +202,7 @@ export class RuntimeGitSyncCommands {
     forceWithLease?: boolean
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    pushTarget = linkedReviewOperationTarget(target.worktree, pushTarget)
     const provider = requireRuntimeGitProvider(target)
     if (provider) {
       const materializedPushTarget = pushTarget

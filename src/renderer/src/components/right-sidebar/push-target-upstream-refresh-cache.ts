@@ -1,3 +1,4 @@
+import { reviewHeadKey } from '../../../../shared/git-review-push-authority'
 import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
@@ -24,6 +25,7 @@ function getRuntimeEnvironmentKey(
 
 function getPushTargetKey(pushTarget: GitPushTarget): readonly unknown[] {
   return [
+    reviewHeadKey(pushTarget.reviewHead) ?? null,
     pushTarget.remoteName,
     pushTarget.branchName,
     pushTarget.remoteUrl ?? null,

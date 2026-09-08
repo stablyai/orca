@@ -10,7 +10,7 @@ import type { GitExec } from './git-handler-ops'
 import type { RelayGitStreamExec } from './git-stdout-stream'
 import type { GitUpstreamStatus } from '../shared/git-status-types'
 import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
-import { splitRemoteBranchName } from '../shared/git-effective-upstream'
+import { gitBranchNameFromFullRef } from '../shared/git-upstream-identity'
 import { collectGitStatusLineStatInputs } from '../shared/git-status-line-stat-inputs'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
@@ -305,15 +305,7 @@ function getShortBranchName(branch: string | undefined): string | null {
 
 function shouldProbeEffectiveUpstreamStatus(
   branch: string | undefined,
-  upstreamName: string | undefined
+  _upstreamName?: string
 ): boolean {
-  const branchName = getShortBranchName(branch)
-  if (!branchName) {
-    return false
-  }
-  if (!upstreamName) {
-    return true
-  }
-  const parsed = splitRemoteBranchName(upstreamName)
-  return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
+  return gitBranchNameFromFullRef(branch) !== null
 }

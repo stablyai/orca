@@ -82,13 +82,14 @@ export async function listIssues(
   const currentPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1
   const perPage = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
-  const { source: projectRef } = await resolveIssueSource(
+  const resolution = await resolveIssueSource(
     repoPath,
     preference,
     knownHosts,
     connectionId,
     localGitOptions
   )
+  const projectRef = resolution.source
   // Why: when the project can't be resolved we must NOT fall back to an
   // unscoped `glab issue list` that infers the project from cwd. For a repo
   // on an SSH connection there is no local cwd matching the repo, so glab
@@ -101,8 +102,10 @@ export async function listIssues(
       items: [],
       totalPages: 0,
       error: {
-        type: 'not_found',
-        message: 'Could not resolve a GitLab project for this repository.'
+        type: resolution.ambiguousRemoteNames ? 'validation_error' : 'not_found',
+        message: resolution.ambiguousRemoteNames
+          ? `Could not determine the GitLab issue source from remote evidence (${resolution.ambiguousRemoteNames.join(', ')}). Choose an explicit source in repository settings.`
+          : 'Could not resolve a GitLab project for this repository.'
       }
     }
   }

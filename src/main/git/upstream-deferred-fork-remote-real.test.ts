@@ -51,6 +51,11 @@ describe('getUpstreamStatus with a deferred (not-yet-materialized) fork remote',
     expect(status).toEqual({
       hasUpstream: false,
       upstreamName: 'pr-contributor-orca/contributor/fix',
+      upstreamIdentity: {
+        selector: { kind: 'named-remote', value: 'pr-contributor-orca' },
+        mergeRef: 'refs/heads/contributor/fix',
+        trackingRef: null
+      },
       ahead: 0,
       behind: 0,
       hasConfiguredPushTarget: true

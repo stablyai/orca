@@ -1,3 +1,4 @@
+import { reviewHeadKey } from '../../shared/git-review-push-authority'
 import type { GitUpstreamStatus } from '../../shared/git-status-types'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
@@ -9,10 +10,17 @@ import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight
  * compile error instead of a silently shared lease between two different targets.
  */
 function pushTargetKeyParts(pushTarget: GitPushTarget): readonly unknown[] {
-  const { remoteName, branchName, remoteUrl, remoteCreated, ...rest } = pushTarget
+  const { remoteName, branchName, remoteUrl, remoteCreated, reviewHead, ...rest } = pushTarget
   const exhaustive: Record<string, never> = rest
   void exhaustive
-  return ['explicit-target', remoteName, branchName, remoteUrl ?? null, remoteCreated ?? null]
+  return [
+    'explicit-target',
+    remoteName,
+    branchName,
+    remoteUrl ?? null,
+    remoteCreated ?? null,
+    reviewHeadKey(reviewHead) ?? null
+  ]
 }
 
 export type GitUpstreamStatusExecutionIdentity =

@@ -12,6 +12,8 @@ import { REBASE_SOURCE_FETCH_TIMEOUT_MS } from '../../shared/git-rebase-source'
 import { clearGitCapabilityStateForTests } from './git-capability-state'
 import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from './remote'
 
+import { configuredFeatureUpstream, upstreamMetadataArgs } from './upstream-operation-test-fixture'
+
 const REBASE_OPERATION_OPTIONS = {
   cwd: '/repo',
   terminationBarrier: true,
@@ -39,7 +41,7 @@ describe('git remote operations', () => {
   it('pushes to the configured upstream remote and branch', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'review/pr-1738\n', stderr: '' }
+        return { stdout: 'refs/heads/review/pr-1738\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.remote')) {
         return { stdout: 'pr-prateek-orca\n', stderr: '' }
@@ -51,7 +53,7 @@ describe('git remote operations', () => {
         return { stdout: 'refs/heads/prateek/fix-sidebar-agents-toggle\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.base')) {
-        throw new Error('missing branch base')
+        throw Object.assign(new Error('missing branch base'), { code: 1 })
       }
       return { stdout: '', stderr: '' }
     })
@@ -63,7 +65,12 @@ describe('git remote operations', () => {
       { cwd: '/repo' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--set-upstream', 'pr-prateek-orca', 'HEAD:prateek/fix-sidebar-agents-toggle'],
+      [
+        'push',
+        '--set-upstream',
+        'pr-prateek-orca',
+        'HEAD:refs/heads/prateek/fix-sidebar-agents-toggle'
+      ],
       { cwd: '/repo' }
     )
   })
@@ -71,7 +78,7 @@ describe('git remote operations', () => {
   it('does not combine remote.pushDefault with a base-branch merge target', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/feature/fix\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.feature/fix.remote')) {
         return { stdout: 'origin\n', stderr: '' }
@@ -94,7 +101,7 @@ describe('git remote operations', () => {
     await gitPush('/repo', false)
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
-      ['push', '--set-upstream', 'fork', 'HEAD:main'],
+      ['push', '--set-upstream', 'fork', 'HEAD:refs/heads/main'],
       { cwd: '/repo' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
@@ -106,7 +113,7 @@ describe('git remote operations', () => {
   it('keeps a fork head target when the contributor branch matches the base branch name', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'review/pr-1\n', stderr: '' }
+        return { stdout: 'refs/heads/review/pr-1\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.review/pr-1.remote')) {
         return { stdout: 'fork\n', stderr: '' }
@@ -126,7 +133,7 @@ describe('git remote operations', () => {
     await gitPush('/repo', false)
 
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--set-upstream', 'fork', 'HEAD:main'],
+      ['push', '--set-upstream', 'fork', 'HEAD:refs/heads/main'],
       { cwd: '/repo' }
     )
   })
@@ -134,7 +141,7 @@ describe('git remote operations', () => {
   it('pushes to a URL-valued branch pushRemote when no named remote exists', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
@@ -164,16 +171,16 @@ describe('git remote operations', () => {
         'push',
         '--set-upstream',
         'https://github.com/pynickle/orca.git',
-        'HEAD:imp/chinese-translation'
+        'HEAD:refs/heads/imp/chinese-translation'
       ],
       { cwd: '/repo' }
     )
   })
 
-  it('normalizes a URL-valued branch remote to a matching named remote before pushing', async () => {
+  it('preserves a URL-valued branch remote before pushing', async () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
         throw new Error('missing pushRemote')
@@ -213,14 +220,19 @@ describe('git remote operations', () => {
     await gitPush('/repo', false)
 
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--set-upstream', 'pr-pynickle-orca', 'HEAD:imp/chinese-translation'],
+      [
+        'push',
+        '--set-upstream',
+        'https://github.com/pynickle/orca.git',
+        'HEAD:refs/heads/imp/chinese-translation'
+      ],
       { cwd: '/repo' }
     )
   })
 
   // Regression: normalizing a URL-valued push remote used to run `git remote` and then a
   // serial `git remote get-url` per remote -- 59 subprocesses on a 58-remote repo.
-  it('normalizes a URL-valued push remote from one remote table read at 58 remotes', async () => {
+  it('preserves a URL-valued push remote without scanning 58 named remotes', async () => {
     const remotes = [
       { name: 'origin', url: 'https://github.com/stablyai/orca.git' },
       ...Array.from({ length: 56 }, (_, index) => ({
@@ -231,7 +243,7 @@ describe('git remote operations', () => {
     ]
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'imp/chinese-translation\n', stderr: '' }
+        return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
         return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
@@ -259,36 +271,45 @@ describe('git remote operations', () => {
     await gitPush('/repo', false)
 
     const remoteReads = gitExecFileAsyncMock.mock.calls.filter(([args]) => args[0] === 'remote')
-    expect(remoteReads.map(([args]) => args)).toEqual([['remote', '-v']])
+    expect(remoteReads.map(([args]) => args)).toEqual([])
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--set-upstream', 'pr-pynickle-orca', 'HEAD:imp/chinese-translation'],
+      [
+        'push',
+        '--set-upstream',
+        'https://github.com/pynickle/orca.git',
+        'HEAD:refs/heads/imp/chinese-translation'
+      ],
       { cwd: '/repo' }
     )
   })
 
   it('uses an explicit push target even when it differs from the local branch name', async () => {
-    gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
-      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' }).mockResolvedValueOnce({
+      stdout: 'origin\thttps://github.com/team/repo.git (push)',
+      stderr: ''
+    })
 
     await gitPush('/repo', false, {
+      reviewHead: {
+        provider: 'github',
+        host: 'github.com',
+        repository: 'team/repo',
+        branchName: 'contributor/fix-sidebar'
+      },
       remoteName: 'origin',
       branchName: 'contributor/fix-sidebar'
     })
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['push', '--set-upstream', 'origin', 'HEAD:contributor/fix-sidebar'],
+      ['push', '--set-upstream', 'origin', 'HEAD:refs/heads/contributor/fix-sidebar'],
       { cwd: '/repo' }
     )
-    expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['check-ref-format', '--branch', 'contributor/fix-sidebar'], { cwd: '/repo' }],
-      [['push', '--set-upstream', 'origin', 'HEAD:contributor/fix-sidebar'], { cwd: '/repo' }]
-    ])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', '-v'], { cwd: '/repo' })
   })
 
   it('passes --force-with-lease when requested', async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'origin\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
@@ -296,7 +317,7 @@ describe('git remote operations', () => {
     await gitPush('/repo', false, undefined, { forceWithLease: true })
 
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--force-with-lease', '--set-upstream', 'origin', 'HEAD:feature'],
+      ['push', '--force-with-lease', '--set-upstream', 'origin', 'HEAD:refs/heads/feature'],
       { cwd: '/repo' }
     )
   })
@@ -418,15 +439,15 @@ describe('git remote operations', () => {
 
   it("runs pull with the user's configured strategy", async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await gitPull('/repo')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
-      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
+      [upstreamMetadataArgs, { cwd: '/repo' }],
       [['pull'], { cwd: '/repo' }]
     ])
   })
@@ -437,30 +458,30 @@ describe('git remote operations', () => {
     )
     gitExecFileAsyncMock
       // First attempt: plain pull rejects with git's reconciliation error.
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockRejectedValueOnce(divergentError)
       // Fallback attempt: pull --no-rebase (merge) succeeds.
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await gitPull('/repo')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
-      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
+      [upstreamMetadataArgs, { cwd: '/repo' }],
       [['pull'], { cwd: '/repo' }],
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
-      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
+      [upstreamMetadataArgs, { cwd: '/repo' }],
       [['pull', '--no-rebase'], { cwd: '/repo' }]
     ])
   })
 
   it('does not retry a fast-forward-only pull that fails on divergence', async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockRejectedValueOnce(
         new Error('Command failed: git pull\nfatal: Not possible to fast-forward, aborting.')
       )
@@ -502,12 +523,12 @@ describe('git remote operations', () => {
     )
     gitExecFileAsyncMock
       // First attempt fails with the reconciliation error.
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockRejectedValueOnce(divergentError)
       // The single merge fallback then fails on a real conflict.
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockRejectedValueOnce(mergeConflictError)
 
     await expect(gitPull('/repo')).rejects.toThrow()
@@ -517,18 +538,23 @@ describe('git remote operations', () => {
 
   it('pulls the same-name origin branch for legacy base-tracking worktrees', async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/main\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce({
+        stdout: 'refs/remotes/origin/main\0=\0refs/heads/feature\0origin\0refs/heads/main\n',
+        stderr: ''
+      })
+      .mockResolvedValueOnce({ stdout: '+refs/heads/*:refs/remotes/origin/*\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'abc123\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await gitPull('/repo')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
-      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
+      [upstreamMetadataArgs, { cwd: '/repo' }],
+      [['config', '--get-all', 'remote.origin.fetch'], { cwd: '/repo' }],
       [['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature'], { cwd: '/repo' }],
-      [['pull', 'origin', 'feature'], { cwd: '/repo' }]
+      [['pull', 'origin', 'refs/heads/feature'], { cwd: '/repo' }]
     ])
   })
 
@@ -550,15 +576,15 @@ describe('git remote operations', () => {
 
   it('fast-forwards with --ff-only using the configured upstream', async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await gitFastForward('/repo')
 
     expect(gitExecFileAsyncMock.mock.calls).toEqual([
-      [['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: '/repo' }],
-      [['rev-parse', '--abbrev-ref', 'HEAD@{u}'], { cwd: '/repo' }],
+      [['symbolic-ref', '--quiet', 'HEAD'], { cwd: '/repo' }],
+      [upstreamMetadataArgs, { cwd: '/repo' }],
       [['pull', '--ff-only'], { cwd: '/repo' }]
     ])
   })
@@ -646,7 +672,7 @@ describe('git remote operations', () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'upstream\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
-      .mockRejectedValueOnce(new Error('missing remote-tracking ref'))
+      .mockRejectedValueOnce(Object.assign(new Error('missing remote-tracking ref'), { code: 1 }))
       .mockResolvedValueOnce({ stdout: 'head\n', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
       .mockResolvedValueOnce({ stdout: '', stderr: '' })
@@ -732,8 +758,8 @@ describe('git remote operations', () => {
 
   it('normalizes pull authentication errors to a friendly message', async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockRejectedValueOnce(new Error('Authentication failed'))
 
     await expect(gitPull('/repo')).rejects.toThrow(
@@ -743,8 +769,8 @@ describe('git remote operations', () => {
 
   it('normalizes pull dirty-worktree aborts to a friendly message', async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockRejectedValueOnce(
         new Error(
           'Command failed: git pull\n' +
@@ -762,8 +788,8 @@ describe('git remote operations', () => {
 
   it('normalizes pull untracked-file aborts to a friendly message', async () => {
     gitExecFileAsyncMock
-      .mockResolvedValueOnce({ stdout: 'feature\n', stderr: '' })
-      .mockResolvedValueOnce({ stdout: 'origin/feature\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature\n', stderr: '' })
+      .mockResolvedValueOnce(configuredFeatureUpstream)
       .mockRejectedValueOnce(
         new Error(
           'Command failed: git pull\n' +

@@ -12,7 +12,10 @@ function isConfigListSnapshotCommand(args: string[]): boolean {
 }
 
 function emptyGitConfigSnapshot(): { stdout: string } {
-  return { stdout: 'core.repositoryformatversion\n0\0' }
+  return {
+    stdout:
+      'core.repositoryformatversion\n0\0remote.origin.fetch\n+refs/heads/*:refs/remotes/origin/*\0'
+  }
 }
 
 describe('relay upstream negative cache', () => {
@@ -28,10 +31,10 @@ describe('relay upstream negative cache', () => {
     let originBranchExists = false
     const runGit = vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured for branch feature')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
@@ -40,9 +43,9 @@ describe('relay upstream negative cache', () => {
         if (originBranchExists) {
           return { stdout: 'abc123\n' }
         }
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
       }
-      if (args[0] === 'rev-list' && args.includes('HEAD...origin/feature')) {
+      if (args[0] === 'rev-list' && args.includes('HEAD...refs/remotes/origin/feature')) {
         return { stdout: '0\t1\n' }
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
@@ -56,9 +59,9 @@ describe('relay upstream negative cache', () => {
       bypassCache: true
     })
 
-    expect(first).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
+    expect(first).toMatchObject({ hasUpstream: false, ahead: 0, behind: 0 })
     expect(automatic).toEqual(first)
-    expect(strict).toEqual({
+    expect(strict).toMatchObject({
       hasUpstream: true,
       upstreamName: 'origin/feature',
       ahead: 0,
@@ -71,10 +74,10 @@ describe('relay upstream negative cache', () => {
     let deferredOriginReject: ((error: Error) => void) | null = null
     const runGit = vi.fn(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured for branch feature')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
@@ -87,7 +90,7 @@ describe('relay upstream negative cache', () => {
           deferredOriginReject = reject
         })
       }
-      if (args[0] === 'rev-list' && args.includes('HEAD...origin/feature')) {
+      if (args[0] === 'rev-list' && args.includes('HEAD...refs/remotes/origin/feature')) {
         return { stdout: '0\t1\n' }
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
@@ -104,17 +107,19 @@ describe('relay upstream negative cache', () => {
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }
-    ;(deferredOriginReject as (error: Error) => void)(new Error('missing remote branch'))
+    ;(deferredOriginReject as (error: Error) => void)(
+      Object.assign(new Error('missing remote branch'), { code: 1 })
+    )
     const staleAutomatic = await automatic
     const nextAutomatic = await readOrProbeNoEffectiveUpstreamStatus(identity, runGit)
 
-    expect(strict).toEqual({
+    expect(strict).toMatchObject({
       hasUpstream: true,
       upstreamName: 'origin/feature',
       ahead: 0,
       behind: 1
     })
-    expect(staleAutomatic).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
+    expect(staleAutomatic).toMatchObject({ hasUpstream: false, ahead: 0, behind: 0 })
     expect(nextAutomatic).toEqual(strict)
   })
 
@@ -123,10 +128,10 @@ describe('relay upstream negative cache', () => {
     let deferredOriginReject: ((error: Error) => void) | null = null
     const runGit = vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured for branch feature')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
@@ -139,7 +144,7 @@ describe('relay upstream negative cache', () => {
           deferredOriginReject = reject
         })
       }
-      if (args[0] === 'rev-list' && args.includes('HEAD...origin/feature')) {
+      if (args[0] === 'rev-list' && args.includes('HEAD...refs/remotes/origin/feature')) {
         return { stdout: '0\t1\n' }
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
@@ -159,10 +164,10 @@ describe('relay upstream negative cache', () => {
         { worktreePath: '/repo', branchName },
         async (args) => {
           if (args[0] === 'symbolic-ref') {
-            return { stdout: `${branchName}\n` }
+            return { stdout: `refs/heads/${branchName}\n` }
           }
-          if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-            throw new Error(`fatal: no upstream configured for branch ${branchName}`)
+          if (args[0] === 'for-each-ref') {
+            return { stdout: '\0\n' }
           }
           if (isConfigListSnapshotCommand(args)) {
             return emptyGitConfigSnapshot()
@@ -170,7 +175,7 @@ describe('relay upstream negative cache', () => {
           if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
             return { stdout: 'abc123\n' }
           }
-          if (args[0] === 'rev-list' && args.includes(`HEAD...origin/${branchName}`)) {
+          if (args[0] === 'rev-list' && args.includes(`HEAD...refs/remotes/origin/${branchName}`)) {
             return { stdout: '0\t1\n' }
           }
           throw new Error(`No upstream fixture for git ${args.join(' ')}`)
@@ -181,11 +186,13 @@ describe('relay upstream negative cache', () => {
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }
-    ;(deferredOriginReject as (error: Error) => void)(new Error('missing remote branch'))
+    ;(deferredOriginReject as (error: Error) => void)(
+      Object.assign(new Error('missing remote branch'), { code: 1 })
+    )
     await automatic
     const nextAutomatic = await readOrProbeNoEffectiveUpstreamStatus(identity, runGit)
 
-    expect(strict).toEqual({
+    expect(strict).toMatchObject({
       hasUpstream: true,
       upstreamName: 'origin/feature',
       ahead: 0,
@@ -200,10 +207,10 @@ describe('relay upstream negative cache', () => {
     let deferredOriginReject: ((error: Error) => void) | null = null
     const runGit = vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured for branch feature')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
@@ -216,7 +223,7 @@ describe('relay upstream negative cache', () => {
           deferredOriginReject = reject
         })
       }
-      if (args[0] === 'rev-list' && args.includes('HEAD...origin/feature')) {
+      if (args[0] === 'rev-list' && args.includes('HEAD...refs/remotes/origin/feature')) {
         return { stdout: '0\t1\n' }
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
@@ -234,10 +241,10 @@ describe('relay upstream negative cache', () => {
         { worktreePath: '/repo', branchName },
         async (args) => {
           if (args[0] === 'symbolic-ref') {
-            return { stdout: `${branchName}\n` }
+            return { stdout: `refs/heads/${branchName}\n` }
           }
-          if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-            throw new Error(`fatal: no upstream configured for branch ${branchName}`)
+          if (args[0] === 'for-each-ref') {
+            return { stdout: '\0\n' }
           }
           if (isConfigListSnapshotCommand(args)) {
             return emptyGitConfigSnapshot()
@@ -245,7 +252,7 @@ describe('relay upstream negative cache', () => {
           if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
             return { stdout: 'abc123\n' }
           }
-          if (args[0] === 'rev-list' && args.includes(`HEAD...origin/${branchName}`)) {
+          if (args[0] === 'rev-list' && args.includes(`HEAD...refs/remotes/origin/${branchName}`)) {
             return { stdout: '0\t1\n' }
           }
           throw new Error(`No upstream fixture for git ${args.join(' ')}`)
@@ -256,11 +263,13 @@ describe('relay upstream negative cache', () => {
     if (!deferredOriginReject) {
       throw new Error('expected deferred origin reject')
     }
-    ;(deferredOriginReject as (error: Error) => void)(new Error('missing remote branch'))
+    ;(deferredOriginReject as (error: Error) => void)(
+      Object.assign(new Error('missing remote branch'), { code: 1 })
+    )
     await automatic
     const nextAutomatic = await readOrProbeNoEffectiveUpstreamStatus(identity, runGit)
 
-    expect(nextAutomatic).toEqual({
+    expect(nextAutomatic).toMatchObject({
       hasUpstream: true,
       upstreamName: 'origin/feature',
       ahead: 0,
@@ -276,16 +285,16 @@ describe('relay upstream negative cache', () => {
         { worktreePath: '/repo', branchName },
         async (args) => {
           if (args[0] === 'symbolic-ref') {
-            return { stdout: `${branchName}\n` }
+            return { stdout: `refs/heads/${branchName}\n` }
           }
-          if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-            throw new Error(`fatal: no upstream configured for branch ${branchName}`)
+          if (args[0] === 'for-each-ref') {
+            return { stdout: '\0\n' }
           }
           if (isConfigListSnapshotCommand(args)) {
             return emptyGitConfigSnapshot()
           }
           if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
-            throw new Error('missing remote branch')
+            throw Object.assign(new Error('missing remote branch'), { code: 1 })
           }
           throw new Error(`No upstream fixture for git ${args.join(' ')}`)
         }
@@ -303,10 +312,10 @@ describe('relay upstream negative cache', () => {
         { worktreePath: '/repo', branchName },
         async (args) => {
           if (args[0] === 'symbolic-ref') {
-            return { stdout: `${branchName}\n` }
+            return { stdout: `refs/heads/${branchName}\n` }
           }
-          if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-            throw new Error(`fatal: no upstream configured for branch ${branchName}`)
+          if (args[0] === 'for-each-ref') {
+            return { stdout: '\0\n' }
           }
           if (isConfigListSnapshotCommand(args)) {
             return emptyGitConfigSnapshot()
@@ -314,7 +323,7 @@ describe('relay upstream negative cache', () => {
           if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
             return { stdout: 'abc123\n' }
           }
-          if (args[0] === 'rev-list' && args.includes(`HEAD...origin/${branchName}`)) {
+          if (args[0] === 'rev-list' && args.includes(`HEAD...refs/remotes/origin/${branchName}`)) {
             return { stdout: '0\t1\n' }
           }
           throw new Error(`No upstream fixture for git ${args.join(' ')}`)
@@ -330,16 +339,16 @@ describe('relay upstream negative cache', () => {
   it('coalesces no-upstream config reads into one snapshot subprocess', async () => {
     const runGit = vi.fn(async (args: string[]): Promise<{ stdout: string }> => {
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n' }
+        return { stdout: 'refs/heads/feature\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured for branch feature')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })

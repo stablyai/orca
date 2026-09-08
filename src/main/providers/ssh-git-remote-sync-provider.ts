@@ -1,3 +1,5 @@
+import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
+import { assertGitReviewPushAuthority } from '../../shared/git-review-push-authority'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../shared/git-rebase-source'
@@ -11,6 +13,15 @@ export class SshGitRemoteSyncProvider extends SshGitWorkingTreeProvider {
     options: { forceWithLease?: boolean } = {}
   ): Promise<void> {
     await this.runWithGitReadInvalidation(async () => {
+      if (pushTarget) {
+        await assertGitReviewPushAuthority(
+          async (args) =>
+            (await requestGitStreamable(this.mux, 'git.exec', { args, cwd: worktreePath })) as {
+              stdout: string
+            },
+          pushTarget
+        )
+      }
       await this.mux.request('git.push', {
         worktreePath,
         publish,

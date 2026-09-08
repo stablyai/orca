@@ -1,3 +1,4 @@
+import { hasUsableHostedReviewPushTarget } from '../../../shared/hosted-review-push-target-admission'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../../shared/git-fork-sync'
 import type { GitUpstreamStatus } from '../../../shared/git-status-types'
 import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
@@ -194,6 +195,17 @@ export async function pushRuntimeGit(
       ...(args.forceWithLease !== undefined ? { forceWithLease: args.forceWithLease } : {})
     })
     return
+  }
+  if (
+    args.pushTarget &&
+    !hasUsableHostedReviewPushTarget({
+      pushTarget: args.pushTarget,
+      upstreamStatus: await getRuntimeGitUpstreamStatus(context, args.pushTarget)
+    })
+  ) {
+    throw new Error(
+      'The execution host has not verified the review push endpoints. Update or reconnect the host and retry.'
+    )
   }
   await callRuntimeRpc(
     target,

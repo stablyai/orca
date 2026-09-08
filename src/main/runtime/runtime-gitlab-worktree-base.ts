@@ -1,3 +1,4 @@
+import { readGitReviewPushAuthority } from '../../shared/git-review-push-authority'
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -55,7 +56,8 @@ export async function resolveRuntimeGitLabWorktreeBase(
   let sourceBranch = args.sourceBranch?.trim() ?? ''
   let targetBranch = args.targetBranch?.trim() ?? ''
   let isCrossRepository = args.isCrossRepository === true
-  if (!sourceBranch) {
+  let pushTarget: GitPushTarget | undefined
+  if (!sourceBranch || !isCrossRepository) {
     let discoveryRemote: string
     try {
       discoveryRemote = await resolveRuntimeGitLabIssueSourceRemote(
@@ -86,15 +88,30 @@ export async function resolveRuntimeGitLabWorktreeBase(
       repo.connectionId ?? null,
       localWorktreeGitOptions
     )
-    if (!item || item.type !== 'mr') {
+    if ((!item || item.type !== 'mr') && !sourceBranch) {
       return { error: `MR !${args.mrIid} not found.` }
     }
-    sourceBranch = (item.branchName ?? '').trim()
-    targetBranch = (item.baseRefName ?? '').trim()
+    if (item?.headProjectRef && item.branchName) {
+      const candidate: GitPushTarget = {
+        remoteName: discoveryRemote,
+        branchName: item.branchName,
+        reviewHead: {
+          provider: 'gitlab',
+          host: item.headProjectRef.host,
+          repository: item.headProjectRef.path,
+          branchName: item.branchName
+        }
+      }
+      if ((await readGitReviewPushAuthority(gitExec, candidate)).kind === 'verified') {
+        pushTarget = candidate
+      }
+    }
+    sourceBranch = item?.branchName?.trim() || sourceBranch
+    targetBranch = item?.baseRefName?.trim() || targetBranch
     if (!sourceBranch) {
       return { error: `MR !${args.mrIid} has no source branch.` }
     }
-    if (item.isCrossRepository === true) {
+    if (item?.isCrossRepository === true) {
       isCrossRepository = true
     }
   }
@@ -151,6 +168,6 @@ export async function resolveRuntimeGitLabWorktreeBase(
   return {
     baseBranch: remoteRef,
     ...(compareBaseFetched ? { compareBaseRef } : {}),
-    pushTarget: { remoteName: remote, branchName: sourceBranch }
+    ...(pushTarget ? { pushTarget } : {})
   }
 }

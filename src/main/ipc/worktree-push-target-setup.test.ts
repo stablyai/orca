@@ -32,8 +32,12 @@ function makeRepoExec(
   checkedOutBranch = 'local-branch'
 ): ExecMock {
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
-    if (args[0] === 'symbolic-ref' && args[1] === '--short' && args[2] === 'HEAD') {
-      return { stdout: `${checkedOutBranch}\n`, stderr: '' }
+    if (args[0] === 'symbolic-ref' && args[1] === '--quiet' && args[2] === 'HEAD') {
+      return { stdout: `refs/heads/${checkedOutBranch}\n`, stderr: '' }
+    }
+    if (args[0] === 'config' && args[1] === '--get-all') {
+      const name = args[2]!.slice('remote.'.length, -'.fetch'.length)
+      return { stdout: `+refs/heads/*:refs/remotes/${name}/*\n`, stderr: '' }
     }
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: Object.keys(remotes).join('\n'), stderr: '' }
@@ -258,7 +262,12 @@ describe('configureCreatedWorktreePushTargetWithExec', () => {
     )
 
     expect(exec).toHaveBeenCalledWith(
-      ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/fix', 'local-branch'],
+      [
+        'branch',
+        '--set-upstream-to',
+        'refs/remotes/pr-contributor-orca/contributor/fix',
+        'local-branch'
+      ],
       '/wt/path'
     )
     expect(result).toBe(target)
@@ -273,7 +282,12 @@ describe('restoreUpstreamAfterMaterialize', () => {
     const result = await restoreUpstreamAfterMaterialize(exec, '/wt/path', target)
 
     expect(exec).toHaveBeenCalledWith(
-      ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/fix', 'local-branch'],
+      [
+        'branch',
+        '--set-upstream-to',
+        'refs/remotes/pr-contributor-orca/contributor/fix',
+        'local-branch'
+      ],
       '/wt/path'
     )
     expect(result).toBe(target)
@@ -292,7 +306,7 @@ describe('restoreUpstreamAfterMaterialize', () => {
   it('is a no-op when HEAD is detached (no checked-out branch)', async () => {
     const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
       if (args[0] === 'symbolic-ref') {
-        throw new Error('fatal: ref HEAD is not a symbolic ref')
+        throw Object.assign(new Error('fatal: ref HEAD is not a symbolic ref'), { code: 1 })
       }
       return { stdout: '', stderr: '' }
     })

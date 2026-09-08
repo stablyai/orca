@@ -276,6 +276,27 @@ describe('gitlab issue operations', () => {
     expect(acquireMock).not.toHaveBeenCalled()
   })
 
+  it('surfaces an ambiguous issue-source role instead of choosing a remote', async () => {
+    resolveIssueSourceMock.mockResolvedValueOnce({
+      source: null,
+      fellBack: false,
+      ambiguousRemoteNames: ['company', 'mirror']
+    })
+
+    const result = await listIssues('/repo-root', 5)
+
+    expect(result).toMatchObject({
+      items: [],
+      totalPages: 0,
+      error: {
+        type: 'validation_error',
+        message: expect.stringContaining('company, mirror')
+      }
+    })
+    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(acquireMock).not.toHaveBeenCalled()
+  })
+
   it('returns null for getIssue (and spawns no glab call) when the project is unresolved', async () => {
     getIssueProjectRefMock.mockResolvedValueOnce(null)
 

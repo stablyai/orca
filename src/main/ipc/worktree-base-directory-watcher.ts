@@ -1,3 +1,4 @@
+import type { GitStatusUpstreamRefResolution } from '../git/status-upstream-ref'
 import type { BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
@@ -40,7 +41,9 @@ let scheduledSync: ReturnType<typeof setTimeout> | null = null
 let latestSyncContext: { mainWindow: BrowserWindow; store: Store } | null = null
 export function setWorktreeGitStatusRefWatch(
   args: GitStatusRefBindingRequest,
-  resolveUpstreamRef: (signal: AbortSignal) => Promise<string | undefined>
+  resolveUpstreamRef: (
+    signal: AbortSignal
+  ) => Promise<string | GitStatusUpstreamRefResolution | undefined>
 ): Promise<void> {
   return updateActiveGitStatusRefBinding(args, () => activeWatches.values(), resolveUpstreamRef)
 }

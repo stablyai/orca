@@ -1,3 +1,4 @@
+import type { GitUpstreamStatusIdentity } from '../../shared/git-upstream-identity'
 import { ipcRenderer } from 'electron'
 import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
 import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-types'
@@ -24,6 +25,8 @@ export const gitApi = {
     connectionId?: string
     branch?: string
     upstreamName?: string
+    upstreamRef?: string
+    upstreamIdentity?: GitUpstreamStatusIdentity
   }): Promise<void> => ipcRenderer.invoke('git:setStatusUpstreamRefWatch', args),
   submoduleStatus: (args: {
     worktreePath: string

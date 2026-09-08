@@ -250,7 +250,28 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
   if (requireVerifiedSshProbe && connectionId && !remoteUrl && !getSshGitProvider(connectionId)) {
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
-  const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
+  if (!remoteUrl) {
+    return null
+  }
+  const repository = await resolveGitHubRepositoryUrl(
+    remoteUrl,
+    repoPath,
+    connectionId,
+    localGitOptions,
+    requireVerifiedSshProbe
+  )
+  return repository?.host === 'github.com' ? null : repository
+}
+
+export async function resolveGitHubRepositoryUrl(
+  remoteUrl: string,
+  repoPath: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {},
+  requireVerifiedSshProbe = true
+): Promise<GitHubEnterpriseRepoSlug | null | undefined> {
+  const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+  const identity = parseGitHubRemoteIdentity(remoteUrl)
   if (!identity) {
     return null
   }
@@ -276,7 +297,7 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
     effectiveHost = effectiveGitHubRemoteHost(identity.host, hostname)
   }
   if (effectiveHost === 'github.com') {
-    return null
+    return { owner: identity.owner, repo: identity.repo, host: effectiveHost }
   }
   const authenticatedHost = await resolveAuthenticatedGitHubHost(
     effectiveHost,

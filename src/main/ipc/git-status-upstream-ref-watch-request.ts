@@ -1,5 +1,5 @@
 import type { Store } from '../persistence'
-import { resolveGitStatusUpstreamRef } from '../git/status-upstream-ref'
+import { resolveGitStatusUpstreamRefBinding } from '../git/status-upstream-ref'
 import { gitExecFileAsync } from '../git/runner'
 import {
   getSshGitProvider,
@@ -44,7 +44,7 @@ export function applyGitStatusUpstreamRefWatchRequest(
         if (!provider) {
           throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
         }
-        return resolveGitStatusUpstreamRef(
+        return resolveGitStatusUpstreamRefBinding(
           (gitArgs, cwd, requestSignal) =>
             provider.exec(gitArgs, cwd, {
               signal: requestSignal,
@@ -53,14 +53,16 @@ export function applyGitStatusUpstreamRefWatchRequest(
           args.worktreePath,
           args.branch,
           args.upstreamName,
-          signal
+          signal,
+          args.upstreamRef,
+          args.upstreamIdentity
         )
       }
 
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const repo = getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)
       const gitOptions = getLocalGitOptionsForRepo(store, repo)
-      return resolveGitStatusUpstreamRef(
+      return resolveGitStatusUpstreamRefBinding(
         (gitArgs, cwd, requestSignal) =>
           gitExecFileAsync(gitArgs, {
             cwd,
@@ -71,7 +73,9 @@ export function applyGitStatusUpstreamRefWatchRequest(
         worktreePath,
         args.branch,
         args.upstreamName,
-        signal
+        signal,
+        args.upstreamRef,
+        args.upstreamIdentity
       )
     }
   )

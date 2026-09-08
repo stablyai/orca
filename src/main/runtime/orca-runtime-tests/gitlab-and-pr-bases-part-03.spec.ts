@@ -122,8 +122,7 @@ describe('OrcaRuntimeService', () => {
 
     expect(result).toEqual({
       baseBranch: 'origin/feature/fix',
-      compareBaseRef: 'refs/remotes/origin/main',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+      compareBaseRef: 'refs/remotes/origin/main'
     })
     expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
       '/remote/repo',
@@ -191,8 +190,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       expect(result).toEqual({
-        baseBranch: 'origin/feature/fix',
-        pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+        baseBranch: 'origin/feature/fix'
       })
       expect(result).not.toHaveProperty('compareBaseRef')
       expect(result).not.toHaveProperty('error')
@@ -252,8 +250,7 @@ describe('OrcaRuntimeService', () => {
 
       expect(result).toEqual({
         baseBranch: 'origin/feature/fix',
-        compareBaseRef: 'refs/remotes/origin/main',
-        pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+        compareBaseRef: 'refs/remotes/origin/main'
       })
     } finally {
       warnSpy.mockRestore()

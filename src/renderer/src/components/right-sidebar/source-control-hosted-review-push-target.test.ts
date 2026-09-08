@@ -1,3 +1,4 @@
+import { reviewTarget } from '../../../../shared/__fixtures__/git-review-target'
 import { describe, expect, it } from 'vitest'
 import {
   hasPositiveHostedReviewNumberLink,
@@ -10,6 +11,11 @@ import {
 const unrelatedUpstream = {
   hasUpstream: true,
   upstreamName: 'origin/helper-branch',
+  upstreamIdentity: {
+    selector: { kind: 'named-remote' as const, value: 'origin' },
+    mergeRef: 'refs/heads/helper-branch',
+    trackingRef: 'refs/remotes/origin/helper-branch'
+  },
   ahead: 1,
   behind: 0
 }
@@ -78,6 +84,11 @@ describe('resolveHostedReviewActionUpstreamStatus', () => {
         upstreamStatus: {
           hasUpstream: true,
           upstreamName: 'pr-user-repo/user/feature',
+          upstreamIdentity: {
+            selector: { kind: 'named-remote' as const, value: 'pr-user-repo' },
+            mergeRef: 'refs/heads/user/feature',
+            trackingRef: 'refs/remotes/pr-user-repo/user/feature'
+          },
           ahead: 2,
           behind: 0
         }
@@ -85,6 +96,11 @@ describe('resolveHostedReviewActionUpstreamStatus', () => {
     ).toEqual({
       hasUpstream: true,
       upstreamName: 'pr-user-repo/user/feature',
+      upstreamIdentity: {
+        selector: { kind: 'named-remote' as const, value: 'pr-user-repo' },
+        mergeRef: 'refs/heads/user/feature',
+        trackingRef: 'refs/remotes/pr-user-repo/user/feature'
+      },
       ahead: 2,
       behind: 0
     })
@@ -200,23 +216,120 @@ describe('resolveHostedReviewStateForActions', () => {
 })
 
 describe('hasUsableHostedReviewPushTarget', () => {
-  it('accepts either persisted target metadata or branch-configured push metadata', () => {
+  it('keeps old-peer labels unresolved before and after target hydration', () => {
+    const upstreamStatus = {
+      hasUpstream: true,
+      upstreamName: 'origin/feature',
+      ahead: 1,
+      behind: 0
+    }
+    expect(
+      hasUsableHostedReviewPushTarget({
+        upstreamStatus,
+        branchName: 'feature',
+        hasResolvableHostedReviewPushTargetLink: true
+      })
+    ).toBe(false)
+    expect(
+      hasUsableHostedReviewPushTarget({
+        upstreamStatus,
+        pushTarget: { remoteName: 'origin', branchName: 'feature' }
+      })
+    ).toBe(false)
+  })
+
+  it('distinguishes equal labels with different named remote and merge identities', () => {
+    const upstreamStatus = {
+      reviewPushAuthority: {
+        kind: 'verified' as const,
+        reviewHead: reviewTarget('origin/team', 'feature').reviewHead
+      },
+      hasUpstream: true,
+      upstreamName: 'origin/team/feature',
+      ahead: 1,
+      behind: 0,
+      upstreamIdentity: {
+        selector: { kind: 'named-remote' as const, value: 'origin/team' },
+        mergeRef: 'refs/heads/feature',
+        trackingRef: 'refs/custom/published'
+      }
+    }
+    expect(
+      hasUsableHostedReviewPushTarget({
+        upstreamStatus,
+        pushTarget: reviewTarget('origin/team', 'feature')
+      })
+    ).toBe(true)
+    expect(
+      hasUsableHostedReviewPushTarget({
+        upstreamStatus,
+        pushTarget: { remoteName: 'origin', branchName: 'team/feature' }
+      })
+    ).toBe(false)
+    expect(
+      hasUsableHostedReviewPushTarget({
+        upstreamStatus: {
+          ...upstreamStatus,
+          upstreamIdentity: {
+            ...upstreamStatus.upstreamIdentity,
+            selector: { kind: 'literal-url' }
+          }
+        },
+        pushTarget: reviewTarget('origin/team', 'feature')
+      })
+    ).toBe(false)
+  })
+
+  it('keeps branch identity unresolved before hydration regardless of tag-shaped labels', () => {
+    const upstreamStatus = {
+      hasUpstream: true,
+      upstreamName: 'remotes/origin/heads/feature',
+      ahead: 1,
+      behind: 0,
+      upstreamIdentity: {
+        selector: { kind: 'named-remote' as const, value: 'origin' },
+        mergeRef: 'refs/heads/heads/feature',
+        trackingRef: 'refs/custom/head'
+      }
+    }
+    expect(
+      hasUsableHostedReviewPushTarget({
+        upstreamStatus,
+        branchName: 'heads/feature',
+        hasResolvableHostedReviewPushTargetLink: true
+      })
+    ).toBe(false)
+    expect(
+      hasUsableHostedReviewPushTarget({
+        upstreamStatus,
+        branchName: 'feature',
+        hasResolvableHostedReviewPushTargetLink: true
+      })
+    ).toBe(false)
+  })
+
+  it('rejects legacy target metadata and retains ordinary configured push policy', () => {
     expect(
       hasUsableHostedReviewPushTarget({
         pushTarget: { remoteName: 'fork', branchName: 'feature' }
       })
-    ).toBe(true)
+    ).toBe(false)
     expect(
       hasUsableHostedReviewPushTarget({
         pushTarget: { remoteName: 'fork', branchName: 'feature' },
         upstreamStatus: {
           hasUpstream: true,
           upstreamName: 'fork/feature',
+          upstreamIdentity: {
+            selector: { kind: 'named-remote' as const, value: 'fork' },
+            mergeRef: 'refs/heads/feature',
+            trackingRef: 'refs/remotes/fork/feature'
+          },
           ahead: 1,
           behind: 0
         }
       })
-    ).toBe(true)
+    ).toBe(false)
     expect(
       hasUsableHostedReviewPushTarget({
         upstreamStatus: {
@@ -247,9 +360,7 @@ describe('hasUsableHostedReviewPushTarget', () => {
     expect(hasUsableHostedReviewPushTarget({ upstreamStatus: unrelatedUpstream })).toBe(false)
   })
 
-  it('treats a same-repo review upstream that already tracks the branch as usable', () => {
-    // Why: a same-repo review must not stay blocked while its push target is
-    // unhydrated — the real upstream already targets the review head.
+  it('requires review repository evidence even when an upstream branch matches', () => {
     expect(
       hasUsableHostedReviewPushTarget({
         hasResolvableHostedReviewPushTargetLink: true,
@@ -257,11 +368,16 @@ describe('hasUsableHostedReviewPushTarget', () => {
         upstreamStatus: {
           hasUpstream: true,
           upstreamName: 'origin/feature/foo',
+          upstreamIdentity: {
+            selector: { kind: 'named-remote' as const, value: 'origin' },
+            mergeRef: 'refs/heads/feature/foo',
+            trackingRef: 'refs/remotes/origin/feature/foo'
+          },
           ahead: 7,
           behind: 2
         }
       })
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('keeps blocking a review whose upstream tracks an unrelated fork/helper head', () => {
@@ -286,10 +402,15 @@ describe('hasUsableHostedReviewPushTarget', () => {
 })
 
 describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', () => {
-  it('does not synthesize hasUpstream:false when the real upstream is the review head', () => {
+  it('keeps an unhydrated review unresolved despite matching upstream', () => {
     const realUpstream = {
       hasUpstream: true,
       upstreamName: 'origin/mobile-resume-suspected-fixes',
+      upstreamIdentity: {
+        selector: { kind: 'named-remote' as const, value: 'origin' },
+        mergeRef: 'refs/heads/mobile-resume-suspected-fixes',
+        trackingRef: 'refs/remotes/origin/mobile-resume-suspected-fixes'
+      },
       ahead: 7,
       behind: 2
     }
@@ -298,7 +419,7 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
       branchName: 'mobile-resume-suspected-fixes',
       upstreamStatus: realUpstream
     })
-    expect(canUseHostedReviewPushTarget).toBe(true)
+    expect(canUseHostedReviewPushTarget).toBe(false)
     expect(
       resolveHostedReviewActionUpstreamStatus({
         hasHostedReviewLink: true,
@@ -308,10 +429,10 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
         canUseHostedReviewPushTarget,
         upstreamStatus: realUpstream
       })
-    ).toBe(realUpstream)
+    ).toMatchObject({ hasUpstream: false, ahead: 0, behind: 0 })
   })
 
-  it('does not block push for a queue-discovered open PR whose upstream tracks the branch', () => {
+  it('blocks queue-discovered review push until its target is resolved', () => {
     // Why: a child worktree with no persisted linkedPR discovers its open PR via
     // the queue (fallbackGitHubPR). Before the fix, that PR counted as a hosted
     // review link but not a resolvable target, so the real matching upstream was
@@ -319,6 +440,11 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
     const realUpstream = {
       hasUpstream: true,
       upstreamName: 'origin/fix-f1-codex-wsl-path-trust',
+      upstreamIdentity: {
+        selector: { kind: 'named-remote' as const, value: 'origin' },
+        mergeRef: 'refs/heads/fix-f1-codex-wsl-path-trust',
+        trackingRef: 'refs/remotes/origin/fix-f1-codex-wsl-path-trust'
+      },
       ahead: 1,
       behind: 0
     }
@@ -333,7 +459,7 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
       branchName: 'fix-f1-codex-wsl-path-trust',
       upstreamStatus: realUpstream
     })
-    expect(canUseHostedReviewPushTarget).toBe(true)
+    expect(canUseHostedReviewPushTarget).toBe(false)
     expect(
       resolveHostedReviewActionUpstreamStatus({
         hasHostedReviewLink: true,
@@ -343,6 +469,6 @@ describe('resolveHostedReviewActionUpstreamStatus with a same-repo upstream', ()
         canUseHostedReviewPushTarget,
         upstreamStatus: realUpstream
       })
-    ).toBe(realUpstream)
+    ).toMatchObject({ hasUpstream: false, ahead: 0, behind: 0 })
   })
 })

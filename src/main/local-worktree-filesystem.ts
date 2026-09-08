@@ -1,5 +1,5 @@
 import { runProcess } from '../shared/child-process/run-process'
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs, quotePosixShell } from '../shared/wsl-login-shell-command'
 import { removeHostTree } from './host-tree-removal'
 import { toLinuxPath } from './wsl'
@@ -15,6 +15,7 @@ export type LocalWorktreeFilesystemOptions = {
 type LocalWorktreePathAccess = {
   statPath: StatPath
   readPath: ReadPath
+  realpath: (path: string) => Promise<string>
 }
 
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
@@ -76,11 +77,19 @@ export function getLocalWorktreePathAccess(
   if (!shouldUseWslFilesystem(options) || !distro) {
     return {
       statPath: lstat,
-      readPath: (path) => readFile(path, 'utf8')
+      readPath: (path) => readFile(path, 'utf8'),
+      realpath
     }
   }
 
   return {
+    realpath: async (path) => {
+      const result = await runWslCommand(
+        distro,
+        `realpath -e -- ${quotePosixShell(toLinuxPath(path))}`
+      )
+      return result.replace(/\r?\n$/, '')
+    },
     statPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
       const stdout = await runWslCommand(

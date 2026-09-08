@@ -121,7 +121,6 @@ export function rememberEffectiveUpstreamStatus(
   cacheKey: string,
   status: GitUpstreamStatus,
   now: number,
-  probedSameNameOriginRef: boolean,
   writeGeneration: number
 ): void {
   // Why: hasConfiguredPushTarget gates a write action; re-probe each poll rather than cache a stale positive.
@@ -132,9 +131,6 @@ export function rememberEffectiveUpstreamStatus(
     return
   }
   if ((effectiveUpstreamStatusWriteGeneration.get(cacheKey) ?? 0) !== writeGeneration) {
-    return
-  }
-  if (!probedSameNameOriginRef) {
     return
   }
   // Why: cache the negative so a stable no-upstream branch doesn't re-probe every poll (TTL lets push/fetch refs appear).

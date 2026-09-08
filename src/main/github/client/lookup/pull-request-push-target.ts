@@ -1,7 +1,10 @@
+import { readGitReviewPushAuthority } from '../../../../shared/git-review-push-authority'
+import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import {
   ghExecFileAsync,
+  gitExecFileAsync,
   acquire,
   release,
   ghRepoExecOptions,
@@ -122,13 +125,26 @@ export async function getPullRequestPushTarget(
     if (!owner || !repo || !branchName || !cloneUrl || !sshUrl) {
       return null
     }
+    const reviewHead = {
+      provider: 'github' as const,
+      host: matchedRepository.host ?? 'github.com',
+      repository: `${owner}/${repo}`,
+      branchName
+    }
     if (
       origin &&
       githubRepoIdentityKey(origin) ===
         githubRepoIdentityKey({ owner, repo, host: matchedRepository.host })
     ) {
+      const pushTarget = { remoteName: 'origin', branchName, reviewHead }
+      const runGit = connectionId
+        ? (args: string[]) => requireSshGitProvider(connectionId).exec(args, repoPath)
+        : (args: string[]) => gitExecFileAsync(args, { cwd: repoPath, ...localGitOptions })
+      if ((await readGitReviewPushAuthority(runGit, pushTarget)).kind !== 'verified') {
+        return null
+      }
       return {
-        pushTarget: { remoteName: 'origin', branchName },
+        pushTarget,
         ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
       }
     }
@@ -142,6 +158,7 @@ export async function getPullRequestPushTarget(
     }
     return {
       pushTarget: {
+        reviewHead,
         remoteName: sanitizeRemoteName(owner, repo),
         branchName,
         remoteUrl: pickPushRemoteUrl({ originUrl, cloneUrl, sshUrl })

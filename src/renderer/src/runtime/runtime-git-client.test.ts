@@ -628,8 +628,7 @@ describe('runtime git client', () => {
     await generateRuntimeCommitMessage(context)
     await cancelRuntimeGenerateCommitMessage(context)
     await pushRuntimeGit(context, {
-      publish: true,
-      pushTarget: { remoteName: 'origin', branchName: 'feature' }
+      publish: true
     })
     await fetchRuntimeGit(context, { remoteName: 'fork', branchName: 'feature' })
     await fastForwardRuntimeGit(context, { remoteName: 'fork', branchName: 'feature' })
@@ -670,8 +669,7 @@ describe('runtime git client', () => {
       method: 'git.push',
       params: {
         worktree: 'id:wt-1',
-        publish: true,
-        pushTarget: { remoteName: 'origin', branchName: 'feature' }
+        publish: true
       },
       timeoutMs: 30_000
     })

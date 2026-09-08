@@ -55,6 +55,7 @@ export function useSourceControlHostedReviewPolling({
     activeWorktree?.pushTarget,
     activeWorktreeId,
     ensureHostedReviewPushTarget,
+    fallbackGitHubPRNumber,
     hasResolvableReviewPushTargetLink,
     isBranchVisible,
     isFolder

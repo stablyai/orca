@@ -56,7 +56,11 @@ describe('getPRForBranch', () => {
             updated_at: '2026-06-16T17:15:33Z',
             draft: false,
             mergeable_state: 'clean',
-            head: { ref: 'add-guide-for-mobile-emulator-use', sha: 'head-oid' },
+            head: {
+              ref: 'add-guide-for-mobile-emulator-use',
+              sha: 'head-oid',
+              repo: { name: 'widgets', owner: { login: 'acme' } }
+            },
             base: { ref: 'main', sha: 'base-oid' }
           }
         ])
@@ -101,7 +105,11 @@ describe('getPRForBranch', () => {
             updated_at: '2026-06-20T04:53:05Z',
             draft: false,
             mergeable_state: 'clean',
-            head: { ref: 'fix-tab-strip-layout-test', sha: 'current-head-oid' },
+            head: {
+              ref: 'fix-tab-strip-layout-test',
+              sha: 'current-head-oid',
+              repo: { name: 'widgets', owner: { login: 'acme' } }
+            },
             base: { ref: 'main', sha: 'base-oid' }
           }
         ])
@@ -154,7 +162,11 @@ describe('getPRForBranch', () => {
             updated_at: '2026-07-03T21:27:36Z',
             draft: false,
             mergeable_state: 'clean',
-            head: { ref: 'fix-hibernation-wake', sha: 'aaaa1111aaaa1111' },
+            head: {
+              ref: 'fix-hibernation-wake',
+              sha: 'aaaa1111aaaa1111',
+              repo: { name: 'widgets', owner: { login: 'acme' } }
+            },
             base: { ref: 'main', sha: 'base-oid' }
           }
         ])
@@ -276,7 +288,11 @@ describe('getPRForBranch', () => {
             updated_at: '2026-07-03T21:27:36Z',
             draft: false,
             mergeable_state: 'clean',
-            head: { ref: 'fix-hibernation-wake', sha: 'aaaa1111aaaa1111' },
+            head: {
+              ref: 'fix-hibernation-wake',
+              sha: 'aaaa1111aaaa1111',
+              repo: { name: 'widgets', owner: { login: 'acme' } }
+            },
             base: { ref: 'main', sha: 'base-oid' }
           }
         ])

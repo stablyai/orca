@@ -84,9 +84,7 @@ export async function resolveGitHubPrStartPoint(
     }
   }
 
-  if (isCrossRepository) {
-    await resolvePushTarget()
-  }
+  await resolvePushTarget()
 
   let remote: string
   try {
@@ -243,6 +241,6 @@ export async function resolveGitHubPrStartPoint(
     ...(compareBaseFetched && compareBaseRef ? { compareBaseRef } : {}),
     headSha,
     branchNameOverride: headRefName,
-    pushTarget: { remoteName: remote, branchName: headRefName }
+    ...(pushTarget ? { pushTarget } : {})
   }
 }

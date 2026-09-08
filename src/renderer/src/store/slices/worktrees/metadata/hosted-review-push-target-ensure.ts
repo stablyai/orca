@@ -1,3 +1,4 @@
+import { queuedReviewPushTargetNumber } from './queued-review-push-target'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import {
@@ -12,10 +13,13 @@ export function createEnsureHostedReviewPushTarget(
 ): WorktreeSlice['ensureHostedReviewPushTarget'] {
   return async (worktreeId) => {
     const worktree = get().getKnownWorktreeById(worktreeId)
-    if (!worktree || worktree.pushTarget) {
+    if (!worktree || worktree.pushTarget?.reviewHead) {
       return
     }
-    const lookup = getHostedReviewPushTargetLookup(worktree)
+    const lookup = getHostedReviewPushTargetLookup(
+      worktree,
+      queuedReviewPushTargetNumber(get(), worktree)
+    )
     if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
       return
     }
@@ -31,10 +35,13 @@ export function createEnsureHostedReviewPushTarget(
         return
       }
       const current = get().getKnownWorktreeById(worktreeId)
-      if (!current || current.pushTarget) {
+      if (!current || current.pushTarget?.reviewHead) {
         return
       }
-      const currentLookup = getHostedReviewPushTargetLookup(current)
+      const currentLookup = getHostedReviewPushTargetLookup(
+        current,
+        queuedReviewPushTargetNumber(get(), current)
+      )
       if (currentLookup?.key !== lookup.key) {
         return
       }

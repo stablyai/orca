@@ -284,17 +284,25 @@ describe('getStatus', () => {
     })
   })
 
-  it('folds upstream ahead/behind from porcelain v2 into the status result', async () => {
+  it('resolves canonical upstream counts even when porcelain supplies a matching label', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n# branch.upstream origin/feature/prompts\n# branch.ab +2 -3\n'
     })
 
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature/prompts\n' })
+      .mockResolvedValueOnce({
+        stdout:
+          'refs/remotes/origin/feature/prompts\0=\0refs/heads/feature/prompts\0origin\0refs/heads/feature/prompts\n'
+      })
+      .mockResolvedValueOnce({ stdout: '2\t3\n' })
+
     const result = await getStatus('/repo')
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(result.upstreamStatus).toEqual({
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(4)
+    expect(result.upstreamStatus).toMatchObject({
       hasUpstream: true,
       upstreamName: 'origin/feature/prompts',
       ahead: 2,
@@ -305,22 +313,28 @@ describe('getStatus', () => {
   it('reports no upstream from porcelain v2 status when no same-name origin branch exists', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args[0] === '-c' && args.includes('status')) {
         return Promise.resolve({
           stdout: '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n'
         })
       }
       if (args[0] === 'symbolic-ref') {
-        return Promise.resolve({ stdout: 'feature/prompts\n' })
+        return Promise.resolve({ stdout: 'refs/heads/feature/prompts\n' })
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        return Promise.reject(new Error('fatal: no upstream configured'))
+      if (args[0] === 'for-each-ref') {
+        return Promise.resolve({ stdout: '\0\n' })
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature/prompts')) {
-        return Promise.reject(new Error('missing remote branch'))
+        return Promise.reject(Object.assign(new Error('missing remote branch'), { code: 1 }))
       }
       if (args[0] === 'config') {
-        return Promise.reject(new Error(`missing ${args[2] ?? 'config'}`))
+        return Promise.reject(
+          Object.assign(new Error(`missing ${args[2] ?? 'config'}`), { code: 1 })
+        )
       }
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
@@ -331,7 +345,7 @@ describe('getStatus', () => {
       ['rev-parse', '--verify', '--quiet', 'refs/remotes/origin/feature/prompts'],
       { cwd: '/repo', preferWslDirectGit: true }
     )
-    expect(result.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
+    expect(result.upstreamStatus).toMatchObject({ hasUpstream: false, ahead: 0, behind: 0 })
   })
 
   it('uses same-name origin branch status for legacy base-tracking worktrees', async () => {
@@ -341,14 +355,19 @@ describe('getStatus', () => {
         stdout:
           '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n# branch.upstream origin/main\n# branch.ab +1 -0\n'
       })
-      .mockResolvedValueOnce({ stdout: 'feature/prompts\n' })
-      .mockResolvedValueOnce({ stdout: 'origin/main\n' })
+      .mockResolvedValueOnce({ stdout: 'refs/heads/feature/prompts\n' })
+      .mockResolvedValueOnce({
+        stdout: 'refs/remotes/origin/main\0=\0refs/heads/feature/prompts\0origin\0refs/heads/main\n'
+      })
+      .mockResolvedValueOnce({
+        stdout: 'remote.origin.fetch\n+refs/heads/*:refs/remotes/origin/*\0'
+      })
       .mockResolvedValueOnce({ stdout: 'abc123\n' })
       .mockResolvedValueOnce({ stdout: '3\t1\n' })
 
     const result = await getStatus('/repo')
 
-    expect(result.upstreamStatus).toEqual({
+    expect(result.upstreamStatus).toMatchObject({
       hasUpstream: true,
       upstreamName: 'origin/feature/prompts',
       ahead: 3,
@@ -397,6 +416,10 @@ describe('getStatus', () => {
   it('attaches per-area line counts from staged and unstaged numstat', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout:
@@ -423,6 +446,10 @@ describe('getStatus', () => {
   it('omits line stats without overwriting the reusable line-stats cache', async () => {
     readFileMock.mockResolvedValue('gitdir: /stats-repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout:
@@ -452,6 +479,10 @@ describe('getStatus', () => {
   it('reuses unchanged line stats only when the safety hint is present', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout:
@@ -480,6 +511,10 @@ describe('getStatus', () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     let failNumstat = true
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout:
@@ -509,6 +544,10 @@ describe('getStatus', () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     let head = 'head-1'
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout:
@@ -535,6 +574,10 @@ describe('getStatus', () => {
   it('isolates line-stat reuse between WSL distributions', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout: '1 .M N... 100644 100644 100644 aaaa aaaa src/unstaged.ts\n'
@@ -558,6 +601,10 @@ describe('getStatus', () => {
   it('attaches numstat counts for literal paths containing rename markers', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout: '1 .M N... 100644 100644 100644 aaaa aaaa docs/a => b.txt\n'
@@ -586,6 +633,10 @@ describe('getStatus', () => {
   it('attaches staged rename counts to the new path', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout: '2 R. N... 100644 100644 100644 aaaa bbbb R100 src/new name.ts\tsrc/old name.ts\n'
@@ -636,6 +687,10 @@ describe('getStatus', () => {
   it('leaves binary working-tree changes without counts', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'config' && args[1] === '--get-all' && args[2]?.endsWith('.fetch')) {
+        const remote = args[2].slice('remote.'.length, -'.fetch'.length)
+        return Promise.resolve({ stdout: `+refs/heads/*:refs/remotes/${remote}/*\n` })
+      }
       if (args.includes('status')) {
         return Promise.resolve({
           stdout: '1 .M N... 100644 100644 100644 cccc cccc assets/logo.png\n'

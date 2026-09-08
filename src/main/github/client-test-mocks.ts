@@ -199,8 +199,10 @@ export function githubApiRepositoryModuleMock(
     resolveGitHubApiRepositoryCandidates: (
       repoPath: string,
       connectionId?: string | null,
-      localGitOptions?: unknown
-    ) => mocks.resolvePRRepositoryCandidatesMock(repoPath, connectionId, localGitOptions),
+      localGitOptions?: unknown,
+      branchName?: string
+    ) =>
+      mocks.resolvePRRepositoryCandidatesMock(repoPath, connectionId, localGitOptions, branchName),
     getGitHubApiRepositoryForRemote: (
       repoPath: string,
       remoteName: string,

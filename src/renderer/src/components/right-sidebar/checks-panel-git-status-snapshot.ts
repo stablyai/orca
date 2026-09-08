@@ -1,3 +1,4 @@
+import { reviewHeadKey } from '../../../../shared/git-review-push-authority'
 import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 
@@ -92,6 +93,7 @@ export function buildChecksPanelGitStatusContextKey(
     localExecutionScope: input.localExecutionScope ?? null,
     pushTarget: input.pushTarget
       ? {
+          reviewHead: reviewHeadKey(input.pushTarget.reviewHead) ?? null,
           remoteName: input.pushTarget.remoteName,
           branchName: input.pushTarget.branchName,
           remoteUrl: input.pushTarget.remoteUrl ?? null,

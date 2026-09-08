@@ -181,7 +181,16 @@ export type AutomationWorkspaceProvenanceRequest = {
   createRequestId: string
 }
 
+export type GitReviewHead = {
+  provider: 'github' | 'gitlab'
+  host: string
+  repository: string
+  branchName: string
+}
+
 export type GitPushTarget = {
+  /** Provider-reported identity; execution must corroborate current operation endpoints. */
+  reviewHead?: GitReviewHead
   remoteName: string
   branchName: string
   remoteUrl?: string

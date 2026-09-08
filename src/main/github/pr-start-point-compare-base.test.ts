@@ -132,8 +132,7 @@ describe('resolveGitHubPrStartPoint compare base', () => {
       baseBranch: 'same-repo-head-sha',
       compareBaseRef: 'refs/remotes/origin/main',
       headSha: 'same-repo-head-sha',
-      branchNameOverride: 'feature/fix',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+      branchNameOverride: 'feature/fix'
     })
   })
 
@@ -164,8 +163,7 @@ describe('resolveGitHubPrStartPoint compare base', () => {
     expect(result).toEqual({
       baseBranch: 'same-repo-head-sha',
       headSha: 'same-repo-head-sha',
-      branchNameOverride: 'feature/fix',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/fix' }
+      branchNameOverride: 'feature/fix'
     })
   })
 })

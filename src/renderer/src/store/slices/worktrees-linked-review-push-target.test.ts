@@ -1,3 +1,4 @@
+import { reviewTarget } from '../../../../shared/__fixtures__/git-review-target'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
@@ -37,7 +38,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('resolves and persists a push target when manually linking a GitHub PR', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'origin', branchName: 'bot/pr-bug-scan-2504' }
+    const pushTarget = reviewTarget('origin', 'bot/pr-bug-scan-2504')
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -79,7 +80,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('clears a stale push target when unlinking the GitHub PR that supplied it', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
+    const pushTarget = reviewTarget('fork', 'owner/old-pr')
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -112,7 +113,7 @@ describe('worktree remote runtime mutations', () => {
       path: '/path/wt1',
       branch: 'refs/heads/review-branch',
       linkedPR: 2548,
-      pushTarget: { remoteName: 'fork', branchName: 'owner/old-pr' }
+      pushTarget: reviewTarget('fork', 'owner/old-pr')
     })
     store.setState({
       repos: [
@@ -139,8 +140,8 @@ describe('worktree remote runtime mutations', () => {
 
   it('clears an older GitHub link and target when replacing it with a GitLab MR', async () => {
     const store = createTestStore()
-    const oldPushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
-    const newPushTarget = { remoteName: 'upstream', branchName: 'owner/new-mr' }
+    const oldPushTarget = reviewTarget('fork', 'owner/old-pr')
+    const newPushTarget = reviewTarget('upstream', 'owner/new-mr')
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -202,7 +203,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('resolves a manually linked GitHub PR through the worktree owner runtime', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'owner-runtime/manual-pr' }
+    const pushTarget = reviewTarget('fork', 'owner-runtime/manual-pr')
     const wt = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -262,7 +263,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('sends a runtime clear when unlinking a review-owned push target', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'owner-runtime/old-pr' }
+    const pushTarget = reviewTarget('fork', 'owner-runtime/old-pr')
     const wt = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
@@ -323,7 +324,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('does not resolve a push target when re-saving the same linked GitHub PR', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'origin', branchName: 'bot/pr-bug-scan-2504' }
+    const pushTarget = reviewTarget('origin', 'bot/pr-bug-scan-2504')
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -349,7 +350,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('recovers a missing push target when re-saving the same linked GitHub PR', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'contributor/fix' }
+    const pushTarget = reviewTarget('fork', 'contributor/fix')
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -383,10 +384,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('hydrates a missing push target for an existing linked GitHub PR', async () => {
     const store = createTestStore()
-    const pushTarget = {
-      remoteName: 'pr-tmchow-orca',
-      branchName: 'tmchow/worktree-delete-button'
-    }
+    const pushTarget = reviewTarget('pr-tmchow-orca', 'tmchow/worktree-delete-button')
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -420,7 +418,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('hydrates a missing linked GitHub PR push target through the active remote runtime', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'feature/runtime-pr' }
+    const pushTarget = reviewTarget('fork', 'feature/runtime-pr')
     const wt = makeWorktree({
       id: 'repo1::/path/runtime-wt',
       repoId: 'repo1',
@@ -475,7 +473,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('hydrates a host-stamped linked GitHub PR push target through the worktree owner runtime', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'feature/owner-runtime-pr' }
+    const pushTarget = reviewTarget('fork', 'feature/owner-runtime-pr')
     const wt = makeWorktree({
       id: 'repo1::/path/owner-runtime-wt',
       repoId: 'repo1',
@@ -531,7 +529,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('hydrates an SSH-owned linked GitHub PR push target through local IPC when a runtime is focused', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'fork', branchName: 'feature/ssh-pr' }
+    const pushTarget = reviewTarget('fork', 'feature/ssh-pr')
     const wt = makeWorktree({
       id: 'repo-ssh::/home/orca/runtime-wt',
       repoId: 'repo-ssh',
@@ -674,7 +672,7 @@ describe('worktree remote runtime mutations', () => {
   it('cleans up the in-flight lookup when restore is skipped for a genuinely ambiguous owner', async () => {
     const store = createTestStore()
     const worktreeId = 'repo-shared::/same/path'
-    const pushTarget = { remoteName: 'fork', branchName: 'feature/disambiguated' }
+    const pushTarget = reviewTarget('fork', 'feature/disambiguated')
     const ownedWorktree = makeWorktree({
       id: worktreeId,
       repoId: 'repo-shared',
@@ -740,7 +738,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('hydrates a missing push target for an existing linked GitLab MR when supported', async () => {
     const store = createTestStore()
-    const pushTarget = { remoteName: 'upstream', branchName: 'feature/mr' }
+    const pushTarget = reviewTarget('upstream', 'feature/mr')
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',

@@ -63,7 +63,7 @@ describe('useGitStatusUpstreamRefWatch', () => {
     )
   })
 
-  it('publishes the accepted branch and upstream display identity', () => {
+  it('publishes full upstream identity with the accepted branch', () => {
     const publish = useGitStatusUpstreamRefWatch({
       enabled: true,
       executionHostId: 'ssh:ssh-1',
@@ -78,6 +78,11 @@ describe('useGitStatusUpstreamRefWatch', () => {
       upstreamStatus: {
         hasUpstream: true,
         upstreamName: 'team/fork/feature/local',
+        upstreamIdentity: {
+          selector: { kind: 'named-remote', value: 'team/fork' },
+          mergeRef: 'refs/heads/feature/local',
+          trackingRef: 'refs/custom/feature/local'
+        },
         ahead: 0,
         behind: 0
       }
@@ -88,7 +93,13 @@ describe('useGitStatusUpstreamRefWatch', () => {
       {
         executionHostId: 'ssh:ssh-1',
         branch: 'refs/heads/feature/local',
-        upstreamName: 'team/fork/feature/local'
+        upstreamName: 'team/fork/feature/local',
+        upstreamRef: 'refs/custom/feature/local',
+        upstreamIdentity: {
+          selector: { kind: 'named-remote', value: 'team/fork' },
+          mergeRef: 'refs/heads/feature/local',
+          trackingRef: 'refs/custom/feature/local'
+        }
       }
     )
   })

@@ -184,7 +184,7 @@ describe('validateGitExecArgs', () => {
       [['remote', 'add', '../escape', 'https://github.com/contributor/orca.git']],
       [['remote', 'remove', '-f']],
       [['remote', 'add', 'fork', 'ext::sh -c payload']],
-      [['remote', 'add', 'fork', 'https://evil.test/contributor/orca.git']],
+      [['remote', 'add', 'fork', 'https://gitlab.example/contributor/orca.git?unsupported=1']],
       [['remote', 'add', 'fork', '/etc/passwd']]
     ])('rejects unsafe remote write args %j', (args) => {
       expectBlocked(args, 'Destructive git remote operations')

@@ -46,7 +46,10 @@ function isConfigListSnapshotCommand(args: string[]): boolean {
 }
 
 function emptyGitConfigSnapshot(): { stdout: string } {
-  return { stdout: 'core.repositoryformatversion\n0\0' }
+  return {
+    stdout:
+      'core.repositoryformatversion\n0\0remote.origin.fetch\n+refs/heads/*:refs/remotes/origin/*\0'
+  }
 }
 
 function featureFixPushTargetSnapshot(): { stdout: string } {
@@ -80,16 +83,16 @@ describe('getStatus missing-upstream polling churn', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: 'Initi-Project\n' }
+        return { stdout: 'refs/heads/Initi-Project\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
       }
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
@@ -100,7 +103,7 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
-      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
+      return args[0] === 'for-each-ref'
     })
     const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
@@ -121,16 +124,16 @@ describe('getStatus missing-upstream polling churn', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: 'Initi-Project\n' }
+        return { stdout: 'refs/heads/Initi-Project\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
       }
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
@@ -141,7 +144,7 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
-      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
+      return args[0] === 'for-each-ref'
     })
 
     expect(upstreamProbeCalls).toHaveLength(1)
@@ -155,18 +158,18 @@ describe('getStatus missing-upstream polling churn', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: 'Initi-Project\n' }
+        return { stdout: 'refs/heads/Initi-Project\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+      if (args[0] === 'for-each-ref') {
         await Promise.resolve()
-        throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
         await Promise.resolve()
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
       }
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
@@ -175,7 +178,7 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
-      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
+      return args[0] === 'for-each-ref'
     })
     const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
@@ -198,10 +201,10 @@ describe('getStatus missing-upstream polling churn', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: 'bench/feature\n' }
+        return { stdout: 'refs/heads/bench/feature\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error("fatal: no upstream configured for branch 'bench/feature'")
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
@@ -233,7 +236,7 @@ describe('getStatus missing-upstream polling churn', () => {
 
     // Resolution chain ran once; the two later polls paid one rev-list each.
     expect(countCalls((args) => args[0] === 'symbolic-ref')).toBe(1)
-    expect(countCalls((args) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))).toBe(1)
+    expect(countCalls((args) => args[0] === 'for-each-ref')).toBe(1)
     expect(countCalls(isConfigListSnapshotCommand)).toBe(1)
     expect(
       countCalls(
@@ -278,16 +281,16 @@ describe('getStatus missing-upstream polling churn', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: 'feature/fix\n' }
+        return { stdout: 'refs/heads/feature/fix\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error("fatal: no upstream configured for branch 'feature/fix'")
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return featureFixPushTargetSnapshot()
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
       }
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
@@ -297,7 +300,7 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
-      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
+      return args[0] === 'for-each-ref'
     })
 
     expect(upstreamProbeCalls).toHaveLength(2)
@@ -315,16 +318,16 @@ describe('getStatus missing-upstream polling churn', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: `${currentStatusBranch}\n` }
+        return { stdout: `refs/heads/${currentStatusBranch}\n` }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
       }
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
@@ -351,16 +354,16 @@ describe('getStatus missing-upstream polling churn', () => {
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
-        return { stdout: 'Initi-Project\n' }
+        return { stdout: 'refs/heads/Initi-Project\n' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n' }
       }
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
       }
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })

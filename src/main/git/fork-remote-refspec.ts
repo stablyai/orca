@@ -18,6 +18,8 @@
 // not the fork's entire branch set. The residual widening (an unrelated sibling branch
 // that happens to share the prefix, e.g. `fix` also matching `fix-v2`) is accepted as
 // far narrower than the bug this fixes.
+import { readGitRemoteTrackingRef } from '../../shared/git-remote-tracking-ref'
+
 export type GitExecFn = (
   args: string[],
   cwd: string
@@ -69,11 +71,11 @@ export async function forkRemoteTrackingRefExists(
   branchName: string
 ): Promise<boolean> {
   try {
-    await execGit(
-      ['rev-parse', '--verify', '--quiet', `refs/remotes/${remoteName}/${branchName}`],
-      repoPath
-    )
-    return true
+    return !!(await readGitRemoteTrackingRef(
+      (args) => execGit(args, repoPath),
+      remoteName,
+      branchName
+    ))
   } catch {
     return false
   }
@@ -115,6 +117,18 @@ export async function ensureRemoteTracksBranchNarrowly(
 ): Promise<void> {
   const desired = buildNarrowForkFetchRefspec(remoteName, branchName)
   const existing = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
+  const configuredRef = await readGitRemoteTrackingRef(
+    (args) =>
+      args[0] === 'config'
+        ? Promise.resolve({ stdout: existing.join('\n') })
+        : execGit(args, repoPath),
+    remoteName,
+    branchName,
+    { requireExisting: false }
+  )
+  if (configuredRef && configuredRef !== `refs/remotes/${remoteName}/${branchName}`) {
+    return
+  }
   if (!existing.includes(desired)) {
     // Strip the wide default outright, and any stray literal (non-suffixed) entry for
     // this exact branch -- e.g. a hand-edited config -- since it would shadow the same

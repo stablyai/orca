@@ -163,10 +163,10 @@ async function removeFailedFinalization(
   if (moved) {
     try {
       const { stdout } = await gitExecFileAsync(
-        ['symbolic-ref', '--short', 'HEAD'],
+        ['symbolic-ref', '--quiet', 'HEAD'],
         gitCleanupOptions(cleanupPath, options)
       )
-      branchAttached = stdout.trim() === branch
+      branchAttached = stdout.trim() === `refs/heads/${branch}`
     } catch {
       // Detached or no longer readable.
     }

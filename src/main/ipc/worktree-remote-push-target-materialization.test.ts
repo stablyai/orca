@@ -14,6 +14,10 @@ import {
 const REPO_PATH = '/repo-root'
 const FORK_URL = 'git@github.com:contributor/orca.git'
 const FORK_REMOTE = 'pr-contributor-orca'
+let missingRef = true
+beforeEach(() => {
+  missingRef = true
+})
 
 function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
   return {
@@ -56,10 +60,13 @@ describe('materializeWorktreePushTargetRemote', () => {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
       if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -77,11 +84,11 @@ describe('materializeWorktreePushTargetRemote', () => {
       `+refs/heads/${target.branchName}*:refs/remotes/${FORK_REMOTE}/${target.branchName}*`
     ])
     expect(calls).toContainEqual(['config', `remote.${FORK_REMOTE}.tagOpt`, '--no-tags'])
-    expect(calls).toContainEqual(['symbolic-ref', '--short', 'HEAD'])
+    expect(calls).toContainEqual(['symbolic-ref', '--quiet', 'HEAD'])
     expect(calls).toContainEqual([
       'branch',
       '--set-upstream-to',
-      `${FORK_REMOTE}/${target.branchName}`,
+      `refs/remotes/${FORK_REMOTE}/${target.branchName}`,
       'contributor/fix'
     ])
   })
@@ -128,13 +135,19 @@ describe('materializeWorktreePushTargetRemote', () => {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
       if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
       }
       if (args[0] === 'rev-parse') {
-        throw new Error('unknown revision')
+        if (missingRef) {
+          missingRef = false
+          throw Object.assign(new Error('unknown revision'), { code: 1 })
+        }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -166,7 +179,7 @@ describe('materializeWorktreePushTargetRemote', () => {
     expect(calls).toContainEqual([
       'branch',
       '--set-upstream-to',
-      `${FORK_REMOTE}/${target.branchName}`,
+      `refs/remotes/${FORK_REMOTE}/${target.branchName}`,
       'contributor/fix'
     ])
   })
@@ -177,10 +190,13 @@ describe('materializeWorktreePushTargetRemote', () => {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
       if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       // rev-parse succeeds by default (ref already exists) -- no fetch should follow.
       return { stdout: '', stderr: '' }
@@ -218,10 +234,13 @@ describe('materializeWorktreePushTargetRemote', () => {
         return { stdout: '', stderr: '' }
       }
       if (args[0] === 'config' && args[1] === '--get-all') {
-        throw new Error('no such section')
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'joiner/branch\n', stderr: '' }
+        return { stdout: 'refs/heads/joiner/branch\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -241,7 +260,7 @@ describe('materializeWorktreePushTargetRemote', () => {
     expect(calls).toContainEqual([
       'branch',
       '--set-upstream-to',
-      `${FORK_REMOTE}/joiner/branch`,
+      `refs/remotes/${FORK_REMOTE}/joiner/branch`,
       'joiner/branch'
     ])
     // Exactly one mint: the joiner must not have raced a second `remote add`.
@@ -353,8 +372,11 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
+      }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -370,16 +392,19 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
     expect(result).toBe(target)
     const calls = exec.mock.calls.map((call) => call[0] as string[])
     expect(calls).toContainEqual(['remote', 'get-url', FORK_REMOTE])
-    expect(calls).toContainEqual(['symbolic-ref', '--short', 'HEAD'])
+    expect(calls).toContainEqual(['symbolic-ref', '--quiet', 'HEAD'])
     expect(calls).toContainEqual([
       'branch',
       '--set-upstream-to',
-      `${FORK_REMOTE}/${target.branchName}`,
+      `refs/remotes/${FORK_REMOTE}/${target.branchName}`,
       'contributor/fix'
     ])
-    expect(calls.some((call) => call[0] === 'config' && String(call[2]).includes('.fetch'))).toBe(
-      false
-    )
+    expect(
+      calls.some(
+        (call) =>
+          call[0] === 'config' && call[1] !== '--get-all' && String(call[2]).includes('.fetch')
+      )
+    ).toBe(false)
     expect(fetchRemoteTrackingRef).not.toHaveBeenCalled()
   })
 
@@ -392,10 +417,16 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
       if (args[0] === 'rev-parse') {
-        throw new Error('unknown revision')
+        if (missingRef) {
+          missingRef = false
+          throw Object.assign(new Error('unknown revision'), { code: 1 })
+        }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: `+refs/heads/*:refs/remotes/${FORK_REMOTE}/*\n`, stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'contributor/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/contributor/fix\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -419,13 +450,16 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
     expect(calls).toContainEqual([
       'branch',
       '--set-upstream-to',
-      `${FORK_REMOTE}/${target.branchName}`,
+      `refs/remotes/${FORK_REMOTE}/${target.branchName}`,
       'contributor/fix'
     ])
     // Still no config write -- the fetch is a one-off refspec argument, not a widen.
-    expect(calls.some((call) => call[0] === 'config' && String(call[2]).includes('.fetch'))).toBe(
-      false
-    )
+    expect(
+      calls.some(
+        (call) =>
+          call[0] === 'config' && call[1] !== '--get-all' && String(call[2]).includes('.fetch')
+      )
+    ).toBe(false)
   })
 
   it('materializes the remote (add + provenance + fetch) when the probe misses', async () => {

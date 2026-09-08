@@ -67,7 +67,7 @@ describe('getPRForBranch', () => {
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(['api', 'repos/stablyai/orca/pulls/1738'], {
       cwd: '/repo-root'
     })
-    expect(target).toEqual({
+    expect(target).toMatchObject({
       pushTarget: {
         remoteName: 'pr-prateek-orca',
         branchName: 'prateek/fix-sidebar-agents-toggle',
@@ -134,7 +134,7 @@ describe('getPRForBranch', () => {
     })
     getRemoteUrlForRepoMock.mockResolvedValueOnce('git@github.com:stablyai/orca.git')
 
-    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
+    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toMatchObject({
       pushTarget: {
         remoteName: 'pr-prateek-orca',
         branchName: 'prateek/fix-sidebar-agents-toggle',
@@ -145,6 +145,10 @@ describe('getPRForBranch', () => {
   })
 
   it('omits maintainerCanModify when the API does not report the flag', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'origin\thttps://github.com/stablyai/orca.git (push)',
+      stderr: ''
+    })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
@@ -162,7 +166,7 @@ describe('getPRForBranch', () => {
       })
     })
 
-    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
+    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toMatchObject({
       pushTarget: {
         remoteName: 'origin',
         branchName: 'fix-sidebar'
@@ -171,6 +175,10 @@ describe('getPRForBranch', () => {
   })
 
   it('uses origin for same-repository PR push targets', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'origin\thttps://github.com/stablyai/orca.git (push)',
+      stderr: ''
+    })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockResolvedValueOnce({
@@ -188,13 +196,13 @@ describe('getPRForBranch', () => {
       })
     })
 
-    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
+    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toMatchObject({
       pushTarget: {
         remoteName: 'origin',
         branchName: 'fix-sidebar'
       }
     })
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', '-v'], { cwd: '/repo-root' })
   })
 
   it('keeps getRepoSlug origin-based on a fork checkout (#7331)', async () => {
@@ -286,6 +294,10 @@ describe('getPRForBranch', () => {
   })
 
   it('routes GHES push-target probes through the Enterprise host', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'origin\thttps://github.acme-corp.com/team/orca.git (push)',
+      stderr: ''
+    })
     const ghes = { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' }
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [ghes],
@@ -307,7 +319,7 @@ describe('getPRForBranch', () => {
       })
     })
 
-    await expect(getPullRequestPushTarget('/repo-root', 7)).resolves.toEqual({
+    await expect(getPullRequestPushTarget('/repo-root', 7)).resolves.toMatchObject({
       pushTarget: { remoteName: 'origin', branchName: 'feature' }
     })
     // Why: the candidate probe must pin options.host so the runner targets the
@@ -342,7 +354,7 @@ describe('getPRForBranch', () => {
       })
     })
 
-    await expect(getPullRequestPushTarget('/repo-root', 7)).resolves.toEqual({
+    await expect(getPullRequestPushTarget('/repo-root', 7)).resolves.toMatchObject({
       pushTarget: {
         remoteName: 'pr-team-orca',
         branchName: 'feature',
@@ -352,6 +364,10 @@ describe('getPRForBranch', () => {
   })
 
   it('probes additional PR repo candidates when the first lookup is not found', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'origin\thttps://github.com/fork/orca.git (push)',
+      stderr: ''
+    })
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [
         { owner: 'fork', repo: 'orca' },
@@ -377,7 +393,7 @@ describe('getPRForBranch', () => {
         })
       })
 
-    await expect(getPullRequestPushTarget('/repo-root', 1849)).resolves.toEqual({
+    await expect(getPullRequestPushTarget('/repo-root', 1849)).resolves.toMatchObject({
       pushTarget: {
         remoteName: 'origin',
         branchName: 'feature/test'

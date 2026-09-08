@@ -1,3 +1,4 @@
+import { readPullRequestHeadIdentity } from './pull-request-head-identity'
 import { ghExecFileAsync } from '../../gh-utils'
 import type { OwnerRepo, ghRepoExecOptions } from '../../gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
@@ -30,7 +31,7 @@ export async function getRestPRByNumber(
     throw new Error('invalid response shape')
   }
   const restData = parsed as RestPullRequest
-  const mapped = mapRestPullRequest(restData)
+  const mapped = mapRestPullRequest(restData, ownerRepo)
   if (
     options.requireUsableStackMetadata &&
     restData.stack !== undefined &&
@@ -67,7 +68,21 @@ export async function getPRByNumber(
       ],
       { ...ghOptions, ...githubHostExecOptions(ownerRepo) }
     )
-    const exactData = JSON.parse(stdout) as PullRequestLookupData
+    const rawExactData = JSON.parse(stdout) as PullRequestLookupData
+    const exactData = {
+      ...rawExactData,
+      headIdentity: readPullRequestHeadIdentity(rawExactData, ownerRepo)
+    }
+    // Missing fields on older CLI versions may retain actual discovery evidence; explicit null cannot.
+    if (
+      !('headRepository' in rawExactData) &&
+      !('headRepositoryOwner' in rawExactData) &&
+      knownPullRequestData?.headIdentity &&
+      (rawExactData.headRefName === undefined ||
+        rawExactData.headRefName === knownPullRequestData.headRefName)
+    ) {
+      exactData.headIdentity = knownPullRequestData.headIdentity
+    }
     return hydratePullRequestLookupData(
       ownerRepo,
       {

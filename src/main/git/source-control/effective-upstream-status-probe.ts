@@ -1,8 +1,7 @@
 import type { GitUpstreamStatus } from '../../../shared/git-status-types'
 import {
   getEffectiveGitUpstreamStatus,
-  getGitUpstreamStatusForUpstreamName,
-  splitRemoteBranchName
+  getGitUpstreamStatusForIdentity
 } from '../../../shared/git-effective-upstream'
 import { createGitConfigSnapshotRunner } from '../../../shared/git-config-snapshot-runner'
 import type { GitRuntimeOptions } from '../git-runtime-options'
@@ -29,7 +28,7 @@ export function getShortBranchName(branch: string | undefined): string | null {
 export async function readOrProbeEffectiveUpstreamStatus(
   cacheKey: string,
   worktreePath: string,
-  branchName: string,
+  _branchName: string,
   options: GitRuntimeOptions = {},
   bypassCache = false
 ): Promise<GitUpstreamStatus> {
@@ -50,17 +49,10 @@ export async function readOrProbeEffectiveUpstreamStatus(
   const probe = probeOrRevalidateEffectiveUpstreamStatus(
     cacheKey,
     worktreePath,
-    branchName,
     options,
     bypassCache
   ).then((result) => {
-    rememberEffectiveUpstreamStatus(
-      cacheKey,
-      result.status,
-      Date.now(),
-      result.probedSameNameOriginRef,
-      writeGeneration
-    )
+    rememberEffectiveUpstreamStatus(cacheKey, result.status, Date.now(), writeGeneration)
     return result.status
   })
   if (!bypassCache) {
@@ -79,21 +71,20 @@ export async function readOrProbeEffectiveUpstreamStatus(
 async function probeOrRevalidateEffectiveUpstreamStatus(
   cacheKey: string,
   worktreePath: string,
-  branchName: string,
   options: GitRuntimeOptions = {},
   bypassCache = false
-): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
+): Promise<{ status: GitUpstreamStatus }> {
   const now = Date.now()
   const cached = resolvedUpstreamNameCache.get(cacheKey)
   if (cached && (bypassCache || cached.expiresAt <= now)) {
     resolvedUpstreamNameCache.delete(cacheKey)
   } else if (cached) {
     try {
-      const status = await getGitUpstreamStatusForUpstreamName(
+      const status = await getGitUpstreamStatusForIdentity(
         (args) => gitExecFileAsync(args, gitReadOptionsForWorktree(worktreePath, options)),
-        cached.upstreamName
+        cached.upstreamIdentity
       )
-      return { status, probedSameNameOriginRef: false }
+      return { status }
     } catch (error) {
       // Why: an aborted probe says nothing about the ref; don't evict the warm name cache.
       if (options.signal?.aborted) {
@@ -103,10 +94,17 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
       resolvedUpstreamNameCache.delete(cacheKey)
     }
   }
-  const result = await probeEffectiveUpstreamStatus(worktreePath, branchName, options)
-  if (result.status.hasUpstream && result.status.upstreamName) {
+  const result = await probeEffectiveUpstreamStatus(worktreePath, options)
+  if (
+    result.status.hasUpstream &&
+    result.status.upstreamName &&
+    result.status.upstreamIdentity?.trackingRef
+  ) {
     resolvedUpstreamNameCache.set(cacheKey, {
-      upstreamName: result.status.upstreamName,
+      upstreamIdentity: {
+        ...result.status.upstreamIdentity,
+        trackingRef: result.status.upstreamIdentity.trackingRef
+      },
       expiresAt: Date.now() + RESOLVED_UPSTREAM_NAME_CACHE_TTL_MS
     })
     while (resolvedUpstreamNameCache.size > MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES) {
@@ -122,33 +120,19 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
 
 async function probeEffectiveUpstreamStatus(
   worktreePath: string,
-  branchName: string,
   options: GitRuntimeOptions = {}
-): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
-  let probedSameNameOriginRef = false
+): Promise<{ status: GitUpstreamStatus }> {
   const snapshotRunner = createGitConfigSnapshotRunner((args) =>
     gitExecFileAsync(args, gitReadOptionsForWorktree(worktreePath, options))
   )
-  const status = await getEffectiveGitUpstreamStatus((args) => {
-    if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
-      probedSameNameOriginRef = true
-    }
-    return snapshotRunner(args)
-  })
-  return { status, probedSameNameOriginRef }
+  const status = await getEffectiveGitUpstreamStatus(snapshotRunner)
+  return { status }
 }
 
 export function shouldProbeEffectiveUpstreamStatus(
   branch: string | undefined,
-  upstreamName: string | undefined
+  _upstreamName?: string
 ): boolean {
-  const branchName = getShortBranchName(branch)
-  if (!branchName) {
-    return false
-  }
-  if (!upstreamName) {
-    return true
-  }
-  const parsed = splitRemoteBranchName(upstreamName)
-  return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
+  // Porcelain upstream labels cannot authorize skipping canonical operation policy.
+  return getShortBranchName(branch) !== null
 }

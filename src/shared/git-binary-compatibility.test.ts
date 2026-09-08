@@ -1,3 +1,4 @@
+import { readGitRemoteTrackingRef } from './git-remote-tracking-ref'
 import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -71,6 +72,23 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     })
   }
 
+  it('resolves abbreviated fetch mappings using Git-ranked source evidence', async () => {
+    await runGit(['update-ref', 'refs/heads/abbreviated-source', 'HEAD'])
+    await runGit(['clone', '--bare', '.', 'abbreviated-remote.git'])
+    await runGit(['remote', 'add', 'abbreviated', './abbreviated-remote.git'])
+    await runGit([
+      'config',
+      'remote.abbreviated.fetch',
+      'abbreviated-source:refs/custom/abbreviated'
+    ])
+    await runGit(['fetch', 'abbreviated'])
+    expect(await readGitRemoteTrackingRef(runGit, 'abbreviated', 'abbreviated-source')).toBe(
+      'refs/custom/abbreviated'
+    )
+    await runGit(['--git-dir=abbreviated-remote.git', 'tag', 'abbreviated-source', 'HEAD'])
+    expect(await readGitRemoteTrackingRef(runGit, 'abbreviated', 'abbreviated-source')).toBeNull()
+  })
+
   function supports(major: number, minor: number): boolean {
     return version.major > major || (version.major === major && version.minor >= minor)
   }
@@ -108,6 +126,36 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   afterAll(async () => {
     if (repoPath) {
       await rm(repoPath, { recursive: true, force: true })
+    }
+  })
+
+  it('preserves full symbolic branch identity and optional tracking atoms', async () => {
+    const original = (await runGit(['symbolic-ref', '--quiet', 'HEAD'])).stdout.trim()
+    await runGit(['branch', 'compat-identity'])
+    await runGit(['tag', 'compat-identity'])
+    await runGit(['symbolic-ref', 'HEAD', 'refs/heads/compat-identity'])
+    const metadata = [
+      'for-each-ref',
+      '--format=%(upstream)%00%(upstream:trackshort)%00%(refname)%00%(upstream:remotename)%00%(upstream:remoteref)',
+      'refs/heads/compat-identity'
+    ]
+    try {
+      expect((await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])).stdout.trim()).toBe(
+        'heads/compat-identity'
+      )
+      expect((await runGit(['symbolic-ref', '--quiet', 'HEAD'])).stdout.trim()).toBe(
+        'refs/heads/compat-identity'
+      )
+      expect((await runGit(metadata)).stdout.trim()).toBe('\0\0refs/heads/compat-identity\0\0')
+      await runGit(['config', 'branch.compat-identity.remote', '.'])
+      await runGit(['config', 'branch.compat-identity.merge', original])
+      expect((await runGit(metadata)).stdout.trim()).toBe(
+        `${original}\0=\0refs/heads/compat-identity\0.\0${original}`
+      )
+    } finally {
+      await runGit(['symbolic-ref', 'HEAD', original])
+      await runGit(['branch', '-D', 'compat-identity'])
+      await runGit(['tag', '-d', 'compat-identity'])
     }
   })
 

@@ -1,3 +1,4 @@
+import { reviewTarget } from '../../shared/__fixtures__/git-review-target'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { SshGitProvider } from './ssh-git-provider'
 import { createMockMux, type MockMultiplexer } from './ssh-git-provider-test-harness'
@@ -38,17 +39,19 @@ describe('SshGitProvider', () => {
   })
 
   it('pushBranch sends git.push request and forwards publish mode and target', async () => {
-    await provider.pushBranch('/home/user/repo', true, {
-      remoteName: 'pr-fork-orca',
-      branchName: 'contributor/fix'
+    mux.request.mockResolvedValue({
+      stdout: 'pr-fork-orca\thttps://github.com/team/repo.git (push)',
+      stderr: ''
     })
+    await provider.pushBranch(
+      '/home/user/repo',
+      true,
+      reviewTarget('pr-fork-orca', 'contributor/fix')
+    )
     expect(mux.request).toHaveBeenCalledWith('git.push', {
       worktreePath: '/home/user/repo',
       publish: true,
-      pushTarget: {
-        remoteName: 'pr-fork-orca',
-        branchName: 'contributor/fix'
-      }
+      pushTarget: reviewTarget('pr-fork-orca', 'contributor/fix')
     })
   })
 

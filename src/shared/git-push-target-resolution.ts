@@ -1,6 +1,7 @@
+import { gitBranchNameFromFullRef } from './git-upstream-identity'
+import { readCurrentGitBranchName } from './git-current-branch'
 import type { GitCommandRunner } from './git-effective-upstream'
 import { gitRefTargetsBranchOnRemote } from './git-remote-branch-name'
-import { findGitRemoteNameByFetchUrl } from './git-remote-url-index'
 
 export type ResolvedGitPushTarget = {
   remote: string
@@ -17,34 +18,9 @@ async function getConfigValue(runGit: GitCommandRunner, key: string): Promise<st
   }
 }
 
-function isUrlValuedRemote(remote: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(remote) || /^[^@/:]+@[^:]+:.+/.test(remote)
-}
-
 type ConfiguredPushRemote = {
   remote: string
   branchRemote: string | null
-}
-
-// One `git remote -v` instead of `git remote` plus a serial `git remote get-url`
-// per remote; both print the same insteadOf-expanded fetch URL.
-async function findRemoteNameForUrl(
-  runGit: GitCommandRunner,
-  remoteUrl: string
-): Promise<string | null> {
-  try {
-    const { stdout } = await runGit(['remote', '-v'])
-    return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) => candidateUrl === remoteUrl)
-  } catch {
-    return null
-  }
-}
-
-async function normalizePushRemote(runGit: GitCommandRunner, remote: string): Promise<string> {
-  if (!isUrlValuedRemote(remote)) {
-    return remote
-  }
-  return (await findRemoteNameForUrl(runGit, remote)) ?? remote
 }
 
 async function getConfiguredPushRemote(
@@ -59,16 +35,7 @@ async function getConfiguredPushRemote(
   if (!remote) {
     return null
   }
-  const normalizedRemote = await normalizePushRemote(runGit, remote)
-  // The two usually name the same URL; resolving it twice reads the remote table twice.
-  if (!branchRemote) {
-    return { remote: normalizedRemote, branchRemote: null }
-  }
-  return {
-    remote: normalizedRemote,
-    branchRemote:
-      branchRemote === remote ? normalizedRemote : await normalizePushRemote(runGit, branchRemote)
-  }
+  return { remote, branchRemote }
 }
 
 async function branchMergeTargetsConfiguredBase(
@@ -112,8 +79,7 @@ export async function resolveConfiguredGitPushTarget(
   runGit: GitCommandRunner
 ): Promise<ResolvedGitPushTarget | null> {
   try {
-    const { stdout: branchStdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
-    const branch = branchStdout.trim()
+    const branch = await readCurrentGitBranchName(runGit)
     if (!branch) {
       return null
     }
@@ -123,8 +89,8 @@ export async function resolveConfiguredGitPushTarget(
     ])
     const remote = pushRemote?.remote
     const mergeRef = mergeStdout.trim()
-    const branchRef = mergeRef.replace(/^refs\/heads\//, '')
-    if (!remote || !branchRef || remote === '.' || branchRef === mergeRef) {
+    const branchRef = gitBranchNameFromFullRef(mergeRef)
+    if (!remote || !branchRef || remote === '.') {
       return null
     }
     if (await branchMergeTargetsConfiguredBase(runGit, branch, remote, branchRef)) {
@@ -133,7 +99,7 @@ export async function resolveConfiguredGitPushTarget(
     if (!canPushConfiguredMergeBranch(pushRemote, branch, branchRef)) {
       return null
     }
-    return { remote, refspec: `HEAD:${branchRef}` }
+    return { remote, refspec: `HEAD:${mergeRef}` }
   } catch {
     return null
   }

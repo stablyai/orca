@@ -1,3 +1,4 @@
+import { reviewHeadKey } from '../../../../shared/git-review-push-authority'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 function indexUnambiguousWorktrees(
@@ -21,6 +22,7 @@ function branchScopedReviewContextMatches(left: Worktree, right: Worktree): bool
     left.linkedBitbucketPR === right.linkedBitbucketPR &&
     left.linkedAzureDevOpsPR === right.linkedAzureDevOpsPR &&
     left.linkedGiteaPR === right.linkedGiteaPR &&
+    reviewHeadKey(left.pushTarget?.reviewHead) === reviewHeadKey(right.pushTarget?.reviewHead) &&
     left.pushTarget?.remoteName === right.pushTarget?.remoteName &&
     left.pushTarget?.branchName === right.pushTarget?.branchName
   )

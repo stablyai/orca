@@ -35,10 +35,13 @@ describe('OrcaRuntimeService', () => {
       updatedAt: '2026-05-21T00:00:00Z',
       mergeable: 'UNKNOWN'
     })
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
-      stdout: '',
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => ({
+      stdout:
+        args[0] === 'config' && args[1] === '--get-all'
+          ? '+refs/heads/*:refs/remotes/origin/*\n'
+          : '',
       stderr: ''
-    })
+    }))
 
     try {
       const result = await runtime.createManagedWorktree({
@@ -66,7 +69,7 @@ describe('OrcaRuntimeService', () => {
         false
       )
       expect(gitSpy).toHaveBeenCalledWith(
-        ['branch', '--set-upstream-to', 'origin/feature/fix', 'feature/fix'],
+        ['branch', '--set-upstream-to', 'refs/remotes/origin/feature/fix', 'feature/fix'],
         { cwd: createdWorktree.path }
       )
       expect(result.worktree).toMatchObject({
@@ -93,6 +96,12 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce(null)
     vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout: '+refs/heads/*:refs/remotes/origin/*\n',
+          stderr: ''
+        }
+      }
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
@@ -153,10 +162,13 @@ describe('OrcaRuntimeService', () => {
       updatedAt: '2026-05-21T00:00:00Z',
       mergeable: 'UNKNOWN'
     })
-    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
-      stdout: '',
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => ({
+      stdout:
+        args[0] === 'config' && args[1] === '--get-all'
+          ? '+refs/heads/*:refs/remotes/origin/*\n'
+          : '',
       stderr: ''
-    })
+    }))
 
     try {
       const result = await runtime.createManagedWorktree({
@@ -225,6 +237,12 @@ describe('OrcaRuntimeService', () => {
       mergeable: 'UNKNOWN'
     })
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout: '+refs/heads/*:refs/remotes/origin/*\n',
+          stderr: ''
+        }
+      }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
@@ -272,6 +290,12 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce('remote')
     vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout: '+refs/heads/*:refs/remotes/origin/*\n',
+          stderr: ''
+        }
+      }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
@@ -328,6 +352,12 @@ describe('OrcaRuntimeService', () => {
       mergeable: 'UNKNOWN'
     })
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout: '+refs/heads/*:refs/remotes/origin/*\n',
+          stderr: ''
+        }
+      }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
@@ -377,6 +407,12 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
     getPRForBranchMock.mockRejectedValueOnce(new Error('gh unavailable'))
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout: '+refs/heads/*:refs/remotes/origin/*\n',
+          stderr: ''
+        }
+      }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
@@ -433,6 +469,12 @@ describe('OrcaRuntimeService', () => {
       ])
       .mockResolvedValueOnce([createdWorktree])
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout: '+refs/heads/*:refs/remotes/origin/*\n',
+          stderr: ''
+        }
+      }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         return { stdout: 'abc123\n', stderr: '' }
       }
@@ -500,6 +542,12 @@ describe('OrcaRuntimeService', () => {
       ])
       .mockResolvedValueOnce([createdWorktree])
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return {
+          stdout: '+refs/heads/*:refs/remotes/origin/*\n',
+          stderr: ''
+        }
+      }
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         return { stdout: 'abc123\n', stderr: '' }
       }

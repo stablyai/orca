@@ -1,3 +1,4 @@
+import { matchesPullRequestHead, readPullRequestHeadIdentity } from './pull-request-head-identity'
 import { ghExecFileAsync } from '../../gh-utils'
 import type { OwnerRepo, ghRepoExecOptions } from '../../gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
@@ -25,7 +26,7 @@ export async function getRestPRForBranch(
   )
   const list = JSON.parse(stdout) as RestPullRequest[]
   const pr = list[0]
-  return pr ? mapRestPullRequest(pr) : null
+  return pr ? mapRestPullRequest(pr, prRepo) : null
 }
 
 export async function getFallbackPRListForBranch(
@@ -51,7 +52,7 @@ export async function getFallbackPRListForBranch(
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
   const list = JSON.parse(stdout) as PullRequestLookupData[]
-  return list[0] ?? null
+  return list[0] ? { ...list[0], headIdentity: readPullRequestHeadIdentity(list[0], prRepo) } : null
 }
 
 export async function hydrateBranchLookupWithExactPR(
@@ -87,6 +88,22 @@ export async function lookupPRByBranchName(args: {
   if (args.candidates.length > 0) {
     let pendingError: unknown
     let hasPendingError = false
+    const admit = (data: PullRequestLookupData | null): boolean => {
+      if (!data) {
+        return false
+      }
+      if (
+        !args.headRepo ||
+        matchesPullRequestHead(data.headIdentity, args.headRepo, args.branchName)
+      ) {
+        return true
+      }
+      pendingError = new Error(
+        'Could not resolve to a Repository: returned review head identity does not match repository evidence.'
+      )
+      hasPendingError = true
+      return false
+    }
     for (const candidate of args.candidates) {
       try {
         const branchData = args.headRepo
@@ -97,6 +114,9 @@ export async function lookupPRByBranchName(args: {
               args.ghOptions
             )
           : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
+        if (branchData && !admit(branchData)) {
+          continue
+        }
         // Why: REST/list branch lookup identifies the PR cheaply; exact `gh pr view` carries review, merge-queue, and auto-merge state.
         const data = await hydrateBranchLookupWithExactPR(
           candidate,
@@ -104,7 +124,7 @@ export async function lookupPRByBranchName(args: {
           args.ghOptions,
           args.executionScope
         )
-        if (data) {
+        if (data && admit(data)) {
           return { data, dataRepo: candidate }
         }
       } catch (err) {
@@ -122,13 +142,16 @@ export async function lookupPRByBranchName(args: {
             args.branchName,
             args.ghOptions
           )
+          if (branchData && !admit(branchData)) {
+            continue
+          }
           const data = await hydrateBranchLookupWithExactPR(
             candidate,
             branchData,
             args.ghOptions,
             args.executionScope
           )
-          if (data) {
+          if (data && admit(data)) {
             return { data, dataRepo: candidate }
           }
         } catch (retryErr) {

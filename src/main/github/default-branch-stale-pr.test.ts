@@ -15,6 +15,7 @@
  * symbolic-ref / rev-parse plumbing and the `origin/` strip are exercised.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GithubApiRepositoryModule from './github-api-repository'
 
 type RateLimitGuardResult =
   | { blocked: false }
@@ -103,6 +104,11 @@ vi.mock('./gh-utils', () => ({
   _resetOwnerRepoCache: vi.fn()
 }))
 
+vi.mock('./github-api-repository', async (importOriginal) => ({
+  ...(await importOriginal<typeof GithubApiRepositoryModule>()),
+  resolveGitHubApiRepositoryCandidates: resolvePRRepositoryCandidatesMock
+}))
+
 vi.mock('../git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
@@ -189,7 +195,7 @@ function restPR({
     draft: false,
     mergeable: null,
     base: { ref: 'old-release', sha: 'base-oid' },
-    head: { ref: head_ref, sha: head_sha }
+    head: { ref: head_ref, sha: head_sha, repo: { name: 'widgets', owner: { login: 'acme' } } }
   }
 }
 
@@ -209,7 +215,7 @@ describe('issue #9171: default-branch checkout must not attach a stale non-open 
     execFileAsyncMock.mockReset()
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
-    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets', host: 'github.com' })
     getIssueOwnerRepoMock.mockReset()
     getOwnerRepoForRemoteMock.mockReset()
     // Why: getPRForBranch resolves origin through getOwnerRepoForRemote.

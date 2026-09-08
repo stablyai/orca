@@ -1,3 +1,4 @@
+import { assertGitReviewPushAuthority } from '../../shared/git-review-push-authority'
 import {
   normalizeGitErrorMessage,
   runPullWithDivergenceFallback
@@ -19,8 +20,14 @@ import { runWithGitWorktreeOperationLock } from '../../shared/git-worktree-opera
 
 export { gitPullRebaseFromBase } from './remote-rebase'
 
-function explicitPushTarget(target: GitPushTarget): { remote: string; refspec: string } {
-  return { remote: target.remoteName, refspec: `HEAD:${target.branchName}` }
+function explicitPushTarget(target: GitPushTarget): {
+  remote: string
+  refspec: string
+} {
+  return {
+    remote: target.remoteName,
+    refspec: `HEAD:refs/heads/${target.branchName}`
+  }
 }
 
 export async function gitPush(
@@ -32,6 +39,10 @@ export async function gitPush(
   try {
     if (pushTarget) {
       await validateGitPushTarget(worktreePath, pushTarget, options)
+      await assertGitReviewPushAuthority(
+        (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
+        pushTarget
+      )
     }
     // Why: push to the branch's configured upstream when one exists. PR-created
     // worktrees can track a contributor fork remote; hardcoding origin here
@@ -82,7 +93,12 @@ async function gitPullWithArgs(
       // Why: legacy Orca branches may still track origin/main while pushes
       // target origin/<branch>. Pull the same effective branch the UI reports.
       await gitExecFileAsync(
-        ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
+        [
+          'pull',
+          ...effectiveArgs,
+          upstream.operationSelector?.value ?? upstream.remoteName,
+          upstream.mergeRef
+        ],
         gitOptionsForWorktree(worktreePath, options)
       )
       return

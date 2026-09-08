@@ -74,6 +74,26 @@ describe('worktree git status ref watch binding', () => {
     expect(resolve).toHaveBeenCalledOnce()
   })
 
+  it('rebinds identity-only changes with an unchanged label', async () => {
+    const target = makeTarget()
+    const resolve = vi
+      .fn()
+      .mockResolvedValueOnce('refs/remotes/origin/feature')
+      .mockResolvedValueOnce('refs/custom/feature')
+    await updateActiveGitStatusRefBinding(
+      request({ upstreamRef: 'refs/remotes/origin/feature' }),
+      () => [target],
+      resolve
+    )
+    await updateActiveGitStatusRefBinding(
+      request({ upstreamRef: 'refs/custom/feature' }),
+      () => [target],
+      resolve
+    )
+    expect(resolve).toHaveBeenCalledTimes(2)
+    expect([...target.gitStatusRefPaths]).toEqual(['C:/repo/.git/refs/custom/feature'])
+  })
+
   it('applies an in-flight resolution to a replacement watch', async () => {
     const first = makeTarget()
     const replacement = makeTarget()

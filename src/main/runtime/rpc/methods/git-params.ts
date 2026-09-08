@@ -1,3 +1,4 @@
+import { GitPushTargetParam } from './git-push-target-schema'
 import { z } from 'zod'
 import { OptionalGitAdmissionTier } from './git-admission-tier-schema'
 
@@ -204,13 +205,6 @@ export const GitGeneratePullRequestFields = GitGenerateCommitMessage.extend({
 
 export const GitBulkPaths = WorktreeSelector.extend({
   filePaths: z.array(z.string().min(1, 'Missing file path'))
-})
-
-const GitPushTargetParam = z.object({
-  remoteName: z.string(),
-  branchName: z.string(),
-  remoteUrl: z.string().optional(),
-  remoteCreated: z.boolean().optional()
 })
 
 export const GitPush = WorktreeSelector.extend({

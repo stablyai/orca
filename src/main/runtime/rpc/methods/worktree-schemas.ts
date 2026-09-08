@@ -1,3 +1,4 @@
+import { GitPushTargetParam } from './git-push-target-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -142,14 +143,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   sparsePresetId: OptionalString,
   baseRef: OptionalString,
   workspaceStatus: OptionalString,
-  pushTarget: z
-    .object({
-      remoteName: z.string(),
-      branchName: z.string(),
-      remoteUrl: OptionalString
-    })
-    .nullable()
-    .optional(),
+  pushTarget: GitPushTargetParam.nullable().optional(),
   diffComments: z.array(z.unknown()).optional(),
   mobileDiffReview: z.unknown().optional(),
   parentWorktree: OptionalString,

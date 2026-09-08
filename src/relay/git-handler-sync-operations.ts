@@ -76,7 +76,12 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
       if (upstream && !upstream.isConfiguredUpstream) {
         // Why: legacy Orca branches may track origin/main while pushes target origin/<branch>; pull the same effective branch the UI reports.
         await this.git(
-          ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
+          [
+            'pull',
+            ...effectiveArgs,
+            upstream.operationSelector?.value ?? upstream.remoteName,
+            upstream.mergeRef
+          ],
           worktreePath
         )
         return

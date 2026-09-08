@@ -469,6 +469,9 @@ describe('resolveGitHubPrStartPoint', () => {
   })
 
   it('returns the verified head SHA, branch override, and push target when same-repo branch fetch succeeds', async () => {
+    getPullRequestPushTargetMock.mockResolvedValue({
+      pushTarget: { remoteName: 'origin', branchName: 'feature/add-feature' }
+    })
     const fetchRemoteTrackingRef = vi.fn(async () => {})
     const gitExec = vi.fn(async (args: string[]) => {
       const url = remoteGetUrl(args)

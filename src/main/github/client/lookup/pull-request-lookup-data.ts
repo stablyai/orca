@@ -1,3 +1,10 @@
+import type { OwnerRepo } from '../../gh-utils'
+import {
+  readPullRequestHeadIdentity,
+  type PullRequestHeadFields,
+  type PullRequestHeadIdentity,
+  type PullRequestHeadRepository
+} from './pull-request-head-identity'
 import type {
   GitHubPRMergeMethodSettings,
   GitHubPRStack,
@@ -17,7 +24,8 @@ import {
   normalizeReviewDecision,
   isAutoMergeEnabled
 } from './../map/work-item-field-coercion'
-export type PullRequestLookupData = {
+export type PullRequestLookupData = PullRequestHeadFields & {
+  headIdentity?: PullRequestHeadIdentity
   number: number
   title: string
   state: string
@@ -53,7 +61,7 @@ export type RestPullRequest = {
   mergeable?: boolean | null
   mergeable_state?: string | null
   base?: { ref?: string; sha?: string }
-  head?: { ref?: string; sha?: string }
+  head?: { ref?: string; sha?: string; repo?: PullRequestHeadRepository | null }
   stack?: {
     number?: number
     position?: number
@@ -63,10 +71,10 @@ export type RestPullRequest = {
 }
 
 export const PR_LOOKUP_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid'
+  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepository,headRepositoryOwner'
 
 export const PR_BRANCH_LIST_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid'
+  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepository,headRepositoryOwner'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
@@ -93,7 +101,10 @@ export function derivePullRequestMergeable(data: PullRequestLookupData): PRMerge
   return mergeable ?? 'UNKNOWN'
 }
 
-export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
+export function mapRestPullRequest(
+  pr: RestPullRequest,
+  apiRepository?: OwnerRepo
+): PullRequestLookupData {
   const stack =
     typeof pr.stack?.number === 'number' &&
     typeof pr.stack.position === 'number' &&
@@ -108,6 +119,10 @@ export function mapRestPullRequest(pr: RestPullRequest): PullRequestLookupData {
         }
       : undefined
   return {
+    headIdentity: readPullRequestHeadIdentity(
+      { url: pr.html_url ?? '', headRefName: pr.head?.ref, headRepository: pr.head?.repo },
+      apiRepository
+    ),
     number: pr.number,
     title: pr.title,
     state: pr.merged_at ? 'MERGED' : pr.state,
@@ -145,9 +160,13 @@ export function shouldHideMergedImplicitPR(
   return !currentHeadOid || data.headRefOid !== currentHeadOid
 }
 
-export function normalizePullRequestLookupData(data: PullRequestLookupData): PullRequestLookupData {
+export function normalizePullRequestLookupData(
+  data: PullRequestLookupData,
+  apiRepository?: OwnerRepo
+): PullRequestLookupData {
   return {
     ...data,
+    headIdentity: data.headIdentity ?? readPullRequestHeadIdentity(data, apiRepository),
     reviewDecision:
       data.reviewDecision !== undefined ? normalizeReviewDecision(data.reviewDecision) : undefined,
     autoMergeEnabled:

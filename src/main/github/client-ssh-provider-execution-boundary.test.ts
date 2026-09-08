@@ -53,7 +53,11 @@ function mockMergedBranchPRLookup(): void {
           updated_at: '2026-06-20T04:53:05Z',
           draft: false,
           mergeable_state: 'clean',
-          head: { ref: MERGED_BRANCH, sha: MERGED_HEAD_OID },
+          head: {
+            ref: MERGED_BRANCH,
+            sha: MERGED_HEAD_OID,
+            repo: { name: 'widgets', owner: { login: 'acme' } }
+          },
           base: { ref: 'main', sha: 'base-oid' }
         }
       ])
@@ -76,7 +80,26 @@ function mockMergedBranchPRLookup(): void {
     })
 }
 
+const actualRepositories =
+  await vi.importActual<typeof GithubApiRepositoryModule>('./github-api-repository')
+function topologyProbe(args: string[]) {
+  return {
+    stdout:
+      args[0] === 'remote'
+        ? 'origin\thttps://github.com/acme/widgets (fetch)\norigin\thttps://github.com/acme/widgets (push)'
+        : args[0] === 'for-each-ref'
+          ? `refs/heads/${MERGED_BRANCH}\0oid\0refs/remotes/origin/contributor/original\n`
+          : args[0] === 'config'
+            ? `branch.${MERGED_BRANCH}.remote\norigin\0branch.${MERGED_BRANCH}.merge\nrefs/heads/contributor/original\0`
+            : '',
+    stderr: ''
+  }
+}
+
 function mockUpstreamOnlyPRLookup(): void {
+  resolvePRRepositoryCandidatesMock.mockImplementation(
+    actualRepositories.resolveGitHubApiRepositoryCandidates
+  )
   ghExecFileAsyncMock
     .mockResolvedValueOnce({ stdout: JSON.stringify([]) })
     .mockResolvedValueOnce({
@@ -90,7 +113,11 @@ function mockUpstreamOnlyPRLookup(): void {
           draft: false,
           mergeable: true,
           base: { ref: 'main', sha: 'base-oid' },
-          head: { ref: 'contributor/original', sha: 'upstream-head-oid' }
+          head: {
+            ref: 'contributor/original',
+            sha: 'upstream-head-oid',
+            repo: { name: 'widgets', owner: { login: 'acme' } }
+          }
         }
       ])
     })
@@ -144,14 +171,18 @@ describe('getPRForBranch SSH execution boundary', () => {
     expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
   })
 
-  it('keeps a verified empty SSH candidate set as no PR', async () => {
-    resolvePRRepositoryCandidatesMock.mockResolvedValue({ candidates: [], headRepo: null })
+  it('keeps an unresolved SSH candidate set inconclusive', async () => {
+    resolvePRRepositoryCandidatesMock.mockResolvedValue({
+      candidates: [],
+      headRepo: null,
+      head: { kind: 'unresolved' }
+    })
 
     const outcome = await getPRForBranchOutcome('/remote/repo', MERGED_BRANCH, null, 'ssh-1')
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(outcome).toMatchObject({ kind: 'no-pr' })
+    expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'repo_unavailable' })
   })
 
   it('rev-parses HEAD through the SSH provider when it is registered', async () => {
@@ -199,7 +230,7 @@ describe('getPRForBranch SSH execution boundary', () => {
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({ kind: 'upstream-error', errorType: 'unknown' })
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('reports an upstream error when the SSH HEAD probe loses its provider mid-flight', async () => {
@@ -227,14 +258,14 @@ describe('getPRForBranch SSH execution boundary', () => {
   })
 
   it('reads tracked upstreams through the SSH provider when it is registered', async () => {
-    const forEachRefArgs = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
-    const sshGitProvider = {
-      exec: vi.fn(async (args: string[]) =>
-        args[0] === 'for-each-ref'
-          ? { stdout: `${MERGED_BRANCH}\0origin/contributor/original\n`, stderr: '' }
-          : { stdout: '', stderr: '' }
-      )
-    }
+    const forEachRefArgs = [
+      'for-each-ref',
+      '--count=4097',
+      '--format=%(refname)%00%(objectname)%00%(upstream)',
+      'refs/heads',
+      'refs/remotes'
+    ]
+    const sshGitProvider = { exec: vi.fn(async (args: string[]) => topologyProbe(args)) }
     getSshGitProviderMock.mockReturnValue(sshGitProvider)
     mockUpstreamOnlyPRLookup()
 
@@ -246,12 +277,15 @@ describe('getPRForBranch SSH execution boundary', () => {
   })
 
   it('reads tracked upstreams through the local runtime for a WSL repository', async () => {
-    const forEachRefArgs = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
+    const forEachRefArgs = [
+      'for-each-ref',
+      '--count=4097',
+      '--format=%(refname)%00%(objectname)%00%(upstream)',
+      'refs/heads',
+      'refs/remotes'
+    ]
     mockUpstreamOnlyPRLookup()
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: `${MERGED_BRANCH}\0origin/contributor/original\n`,
-      stderr: ''
-    })
+    gitExecFileAsyncMock.mockImplementation(async (args) => topologyProbe(args))
 
     const pr = await getPRForBranch('/repo-root', MERGED_BRANCH, null, null, null, {
       localGitExecOptions: { wslDistro: 'Ubuntu' }

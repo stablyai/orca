@@ -35,11 +35,15 @@ export function isSafeGitRefName(ref: string): boolean {
   )
 }
 
-export function isSafeGitStatusUpstreamRef(ref: string): boolean {
+export function isSafeGitCommonRefName(ref: string): boolean {
   return (
     isSafeGitRefName(ref) &&
-    ref !== 'refs/heads' &&
-    !ref.startsWith(LOCAL_BRANCH_REF_PREFIX) &&
     !WORKTREE_REF_PREFIXES.some((prefix) => ref === prefix.slice(0, -1) || ref.startsWith(prefix))
+  )
+}
+
+export function isSafeGitStatusUpstreamRef(ref: string): boolean {
+  return (
+    isSafeGitCommonRefName(ref) && ref !== 'refs/heads' && !ref.startsWith(LOCAL_BRANCH_REF_PREFIX)
   )
 }

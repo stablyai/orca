@@ -11,7 +11,6 @@ import type { PullRequestLookupData } from './pull-request-lookup-data'
 export function assemblePRRefreshFoundOutcome(args: {
   data: PullRequestLookupData
   dataRepo: OwnerRepo | null
-  dataHeadRepo: OwnerRepo | null
   stack: GitHubPRStack | undefined
   mergeable: PRMergeableState
   stackMergeQueueRequired: boolean | null | undefined
@@ -22,7 +21,6 @@ export function assemblePRRefreshFoundOutcome(args: {
   const {
     data,
     dataRepo,
-    dataHeadRepo,
     stack,
     mergeable,
     stackMergeQueueRequired,
@@ -63,7 +61,7 @@ export function assemblePRRefreshFoundOutcome(args: {
       ...(data.baseRefName ? { baseRefName: data.baseRefName } : {}),
       ...(data.headRefName ? { headRefName: data.headRefName } : {}),
       prRepo: dataRepo ?? undefined,
-      headRepo: dataHeadRepo ?? undefined,
+      headRepo: data.headIdentity?.kind === 'resolved' ? data.headIdentity.repository : undefined,
       conflictSummary
     }
   }

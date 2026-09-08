@@ -17,7 +17,7 @@ function gitForConfig(config: {
   const merge = config.merge ?? `refs/heads/${branch}`
   return vi.fn(async (args: GitArgs) => {
     if (args[0] === 'symbolic-ref') {
-      return { stdout: `${branch}\n`, stderr: '' }
+      return { stdout: `refs/heads/${branch}\n`, stderr: '' }
     }
     if (args[0] === 'config' && args[2] === `branch.${branch}.pushRemote`) {
       if (config.pushRemote instanceof Error) {
@@ -81,7 +81,7 @@ describe('resolveRelayPushTarget', () => {
 
     await expect(resolveRelayPushTarget(git, '/repo', undefined)).resolves.toEqual({
       remote: 'fork',
-      refspec: 'HEAD:contributor/fix'
+      refspec: 'HEAD:refs/heads/contributor/fix'
     })
   })
 
@@ -109,7 +109,7 @@ describe('resolveRelayPushTarget', () => {
 
     await expect(resolveRelayPushTarget(git, '/repo', undefined)).resolves.toEqual({
       remote: 'fork',
-      refspec: 'HEAD:main'
+      refspec: 'HEAD:refs/heads/main'
     })
   })
 
@@ -122,11 +122,11 @@ describe('resolveRelayPushTarget', () => {
 
     await expect(resolveRelayPushTarget(git, '/repo', undefined)).resolves.toEqual({
       remote: 'fork',
-      refspec: 'HEAD:feature/fix'
+      refspec: 'HEAD:refs/heads/feature/fix'
     })
   })
 
-  it('normalizes a URL-valued branch remote to a matching named remote', async () => {
+  it('preserves a URL-valued branch remote despite a matching named remote', async () => {
     const forkUrl = 'https://github.com/contributor/orca.git'
     const git = gitForConfig({
       pushRemote: new Error('missing pushRemote'),
@@ -140,8 +140,8 @@ describe('resolveRelayPushTarget', () => {
     })
 
     await expect(resolveRelayPushTarget(git, '/repo', undefined)).resolves.toEqual({
-      remote: 'pr-contributor-orca',
-      refspec: 'HEAD:feature/fix'
+      remote: forkUrl,
+      refspec: 'HEAD:refs/heads/feature/fix'
     })
   })
 
@@ -158,21 +158,30 @@ describe('resolveRelayPushTarget', () => {
 
     await expect(resolveRelayPushTarget(git, '/repo', undefined)).resolves.toEqual({
       remote: forkUrl,
-      refspec: 'HEAD:feature/fix'
+      refspec: 'HEAD:refs/heads/feature/fix'
     })
   })
 
   it('uses an explicit push target without reading branch config', async () => {
-    const git = vi.fn(async () => ({ stdout: '', stderr: '' }))
+    const git = vi.fn(async () => ({
+      stdout: 'fork\thttps://github.com/team/repo.git (push)',
+      stderr: ''
+    }))
 
     await expect(
       resolveRelayPushTarget(git, '/repo', {
         remoteName: 'fork',
-        branchName: 'feature/head'
+        branchName: 'feature/head',
+        reviewHead: {
+          provider: 'github',
+          host: 'github.com',
+          repository: 'team/repo',
+          branchName: 'feature/head'
+        }
       })
     ).resolves.toEqual({
       remote: 'fork',
-      refspec: 'HEAD:feature/head'
+      refspec: 'HEAD:refs/heads/feature/head'
     })
     expect(git).toHaveBeenCalledWith(['check-ref-format', '--branch', 'feature/head'], '/repo')
   })

@@ -171,6 +171,11 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: {
           hasUpstream: true,
           upstreamName: 'origin/feature',
+          upstreamIdentity: {
+            selector: { kind: 'named-remote' as const, value: 'origin' },
+            mergeRef: 'refs/heads/feature',
+            trackingRef: 'refs/remotes/origin/feature'
+          },
           ahead: 14,
           behind: 3,
           behindCommitsArePatchEquivalent: true
@@ -226,6 +231,11 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: {
           hasUpstream: true,
           upstreamName: 'origin/feature',
+          upstreamIdentity: {
+            selector: { kind: 'named-remote' as const, value: 'origin' },
+            mergeRef: 'refs/heads/feature',
+            trackingRef: 'refs/remotes/origin/feature'
+          },
           ahead: 1,
           behind: 0
         }
@@ -698,21 +708,26 @@ describe('resolveDropdownItems with an unhydrated linked-review push target', ()
     )
   }
 
-  it('enables Push and Force Push when the real upstream is the same-repo review head', () => {
+  it('disables Push and Force Push until review repository hydration', () => {
     const byKind = pipeline({
       branchName: 'mobile-resume-suspected-fixes',
       upstreamStatus: {
         hasUpstream: true,
         upstreamName: 'origin/mobile-resume-suspected-fixes',
+        upstreamIdentity: {
+          selector: { kind: 'named-remote' as const, value: 'origin' },
+          mergeRef: 'refs/heads/mobile-resume-suspected-fixes',
+          trackingRef: 'refs/remotes/origin/mobile-resume-suspected-fixes'
+        },
         ahead: 7,
         behind: 2
       }
     })
-    expect(byKind.push.disabled).toBe(false)
-    expect(byKind.push.title).not.toBe('Linked review branch target is unavailable')
-    expect(byKind.force_push.disabled).toBe(false)
-    expect(byKind.pull.disabled).toBe(false)
-    expect(byKind.sync.disabled).toBe(false)
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(true)
+    expect(byKind.pull.disabled).toBe(true)
+    expect(byKind.sync.disabled).toBe(true)
     expect(byKind.publish.disabled).toBe(true)
   })
 
@@ -722,6 +737,11 @@ describe('resolveDropdownItems with an unhydrated linked-review push target', ()
       upstreamStatus: {
         hasUpstream: true,
         upstreamName: 'origin/helper-branch',
+        upstreamIdentity: {
+          selector: { kind: 'named-remote' as const, value: 'origin' },
+          mergeRef: 'refs/heads/helper-branch',
+          trackingRef: 'refs/remotes/origin/helper-branch'
+        },
         ahead: 1,
         behind: 0
       }

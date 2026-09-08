@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { runProcessMock, lstatMock, readFileMock, rmMock } = vi.hoisted(() => ({
+const { runProcessMock, lstatMock, readFileMock, rmMock, realpathMock } = vi.hoisted(() => ({
   runProcessMock: vi.fn(),
   lstatMock: vi.fn(),
   readFileMock: vi.fn(),
-  rmMock: vi.fn()
+  rmMock: vi.fn(),
+  realpathMock: vi.fn()
 }))
 
 // Why mock the chokepoint: encoding, timeout and the hidden console are its
@@ -16,7 +17,8 @@ vi.mock('../shared/child-process/run-process', () => ({
 vi.mock('node:fs/promises', () => ({
   lstat: lstatMock,
   readFile: readFileMock,
-  rm: rmMock
+  rm: rmMock,
+  realpath: realpathMock
 }))
 
 import {
@@ -227,5 +229,25 @@ describe('local worktree filesystem runtime access', () => {
         code: 'ENOENT'
       })
     })
+  })
+})
+
+it('canonicalizes WSL workspace identity inside the selected distro without local fallback', async () => {
+  await withPlatform('win32', async () => {
+    completeExecFile('/repo/canonical\n')
+    expect(await getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' }).realpath('/repo/link/.')).toBe(
+      '/repo/canonical'
+    )
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: 'wsl.exe',
+        args: ['-d', 'Ubuntu', '--exec', 'sh', '-c', "realpath -e -- '/repo/link/.'"]
+      })
+    )
+    expect(realpathMock).not.toHaveBeenCalled()
+    failExecFile(1)
+    await expect(
+      getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' }).realpath('/missing')
+    ).rejects.toThrow()
   })
 })

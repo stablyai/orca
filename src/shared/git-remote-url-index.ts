@@ -62,3 +62,7 @@ export function findGitRemoteNameByFetchUrl(
   }
   return null
 }
+
+export function isUrlValuedGitRemote(remote: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(remote) || /^[^@/:]+@[^:]+:.+/.test(remote)
+}

@@ -274,10 +274,16 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured for branch feature')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n', stderr: '' }
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: '+refs/heads/*:refs/remotes/origin/*', stderr: '' }
+      }
+      if (args[0] === 'config' || args[0] === 'rev-parse') {
+        throw Object.assign(new Error('missing fixture value'), { code: 1 })
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
@@ -289,9 +295,7 @@ describe('getStatusOp', () => {
     expect(first.upstreamStatus).toEqual({ hasUpstream: false, ahead: 0, behind: 0 })
     expect(second.upstreamStatus).toEqual(first.upstreamStatus)
     expect(git.mock.calls).toHaveLength(firstCallCount + 1)
-    expect(
-      git.mock.calls.filter(([args]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))
-    ).toHaveLength(1)
+    expect(git.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(1)
     expect(
       git.mock.calls.filter(
         ([args]) => args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')
@@ -307,13 +311,19 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured for branch feature')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: '+refs/heads/*:refs/remotes/origin/*', stderr: '' }
+      }
+      if (args[0] === 'config' || args[0] === 'rev-parse') {
+        throw Object.assign(new Error('missing fixture value'), { code: 1 })
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
@@ -322,9 +332,7 @@ describe('getStatusOp', () => {
     vi.setSystemTime(31_000)
     await getStatusOp(git, streamGitFromCapture(git), { worktreePath: tmpDir })
 
-    expect(
-      git.mock.calls.filter(([args]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))
-    ).toHaveLength(1)
+    expect(git.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(1)
   })
 
   it('coalesces concurrent no-effective-upstream probes', async () => {
@@ -333,15 +341,21 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature\n', stderr: '' }
+        return { stdout: 'refs/heads/feature\n', stderr: '' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+      if (args[0] === 'for-each-ref') {
         await Promise.resolve()
-        throw new Error('fatal: no upstream configured for branch feature')
+        return { stdout: '\0\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         await Promise.resolve()
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: '+refs/heads/*:refs/remotes/origin/*', stderr: '' }
+      }
+      if (args[0] === 'config' || args[0] === 'rev-parse') {
+        throw Object.assign(new Error('missing fixture value'), { code: 1 })
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
@@ -352,9 +366,7 @@ describe('getStatusOp', () => {
       getStatusOp(git, streamGitFromCapture(git), { worktreePath: tmpDir })
     ])
 
-    expect(
-      git.mock.calls.filter(([args]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))
-    ).toHaveLength(1)
+    expect(git.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(1)
     expect(
       git.mock.calls.filter(
         ([args]) => args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')
@@ -369,13 +381,19 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', branch), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: `${branch}\n`, stderr: '' }
+        return { stdout: `refs/heads/${branch}\n`, stderr: '' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error(`fatal: no upstream configured for branch ${branch}`)
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n', stderr: '' }
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: '+refs/heads/*:refs/remotes/origin/*', stderr: '' }
+      }
+      if (args[0] === 'config' || args[0] === 'rev-parse') {
+        throw Object.assign(new Error('missing fixture value'), { code: 1 })
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
@@ -400,10 +418,10 @@ describe('getStatusOp', () => {
         return { stdout: buildBranchStatusOutput('abc123', 'feature/fix'), stderr: '' }
       }
       if (args[0] === 'symbolic-ref') {
-        return { stdout: 'feature/fix\n', stderr: '' }
+        return { stdout: 'refs/heads/feature/fix\n', stderr: '' }
       }
-      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
-        throw new Error('fatal: no upstream configured for branch feature/fix')
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '\0\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.feature/fix.pushRemote')) {
         return { stdout: 'fork\n', stderr: '' }
@@ -418,10 +436,16 @@ describe('getStatusOp', () => {
         return { stdout: 'refs/heads/feature/fix\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.feature/fix.base')) {
-        throw new Error('missing branch base')
+        throw Object.assign(new Error('missing branch base'), { code: 1 })
       }
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
-        throw new Error('missing remote branch')
+        throw Object.assign(new Error('missing remote branch'), { code: 1 })
+      }
+      if (args[0] === 'config' && args[1] === '--get-all') {
+        return { stdout: '+refs/heads/*:refs/remotes/origin/*', stderr: '' }
+      }
+      if (args[0] === 'config' || args[0] === 'rev-parse') {
+        throw Object.assign(new Error('missing fixture value'), { code: 1 })
       }
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
@@ -429,8 +453,6 @@ describe('getStatusOp', () => {
     await getStatusOp(git, streamGitFromCapture(git), { worktreePath: tmpDir })
     await getStatusOp(git, streamGitFromCapture(git), { worktreePath: tmpDir })
 
-    expect(
-      git.mock.calls.filter(([args]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}'))
-    ).toHaveLength(2)
+    expect(git.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(2)
   })
 })
