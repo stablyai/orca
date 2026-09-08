@@ -139,6 +139,8 @@ export type GlobalSettings = {
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
   terminalDividerColorLight: string
+  /** When on, the file editor and diff viewer derive their color theme from the active terminal theme instead of the plain light/dark editor default. */
+  editorThemeMatchesTerminal?: boolean
   terminalInactivePaneOpacity: number
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number

@@ -290,6 +290,36 @@ export function TerminalThemeCatalogSection({
 
         {advancedContent ? <div className="-mt-4">{advancedContent}</div> : null}
 
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.TerminalThemeSections.editor_theme_matches_terminal',
+            'Match Editor Theme'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalThemeSections.editor_theme_matches_terminal_description',
+            'Color the file editor and diff viewer using the active terminal theme instead of the default light/dark editor theme.'
+          )}
+          keywords={['editor', 'theme', 'terminal', 'match', 'monaco', 'colors']}
+          forceVisible
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.TerminalThemeSections.editor_theme_matches_terminal',
+              'Match Editor Theme'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalThemeSections.editor_theme_matches_terminal_description',
+              'Color the file editor and diff viewer using the active terminal theme instead of the default light/dark editor theme.'
+            )}
+            checked={settings.editorThemeMatchesTerminal ?? false}
+            onChange={() =>
+              updateSettings({
+                editorThemeMatchesTerminal: !settings.editorThemeMatchesTerminal
+              })
+            }
+          />
+        </SearchableSetting>
+
         <TerminalSettingsPreview
           title={
             isLightTarget
