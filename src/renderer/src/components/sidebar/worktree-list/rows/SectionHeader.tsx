@@ -233,6 +233,8 @@ export function renderWorktreeSectionHeaderRow(args: {
           // Why: no row-level grab — only the title surface below shows the hand;
           // actions use cursor-pointer so … / + never look reorderable.
           'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
+          (isRepoHeader || isProjectGroupHeader) &&
+            'before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:border-t before:border-worktree-sidebar-border',
           !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
           ctx.highlightedRevealRowKey === row.key &&
             'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',

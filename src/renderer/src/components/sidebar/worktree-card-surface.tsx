@@ -59,6 +59,11 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
             : isMultiSelected
               ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
               : 'border border-transparent worktree-sidebar-card-hover',
+        flushSurface &&
+          !isActiveSurface &&
+          !isMultiSelected &&
+          !isLineageDropTarget &&
+          'border-b-worktree-sidebar-border/70',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
@@ -95,7 +100,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
 
       {newCardStyle && lineageChildren ? (
         <div
-          className="mt-1.5 space-y-1"
+          className="mt-1.5 space-y-1 shadow-[inset_1px_0_var(--worktree-sidebar-border)]"
           data-worktree-lineage-children=""
           style={lineageChildrenStyle}
         >
