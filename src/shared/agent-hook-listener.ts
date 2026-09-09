@@ -1,6 +1,6 @@
 import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
-import { extractAgentProviderSession } from './agent-session-resume'
+import { extractAgentProviderSession, isProviderSessionOnlyAgent } from './agent-session-resume'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -112,9 +112,7 @@ export function normalizeHookPayload(
     extractedPrompt
   })
   const providerSessionOnly =
-    (source === 'pi' || source === 'prime-agent') &&
-    eventName === 'session_start' &&
-    providerSession !== null
+    isProviderSessionOnlyAgent(source) && eventName === 'session_start' && providerSession !== null
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.
   const transportPayload =
     dispatched.payload ??

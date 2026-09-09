@@ -29,4 +29,14 @@ describe('TUI_AGENT_CONFIG', () => {
       expect(TUI_AGENT_CONFIG[agent as TuiAgent]).toMatchObject(expected)
     }
   })
+
+  it('launches Polytoken through its new-session subcommand while detecting the bare binary', () => {
+    expect(TUI_AGENT_CONFIG.polytoken).toMatchObject({
+      detectCmd: 'polytoken',
+      launchCmd: 'polytoken new',
+      expectedProcess: 'polytoken',
+      promptInjectionMode: 'flag-prompt',
+      detectUnsupportedRuntimes: ['win32']
+    })
+  })
 })

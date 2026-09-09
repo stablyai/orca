@@ -20,21 +20,25 @@ function isClaudeResumeSelector(token: string): boolean {
   return token === '-r' || token.startsWith('-r=') || token === '-c' || token.startsWith('-c=')
 }
 
-function isClaudeExecutableToken(token: string): boolean {
+function isExecutableToken(token: string, executable: string): boolean {
   const base = token.split(/[\\/]/).pop() ?? ''
-  return /^claude(\.(exe|cmd|bat|ps1))?$/i.test(base)
+  return new RegExp(`^${executable}(\\.(exe|cmd|bat|ps1))?$`, 'i').test(base)
 }
 
-/** Accepts a claude token only in command position — index 0, right after a
- * wrapper's `--`, behind PowerShell's `&` call operator, or preceded solely by
+/** Accepts the executable token only in command position — index 0, right after
+ * a wrapper's `--`, behind PowerShell's `&` call operator, or preceded solely by
  * NAME=value assignments — so an argument that merely ends in /claude (an ssh
  * key, a project dir) can never be mistaken for the executable. */
-function findClaudeExecutableIndex(tokens: readonly string[], shell: AgentStartupShell): number {
+function findExecutableIndex(
+  tokens: readonly string[],
+  shell: AgentStartupShell,
+  executable: string
+): number {
   let commandPosition = true
   for (let i = 0; i < tokens.length; i += 1) {
     const token = tokens[i]
     if (commandPosition) {
-      if (isClaudeExecutableToken(token)) {
+      if (isExecutableToken(token, executable)) {
         return i
       }
       if (
@@ -66,6 +70,9 @@ export function buildAgentResumeLaunchCommand(
   if (agent === 'claude') {
     return buildClaudeResumeLaunchCommand(baseCommand, argv, shell)
   }
+  if (agent === 'polytoken') {
+    return buildPolytokenResumeLaunchCommand(baseCommand, argv, shell)
+  }
   const resumeArgs = argv.map((arg) => quoteStartupArg(arg, shell)).join(' ')
   return resumeArgs ? `${baseCommand} ${resumeArgs}` : baseCommand
 }
@@ -96,37 +103,9 @@ export function buildClaudeResumeLaunchCommand(
     return appended
   }
   const { tokens, spans } = tokenized
-  const claudeIndex = findClaudeExecutableIndex(tokens, shell)
-  if (claudeIndex === -1) {
+  const claudeIndex = findExecutableIndex(tokens, shell, 'claude')
+  if (claudeIndex === -1 || !isBaseFullyModelable(baseCommand, tokens, spans, shell)) {
     return appended
-  }
-  // Why: any token the tokenizer cannot model for this shell — an operator,
-  // comment, expansion, or cmd single-quoted region — means the splice could
-  // cut live syntax or misread a literal as a selector. The whole base must
-  // be modelable, including the executable itself; only PowerShell's leading
-  // call operator is a known-safe divergent token.
-  for (let i = 0; i <= tokens.length; i += 1) {
-    const gapStart = i === 0 ? 0 : spans[i - 1].end
-    const gapEnd = i === tokens.length ? baseCommand.length : spans[i].start
-    if (!/^[ \t]*$/.test(baseCommand.slice(gapStart, gapEnd))) {
-      return appended
-    }
-    if (i === tokens.length) {
-      break
-    }
-    // Why: a bare `--%` makes PowerShell pass the rest of the line to the
-    // child literally, so appended quoting would arrive as literal bytes. A
-    // quoted `--%` can also stop parsing, but only before a parameter token,
-    // where the base is already mangled with or without the guard.
-    if (shell === 'powershell' && baseCommand.slice(spans[i].start, spans[i].end) === '--%') {
-      return appended
-    }
-    if (spans[i].divergesFromShell) {
-      const isCallOperator = shell === 'powershell' && i === 0 && tokens[i] === '&'
-      if (!isCallOperator) {
-        return appended
-      }
-    }
   }
   const cuts: { start: number; end: number }[] = []
   let terminatorStart: number | null = null
@@ -166,4 +145,113 @@ export function buildClaudeResumeLaunchCommand(
     result = `${result.slice(0, cuts[i].start)}${result.slice(cuts[i].end)}`
   }
   return terminatorStart !== null ? result : `${result} ${quotedResume}`
+}
+
+type TokenSpan = { start: number; end: number; divergesFromShell?: boolean }
+
+/** Why: any token the tokenizer cannot model for this shell — an operator,
+ * comment, expansion, or cmd single-quoted region — means a splice could cut
+ * live syntax or misread a literal. The whole base must be modelable,
+ * including the executable itself; only PowerShell's leading call operator is
+ * a known-safe divergent token. */
+function isBaseFullyModelable(
+  baseCommand: string,
+  tokens: readonly string[],
+  spans: readonly TokenSpan[],
+  shell: AgentStartupShell
+): boolean {
+  for (let i = 0; i <= tokens.length; i += 1) {
+    const gapStart = i === 0 ? 0 : spans[i - 1].end
+    const gapEnd = i === tokens.length ? baseCommand.length : spans[i].start
+    if (!/^[ \t]*$/.test(baseCommand.slice(gapStart, gapEnd))) {
+      return false
+    }
+    if (i === tokens.length) {
+      break
+    }
+    // Why: a bare `--%` makes PowerShell pass the rest of the line to the
+    // child literally, so appended quoting would arrive as literal bytes. A
+    // quoted `--%` can also stop parsing, but only before a parameter token,
+    // where the base is already mangled with or without the guard.
+    if (shell === 'powershell' && baseCommand.slice(spans[i].start, spans[i].end) === '--%') {
+      return false
+    }
+    if (spans[i].divergesFromShell) {
+      const isCallOperator = shell === 'powershell' && i === 0 && tokens[i] === '&'
+      if (!isCallOperator) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
+const POLYTOKEN_GLOBAL_OPTIONS_WITH_VALUE = new Set(['--config-dir', '--working-dir'])
+const POLYTOKEN_SESSION_SUBCOMMANDS = new Set(['new', 'continue', 'attach'])
+
+/** Builds the Polytoken cold-restore launch command. The default launch line is
+ * `polytoken new`, while a resume is the sibling subcommand `polytoken continue
+ * <id>`, so the subcommand span is replaced rather than appended to — appending
+ * would produce `polytoken new continue <id>`, which Polytoken rejects.
+ *
+ * Fails safe rather than open: when the base cannot be tokenized, has no
+ * polytoken executable in command position, is not fully modelable, or names
+ * a non-session subcommand, the result is the bare argv form `polytoken
+ * continue <id>`, which loses a custom executable path but never runs a
+ * wrong subcommand. Bytes outside the replaced span are preserved verbatim. */
+export function buildPolytokenResumeLaunchCommand(
+  baseCommand: string,
+  resumeArgs: readonly string[],
+  shell: AgentStartupShell
+): string {
+  // Why: the leading `continue` is Polytoken's own subcommand, not user data; only the
+  // session id needs shell quoting.
+  const [subcommandArg, ...locatorArgs] = resumeArgs
+  const quotedResume = [subcommandArg, ...locatorArgs.map((arg) => quoteStartupArg(arg, shell))]
+    .filter((arg): arg is string => Boolean(arg))
+    .join(' ')
+  if (!quotedResume) {
+    return baseCommand
+  }
+  const fallback = `polytoken ${quotedResume}`
+  const tokenized = tokenizeStartupCommand(baseCommand, shell)
+  if (!tokenized.ok) {
+    return fallback
+  }
+  const { tokens, spans } = tokenized
+  const executableIndex = findExecutableIndex(tokens, shell, 'polytoken')
+  if (executableIndex === -1 || !isBaseFullyModelable(baseCommand, tokens, spans, shell)) {
+    return fallback
+  }
+  let subcommandIndex = -1
+  for (let i = executableIndex + 1; i < tokens.length; i += 1) {
+    const token = tokens[i]
+    if (token === '--') {
+      return fallback
+    }
+    if (POLYTOKEN_GLOBAL_OPTIONS_WITH_VALUE.has(token)) {
+      i += 1
+      continue
+    }
+    if (token.startsWith('-')) {
+      continue
+    }
+    subcommandIndex = i
+    break
+  }
+  if (subcommandIndex === -1) {
+    return `${baseCommand} ${quotedResume}`
+  }
+  const subcommand = tokens[subcommandIndex]
+  if (!POLYTOKEN_SESSION_SUBCOMMANDS.has(subcommand)) {
+    return fallback
+  }
+  let end = spans[subcommandIndex].end
+  const next = tokens[subcommandIndex + 1]
+  // Why: a persisted `continue <id>` / `attach <id>` carries a stale locator that must not
+  // compete with the authoritative session id.
+  if (subcommand !== 'new' && next !== undefined && !next.startsWith('-')) {
+    end = spans[subcommandIndex + 1].end
+  }
+  return `${baseCommand.slice(0, spans[subcommandIndex].start)}${quotedResume}${baseCommand.slice(end)}`
 }

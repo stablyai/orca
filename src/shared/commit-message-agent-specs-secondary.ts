@@ -1,4 +1,10 @@
 import type { TuiAgent } from './tui-agent'
+import {
+  buildPolytokenModelArg,
+  POLYTOKEN_CONFIGURED_DEFAULT_MODEL,
+  POLYTOKEN_CONFIGURED_DEFAULT_MODEL_ID,
+  POLYTOKEN_MODEL_LIST_ARGS
+} from './polytoken-model-list'
 import type {
   CommitMessageAgentSpec,
   CommitMessageModel,
@@ -10,13 +16,15 @@ type SecondaryAgentSpecDeps = {
   OPENAI_THINKING_LEVELS: ThinkingLevel[]
   parseCursorModels: (stdout: string) => CommitMessageModel[]
   parseAntigravityModels: (stdout: string) => CommitMessageModel[]
+  parsePolytokenModels: (stdout: string) => CommitMessageModel[]
 }
 
 export function buildSecondaryCommitMessageAgentSpecs({
   BASIC_THINKING_LEVELS,
   OPENAI_THINKING_LEVELS,
   parseCursorModels,
-  parseAntigravityModels
+  parseAntigravityModels,
+  parsePolytokenModels
 }: SecondaryAgentSpecDeps): Partial<Record<TuiAgent, CommitMessageAgentSpec>> {
   return {
     amp: {
@@ -74,6 +82,29 @@ export function buildSecondaryCommitMessageAgentSpecs({
       modelDiscovery: { binary: 'cursor-agent', args: ['--list-models'], parse: parseCursorModels },
       models: [{ id: 'auto', label: 'Auto' }],
       defaultModelId: 'auto'
+    },
+    polytoken: {
+      id: 'polytoken',
+      label: 'Polytoken',
+      binary: 'polytoken',
+      // Why: `polytoken exec` appends piped stdin to its optional positional prompt, so the
+      // whole task rides stdin and diffs never hit argv limits (verified against 0.8.2).
+      promptDelivery: 'stdin',
+      buildArgs: ({ model, thinkingLevel }) => [
+        'exec',
+        ...(model && model !== POLYTOKEN_CONFIGURED_DEFAULT_MODEL_ID
+          ? ['--model', buildPolytokenModelArg(model, thinkingLevel)]
+          : [])
+      ],
+      singletonOptions: [['--model']],
+      modelSource: 'dynamic',
+      modelDiscovery: {
+        binary: 'polytoken',
+        args: [...POLYTOKEN_MODEL_LIST_ARGS],
+        parse: parsePolytokenModels
+      },
+      models: [POLYTOKEN_CONFIGURED_DEFAULT_MODEL],
+      defaultModelId: POLYTOKEN_CONFIGURED_DEFAULT_MODEL_ID
     },
     kimi: {
       id: 'kimi',

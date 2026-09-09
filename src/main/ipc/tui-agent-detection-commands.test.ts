@@ -46,4 +46,21 @@ describe('tui agent detection commands', () => {
     expect(getTuiAgentDetectionProbeCommands(commands, 'wsl')).toEqual([])
     expect(resolveDetectedTuiAgentIds(commands, new Set(['orca-ide', 'claude']), 'wsl')).toEqual([])
   })
+
+  it('detects Polytoken on POSIX, WSL, and remote hosts but never on native Windows', () => {
+    const commands = KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter(
+      (command) => command.id === 'polytoken'
+    )
+
+    expect(commands).toHaveLength(1)
+    expect(commands[0]).toMatchObject({ cmd: 'polytoken', unsupportedRuntimes: ['win32'] })
+    for (const runtime of ['darwin', 'linux', 'wsl'] as const) {
+      expect(getTuiAgentDetectionProbeCommands(commands, runtime)).toEqual(['polytoken'])
+      expect(resolveDetectedTuiAgentIds(commands, new Set(['polytoken']), runtime)).toEqual([
+        'polytoken'
+      ])
+    }
+    expect(getTuiAgentDetectionProbeCommands(commands, 'win32')).toEqual([])
+    expect(resolveDetectedTuiAgentIds(commands, new Set(['polytoken']), 'win32')).toEqual([])
+  })
 })

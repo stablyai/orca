@@ -128,6 +128,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: opencode enables bracketed paste before its composer mounts; wait for the post-\x1b[?2004h show-cursor so paste lands.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
+  polytoken: {
+    detectCmd: 'polytoken',
+    // Why: Polytoken ships macOS/Linux binaries only; WSL and SSH Linux hosts stay detectable.
+    detectUnsupportedRuntimes: ['win32'],
+    launchCmd: 'polytoken new',
+    promptInjectionMode: 'flag-prompt'
+  },
   'mimo-code': {
     detectCmd: 'mimo',
     promptInjectionMode: 'flag-prompt',

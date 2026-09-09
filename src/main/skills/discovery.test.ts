@@ -359,6 +359,33 @@ describe('skill discovery', () => {
     expect(rootPaths).toContain('/workspace/current/.claude/skills')
   })
 
+  it('scans the Polytoken skill roots and honors a relocated XDG_CONFIG_HOME', () => {
+    // Why: no overrides means process.env is consulted; pin the default so an absolute
+    // XDG_CONFIG_HOME in the test environment cannot relocate the asserted path.
+    const defaults = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current',
+      providerRootOverrides: {}
+    })
+    const defaultPaths = defaults.map((root) => root.path.replace(/\\/g, '/'))
+    expect(defaultPaths).toEqual(
+      expect.arrayContaining([
+        '/home/test/.config/polytoken/skills',
+        '/workspace/current/.polytoken/skills'
+      ])
+    )
+
+    const relocated = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current',
+      providerRootOverrides: { polytoken: '/srv/xdg/polytoken/skills' }
+    })
+    const relocatedPaths = relocated
+      .filter((root) => root.id === 'home-polytoken')
+      .map((root) => root.path.replace(/\\/g, '/'))
+    expect(relocatedPaths).toEqual(['/srv/xdg/polytoken/skills'])
+  })
+
   it('scans each provider home skill root that npx skills --global writes to', () => {
     const roots = buildSkillDiscoverySources({
       homeDir: '/home/test',

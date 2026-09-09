@@ -91,6 +91,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://opencode.ai/docs/cli/'
   },
   {
+    id: 'polytoken',
+    label: translate('auto.lib.agent.catalog.polytoken_label', 'Polytoken'),
+    cmd: 'polytoken',
+    homepageUrl: 'https://docs.polytoken.dev/installation/'
+  },
+  {
     id: 'mimo-code',
     label: translate('auto.lib.agent.catalog.mimo_code_label', 'MiMo Code'),
     cmd: 'mimo',

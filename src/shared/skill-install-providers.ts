@@ -15,6 +15,7 @@ export type SkillInstallProviderId =
   | 'trae'
   | 'grok'
   | 'aug'
+  | 'polytoken'
 
 export type SkillInstallProviderDefinition = {
   id: SkillInstallProviderId
@@ -80,6 +81,14 @@ export const SKILL_INSTALL_PROVIDERS: readonly SkillInstallProviderDefinition[] 
     displayName: 'Augment',
     globalSegments: ['.augment', 'skills'],
     workspaceSegments: ['.augment', 'skills']
+  },
+  // Why: Polytoken reads the canonical .agents/skills root at both scopes (its own
+  // ~/.config/polytoken/skills and .polytoken/skills need no placement from Orca).
+  {
+    id: 'polytoken',
+    displayName: 'Polytoken',
+    globalSegments: null,
+    workspaceSegments: null
   }
 ]
 

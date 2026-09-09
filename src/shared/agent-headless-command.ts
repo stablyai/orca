@@ -1,4 +1,5 @@
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
+import { isPolytokenHeadlessOneShotCommand } from './polytoken-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
 import type { TuiAgent } from './tui-agent'
@@ -12,6 +13,7 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   claude: isPrintModeHeadlessOneShotCommand,
   trae: isPrintModeHeadlessOneShotCommand,
   'prime-agent': isPrimeAgentHeadlessOneShotCommand,
+  polytoken: isPolytokenHeadlessOneShotCommand,
   ante: isAnteHeadlessOneShotCommand
 }
 

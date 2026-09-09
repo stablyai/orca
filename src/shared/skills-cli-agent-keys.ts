@@ -19,6 +19,8 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   codex: 'codex',
   autohand: 'autohand-code',
   opencode: 'opencode',
+  // Why: the skills CLI publishes no Polytoken key; the universal .agents/skills target covers it.
+  polytoken: null,
   'mimo-code': null,
   pi: 'pi',
   omp: null,

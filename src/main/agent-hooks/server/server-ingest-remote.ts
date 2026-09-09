@@ -16,7 +16,7 @@ import {
 import { launchTokenHash } from '../../../shared/agent-hook-spool'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { isValidPiProviderSessionOnly } from './server-status-identity'
+import { isValidProviderSessionOnly } from './server-status-identity'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestTerminal {
@@ -225,7 +225,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestT
     }
     if (
       envelope.providerSessionOnly === true &&
-      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
+      !isValidProviderSessionOnly(providerSession, normalizedPayload.agentType)
     ) {
       return
     }
