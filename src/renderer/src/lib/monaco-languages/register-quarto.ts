@@ -16,10 +16,16 @@ const markdownTokenizer = markdownLanguage.tokenizer as Record<
   Monaco.languages.IMonarchLanguageRule[]
 >
 
+// `$S2` is the opening fence carried in the cell state's name, substituted by
+// Monaco when the rule is resolved for that state. A string keeps that visible;
+// as a regex literal the `$` would read as an end anchor.
+const CLOSING_FENCE = '^\\s*$S2`*\\s*$'
+
 // Why: Quarto is Markdown plus a YAML header and executable cells, so the whole
-// Markdown grammar is reused and only the two Quarto-specific shapes are added
-// in front of it. Cell bodies reuse Markdown's own `codeblockgh` state, whose
-// `nextEmbedded: '@pop'` rule ends the embedded language at the closing fence.
+// Markdown grammar is reused and only the Quarto-specific shapes are added in
+// front of it. Cell bodies run through `quartoCell`/`quartoRawCell` rather than
+// Markdown's own code-block states, because a Quarto fence can be longer than
+// three backticks and those states close on exactly three.
 export const quartoMonarchLanguage: Monaco.languages.IMonarchLanguage = {
   ...markdownLanguage,
   tokenPostfix: '.qmd',
@@ -68,34 +74,23 @@ export const quartoMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       ...markdownTokenizer.root
     ],
     // Why not Markdown's own `codeblock`/`codeblockgh`: both close on exactly
-    // three backticks, so a ````-fenced cell never ends and the rest of the file
-    // is tokenized as code. The opening fence travels in the state name, and the
-    // `$1~$S2`*` guard closes the cell only on a fence at least as long as the
-    // one that opened it — what Quarto and CommonMark require.
+    // three backticks, so a ````-fenced cell never ended and the rest of the
+    // file was tokenized as code. The opening fence travels in the state name
+    // and `$S2` puts it back into the closing pattern, so a cell closes on a
+    // fence at least as long as the one that opened it — what Quarto and
+    // CommonMark require. Written as a pattern rather than a `cases` guard
+    // because Monaco decides where an embedded language ends by matching this
+    // regex alone (`_findLeavingNestedLanguageOffset` never runs guards): a
+    // shorter fence inside the cell has to miss the pattern itself, or the
+    // engine stops tokenizing at the very line a long fence exists to show.
     quartoCell: [
-      [
-        /^\s*(`{3,})\s*$/,
-        {
-          cases: {
-            '$1~$S2`*': { token: 'string', next: '@pop', nextEmbedded: '@pop' },
-            '@default': 'variable.source'
-          }
-        }
-      ],
+      [CLOSING_FENCE, { token: 'string', next: '@pop', nextEmbedded: '@pop' }],
       [/.*$/, 'variable.source']
     ],
     // The same fence bookkeeping for cells with no embedded language: escaped
     // ```{{python}} cells and plain ```` blocks.
     quartoRawCell: [
-      [
-        /^\s*(`{3,})\s*$/,
-        {
-          cases: {
-            '$1~$S2`*': { token: 'string', next: '@pop' },
-            '@default': 'variable.source'
-          }
-        }
-      ],
+      [CLOSING_FENCE, { token: 'string', next: '@pop' }],
       [/.*$/, 'variable.source']
     ]
   }

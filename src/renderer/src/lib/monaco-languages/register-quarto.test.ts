@@ -6,30 +6,40 @@ import {
   registerQuartoLanguage
 } from './register-quarto'
 
-type MonarchCases = { cases: Record<string, string | MonarchAction> }
 type MonarchAction = {
   token?: string
   next?: string
   nextEmbedded?: string
   switchTo?: string
 }
-type MonarchRule = [RegExp, string | MonarchAction | MonarchCases, string?] | { include: string }
+type MonarchRule = [string | RegExp, string | MonarchAction, string?] | { include: string }
 
-function isRuleEntry(rule: MonarchRule): rule is [RegExp, string | MonarchAction, string?] {
+function isRuleEntry(
+  rule: MonarchRule
+): rule is [string | RegExp, string | MonarchAction, string?] {
   return Array.isArray(rule)
 }
 
 const tokenizer = quartoMonarchLanguage.tokenizer as Record<string, MonarchRule[]>
 
+// Mirrors Monaco's `Rule.resolveRegex`: a rule written as a string is compiled
+// per state with `$S2` replaced by the state's own argument — for a cell state
+// that is the fence that opened it.
+function resolveRegex(pattern: string | RegExp, openingFence: string): RegExp {
+  return typeof pattern === 'string' ? new RegExp(pattern.replace('$S2', openingFence)) : pattern
+}
+
 function matchLine(
   state: string,
-  line: string
+  line: string,
+  openingFence = ''
 ): { token?: string; action: MonarchAction; captured?: string; captures: string[] } | undefined {
   for (const rule of tokenizer[state]) {
     if (!isRuleEntry(rule)) {
       continue
     }
-    const [regexp, action, nextStateShortcut] = rule
+    const [pattern, action, nextStateShortcut] = rule
+    const regexp = resolveRegex(pattern, openingFence)
     regexp.lastIndex = 0
     const match = regexp.exec(line)
     if (!match || match.index !== 0) {
@@ -45,20 +55,13 @@ function matchLine(
   return undefined
 }
 
-// Monarch resolves a `$1~<pattern>` guard by substituting the state's own
-// arguments into the pattern and testing it anchored, so `$1~$S2`*` in state
-// `quartoCell.\`\`\`` becomes /^```\`*$/. Reproducing that here keeps the
-// assertions on the guard that actually ships rather than on a copy of it.
-function closesCell(state: 'quartoCell' | 'quartoRawCell', openingFence: string, line: string) {
-  const [regexp, action] = tokenizer[state][0] as [RegExp, MonarchCases]
-  regexp.lastIndex = 0
-  const match = regexp.exec(line)
-  if (!match || match.index !== 0) {
-    return undefined
-  }
-  const [guard, guardedAction] = Object.entries(action.cases)[0]
-  const pattern = guard.slice(guard.indexOf('~') + 1).replace('$S2', openingFence)
-  return new RegExp(`^${pattern}$`).test(match[1]) ? (guardedAction as MonarchAction) : undefined
+function closesCell(
+  state: 'quartoCell' | 'quartoRawCell',
+  openingFence: string,
+  line: string
+): MonarchAction | undefined {
+  const matched = matchLine(state, line, openingFence)
+  return matched?.action.next === '@pop' ? matched.action : undefined
 }
 
 describe('registerQuartoLanguage', () => {
@@ -165,8 +168,23 @@ describe('registerQuartoLanguage', () => {
   it('keeps cell content out of the closing rule', () => {
     // Why: a fence with trailing content is not a closing fence in Quarto.
     expect(closesCell('quartoCell', '```', '``` still open')).toBeUndefined()
-    expect(matchLine('quartoCell', 'x <- 1')?.token).toBe('variable.source')
-    expect(matchLine('quartoRawCell', 'print(1)')?.token).toBe('variable.source')
+    expect(matchLine('quartoCell', 'x <- 1', '```')?.token).toBe('variable.source')
+    expect(matchLine('quartoRawCell', 'print(1)', '```')?.token).toBe('variable.source')
+  })
+
+  it('resolves the closing fence in the rule pattern, not a cases guard', () => {
+    // Why: Monaco decides where an embedded language ends by matching this rule's
+    // regex alone — `_findLeavingNestedLanguageOffset` never evaluates guards — so
+    // a ``` line inside a ````-fenced cell has to miss the pattern itself. With a
+    // guard the engine would stop tokenizing at the very line a long fence exists
+    // to show.
+    const [pattern, action] = tokenizer.quartoCell[0] as [string, MonarchAction]
+    expect(typeof pattern).toBe('string')
+    expect(pattern).toContain('$S2')
+    expect(action).toMatchObject({ next: '@pop', nextEmbedded: '@pop' })
+    expect(resolveRegex(pattern, '````').test('```')).toBe(false)
+    expect(resolveRegex(pattern, '````').test('````')).toBe(true)
+    expect(resolveRegex(pattern, '```').test('```')).toBe(true)
   })
 
   it('routes long plain fences through the fence-aware states', () => {
