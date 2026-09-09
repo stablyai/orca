@@ -16,6 +16,7 @@ import {
   resolveOfficeDocumentTarget
 } from './office-document-path'
 import { NATIVE_OFFICECLI_LANE } from './officecli-lane'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { isValidOfficeRelativePath, joinOfficeRelativePath } from '../../shared/office-preview-rpc'
 
 let root = ''
@@ -46,14 +47,19 @@ describe('office workspace boundary', () => {
     ).rejects.toBeInstanceOf(OfficeDocumentOutsideWorkspaceError)
   })
 
-  it('refuses a symlink inside the workspace that points outside it', async () => {
-    // The case a lexical join cannot catch, and the reason the containment test runs *after*
-    // canonicalisation rather than on the joined string.
-    await symlink(join(outside, 'secret.docx'), join(root, 'docs', 'link.docx'))
-    await expect(
-      resolveOfficeDocumentTarget(root, 'docs/link.docx', NATIVE_OFFICECLI_LANE)
-    ).rejects.toBeInstanceOf(OfficeDocumentOutsideWorkspaceError)
-  })
+  // Creating a symlink needs elevation or Developer Mode on Windows, as `worktree-trash.test.ts`
+  // already accounts for; the containment logic under test is platform-independent.
+  it.skipIf(process.platform === 'win32')(
+    'refuses a symlink inside the workspace that points outside it',
+    async () => {
+      // The case a lexical join cannot catch, and the reason the containment test runs *after*
+      // canonicalisation rather than on the joined string.
+      await symlink(join(outside, 'secret.docx'), join(root, 'docs', 'link.docx'))
+      await expect(
+        resolveOfficeDocumentTarget(root, 'docs/link.docx', NATIVE_OFFICECLI_LANE)
+      ).rejects.toBeInstanceOf(OfficeDocumentOutsideWorkspaceError)
+    }
+  )
 
   it('refuses an absolute path smuggled in as the relative half', async () => {
     for (const smuggled of [
@@ -70,6 +76,19 @@ describe('office workspace boundary', () => {
     await expect(
       resolveOfficeDocumentTarget(root, 'docs/absent.docx', NATIVE_OFFICECLI_LANE)
     ).rejects.toBeInstanceOf(OfficeDocumentPathError)
+  })
+
+  it('collapses traversal so a caller that cannot canonicalise can still test containment', () => {
+    // `isPathInsideOrEqual` folds separators and case but does not resolve `..`, so without the
+    // collapse `/w/repo/../../elsewhere/x.docx` reads as inside `/w/repo`. This is what the stop
+    // path relies on once the document is deleted and `realpath` can no longer answer.
+    const escaped = joinOfficeRelativePath('/w/repo', '../../elsewhere/x.docx')
+    expect(escaped).toBe('/elsewhere/x.docx')
+    expect(isPathInsideOrEqual('/w/repo', escaped as string)).toBe(false)
+
+    const inside = joinOfficeRelativePath('/w/repo', 'docs/../docs/a.docx')
+    expect(inside).toBe('/w/repo/docs/a.docx')
+    expect(isPathInsideOrEqual('/w/repo', inside as string)).toBe(true)
   })
 
   it('joins without inventing a separator the host cannot read', () => {

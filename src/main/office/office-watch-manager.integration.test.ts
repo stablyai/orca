@@ -79,6 +79,26 @@ describe('office watch lifecycle', () => {
     expect(await portAnswers(started.port)).toBe(false)
   }, 120_000)
 
+  it('stops a watch whose start is still in flight', async (ctx) => {
+    // The reader clicking Live and closing the tab inside the readiness budget. Before the stop
+    // path awaited `starting`, it found no session, returned ok, and the child registered a moment
+    // later held its process and port for the rest of the run.
+    if (!installed) {
+      ctx.skip()
+      return
+    }
+    const startPromise = startOfficeWatch(document)
+    const stopped = await stopOfficeWatch(document)
+    expect(stopped).toEqual({ ok: true })
+    const started = await startPromise
+    if (started.ok) {
+      for (let attempt = 0; attempt < 20 && (await portAnswers(started.port)); attempt += 1) {
+        await new Promise((done) => setTimeout(done, 100))
+      }
+      expect(await portAnswers(started.port)).toBe(false)
+    }
+  }, 120_000)
+
   it('refuses a format it cannot watch before spawning anything', async () => {
     await expect(startOfficeWatch(officeDocumentRef(directory, 'notes.doc'))).resolves.toEqual({
       ok: false,

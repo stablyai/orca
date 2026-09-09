@@ -6,6 +6,8 @@
  * Params are deliberately minimal — a document path, and for skills a list of pairs. Everything
  * else (which lane, which temp directory, which port) is the host's business, decided on the host.
  */
+
+import { posix, win32 } from 'node:path'
 export const OFFICE_PROBE_METHOD = 'office.probe' as const
 export const OFFICE_RENDER_METHOD = 'office.render' as const
 export const OFFICE_WATCH_START_METHOD = 'office.watchStart' as const
@@ -90,19 +92,26 @@ export function isValidOfficeRelativePath(value: unknown): value is string {
 }
 
 /**
- * Joins a workspace root and a relative path for the host to canonicalise.
+ * Joins a workspace root and a relative path, collapsing `.` and `..` in the result.
  *
- * Deliberately lexical and permissive about `..`: refusing traversal here would be a check the
- * host cannot trust anyway, since a symlink inside the root defeats it. The real boundary is the
- * post-canonicalisation containment test; this only has to produce a path to canonicalise.
+ * The collapse is what lets a caller that cannot canonicalise — the stop path, once the document
+ * has been deleted — still test containment lexically. `isPathInsideOrEqual` folds separators and
+ * case but does **not** resolve `..`, so `/w/repo/../../elsewhere/x.docx` would otherwise read as
+ * inside `/w/repo`. Normalising here keeps that trap in one place rather than at each call site.
+ *
+ * Still not a substitute for canonicalisation: a symlink inside the root defeats any lexical
+ * check, which is why `resolveOfficeDocumentTarget` re-tests containment after `realpath`.
  */
 export function joinOfficeRelativePath(workspaceRoot: string, relativePath: string): string | null {
   if (!isValidOfficeDocumentPath(workspaceRoot) || !isValidOfficeRelativePath(relativePath)) {
     return null
   }
-  const separator = /^[a-zA-Z]:|^\\\\/.test(workspaceRoot) ? '\\' : '/'
+  const isWindowsShaped = /^[a-zA-Z]:/.test(workspaceRoot) || workspaceRoot.startsWith('\\\\')
+  const flavor = isWindowsShaped ? win32 : posix
   const trimmedRoot = workspaceRoot.replace(/[/\\]+$/, '')
-  return `${trimmedRoot}${separator}${relativePath.replace(/^[/\\]+/, '')}`
+  const separator = isWindowsShaped ? '\\' : '/'
+  const suffix = relativePath.replace(/^[/\\]+/, '')
+  return flavor.normalize(`${trimmedRoot}${separator}${suffix}`)
 }
 
 /** Shape-checked only: the host passes it as one argv element and never into a shell string. */
