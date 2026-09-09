@@ -6,7 +6,18 @@ type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
 }
 
+type EditorToggleTarget = MarkdownPreviewTarget & {
+  // Why: only markdown edit tabs have a dedicated read-only preview tab to
+  // route to, so this only affects the markdown edit toggle set.
+  richModeFallsBackToSource?: boolean
+}
+
 const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const MARKDOWN_EDIT_TOGGLE_MODES_WITH_PREVIEW_FALLBACK = [
+  'source',
+  'rich',
+  'preview'
+] as const satisfies readonly EditorToggleValue[]
 const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
@@ -21,7 +32,7 @@ const NO_VIEW_MODES = [] as const satisfies readonly MarkdownViewMode[]
 // Edit | Changes.
 const CODE_EDIT_TOGGLE_MODES = ['edit', 'changes'] as const satisfies readonly EditorToggleValue[]
 
-export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly EditorToggleValue[] {
+export function getEditorToggleModes(target: EditorToggleTarget): readonly EditorToggleValue[] {
   if (target.mode !== 'edit') {
     return getMarkdownViewModes(target)
   }
@@ -29,6 +40,12 @@ export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly Ed
     // Why: notebook source mode is raw JSON and Changes would diff that JSON,
     // which is noisy and currently invalid for restored external notebooks.
     return NOTEBOOK_VIEW_MODES
+  }
+  // Why: when rich mode would fall back to Source for this content, the
+  // toggle offers the dedicated read-only preview tab instead of leaving
+  // Preview undiscoverable behind a menu item and a shortcut.
+  if (target.language === 'markdown' && target.richModeFallsBackToSource) {
+    return [...MARKDOWN_EDIT_TOGGLE_MODES_WITH_PREVIEW_FALLBACK, 'changes']
   }
   const languageModes = getMarkdownViewModes(target)
   if (languageModes.length > 0) {

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import type { FileContent } from './editor-panel-content-types'
@@ -97,12 +97,14 @@ function renderEditPath({
   content,
   language = 'markdown',
   viewMode = 'rich',
-  mode = 'edit'
+  mode = 'edit',
+  onOpenMarkdownPreview
 }: {
   content: string
   language?: 'markdown' | 'typescript'
   viewMode?: 'source' | 'rich' | 'preview'
   mode?: 'edit' | 'markdown-preview'
+  onOpenMarkdownPreview?: () => void
 }) {
   const activeFile = openFile(language, mode)
   const fileContents = {
@@ -145,6 +147,7 @@ function renderEditPath({
       handleSave={vi.fn()}
       handleSaveForFile={vi.fn()}
       reloadContent={vi.fn()}
+      onOpenMarkdownPreview={onOpenMarkdownPreview}
     />
   )
 
@@ -212,12 +215,6 @@ describe('inline Markdown render classification', () => {
 
   it.each([
     {
-      name: 'source Markdown',
-      args: { content: '# Source', viewMode: 'source' as const },
-      expectedView: 'source',
-      canExport: false
-    },
-    {
       name: 'Markdown preview',
       args: { content: '# Preview', mode: 'markdown-preview' as const },
       expectedView: 'preview',
@@ -236,6 +233,15 @@ describe('inline Markdown render classification', () => {
     expect(result.model.canExportMarkdownToPdf).toBe(canExport)
     expect(classifiers.getUnsupportedMessage).not.toHaveBeenCalled()
     expect(classifiers.exceedsSizeLimit).not.toHaveBeenCalled()
+  })
+
+  it('scans source Markdown edit tabs too, so the toggle knows whether rich mode would fall back', () => {
+    const result = renderEditPath({ content: '# Source', viewMode: 'source' as const })
+
+    expect(result.view.container.innerHTML).toContain('data-editor-view="source"')
+    expect(result.model.canExportMarkdownToPdf).toBe(false)
+    expect(classifiers.getUnsupportedMessage).toHaveBeenCalledTimes(1)
+    expect(classifiers.exceedsSizeLimit).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -300,5 +306,36 @@ describe('inline Markdown render classification', () => {
     expect(oversized.model.canExportMarkdownToPdf).toBe(false)
     expect(oversized.view.getByText(/File is larger than the .* rich editing limit/)).toBeTruthy()
     expect(oversized.view.getByText('Open anyway')).toBeTruthy()
+  })
+
+  it('offers the Preview toggle once rich mode falls back to source for this content', () => {
+    const fallback = renderEditPath({ content: '[reference]: https://example.com' })
+    expect(fallback.model.availableEditorToggleModes).toEqual([
+      'source',
+      'rich',
+      'preview',
+      'changes'
+    ])
+
+    const normal = renderEditPath({ content: '# Ordinary content' })
+    expect(normal.model.availableEditorToggleModes).toEqual(['source', 'rich', 'changes'])
+  })
+
+  it('opens the preview tab from the fallback banner action', () => {
+    const onOpenMarkdownPreview = vi.fn()
+    const { view } = renderEditPath({
+      content: '[reference]: https://example.com',
+      onOpenMarkdownPreview
+    })
+
+    fireEvent.click(view.getByText('Open preview'))
+
+    expect(onOpenMarkdownPreview).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the fallback banner preview action when no handler is provided', () => {
+    const { view } = renderEditPath({ content: '[reference]: https://example.com' })
+
+    expect(view.queryByText('Open preview')).toBeNull()
   })
 })

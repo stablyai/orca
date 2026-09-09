@@ -61,7 +61,8 @@ export function EditorContent({
   handleDirtyStateHint,
   handleSave,
   handleSaveForFile,
-  reloadContent
+  reloadContent,
+  onOpenMarkdownPreview
 }: {
   activeFile: OpenFile
   viewStateScopeId: string
@@ -90,6 +91,7 @@ export function EditorContent({
   handleSave: (content: string) => Promise<boolean>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
   reloadContent: (file: OpenFile) => void
+  onOpenMarkdownPreview?: () => void
 }): React.JSX.Element {
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
@@ -252,6 +254,7 @@ export function EditorContent({
         markdownDocuments={markdownDocuments}
         getConflictNavigation={getConflictNavigation}
         getMarkdownSourceLineOffset={getMarkdownSourceLineOffset}
+        onOpenMarkdownPreview={onOpenMarkdownPreview}
         handleContentChange={handleContentChange}
         handleDirtyStateHint={handleDirtyStateHint}
         handleSave={handleSave}

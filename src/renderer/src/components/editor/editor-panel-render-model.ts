@@ -105,26 +105,12 @@ export function getEditorPanelRenderModel({
     markdownViewModes.includes(storedMarkdownViewMode)
       ? storedMarkdownViewMode
       : defaultMarkdownViewMode
-  const editorToggleModes = getEditorToggleModes({
-    language: viewerLanguage,
-    mode: activeFile.mode,
-    diffSource: activeFile.diffSource
-  })
-  const isBinaryEditSurface =
-    activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
-  const availableEditorToggleModes =
-    isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
-      ? editorToggleModes.filter((mode) => mode !== 'changes')
-      : editorToggleModes
-  const effectiveToggleValue: EditorToggleValue = isChangesMode
-    ? 'changes'
-    : hasViewModeToggle
-      ? mdViewMode
-      : 'edit'
   const inlineMarkdownContent =
     activeFile.mode === 'edit'
       ? (editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null)
       : null
+  const isBinaryEditSurface =
+    activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
   const shouldShowMarkdownExportAction =
     viewerLanguage === 'markdown' &&
     (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview')
@@ -139,16 +125,38 @@ export function getEditorPanelRenderModel({
     !inlineFileContent.loadError &&
     activeFile.conflict?.kind !== 'conflict-placeholder' &&
     activeFile.conflict?.conflictStatus !== 'unresolved'
+  // Why: classified once per content change (cached) so both the toggle's
+  // fallback-preview affordance and the inline banner below agree on whether
+  // rich mode would fall back, without duplicating the eligibility scan. Gated
+  // on the same guards as the inline renderer so unrenderable content (binary,
+  // load error, unresolved conflict, Changes mode) is never scanned.
+  const richModeEligibility = canRenderInlineMarkdown
+    ? getCachedMarkdownRichModeEligibility({
+        content: inlineMarkdownContent,
+        sizeOverridden: markdownRichModeSizeOverridden
+      })
+    : null
+  const richModeUnsupportedMessage = richModeEligibility?.unsupportedMessage ?? null
+  const richModeFallsBackToSource =
+    richModeEligibility !== null &&
+    (richModeEligibility.exceedsSizeLimit || richModeUnsupportedMessage !== null)
+  const editorToggleModes = getEditorToggleModes({
+    language: viewerLanguage,
+    mode: activeFile.mode,
+    diffSource: activeFile.diffSource,
+    richModeFallsBackToSource
+  })
+  const availableEditorToggleModes =
+    isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
+      ? editorToggleModes.filter((mode) => mode !== 'changes')
+      : editorToggleModes
+  const effectiveToggleValue: EditorToggleValue = isChangesMode
+    ? 'changes'
+    : hasViewModeToggle
+      ? mdViewMode
+      : 'edit'
   let inlineMarkdownRenderState: MarkdownRenderState | null = null
   if (canRenderInlineMarkdown) {
-    const shouldClassifyRichMode = mdViewMode === 'rich'
-    const richModeEligibility = shouldClassifyRichMode
-      ? getCachedMarkdownRichModeEligibility({
-          content: inlineMarkdownContent,
-          sizeOverridden: markdownRichModeSizeOverridden
-        })
-      : null
-    const richModeUnsupportedMessage = richModeEligibility?.unsupportedMessage ?? null
     inlineMarkdownRenderState = {
       renderMode: getMarkdownRenderMode({
         exceedsRichModeSizeLimit: richModeEligibility?.exceedsSizeLimit ?? false,

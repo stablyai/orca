@@ -251,21 +251,6 @@ function EditorPanelInner({
       setMarkdownViewMode(activeFile.filePath, preferredMarkdownViewMode)
     }
   }
-  const handleEditorToggleChange = (next: EditorToggleValue): void => {
-    const fileId = activeFile.id
-    if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
-      handleOpenDiffTargetFile('rich')
-      return
-    }
-    if (next === 'changes') {
-      setEditorViewMode(fileId, 'changes')
-      return
-    }
-    setEditorViewMode(fileId, 'edit')
-    if (next !== 'edit') {
-      setMarkdownViewMode(fileId, next)
-    }
-  }
   const handleOpenMarkdownPreview = (): void => {
     openMarkdownPreview(
       {
@@ -277,6 +262,29 @@ function EditorPanelInner({
       },
       { sourceFileId: activeFile.id }
     )
+  }
+  const handleEditorToggleChange = (next: EditorToggleValue): void => {
+    const fileId = activeFile.id
+    if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
+      handleOpenDiffTargetFile('rich')
+      return
+    }
+    if (next === 'changes') {
+      setEditorViewMode(fileId, 'changes')
+      return
+    }
+    // Why: the toggle only offers 'preview' as a fallback affordance (rich mode
+    // couldn't render this content); it opens the existing dedicated preview
+    // tab rather than a real edit-tab render mode, since 'edit' tabs never
+    // render read-only preview inline (see getMarkdownRenderMode).
+    if (next === 'preview') {
+      handleOpenMarkdownPreview()
+      return
+    }
+    setEditorViewMode(fileId, 'edit')
+    if (next !== 'edit') {
+      setMarkdownViewMode(fileId, next)
+    }
   }
   const handleOpenContainingFolder = (): void => {
     // Why: virtual editor tabs use synthetic ids instead of on-disk paths.
