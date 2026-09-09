@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, Server, ServerOff, Trash2 } from 'lucide-react'
+import { AlertTriangle, Check, Loader2, Server, ServerOff, Trash2 } from 'lucide-react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
@@ -34,6 +34,7 @@ type RuntimeServerRowProps = {
   onOpenUpdate: () => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
+  onActivate: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
 }
 
@@ -51,6 +52,7 @@ export function RuntimeServerRow({
   onOpenUpdate,
   onDisconnect,
   onConnect,
+  onActivate,
   onRemove
 }: RuntimeServerRowProps): React.JSX.Element {
   const runtimeStatusEntry = useAppStore((state) =>
@@ -83,11 +85,21 @@ export function RuntimeServerRow({
   const actionBusy = connecting || switching || disconnecting || removing
 
   return (
-    <div data-settings-section={environment.id} className="flex items-center gap-3 px-4 py-3">
+    <div
+      data-settings-section={environment.id}
+      data-current={isActive || undefined}
+      className={cn('flex items-center gap-3 px-4 py-3', isActive && 'bg-accent')}
+    >
       <Server className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <div className="truncate text-sm font-medium">{environment.name}</div>
+          {isActive ? (
+            <span className="flex shrink-0 items-center gap-1 rounded-full border border-border px-1.5 py-px text-[11px] text-muted-foreground">
+              <Check className="size-3" aria-hidden />
+              {translate('auto.components.settings.RuntimeEnvironmentsPane.activeBadge', 'Active')}
+            </span>
+          ) : null}
           <span
             className={cn(
               'size-2 shrink-0 rounded-full',
@@ -199,6 +211,19 @@ export function RuntimeServerRow({
             {translate('auto.components.settings.RuntimeEnvironmentsPane.connect', 'Connect')}
           </Button>
         )}
+        {!isActive ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="gap-1.5"
+            onClick={() => onActivate(environment)}
+            disabled={actionBusy}
+          >
+            {switching ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+            {translate('auto.components.settings.RuntimeEnvironmentsPane.activate', 'Activate')}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"

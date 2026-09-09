@@ -35,6 +35,7 @@ type RuntimeServersConnectSectionProps = {
   onOpenUpdateDialog: () => void
   refreshRemoteServerUpdates: (options?: UpdateCheckOptions) => Promise<void>
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
+  onActivate: (environment: PublicKnownRuntimeEnvironment) => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
 }
@@ -64,6 +65,7 @@ export function RuntimeServersConnectSection({
   onOpenUpdateDialog,
   refreshRemoteServerUpdates,
   onConnect,
+  onActivate,
   onDisconnect,
   onRemove
 }: RuntimeServersConnectSectionProps): React.JSX.Element {
@@ -175,6 +177,7 @@ export function RuntimeServersConnectSection({
                 isBusy={isBusy}
                 onOpenUpdate={onOpenUpdateDialog}
                 onConnect={onConnect}
+                onActivate={onActivate}
                 onDisconnect={onDisconnect}
                 onRemove={onRemove}
               />

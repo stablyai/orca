@@ -1,5 +1,6 @@
 export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:list',
+  'runtimeEnvironments:setActive',
   'runtimeEnvironments:addFromPairingCode',
   'runtimeEnvironments:verifyAndAddFromPairingCode',
   'runtimeEnvironments:resolve',

@@ -68,27 +68,28 @@ export async function installApi(userAgent?: string): Promise<{
 }
 
 export function writeStoredRuntimeEnvironment(storage: Storage, environmentId = 'web-env-1'): void {
+  const environment = {
+    id: environmentId,
+    name: 'Test runtime',
+    createdAt: 1,
+    updatedAt: 1,
+    lastUsedAt: null,
+    runtimeId: null,
+    preferredEndpointId: `ws-${environmentId}`,
+    endpoints: [
+      {
+        id: `ws-${environmentId}`,
+        kind: 'websocket' as const,
+        label: 'WebSocket',
+        endpoint: 'ws://127.0.0.1:1234',
+        deviceToken: 'token',
+        publicKeyB64: 'public-key'
+      }
+    ]
+  }
   storage.setItem(
-    'orca.web.runtimeEnvironment.v1',
-    JSON.stringify({
-      id: environmentId,
-      name: 'Test runtime',
-      createdAt: 1,
-      updatedAt: 1,
-      lastUsedAt: null,
-      runtimeId: null,
-      preferredEndpointId: `ws-${environmentId}`,
-      endpoints: [
-        {
-          id: `ws-${environmentId}`,
-          kind: 'websocket',
-          label: 'WebSocket',
-          endpoint: 'ws://127.0.0.1:1234',
-          deviceToken: 'token',
-          publicKeyB64: 'public-key'
-        }
-      ]
-    })
+    'orca.web.runtimeEnvironments.v2',
+    JSON.stringify({ environments: [environment], activeEnvironmentId: environmentId })
   )
 }
 

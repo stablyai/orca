@@ -133,6 +133,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
     expect(handleMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
+      'runtimeEnvironments:setActive',
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
@@ -157,6 +158,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
 
     expect(removeHandlerMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
+      'runtimeEnvironments:setActive',
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
       'runtimeEnvironments:resolve',
@@ -216,9 +218,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     expect(JSON.stringify(added)).not.toContain('device-token')
     expect(JSON.stringify(added)).not.toContain('publicKeyB64')
-    const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
-    expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
-    expect(JSON.stringify(await list(null, undefined))).not.toContain('device-token')
+    const list = handler<undefined, { environments: { id: string; name: string }[] }>(
+      'runtimeEnvironments:list'
+    )
+    const listed = await list(null, undefined)
+    expect(listed.environments).toMatchObject([{ id: added.environment.id, name: 'desk' }])
+    expect(JSON.stringify(listed)).not.toContain('device-token')
 
     const resolve = handler<{ selector: string }, { id: string; name: string }>(
       'runtimeEnvironments:resolve'
@@ -239,7 +244,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(JSON.stringify(removed)).not.toContain('device-token')
-    expect(await list(null, undefined)).toEqual([])
+    expect((await list(null, undefined)).environments).toEqual([])
   })
 
   it('blocks loopback before verification unless an SSH tunnel is declared', async () => {
@@ -457,8 +462,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith('desk')
 
-    const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
-    expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
+    const list = handler<undefined, { environments: { id: string; name: string }[] }>(
+      'runtimeEnvironments:list'
+    )
+    expect((await list(null, undefined)).environments).toMatchObject([
+      { id: added.environment.id, name: 'desk' }
+    ])
 
     const getStatus = handler<{ selector: string }, { ok: boolean; error?: { code: string } }>(
       'runtimeEnvironments:getStatus'
@@ -506,11 +515,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       source: 'ephemeral-vm'
     })
 
-    const list = handler<undefined, { id: string; name: string; source?: string }[]>(
-      'runtimeEnvironments:list'
-    )
+    const list = handler<
+      undefined,
+      { environments: { id: string; name: string; source?: string }[] }
+    >('runtimeEnvironments:list')
 
-    expect(await list(null, undefined)).toMatchObject([
+    expect((await list(null, undefined)).environments).toMatchObject([
       { id: added.id, name: 'orca VM abc12345', source: 'ephemeral-vm' }
     ])
   })

@@ -60,9 +60,17 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   getUserDataPath,
   invalidateTransport
 }: ConnectivityHandlerOptions): void {
-  ipcMain.handle('runtimeEnvironments:list', () =>
-    listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
-  )
+  ipcMain.handle('runtimeEnvironments:list', () => ({
+    environments: listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment),
+    // single source of truth: the persisted Active Server preference in settings
+    activeEnvironmentId: store.getSettings().activeRuntimeEnvironmentId ?? null
+  }))
+  ipcMain.handle('runtimeEnvironments:setActive', (_event, args: { id: string }) => {
+    // resolve validates the selector and throws on unknown environments
+    const environment = resolveEnvironment(getUserDataPath(), args.id)
+    store.updateSettings({ activeRuntimeEnvironmentId: environment.id }, { notifyListeners: true })
+    return { environment: redactRuntimeEnvironment(environment) }
+  })
   ipcMain.handle(
     'runtimeEnvironments:addFromPairingCode',
     (
