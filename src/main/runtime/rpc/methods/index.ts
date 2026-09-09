@@ -46,6 +46,7 @@ import { AGENT_SESSION_METHODS } from './agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { ARTIFACT_METHODS } from './artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
+import { createOfficeMethods } from './office'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -68,6 +69,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...BROWSER_CLIENT_HOST_METHODS,
   ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
   ...BROWSER_NETWORK_TUNNEL_METHODS,
+  ...createOfficeMethods(),
   ...ORCHESTRATION_METHODS,
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,

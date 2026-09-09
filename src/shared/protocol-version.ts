@@ -94,6 +94,13 @@ export const BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY =
 export const BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY =
   'browser.clientHost.fileChannel.v1' as const
 export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.v1' as const
+// Why: the paired-runtime `office.*` methods are new, and an older host answers them with
+// method_not_found — a code the preview cannot tell from a real refusal. Without negotiation the
+// reader gets a broken preview instead of "update the paired machine". The SSH relay needs no
+// equivalent: it is bundle-hash-locked to its client, so the two are always the same build.
+export const OFFICE_PREVIEW_RUNTIME_CAPABILITY = 'office.preview.v1' as const
+export const OFFICE_PREVIEW_UPDATE_REQUIRED_MESSAGE =
+  'Office document previews require a newer Orca on the paired machine. Update it and try again.'
 export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
   'network.browserTunnel.executionHosts.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
@@ -237,6 +244,7 @@ export const RUNTIME_CAPABILITIES = [
   BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
+  OFFICE_PREVIEW_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1',
   'workspace-ports.v1',

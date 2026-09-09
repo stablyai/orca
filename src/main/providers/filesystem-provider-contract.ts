@@ -4,6 +4,8 @@ import type {
   DocPreviewFileAccessResult
 } from '../../shared/doc-preview-file-access'
 import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
+import type { OfficeMethodResult } from '../../shared/office-preview-contracts'
+import type { OfficeRpcMethod } from '../../shared/office-preview-rpc'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 export type FileStat = {
@@ -53,6 +55,13 @@ export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
   readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>
+  /** Office preview work on the host that owns the document. Optional for the same reason
+   *  `readDocPreviewFile` is: it is answered by the relay, and a local provider has no relay.
+   *  Never a substitute channel — a host without it is an error, not permission to render here. */
+  officeRequest?(
+    method: OfficeRpcMethod,
+    params: Record<string, unknown> | undefined
+  ): Promise<OfficeMethodResult>
   /** Positional read. Optional because an older remote host cannot serve one.
    *  Strict by design: it throws `FileRangeReadUnsupportedError` rather than
    *  silently degrading, so a caller cannot accidentally pay a whole-file

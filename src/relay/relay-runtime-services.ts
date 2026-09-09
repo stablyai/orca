@@ -10,6 +10,7 @@ import { GitResponseStreamRegistry } from './git-response-stream'
 import { PreflightHandler } from './preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
+import { OfficeHandler } from './office-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { AiVaultHandler } from './ai-vault-handler'
@@ -28,6 +29,7 @@ export class RelayRuntimeServices {
   readonly fsHandler: FsHandler
   readonly gitHandler: GitHandler
   readonly skillInstallHandler: SkillInstallHandler
+  private readonly officeHandler: OfficeHandler
   private readonly aiVaultService: ReturnType<typeof createRelayAiVaultService> | null
   private readonly registeredHandlers: readonly unknown[]
 
@@ -72,6 +74,7 @@ export class RelayRuntimeServices {
     this.skillInstallHandler = new SkillInstallHandler(dispatcher)
     const externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)
     const portScanHandler = new PortScanHandler(dispatcher)
+    this.officeHandler = new OfficeHandler(dispatcher)
     const agentExecHandler = new AgentExecHandler(dispatcher)
     const workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
     const relayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
@@ -82,6 +85,7 @@ export class RelayRuntimeServices {
       this.skillInstallHandler,
       externalAutomationsHandler,
       portScanHandler,
+      this.officeHandler,
       agentExecHandler,
       workspaceSessionHandler,
       new AiVaultHandler(dispatcher, {
@@ -99,6 +103,11 @@ export class RelayRuntimeServices {
   }
 
   async disposeOwnedProcesses(): Promise<void> {
+    await this.officeHandler.shutdown().catch((error) => {
+      relayLogLine(
+        `[relay] Office watch teardown failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    })
     await this.skillInstallHandler.dispose().catch((error) => {
       relayLogLine(
         `[relay] Skill upload cleanup failed: ${error instanceof Error ? error.message : String(error)}`
