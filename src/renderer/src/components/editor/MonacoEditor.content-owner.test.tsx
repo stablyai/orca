@@ -16,6 +16,7 @@ vi.mock('@/store', () => ({
     selector({
       settings: { theme: 'dark', terminalFontSize: 13, terminalFontFamily: 'monospace' },
       editorFontZoomLevel: 0,
+      editorTextDirectionByFile: {},
       setPendingEditorReveal: vi.fn(),
       setEditorCursorLine: vi.fn(),
       addDiffComment: vi.fn(),

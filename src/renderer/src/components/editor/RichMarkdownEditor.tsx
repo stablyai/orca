@@ -32,6 +32,7 @@ import {
   getSelectedHtmlSuperscriptLinkStatus
 } from './rich-markdown-selected-link-actions'
 import type { RichMarkdownEditorProps } from './rich-markdown-editor-props'
+import { resolveEditorTextDirection } from '../../../../shared/editor-text-direction'
 
 export default function RichMarkdownEditor({
   fileId,
@@ -59,6 +60,11 @@ export default function RichMarkdownEditor({
   const settings = useAppStore((s) => s.settings)
   const richMarkdownSpellcheckEnabled = settings?.richMarkdownSpellcheckEnabled ?? true
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const textDirectionOverride = useAppStore((s) => s.editorTextDirectionByFile[fileId])
+  const resolvedTextDirection = resolveEditorTextDirection(
+    settings?.editorTextDirection,
+    textDirectionOverride
+  )
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
@@ -351,6 +357,7 @@ export default function RichMarkdownEditor({
   return (
     <RichMarkdownEditorSurface
       editor={editor}
+      textDirection={resolvedTextDirection}
       editorFontZoomLevel={editorFontZoomLevel}
       rootElement={rootRef.current}
       rootRef={setRootElement}

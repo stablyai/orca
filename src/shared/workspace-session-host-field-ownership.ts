@@ -46,6 +46,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   remoteSessionIdsByTabId: 'tabKeyed',
   browserPagesByWorkspace: 'browserWorkspaceKeyed',
   markdownFrontmatterVisible: 'fileKeyed',
+  editorTextDirectionByFile: 'fileKeyed',
   sleepingAgentSessionsByPaneKey: 'sleepingAgentKeyed',
   terminalPtyIncarnationsByPaneKey: 'paneKeyed',
   // Why: this host-issued fence must never collide while unified renderer state merges equal repo ids across hosts.

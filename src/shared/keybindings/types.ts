@@ -88,6 +88,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
+  | 'editor.toggleTextDirection'
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'
