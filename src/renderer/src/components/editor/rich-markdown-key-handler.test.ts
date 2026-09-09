@@ -32,7 +32,9 @@ const TABLE_MARKDOWN = `| A | B |
 function createTableEditor(): Editor {
   return new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
+    extensions: createRichMarkdownExtensions({
+      codec: createRichMarkdownEditorCodec()
+    }),
     content: TABLE_MARKDOWN,
     contentType: 'markdown'
   })
@@ -152,7 +154,11 @@ describe('rich markdown key handler', () => {
 
     try {
       const ctx = createContext(editor, false)
-      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
+      const event = keyEvent('a', {
+        metaKey: true,
+        shiftKey: true,
+        code: 'KeyA'
+      })
 
       expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
       expect(event.preventDefault).toHaveBeenCalled()
@@ -168,7 +174,11 @@ describe('rich markdown key handler', () => {
     try {
       const ctx = createContext(editor, false)
       ctx.openAnnotationPopoverRef.current = vi.fn(() => false)
-      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
+      const event = keyEvent('a', {
+        metaKey: true,
+        shiftKey: true,
+        code: 'KeyA'
+      })
 
       expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
       expect(event.preventDefault).not.toHaveBeenCalled()
@@ -183,7 +193,12 @@ describe('rich markdown key handler', () => {
 
     try {
       const ctx = createContext(editor, false)
-      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA', repeat: true })
+      const event = keyEvent('a', {
+        metaKey: true,
+        shiftKey: true,
+        code: 'KeyA',
+        repeat: true
+      })
 
       // Why: leave the repeat unconsumed here; open drafts are consumed by the
       // mounted composer guard (product B) instead of this editor key path.
@@ -204,7 +219,11 @@ describe('rich markdown key handler', () => {
       // (which reads the selection), so the handler now only delegates the open
       // with requireLiveSelection and consumes the chord when it succeeds.
       ctx.openAnnotationPopoverRef.current = vi.fn(() => true)
-      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
+      const event = keyEvent('a', {
+        metaKey: true,
+        shiftKey: true,
+        code: 'KeyA'
+      })
 
       expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
       expect(event.preventDefault).toHaveBeenCalled()
@@ -257,16 +276,30 @@ describe('rich markdown key handler', () => {
           content: [
             {
               type: 'listItem',
-              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 1' }] }]
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: 'Item 1' }]
+                }
+              ]
             },
             {
               type: 'listItem',
-              content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Item 2' }] }]
+              content: [
+                {
+                  type: 'paragraph',
+                  content: [{ type: 'text', text: 'Item 2' }]
+                }
+              ]
             },
             { type: 'listItem', content: [{ type: 'paragraph' }] }
           ]
         },
-        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Next section' }] }
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'Next section' }]
+        }
       ]
     })
 
@@ -355,6 +388,147 @@ describe('rich markdown key handler', () => {
     }
   })
 
+  it('exits heading style on Enter at the end of a heading', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'Section' }]
+        }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [{ type: 'heading', attrs: { level: 2 } }, { type: 'paragraph' }]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('splits the trailing text into a paragraph on Enter in the middle of a heading', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'SectionTwo' }]
+        }
+      ]
+    })
+
+    try {
+      // Position after "Section", before "Two".
+      editor.commands.setTextSelection(1 + 'Section'.length)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [
+          {
+            type: 'heading',
+            attrs: { level: 2 },
+            content: [{ type: 'text', text: 'Section' }]
+          },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Two' }] }
+        ]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('inserts an empty paragraph above and keeps the heading on Enter at its start', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'Section' }]
+        }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(1)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(editor.state.selection.$from.parent.type.name).toBe('heading')
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [
+          { type: 'paragraph' },
+          {
+            type: 'heading',
+            attrs: { level: 2 },
+            content: [{ type: 'text', text: 'Section' }]
+          }
+        ]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('does not intercept Shift+Enter inside a heading', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        {
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: 'Section' }]
+        }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+      const event = keyEvent('Enter', { shiftKey: true })
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [{ type: 'heading', attrs: { level: 2 } }]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('leaves paragraph Enter behavior unaffected by the heading handler', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Body text' }] }]
+    })
+
+    try {
+      editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Body text' }] }]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('dismisses the slash menu on Escape even when search has no matches', () => {
     const editor = createEditor({
       type: 'doc',
@@ -364,7 +538,13 @@ describe('rich markdown key handler', () => {
     try {
       editor.commands.setTextSelection(5)
       const ctx = createContext(editor, false)
-      ctx.slashMenuRef.current = { query: 'zzz', from: 1, to: 5, left: 0, top: 0 }
+      ctx.slashMenuRef.current = {
+        query: 'zzz',
+        from: 1,
+        to: 5,
+        left: 0,
+        top: 0
+      }
       ctx.filteredSlashCommandsRef.current = []
       ctx.setSlashMenu = vi.fn()
       const event = keyEvent('Escape')

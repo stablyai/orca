@@ -18,6 +18,7 @@ import {
   exitTrailingEmptyOrderedListItem
 } from './rich-markdown-list-continuation'
 import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-delete'
+import { exitHeadingOnEnter } from './rich-markdown-heading-continuation'
 import { handleRichMarkdownTableBackspace } from './rich-markdown-table-row-delete'
 import { handleRichMarkdownTableEnter } from './rich-markdown-table-enter'
 import { handleRichMarkdownTableTab } from './rich-markdown-table-tab'
@@ -173,6 +174,10 @@ export function createRichMarkdownKeyHandler(
         return true
       }
       if (ed && !isComposingMarkdownInput(event, ed) && exitTrailingEmptyOrderedListItem(ed)) {
+        event.preventDefault()
+        return true
+      }
+      if (ed && !event.shiftKey && !isComposingMarkdownInput(event, ed) && exitHeadingOnEnter(ed)) {
         event.preventDefault()
         return true
       }
