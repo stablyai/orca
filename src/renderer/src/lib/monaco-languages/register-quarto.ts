@@ -43,21 +43,60 @@ export const quartoMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       // ```{{python}} escapes a cell so Quarto shows it without running it. It
       // matches no Markdown fence rule, so without this the closing fence would
       // be read as an opening one and swallow the rest of the document.
-      [/^\s*```+\s*\{\{[^}]*\}\}.*$/, { token: 'string', next: '@codeblock' }],
+      [/^\s*(`{3,})\s*\{\{[^}]*\}\}.*$/, { token: 'string', next: '@quartoRawCell.$1' }],
       // ```{ojs} / ```{d3} are JavaScript dialects Monaco has no language id for.
       [
-        /^\s*```+\s*\{\s*(?:ojs|d3)\b[^}]*\}.*$/,
-        { token: 'string', next: '@codeblockgh', nextEmbedded: 'javascript' }
+        /^\s*(`{3,})\s*\{\s*(?:ojs|d3)\b[^}]*\}.*$/,
+        { token: 'string', next: '@quartoCell.$1', nextEmbedded: 'javascript' }
       ],
       // ```{r}, ```{python, echo=FALSE}, ```{=html} — an engine Monaco does not
       // know (tikz, dot, …) stays uncolored instead of erroring.
       [
-        /^\s*```+\s*\{=?\s*([A-Za-z][\w.+-]*)[^}]*\}.*$/,
-        { token: 'string', next: '@codeblockgh', nextEmbedded: '$1' }
+        /^\s*(`{3,})\s*\{=?\s*([A-Za-z][\w.+-]*)[^}]*\}.*$/,
+        { token: 'string', next: '@quartoCell.$1', nextEmbedded: '$2' }
       ],
+      // A ````-fenced block is how a Quarto document shows a ``` fence verbatim.
+      // Markdown's own fence rules match exactly three backticks, so the longer
+      // form has to be routed here or its inner ``` reads as a block opener.
+      [
+        /^\s*(`{4,})\s*((?:\w|[/\-#])+).*$/,
+        { token: 'string', next: '@quartoCell.$1', nextEmbedded: '$2' }
+      ],
+      [/^\s*(`{4,})\s*$/, { token: 'string', next: '@quartoRawCell.$1' }],
       // Pandoc fenced divs: ::: {.callout-note}
       [/^\s*:{3,}.*$/, 'meta.separator'],
       ...markdownTokenizer.root
+    ],
+    // Why not Markdown's own `codeblock`/`codeblockgh`: both close on exactly
+    // three backticks, so a ````-fenced cell never ends and the rest of the file
+    // is tokenized as code. The opening fence travels in the state name, and the
+    // `$1~$S2`*` guard closes the cell only on a fence at least as long as the
+    // one that opened it — what Quarto and CommonMark require.
+    quartoCell: [
+      [
+        /^\s*(`{3,})\s*$/,
+        {
+          cases: {
+            '$1~$S2`*': { token: 'string', next: '@pop', nextEmbedded: '@pop' },
+            '@default': 'variable.source'
+          }
+        }
+      ],
+      [/.*$/, 'variable.source']
+    ],
+    // The same fence bookkeeping for cells with no embedded language: escaped
+    // ```{{python}} cells and plain ```` blocks.
+    quartoRawCell: [
+      [
+        /^\s*(`{3,})\s*$/,
+        {
+          cases: {
+            '$1~$S2`*': { token: 'string', next: '@pop' },
+            '@default': 'variable.source'
+          }
+        }
+      ],
+      [/.*$/, 'variable.source']
     ]
   }
 }

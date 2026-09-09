@@ -6,18 +6,25 @@ import {
   registerQuartoLanguage
 } from './register-quarto'
 
-type MonarchAction = { token?: string; next?: string; nextEmbedded?: string; switchTo?: string }
-type MonarchRule = [RegExp, string | MonarchAction, string?] | { include: string }
+type MonarchCases = { cases: Record<string, string | MonarchAction> }
+type MonarchAction = {
+  token?: string
+  next?: string
+  nextEmbedded?: string
+  switchTo?: string
+}
+type MonarchRule = [RegExp, string | MonarchAction | MonarchCases, string?] | { include: string }
 
 function isRuleEntry(rule: MonarchRule): rule is [RegExp, string | MonarchAction, string?] {
   return Array.isArray(rule)
 }
 
+const tokenizer = quartoMonarchLanguage.tokenizer as Record<string, MonarchRule[]>
+
 function matchLine(
   state: string,
   line: string
-): { token?: string; action: MonarchAction; captured?: string } | undefined {
-  const tokenizer = quartoMonarchLanguage.tokenizer as Record<string, MonarchRule[]>
+): { token?: string; action: MonarchAction; captured?: string; captures: string[] } | undefined {
   for (const rule of tokenizer[state]) {
     if (!isRuleEntry(rule)) {
       continue
@@ -31,10 +38,27 @@ function matchLine(
     return {
       token: typeof action === 'string' ? action : action.token,
       action: typeof action === 'object' ? action : { next: nextStateShortcut },
-      captured: match[1]
+      captured: match[1],
+      captures: match.slice(1)
     }
   }
   return undefined
+}
+
+// Monarch resolves a `$1~<pattern>` guard by substituting the state's own
+// arguments into the pattern and testing it anchored, so `$1~$S2`*` in state
+// `quartoCell.\`\`\`` becomes /^```\`*$/. Reproducing that here keeps the
+// assertions on the guard that actually ships rather than on a copy of it.
+function closesCell(state: 'quartoCell' | 'quartoRawCell', openingFence: string, line: string) {
+  const [regexp, action] = tokenizer[state][0] as [RegExp, MonarchCases]
+  regexp.lastIndex = 0
+  const match = regexp.exec(line)
+  if (!match || match.index !== 0) {
+    return undefined
+  }
+  const [guard, guardedAction] = Object.entries(action.cases)[0]
+  const pattern = guard.slice(guard.indexOf('~') + 1).replace('$S2', openingFence)
+  return new RegExp(`^${pattern}$`).test(match[1]) ? (guardedAction as MonarchAction) : undefined
 }
 
 describe('registerQuartoLanguage', () => {
@@ -100,12 +124,12 @@ describe('registerQuartoLanguage', () => {
 
   it('colors executable cells with the engine language', () => {
     const rCell = matchLine('root', '```{r setup, include=FALSE}')
-    expect(rCell?.action).toMatchObject({ next: '@codeblockgh', nextEmbedded: '$1' })
-    expect(rCell?.captured).toBe('r')
-    expect(matchLine('root', '```{python}')?.captured).toBe('python')
-    expect(matchLine('root', '```{=html}')?.captured).toBe('html')
+    expect(rCell?.action).toMatchObject({ next: '@quartoCell.$1', nextEmbedded: '$2' })
+    expect(rCell?.captures).toEqual(['```', 'r'])
+    expect(matchLine('root', '```{python}')?.captures[1]).toBe('python')
+    expect(matchLine('root', '```{=html}')?.captures[1]).toBe('html')
     expect(matchLine('root', '```{ojs}')?.action.nextEmbedded).toBe('javascript')
-    expect(matchLine('codeblockgh', '```')?.action).toMatchObject({
+    expect(closesCell('quartoCell', '```', '```')).toMatchObject({
       next: '@pop',
       nextEmbedded: '@pop'
     })
@@ -115,9 +139,43 @@ describe('registerQuartoLanguage', () => {
     // Why: Quarto's double-brace form shows a cell without running it, and it
     // matches no markdown fence rule — the closing fence would open a block.
     const escapedCell = matchLine('root', '```{{python}}')
-    expect(escapedCell?.action).toMatchObject({ next: '@codeblock' })
+    expect(escapedCell?.action).toMatchObject({ next: '@quartoRawCell.$1' })
     expect(escapedCell?.action.nextEmbedded).toBeUndefined()
-    expect(matchLine('codeblock', '```')?.action).toMatchObject({ next: '@pop' })
+    expect(closesCell('quartoRawCell', '```', '```')).toMatchObject({ next: '@pop' })
+  })
+
+  it('carries the opening fence into the cell state', () => {
+    // Why: the state argument is the only place the fence length survives, and
+    // the closing guard reads it back as $S2.
+    expect(matchLine('root', '````{python}')?.captures).toEqual(['````', 'python'])
+    expect(matchLine('root', '````{{python}}')?.captured).toBe('````')
+    expect(matchLine('root', '`````{ojs}')?.captured).toBe('`````')
+  })
+
+  it('closes a cell only on a fence at least as long as the one that opened it', () => {
+    // Why: markdown's codeblock/codeblockgh close on exactly three backticks, so
+    // a ````-fenced cell never ended and the rest of the file rendered as code.
+    expect(closesCell('quartoCell', '````', '```')).toBeUndefined()
+    expect(closesCell('quartoCell', '````', '````')).toMatchObject({ next: '@pop' })
+    expect(closesCell('quartoCell', '```', '`````')).toMatchObject({ next: '@pop' })
+    expect(closesCell('quartoRawCell', '````', '```')).toBeUndefined()
+    expect(closesCell('quartoRawCell', '````', '````')).toMatchObject({ next: '@pop' })
+  })
+
+  it('keeps cell content out of the closing rule', () => {
+    // Why: a fence with trailing content is not a closing fence in Quarto.
+    expect(closesCell('quartoCell', '```', '``` still open')).toBeUndefined()
+    expect(matchLine('quartoCell', 'x <- 1')?.token).toBe('variable.source')
+    expect(matchLine('quartoRawCell', 'print(1)')?.token).toBe('variable.source')
+  })
+
+  it('routes long plain fences through the fence-aware states', () => {
+    // Why: ````-fenced blocks are how a Quarto document shows a ``` fence, and
+    // markdown's own fence rules stop at three backticks.
+    const labelled = matchLine('root', '````markdown')
+    expect(labelled?.action).toMatchObject({ next: '@quartoCell.$1', nextEmbedded: '$2' })
+    expect(labelled?.captures).toEqual(['````', 'markdown'])
+    expect(matchLine('root', '````')?.action).toMatchObject({ next: '@quartoRawCell.$1' })
   })
 
   it('keeps markdown fences and headings working', () => {
