@@ -30,37 +30,42 @@ to that path as well as printed.
 Corpus: 40 synthetic Claude transcripts, 10.5 MB, 9,600 messages, indexed through
 the real store. Eight queries, one per rung of the route ladder plus the two
 shapes that skip it; 5 warm-up runs and 25 samples each. Apple silicon, warm page
-cache. Milliseconds.
+cache, machine otherwise idle. Milliseconds, and p95 over 25 samples moves
+several milliseconds run to run if anything else is competing for the disk.
 
-| Scope          | p50  | p95   |
-| -------------- | ---- | ----- |
-| `all`          | 8.46 | 41.74 |
-| `conversation` | 5.32 | 12.20 |
+| Scope          | p50  | p95  |
+| -------------- | ---- | ---- |
+| `all`          | 6.08 | 8.82 |
+| `conversation` | 3.74 | 5.09 |
 
 Per query, `all` then `conversation` (p50 / p95):
 
-| Query                                            | `all`         | `conversation` |
-| ------------------------------------------------ | ------------- | -------------- |
-| `"terminal reattach"` (phrase)                    | 5.03 / 5.86   | 2.77 / 3.78    |
-| `resolveTerminalPath` (identifier)                | 8.47 / 9.54   | 5.39 / 17.89   |
-| `src/main/…/session-transcript-reader.ts` (path)  | 11.96 / 39.31 | 5.55 / 17.27   |
-| `why is the daemon snapshot stale` (prose)        | 10.78 / 25.23 | 7.11 / 12.34   |
-| `reattahc worktre` (typo repair)                  | 10.41 / 115.05| 6.73 / 9.41    |
-| `index` (common term)                             | 7.25 / 29.99  | 4.98 / 11.51   |
-| `repo:app-3` (operator only)                      | 0.10 / 0.60   | 0.10 / 0.20    |
-| `worktree` scoped to one cwd                      | 2.10 / 2.60   | 1.48 / 2.06    |
+| Query                                            | `all`       | `conversation` |
+| ------------------------------------------------ | ----------- | -------------- |
+| `"terminal reattach"` (phrase)                    | 3.61 / 3.76 | 1.94 / 2.09    |
+| `resolveTerminalPath` (identifier)                | 6.16 / 6.40 | 3.81 / 3.97    |
+| `src/main/…/session-transcript-reader.ts` (path)  | 8.76 / 11.14| 3.95 / 3.98    |
+| `why is the daemon snapshot stale` (prose)        | 7.61 / 7.81 | 5.07 / 5.19    |
+| `reattahc worktre` (typo repair)                  | 7.32 / 7.51 | 4.93 / 5.09    |
+| `index` (common term)                             | 5.34 / 5.58 | 3.54 / 3.61    |
+| `repo:app-3` (operator only)                      | 0.13 / 0.16 | 0.12 / 0.13    |
+| `worktree` scoped to one cwd                      | 1.48 / 1.52 | 1.05 / 1.13    |
 
 Reading it:
 
-- `conversation` is about 1.6x faster at p50 and 3.4x at p95. That gap is the
+- `conversation` is about 1.6x faster at p50 and 1.7x at p95. That gap is the
   answer to "what is the second table for": it is the corpus a keystroke can
   afford, and it holds no tool output, so it is also the corpus where a match is
   something a person wrote.
-- An operator-only query never touches FTS at all. It is a range seek on
-  `sessions_cwd_key`, and it costs a tenth of a millisecond.
-- Typo repair's p95 in `all` is the worst number on the page. The repair walks
-  `messages_vocab` per prefix, and the first walk after a cold statement cache
-  pays for the b-tree pages. It is a first-query cost, not a per-query one.
+- A `scopePaths` query is the cheapest real search on the page. It is the one
+  narrowing SQL can express exactly, so it seeks `sessions_cwd_key` and hands
+  ranking a small candidate set.
+- The operator-only figure is a floor, not a typical cost. `repo:` and `path:`
+  are applied in JS over retrieved rows (see `session-search-row-filter` for why
+  they cannot be pushed into SQL), so their cost tracks how many sessions the
+  walk has to read before it fills a candidate set. This corpus has 40 sessions,
+  which is one page of that walk; an index where few sessions match the operator
+  will read up to the ceiling in `session-search-retrieval` instead.
 
 ## `sessionCandidateLimit`
 
@@ -76,12 +81,12 @@ seen and the ordering alone moves p95 further than the limit does.
 
 | Limit | p50   | p95   | Pages of 20 a caller can reach |
 | ----- | ----- | ----- | ------------------------------ |
-| 200   | 9.50  | 13.18 | 10                             |
-| 600   | 10.86 | 20.30 | 30                             |
-| 1200  | 12.65 | 15.20 | 60                             |
-| 2400  | 17.68 | 27.08 | 120                            |
+| 200   | 7.08  | 7.23  | 10                             |
+| 600   | 8.18  | 8.73  | 30                             |
+| 1200  | 9.72  | 10.44 | 60                             |
+| 2400  | 12.60 | 13.68 | 120                            |
 
-600 is the default: it costs about 14% over 200 at p50 and buys three times the
+600 is the default: it costs about 16% over 200 at p50 and buys three times the
 reachable depth, and the curve only turns steep past 1200. A host with a much
 larger index can raise it; the result's `truncated.candidates` says when the limit
 was the thing that cut the answer, so a caller never has to guess.
@@ -92,3 +97,13 @@ not what it retrieves. The MRR figures quoted in the BM25 weights
 (`session-search-identifier-split.ts`) come from the original retrieval shoot-out
 on real transcripts and are not reproducible from this repository. Any change to
 the limit justified on relevance grounds needs an eval set, not this benchmark.
+
+## Not settled here
+
+Which process may open, unlink and rebuild the index is PR 3b's decision. A
+second handle that finds an older schema version replaces the file while a live
+store keeps answering from the unlinked inode, and this PR is what first makes
+that reachable, because it is the first thing that reads. What PR 4 does is
+refuse to make it worse: an engine over an index it does not fully recognise
+answers from the tables that are there and names the feature it cannot serve,
+rather than throwing on the first query that reaches for one.
