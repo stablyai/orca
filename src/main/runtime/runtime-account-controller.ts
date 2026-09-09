@@ -10,6 +10,8 @@ import type {
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
+import type { ResourceEvidence } from '../../shared/resource-evidence-types'
+import { projectResourceEvidence } from '../rate-limits/resource-evidence-projection'
 import type { CodexResetCreditExpectedScope } from '../../shared/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
@@ -65,6 +67,17 @@ export class RuntimeAccountController {
       codex: codexAccounts.listAccounts(),
       rateLimits: rateLimits.getState()
     }
+  }
+
+  async getResourceEvidence(options?: { refresh?: boolean }): Promise<ResourceEvidence> {
+    const { rateLimits } = this.requireServices()
+    // Why: refresh reuses the stale-aware plan (honours the poll throttle and
+    // Retry-After); never the forced fetch or the inactive-account sweeps
+    // refreshForMobile adds — this projection never touches account data.
+    if (options?.refresh) {
+      await rateLimits.refreshIfStale()
+    }
+    return projectResourceEvidence(rateLimits.getState(), { queriedAtMs: Date.now() })
   }
 
   async refreshForMobile(): Promise<void> {
