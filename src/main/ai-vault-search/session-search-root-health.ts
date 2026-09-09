@@ -23,8 +23,11 @@ export type SessionSearchRootHealth = {
 // returns, so an EACCES root and an agent that was never installed both arrive
 // as "no files". Reporting the first as an empty index would be the
 // loss-of-contact-as-absence mistake docs/reference/ssh-execution-boundary.md
-// forbids, so an empty root is re-checked and only ENOENT counts as absent.
-const ABSENT_ROOT = new Set(['ENOENT', 'ENOTDIR'])
+// forbids, so an empty root is re-checked.
+const MISSING_ROOT = new Set(['ENOENT', 'ENOTDIR'])
+
+/** What a probe of an empty root found. `missing` is not yet a verdict. */
+type RootProbe = { listed: true } | { listed: false; missing: boolean; reason: string }
 
 /** How many consecutive listable-but-empty sweeps mean the user emptied it. */
 const EMPTY_SWEEPS_BEFORE_TRUSTED = 2
@@ -35,9 +38,16 @@ const EMPTY_SWEEPS_BEFORE_TRUSTED = 2
  *
  * The rule an empty root is judged by, and why it takes two sweeps:
  *
- * - Cannot be listed at all: degraded, keeping its last healthy count. An
- *   unmounted SSH home or a detached drive is not an emptied one, and its
- *   transcripts must not be retired on an ENOENT they all answer at once.
+ * - Cannot be listed: degraded, keeping its last healthy count. An unmounted
+ *   SSH home or a detached drive is not an emptied one, and its transcripts
+ *   must not be retired on the errors every path under it answers at once.
+ * - Missing entirely, while the index holds files under it: also degraded. A
+ *   detached volume answers ENOENT, and so does an agent that was never
+ *   installed; what tells them apart is whether this index ever indexed
+ *   anything there. That evidence is read from the store rather than from
+ *   memory, because memory is empty on the first sweep after every restart,
+ *   which is precisely when a volume is most likely to be missing.
+ * - Missing with nothing held under it: absent, and no concern of ours.
  * - Lists successfully but empty, having held transcripts before: degraded for
  *   now. This is what a freshly unmounted volume also looks like, and one sweep
  *   cannot tell the two apart.
@@ -45,6 +55,10 @@ const EMPTY_SWEEPS_BEFORE_TRUSTED = 2
  *   really did delete them. Degraded clears and the rows retire. Without this
  *   the alarm never releases, so a legitimately emptied root pins the whole
  *   index at `degraded` for the life of the process.
+ *
+ * Consecutive means consecutive: anything that is not a successful empty
+ * listing resets the tally, or an empty sweep either side of an unreadable one
+ * would add up to a deletion nobody performed.
  *
  * Only a full sweep counts toward that tally. A recent-window cycle can see a
  * root that went to zero, but it is not a census and must not conclude one.
@@ -55,6 +69,8 @@ export async function sessionSearchRootHealth(args: {
   previous: ReadonlyMap<string, SessionSearchRootState>
   /** True for a full sweep, whose observation is allowed to move the tally. */
   census: boolean
+  /** Whether the index holds anything under a root, read from the store. */
+  holdsFiles: (root: string) => boolean
   signal?: AbortSignal
 }): Promise<SessionSearchRootHealth> {
   const degraded = new Map<string, string>()
@@ -73,9 +89,15 @@ export async function sessionSearchRootHealth(args: {
     if (degraded.has(listing.root) || args.signal?.aborted) {
       continue
     }
-    const unreadable = await unreadableRootReason(listing.root, args.signal)
-    if (unreadable !== null) {
-      degraded.set(listing.root, unreadable)
+    const probe = await probeRoot(listing.root, args.signal)
+    if (!probe.listed) {
+      if (probe.missing && !args.holdsFiles(listing.root)) {
+        // Never held anything here: an agent that is not installed.
+        continue
+      }
+      degraded.set(listing.root, probe.reason)
+      // Not a successful empty listing, so it breaks the run.
+      states.set(listing.root, { ...previous, emptySweeps: 0 })
       continue
     }
     // Listable and empty. The tally only advances on a census, so a cycle reads
@@ -99,19 +121,20 @@ export async function sessionSearchRootHealth(args: {
   return { degraded: [...degraded].map(([root, reason]) => ({ root, reason })), states }
 }
 
-async function unreadableRootReason(root: string, signal?: AbortSignal): Promise<string | null> {
+async function probeRoot(root: string, signal?: AbortSignal): Promise<RootProbe> {
   try {
     await wslGatedReaddir(root, 'scan', signal)
-    return null
+    return { listed: true }
   } catch (error) {
     const code =
       error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
         ? error.code
         : null
-    if (code !== null && ABSENT_ROOT.has(code)) {
-      return null
+    return {
+      listed: false,
+      missing: code !== null && MISSING_ROOT.has(code),
+      reason: error instanceof Error ? error.message : String(error)
     }
-    return error instanceof Error ? error.message : String(error)
   }
 }
 

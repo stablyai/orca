@@ -567,6 +567,71 @@ it('settles an invalidated file that turned out not to have changed', async () =
   expect(indexer?.status()).toMatchObject({ filesPending: 0, bytesIndexed: bytes })
 })
 
+// Round 4, item 1: the fence was inert on the first sweep of every process,
+// which is exactly when a volume is most likely to be detached.
+it('keeps a root that is gone at the first sweep after a restart', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
+  await newIndexer().start()
+  indexer?.close()
+  resetTranscriptConsumersForTests()
+  resetSessionParseCacheForTests()
+
+  // The volume is not there when the process comes back.
+  await rm(harness.roots.claudeProjectsDir ?? '', { recursive: true, force: true })
+  await newIndexer().start()
+
+  const status = indexer?.status()
+  expect(status?.phase).toBe('degraded')
+  expect(status?.degradedRoots.map((root) => root.root)).toContain(harness.roots.claudeProjectsDir)
+  expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+
+  // And it clears once the volume is back.
+  await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
+  await indexer?.reconcile({ full: true })
+  expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
+})
+
+// Round 4, item 3: rows under no configured root were immortal, refreshed by
+// nothing and reported by nothing, while still answering searches.
+it('reports rows under no configured root, and retires them only when gone', async () => {
+  const moved = transcriptPath()
+  await writeClaudeTranscript(moved, ['a session in the old profile'], SESSION_ID)
+  await newIndexer().start()
+  indexer?.close()
+  resetTranscriptConsumersForTests()
+  resetSessionParseCacheForTests()
+
+  // The profile moves: same index, a root that no longer covers those rows.
+  const elsewhere = join(harness.root, 'moved-profile')
+  newIndexer({ roots: { ...harness.roots, claudeProjectsDir: elsewhere } })
+  await indexer?.start()
+  expect(indexer?.status().orphanedFiles).toBe(1)
+  // Still on disk, so the rows stay: this is a configuration problem, not a
+  // licence to delete a user's history.
+  expect(sessionsMatching('profile')).toEqual([SESSION_ID])
+
+  await rm(moved)
+  await indexer?.reconcile({ full: true })
+  expect(indexer?.status().orphanedFiles).toBe(0)
+  expect(sessionsMatching('profile')).toEqual([])
+})
+
+// Round 4, item 4: only a full sweep may conclude a root was emptied.
+it('does not let cycles conclude that a root was emptied', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['a session about to vanish'], SESSION_ID)
+  await newIndexer().start()
+
+  await rm(harness.claudeProjectDir, { recursive: true, force: true })
+  await indexer?.reconcile({ full: true })
+  expect(sessionsMatching('vanish')).toEqual([SESSION_ID])
+
+  // Two cycles see the same empty root and must not add up to a sweep.
+  await nextCycle()
+  await nextCycle()
+  expect(sessionsMatching('vanish')).toEqual([SESSION_ID])
+  expect(indexer?.status().phase).toBe('degraded')
+})
+
 // Finding 8: a path sits in both queues the moment a read is declined during a
 // pause and a caller then invalidates the same file. Summing them reports one
 // transcript as two, and a caller has no way to tell that from two files.

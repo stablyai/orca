@@ -32,6 +32,12 @@ export type SessionSearchIndexStatus = {
   /** Unfinished writes the open tombstoned; a non-zero value means a crash. */
   recoveredRows: number
   failures: number
+  /**
+   * Files the index holds under no root it is configured to walk, still on
+   * disk. Their rows are kept and never refreshed, so a non-zero count is a
+   * configuration problem to surface rather than rows to delete.
+   */
+  orphanedFiles: number
   degradedRoots: SessionSearchDegradedRoot[]
   lastReconcileAt: number | null
   discovered: Record<string, SessionSearchDiscoveredCount>
@@ -50,6 +56,7 @@ export class SessionSearchIndexingStatus {
   private droppedPending = 0
   private recoveredRows = 0
   private failures = 0
+  private orphanedFiles = 0
   private degradedRoots: SessionSearchDegradedRoot[] = []
   private lastReconcileAt: number | null = null
   private discovered = new Map<AiVaultAgent, SessionSearchDiscoveredCount>()
@@ -64,6 +71,7 @@ export class SessionSearchIndexingStatus {
       droppedPending: this.droppedPending,
       recoveredRows: this.recoveredRows,
       failures: this.failures,
+      orphanedFiles: this.orphanedFiles,
       degradedRoots: this.degradedRoots.map((root) => ({ ...root })),
       lastReconcileAt: this.lastReconcileAt,
       discovered: Object.fromEntries(this.discovered)
@@ -154,6 +162,10 @@ export class SessionSearchIndexingStatus {
   setPending(pending: number, dropped: number): void {
     this.filesPending = pending
     this.droppedPending = dropped
+  }
+
+  setOrphanedFiles(files: number): void {
+    this.orphanedFiles = files
   }
 
   setDegradedRoots(roots: SessionSearchDegradedRoot[]): void {

@@ -39,6 +39,11 @@ export type SessionSearchBackfillArgs = {
 }
 
 export type SessionSearchBackfillResult = {
+  /**
+   * Files the index holds under no root this scan is configured to walk, which
+   * still exist on disk. Kept and reported rather than deleted.
+   */
+  orphanedFiles: number
   /** Paths to watch for disappearance, plus whatever this sweep could not settle. */
   watchPaths: Set<string>
   rootStates: Map<string, SessionSearchRootState>
@@ -94,22 +99,41 @@ export async function runSessionSearchBackfill(
         message: refusal.message
       })
     }
-    const health = await sessionSearchRootHealth({
-      listings: sessionSearchRootListings(args.roots, swept.discoveries),
-      issues,
-      previous: args.previousRootStates ?? new Map(),
-      // A sweep walks every root without a limit, so its observation is the one
-      // allowed to conclude that a root really was emptied.
-      census: completed,
-      signal
-    })
+    const listings = sessionSearchRootListings(args.roots, swept.discoveries)
+    const previousStates = args.previousRootStates ?? new Map()
+    // An aborted sweep saw part of the machine. It does not probe, it does not
+    // judge, and it does not carry an observation into the tally that decides a
+    // root was emptied: two interrupted passes must not add up to a conclusion
+    // no completed pass ever reached.
+    const health = completed
+      ? await sessionSearchRootHealth({
+          listings,
+          issues,
+          holdsFiles: (root) => store.hasIndexedFilesUnder(root),
+          previous: previousStates,
+          // A sweep walks every root without a limit, so it is the observation
+          // allowed to conclude that a root really was emptied.
+          census: true,
+          signal
+        })
+      : { degraded: [], states: new Map(previousStates) }
     const degradedRoots = health.degraded
     const discoveredPaths = new Set(swept.candidates.map((candidate) => candidate.file.path))
+    const held = completed ? store.indexedSources().map((source) => source.path) : []
+    const undiscovered = held.filter((path) => !discoveredPaths.has(path))
+    const orphans = new Set(
+      undiscovered.filter((path) => !listings.some((listing) => underRoot(path, listing.root)))
+    )
     const retirement = completed
-      ? await retireSweptAwaySources(args, discoveredPaths, degradedRoots)
+      ? await retireDeletedSessionSearchSources(store, undiscovered, {
+          signal,
+          limit: RETIREMENT_CHECKS_PER_SWEEP,
+          degradedRoots
+        })
       : { retired: [], unverifiable: [], unchecked: [] }
 
     return {
+      orphanedFiles: [...orphans].filter((path) => !retirement.retired.includes(path)).length,
       watchPaths: new Set([
         ...discoveredPaths,
         ...retirement.unverifiable,
@@ -123,23 +147,17 @@ export async function runSessionSearchBackfill(
 }
 
 /**
- * A sweep is the only pass that sees every root, so it is the only one that can
- * retire a source deleted while nothing was running. The degraded-root fence
- * that keeps an unmounted volume from taking its history with it belongs to the
- * retirement function itself, which the cycle calls too.
+ * A path this scan walks no root for: the profile moved, a root was
+ * reconfigured, or an agent's store relocated between releases.
+ *
+ * The rule, one rule, and why it is not "delete it": such a file is retired
+ * exactly like any other if its path answers ENOENT, because that is proof.
+ * If it is still on disk, the rows stay and the count is reported, because the
+ * index holding content the current configuration cannot reach is a
+ * configuration problem to surface, not a licence to delete a user's
+ * searchable history. Nothing refreshes those rows, so `orphanedFiles` is the
+ * only honest signal that they are there.
  */
-async function retireSweptAwaySources(
-  args: SessionSearchBackfillArgs,
-  discoveredPaths: ReadonlySet<string>,
-  degradedRoots: readonly SessionSearchDegradedRoot[]
-): Promise<{ retired: string[]; unverifiable: string[]; unchecked: string[] }> {
-  const undiscovered = args.store
-    .indexedSources()
-    .map((source) => source.path)
-    .filter((path) => !discoveredPaths.has(path))
-  return retireDeletedSessionSearchSources(args.store, undiscovered, {
-    signal: args.signal,
-    limit: RETIREMENT_CHECKS_PER_SWEEP,
-    degradedRoots
-  })
+function underRoot(path: string, root: string): boolean {
+  return root.length > 0 && (path.startsWith(`${root}/`) || path.startsWith(`${root}\\`))
 }

@@ -276,14 +276,18 @@ export class SessionSearchIndexer {
       signal
     })
     this.rootStates = sweep.rootStates
-    this.indexingStatus.setDegradedRoots(sweep.degradedRoots)
     this.indexingStatus.sweepFinished(sweep.completed)
     if (!sweep.completed) {
-      // A sweep is due until it finishes. Clearing the flag on entry meant a
-      // pause part way through abandoned the rest of the machine's transcripts
-      // until something else happened to ask for a full sweep.
+      // An aborted sweep stops probing, so it learned nothing about root health
+      // or orphans. Publishing its empty findings would clear a live alarm.
+      //
+      // A sweep also stays due until it finishes: clearing the flag on entry
+      // meant a pause part way through abandoned the rest of the machine's
+      // transcripts until something else happened to ask for a full sweep.
       return
     }
+    this.indexingStatus.setDegradedRoots(sweep.degradedRoots)
+    this.indexingStatus.setOrphanedFiles(sweep.orphanedFiles)
     this.fullSweepDue = false
     // Watch everything the sweep saw: a transcript deleted between its
     // discovery and the first cycle is invisible to both otherwise. The

@@ -144,6 +144,7 @@ export async function runSessionSearchReconcileCycle(
       await sessionSearchRootHealth({
         listings: sessionSearchRootListings(args.roots, swept.discoveries),
         issues,
+        holdsFiles: (root) => store.hasIndexedFilesUnder(root),
         previous: args.previousRootStates ?? new Map(),
         // A recent-window discovery can see a root that went to zero, but it is
         // not a census and must never conclude one was emptied.

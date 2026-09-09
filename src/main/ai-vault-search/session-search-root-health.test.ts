@@ -28,12 +28,14 @@ function health(args: {
   issues?: Parameters<typeof sessionSearchRootHealth>[0]['issues']
   previous?: Map<string, SessionSearchRootState>
   census?: boolean
+  held?: readonly string[]
 }) {
   return sessionSearchRootHealth({
     listings: args.listings,
     issues: args.issues ?? [],
     previous: args.previous ?? new Map(),
-    census: args.census ?? true
+    census: args.census ?? true,
+    holdsFiles: (root) => (args.held ?? []).includes(root)
   })
 }
 
@@ -138,4 +140,52 @@ it('fences files by real root boundaries', () => {
   expect(underDegradedRoot('/b/agents/s/one.jsonl', degraded)).toBe(false)
   // A sibling whose name merely starts with the root is not inside it.
   expect(underDegradedRoot('/a/agents-old/one.jsonl', degraded)).toBe(false)
+})
+
+// Round 4, item 1: the evidence that a root once held transcripts has to
+// outlive the process that saw it. Carried in memory it is empty on the first
+// sweep after every restart, which is when a detached volume looks exactly
+// like an agent that was never installed.
+it('degrades a missing root the index still holds files under', async () => {
+  const gone = join(await tempRoot(), 'unmounted')
+  const result = await health({ listings: [{ root: gone, files: 0 }], held: [gone] })
+  expect(result.degraded).toHaveLength(1)
+  expect(result.degraded[0]?.root).toBe(gone)
+})
+
+it('leaves a missing root alone when the index holds nothing under it', async () => {
+  const gone = join(await tempRoot(), 'never-installed')
+  const result = await health({ listings: [{ root: gone, files: 0 }], held: [] })
+  expect(result.degraded).toEqual([])
+})
+
+// Round 4, item 2: consecutive means consecutive. An empty sweep either side of
+// an unreadable one is not two in a row, and adding them up retires a tree
+// nobody emptied.
+it.skipIf(!CAN_DENY_READ)('restarts the tally when a sweep cannot list the root', async () => {
+  const root = await tempRoot()
+  const flaky = join(root, 'flaky')
+  await mkdir(flaky)
+  let previous = new Map([[flaky, { lastHealthyCount: 4, emptySweeps: 0 }]])
+
+  const first = await health({ listings: [{ root: flaky, files: 0 }], previous })
+  expect(first.states.get(flaky)?.emptySweeps).toBe(1)
+
+  await chmod(flaky, 0o000)
+  try {
+    const second = await health({
+      listings: [{ root: flaky, files: 0 }],
+      previous: first.states,
+      held: [flaky]
+    })
+    expect(second.degraded).toHaveLength(1)
+    expect(second.states.get(flaky)?.emptySweeps).toBe(0)
+    previous = second.states
+  } finally {
+    await chmod(flaky, 0o755)
+  }
+
+  // The third sweep is only the first empty one in its run, so it still fences.
+  const third = await health({ listings: [{ root: flaky, files: 0 }], previous })
+  expect(third.degraded).toHaveLength(1)
 })
