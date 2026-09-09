@@ -38,7 +38,7 @@ const AGENT_IDENTITY_ALIASES_LOWER: Readonly<Record<string, readonly string[]>> 
 }
 
 const STATUS_WITH_CONTEXT_RE = /^(?:ready|idle|done)(?:\s+\([^)]*\))?$/i
-const DEFAULT_TERMINAL_TITLE_RE = /^terminal \d+$/i
+const DEFAULT_TERMINAL_TITLE_RE = /^terminal(?: \d+)?$/i
 
 function isIdentityStatusTitle(titleLower: string, identityLower: string): boolean {
   return (
@@ -81,8 +81,7 @@ function isCwdLikeTitle(title: string): boolean {
 function conversationNameFromLiveTitle(
   liveTitle: string,
   agentType: AgentType | null | undefined,
-  agentTypeLabelLower: string,
-  defaultTitle: string | undefined
+  agentTypeLabelLower: string
 ): string | null {
   const stripped = stripLeadingAgentTitleDecorationOrEmpty(liveTitle.trim()).trim()
   if (!stripped) {
@@ -100,9 +99,7 @@ function conversationNameFromLiveTitle(
   ) {
     return null
   }
-  if (defaultTitle && stripped === defaultTitle.trim()) {
-    return null
-  }
+  // Mirrored tabs can retain a real conversation name as their defaultTitle.
   return stripped
 }
 
@@ -149,7 +146,6 @@ export function getAgentRowConversationName(
   return conversationNameFromLiveTitle(
     liveTitle,
     agentType,
-    formatAgentTypeLabel(agentType).toLowerCase(),
-    tab.defaultTitle
+    formatAgentTypeLabel(agentType).toLowerCase()
   )
 }

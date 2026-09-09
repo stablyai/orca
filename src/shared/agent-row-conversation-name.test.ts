@@ -211,6 +211,37 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(makeTab({ title: 'Agent' }), 'claude', false)).toBeNull()
   })
 
+  it.each(['Audit Slack automation gaps', '  Audit Slack automation gaps  '])(
+    'recovers a mirrored live title also stored as defaultTitle: %s',
+    (defaultTitle) => {
+      const tab = makeTab({ title: 'Audit Slack automation gaps', defaultTitle })
+      expect(getAgentRowConversationName(tab, 'codex', false)).toBe('Audit Slack automation gaps')
+    }
+  )
+
+  it('keeps a split pane name when it matches the mirrored tab default', () => {
+    const tab = makeTab({ title: 'Focused task', defaultTitle: 'Sibling task' })
+    expect(getAgentRowConversationName(tab, 'codex', false, 'Sibling task')).toBe('Sibling task')
+    expect(getAgentRowConversationName(tab, 'codex', false, null)).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        { ...tab, customTitle: 'Manual name' },
+        'codex',
+        false,
+        'Sibling task'
+      )
+    ).toBe('Manual name')
+  })
+
+  it.each(['Done', 'Ready (orca)', 'Codex', 'Codex ready', '~/orca/workspaces', 'Terminal', 'Terminal 72'])(
+    'still suppresses non-name live titles matching the mirrored default: %s',
+    (title) => {
+      expect(
+        getAgentRowConversationName(makeTab({ title, defaultTitle: title }), 'codex', false)
+      ).toBeNull()
+    }
+  )
+
   it('rejects empty, glyph-only, and default terminal titles', () => {
     expect(getAgentRowConversationName(makeTab(), 'claude', false)).toBeNull()
     expect(getAgentRowConversationName(makeTab({ title: '✳' }), 'claude', false)).toBeNull()
