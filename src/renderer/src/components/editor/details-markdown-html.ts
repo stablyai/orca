@@ -193,6 +193,15 @@ function hasOnlySupportedDetailsAttributes(rawAttributes: string): boolean {
   )
 }
 
+export function normalizeDetailsOpeningTag(fragment: string): string {
+  const match = fragment.match(/^<details(\s[^<>]*)?>$/i)
+  const attributes = match?.[1] ?? ''
+  if (!match || !hasOnlySupportedDetailsAttributes(attributes)) {
+    return fragment
+  }
+  return `<details ${renderDetailsAttributes(parseDetailsAttributes(attributes))}>`
+}
+
 function hasOnlyPlainParagraphAndBreakTags(content: string): boolean {
   return !/<p\b(?!\s*>)[^>]*>|<br\b(?!\s*\/?>)[^>]*>/iu.test(content)
 }

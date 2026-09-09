@@ -3,6 +3,7 @@ import {
   extractDetailsSummaryHtml,
   isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
+  normalizeDetailsOpeningTag,
   parseDetailsAttributes,
   parseToggleHeadingVariant,
   type DetailsHtmlBlock
@@ -26,6 +27,30 @@ afterEach(() => {
 })
 
 describe('details markdown html', () => {
+  it.each([
+    ['<details>', '<details class="orca-details">'],
+    ['<details open="open">', '<details class="orca-details" open>'],
+    [
+      "<details open data-orca-toggle = 'heading-2' class='orca-details'>",
+      '<details class="orca-details" data-orca-toggle="heading-2" open>'
+    ]
+  ])('normalizes supported opening tag %s like the serializer', (input, expected) => {
+    expect(normalizeDetailsOpeningTag(input)).toBe(expected)
+  })
+
+  it.each([
+    '<details id="keep">',
+    '<details class="custom">',
+    '<details data-orca-toggle="heading-6">',
+    '<details open="false">',
+    '<detailsish>',
+    '</details>',
+    '<summary>',
+    '<!-- <details> -->'
+  ])('leaves noncanonical or unrelated fragment %s unchanged', (fragment) => {
+    expect(normalizeDetailsOpeningTag(fragment)).toBe(fragment)
+  })
+
   it('extracts leading summary html without regex capture', () => {
     const matchSpy = vi.spyOn(String.prototype, 'match')
     const inner = `\n<SUMMARY>${'Heading line\n'.repeat(1_000)}</SUMMARY><p>Body</p>`
