@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { FlatList } from 'react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { mobileNativeChatPromptAnchorIndex } from './mobile-native-chat-prompt-anchor'
@@ -33,8 +33,13 @@ export function useMobileNativeChatScrollTargets(
   onScrollToPrompt: (index: number) => void
   onScrollToIndexFailed: (info: ScrollToIndexFailure) => void
 } {
+  // `useLayoutEffect`, not `useEffect`: a passive effect can be deferred past the
+  // paint, so a press landing in that window would resolve the anchor against the
+  // previous transcript and jump to an older prompt. A layout effect runs before
+  // the browser can paint the new rows, so the ref is current by the time the row
+  // the user is looking at exists.
   const dataRef = useRef(data)
-  useEffect(() => {
+  useLayoutEffect(() => {
     dataRef.current = data
   }, [data])
 

@@ -109,6 +109,9 @@ function AgentControls({
   )
 }
 
+/** One row of the chat transcript: the message's prose, its folded tool run, and
+ *  the per-message controls. Memoized on props so streaming a reply does not
+ *  re-render the rows above it. */
 function MobileNativeChatMessageImpl({
   message,
   toolsExpanded = false,
@@ -195,8 +198,13 @@ function MobileNativeChatMessageImpl({
   }
 
   // Copy + scroll-to-top + jump-to-prompt, shown inline with the first tool call
-  // (or after the prose when there are no tools). The jump is hidden on the very
-  // first row, where nothing can precede it.
+  // (or after the prose when there are no tools).
+  //
+  // The jump is narrower than its siblings on purpose: only an `assistant` row is
+  // an answer to a prompt. `isAgent` also covers `reasoning`, `tool` and `system`
+  // rows, where "the prompt this answers" has no meaning. Copy and scroll-to-top
+  // stay on those rows, unchanged. It is also hidden on the very first row, where
+  // nothing can precede it.
   const controls = isAgent ? (
     <AgentControls
       onCopy={handleCopy}
@@ -206,7 +214,10 @@ function MobileNativeChatMessageImpl({
           : undefined
       }
       onScrollToPrompt={
-        onScrollToPrompt && messageIndex !== undefined && messageIndex > 0
+        onScrollToPrompt &&
+        message.role === 'assistant' &&
+        messageIndex !== undefined &&
+        messageIndex > 0
           ? () => onScrollToPrompt(messageIndex)
           : undefined
       }
