@@ -1,6 +1,5 @@
-import { mkdirSync } from 'node:fs'
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
@@ -19,7 +18,6 @@ let removed: string[]
 beforeEach(async () => {
   resetTranscriptConsumersForTests()
   harness = await openSessionSearchIndexerHarness('ss-deleted-sources')
-  mkdirSync(dirname(harness.databasePath), { recursive: true })
   removed = []
   store = new SessionSearchStore(harness.databasePath)
   // Only the removal matters here; the store's own removal path has its own tests.

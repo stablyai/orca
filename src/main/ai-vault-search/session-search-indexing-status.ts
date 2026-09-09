@@ -17,7 +17,11 @@ export type SessionSearchIndexStatus = {
   bytesIndexed: number
   /** Queued re-reads: the store's stale set plus whatever the budget rolled over. */
   filesPending: number
-  /** Pending entries dropped at the bound, so a long pause cannot grow memory. */
+  /**
+   * Re-reads dropped at a bound, the indexer's queue and the store's re-read set
+   * together. Non-zero means the queue is knowingly incomplete, so coverage
+   * cannot be reported as whole until the next full sweep.
+   */
   droppedPending: number
   /** Unfinished writes the open tombstoned; a non-zero value means a crash. */
   recoveredRows: number

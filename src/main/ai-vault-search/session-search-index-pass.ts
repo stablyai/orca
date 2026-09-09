@@ -2,11 +2,11 @@ import { throwIfAiVaultScanCancelled } from '../ai-vault/ai-vault-scan-cancellat
 import { parserPublishesMessages } from '../ai-vault/session-scanner-agent-parser'
 import {
   createSessionParseStats,
-  invalidateSessionParseCacheEntry,
   parseAgentSessionFileCached,
   sessionParseCacheCoversTranscript,
   type SessionParseStats
 } from '../ai-vault/session-scanner-parse-cache'
+import { requestWholeTranscriptRead } from '../ai-vault/session-transcript-reader'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity, isSessionSearchFileCurrent } from './session-search-file-cursor'
 import type { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
@@ -63,13 +63,20 @@ export async function runSessionSearchIndexPass(
       deferred.push(...candidates.slice(index))
       break
     }
-    // Two reasons to drop the session list's cursor, both of which end with
-    // the reader opening the file: the index has to re-read it whole, or the
-    // list is already done with it and would otherwise read nothing at all.
-    // The second is not an edge case: any file the list scanned before the
-    // index existed is in exactly that state.
+    // Two reasons to ask the reader for a whole read, both ending with the file
+    // actually being opened. `forced` covers a path the store handed back from
+    // `takeStale` or a caller invalidated: the reader would otherwise pick
+    // `append` from the session list's resume point and the consumer would
+    // decline it again, every cycle, forever.
+    //
+    // The second is the case no decline can reach. When the list's cursor
+    // already sits at this file's current stat, the parse reuses its cached fold
+    // and opens nothing at all, so no consumer is ever asked and there is
+    // nothing to record as stale. Every transcript the list scanned before the
+    // index existed is in that state, which is what first enablement inside a
+    // running app looks like.
     if (forced || sessionParseCacheCoversTranscript(candidate, process.platform)) {
-      invalidateSessionParseCacheEntry(candidate.file.path)
+      requestWholeTranscriptRead(candidate.file.path)
     }
     try {
       await parseAgentSessionFileCached(candidate, process.platform, stats)

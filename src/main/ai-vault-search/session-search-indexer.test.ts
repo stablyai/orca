@@ -212,7 +212,7 @@ it('restarts the backfill when the history window widens and purges when it narr
   expect(sessionsMatching('recent')).toEqual([SESSION_ID])
 })
 
-it('refuses writes while paused and bounds the queue it keeps', async () => {
+it('refuses writes while paused, remembers what it declined, and bounds both queues', async () => {
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['indexed before the pause'], SESSION_ID)
   await newIndexer({ pendingLimit: 3 }).start()
@@ -225,14 +225,19 @@ it('refuses writes while paused and bounds the queue it keeps', async () => {
   await parseTranscript(path)
   await nextCycle()
   expect(sessionsMatching('paused')).toEqual([])
+  // A pause is the window in which reads are declined, so forgetting them would
+  // lose exactly the files the pause covered.
+  expect(indexer?.status().filesPending).toBe(1)
 
+  // A caller can keep invalidating right through the pause; that queue is capped.
   indexer?.invalidate(['/a', '/b', '/c', '/d', '/e'])
   const paused = indexer?.status()
-  expect(paused?.filesPending).toBe(3)
+  expect(paused?.filesPending).toBe(4)
   expect(paused?.droppedPending).toBe(2)
 
   await indexer?.resume()
   expect(sessionsMatching('paused')).toEqual([SESSION_ID])
+  expect(indexer?.status()).toMatchObject({ filesPending: 0, droppedPending: 2 })
   expect(indexer?.status().phase).not.toBe('paused')
 })
 
@@ -279,14 +284,29 @@ it('spends a cycle budget and rolls the rest into the next cycle', async () => {
   expect(sessionsMatching('budgeted')).toHaveLength(4)
 })
 
-it('indexes a transcript the session list had already parsed before it existed', async () => {
+// First enablement inside a running app is the normal case, not an edge: the
+// session list has been scanning since launch, so every transcript already has
+// a cursor sitting at its current stat and the index has nothing at all.
+it('fills an empty index over a warm session-list cache on the first reconcile', async () => {
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['scanned before the index existed'], SESSION_ID)
-  // The list's cursor now sits at this file's current stat, so an ordinary
-  // parse reads nothing and the index would stay empty forever.
+  // An ordinary parse now reuses its cached fold and opens no file, so no
+  // consumer is asked and there is nothing for a decline to record.
+  await parseTranscript(path)
+
+  newIndexer()
+  await indexer?.reconcile()
+
+  expect(sessionsMatching('scanned')).toEqual([SESSION_ID])
+})
+
+it('fills an empty index over a warm session-list cache on the first sweep', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['scanned before the index existed'], SESSION_ID)
   await parseTranscript(path)
 
   await newIndexer().start()
+
   expect(sessionsMatching('scanned')).toEqual([SESSION_ID])
 })
 

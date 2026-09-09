@@ -1,5 +1,3 @@
-import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
 import { runSessionSearchBackfill } from './session-search-backfill'
 import { pauseBackfill } from './session-search-backfill-pacing'
 import {
@@ -329,14 +327,16 @@ export class SessionSearchIndexer {
   }
 
   private publishPending(): void {
+    // Both queues, because a caller cannot act on one of them: the store's
+    // re-read set and this indexer's roll-over queue are each bounded, and
+    // either overrunning means the same thing for coverage.
     this.indexingStatus.setPending(
       this.pending.size + (this.store?.pendingFileCount ?? 0),
-      this.pending.droppedCount
+      this.pending.droppedCount + (this.store?.droppedPendingFileCount ?? 0)
     )
   }
 
   private openStore(): void {
-    mkdirSync(dirname(this.options.databasePath), { recursive: true })
     const store = new SessionSearchStore(this.options.databasePath, this.onError)
     store.setRetentionCutoffMs(this.cutoffMs())
     store.setAcceptingWrites(!this.paused)

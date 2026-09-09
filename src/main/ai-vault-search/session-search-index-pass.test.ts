@@ -1,6 +1,5 @@
-import { mkdirSync } from 'node:fs'
 import { appendFile, rm } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
@@ -44,7 +43,6 @@ function transcript(sessionId: string): string {
 }
 
 function openStore(): SessionSearchStore {
-  mkdirSync(dirname(harness.databasePath), { recursive: true })
   const opened = new SessionSearchStore(harness.databasePath, (error) => errors.push(error))
   registerSessionSearchIndexConsumer(opened)
   return opened
