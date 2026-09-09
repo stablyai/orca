@@ -86,6 +86,7 @@ export class SessionSearchIndexer {
   private paused = false
   private pausedAt: number | null = null
   private fullSweepDue = false
+  private sweptOnce = false
   private closed = false
 
   constructor(private readonly options: SessionSearchIndexerOptions) {
@@ -163,6 +164,7 @@ export class SessionSearchIndexer {
       this.pending.clear()
       this.previousRecent = new Set()
       this.rootStates = new Map()
+      this.sweptOnce = false
       this.openStore()
       this.fullSweepDue = true
     })
@@ -289,6 +291,7 @@ export class SessionSearchIndexer {
     this.indexingStatus.setDegradedRoots(sweep.degradedRoots)
     this.indexingStatus.setOrphanedFiles(sweep.orphanedFiles)
     this.fullSweepDue = false
+    this.sweptOnce = true
     // Watch everything the sweep saw: a transcript deleted between its
     // discovery and the first cycle is invisible to both otherwise. The
     // cycle's retirement cap keeps that one-off check off the critical path.
@@ -310,6 +313,8 @@ export class SessionSearchIndexer {
       // Read but not written: a recent-window discovery is not a census, so it
       // can spot a root that went to zero without redefining what healthy was.
       previousRootStates: this.rootStates,
+      previousDegradedRoots: this.indexingStatus.snapshot().degradedRoots.map((one) => one.root),
+      afterSweep: this.sweptOnce,
       signal
     })
     // Work that was drained and then not read is a hole in the index, not
@@ -320,6 +325,9 @@ export class SessionSearchIndexer {
     if (!cycle.completed) {
       return
     }
+    // A root that lists again after being judged absent or degraded needs the
+    // whole tree read, not the newest N a cycle happens to reach.
+    this.fullSweepDue ||= cycle.recoveredRoots.length > 0
     this.previousRecent = cycle.recentPaths
     this.indexingStatus.setDegradedRoots(cycle.degradedRoots)
     this.indexingStatus.finishWork(this.clock.now())

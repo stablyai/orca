@@ -50,7 +50,9 @@ const EMPTY_SWEEPS_BEFORE_TRUSTED = 2
  * - Missing with nothing held under it: absent, and no concern of ours.
  * - Lists successfully but empty, having held transcripts before: degraded for
  *   now. This is what a freshly unmounted volume also looks like, and one sweep
- *   cannot tell the two apart.
+ *   cannot tell the two apart. "Held before" is read from the store here too,
+ *   because an unmount on Linux, WSL or sshfs leaves the mountpoint present and
+ *   empty rather than missing, so this is the branch it takes there.
  * - Lists successfully but empty on two consecutive full sweeps: the user
  *   really did delete them. Degraded clears and the rows retire. Without this
  *   the alarm never releases, so a legitimately emptied root pins the whole
@@ -106,14 +108,19 @@ export async function sessionSearchRootHealth(args: {
     if (args.census) {
       states.set(listing.root, { ...previous, emptySweeps })
     }
-    if (previous.lastHealthyCount > 0 && emptySweeps < EMPTY_SWEEPS_BEFORE_TRUSTED) {
+    // The store, not just memory. An unmount on Linux, WSL or sshfs leaves the
+    // mountpoint present and empty rather than missing, so this is the branch a
+    // detached volume takes there — and on the first sweep of a process, memory
+    // has never seen the root healthy.
+    const heldBefore = previous.lastHealthyCount > 0 || args.holdsFiles(listing.root)
+    if (heldBefore && emptySweeps < EMPTY_SWEEPS_BEFORE_TRUSTED) {
       degraded.set(
         listing.root,
         `Listed no transcripts where it listed ${previous.lastHealthyCount} before.`
       )
       continue
     }
-    if (args.census && emptySweeps >= EMPTY_SWEEPS_BEFORE_TRUSTED) {
+    if (args.census && heldBefore && emptySweeps >= EMPTY_SWEEPS_BEFORE_TRUSTED) {
       // Believed: stop carrying a healthy count that is no longer true.
       states.set(listing.root, { lastHealthyCount: 0, emptySweeps })
     }

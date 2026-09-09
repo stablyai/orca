@@ -48,10 +48,25 @@ export type SessionSearchReconcileArgs = {
   retirementChecksPerCycle?: number
   /** What the last sweeps saw of each root; read, never written, by a cycle. */
   previousRootStates?: ReadonlyMap<string, SessionSearchRootState>
+  /** Roots the previous pass reported as degraded. */
+  previousDegradedRoots?: readonly string[]
+  /**
+   * Whether a full sweep has ever completed. Before one has, a root with no
+   * recorded healthy count has simply never been censused, which is not the
+   * same as one that recovered.
+   */
+  afterSweep?: boolean
   signal?: AbortSignal
 }
 
 export type SessionSearchReconcileResult = {
+  /**
+   * Roots that list transcripts again after a pass judged them absent or
+   * degraded. A cycle only reads the newest N per agent, so on its own it would
+   * index the newest file of a remounted volume and leave the rest unreachable
+   * for the life of the process; the caller owes them a sweep.
+   */
+  recoveredRoots: string[]
   /** What the next cycle watches: this cycle's recent window plus what it could not settle. */
   recentPaths: Set<string>
   /** Work drained but not read: over budget, unresolved, or cut short by an abort. */
@@ -140,9 +155,10 @@ export async function runSessionSearchReconcileCycle(
 
     // Before the retirement, not after it: the cycle deletes rows too, so it
     // needs the same fence the sweep has or one interval undoes the sweep's care.
+    const listings = sessionSearchRootListings(args.roots, swept.discoveries)
     const degradedRoots = (
       await sessionSearchRootHealth({
-        listings: sessionSearchRootListings(args.roots, swept.discoveries),
+        listings,
         issues,
         holdsFiles: (root) => store.hasIndexedFilesUnder(root),
         previous: args.previousRootStates ?? new Map(),
@@ -186,7 +202,17 @@ export async function runSessionSearchReconcileCycle(
         message: refusal.message
       })
     }
+    const wasDegraded = new Set(args.previousDegradedRoots ?? [])
     return {
+      recoveredRoots: listings
+        .filter(
+          (listing) =>
+            listing.files > 0 &&
+            (wasDegraded.has(listing.root) ||
+              (args.afterSweep === true &&
+                (args.previousRootStates?.get(listing.root)?.lastHealthyCount ?? 0) === 0))
+        )
+        .map((listing) => listing.root),
       // An unreadable source is not a deleted one, and a path the cap did not
       // reach was never checked at all: both stay watched instead of being
       // retired or forgotten.

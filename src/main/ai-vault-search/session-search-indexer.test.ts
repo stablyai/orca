@@ -591,6 +591,54 @@ it('keeps a root that is gone at the first sweep after a restart', async () => {
   expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
 })
 
+// Round 5, item 1: an unmount on Linux, WSL or sshfs leaves the mountpoint
+// present and empty rather than missing, so it takes the listable-but-empty
+// branch. Armed from memory, that branch had no grace on the first sweep of a
+// process, and the whole root retired on it.
+it('keeps a root that is present but empty at the first sweep after a restart', async () => {
+  for (let index = 0; index < 3; index++) {
+    const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
+    await writeClaudeTranscript(transcriptPath(session), [`mounted session ${index}`], session)
+  }
+  await newIndexer().start()
+  expect(sessionsMatching('mounted')).toHaveLength(3)
+  indexer?.close()
+  resetTranscriptConsumersForTests()
+  resetSessionParseCacheForTests()
+
+  // The mountpoint is still there when the process comes back; the volume is not.
+  await rm(harness.roots.claudeProjectsDir ?? '', { recursive: true, force: true })
+  await mkdir(harness.roots.claudeProjectsDir ?? '', { recursive: true })
+  await newIndexer().start()
+
+  const status = indexer?.status()
+  expect(status?.phase).toBe('degraded')
+  expect(status?.degradedRoots.map((root) => root.root)).toContain(harness.roots.claudeProjectsDir)
+  expect(sessionsMatching('mounted')).toHaveLength(3)
+})
+
+// Round 5, item 2: a cycle only reads the newest N per agent, so a remounted
+// volume would give up its newest transcript and keep the rest unreachable.
+it('sweeps again when a root comes back after being absent', async () => {
+  const absent = harness.roots.claudeProjectsDir ?? ''
+  // Detached before anything was ever indexed, so the sweep correctly finds
+  // nothing and reports no alarm.
+  await newIndexer({ recentPerAgent: 1 }).start()
+  expect(indexer?.status()).toMatchObject({ degradedRoots: [], filesIndexed: 0 })
+
+  for (let index = 0; index < 3; index++) {
+    const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
+    await writeClaudeTranscript(transcriptPath(session), [`remounted session ${index}`], session)
+  }
+  expect(absent).toBeTruthy()
+
+  // One cycle notices the root is back; the sweep it asks for reads the rest.
+  await nextCycle()
+  await nextCycle()
+
+  expect(sessionsMatching('remounted')).toHaveLength(3)
+})
+
 // Round 4, item 3: rows under no configured root were immortal, refreshed by
 // nothing and reported by nothing, while still answering searches.
 it('reports rows under no configured root, and retires them only when gone', async () => {
