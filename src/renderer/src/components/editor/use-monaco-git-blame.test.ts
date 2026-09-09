@@ -38,4 +38,14 @@ describe('current-line Git blame', () => {
       'Git blame is unavailable on this host. Reconnect to update Orca, then try again.'
     )
   })
+
+  it('explains that an older SSH host needs to reconnect through Electron IPC', () => {
+    const error = new Error(
+      "Error invoking remote method 'git:blame': Error: Git blame is unavailable on this host. Reconnect to update Orca."
+    )
+
+    expect(getGitBlameErrorMessage(error)).toBe(
+      'Git blame is unavailable on this host. Reconnect to update Orca, then try again.'
+    )
+  })
 })

@@ -13,6 +13,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { retainCurrentStashFiles, stashFilesCacheKey } from './stash-panel-cache'
+import { getStashErrorMessage } from './stash-error-message'
 import type { GitStashFile, GitStashSummary } from '../../../../../../shared/git-stash'
 import {
   applyRuntimeGitStash,
@@ -26,28 +27,6 @@ import {
 } from '@/runtime/runtime-git-client'
 
 type Confirmation = { action: 'pop' | 'drop'; stash: GitStashSummary } | null
-
-function stashErrorMessage(error: unknown, fallback: string): string {
-  if (!(error instanceof Error)) {
-    return fallback
-  }
-  if (error.message === 'stash_revision_changed') {
-    return translate(
-      'components.sourceControl.stashes.revisionChanged',
-      'This stash changed. Refresh stashes and try again.'
-    )
-  }
-  if (error.message === 'invalid_stash_revision') {
-    return translate('components.sourceControl.stashes.invalidRevision', 'Invalid stash revision')
-  }
-  if (error.message === 'git_stash_unavailable') {
-    return translate(
-      'components.sourceControl.stashes.hostUnavailable',
-      'Git stashes are unavailable on this host. Reconnect to update Orca, then try again.'
-    )
-  }
-  return error.message
-}
 
 export function GitStashesPanel(props: {
   worktreeId: string
@@ -93,7 +72,7 @@ export function GitStashesPanel(props: {
       )
     } catch (error) {
       if (!controller.signal.aborted) {
-        toast.error(stashErrorMessage(error, translate('components.sourceControl.stashes.loadFailed', 'Failed to load stashes')))
+        toast.error(getStashErrorMessage(error, translate('components.sourceControl.stashes.loadFailed', 'Failed to load stashes')))
       }
     } finally {
       if (listRequestRef.current === controller) {
@@ -135,7 +114,7 @@ export function GitStashesPanel(props: {
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          toast.error(stashErrorMessage(error, translate('components.sourceControl.stashes.filesLoadFailed', 'Failed to load stash files')))
+          toast.error(getStashErrorMessage(error, translate('components.sourceControl.stashes.filesLoadFailed', 'Failed to load stash files')))
         }
       } finally {
         if (filesRequestRef.current === controller) {
@@ -172,7 +151,7 @@ export function GitStashesPanel(props: {
       await operation()
       toast.success(success)
     } catch (error) {
-      toast.error(stashErrorMessage(error, translate('components.sourceControl.stashes.operationFailed', 'Stash operation failed')))
+      toast.error(getStashErrorMessage(error, translate('components.sourceControl.stashes.operationFailed', 'Stash operation failed')))
     } finally {
       props.onRefreshStatus()
       await refresh()
