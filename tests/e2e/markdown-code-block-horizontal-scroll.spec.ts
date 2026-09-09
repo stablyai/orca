@@ -47,13 +47,9 @@ test.describe('Wide code blocks scroll horizontally', () => {
         }
       })
 
-      // The wide viewport keeps the editor pane wider than WIDE_LINE's
-      // unbroken run needs to fit on one line, so pre-wrap wraps it at
-      // ordinary word boundaries with no overflow — scrollWidth only
-      // exceeds clientWidth once white-space: pre removes those wrap
-      // points, which is what pins this assertion to the fix. A narrower
-      // pane lets the browser's overflow-wrap: break-word fallback wrap
-      // the run mid-word even under pre-wrap, which would pass either way.
+      // The wide viewport fits WIDE_LINE's unbroken run on one wrapped
+      // line under pre-wrap with no overflow, so scrollWidth exceeds
+      // clientWidth only once white-space: pre removes that wrap point.
       expect(metrics.whiteSpace).toBe('pre')
       expect(metrics.scrollWidth).toBeGreaterThan(metrics.clientWidth)
     } finally {
