@@ -14,6 +14,10 @@
  */
 import { z } from 'zod'
 import {
+  isValidOfficeDocumentPath,
+  isValidOfficeRelativePath
+} from '../../../../shared/office-preview-rpc'
+import {
   OFFICE_CLEAR_MARKS_METHOD,
   OFFICE_GOTO_METHOD,
   OFFICE_MARKS_METHOD,
@@ -30,21 +34,21 @@ import {
 import { executeOfficeMethod } from '../../../office/office-method-executor'
 import { defineMethod, type RpcMethod } from '../core'
 
-const WorkspaceRoot = z.string().min(1).max(4096)
+// Refined through the shared predicates rather than restating their rules: zod alone accepted a
+// whitespace-only or NUL-carrying string that `isValidOfficeDocumentPath` rejects, and an invalid
+// optional `workspaceRoot` then read as absent — silently probing this host's default lane instead
+// of failing the call.
+const WorkspaceRoot = z
+  .string()
+  .max(4096)
+  .refine(isValidOfficeDocumentPath, { message: 'workspaceRoot is not a usable path' })
 /**
  * Never absolute: the host joins this onto the workspace root and refuses anything that
  * canonicalises outside it, matching every neighbouring `files.*` method.
  */
-const RelativePath = z
-  .string()
-  .min(1)
-  .max(2048)
-  .refine(
-    (value) => !value.startsWith('/') && !value.startsWith('\\') && !/^[a-zA-Z]:/.test(value),
-    {
-      message: 'relativePath must be relative to the workspace root'
-    }
-  )
+const RelativePath = z.string().max(2048).refine(isValidOfficeRelativePath, {
+  message: 'relativePath must be a non-empty path relative to the workspace root'
+})
 const WorkspaceDocument = { workspaceRoot: WorkspaceRoot, relativePath: RelativePath }
 const SkillId = z
   .string()

@@ -19,6 +19,7 @@ import {
   type OfficeWatchOutcome
 } from '../../shared/office-preview-contracts'
 import { isOfficeRenderable } from '../../shared/office-file-extensions'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { joinOfficeRelativePath } from '../../shared/office-preview-rpc'
 import {
   OfficeDocumentOutsideWorkspaceError,
@@ -220,11 +221,21 @@ export async function stopOfficeWatch(ref: OfficeDocumentRef): Promise<OfficeAck
     // that has to go. Fall back to the lane's own join rather than a hardcoded `/`: this string is
     // both the registry lookup and the argument handed to `officecli unwatch`, and a Windows path
     // spelled with a stray forward slash matches neither.
-    canonicalPath =
-      joinOfficeRelativePath(ref.workspaceRoot, ref.relativePath) ??
-      `${ref.workspaceRoot}/${ref.relativePath}`
+    const joined = joinOfficeRelativePath(ref.workspaceRoot, ref.relativePath)
+    // The boundary still applies on the way out. Canonicalisation is what normally enforces it, so
+    // with the document gone the lexical check is all that is left — and without it a traversal
+    // relative path would reach `officecli unwatch` after every other method had refused it.
+    if (!joined || !isPathInsideOrEqual(ref.workspaceRoot, joined)) {
+      return officeFailure('OFFICE_DOCUMENT_OUTSIDE_WORKSPACE')
+    }
+    canonicalPath = joined
   }
-  const session = sessions.get(officeWatchSessionKeyFor(lane, canonicalPath))
+  const key = officeWatchSessionKeyFor(lane, canonicalPath)
+  // A start still in flight has registered no session yet, so a stop would otherwise pass straight
+  // through and the child registered a moment later would have nothing left to stop it — a live
+  // process and a loopback port for the rest of the run. Readiness is bounded, so is this wait.
+  await starting.get(key)?.catch(() => undefined)
+  const session = sessions.get(key)
   if (session) {
     await stopWatchSession(session)
     return { ok: true }
