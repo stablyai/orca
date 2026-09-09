@@ -23,6 +23,7 @@ export type NewWorktreeModalProps = {
   hostId?: string
   existingWorktreePaths?: readonly string[]
   existingWorktrees?: readonly { repoId: string; branch: string }[]
+  openExternalUrl: (url: string) => Promise<unknown>
   onCreated: (worktreeId: string, name: string) => void
   onClose: () => void
 }
