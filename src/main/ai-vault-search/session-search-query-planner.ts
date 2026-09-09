@@ -22,6 +22,12 @@ const QUOTED = /"[^"]{3,}"|'[^']{3,}'/
 
 export type SessionSearchQueryPlan = {
   literal: boolean
+  /**
+   * The query had more terms than the planner will search. What is dropped is
+   * the tail, so a match that only the last term would have found is missed;
+   * the caller is told rather than handed a confident empty answer.
+   */
+  truncated: boolean
   /** Deduplicated index-faithful terms for the OR fallback, incl. identifier pieces. */
   terms: string[]
   /** Query-order tokens minus stop words: the phrase / AND candidate. */
@@ -66,7 +72,11 @@ export function planSessionSearchQuery(
   query: string,
   literal = isLiteralQuery(query)
 ): SessionSearchQueryPlan {
-  const raw = indexTokens(query, MAX_BODY_TERMS)
+  // One past the cap, so the plan can tell a query that just fits from one that
+  // was cut. `indexTokens` stops at its limit, so it cannot be asked afterwards.
+  const overCap = indexTokens(query, MAX_BODY_TERMS + 1)
+  const truncated = overCap.length > MAX_BODY_TERMS
+  const raw = overCap.slice(0, MAX_BODY_TERMS)
   let body = literal ? raw : raw.filter((token) => !STOP_WORDS.has(token.toLowerCase()))
   if (body.length < 2) {
     body = raw
@@ -82,6 +92,7 @@ export function planSessionSearchQuery(
   }
   return {
     literal,
+    truncated,
     terms: [...terms, ...extra].slice(0, MAX_TERMS),
     body: body.slice(0, MAX_BODY_TERMS)
   }

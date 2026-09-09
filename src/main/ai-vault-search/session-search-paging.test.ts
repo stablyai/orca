@@ -224,12 +224,23 @@ describe('cursor encoding', () => {
   })
 
   it.each([
-    ['a negative offset', encodeSessionSearchCursor(1, -1, 'k')],
-    ['a non-integer offset', Buffer.from('{"g":1,"o":1.5,"k":"k"}').toString('base64url')],
-    ['a payload that is not an object', Buffer.from('"nope"').toString('base64url')],
-    ['text that is not base64url JSON', 'zzz!!']
-  ])('rejects %s as malformed', (_name, cursor) => {
-    expect(() => decodeSessionSearchCursor(cursor, 1, 'k')).toThrow(SessionSearchCursorError)
+    ['a negative offset', encodeSessionSearchCursor(1, -1, 'k'), 1],
+    ['a non-integer offset', Buffer.from('{"g":1,"o":1.5,"k":"k"}').toString('base64url'), 1],
+    ['a payload that is not an object', Buffer.from('"nope"').toString('base64url'), undefined],
+    ['text that is not base64url JSON', 'zzz!!', undefined]
+  ])('rejects %s as malformed, still naming the index generation', (_name, cursor, claimed) => {
+    // The caller has to know which snapshot it was refused against whatever was
+    // wrong with the cursor, and the generation it claimed whenever that
+    // survived parsing.
+    try {
+      decodeSessionSearchCursor(cursor, 7, 'k')
+      expect.unreachable('a malformed cursor is not an empty one')
+    } catch (error) {
+      const rejected = error as SessionSearchCursorError
+      expect(rejected.rejection).toBe('malformed')
+      expect(rejected.actualGeneration).toBe(7)
+      expect(rejected.expectedGeneration).toBe(claimed)
+    }
   })
 })
 

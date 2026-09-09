@@ -335,6 +335,32 @@ describe('an index that predates version 2 is answered from, not thrown at', () 
   })
 })
 
+describe('a query the engine had to cut says so', () => {
+  it('reports truncation when the planner drops terms past its cap', async () => {
+    // The 56th term is the only one that matches. Without the flag this is a
+    // confident empty answer to a query the engine never finished reading.
+    const { db, engine } = await open('ss-engine-term-cap')
+    addSyntheticSession(db, { id: 1, text: 'onlyattheend' })
+    const query = `${Array.from({ length: 55 }, (_unused, n) => `term${n}`).join(' ')} onlyattheend`
+    const result = engine.search({ query })
+    expect(result.hits).toEqual([])
+    expect(result.truncated.query).toBe(true)
+  })
+
+  it('reports truncation when the query is longer than the engine will plan', async () => {
+    const { db, engine } = await open('ss-engine-length-cap')
+    addSyntheticSession(db, { id: 1, text: 'needle' })
+    const result = engine.search({ query: `needle ${'x'.repeat(SESSION_SEARCH_QUERY_MAX_LENGTH)}` })
+    expect(result.truncated.query).toBe(true)
+  })
+
+  it('claims no truncation for a query that fit', async () => {
+    const { db, engine } = await open('ss-engine-no-cap')
+    addSyntheticSession(db, { id: 1, text: 'needle' })
+    expect(engine.search({ query: 'needle' }).truncated.query).toBe(false)
+  })
+})
+
 describe('the engine is the only thing that warms the index', () => {
   it('warms on the first search and leans on the store to memoize the rest', async () => {
     const { db, store, engine } = await open('ss-engine-warm')
