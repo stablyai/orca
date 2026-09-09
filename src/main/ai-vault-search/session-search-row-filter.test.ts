@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { splitAiVaultSearchQuery } from '../../shared/ai-vault-search-query-operators'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchFilters } from './session-search-engine-types'
 import { cwdKey } from './session-search-file-records'
@@ -41,8 +40,8 @@ function addSession(
   )
 }
 
-function selected(db: SyncDatabase, query: string, filters: SessionSearchFilters = {}): number[] {
-  const filter = sessionRowFilter(filters, splitAiVaultSearchQuery(query))
+function selected(db: SyncDatabase, filters: SessionSearchFilters = {}): number[] {
+  const filter = sessionRowFilter(filters)
   const where = filter.conditions.length > 0 ? `WHERE ${filter.conditions.join(' AND ')}` : ''
   return (
     db.prepare(`SELECT id FROM visible_sessions ${where} ORDER BY id`).all(...filter.values) as {
@@ -70,16 +69,14 @@ describe('a cwd scope is the sidebar key, or anything below it', () => {
   ])('scopes %s under %s: %s', async (cwd, scope, expected) => {
     const db = await openIndex()
     addSession(db, 1, cwd)
-    expect(selected(db, 'needle', { scopePaths: [scope] })).toEqual(expected ? [1] : [])
-    // An absolute `path:` operator claims the same identity as a scope path.
-    expect(selected(db, `needle path:"${scope}"`)).toEqual(expected ? [1] : [])
+    expect(selected(db, { scopePaths: [scope] })).toEqual(expected ? [1] : [])
   })
 
   it('never matches a session whose transcript recorded no cwd', async () => {
     const db = await openIndex()
     addSession(db, 1, null)
-    expect(selected(db, 'needle', { scopePaths: ['/work'] })).toEqual([])
-    expect(selected(db, 'needle')).toEqual([1])
+    expect(selected(db, { scopePaths: ['/work'] })).toEqual([])
+    expect(selected(db)).toEqual([1])
   })
 
   it('keeps a WSL UNC workspace distinct from the bare Linux spelling', async () => {
@@ -89,44 +86,9 @@ describe('a cwd scope is the sidebar key, or anything below it', () => {
     const db = await openIndex()
     addSession(db, 1, '\\\\wsl.localhost\\Ubuntu\\home\\ada\\app')
     addSession(db, 2, '/home/ada/app')
-    expect(selected(db, 'needle', { scopePaths: ['\\\\wsl$\\Ubuntu\\home\\ada'] })).toEqual([1])
-    expect(selected(db, 'needle', { scopePaths: ['/home/ada/app'] })).toEqual([2])
-    expect(selected(db, 'needle', { scopePaths: ['\\\\wsl$\\Debian\\home\\ada\\app'] })).toEqual([])
-  })
-})
-
-describe('operators narrow, and combine the way qualifiers do', () => {
-  it('scopes repo: to the last segment of cwd, never a parent', async () => {
-    const db = await openIndex()
-    addSession(db, 1, '/repo/app')
-    addSession(db, 2, '/other/service')
-    expect(selected(db, 'needle repo:app')).toEqual([1])
-    expect(selected(db, 'needle repo:service')).toEqual([2])
-    expect(selected(db, 'needle repo:other')).toEqual([])
-  })
-
-  it('ORs within one key and ANDs across keys', async () => {
-    const db = await openIndex()
-    addSession(db, 1, '/repo/app')
-    addSession(db, 2, '/other/service')
-    addSession(db, 3, '/repo/tool')
-    expect(selected(db, 'needle path:/repo/app path:/other/service')).toEqual([1, 2])
-    expect(selected(db, 'needle repo:app path:/other')).toEqual([])
-    expect(selected(db, 'needle repo:app path:/repo')).toEqual([1])
-  })
-
-  it('treats LIKE wildcards inside a relative path: as literal text', async () => {
-    const db = await openIndex()
-    addSession(db, 1, '/work/a_b')
-    addSession(db, 2, '/work/axb')
-    expect(selected(db, 'needle path:a_b')).toEqual([1])
-    expect(selected(db, 'needle path:a%b')).toEqual([])
-  })
-
-  it('drops an operator whose value is only separators', async () => {
-    const db = await openIndex()
-    addSession(db, 1, '/work/app')
-    expect(selected(db, 'needle path:///')).toEqual([1])
+    expect(selected(db, { scopePaths: ['\\\\wsl$\\Ubuntu\\home\\ada'] })).toEqual([1])
+    expect(selected(db, { scopePaths: ['/home/ada/app'] })).toEqual([2])
+    expect(selected(db, { scopePaths: ['\\\\wsl$\\Debian\\home\\ada\\app'] })).toEqual([])
   })
 })
 
@@ -135,11 +97,9 @@ describe('caller filters', () => {
     const db = await openIndex()
     addSession(db, 1, '/work/app', { agent: 'claude', updatedAt: '2026-09-01T00:00:00.000Z' })
     addSession(db, 2, '/work/app', { agent: 'codex', updatedAt: '2026-09-05T00:00:00.000Z' })
-    expect(selected(db, 'needle', { agents: ['codex'] })).toEqual([2])
-    expect(selected(db, 'needle', { since: '2026-09-03T00:00:00.000Z' })).toEqual([2])
-    expect(
-      selected(db, 'needle', { agents: ['claude'], since: '2026-09-03T00:00:00.000Z' })
-    ).toEqual([])
+    expect(selected(db, { agents: ['codex'] })).toEqual([2])
+    expect(selected(db, { since: '2026-09-03T00:00:00.000Z' })).toEqual([2])
+    expect(selected(db, { agents: ['claude'], since: '2026-09-03T00:00:00.000Z' })).toEqual([])
   })
 
   it('applies the retention cutoff through the files table', async () => {
@@ -152,7 +112,7 @@ describe('caller filters', () => {
     db.prepare(
       "INSERT INTO files(path,byte_offset,mtime_ms,session_row_id) VALUES ('b',0,500,2)"
     ).run()
-    const filter = sessionRowFilter({}, splitAiVaultSearchQuery('needle'), 300)
+    const filter = sessionRowFilter({}, 300)
     const rows = db
       .prepare(`SELECT id FROM visible_sessions WHERE ${filter.conditions.join(' AND ')}`)
       .all(...filter.values) as { id: number }[]
@@ -162,7 +122,7 @@ describe('caller filters', () => {
 
 it('plans a cwd scope as a seek on sessions_cwd_key, never a scan', async () => {
   const db = await openIndex()
-  const filter = sessionRowFilter({ scopePaths: ['/work/app'] }, splitAiVaultSearchQuery('needle'))
+  const filter = sessionRowFilter({ scopePaths: ['/work/app'] })
   const plan = (
     db
       .prepare(

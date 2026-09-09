@@ -1,8 +1,3 @@
-import type { AiVaultSearchQuerySplit } from '../../shared/ai-vault-search-query-operators'
-import {
-  isRuntimePathAbsolute,
-  normalizeRuntimePathSeparators
-} from '../../shared/cross-platform-path'
 import { cwdKey } from './session-search-file-records'
 import type { SessionSearchFilters } from './session-search-engine-types'
 
@@ -15,27 +10,28 @@ export type SessionRowFilter = {
 // Stored identity: `cwdKey` is the sidebar's `folderGroupKey` without its prefix,
 // so a scope term and an indexed session are keyed by one function, never two.
 const CWD = 'cwd_key'
-// Why: SQLite has no basename(). `rtrim(p, <p minus its separators>)` peels the
-// last segment off, leaving the parent prefix to delete out of p.
-const CWD_BASENAME = `replace(${CWD}, rtrim(${CWD}, replace(${CWD}, '/', '')), '')`
 
 /**
- * Every caller-supplied narrowing in one place, so the retrieval, the recent
- * page and the session load cannot drift apart. Row visibility is not here: it
- * belongs to the `visible_sessions` / `visible_messages` views these conditions
- * run over.
+ * The narrowings SQL can express exactly, in one place, so retrieval, the
+ * operator-only page and the session load cannot drift apart. Row visibility is
+ * not here: it belongs to the `visible_sessions` / `visible_messages` views
+ * these conditions run over.
  *
- * Case rule, one for the whole file: a comparison that claims *identity*
- * (`scopePaths`, an absolute `path:`) compares the stored key as-is, so it folds
- * exactly where the execution host folds — Windows drives, never a POSIX
- * directory name. A comparison that is only a *substring probe* (a relative
- * `path:`, any `repo:`) uses LIKE, which folds ASCII and nothing else; SQLite
- * has no Unicode fold, and `lower()` would fold ASCII twice while still missing
- * `É`, so it is not used.
+ * `repo:` and `path:` are deliberately absent. What they mean is the predicate
+ * the sessions panel applies (`matchesAiVaultQueryOperators`), and SQL cannot
+ * express it: LIKE folds ASCII and nothing else, so `path:CAFÉ` would miss
+ * `café`; `path:` searches the transcript path as well as the working
+ * directory, so `path:jsonl` would miss every session; and `repo:` compares the
+ * last two path segments, not one. A second spelling that came close would be a
+ * query meaning different things in the list and in the index, so the engine
+ * applies the panel's own predicate over the rows it retrieves instead.
+ *
+ * `scopePaths` stays here because it is exact: a prefix range over the key
+ * `cwdKey` produces, which folds exactly where the execution host folds —
+ * Windows drives, never a POSIX directory name.
  */
 export function sessionRowFilter(
   filters: SessionSearchFilters,
-  split: AiVaultSearchQuerySplit,
   cutoffMs: number | null = null
 ): SessionRowFilter {
   const filter: SessionRowFilter = { conditions: [], values: [] }
@@ -52,48 +48,21 @@ export function sessionRowFilter(
     filter.values.push(filters.since)
   }
   if (filters.scopePaths && filters.scopePaths.length > 0) {
-    addGroup(
-      filter,
-      filters.scopePaths.map((scope) => scopeCondition(filter, scope))
-    )
+    // Several scopes mean any of them; every other narrowing is ANDed on.
+    const present = filters.scopePaths
+      .map((scope) => scopeCondition(filter, scope))
+      .filter((condition) => condition !== null)
+    if (present.length > 0) {
+      filter.conditions.push(`(${present.join(' OR ')})`)
+    }
   }
-  // Operators narrow the caller's scope, never widen it, and follow the usual
-  // qualifier semantics: OR within one key, AND across keys, so `path:a path:b`
-  // means either while `repo:x path:a` means both.
-  addGroup(
-    filter,
-    split.pathTerms.map((term) => pathTermCondition(filter, term))
-  )
-  addGroup(
-    filter,
-    // Why: a folder workspace has no repo name beyond its own folder, so the
-    // last segment of cwd is the only honest local proxy for `repo:`.
-    split.repoTerms.map((term) => containsCondition(filter, CWD_BASENAME, term))
-  )
   return filter
-}
-
-function addGroup(filter: SessionRowFilter, conditions: (string | null)[]): void {
-  const present = conditions.filter((condition) => condition !== null)
-  if (present.length > 0) {
-    filter.conditions.push(`(${present.join(' OR ')})`)
-  }
 }
 
 /** A scope the caller could not key is a scope nothing is inside of. */
 function scopeCondition(filter: SessionRowFilter, scope: string): string | null {
   const key = cwdKey(scope)
   return key === null ? null : insideCondition(filter, key)
-}
-
-function pathTermCondition(filter: SessionRowFilter, term: string): string | null {
-  if (isRuntimePathAbsolute(term)) {
-    return scopeCondition(filter, term)
-  }
-  // A bare fragment cannot prove Windows semantics, so fold separators anyway:
-  // `path:Work\App` is a Windows user typing, never a POSIX file named `Work\App`.
-  const fragment = normalizeRuntimePathSeparators(term).replace(/\/+$/, '')
-  return fragment ? containsCondition(filter, CWD, fragment) : null
 }
 
 /**
@@ -117,10 +86,4 @@ function insideCondition(filter: SessionRowFilter, key: string): string {
 /** The first string that sorts after every string starting with `prefix`. */
 function nextAfterPrefix(prefix: string): string {
   return prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1)
-}
-
-function containsCondition(filter: SessionRowFilter, column: string, term: string): string {
-  // LIKE wildcards inside a user-typed term are literal text, not a pattern.
-  filter.values.push(`%${term.normalize('NFC').replaceAll(/[\\%_]/g, '\\$&')}%`)
-  return `${column} LIKE ? ESCAPE '\\'`
 }

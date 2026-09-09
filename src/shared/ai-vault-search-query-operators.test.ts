@@ -45,9 +45,30 @@ describe('what counts as an operator', () => {
   })
 })
 
-// Two parsers for one syntax exist only until the panel moves onto this one
-// (PR 7). Until then they must agree on which token is an operator, or the same
-// query means different things in the list and in the index.
+// The panel parses through this module now, so the two cannot disagree by
+// construction. What is worth pinning is the handful of shapes where the
+// panel's old hand-rolled tokenizer answered differently, so the change of
+// behaviour is a decision on the record rather than a surprise.
+describe('the shapes where the panel parser used to answer differently', () => {
+  it('drops an operator with an empty quoted value instead of searching for `""`', () => {
+    // The old tokenizer kept the quotes as the value, which matched no repo at
+    // all, so `repo:""` silently emptied the list.
+    expect(splitAiVaultSearchQuery('repo:"" x').repoTerms).toEqual([])
+    expect(parseVaultQuery('repo:"" x').repoTerms).toEqual([])
+  })
+
+  it('reads a quote that does not end a word as ordinary text', () => {
+    // `"foo"bar` was two tokens, `foo` and `bar`; it is one now. A closing quote
+    // has to end a word, which is what keeps the apostrophes in `it's ... thing's`
+    // from swallowing an operator between them.
+    expect(parseVaultQuery('"foo"bar').terms).toEqual(['"foo"bar'])
+  })
+
+  it('reads a bare pair of quotes as an empty term, not as the characters', () => {
+    expect(parseVaultQuery('"" empty').terms).toEqual(['', 'empty'])
+  })
+})
+
 describe('agrees with the sessions panel parser on operator recognition', () => {
   it.each([
     'relay capacity',
