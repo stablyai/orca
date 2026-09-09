@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { ConnectConfig } from 'ssh2'
 import {
   clientInstances,
   emitSshEvent,
@@ -9,7 +10,11 @@ import {
   resetSshConnectionMocks,
   ssh2Mock
 } from './ssh-connection-test-harness'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import {
+  createCallbacks,
+  createTarget,
+  walkInitialAuthLadder
+} from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
 
@@ -116,15 +121,14 @@ describe('SshConnection', () => {
       await conn.connect()
 
       expect(clientInstances).toHaveLength(2)
-      // The agent-first attempt defers ~/.ssh/id_rsa, so it must not offer the host's password
-      // challenge: the deferred key is what authenticates, and it is only tried below.
-      expect(clientInstances[0].lastConnectConfig).toMatchObject({
-        agent: '/tmp/agent.sock',
-        tryKeyboard: false
-      })
+      // The agent-first attempt defers ~/.ssh/id_rsa, so its ladder ends at the agent: answering
+      // the host's password challenge there would preempt the key that actually authenticates.
+      expect(walkInitialAuthLadder(clientInstances[0].lastConnectConfig as ConnectConfig)).toEqual([
+        'none',
+        'agent'
+      ])
       expect(clientInstances[1].lastConnectConfig).toMatchObject({
-        privateKey: Buffer.from('default-key'),
-        tryKeyboard: true
+        privateKey: Buffer.from('default-key')
       })
       expect(onCredentialRequest).not.toHaveBeenCalled()
     } finally {

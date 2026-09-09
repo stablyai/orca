@@ -36,6 +36,7 @@ import {
   RECONNECT_BACKOFF_MS
 } from './ssh-connection-utils'
 import { resolveEffectiveProxy } from './ssh-proxy-command'
+import { walkInitialAuthLadder } from './ssh-connection-test-fixtures'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 
@@ -693,9 +694,9 @@ describe('buildConnectConfig', () => {
     )
     expect(config.agent).toBe('/tmp/agent.sock')
     // No privateKey, so ssh2 cannot parse (and demand a passphrase for) the key before the agent
-    // has been tried, and no challenge, so the deferred key is reached before any dialog.
+    // has been tried, and no challenge rung, so the deferred key is reached before any dialog.
     expect(config.privateKey).toBeUndefined()
-    expect(config.tryKeyboard).toBe(false)
+    expect(walkInitialAuthLadder(config)).toEqual(['none', 'agent'])
   })
 
   it('defers an existing default key file to the no-agent retry', () => {
@@ -705,14 +706,14 @@ describe('buildConnectConfig', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
-    expect(config.tryKeyboard).toBe(false)
+    expect(walkInitialAuthLadder(config)).toEqual(['none', 'agent'])
   })
 
   it('offers the keyboard-interactive challenge when the agent defers no key', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
-    expect(config.tryKeyboard).toBe(true)
+    expect(walkInitialAuthLadder(config)).toEqual(['none', 'agent', 'keyboard-interactive'])
   })
 
   it('provides fallback key when no agent is available', () => {

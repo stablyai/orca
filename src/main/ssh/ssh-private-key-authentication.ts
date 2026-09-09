@@ -15,7 +15,8 @@ function authMethodName(attempt: AuthenticationType | AnyAuthMethod): Authentica
 
 function buildAuthQueue(
   config: ConnectConfig,
-  keys: PrivateKeyFile[]
+  keys: PrivateKeyFile[],
+  options: { offerKeyboardInteractive?: boolean } = {}
 ): (AuthenticationType | AnyAuthMethod)[] {
   const username = config.username ?? ''
   const queue: (AuthenticationType | AnyAuthMethod)[] = [{ type: 'none', username }]
@@ -33,7 +34,7 @@ function buildAuthQueue(
   if (config.agent) {
     queue.push({ type: 'agent', username, agent: config.agent })
   }
-  if (config.tryKeyboard) {
+  if (options.offerKeyboardInteractive ?? config.tryKeyboard === true) {
     queue.push('keyboard-interactive')
   }
   return queue
@@ -42,7 +43,8 @@ function buildAuthQueue(
 export function configurePrivateKeyAuthentication(
   config: ConnectConfig,
   keys: PrivateKeyFile[],
-  passphraseKeyPath?: string
+  passphraseKeyPath?: string,
+  options: { deferKeyboardInteractive?: boolean } = {}
 ): void {
   const firstKey = keys[0]
   if (firstKey) {
@@ -61,12 +63,16 @@ export function configurePrivateKeyAuthentication(
   let partialSuccessStagesLeft = MAX_PARTIAL_SUCCESS_STAGES
   config.authHandler = (authsLeft, partialSuccess, next) => {
     if (authsLeft == null) {
-      queue = buildAuthQueue(config, keys)
+      queue = buildAuthQueue(config, keys, {
+        offerKeyboardInteractive: !options.deferKeyboardInteractive
+      })
       partialSuccessStagesLeft = MAX_PARTIAL_SUCCESS_STAGES
     } else if (partialSuccess && partialSuccessStagesLeft > 0) {
       // A stage was accepted and the host now demands another method. Restart from a fresh queue
       // narrowed to what it still offers: re-offering keys it has stopped accepting is what
-      // exhausts MaxAuthTries before the challenge is ever shown.
+      // exhausts MaxAuthTries before the challenge is ever shown. The challenge stays offerable
+      // even on attempts that withheld it from their initial ladder (deferred keys), because a
+      // second factor demanded after a key partial-succeeds has no later attempt to fall back to.
       partialSuccessStagesLeft -= 1
       const offered = Array.isArray(authsLeft) ? authsLeft : []
       queue = buildAuthQueue(config, keys).filter((attempt) => {
