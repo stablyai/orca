@@ -27,9 +27,27 @@ describe('TaskStatusBadge', () => {
   })
 
   it('renders todo with ⏳ as fallback or explicit', () => {
-    render(<TaskStatusBadge status={'todo' as any} />)
+    render(<TaskStatusBadge status="todo" />)
     expect(screen.getByText('Todo')).toBeInTheDocument()
     expect(screen.getByText('⏳')).toBeInTheDocument()
+  })
+
+  it("renders backlog with label 'Backlog', not a Todo fallback", () => {
+    render(<TaskStatusBadge status="backlog" />)
+    expect(screen.getByText('Backlog')).toBeInTheDocument()
+    expect(screen.getByText('📋')).toBeInTheDocument()
+  })
+
+  it("renders review with label 'Review'", () => {
+    render(<TaskStatusBadge status="review" />)
+    expect(screen.getByText('Review')).toBeInTheDocument()
+    expect(screen.getByText('👀')).toBeInTheDocument()
+  })
+
+  it("renders blocked with label 'Blocked'", () => {
+    render(<TaskStatusBadge status="blocked" />)
+    expect(screen.getByText('Blocked')).toBeInTheDocument()
+    expect(screen.getByText('🚫')).toBeInTheDocument()
   })
 })
 

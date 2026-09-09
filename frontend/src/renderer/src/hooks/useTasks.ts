@@ -24,6 +24,10 @@ export function useTasks(projectId: string) {
   const [filterStatus, setFilterStatus] = useState<'all' | string>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  // Bumped by refetch() to force the fetch effect below to re-run — there is
+  // no other trigger for a manual reload (e.g. right after task.create).
+  const [refetchTrigger, setRefetchTrigger] = useState(0)
+  const refetch = useCallback(() => setRefetchTrigger((n) => n + 1), [])
 
   // Fetch tasks when projectId changes
   useEffect(() => {
@@ -52,7 +56,7 @@ export function useTasks(projectId: string) {
         /* silently fail */
       })
       .finally(() => setIsLoading(false))
-  }, [projectId, setTasks])
+  }, [projectId, setTasks, refetchTrigger])
 
   // Filter + search
   const filteredTasks = useMemo(() => {
@@ -90,6 +94,7 @@ export function useTasks(projectId: string) {
     searchQuery,
     setSearchQuery,
     isLoading,
+    refetch,
     dagView: null // future: DAG graph data
   }
 }

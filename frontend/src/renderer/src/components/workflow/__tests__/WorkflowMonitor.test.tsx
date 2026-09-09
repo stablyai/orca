@@ -48,7 +48,7 @@ describe('WorkflowMonitor (CR-PW-003)', () => {
   })
 
   it('fetches workflow.listExecutions(projectId) on mount', async () => {
-    render(<WorkflowMonitor projectId="p1" />)
+    render(<WorkflowMonitor projectId="p1" onNewWorkflow={vi.fn()} />)
     await waitFor(() => {
       expect(mockRpc).toHaveBeenCalledWith('mock-target', 'workflow.listExecutions', {
         projectId: 'p1'
@@ -57,7 +57,7 @@ describe('WorkflowMonitor (CR-PW-003)', () => {
   })
 
   it('shows the empty state when there are no executions', async () => {
-    render(<WorkflowMonitor projectId="p1" />)
+    render(<WorkflowMonitor projectId="p1" onNewWorkflow={vi.fn()} />)
     await waitFor(() => {
       expect(screen.getByTestId('workflow-empty')).toBeInTheDocument()
     })
@@ -65,10 +65,18 @@ describe('WorkflowMonitor (CR-PW-003)', () => {
 
   it('shows an error state when the RPC throws', async () => {
     mockRpc.mockRejectedValueOnce(new Error('boom'))
-    render(<WorkflowMonitor projectId="p1" />)
+    render(<WorkflowMonitor projectId="p1" onNewWorkflow={vi.fn()} />)
     await waitFor(() => {
       expect(screen.getByTestId('workflow-load-error')).toBeInTheDocument()
     })
+  })
+
+  it('"+ New Workflow" button calls onNewWorkflow', async () => {
+    const onNewWorkflow = vi.fn()
+    render(<WorkflowMonitor projectId="p1" onNewWorkflow={onNewWorkflow} />)
+    await waitFor(() => screen.getByTestId('new-workflow-btn'))
+    fireEvent.click(screen.getByTestId('new-workflow-btn'))
+    expect(onNewWorkflow).toHaveBeenCalled()
   })
 
   it('renders one row per execution with its status and triggeredBy', async () => {
@@ -80,7 +88,7 @@ describe('WorkflowMonitor (CR-PW-003)', () => {
         definition: { name: 'Deploy', steps: [] }
       }
     ])
-    render(<WorkflowMonitor projectId="p1" />)
+    render(<WorkflowMonitor projectId="p1" onNewWorkflow={vi.fn()} />)
     await waitFor(() => {
       expect(screen.getByTestId('execution-row-exec-1')).toHaveTextContent('Deploy')
       expect(screen.getByTestId('execution-row-exec-1')).toHaveTextContent('Running')
@@ -97,7 +105,7 @@ describe('WorkflowMonitor (CR-PW-003)', () => {
         definition: { name: 'Deploy', steps: [] }
       }
     ])
-    render(<WorkflowMonitor projectId="p1" />)
+    render(<WorkflowMonitor projectId="p1" onNewWorkflow={vi.fn()} />)
     await waitFor(() => screen.getByTestId('execution-row-exec-1'))
     fireEvent.click(screen.getByTestId('execution-row-exec-1'))
 

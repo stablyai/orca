@@ -21,6 +21,12 @@ const TaskGraphPanel = lazy(() =>
 const WorkflowMonitor = lazy(() =>
   import('../workflow/WorkflowMonitor').then((m) => ({ default: m.WorkflowMonitor }))
 )
+const WorkflowBuilder = lazy(() =>
+  import('../workflow/WorkflowBuilder').then((m) => ({ default: m.WorkflowBuilder }))
+)
+const WorkflowLibrary = lazy(() =>
+  import('../workflow/WorkflowLibrary').then((m) => ({ default: m.WorkflowLibrary }))
+)
 const AgentPanel = lazy(() => import('./AgentPanel').then((m) => ({ default: m.AgentPanel })))
 // Why: reuse the main app's SSH/remote-host status segment (already lazy
 // there too) instead of a new ServerStatusBar — doc §4 step 6.
@@ -51,6 +57,8 @@ export function WorkspaceLayout() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('git')
   const [rightPanelVisible, setRightPanel] = useState(true)
   const [terminalVisible, setTerminalVisible] = useState(false)
+  const [workflowView, setWorkflowView] = useState<'monitor' | 'builder' | 'library'>('monitor')
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | undefined>(undefined)
 
   if (!project) {
     return <NoProjectSelected />
@@ -90,7 +98,30 @@ export function WorkspaceLayout() {
                 with no worktree selected and silently fall back to a misleading "(no branch)". */}
             {activeTab === 'git' && (currentWorktree ? <GitPanel /> : <NoWorktreeSelected />)}
             {activeTab === 'tasks' && <TaskGraphPanel projectId={project.id} />}
-            {activeTab === 'workflows' && <WorkflowMonitor projectId={project.id} />}
+            {activeTab === 'workflows' &&
+              (workflowView === 'library' ? (
+                <WorkflowLibrary
+                  onUseTemplate={(id) => {
+                    setSelectedTemplateId(id)
+                    setWorkflowView('builder')
+                  }}
+                />
+              ) : workflowView === 'builder' ? (
+                <WorkflowBuilder
+                  templateId={selectedTemplateId}
+                  projectId={project.id}
+                  onSave={() => setWorkflowView('monitor')}
+                />
+              ) : (
+                <WorkflowMonitor
+                  projectId={project.id}
+                  onNewWorkflow={() => {
+                    setSelectedTemplateId(undefined)
+                    setWorkflowView('builder')
+                  }}
+                  onOpenLibrary={() => setWorkflowView('library')}
+                />
+              ))}
             {activeTab === 'agent' &&
               (currentWorktree ? (
                 <AgentPanel worktreeId={currentWorktree.id} />

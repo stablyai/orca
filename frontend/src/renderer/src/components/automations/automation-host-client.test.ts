@@ -174,11 +174,16 @@ describe('automation host client', () => {
 
     expect(mockApi.automations.update).not.toHaveBeenCalled()
     expect(mockApi.automations.runNow).not.toHaveBeenCalled()
+    // Why: FLAT, not { id, updates: {...} } — api-gateway's wscompat
+    // automation.update decodes `id` and every field as siblings of one
+    // top-level object; the nested shape silently no-oped every field but
+    // `id` (FE-TASK-AUTO-002's discovered bug — see
+    // automation-host-client.ts's updateAutomationForTarget comment).
     expect(callRuntimeRpc).toHaveBeenNthCalledWith(
       1,
       sourceTarget,
       'automation.update',
-      { id: automation.id, updates: { name: 'Updated' } },
+      { id: automation.id, name: 'Updated' },
       { timeoutMs: 15_000 }
     )
     expect(callRuntimeRpc).toHaveBeenNthCalledWith(
@@ -186,6 +191,128 @@ describe('automation host client', () => {
       sourceTarget,
       'automation.runNow',
       { id: automation.id },
+      { timeoutMs: 15_000 }
+    )
+  })
+
+  it('synthesizes a 1-action run_agent chain from prompt/agentId when creating a runtime automation with no explicit actions', async () => {
+    const automation = makeAutomation()
+    const input: AutomationCreateInput = {
+      name: automation.name,
+      prompt: 'Summarize the PR',
+      precheck: null,
+      agentId: 'claude',
+      runContext: automation.runContext,
+      projectId: automation.projectId,
+      workspaceMode: automation.workspaceMode,
+      workspaceId: null,
+      timezone: automation.timezone,
+      rrule: automation.rrule,
+      dtstart: automation.dtstart
+    }
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ automation })
+
+    await createAutomationForTarget(input)
+
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'gpu' },
+      'automation.create',
+      expect.objectContaining({
+        actions: [
+          {
+            id: 'primary',
+            type: 'run_agent',
+            configJson: JSON.stringify({ prompt: 'Summarize the PR', agentId: 'claude' })
+          }
+        ]
+      }),
+      { timeoutMs: 15_000 }
+    )
+  })
+
+  it('forwards explicit actions as-is (JSON-stringified config), not the prompt/agentId fallback', async () => {
+    const automation = makeAutomation()
+    const input: AutomationCreateInput = {
+      name: automation.name,
+      prompt: automation.prompt,
+      precheck: null,
+      agentId: automation.agentId,
+      runContext: automation.runContext,
+      projectId: automation.projectId,
+      workspaceMode: automation.workspaceMode,
+      workspaceId: null,
+      timezone: automation.timezone,
+      rrule: automation.rrule,
+      dtstart: automation.dtstart,
+      actions: [
+        { id: 'a1', type: 'run_script', config: { script: 'echo hi' }, continueOnFailure: true }
+      ]
+    }
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ automation })
+
+    await createAutomationForTarget(input)
+
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'gpu' },
+      'automation.create',
+      expect.objectContaining({
+        actions: [
+          {
+            id: 'a1',
+            type: 'run_script',
+            configJson: JSON.stringify({ script: 'echo hi' }),
+            continueOnFailure: true
+          }
+        ]
+      }),
+      { timeoutMs: 15_000 }
+    )
+  })
+
+  it('omits `actions` entirely on a partial update that does not touch prompt/agentId (leaves the existing chain untouched)', async () => {
+    const automation = makeAutomation()
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({
+      automation: { ...automation, enabled: false }
+    })
+
+    await updateAutomationForTarget(automation, { enabled: false })
+
+    const [, , sentParams] = vi.mocked(callRuntimeRpc).mock.calls[0]
+    expect(sentParams).not.toHaveProperty('actions')
+  })
+
+  it('sends an explicit empty actions array through unchanged (clears the chain)', async () => {
+    const automation = makeAutomation()
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ automation })
+
+    await updateAutomationForTarget(automation, { actions: [] })
+
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      expect.anything(),
+      'automation.update',
+      expect.objectContaining({ actions: [] }),
+      { timeoutMs: 15_000 }
+    )
+  })
+
+  it('synthesizes a 1-action chain on a full-form update that sends prompt+agentId together', async () => {
+    const automation = makeAutomation()
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ automation })
+
+    await updateAutomationForTarget(automation, { prompt: 'New prompt', agentId: 'claude' })
+
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      expect.anything(),
+      'automation.update',
+      expect.objectContaining({
+        actions: [
+          {
+            id: 'primary',
+            type: 'run_agent',
+            configJson: JSON.stringify({ prompt: 'New prompt', agentId: 'claude' })
+          }
+        ]
+      }),
       { timeoutMs: 15_000 }
     )
   })

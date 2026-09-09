@@ -16,6 +16,7 @@ import {
 import type { AutomationTargetAvailability } from './automation-target-availability'
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
+import { getExecutionHostLabel, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -133,6 +134,12 @@ export function AutomationDetail({
       : workspaceName
   const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
   const runNowDisabled = runNowAvailability?.canRunNow === false
+  // CR-AUTO-001/FE-TASK-AUTO-001: makes explicit which backend actually
+  // dispatches this automation (Electron/Node scheduler if local, or
+  // backend-go's automation-service if a runtime environment) — see
+  // CR-AUTO-001's "Cập nhật 2026-09-09".
+  const runHostId = automation.runContext?.hostId ?? LOCAL_EXECUTION_HOST_ID
+  const runHostLabel = hostLabelById?.get(runHostId) ?? getExecutionHostLabel(runHostId)
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -145,6 +152,18 @@ export function AutomationDetail({
                 ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
                 : translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
             </Badge>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline">{runHostLabel}</Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                {translate(
+                  'auto.components.automations.AutomationDetail.runHostTooltip',
+                  'Runs on {{host}}',
+                  { host: runHostLabel }
+                )}
+              </TooltipContent>
+            </Tooltip>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
             {projectName} / {workspaceName}

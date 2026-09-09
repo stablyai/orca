@@ -119,7 +119,7 @@ export const TASK_PERMISSION_ORDER: Readonly<Record<TaskPermission, number>> = {
   comment: 2,
   edit: 3,
   execute: 4,
-  manage: 5,
+  manage: 5
 } as const
 
 /** Progress weights by status (leaf node calculation) */
@@ -130,8 +130,12 @@ export const TASK_STATUS_PROGRESS: Readonly<Record<TaskStatus, number>> = {
   review: 80,
   done: 100,
   blocked: 0,
-  cancelled: 0,
+  cancelled: 0
 } as const
 
 /** Alias for TaskPermission — used by TaskGrantService API (TDD-18) */
 export type TaskGrantLevel = TaskPermission
+
+/** Real GrantLevel scale matching backend taskv1.GrantLevel (BE-SOL-003's correction —
+ * NOT TaskPermission's view/comment/edit/execute/manage, which has no backend counterpart). */
+export type RealGrantLevel = 'owner' | 'admin' | 'user' | 'team' | 'company'

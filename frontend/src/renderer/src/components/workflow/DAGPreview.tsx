@@ -1,13 +1,7 @@
 import { useMemo } from 'react'
-import {
-  ReactFlow,
-  type Node,
-  type Edge,
-  Background,
-  Controls,
-} from '@xyflow/react'
+import { ReactFlow, type Node, type Edge, Background, Controls } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { WorkflowStep } from '../../types/workflow-types'
+import type { WorkflowStep } from '@shared/workflow-types'
 
 type DAGPreviewProps = {
   steps: WorkflowStep[]
@@ -15,11 +9,11 @@ type DAGPreviewProps = {
 }
 
 const STEP_TYPE_COLORS: Record<string, string> = {
-  shell:   '#dbeafe',   // blue
-  agent:   '#fce7f3',   // pink
-  code:    '#f0fdf4',   // green
-  review:  '#fef9c3',   // yellow
-  default: '#f8fafc',   // grey
+  shell: '#dbeafe', // blue
+  agent: '#fce7f3', // pink
+  code: '#f0fdf4', // green
+  review: '#fef9c3', // yellow
+  default: '#f8fafc' // grey
 }
 
 function buildWorkflowDAG(steps: WorkflowStep[], selectedStepId?: string | null) {
@@ -28,26 +22,31 @@ function buildWorkflowDAG(steps: WorkflowStep[], selectedStepId?: string | null)
 
   // Assign wave (topological level)
   const waveMap = new Map<string, number>()
-  const depMap = new Map(steps.map(s => [s.id, s.dependsOn ?? []]))
+  const depMap = new Map(steps.map((s) => [s.id, s.dependsOn ?? []]))
 
   function getWave(id: string, visited = new Set<string>()): number {
-    if (waveMap.has(id)) {return waveMap.get(id)!}
-    if (visited.has(id)) {return 0}
+    if (waveMap.has(id)) {
+      return waveMap.get(id)!
+    }
+    if (visited.has(id)) {
+      return 0
+    }
     visited.add(id)
     const deps = depMap.get(id) ?? []
-    const wave = deps.length === 0
-      ? 0
-      : Math.max(...deps.map(d => getWave(d, new Set(visited)))) + 1
+    const wave =
+      deps.length === 0 ? 0 : Math.max(...deps.map((d) => getWave(d, new Set(visited)))) + 1
     waveMap.set(id, wave)
     return wave
   }
-  steps.forEach(s => getWave(s.id))
+  steps.forEach((s) => getWave(s.id))
 
   // Group by wave
   const waveGroups = new Map<number, WorkflowStep[]>()
   for (const step of steps) {
     const w = waveMap.get(step.id) ?? 0
-    if (!waveGroups.has(w)) {waveGroups.set(w, [])}
+    if (!waveGroups.has(w)) {
+      waveGroups.set(w, [])
+    }
     waveGroups.get(w)!.push(step)
   }
 
@@ -62,22 +61,28 @@ function buildWorkflowDAG(steps: WorkflowStep[], selectedStepId?: string | null)
         data: {
           label: (
             <div style={{ fontSize: 11 }}>
-              <div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
+              <div
+                style={{
+                  fontWeight: 600,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: 130
+                }}
+              >
                 {step.name}
               </div>
-              <div style={{ color: '#6b7280', fontSize: 10, marginTop: 1 }}>
-                {step.type}
-              </div>
+              <div style={{ color: '#6b7280', fontSize: 10, marginTop: 1 }}>{step.type}</div>
             </div>
-          ),
+          )
         },
         style: {
           background: bg,
           border: isSelected ? '2px solid #3b82f6' : '1px solid #e2e8f0',
           borderRadius: 8,
           width: 160,
-          boxShadow: isSelected ? '0 0 0 2px #bfdbfe' : 'none',
-        },
+          boxShadow: isSelected ? '0 0 0 2px #bfdbfe' : 'none'
+        }
       })
     })
   }
@@ -85,13 +90,13 @@ function buildWorkflowDAG(steps: WorkflowStep[], selectedStepId?: string | null)
   // Create edges
   for (const step of steps) {
     for (const depId of step.dependsOn ?? []) {
-      if (steps.find(s => s.id === depId)) {
+      if (steps.find((s) => s.id === depId)) {
         edges.push({
           id: `${depId}->${step.id}`,
           source: depId,
           target: step.id,
           animated: false,
-          style: { stroke: '#94a3b8', strokeWidth: 1.5 },
+          style: { stroke: '#94a3b8', strokeWidth: 1.5 }
         })
       }
     }

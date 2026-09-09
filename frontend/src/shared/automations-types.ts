@@ -15,7 +15,13 @@ export type AutomationRunStatus =
   | 'skipped_unavailable'
   | 'skipped_needs_interactive_auth'
   | 'dispatch_failed'
-export type AutomationRunTrigger = 'scheduled' | 'manual'
+/** Why: 'external' added by FE-TASK-AUTO-006/CR-AUTO-005 — a run dispatched
+ *  via automation-service's HandleExternalTrigger RPC (see
+ *  backend-go/proto/orca/automation/v1/automation.proto), as opposed to a
+ *  cron-scheduled or manually-clicked ("Run Now") run. No production caller
+ *  invokes that RPC yet (still-blocked TASK-BE-AUTO-009) — this value only
+ *  needs to render correctly once a run is recorded with it. */
+export type AutomationRunTrigger = 'scheduled' | 'manual' | 'external'
 
 /** Statuses a run can never leave; only these are safe to evict from history. */
 export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean {
@@ -87,8 +93,47 @@ export type AutomationPrecheckResult = {
   completedAt: number
 }
 
+/**
+ * CR-AUTO-002 (FE-TASK-AUTO-002) — matches backend-go's
+ * automation.v1.AutomationAction/AutomationActionType 1:1 (see
+ * backend-go/proto/orca/automation/v1/automation.proto). Only meaningful
+ * for automations dispatched via a runtime (backend-go) target —
+ * `window.api.automations.*`'s Node "server mode" automations have no
+ * concept of an action chain and never populate this.
+ */
+export type AutomationActionType =
+  | 'create_worktree'
+  | 'run_agent'
+  | 'commit_push'
+  | 'create_pr'
+  | 'send_notification'
+  | 'run_script'
+
+export type AutomationAction = {
+  id: string
+  type: AutomationActionType
+  /** Why: opaque here by design — each action type's own config shape is
+   *  decoded/validated by its form component (FE-AUTO-SOL-003/004), not by
+   *  this shared type. Serialized to a JSON string only at the
+   *  automation-host-client.ts wire boundary (backend-go's config_json). */
+  config: Record<string, unknown>
+  continueOnFailure?: boolean
+}
+
+export type AutomationActionResult = {
+  actionId: string
+  status: string
+  outputJson?: string
+  error?: string
+}
+
 export type Automation = {
   id: string
+  /** Why: optional — legacy (pre-CR-AUTO-002) and Node "server mode"
+   *  automations never populate this; a populated actions[] from a
+   *  runtime target takes precedence over prompt/agentId at dispatch time
+   *  (see backend-go's resolveActions). */
+  actions?: AutomationAction[]
   name: string
   prompt: string
   precheck: AutomationPrecheck | null
@@ -123,6 +168,11 @@ export type Automation = {
   missedRunGraceMinutes: number
   createdAt: number
   updatedAt: number
+  /** Why: CR-AUTO-007, runtime (backend-go) targets only — Node "server
+   *  mode" automations have no run-history retention/timeout concept. 0 or
+   *  undefined = backend-go's own default (100 runs / 7200s). */
+  maxRunHistory?: number
+  runTimeoutSeconds?: number
 }
 
 export type AutomationRun = {
@@ -155,6 +205,10 @@ export type AutomationRun = {
   /** Why: run titles must stay unique once retention prunes old runs, so the
    *  number can no longer be derived from how many runs are currently kept. */
   runNumber?: number
+  /** Why: only populated for runs dispatched via the CR-AUTO-002 action
+   *  chain (backend-go runtime targets) — a legacy 1-step run has no
+   *  per-action breakdown, only the top-level status/error above. */
+  actionResults?: AutomationActionResult[]
 }
 
 export type AutomationCreateInput = {
@@ -177,6 +231,14 @@ export type AutomationCreateInput = {
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
+  /** Why: optional, runtime-target-only — see Automation.actions/
+   *  maxRunHistory/runTimeoutSeconds. Omitted = automation-host-client.ts
+   *  derives a 1-action `run_agent` chain from prompt/agentId instead
+   *  (FE-AUTO-SOL-002 §3); set explicitly once multi-action UI
+   *  (FE-AUTO-SOL-003/004) exists. */
+  actions?: AutomationAction[]
+  maxRunHistory?: number
+  runTimeoutSeconds?: number
 }
 
 export type AutomationUpdateInput = Partial<
@@ -199,6 +261,9 @@ export type AutomationUpdateInput = Partial<
     | 'dtstart'
     | 'enabled'
     | 'missedRunGraceMinutes'
+    | 'actions'
+    | 'maxRunHistory'
+    | 'runTimeoutSeconds'
   >
 >
 
@@ -222,103 +287,8 @@ export type AutomationDispatchResult = {
   error?: string | null
 }
 
-export type ExternalAutomationProvider = 'hermes' | 'openclaw'
-export type ExternalAutomationManagerStatus = 'available' | 'unavailable'
-export type ExternalAutomationAction = 'pause' | 'resume' | 'run' | 'delete'
-export type ExternalAutomationRunStatus = 'completed' | 'failed' | 'unknown'
-
-export type ExternalAutomationTarget =
-  | {
-      type: 'local'
-    }
-  | {
-      type: 'ssh'
-      connectionId: string
-    }
-
-export type ExternalAutomationJob = {
-  id: string
-  managerId: string
-  provider: ExternalAutomationProvider
-  name: string
-  schedule: string
-  rawSchedule: string | null
-  enabled: boolean
-  state: string
-  prompt: string | null
-  promptPreview: string
-  nextRunAt: string | null
-  lastRunAt: string | null
-  lastStatus: string | null
-  lastError: string | null
-  workdir: string | null
-  runCount: number
-  runs: ExternalAutomationRun[]
-}
-
-export type ExternalAutomationRun = {
-  id: string
-  managerId: string
-  provider: ExternalAutomationProvider
-  jobId: string
-  runAt: string | null
-  status: ExternalAutomationRunStatus
-  outputPreview: string | null
-  outputContent: string | null
-  error: string | null
-  outputPath: string | null
-}
-
-export type ExternalAutomationRunsPage = {
-  managerId: string
-  provider: ExternalAutomationProvider
-  target: ExternalAutomationTarget
-  jobId: string
-  page: number
-  pageSize: number
-  total: number
-  runs: ExternalAutomationRun[]
-}
-
-export type ExternalAutomationRunsInput = {
-  managerId: string
-  provider: ExternalAutomationProvider
-  target: ExternalAutomationTarget
-  jobId: string
-  page: number
-  pageSize: number
-}
-
-export type ExternalAutomationCreateInput = {
-  managerId: string
-  provider: ExternalAutomationProvider
-  target: ExternalAutomationTarget
-  name: string
-  prompt: string
-  schedule: string
-  workdir: string | null
-}
-
-export type ExternalAutomationUpdateInput = ExternalAutomationCreateInput & {
-  jobId: string
-}
-
-export type ExternalAutomationManager = {
-  id: string
-  provider: ExternalAutomationProvider
-  label: string
-  targetLabel: string
-  target: ExternalAutomationTarget
-  status: ExternalAutomationManagerStatus
-  error: string | null
-  canManage: boolean
-  jobs: ExternalAutomationJob[]
-}
-
-export type ExternalAutomationActionInput = {
-  managerId: string
-  provider: ExternalAutomationProvider
-  target: ExternalAutomationTarget
-  jobId: string
-  action: ExternalAutomationAction
-}
+// Why: split into automations-external-types.ts to keep this file under
+// AGENTS.md's max-lines limit — Hermes/OpenClaw external-manager types are
+// a separate domain from this project's own Automation/AutomationRun model,
+// so the split is a natural boundary, not an arbitrary line-count dodge.
+export * from './automations-external-types'

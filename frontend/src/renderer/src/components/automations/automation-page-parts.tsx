@@ -91,6 +91,20 @@ export function getAutomationRunStatusLabel(status: AutomationRun['status']): st
   }
 }
 
+/** Why: exhaustive switch (no default) — adding a new AutomationRunTrigger
+ *  value without a case here fails typecheck instead of silently falling
+ *  through, per FE-TASK-AUTO-006's "no silent fallthrough" requirement. */
+export function getAutomationRunTriggerLabel(trigger: AutomationRun['trigger']): string {
+  switch (trigger) {
+    case 'scheduled':
+      return 'Scheduled'
+    case 'manual':
+      return 'Manual'
+    case 'external':
+      return 'External'
+  }
+}
+
 export function Field({
   label,
   children,

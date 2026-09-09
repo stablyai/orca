@@ -20,6 +20,7 @@ import {
   isValidAutomationSchedule
 } from '../../../../shared/automation-schedules'
 import { Field } from './automation-page-parts'
+import { AutomationActionList } from './AutomationActionList'
 import { AutomationEditorDialogFooter } from './AutomationEditorDialogFooter'
 import { AutomationEditorDialogHeader } from './AutomationEditorDialogHeader'
 import { AutomationEditorPromptSection } from './AutomationEditorPromptSection'
@@ -167,6 +168,13 @@ export function AutomationEditorDialog({
           pickerTriggerClassName={PICKER_TRIGGER_CLASS}
           onDraftChange={onDraftChange}
         />
+
+        {/* Why: FE-TASK-AUTO-003 — self-contained action-chain UI, kept out of
+            this file's own state per its file-list constraint (see AGENTS.md's
+            max-lines rule and FE-AUTO-SOL-003 §"Rủi ro / Phụ thuộc"). */}
+        <div className="border-t border-border px-5 py-4">
+          <AutomationActionList repoId={draft.projectId} repoMap={repoMap} worktrees={worktrees} />
+        </div>
 
         <AutomationEditorDialogFooter
           isEditing={isEditing}
