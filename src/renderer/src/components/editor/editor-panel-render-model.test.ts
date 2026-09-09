@@ -32,6 +32,7 @@ function renderModel(args: {
   editorDrafts?: Record<string, string>
   markdownViewMode?: Record<string, 'source' | 'rich' | 'preview'>
   markdownRichModeSizeOverridden?: boolean
+  markdownRichModeFaultedContent?: Record<string, string>
   isChangesMode?: boolean
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }) {
@@ -44,6 +45,7 @@ function renderModel(args: {
     gitBranchEntries: undefined,
     markdownViewMode: args.markdownViewMode ?? {},
     markdownRichModeSizeOverridden: args.markdownRichModeSizeOverridden ?? false,
+    markdownRichModeFaultedContent: args.markdownRichModeFaultedContent ?? {},
     isChangesMode: args.isChangesMode ?? false,
     canOpenWorkspaceFileBrowser: true
   })
@@ -63,7 +65,40 @@ function htmlFile(overrides: Partial<OpenFile> = {}): OpenFile {
 }
 
 describe('getEditorPanelRenderModel rich-mode fallback toggle', () => {
-  it('offers Preview once rich mode falls back for this content', () => {
+  it('omits Preview in Source view until a fault is recorded for this content, even though it would fault', () => {
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'source' },
+      editorDrafts: { '/repo/README.md': '[reference]: https://example.com' }
+    })
+
+    expect(model.availableEditorToggleModes).toEqual(['source', 'rich', 'changes'])
+  })
+
+  it('offers Preview in Source view once a stored fault matches the current content', () => {
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'source' },
+      editorDrafts: { '/repo/README.md': '[reference]: https://example.com' },
+      markdownRichModeFaultedContent: {
+        '/repo/README.md': '[reference]: https://example.com'
+      }
+    })
+
+    expect(model.availableEditorToggleModes).toEqual(['source', 'rich', 'preview', 'changes'])
+  })
+
+  it('omits Preview when the stored fault is for different, stale content', () => {
+    const model = renderModel({
+      markdownViewMode: { '/repo/README.md': 'source' },
+      editorDrafts: { '/repo/README.md': '# Edited since the fault' },
+      markdownRichModeFaultedContent: {
+        '/repo/README.md': '[reference]: https://example.com'
+      }
+    })
+
+    expect(model.availableEditorToggleModes).toEqual(['source', 'rich', 'changes'])
+  })
+
+  it('offers Preview when Rich view classifies live and this content falls back', () => {
     const model = renderModel({
       editorDrafts: { '/repo/README.md': '[reference]: https://example.com' }
     })
@@ -95,6 +130,7 @@ describe('getEditorPanelRenderModel HTML preview affordance', () => {
       gitBranchEntries: undefined,
       markdownViewMode: {},
       markdownRichModeSizeOverridden: false,
+      markdownRichModeFaultedContent: {},
       isChangesMode: false,
       canOpenWorkspaceFileBrowser: false
     })

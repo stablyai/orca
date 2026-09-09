@@ -98,12 +98,14 @@ function renderEditPath({
   language = 'markdown',
   viewMode = 'rich',
   mode = 'edit',
+  markdownRichModeFaultedContent = {},
   onOpenMarkdownPreview
 }: {
   content: string
   language?: 'markdown' | 'typescript'
   viewMode?: 'source' | 'rich' | 'preview'
   mode?: 'edit' | 'markdown-preview'
+  markdownRichModeFaultedContent?: Record<string, string>
   onOpenMarkdownPreview?: () => void
 }) {
   const activeFile = openFile(language, mode)
@@ -119,6 +121,7 @@ function renderEditPath({
     gitBranchEntries: undefined,
     markdownViewMode: { [activeFile.id]: viewMode },
     markdownRichModeSizeOverridden: false,
+    markdownRichModeFaultedContent,
     isChangesMode: false,
     canOpenWorkspaceFileBrowser: true
   })
@@ -174,6 +177,7 @@ function getGuardedRenderModel({
     gitBranchEntries: undefined,
     markdownViewMode: { [activeFile.id]: 'rich' },
     markdownRichModeSizeOverridden: false,
+    markdownRichModeFaultedContent: {},
     isChangesMode,
     canOpenWorkspaceFileBrowser: true
   })
@@ -225,6 +229,12 @@ describe('inline Markdown render classification', () => {
       args: { content: 'const value = 1', language: 'typescript' as const },
       expectedView: 'source',
       canExport: false
+    },
+    {
+      name: 'Source-view Markdown edit tabs',
+      args: { content: '# Source', viewMode: 'source' as const },
+      expectedView: 'source',
+      canExport: false
     }
   ])('skips rich eligibility scans for $name', ({ args, expectedView, canExport }) => {
     const result = renderEditPath(args)
@@ -233,15 +243,6 @@ describe('inline Markdown render classification', () => {
     expect(result.model.canExportMarkdownToPdf).toBe(canExport)
     expect(classifiers.getUnsupportedMessage).not.toHaveBeenCalled()
     expect(classifiers.exceedsSizeLimit).not.toHaveBeenCalled()
-  })
-
-  it('scans source Markdown edit tabs too, so the toggle knows whether rich mode would fall back', () => {
-    const result = renderEditPath({ content: '# Source', viewMode: 'source' as const })
-
-    expect(result.view.container.innerHTML).toContain('data-editor-view="source"')
-    expect(result.model.canExportMarkdownToPdf).toBe(false)
-    expect(classifiers.getUnsupportedMessage).toHaveBeenCalledTimes(1)
-    expect(classifiers.exceedsSizeLimit).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -319,6 +320,36 @@ describe('inline Markdown render classification', () => {
 
     const normal = renderEditPath({ content: '# Ordinary content' })
     expect(normal.model.availableEditorToggleModes).toEqual(['source', 'rich', 'changes'])
+  })
+
+  it('keeps the Preview toggle in Source view from a stored fault, without re-scanning', () => {
+    const content = '[reference]: https://example.com'
+    const result = renderEditPath({
+      content,
+      viewMode: 'source',
+      markdownRichModeFaultedContent: { [openFile().id]: content }
+    })
+
+    expect(result.model.availableEditorToggleModes).toEqual([
+      'source',
+      'rich',
+      'preview',
+      'changes'
+    ])
+    expect(classifiers.getUnsupportedMessage).not.toHaveBeenCalled()
+    expect(classifiers.exceedsSizeLimit).not.toHaveBeenCalled()
+  })
+
+  it('drops the Preview toggle once content no longer matches the stored fault', () => {
+    const result = renderEditPath({
+      content: '# Edited since the fault',
+      viewMode: 'source',
+      markdownRichModeFaultedContent: {
+        [openFile().id]: '[reference]: https://example.com'
+      }
+    })
+
+    expect(result.model.availableEditorToggleModes).toEqual(['source', 'rich', 'changes'])
   })
 
   it('opens the preview tab from the fallback banner action', () => {

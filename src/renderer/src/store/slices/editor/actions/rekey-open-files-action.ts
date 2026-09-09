@@ -121,6 +121,10 @@ export function createRekeyOpenFilesAction(
             s.markdownRichModeSizeOverride,
             migrations
           ),
+          markdownRichModeFaultedContent: rekeyFileIdRecord(
+            s.markdownRichModeFaultedContent,
+            migrations
+          ),
           editorViewMode: rekeyFileIdRecord(s.editorViewMode, migrations),
           markdownFrontmatterVisible: rekeyFileIdRecord(s.markdownFrontmatterVisible, migrations),
           markdownTableOfContentsVisible: rekeyFileIdRecord(
