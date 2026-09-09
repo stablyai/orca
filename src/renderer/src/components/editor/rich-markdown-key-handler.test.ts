@@ -483,6 +483,117 @@ describe('rich markdown key handler', () => {
     }
   })
 
+  it('converts an empty heading to a paragraph on Enter', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'heading', attrs: { level: 2 } }]
+    })
+
+    try {
+      editor.commands.setTextSelection(1)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [{ type: 'paragraph' }]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('does not stack blank paragraphs on repeated Enter in an empty heading', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'heading', attrs: { level: 2 } }]
+    })
+
+    try {
+      const handler = createRichMarkdownKeyHandler(createContext(editor, false))
+      handler(null, keyEvent('Enter'))
+      handler(null, keyEvent('Enter'))
+
+      expect(editor.state.doc.childCount).toBe(1)
+      expect(editor.state.doc.firstChild?.type.name).toBe('paragraph')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('converts an empty heading inside a list item to a paragraph on Enter', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        {
+          type: 'bulletList',
+          content: [{ type: 'listItem', content: [{ type: 'heading', attrs: { level: 2 } }] }]
+        }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(3)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [
+          {
+            type: 'bulletList',
+            content: [{ type: 'listItem', content: [{ type: 'paragraph' }] }]
+          }
+        ]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('converts an empty heading inside a blockquote to a paragraph on Enter', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'blockquote', content: [{ type: 'heading', attrs: { level: 2 } }] }]
+    })
+
+    try {
+      editor.commands.setTextSelection(2)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [{ type: 'blockquote', content: [{ type: 'paragraph' }] }]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('splits a whitespace-only heading rather than converting it', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [{ type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: '  ' }] }]
+    })
+
+    try {
+      editor.commands.setTextSelection(2)
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(createContext(editor, false))(null, event)).toBe(true)
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: ' ' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: ' ' }] }
+        ]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('does not intercept Shift+Enter inside a heading', () => {
     const editor = createEditor({
       type: 'doc',
