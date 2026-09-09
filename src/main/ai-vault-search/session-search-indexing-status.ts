@@ -7,11 +7,17 @@ import type { SessionSearchDegradedRoot } from './session-search-root-health'
  * agent within one interval, not every transcript on the machine, so nothing
  * here ever claims the whole index is up to date.
  */
-export type SessionSearchIndexPhase = 'discovering' | 'indexing' | 'current' | 'paused' | 'degraded'
+export type SessionSearchIndexPhase =
+  | 'discovering'
+  | 'indexing'
+  | 'current'
+  | 'paused'
+  | 'degraded'
+  | 'closed'
 
 export type SessionSearchIndexStatus = {
   phase: SessionSearchIndexPhase
-  /** Files read into the index since the current backfill began, and its total. */
+  /** Files the index holds right now, and what the running sweep set out to read. */
   filesIndexed: number
   filesTotal: number | null
   bytesIndexed: number
@@ -35,6 +41,8 @@ export type SessionSearchIndexStatus = {
 export class SessionSearchIndexingStatus {
   private working: 'discovering' | 'indexing' | null = null
   private paused = false
+  private closed = false
+  private sweptClean = false
   private filesIndexed = 0
   private filesTotal: number | null = null
   private bytesIndexed = 0
@@ -62,7 +70,15 @@ export class SessionSearchIndexingStatus {
     }
   }
 
+  /**
+   * `current` is a claim, so it takes all three: nothing queued, no root the
+   * index could not read, and a whole sweep that actually finished. Anything
+   * short of that is still work in progress, however quiet it looks.
+   */
   private phase(): SessionSearchIndexPhase {
+    if (this.closed) {
+      return 'closed'
+    }
     if (this.paused) {
       return 'paused'
     }
@@ -71,7 +87,25 @@ export class SessionSearchIndexingStatus {
     if (this.working) {
       return this.working
     }
-    return this.degradedRoots.length > 0 ? 'degraded' : 'current'
+    if (this.degradedRoots.length > 0) {
+      return 'degraded'
+    }
+    return this.sweptClean && this.filesPending === 0 ? 'current' : 'indexing'
+  }
+
+  setClosed(): void {
+    this.closed = true
+    this.working = null
+  }
+
+  /** One whole sweep ran to completion; until then nothing is `current`. */
+  sweepCompleted(): void {
+    this.sweptClean = true
+  }
+
+  /** Files the index holds, counted in the store rather than tallied per attempt. */
+  setFilesIndexed(files: number): void {
+    this.filesIndexed = files
   }
 
   setPaused(paused: boolean): void {
@@ -85,7 +119,6 @@ export class SessionSearchIndexingStatus {
   /** A full sweep restarts the progress pair; a reconcile cycle only reports work. */
   beginSweep(): void {
     this.working = 'discovering'
-    this.filesIndexed = 0
     this.filesTotal = null
     this.bytesIndexed = 0
     this.failures = 0
@@ -107,7 +140,6 @@ export class SessionSearchIndexingStatus {
   }
 
   indexed(bytes: number): void {
-    this.filesIndexed += 1
     this.bytesIndexed += bytes
   }
 

@@ -3,12 +3,14 @@ import { parserPublishesMessages } from '../ai-vault/session-scanner-agent-parse
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
-  sessionParseCacheCoversTranscript,
   type SessionParseStats
 } from '../ai-vault/session-scanner-parse-cache'
-import { requestWholeTranscriptRead } from '../ai-vault/session-transcript-reader'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { fileIdentity, isSessionSearchFileCurrent } from './session-search-file-cursor'
+import {
+  fileIdentity,
+  isSessionSearchFileCurrent,
+  type SessionSearchIndexedFile
+} from './session-search-file-cursor'
 import type { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import type { SessionSearchStore } from './session-search-store'
 
@@ -21,6 +23,8 @@ export type SessionSearchIndexPassOptions = {
   /** Sleeps between batches so an unasked backfill never owns the CPU. */
   pace?: (signal?: AbortSignal) => Promise<void>
   onIndexed?: (candidate: SessionFileCandidate, bytes: number) => void
+  /** The index already covers this file, or can never index it; nothing is owed. */
+  onSkipped?: (candidate: SessionFileCandidate) => void
   onFailed?: (candidate: SessionFileCandidate) => void
 }
 
@@ -52,10 +56,12 @@ export async function runSessionSearchIndexPass(
     // cursor: a closed or paused store answers no, and every read after that
     // would be against a handle it has already given up.
     if (!wantsCandidate(store, candidate)) {
+      options.onSkipped?.(candidate)
       continue
     }
     const forced = mustReadWhole(store, candidate, options.forced)
     if (!forced && indexIsCurrent(store, candidate)) {
+      options.onSkipped?.(candidate)
       continue
     }
     const bytes = forced ? (candidate.file.sizeBytes ?? 0) : unreadBytes(store, candidate)
@@ -63,24 +69,27 @@ export async function runSessionSearchIndexPass(
       deferred.push(...candidates.slice(index))
       break
     }
-    // Two reasons to ask the reader for a whole read, both ending with the file
-    // actually being opened. `forced` covers a path the store handed back from
-    // `takeStale` or a caller invalidated: the reader would otherwise pick
-    // `append` from the session list's resume point and the consumer would
-    // decline it again, every cycle, forever.
-    //
-    // The second is the case no decline can reach. When the list's cursor
-    // already sits at this file's current stat, the parse reuses its cached fold
-    // and opens nothing at all, so no consumer is ever asked and there is
-    // nothing to record as stale. Every transcript the list scanned before the
-    // index existed is in that state, which is what first enablement inside a
-    // running app looks like.
-    if (forced || sessionParseCacheCoversTranscript(candidate, process.platform)) {
-      requestWholeTranscriptRead(candidate.file.path)
-    }
+    // `whole` for a path the store handed back from `takeStale` or a caller
+    // invalidated: the reader would otherwise pick `append` from the session
+    // list's resume point and the consumer would decline it again, every cycle,
+    // forever. `any` for the rest, because reaching here means the index is
+    // behind, and a list cursor already at this file's current stat would make
+    // the parse open nothing at all — the state every transcript is in the
+    // first time the index is switched on inside a running app.
+    const before = indexedRecord(store, candidate)
     try {
-      await parseAgentSessionFileCached(candidate, process.platform, stats)
-      options.onIndexed?.(candidate, bytes)
+      await parseAgentSessionFileCached(
+        candidate,
+        process.platform,
+        stats,
+        forced ? 'whole' : 'any'
+      )
+      // A parse that returned without throwing is not a parse the index kept:
+      // the consumer declines a read it cannot use, and counting that as
+      // indexed is how a status ends up claiming files it does not hold.
+      if (published(before, indexedRecord(store, candidate))) {
+        options.onIndexed?.(candidate, bytes)
+      }
     } catch (error) {
       throwIfAiVaultScanCancelled(options.signal)
       options.onFailed?.(candidate)
@@ -134,6 +143,29 @@ function mustReadWhole(
   }
   const size = candidate.file.sizeBytes
   return typeof size === 'number' && stored.byteOffset > size
+}
+
+function indexedRecord(
+  store: SessionSearchStore,
+  candidate: SessionFileCandidate
+): SessionSearchIndexedFile | null {
+  return store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
+}
+
+/** True when the index's own cursor for this file moved, which only a publish does. */
+function published(
+  before: SessionSearchIndexedFile | null,
+  after: SessionSearchIndexedFile | null
+): boolean {
+  if (!after) {
+    return false
+  }
+  return (
+    !before ||
+    before.byteOffset !== after.byteOffset ||
+    before.mtimeMs !== after.mtimeMs ||
+    before.sizeBytes !== after.sizeBytes
+  )
 }
 
 /** What this read will actually cost: the tail past the index's own cursor. */

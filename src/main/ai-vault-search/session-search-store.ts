@@ -230,6 +230,16 @@ export class SessionSearchStore {
     }
   }
 
+  /** Files the index currently holds, for a status that reports what is there. */
+  get indexedFileCount(): number {
+    try {
+      return Number((this.db.prepare('SELECT count(*) AS n FROM files').get() as { n: number }).n)
+    } catch (error) {
+      this.onError(error)
+      return 0
+    }
+  }
+
   /**
    * What this index believes it holds, for a scheduler that has to notice a
    * source that vanished while nothing was running. `paths` narrows it to a

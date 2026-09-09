@@ -77,6 +77,22 @@ function sessionsMatching(term: string): string[] {
   )
 }
 
+function indexedSessionCount(): number {
+  return harness.read(
+    (db: SyncDatabase) =>
+      (db.prepare('SELECT count(*) AS n FROM visible_sessions').get() as { n: number }).n
+  )
+}
+
+function indexedCursor(path: string): { mtime_ms: number; size_bytes: number } | undefined {
+  return harness.read(
+    (db: SyncDatabase) =>
+      db.prepare('SELECT mtime_ms, size_bytes FROM files WHERE path = ?').get(path) as
+        | { mtime_ms: number; size_bytes: number }
+        | undefined
+  )
+}
+
 function transcriptPath(name = SESSION_ID): string {
   return join(harness.claudeProjectDir, `${name}.jsonl`)
 }
@@ -180,7 +196,9 @@ it('resumes after close and reopen without re-reading what it already indexed', 
   const reopened = newIndexer()
   await reopened.start()
 
-  expect(reopened.status().filesIndexed).toBe(0)
+  // Bytes, not files: `filesIndexed` is what the index holds, so it stays 2.
+  // Zero bytes read is the claim that matters — nothing was opened again.
+  expect(reopened.status()).toMatchObject({ filesIndexed: 2, bytesIndexed: 0 })
   expect(
     harness.read((db: SyncDatabase) =>
       db.prepare('SELECT count(*) AS n FROM visible_messages').get()
@@ -237,7 +255,9 @@ it('refuses writes while paused, remembers what it declined, and bounds both que
 
   await indexer?.resume()
   expect(sessionsMatching('paused')).toEqual([SESSION_ID])
-  expect(indexer?.status()).toMatchObject({ filesPending: 0, droppedPending: 2 })
+  // The declined read is settled; the three invented paths cannot be resolved
+  // to any agent, so they stay queued and counted rather than disappearing.
+  expect(indexer?.status()).toMatchObject({ filesPending: 3, droppedPending: 2 })
   expect(indexer?.status().phase).not.toBe('paused')
 })
 
@@ -326,3 +346,167 @@ it('reports the rows a crashed writer left behind on the next open', async () =>
   resetTranscriptConsumersForTests()
   expect(newIndexer().status().recoveredRows).toBeGreaterThan(0)
 })
+
+// Finding 1: a pause part way through a sweep used to abandon it. The flag was
+// cleared on entry, the abort was swallowed, and resume only re-swept when the
+// pause outlasted an interval, so the rest of the machine stayed unindexed.
+it('finishes a sweep that a pause interrupted, without the clock moving', async () => {
+  const sessions = Array.from(
+    { length: 20 },
+    (_unused, index) => `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
+  )
+  for (const session of sessions) {
+    await writeClaudeTranscript(transcriptPath(session), [`sweepwide session ${session}`], session)
+  }
+
+  let paced = 0
+  newIndexer({
+    // Pause at the first pacing point, part way through the sweep.
+    pace: async () => {
+      if (paced++ === 0) {
+        indexer?.pause()
+      }
+    }
+  })
+  await indexer?.start()
+  expect(indexedSessionCount()).toBeGreaterThan(0)
+  expect(indexedSessionCount()).toBeLessThan(sessions.length)
+
+  await indexer?.resume()
+  for (let cycle = 0; cycle < 5; cycle++) {
+    await nextCycle()
+  }
+
+  expect(indexedSessionCount()).toBe(sessions.length)
+  expect(indexer?.status().phase).toBe('current')
+})
+
+// Finding 2: the store's cutoff was set once at construction while purges used
+// a fresh one, so a sweep deleted the row and the accept check re-indexed it.
+it('moves the retention window with the clock instead of freezing it at construction', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['an entry that ages out'], SESSION_ID)
+  // Dated on the same clock the retention window is measured against.
+  const now = new Date(clock.now())
+  await utimes(path, now, now)
+  await newIndexer({ historyDays: 1 }).start()
+  expect(sessionsMatching('ages')).toEqual([SESSION_ID])
+
+  clock.advance(3 * 86_400_000)
+  await indexer?.reconcile({ full: true })
+
+  expect(sessionsMatching('ages')).toEqual([])
+  await nextCycle()
+  expect(sessionsMatching('ages')).toEqual([])
+})
+
+// Finding 3: an invalidated path outside the recency window was resolved only
+// through rows the index already held, so anything else was dropped unread.
+it('reads an invalidated transcript from outside the recency window', async () => {
+  const older = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(older, ['the older conversation'], OTHER_SESSION_ID)
+  await writeClaudeTranscript(transcriptPath(), ['the newer conversation'], SESSION_ID)
+  const newer = await stat(transcriptPath())
+  const ahead = new Date(newer.mtimeMs + 60_000)
+  await utimes(transcriptPath(), ahead, ahead)
+
+  // Newest-one per root, and the index has never seen either file.
+  newIndexer({ recentPerAgent: 1 })
+  indexer?.invalidate([older])
+  await indexer?.reconcile()
+
+  expect(sessionsMatching('older')).toEqual([OTHER_SESSION_ID])
+  expect(indexer?.status().filesPending).toBe(0)
+})
+
+// Finding 4d: a declined read returns without throwing, and counting it as
+// indexed is how a status claims files the index does not hold.
+it('counts a file as indexed only when the index actually took it', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['a real read'], SESSION_ID)
+  await newIndexer().start()
+  const afterSweep = indexer?.status().bytesIndexed ?? 0
+  expect(afterSweep).toBeGreaterThan(0)
+
+  // Nothing changed, so the next cycle reads nothing and must claim nothing.
+  await indexer?.reconcile()
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 1, bytesIndexed: afterSweep })
+})
+
+it('reports closed once it is closed, whatever it was doing before', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['before the close'], SESSION_ID)
+  await newIndexer().start()
+  expect(indexer?.status().phase).toBe('current')
+  indexer?.close()
+  expect(indexer?.status().phase).toBe('closed')
+})
+
+// Finding 6: a queued entry carries the stat it was recorded with. Reading at
+// that stat writes a cursor describing a file that no longer looks like this,
+// so the next cycle distrusts it and re-reads it, forever.
+it('reads a queued file at its current stat, not the one it was queued with', async () => {
+  const older = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(older, ['the deferred conversation'], OTHER_SESSION_ID)
+  await writeClaudeTranscript(transcriptPath(), ['the newer conversation'], SESSION_ID)
+  const ahead = new Date((await stat(transcriptPath())).mtimeMs + 60_000)
+  await utimes(transcriptPath(), ahead, ahead)
+
+  // One file per cycle, so the older one is deferred carrying this stat.
+  newIndexer({ budget: { files: 1, bytes: 64 * 1024 } })
+  await indexer?.reconcile()
+  expect(indexer?.status().filesPending).toBe(1)
+
+  await appendFile(
+    older,
+    `${claudeLines(['appended while queued'], OTHER_SESSION_ID, 10).join('\n')}\n`
+  )
+  await indexer?.reconcile()
+
+  expect(sessionsMatching('appended')).toEqual([OTHER_SESSION_ID])
+  // The cursor has to describe the file as it is now; recorded against the
+  // queued stat it would be re-read on every cycle from here on.
+  const cursor = indexedCursor(older)
+  const current = await stat(older)
+  expect(cursor).toEqual({ mtime_ms: current.mtimeMs, size_bytes: current.size })
+})
+
+// A declined read records the stat it was declined at. By the time the store
+// hands it back the file has usually moved on again, and reading at the
+// recorded stat writes a cursor the next cycle immediately distrusts.
+it('reads a stale file at its current stat, not the one it was recorded with', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['the recorded conversation'], SESSION_ID)
+  await newIndexer().start()
+
+  indexer?.pause()
+  await appendFile(path, `${claudeLines(['declined turn'], SESSION_ID, 10).join('\n')}\n`)
+  // The list scan is declined while paused, so the store records this stat.
+  await parseTranscript(path)
+  await appendFile(path, `${claudeLines(['later turn'], SESSION_ID, 20).join('\n')}\n`)
+  await indexer?.resume()
+
+  expect(sessionsMatching('later')).toEqual([SESSION_ID])
+  const current = await stat(path)
+  expect(indexedCursor(path)).toEqual({ mtime_ms: current.mtimeMs, size_bytes: current.size })
+})
+
+// Finding 7: an unmounted volume ENOENTs its whole tree at once. Retiring on
+// that evidence deletes a user's searchable history for a detached drive.
+it.skipIf(!CAN_DENY_READ)(
+  'keeps a whole root when it stops listing, instead of retiring it',
+  async () => {
+    await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
+    await newIndexer().start()
+    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+
+    // What an unmounted tree looks like: present, listable, and suddenly empty.
+    await rm(harness.claudeProjectDir, { recursive: true, force: true })
+    await indexer?.reconcile({ full: true })
+
+    const status = indexer?.status()
+    expect(status?.phase).toBe('degraded')
+    expect(status?.degradedRoots.map((root) => root.root)).toContain(
+      harness.roots.claudeProjectsDir
+    )
+    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+  }
+)

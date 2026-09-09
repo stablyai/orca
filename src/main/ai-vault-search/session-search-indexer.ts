@@ -1,10 +1,6 @@
 import { runSessionSearchBackfill } from './session-search-backfill'
 import { pauseBackfill } from './session-search-backfill-pacing'
-import {
-  systemSessionSearchClock,
-  type SessionSearchClock,
-  type SessionSearchTimerHandle
-} from './session-search-clock'
+import { systemSessionSearchClock, type SessionSearchClock } from './session-search-clock'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import {
   SessionSearchIndexingStatus,
@@ -25,6 +21,7 @@ import {
 import { removeSessionSearchDatabase } from './session-search-schema'
 import type { SessionSearchScanRoots } from './session-search-scan-roots'
 import { SessionSearchStore, STALE_PATH_LIMIT } from './session-search-store'
+import { SessionSearchWorkLoop } from './session-search-work-loop'
 
 /** Default cycle. Long enough that a machine with thousands of transcripts is
  * not re-statting continuously, short enough that a live conversation shows up
@@ -75,12 +72,11 @@ export class SessionSearchIndexer {
   private readonly onError: (error: unknown) => void
   private readonly pace: (signal?: AbortSignal) => Promise<void>
 
+  private readonly loop: SessionSearchWorkLoop
   private store: SessionSearchStore | null = null
   private unregister: (() => void) | null = null
-  private timer: SessionSearchTimerHandle | null = null
-  private controller: AbortController | null = null
-  private run: Promise<void> = Promise.resolve()
   private previousRecent = new Set<string>()
+  private rootFileCounts = new Map<string, number>()
   private historyDays: number | null
   private started = false
   private paused = false
@@ -100,13 +96,22 @@ export class SessionSearchIndexer {
     this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
     this.pace = options.pace ?? pauseBackfill
     this.historyDays = options.historyDays
+    this.loop = new SessionSearchWorkLoop({
+      clock: this.clock,
+      intervalMs: this.intervalMs,
+      onFailure: (error) => {
+        this.indexingStatus.failed()
+        this.onError(error)
+      },
+      afterTask: () => this.publishPending()
+    })
     this.openStore()
   }
 
   /** Runs a full sweep, then reconciles on the interval until paused or closed. */
   start(): Promise<void> {
     if (this.closed || this.started) {
-      return this.run
+      return this.loop.settled
     }
     this.started = true
     this.fullSweepDue = true
@@ -121,14 +126,14 @@ export class SessionSearchIndexer {
     this.paused = true
     this.pausedAt = this.clock.now()
     this.indexingStatus.setPaused(true)
-    this.disarm()
-    this.abort()
+    this.loop.disarm()
+    this.loop.abort()
     this.store?.setAcceptingWrites(false)
   }
 
   resume(): Promise<void> {
     if (!this.paused || this.closed) {
-      return this.run
+      return this.loop.settled
     }
     // A pause longer than one cycle means the recent-N window has moved on, so
     // the cheap re-stat can no longer prove what changed while nothing ran.
@@ -138,17 +143,17 @@ export class SessionSearchIndexer {
     this.indexingStatus.setPaused(false)
     this.store?.setAcceptingWrites(true)
     this.fullSweepDue ||= sincePause > this.intervalMs
-    return this.started ? this.tick() : Promise.resolve()
+    return this.started ? this.tick() : this.loop.settled
   }
 
   /** Throws the index away and rebuilds it from scratch if the indexer is started. */
   clear(): Promise<void> {
     if (this.closed) {
-      return this.run
+      return this.loop.settled
     }
-    this.disarm()
-    this.abort()
-    this.queue(async () => {
+    this.loop.disarm()
+    this.loop.abort()
+    this.loop.queue(async () => {
       this.closeStore()
       removeSessionSearchDatabase(this.options.databasePath)
       this.pending.clear()
@@ -156,13 +161,13 @@ export class SessionSearchIndexer {
       this.openStore()
       this.fullSweepDue = true
     })
-    return this.started && !this.paused ? this.tick() : this.run
+    return this.started && !this.paused ? this.tick() : this.loop.settled
   }
 
   /** Runs one pass now, off the timer. A full pass sweeps every root. */
   reconcile(options: { full?: boolean } = {}): Promise<void> {
     if (this.closed) {
-      return this.run
+      return this.loop.settled
     }
     this.fullSweepDue ||= options.full === true
     return this.tick()
@@ -183,26 +188,29 @@ export class SessionSearchIndexer {
    * outside the old bound were never read. */
   setHistoryDays(historyDays: number | null): Promise<void> {
     if (this.closed) {
-      return this.run
+      return this.loop.settled
     }
     const previous = this.historyDays
     this.historyDays = historyDays
     const cutoffMs = this.cutoffMs()
     this.store?.setRetentionCutoffMs(cutoffMs)
     if (narrowsSessionSearchHistory(previous, historyDays)) {
-      return this.queue(async (signal) => {
+      return this.loop.queue(async (signal) => {
         await this.store?.purgeOlderThan(cutoffMs, signal)
       })
     }
     if (!widensSessionSearchHistory(previous, historyDays)) {
-      return this.run
+      return this.loop.settled
     }
     this.fullSweepDue = true
-    return this.started && !this.paused ? this.tick() : this.run
+    return this.started && !this.paused ? this.tick() : this.loop.settled
   }
 
   status(): SessionSearchIndexStatus {
     this.publishPending()
+    // Counted in the store, not tallied per attempt: an attempt counter reports
+    // files the index does not hold, and reports them again next cycle.
+    this.indexingStatus.setFilesIndexed(this.store?.indexedFileCount ?? 0)
     return this.indexingStatus.snapshot()
   }
 
@@ -212,22 +220,23 @@ export class SessionSearchIndexer {
     }
     this.closed = true
     this.started = false
-    this.disarm()
-    this.abort()
+    this.indexingStatus.setClosed()
+    this.loop.disarm()
+    this.loop.abort()
     this.closeStore()
   }
 
   /** Tests only: everything else drives this through the timer. */
   settled(): Promise<void> {
-    return this.run
+    return this.loop.settled
   }
 
   private tick(): Promise<void> {
-    // Arming inside the chain, not beside it: `settled()` has to cover the
-    // re-arm or a test that advances the clock finds no timer waiting.
-    const chained = this.queue((signal) => this.pass(signal)).then(() => this.arm())
-    this.run = chained
-    return chained
+    return this.loop.queueThenArm(
+      (signal) => this.pass(signal),
+      () => this.started && !this.paused && !this.closed,
+      () => void this.tick()
+    )
   }
 
   private async pass(signal: AbortSignal): Promise<void> {
@@ -235,24 +244,50 @@ export class SessionSearchIndexer {
     if (!store || this.paused) {
       return
     }
+    // The window moves with the clock, and every accept decision below reads it
+    // from the store. Setting it once at construction leaves a sweep purging
+    // rows that the very next candidate check happily re-indexes.
+    const cutoffMs = this.cutoffMs()
+    store.setRetentionCutoffMs(cutoffMs)
     if (this.fullSweepDue) {
-      this.fullSweepDue = false
-      const sweep = await runSessionSearchBackfill({
-        store,
-        roots: this.options.roots,
-        status: this.indexingStatus,
-        cutoffMs: this.cutoffMs(),
-        pace: this.pace,
-        signal
-      })
-      // Watch everything the sweep saw: a transcript deleted between its
-      // discovery and the first cycle is invisible to both otherwise. The
-      // cycle's retirement cap keeps that one-off check off the critical path.
-      this.previousRecent = sweep.discoveredPaths
-      this.indexingStatus.setDegradedRoots(sweep.degradedRoots)
-      this.indexingStatus.finishWork(this.clock.now())
+      await this.sweep(store, cutoffMs, signal)
       return
     }
+    await this.cycle(store, signal)
+  }
+
+  private async sweep(
+    store: SessionSearchStore,
+    cutoffMs: number | null,
+    signal: AbortSignal
+  ): Promise<void> {
+    const sweep = await runSessionSearchBackfill({
+      store,
+      roots: this.options.roots,
+      status: this.indexingStatus,
+      cutoffMs,
+      previousRootFileCounts: this.rootFileCounts,
+      pace: this.pace,
+      signal
+    })
+    this.rootFileCounts = sweep.rootFileCounts
+    this.indexingStatus.setDegradedRoots(sweep.degradedRoots)
+    if (!sweep.completed) {
+      // A sweep is due until it finishes. Clearing the flag on entry meant a
+      // pause part way through abandoned the rest of the machine's transcripts
+      // until something else happened to ask for a full sweep.
+      return
+    }
+    this.fullSweepDue = false
+    // Watch everything the sweep saw: a transcript deleted between its
+    // discovery and the first cycle is invisible to both otherwise. The
+    // cycle's retirement cap keeps that one-off check off the critical path.
+    this.previousRecent = sweep.watchPaths
+    this.indexingStatus.sweepCompleted()
+    this.indexingStatus.finishWork(this.clock.now())
+  }
+
+  private async cycle(store: SessionSearchStore, signal: AbortSignal): Promise<void> {
     this.allowance.reset()
     const cycle = await runSessionSearchReconcileCycle({
       store,
@@ -265,64 +300,17 @@ export class SessionSearchIndexer {
       retirementChecksPerCycle: this.options.retirementChecksPerCycle,
       signal
     })
+    // Work that was drained and then not read is a hole in the index, not
+    // finished work, so an abort puts it back rather than dropping it.
     for (const entry of cycle.deferred) {
       this.pending.add(entry)
+    }
+    if (!cycle.completed) {
+      return
     }
     this.previousRecent = cycle.recentPaths
     this.indexingStatus.setDegradedRoots(cycle.degradedRoots)
     this.indexingStatus.finishWork(this.clock.now())
-  }
-
-  private queue(work: (signal: AbortSignal) => Promise<void>): Promise<void> {
-    const chained = this.run.then(
-      () => this.runGuarded(work),
-      () => this.runGuarded(work)
-    )
-    this.run = chained
-    return chained
-  }
-
-  private async runGuarded(work: (signal: AbortSignal) => Promise<void>): Promise<void> {
-    if (this.closed) {
-      return
-    }
-    const controller = new AbortController()
-    this.controller = controller
-    try {
-      await work(controller.signal)
-    } catch (error) {
-      // An aborted pass is a pause, a clear or a close, never a failure.
-      if (!controller.signal.aborted) {
-        this.indexingStatus.failed()
-        this.onError(error)
-      }
-    } finally {
-      if (this.controller === controller) {
-        this.controller = null
-      }
-      this.publishPending()
-    }
-  }
-
-  private arm(): void {
-    if (this.closed || !this.started || this.paused || this.timer !== null) {
-      return
-    }
-    this.timer = this.clock.setTimeout(() => {
-      this.timer = null
-      void this.tick()
-    }, this.intervalMs)
-  }
-
-  private disarm(): void {
-    if (this.timer !== null) {
-      this.clock.clearTimeout(this.timer)
-      this.timer = null
-    }
-  }
-
-  private abort(): void {
-    this.controller?.abort()
   }
 
   private cutoffMs(): number | null {

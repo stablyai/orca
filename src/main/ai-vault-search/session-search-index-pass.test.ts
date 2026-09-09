@@ -1,10 +1,11 @@
-import { appendFile, rm } from 'node:fs/promises'
+import { appendFile, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { runSessionSearchIndexPass } from './session-search-index-pass'
+import { parseTranscript } from './session-search-transcript-fixtures'
 import {
   claudeLines,
   openSessionSearchIndexerHarness,
@@ -100,4 +101,66 @@ it('skips a source the reader cannot even open without failing the pass', async 
   expect(
     harness.read((db) => db.prepare('SELECT count(*) AS n FROM visible_sessions').get())
   ).toEqual({ n: 1 })
+})
+
+// Finding 6: mtime alone is not the freshness key. A transcript that grows
+// while keeping its mtime (a same-second append, a restored timestamp) is a
+// different file to the index, and reading only mtime would skip it forever.
+it('re-reads a file that grew without its mtime moving', async () => {
+  const path = transcript(FIRST)
+  // A whole-millisecond stamp, so restoring it later reproduces it exactly.
+  const frozen = new Date(1_740_000_000_000)
+  await utimes(path, frozen, frozen)
+  await runSessionSearchIndexPass(store, await candidates())
+
+  await appendFile(path, `${claudeLines(['a same-mtime append'], FIRST, 20).join('\n')}\n`)
+  await utimes(path, frozen, frozen)
+  expect((await stat(path)).mtimeMs).toBe(frozen.getTime())
+
+  const second = await runSessionSearchIndexPass(store, await candidates())
+  expect(second.stats.fullParses + second.stats.incremental).toBe(1)
+})
+
+// Finding 5: the decision reads the session list's cache and then changes it,
+// so outside the per-path lane an overlapping list parse stores its entry in
+// between and the forced read degrades into a reuse.
+it('is not overtaken by a list parse racing the same path', async () => {
+  const path = transcript(FIRST)
+  const all = await candidates()
+  const only = all.filter((candidate) => candidate.file.path === path)
+
+  // The list parses this path first, so its cursor covers the file, and again
+  // concurrently with the index's pass so the two interleave.
+  await parseTranscript(path)
+  const [, pass] = await Promise.all([
+    parseTranscript(path),
+    runSessionSearchIndexPass(store, only)
+  ])
+
+  expect(pass.deferred).toEqual([])
+  expect(
+    harness.read((db) => db.prepare('SELECT count(*) AS n FROM visible_sessions').get())
+  ).toEqual({ n: 1 })
+})
+
+// Finding 4d: a declined read is a parse that returns normally and indexes
+// nothing. Counting it makes a status claim files the index does not hold.
+it('does not count a read the index declined, even though the parse succeeded', async () => {
+  const only = (await candidates()).slice(0, 1)
+  const indexed: string[] = []
+  // What a WAL-budget refusal or a store that stopped accepting looks like from
+  // the consumer's side: the read runs, and nothing is written.
+  store.beginWrite = () => null
+
+  const pass = await runSessionSearchIndexPass(store, only, {
+    onIndexed: (candidate) => indexed.push(candidate.file.path)
+  })
+
+  expect(pass.stats.fullParses).toBe(1)
+  expect(indexed).toEqual([])
+  expect(
+    harness.read((db) => db.prepare('SELECT count(*) AS n FROM visible_sessions').get())
+  ).toEqual({ n: 0 })
+  // Declined, not forgotten: the store records it for a later whole re-read.
+  expect(store.takeStale()).toHaveLength(1)
 })

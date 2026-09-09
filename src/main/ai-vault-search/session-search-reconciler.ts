@@ -7,7 +7,11 @@ import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
-import { runSessionSearchIndexPass } from './session-search-index-pass'
+import {
+  runSessionSearchIndexPass,
+  type SessionSearchIndexPassResult
+} from './session-search-index-pass'
+import { createSessionParseStats } from '../ai-vault/session-scanner-parse-cache'
 import type { SessionSearchIndexingStatus } from './session-search-indexing-status'
 import type { SessionSearchPendingFile } from './session-search-pending-files'
 import type { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
@@ -17,6 +21,7 @@ import {
 } from './session-search-root-health'
 import {
   discoverSessionSearchCandidates,
+  sessionSearchAgentForPath,
   type SessionSearchScanRoots
 } from './session-search-scan-roots'
 import type { SessionSearchStore } from './session-search-store'
@@ -45,9 +50,11 @@ export type SessionSearchReconcileArgs = {
 export type SessionSearchReconcileResult = {
   /** What the next cycle watches: this cycle's recent window plus what it could not settle. */
   recentPaths: Set<string>
-  /** Work the allowance had no room for. */
+  /** Work drained but not read: over budget, unresolved, or cut short by an abort. */
   deferred: SessionSearchPendingFile[]
   degradedRoots: SessionSearchDegradedRoot[]
+  /** False when the cycle was aborted; its conclusions are not to be recorded. */
+  completed: boolean
 }
 
 /**
@@ -69,37 +76,77 @@ export async function runSessionSearchReconcileCycle(
     })
     const issues: AiVaultScanIssue[] = [...swept.issues]
     const recentPaths = new Set(swept.candidates.map((candidate) => candidate.file.path))
-    const queued = await queuedCandidates(store, args.pending, recentPaths, signal)
+    const queued = await queuedCandidates(args, recentPaths, signal)
     const stale = store.takeStale()
     const forced = new Set([
       ...stale.map((candidate) => candidate.file.path),
       ...args.pending.filter((entry) => entry.forced).map((entry) => entry.path)
     ])
+    // Everything drained out of a queue, so an abort can put back exactly what
+    // it did not get to. A drained entry that is never read is a hole in the
+    // index, and dropping it is how a file stays missing until the next sweep.
+    const owed = new Map<string, SessionSearchPendingFile>()
+    for (const entry of args.pending) {
+      owed.set(entry.path, entry)
+    }
+    for (const candidate of stale) {
+      owed.set(candidate.file.path, { path: candidate.file.path, candidate, forced: true })
+    }
 
-    const pass = await runSessionSearchIndexPass(
-      store,
-      // A hole in the index is more urgent than a file that only grew, and
-      // rolled-over work waited a cycle already, so both go before discovery.
-      readOrder([stale, queued.candidates, swept.candidates], swept.candidates),
-      {
-        signal,
-        forced,
-        allowance: args.allowance,
-        onIndexed: (_candidate, bytes) => status.indexed(bytes),
-        onFailed: () => status.failed()
+    let completed = true
+    let pass: SessionSearchIndexPassResult = { stats: createSessionParseStats(), deferred: [] }
+    try {
+      pass = await runSessionSearchIndexPass(
+        store,
+        // A hole in the index is more urgent than a file that only grew, and
+        // rolled-over work waited a cycle already, so both go before discovery.
+        readOrder([stale, queued.candidates, swept.candidates], swept.candidates),
+        {
+          signal,
+          forced,
+          allowance: args.allowance,
+          onIndexed: (candidate, bytes) => {
+            owed.delete(candidate.file.path)
+            status.indexed(bytes)
+          },
+          onSkipped: (candidate) => owed.delete(candidate.file.path),
+          onFailed: () => status.failed()
+        }
+      )
+    } catch (error) {
+      if (!signal?.aborted) {
+        throw error
       }
-    )
+      completed = false
+    }
+    for (const candidate of pass.deferred) {
+      owed.set(candidate.file.path, {
+        path: candidate.file.path,
+        candidate,
+        forced: forced.has(candidate.file.path)
+      })
+    }
+    for (const path of queued.unresolved) {
+      // Never silently dropped: a caller asked for this path and the index has
+      // no record of it, so it stays queued and keeps being counted.
+      owed.set(path, { path, candidate: null, forced: true })
+    }
 
-    const retirement = await retireDeletedSessionSearchSources(
-      store,
-      [...new Set([...args.previousRecent, ...queued.unstattable])].filter(
-        (path) => !recentPaths.has(path)
-      ),
-      {
-        signal,
-        limit: args.retirementChecksPerCycle ?? DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS
-      }
-    )
+    const retirement = completed
+      ? await retireDeletedSessionSearchSources(
+          store,
+          [...new Set([...args.previousRecent, ...queued.unstattable])].filter(
+            (path) => !recentPaths.has(path)
+          ),
+          {
+            signal,
+            limit: args.retirementChecksPerCycle ?? DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS
+          }
+        )
+      : { retired: [], unverifiable: [], unchecked: [] }
+    for (const path of retirement.retired) {
+      owed.delete(path)
+    }
 
     for (const refusal of cursorChatMetaRefusals()) {
       recordSessionScanIssue(issues, {
@@ -113,12 +160,9 @@ export async function runSessionSearchReconcileCycle(
       // reach was never checked at all: both stay watched instead of being
       // retired or forgotten.
       recentPaths: new Set([...recentPaths, ...retirement.unverifiable, ...retirement.unchecked]),
-      deferred: pass.deferred.map((candidate) => ({
-        path: candidate.file.path,
-        candidate,
-        forced: forced.has(candidate.file.path)
-      })),
-      degradedRoots: await degradedSessionSearchRoots(swept.discoveries, issues, signal)
+      deferred: [...owed.values()],
+      degradedRoots: await degradedSessionSearchRoots(swept.discoveries, issues, { signal }),
+      completed
     }
   })
 }
@@ -145,20 +189,21 @@ function readOrder(
 
 /**
  * Turns the queue into candidates. An entry that names a path this cycle
- * discovered is already covered; one that does not is re-statted against what
- * the index recorded for it, so an invalidated file outside the recent window
- * is still re-read rather than waiting for the next sweep.
+ * discovered is already covered; one that does not is re-statted, with the
+ * agent taken from what the index recorded or, for a path the index has never
+ * held, from the same root table discovery reads. What still cannot be resolved
+ * is reported rather than dropped.
  */
 async function queuedCandidates(
-  store: SessionSearchStore,
-  pending: readonly SessionSearchPendingFile[],
+  args: SessionSearchReconcileArgs,
   recentPaths: ReadonlySet<string>,
   signal?: AbortSignal
-): Promise<{ candidates: SessionFileCandidate[]; unstattable: string[] }> {
+): Promise<{ candidates: SessionFileCandidate[]; unstattable: string[]; unresolved: string[] }> {
   const candidates: SessionFileCandidate[] = []
   const unstattable: string[] = []
   const unresolved: string[] = []
-  for (const entry of pending) {
+  const byPath: string[] = []
+  for (const entry of args.pending) {
     if (recentPaths.has(entry.path)) {
       continue
     }
@@ -166,20 +211,31 @@ async function queuedCandidates(
       candidates.push(entry.candidate)
       continue
     }
-    unresolved.push(entry.path)
+    byPath.push(entry.path)
   }
-  for (const source of store.indexedSources(unresolved)) {
-    if (signal?.aborted || !source.agent) {
+  const indexed = new Map(args.store.indexedSources(byPath).map((source) => [source.path, source]))
+  for (const path of byPath) {
+    if (signal?.aborted) {
+      unresolved.push(path)
       continue
     }
-    const candidate = await restatCandidate(source.path, source.agent, source.codexHome, signal)
+    const source = indexed.get(path)
+    const agent = source?.agent ?? sessionSearchAgentForPath(args.roots, path)
+    if (!agent) {
+      unresolved.push(path)
+      continue
+    }
+    const candidate = await restatCandidate(path, agent, source?.codexHome ?? null, signal)
     if (candidate) {
       candidates.push(candidate)
+    } else if (source) {
+      // The index holds rows for it, so whether it is gone is a real question.
+      unstattable.push(path)
     } else {
-      unstattable.push(source.path)
+      unresolved.push(path)
     }
   }
-  return { candidates, unstattable }
+  return { candidates, unstattable, unresolved }
 }
 
 async function restatCandidate(

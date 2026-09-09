@@ -12,29 +12,51 @@ export type SessionSearchDegradedRoot = { root: string; reason: string }
 // forbids, so an empty root is re-checked and only ENOENT counts as absent.
 const ABSENT_ROOT = new Set(['ENOENT', 'ENOTDIR'])
 
+export type SessionSearchRootHealthOptions = {
+  signal?: AbortSignal
+  /** What each root listed last time, so a tree that emptied out is visible. */
+  previousFileCounts?: ReadonlyMap<string, number>
+}
+
+/** Transcripts each root listed, for comparison against the next sweep. */
+export function rootFileCounts(discoveries: readonly SessionFileDiscovery[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const discovery of discoveries) {
+    counts.set(discovery.rootDir, (counts.get(discovery.rootDir) ?? 0) + discovery.files.length)
+  }
+  return counts
+}
+
 /**
  * Classifies the roots a sweep just walked. Only roots that yielded nothing are
  * probed: a root that returned files is readable by construction, which keeps
- * the per-cycle cost at one readdir per genuinely empty tree.
+ * the cost at one readdir per genuinely empty tree.
+ *
+ * A readable but suddenly empty root counts too. An unmounted SSH home or a
+ * detached external drive often reads as a present, listable, empty directory,
+ * and every transcript under it then answers ENOENT at once. Going from N to
+ * zero is not something an agent's transcript store does on its own.
  */
 export async function degradedSessionSearchRoots(
   discoveries: readonly SessionFileDiscovery[],
   issues: readonly AiVaultScanIssue[],
-  signal?: AbortSignal
+  options: SessionSearchRootHealthOptions = {}
 ): Promise<SessionSearchDegradedRoot[]> {
+  const { signal } = options
   const degraded = new Map<string, string>()
   for (const issue of issues) {
     if (issue.kind !== 'notice' && discoveries.some((one) => one.rootDir === issue.path)) {
       degraded.set(issue.path, issue.message)
     }
   }
-  const empty = [
-    ...new Set(
-      discoveries.filter((one) => one.files.length === 0).map((discovery) => discovery.rootDir)
-    )
-  ]
-  for (const root of empty) {
-    if (degraded.has(root) || signal?.aborted) {
+  const counts = rootFileCounts(discoveries)
+  for (const [root, count] of counts) {
+    if (count > 0 || degraded.has(root) || signal?.aborted) {
+      continue
+    }
+    const previous = options.previousFileCounts?.get(root) ?? 0
+    if (previous > 0) {
+      degraded.set(root, `Listed no transcripts where it listed ${previous} before.`)
       continue
     }
     const reason = await unreadableRootReason(root, signal)
@@ -43,6 +65,21 @@ export async function degradedSessionSearchRoots(
     }
   }
   return [...degraded].map(([root, reason]) => ({ root, reason }))
+}
+
+/** True when a path lives under a root this sweep could not trust. */
+export function underDegradedRoot(
+  path: string,
+  degradedRoots: readonly SessionSearchDegradedRoot[]
+): boolean {
+  // Both separators: discovery joins with the platform's, and a root can arrive
+  // from a config value written with the other one.
+  return degradedRoots.some(
+    (degraded) =>
+      path === degraded.root ||
+      path.startsWith(`${degraded.root}/`) ||
+      path.startsWith(`${degraded.root}\\`)
+  )
 }
 
 async function unreadableRootReason(root: string, signal?: AbortSignal): Promise<string | null> {
