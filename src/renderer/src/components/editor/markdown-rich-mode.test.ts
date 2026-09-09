@@ -134,6 +134,16 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     ).toBeNull()
   })
 
+  it('allows a details block already carrying the legacy orca-details class', () => {
+    // Why: a file saved by an earlier Orca version has this class in its
+    // source; the round-trip eligibility check must still recognize it.
+    expect(
+      getMarkdownRichModeUnsupportedMessage(
+        '<details class="orca-details"><summary>x</summary>\n\nbody\n\n</details>\n'
+      )
+    ).toBeNull()
+  })
+
   it('allows a document with front matter, prose, and two details blocks', () => {
     const content = [
       '---',

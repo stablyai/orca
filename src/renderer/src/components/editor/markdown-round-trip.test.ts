@@ -218,10 +218,12 @@ describe('rich markdown round trip', () => {
     )
   })
 
-  it('drops the legacy styling class from a previously orca-authored nested toggle on round trip', () => {
-    // Why: earlier Orca versions wrote `class="orca-details"` into the markdown
-    // source; the serializer no longer re-emits it, since the DOM class comes
-    // from the editor's node view configuration instead.
+  it('round-trips an orca-authored nested toggle unchanged', () => {
+    // Why: a file already saved by an earlier Orca version carries
+    // `class="orca-details"` in its source; that class must keep round-tripping
+    // unchanged, both so the file's bytes stay stable and so the rich-mode
+    // eligibility check (which compares serialized output against source bytes)
+    // keeps recognizing the file as its own on every subsequent open.
     const input = [
       '<details class="orca-details" data-orca-toggle="heading-3" open>',
       '<summary>08/26/2026</summary>',
@@ -239,23 +241,27 @@ describe('rich markdown round trip', () => {
       '</details>',
       ''
     ].join('\n')
-    const expected = [
-      '<details data-orca-toggle="heading-3" open>',
-      '<summary>08/26/2026</summary>',
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+  })
+
+  it('does not backfill the legacy styling class onto a freshly nested toggle', () => {
+    // Why: a toggle nested inside a legacy-class outer block, but itself newly
+    // authored without a class, must not inherit the outer block's class.
+    const input = [
+      '<details class="orca-details" open>',
+      '<summary>Outer</summary>',
       '',
       '<details open>',
-      '<summary>goals</summary>',
+      '<summary>Inner</summary>',
       '',
-      '- Read X post',
-      '  - Collab',
+      'Body',
       '',
       '</details>',
       '',
-      '- after inner',
-      '',
-      '</details>'
+      '</details>',
+      ''
     ].join('\n')
-    expect(roundTripMarkdown(input)).toBe(expected)
+    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
   })
 
   it('keeps nested toggle bodies editable rather than inert raw html', () => {
