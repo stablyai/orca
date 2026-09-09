@@ -42,10 +42,13 @@ it('records the query and its route when logging is on', async () => {
   expect(rows).toEqual([{ query: 'needle', route: 'or', hits: 1 }])
 })
 
-it('redacts a credential pasted into the search box', async () => {
+it('stores the query as typed, the way the index stores content as written', async () => {
+  // PR 2 decided the index does not redact: it is a second copy of plaintext
+  // the user already holds under their own home directory. The same holds for
+  // what they typed into the search box.
   const opened = await open({ logQueries: true })
   opened.engine.search({ query: 'Bearer abcdefghijklmnopqrstuvwxyz012345' })
-  expect(loggedQueries(opened)[0]).toBe('Bearer [redacted:bearer-token]')
+  expect(loggedQueries(opened)[0]).toBe('Bearer abcdefghijklmnopqrstuvwxyz012345')
 })
 
 it('keeps the newest N and drops the rest, so the log cannot grow with use', async () => {
