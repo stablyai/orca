@@ -2,8 +2,10 @@ import type SyncDatabase from '../sqlite/sync-database'
 import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
 import {
   hasAiVaultSearchQueryOperators,
-  splitAiVaultSearchQuery
+  splitAiVaultSearchQuery,
+  type AiVaultSearchQuerySplit
 } from '../../shared/ai-vault-search-query-operators'
+import { matchesAiVaultQueryOperators } from '../../shared/ai-vault-session-filters'
 import {
   resolveSessionSearchLimit,
   SESSION_SEARCH_QUERY_MAX_LENGTH,
@@ -108,11 +110,8 @@ export class SessionSearchEngine {
     const retrievalScope: RetrievalScope = {
       scope,
       sort,
-      filter: sessionRowFilter(
-        request.filters ?? {},
-        split,
-        this.options.retentionCutoffMs ?? null
-      ),
+      filter: sessionRowFilter(request.filters ?? {}, this.options.retentionCutoffMs ?? null),
+      matchesOperators: operatorPredicate(split),
       candidateLimit: this.candidateLimit
     }
     // Decoded before any retrieval: a cursor the engine will refuse must not
@@ -171,14 +170,11 @@ export class SessionSearchEngine {
    * `repo:x` and `word repo:x` differently. There is no relevance signal
    * without text, so the order is always newest.
    */
-  private operatorOnly(
-    split: ReturnType<typeof splitAiVaultSearchQuery>,
-    scope: RetrievalScope
-  ): RankedPage {
+  private operatorOnly(split: AiVaultSearchQuerySplit, scope: RetrievalScope): RankedPage {
     if (!hasAiVaultSearchQueryOperators(split)) {
       return { ranked: [], retrieved: null, candidates: 0 }
     }
-    const sessions = this.retrieval.recent(scope)
+    const { sessions } = this.retrieval.recent(scope)
     return {
       ranked: rankSessionHits(sessions, new Map(), 'newest'),
       retrieved: null,
@@ -194,7 +190,9 @@ export class SessionSearchEngine {
     const retrieved = this.retrieval.run(plan, scope)
     // `match` already grouped to one best row per session.
     const best = new Map<number, MessageRow>(retrieved.rows.map((row) => [row.session_row_id, row]))
-    const sessions = this.retrieval.loadSessions([...best.keys()], scope.filter)
+    // Operators cut here, after retrieval, so the candidate count still reports
+    // what the SQL limit saw: that is what tells a caller the limit was binding.
+    const sessions = this.retrieval.loadSessions([...best.keys()], scope)
     return { ranked: rankSessionHits(sessions, best, sort), retrieved, candidates: best.size }
   }
 
@@ -237,6 +235,23 @@ export class SessionSearchEngine {
         : null
     }
   }
+}
+
+/**
+ * The one reading of `repo:` / `path:`: the sessions panel's own predicate, over
+ * the columns the index stores. The engine has no project map, so a session's
+ * repo label falls back to its folder label, which is what the panel does for
+ * every session it cannot resolve a project for.
+ */
+function operatorPredicate(split: AiVaultSearchQuerySplit): (session: SessionRow) => boolean {
+  if (!hasAiVaultSearchQueryOperators(split)) {
+    return () => true
+  }
+  return (session) =>
+    matchesAiVaultQueryOperators(
+      { cwd: session.cwd, filePath: session.file_path },
+      { repoTerms: split.repoTerms, pathTerms: split.pathTerms }
+    )
 }
 
 function sessionFields(

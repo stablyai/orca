@@ -51,6 +51,8 @@ export type SyntheticSession = {
   messageCount?: number
   /** Written into `files`, which is what makes the source `present`. */
   filePath?: string | null
+  /** `sessions.file_path`: the transcript `path:` searches alongside cwd. */
+  sessionFilePath?: string
 }
 
 /** One session and its message rows, in both FTS tables the way the writer does. */
@@ -64,12 +66,13 @@ export function addSyntheticSession(db: SyncDatabase, session: SyntheticSession)
     agent = 'claude',
     updatedAt = `2026-09-${String((id % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
     messageCount = rows,
-    filePath = `/synthetic/${id}.jsonl`
+    filePath = `/synthetic/${id}.jsonl`,
+    sessionFilePath = `/synthetic/${id}.jsonl`
   } = session
   db.prepare(
     `INSERT INTO sessions(id,agent,session_id,file_path,title,cwd,cwd_key,updated_at,message_count,resume_command)
      VALUES (?,?,?,?,'fixture',?,?,?,?,'resume')`
-  ).run(id, agent, String(id), `/synthetic/${id}.jsonl`, cwd, cwdKey(cwd), updatedAt, messageCount)
+  ).run(id, agent, String(id), sessionFilePath, cwd, cwdKey(cwd), updatedAt, messageCount)
   if (filePath !== null) {
     db.prepare(
       'INSERT INTO files(path,byte_offset,mtime_ms,session_row_id) VALUES (?,0,1740000000000,?)'

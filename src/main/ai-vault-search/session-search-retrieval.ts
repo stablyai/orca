@@ -12,6 +12,11 @@ import type { SessionRowFilter } from './session-search-row-filter'
 import { VISIBLE_MESSAGES, VISIBLE_SESSIONS } from './session-search-schema'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
 
+// The operator-only walk: rows per page, and how far past a full candidate set
+// it will read before giving up on finding more matches.
+const RECENT_PAGE_ROWS = 512
+const RECENT_SCAN_FACTOR = 20
+
 // Measured: user 3 / assistant 2 / tool 1 / identifiers 1 (MRR 0.503 vs 0.475 flat).
 const FULL_WEIGHTS = '3.0, 2.0, 1.0, 1.0'
 const CONVERSATION_WEIGHTS = '3.0, 2.0'
@@ -20,6 +25,11 @@ export type RetrievalScope = {
   scope: SessionSearchScope
   sort: 'relevance' | 'newest'
   filter: SessionRowFilter
+  /**
+   * `repo:` / `path:`, which SQL cannot express. Applied over retrieved rows;
+   * see session-search-row-filter for why it cannot be pushed down.
+   */
+  matchesOperators: (session: SessionRow) => boolean
   /**
    * Sessions retrieved before ranking cuts the page. See
    * docs/reference/agent-session-search-query-tuning.md for the measurements
@@ -82,25 +92,49 @@ export class SessionSearchRetrieval {
     }
   }
 
-  /** Newest sessions the constraints allow: what an operator-only query names. */
-  recent(scope: RetrievalScope): SessionRow[] {
+  /**
+   * Newest sessions the constraints allow: what an operator-only query names.
+   *
+   * Walked in pages rather than taken in one `LIMIT`, because the operators are
+   * applied in JS. A single cut of the newest N would hand ranking whatever
+   * happened to be recent and then throw most of it away, so `repo:x` on a busy
+   * index could answer with nothing while plenty matched. The walk is bounded
+   * both ways: it stops at a full candidate set, and at a ceiling on rows read.
+   */
+  recent(scope: RetrievalScope): { sessions: SessionRow[]; scanned: number } {
     const { conditions, values } = scope.filter
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-    return this.db
-      .prepare(
-        `SELECT * FROM ${VISIBLE_SESSIONS} ${where} ORDER BY updated_at DESC LIMIT ${scope.candidateLimit}`
-      )
-      .all(...values) as SessionRow[]
+    const page = this.db.prepare(
+      `SELECT * FROM ${VISIBLE_SESSIONS} ${where}
+       ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`
+    )
+    const ceiling = scope.candidateLimit * RECENT_SCAN_FACTOR
+    const sessions: SessionRow[] = []
+    let scanned = 0
+    while (sessions.length < scope.candidateLimit && scanned < ceiling) {
+      const rows = page.all(...values, RECENT_PAGE_ROWS, scanned) as SessionRow[]
+      if (rows.length === 0) {
+        break
+      }
+      scanned += rows.length
+      for (const row of rows) {
+        if (sessions.length < scope.candidateLimit && scope.matchesOperators(row)) {
+          sessions.push(row)
+        }
+      }
+    }
+    return { sessions, scanned }
   }
 
-  loadSessions(ids: readonly number[], filter: SessionRowFilter): SessionRow[] {
+  loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     if (ids.length === 0) {
       return []
     }
-    const conditions = [`id IN (${ids.map(() => '?').join(',')})`, ...filter.conditions]
-    return this.db
+    const conditions = [`id IN (${ids.map(() => '?').join(',')})`, ...scope.filter.conditions]
+    const rows = this.db
       .prepare(`SELECT * FROM ${VISIBLE_SESSIONS} WHERE ${conditions.join(' AND ')}`)
-      .all(...ids, ...filter.values) as SessionRow[]
+      .all(...ids, ...scope.filter.values) as SessionRow[]
+    return rows.filter((row) => scope.matchesOperators(row))
   }
 
   private repair(plan: SessionSearchQueryPlan): SessionSearchQueryPlan | null {
