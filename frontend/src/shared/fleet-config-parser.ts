@@ -11,13 +11,13 @@ const FleetRepoSchema = z.object({
   path: z.string(),
   name: z.string(),
   url: z.string().optional(),
-  branch: z.string().optional(),
+  branch: z.string().optional()
 })
 
 const FleetPortForwardSchema = z.object({
   remotePort: z.number(),
   localPort: z.number(),
-  label: z.string().optional(),
+  label: z.string().optional()
 })
 
 const FleetServerBootstrapSchema = z.object({
@@ -26,11 +26,11 @@ const FleetServerBootstrapSchema = z.object({
       z.object({
         url: z.string(),
         path: z.string(),
-        branch: z.string().optional(),
+        branch: z.string().optional()
       })
     )
     .optional(),
-  setupScript: z.string().optional(),
+  setupScript: z.string().optional()
 })
 
 const FleetServerSchema = z.object({
@@ -39,7 +39,7 @@ const FleetServerSchema = z.object({
   host: z.string(),
   port: z.number().optional().default(22),
   username: z.string().optional(),
-  identityFile: z.string().optional(),
+  identityFile: z.string().optional(), // @deprecated cho path backend-go (Vault-only invariant) — vẫn dùng cho path desktop/ legacy
   jumpHost: z.string().optional(),
   proxyCommand: z.string().optional(),
   relayGracePeriodSeconds: z.number().optional(),
@@ -50,6 +50,11 @@ const FleetServerSchema = z.object({
   repos: z.array(FleetRepoSchema).optional(),
   portForwards: z.array(FleetPortForwardSchema).optional(),
   bootstrap: FleetServerBootstrapSchema.optional(),
+  // MỚI — bắt buộc khi target backend là backend-go's BulkProvisionFleet
+  // (CR-FLEET-001). identityFile ở trên chỉ hợp lệ cho path desktop/
+  // legacy — backend-go's domain.NewSshTarget không có field identityFile,
+  // enforce Vault-only invariant (xem ssh_target.go's ErrEmptyVaultSSHRole).
+  vaultSshRole: z.string().optional()
 })
 
 const FleetAccessPolicySchema = z.object({
@@ -60,7 +65,7 @@ const FleetAccessPolicySchema = z.object({
   agentTrust: z.enum(['minimal', 'standard', 'full']).optional(),
   canCreateWorktrees: z.boolean().optional(),
   canDeleteWorktrees: z.boolean().optional(),
-  canAccessProduction: z.boolean().optional(),
+  canAccessProduction: z.boolean().optional()
 })
 
 const FleetConfigSchema = z.object({
@@ -70,7 +75,7 @@ const FleetConfigSchema = z.object({
     .object({
       nodeVersion: z.string().optional(),
       gitVersion: z.string().optional(),
-      packages: z.array(z.string()).optional(),
+      packages: z.array(z.string()).optional()
     })
     .optional(),
   access: z
@@ -82,13 +87,13 @@ const FleetConfigSchema = z.object({
           discoveryUrl: z.string().optional(),
           allowedOrg: z.string().optional(),
           allowedDomain: z.string().optional(),
-          redirectUri: z.string().optional(),
+          redirectUri: z.string().optional()
         })
         .optional(),
-      policies: z.array(FleetAccessPolicySchema).optional(),
+      policies: z.array(FleetAccessPolicySchema).optional()
     })
     .optional(),
-  servers: z.array(FleetServerSchema),
+  servers: z.array(FleetServerSchema)
 })
 
 // ── Exported Types ─────────────────────────────────────────────
@@ -148,10 +153,10 @@ export function fleetServerToSshTarget(
       path: r.path,
       name: r.name,
       url: r.url,
-      branch: r.branch,
+      branch: r.branch
     })),
     fleetId: server.id,
-    fleetConfigSource: fleetConfigPath,
+    fleetConfigSource: fleetConfigPath
   }
 }
 
@@ -177,8 +182,8 @@ export function sshTargetsToFleetConfigYaml(targets: SshTarget[]): string {
         team: t.team,
         environment: t.environment,
         tags: t.tags,
-        repos: t.repos,
-      })),
+        repos: t.repos
+      }))
   }
   return stringifyYaml(config)
 }
@@ -205,7 +210,7 @@ export function sshTargetsToFleetConfig(targets: SshTarget[]): FleetConfig {
         team: t.team,
         environment: t.environment,
         tags: t.tags,
-        repos: t.repos,
-      })),
+        repos: t.repos
+      }))
   }
 }
