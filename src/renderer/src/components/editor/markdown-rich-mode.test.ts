@@ -166,6 +166,26 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
       ).not.toBeNull()
     })
 
+    it('blocks a link reference definition nested inside a blockquote inside a list item', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('- > [id]: https://example.com\n  > uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a list item inside a blockquote', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('> - [id]: https://example.com\n>   uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested three levels deep', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage(
+          '> - > [id]: https://example.com\n>   > uses [id] here\n'
+        )
+      ).not.toBeNull()
+    })
+
     it('allows a bracketed label followed by prose, not a link destination', () => {
       expect(getMarkdownRichModeUnsupportedMessage('[Bug]: text with spaces\n')).toBeNull()
     })
