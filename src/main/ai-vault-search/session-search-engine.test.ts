@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SESSION_SEARCH_QUERY_MAX_LENGTH } from './session-search-engine-types'
 import type { SessionSearchRequest, SessionSearchResponse } from './session-search-engine-types'
 import {
   addSyntheticSession,
@@ -251,6 +252,33 @@ describe('source presence comes from the files table, never a stat', () => {
     const hits = engine.search({ query: 'needle' }).hits
     expect(hits).toHaveLength(1)
     expect(hits[0]?.source).toBe('unverifiable')
+  })
+})
+
+describe('the engine is the only thing that warms the index', () => {
+  it('warms on the first search and leans on the store to memoize the rest', async () => {
+    const { db, store, engine } = await open('ss-engine-warm')
+    addSyntheticSession(db, { id: 1 })
+    const warm = vi.spyOn(store, 'warm')
+    engine.search({ query: 'needle' })
+    engine.search({ query: 'needle' })
+    // PR 2 left the call site to whoever knows which pages a read touches. The
+    // store returns one memoized promise, so asking twice costs one warm-up.
+    expect(warm).toHaveBeenCalledTimes(2)
+    await store.warm()
+  })
+})
+
+describe('a query longer than the engine will plan is cut, not refused', () => {
+  it('cuts one enormous token down to the cap before FTS5 ever sees it', async () => {
+    const { db, engine } = await open('ss-engine-long-query')
+    // The planner already caps how many terms it will plan, so a long query of
+    // ordinary words is bounded without this. What is not bounded is a single
+    // token: one 100 kB word is one term, and FTS5 would carry the whole thing
+    // into the MATCH expression. The cut is observable because the indexed
+    // token is exactly the capped length.
+    addSyntheticSession(db, { id: 1, text: 'x'.repeat(SESSION_SEARCH_QUERY_MAX_LENGTH) })
+    expect(ids(engine.search({ query: 'x'.repeat(4000) }))).toEqual(['1'])
   })
 })
 
