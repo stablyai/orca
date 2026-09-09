@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
-import { isNativeChatSkillForAgent } from '../../../src/shared/native-chat-skill-visibility'
+import {
+  discoveredSkillTokenName,
+  isNativeChatSkillForAgent
+} from '../../../src/shared/native-chat-skill-visibility'
 import type { SkillDiscoveryResult } from '../../../src/shared/skills'
 
 /** Fetches the worktree's installed skills once per worktree/agent and maps
@@ -33,7 +36,7 @@ export function useMobileNativeChatDiscoveredSkills(args: {
         result.skills
           .filter((skill) => isNativeChatSkillForAgent(agent, skill, result))
           .map((skill) => ({
-            name: skill.name,
+            name: discoveredSkillTokenName(skill),
             ...(skill.description ? { description: skill.description } : {})
           }))
       )

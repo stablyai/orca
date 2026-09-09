@@ -57,6 +57,28 @@ describe('useMobileNativeChatDiscoveredSkills', () => {
     expect(sendRequest).toHaveBeenCalledWith('skills.discover', { worktreeId: 'wt-1' })
   })
 
+  it('namespaces a plugin-sourced skill the way the agent addresses it', async () => {
+    const sendRequest = vi.fn(async () => ({
+      ok: true,
+      result: {
+        skills: [
+          {
+            ...discoveredSkillRow(),
+            name: 'catchup',
+            sourceKind: 'plugin',
+            sourceLabel: 'Claude plugin quiver'
+          }
+        ],
+        sources: [{ path: '/repo/.claude/skills', owner: 'claude' }]
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    }))
+    render({ sendRequest } as unknown as RpcClient, 'claude')
+
+    await vi.waitFor(() => expect(hook?.skillSuggestions.length).toBe(1))
+    expect(hook!.skillSuggestions[0]).toMatchObject({ name: 'quiver:catchup' })
+  })
+
   it('stays empty against a host without the method or on any failure', async () => {
     const sendRequest = vi.fn(async () => ({
       ok: false,
