@@ -64,6 +64,17 @@ export function mobileComposerSlashEntries(
     .filter((name) => !commands.some((command) => command.name === name))
     .map((name) => ({ name }))
   const known = new Set([...commands, ...reportedSkills].map((entry) => entry.name))
-  const discoveredSkills = (discovered ?? []).filter((entry) => !known.has(entry.name))
-  return [...commands, ...reportedSkills, ...discoveredSkills]
+  // Discovery can list one skill through several roots; keep one row per name,
+  // preferring the root that carried a description.
+  const byName = new Map<string, SlashCommandSuggestion>()
+  for (const entry of discovered ?? []) {
+    if (known.has(entry.name)) {
+      continue
+    }
+    const existing = byName.get(entry.name)
+    if (!existing || (!existing.description && entry.description)) {
+      byName.set(entry.name, entry)
+    }
+  }
+  return [...commands, ...reportedSkills, ...byName.values()]
 }
