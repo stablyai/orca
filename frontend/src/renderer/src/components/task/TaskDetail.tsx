@@ -1,17 +1,26 @@
 import { useState, useEffect } from 'react'
 import { useAppStore } from '../../store'
 import { useTask } from '../../hooks/useTask'
+import { useAuthUser } from '../../hooks/useAuthSession'
+import { useTaskActivity } from '../../hooks/useTaskActivity'
 import { useWorkspace } from '../../context/WorkspaceContext'
 import { Input } from '../ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '../ui/select'
 import { TaskAIDecompose } from './TaskAIDecompose'
 import { TaskPromptEditor } from './TaskPromptEditor'
+import { TaskGrantModal } from './TaskGrantModal'
+import { TaskStatusBadge } from './TaskStatusBadge'
 import { Button } from '../ui/button'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { toast } from 'sonner'
 import { Tracers } from '../../../../shared/trace/tracers'
-import type { OrcaTask, TaskEdgeType } from '../../../../shared/task-types'
+import type {
+  OrcaTask,
+  TaskEdgeType,
+  TaskStatus,
+  TaskPriority
+} from '../../../../shared/task-types'
 
 // Right-panel detail view for active task
 // Fields: title (editable), description (textarea), type, status, priority, assignee, progress
@@ -31,8 +40,11 @@ export function TaskDetail() {
   const activeTaskId = useAppStore((s) => s.activeTaskId)
   const { task, updateTask } = useTask(activeTaskId!)
   const { project, currentWorktree } = useWorkspace()
+  const currentUser = useAuthUser()
   const [localTitle, setLocalTitle] = useState(task?.title ?? '')
-  const [activeTab, setActiveTab] = useState<'details' | 'subtasks' | 'ai'>('details')
+  const [activeTab, setActiveTab] = useState<'details' | 'subtasks' | 'ai' | 'access'>('details')
+  // Defaults to true so the Run button isn't hidden while resolvePermission is in flight.
+  const [canManage, setCanManage] = useState(true)
 
   const [deps, setDeps] = useState<{ blockedBy: OrcaTask[]; blocks: OrcaTask[] }>({
     blockedBy: [],
@@ -57,6 +69,25 @@ export function TaskDetail() {
       .catch(() => {})
   }, [task?.id])
 
+  useEffect(() => {
+    if (!task?.id || !currentUser?.id) {
+      return
+    }
+    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    // task.resolvePermission returns { effectiveLevel } (already lowercased, GRANT_LEVEL_
+    // prefix stripped) — channels_automation_task.go:465-479. "owner"/"admin" gate Run here.
+    callRuntimeRpc<{ effectiveLevel: string }>(target, 'task.resolvePermission', {
+      taskId: task.id,
+      userId: currentUser.id
+    })
+      .then((r) => setCanManage(r.effectiveLevel === 'owner' || r.effectiveLevel === 'admin'))
+      .catch(() => setCanManage(false))
+  }, [task?.id, currentUser?.id])
+
+  // Polling fallback (no push channel yet — see useTaskActivity's own doc comment) so a
+  // status change from a running agent shows up here without the user needing to F5.
+  const { task: polledTask } = useTaskActivity(task?.id)
+
   if (!task) {
     return <div className="p-4 text-sm text-muted-foreground">Select a task</div>
   }
@@ -80,9 +111,9 @@ export function TaskDetail() {
       toast.success(`Agent started for: ${task.title}`)
       // Optionally emit workspace event:
       // emit('agent.started', { taskId: task.id })
-    } catch (err: any) {
+    } catch (err) {
       span.fail(err, { taskId: task.id })
-      toast.error(`Failed to start agent: ${err.message}`)
+      toast.error(`Failed to start agent: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
 
@@ -99,24 +130,34 @@ export function TaskDetail() {
 
       {/* Action Buttons */}
       <div className="flex gap-2 mt-2">
-        <Button variant="default" onClick={handleRunAgent} data-testid="run-agent-btn">
-          ▶ Execute with Agent
-        </Button>
+        {canManage && (
+          <Button variant="default" onClick={handleRunAgent} data-testid="run-agent-btn">
+            ▶ Execute with Agent
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="mt-4">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as 'details' | 'subtasks' | 'ai' | 'access')}
+        className="mt-4"
+      >
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
           <TabsTrigger value="ai">AI Agent</TabsTrigger>
+          <TabsTrigger value="access">Access</TabsTrigger>
         </TabsList>
         <TabsContent value="details">
           {/* Status, Priority, Type, Progress fields */}
           <div className="space-y-3 mt-3">
             <div className="flex items-center gap-2">
               <label className="text-sm w-24">Status</label>
-              <Select value={task.status} onValueChange={(s) => updateTask({ status: s as any })}>
+              <Select
+                value={task.status}
+                onValueChange={(s) => updateTask({ status: s as TaskStatus })}
+              >
                 <SelectTrigger className="flex-1">
                   <SelectValue />
                 </SelectTrigger>
@@ -128,12 +169,13 @@ export function TaskDetail() {
                   ))}
                 </SelectContent>
               </Select>
+              <TaskStatusBadge status={polledTask?.status ?? task.status} />
             </div>
             <div className="flex items-center gap-2">
               <label className="text-sm w-24">Priority</label>
               <Select
                 value={task.priority}
-                onValueChange={(p) => updateTask({ priority: p as any })}
+                onValueChange={(p) => updateTask({ priority: p as TaskPriority })}
               >
                 <SelectTrigger className="flex-1">
                   <SelectValue />
@@ -174,6 +216,9 @@ export function TaskDetail() {
         </TabsContent>
         <TabsContent value="ai">
           <TaskPromptEditor task={task} />
+        </TabsContent>
+        <TabsContent value="access">
+          <TaskGrantModal taskId={task.id} />
         </TabsContent>
       </Tabs>
     </div>
