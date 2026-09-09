@@ -22,6 +22,15 @@ import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from './main-window-visual-lifecycle'
 
+function isBareAltMenuBarToggle(input: Electron.Input): boolean {
+  return (
+    !input.control &&
+    !input.meta &&
+    !input.shift &&
+    (input.key === 'Alt' || input.code === 'AltLeft' || input.code === 'AltRight')
+  )
+}
+
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
   mainWindow: BrowserWindow
@@ -182,6 +191,17 @@ export function installMainWindowShortcutRouting(args: {
         }
         // No allowlisted action: let the keydown reach the renderer, whose detector completes and dispatches inline.
       }
+    }
+
+    // Why: Windows/Linux autoHideMenuBar uses Alt to reveal the native menu, which
+    // swallows Alt+letter/arrow before xterm. Pi's Windows dequeue chord is Alt+Q.
+    if (
+      process.platform !== 'darwin' &&
+      (focus.isTerminalInputFocused() || focus.isFloatingTerminalInputFocused()) &&
+      isBareAltMenuBarToggle(input)
+    ) {
+      event.preventDefault()
+      return
     }
 
     if (

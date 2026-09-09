@@ -83,12 +83,46 @@ function kittyEncodesModifiedTextKeys(flags: number): boolean {
   )
 }
 
+function isPhysicalLetterOrDigitCode(code: string | undefined): boolean {
+  return (
+    (code?.startsWith('Key') === true && code.length === 4) ||
+    (code?.startsWith('Digit') === true && code.length === 6)
+  )
+}
+
+// Why: Mac Option encoding is layout-aware; Windows/Linux Alt+letter must still
+// report CSI-u when kitty is on so Pi's Windows dequeue (alt+q) matches.
+function resolveNonMacAltKittyLetterAction(
+  event: TerminalOptionShortcutEvent,
+  context: TerminalOptionShortcutContext
+): TerminalOptionShortcutAction | null {
+  if (event.shiftKey || isImeOwnedKey(event) || !isPhysicalLetterOrDigitCode(event.code)) {
+    return null
+  }
+  const flags = context.getKittyKeyboardFlags()
+  if (!kittyEncodesModifiedTextKeys(flags)) {
+    return null
+  }
+  const data = encodeTerminalOptionKittyEvent(event, {
+    flags,
+    type: event.repeat === true ? 'repeat' : 'press',
+    layoutCharacterForCode: context.layoutCharacterForCode,
+    primaryCharacterFallback: optionKittyPrimaryCharacterFallback(event)
+  })
+  return data === null
+    ? null
+    : { type: 'sendInput', data, optionKittyRelease: createRelease(flags) }
+}
+
 export function resolveTerminalOptionShortcutAction(
   event: TerminalOptionShortcutEvent,
   context: TerminalOptionShortcutContext
 ): TerminalOptionShortcutAction | null {
-  if (!context.isMac || event.metaKey || event.ctrlKey || !event.altKey) {
+  if (event.metaKey || event.ctrlKey || !event.altKey) {
     return null
+  }
+  if (!context.isMac) {
+    return resolveNonMacAltKittyLetterAction(event, context)
   }
   const isLeftOption = (context.optionKeyLocations & 1) !== 0
   const isRightOption = (context.optionKeyLocations & 2) !== 0
