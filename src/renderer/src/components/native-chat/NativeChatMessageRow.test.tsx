@@ -74,4 +74,13 @@ describe('MessageRow control visibility', () => {
     expect(screen.queryByRole('time')).toBeNull()
     expect(screen.queryByRole('button')).toBeNull()
   })
+
+  it.each(['assistant', 'user'] as const)(
+    'renders the %s message body with tabular numerals',
+    (role) => {
+      renderMessage(role)
+      const bodyRoot = screen.getByText('Message text').closest('p')!.parentElement!
+      expect(bodyRoot).toHaveClass('tabular-nums')
+    }
+  )
 })
