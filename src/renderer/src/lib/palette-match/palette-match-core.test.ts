@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { matchPaletteDocument } from './match-document'
 import { mapNormalizedRange, normalizePaletteText } from './normalized-text'
 import { preparePaletteQuery, PALETTE_QUERY_MAX_TOKENS } from './palette-query'
-import { buildPaletteDocument, type PaletteDocumentInput } from './palette-document'
+import {
+  buildPaletteDocument,
+  comparePaletteDocumentRank,
+  type PaletteDocumentInput
+} from './palette-document'
 import { segmentPaletteText } from './text-segments'
 import { isWithinOnePaletteEdit } from './typo-distance'
 
@@ -19,13 +23,22 @@ function run(input: PaletteDocumentInput, query: string) {
   return matchPaletteDocument({
     document: buildPaletteDocument(input),
     tokens: prepared.tokens,
-    normalizedQuery: prepared.normalized
+    normalizedQuery: prepared.normalized,
+    tokenCountBeforeDeduplication: prepared.tokenCountBeforeDeduplication
   })
 }
 
 const labelOnly = (text: string): PaletteDocumentInput => ({
   id: 'doc',
-  visibleFields: [{ id: 'name', profile: 'structured-label', text }],
+  visibleFields: [
+    {
+      id: 'name',
+      profile: 'structured-label',
+      text,
+      role: 'primary',
+      destinationEligible: true
+    }
+  ],
   evidence: []
 })
 
@@ -46,8 +59,8 @@ describe('palette query preparation', () => {
     // Why: field text is always single-spaced, so an uncollapsed run could never satisfy
     // the whole-query equality tier and the exactly-named row silently lost its rank.
     expect(ready('scan  daily').normalized).toBe('scan daily')
-    expect(run(labelOnly('scan daily'), 'scan  daily')?.rank.wholeQuery).toBe(
-      run(labelOnly('scan daily'), 'scan daily')?.rank.wholeQuery
+    expect(run(labelOnly('scan daily'), 'scan  daily')?.rank.placement).toBe(
+      run(labelOnly('scan daily'), 'scan daily')?.rank.placement
     )
   })
 
@@ -181,7 +194,7 @@ describe('structured label matching', () => {
 
   it('applies light typo matching to long letter-only words', () => {
     expect(run(document, 'dayly')).not.toBeNull()
-    expect(run(document, 'scam')?.rank.fuzzyTokenCount).toBe(1)
+    expect(run(document, 'scam')?.rank.recovery).toBe(1)
   })
 
   it('limits single Latin characters to word equality or prefix', () => {
@@ -201,7 +214,15 @@ describe('structured label matching', () => {
 describe('identifier fields', () => {
   const review = (sigil: '#' | '!'): PaletteDocumentInput => ({
     id: 'doc',
-    visibleFields: [{ id: 'name', profile: 'structured-label', text: 'reconnect flow' }],
+    visibleFields: [
+      {
+        id: 'name',
+        profile: 'structured-label',
+        text: 'reconnect flow',
+        role: 'primary',
+        destinationEligible: true
+      }
+    ],
     evidence: [
       {
         unit: { id: 'review', kind: 'pr', text: '#4123 · Fix reconnect', accessibilityLabel: 'PR' },
@@ -248,7 +269,7 @@ describe('identifier fields', () => {
 
   it('combines an identity token with one evidence token', () => {
     const match = run(review('#'), 'reconnect 4123')
-    expect(match?.rank.usesSupportingEvidence).toBe(1)
+    expect(match?.rank.coverage).toBe(3)
     expect(match?.supportingEvidence).toHaveLength(1)
   })
 })
@@ -258,7 +279,15 @@ describe('duplicate evidence unit ids', () => {
   // host:port:pid, so a parent and a forked child both survive.
   const duplicateUnits: PaletteDocumentInput = {
     id: 'doc',
-    visibleFields: [{ id: 'name', profile: 'structured-label', text: 'checkout' }],
+    visibleFields: [
+      {
+        id: 'name',
+        profile: 'structured-label',
+        text: 'checkout',
+        role: 'primary',
+        destinationEligible: true
+      }
+    ],
     evidence: [
       {
         unit: {
@@ -285,7 +314,7 @@ describe('duplicate evidence unit ids', () => {
             profile: 'structured-label',
             text: 'node',
             evidenceId: 'port:3000',
-            renderOffset: 7
+            renderOffset: 0
           }
         ]
       }
@@ -318,7 +347,15 @@ describe('duplicate evidence unit ids', () => {
 describe('evidence limits', () => {
   const twoUnits: PaletteDocumentInput = {
     id: 'doc',
-    visibleFields: [{ id: 'name', profile: 'structured-label', text: 'checkout' }],
+    visibleFields: [
+      {
+        id: 'name',
+        profile: 'structured-label',
+        text: 'checkout',
+        role: 'primary',
+        destinationEligible: true
+      }
+    ],
     evidence: [
       {
         unit: { id: 'port:3000', kind: 'port', text: '3000 · node', accessibilityLabel: 'Port' },
@@ -363,7 +400,7 @@ describe('evidence limits', () => {
 
   it('prefers visible evidence over supporting evidence', () => {
     const match = run(twoUnits, 'checkout')
-    expect(match?.rank.usesSupportingEvidence).toBe(0)
+    expect(match?.rank.coverage).toBe(0)
     expect(match?.supportingEvidence).toHaveLength(0)
   })
 })
@@ -383,33 +420,114 @@ describe('typo distance', () => {
 })
 
 describe('container field matching', () => {
-  it('marks matchedDirectField as 1 and demotes quality class when all tokens land on container fields', () => {
+  it('counts a container-only token and demotes quality class when every token lands on containers', () => {
     const tabDoc: PaletteDocumentInput = {
       id: 'tab-1',
       visibleFields: [
-        { id: 'title', profile: 'structured-label', text: 'README.md' },
-        { id: 'worktree', profile: 'structured-label', text: 'STA-4360-feature', isContainer: true }
+        {
+          id: 'title',
+          profile: 'structured-label',
+          text: 'README.md',
+          role: 'primary',
+          destinationEligible: true
+        },
+        {
+          id: 'worktree',
+          profile: 'structured-label',
+          text: 'STA-4360-feature',
+          role: 'container',
+          destinationEligible: false
+        }
       ],
       evidence: []
     }
     const match = run(tabDoc, '4360')
     expect(match).not.toBeNull()
-    expect(match?.rank.matchedDirectField).toBe(1)
+    expect(match?.rank.coverage).toBe(2)
     expect(match?.qualityClass).toBe('exact-evidence')
   })
 
-  it('marks matchedDirectField as 0 when at least one token lands on a direct field', () => {
+  it('does not count a token that lands on a direct field', () => {
     const tabDoc: PaletteDocumentInput = {
       id: 'tab-1',
       visibleFields: [
-        { id: 'title', profile: 'structured-label', text: 'wsl-transcript-4360.ts' },
-        { id: 'worktree', profile: 'structured-label', text: 'STA-4360-feature', isContainer: true }
+        {
+          id: 'title',
+          profile: 'structured-label',
+          text: 'wsl-transcript-4360.ts',
+          role: 'primary',
+          destinationEligible: true
+        },
+        {
+          id: 'worktree',
+          profile: 'structured-label',
+          text: 'STA-4360-feature',
+          role: 'container',
+          destinationEligible: false
+        }
       ],
       evidence: []
     }
     const match = run(tabDoc, '4360')
     expect(match).not.toBeNull()
-    expect(match?.rank.matchedDirectField).toBe(0)
+    expect(match?.rank.coverage).toBe(0)
     expect(match?.qualityClass).toBe('exact-visible')
+  })
+
+  it('ranks an all-direct multi-token match ahead of a mixed direct and container match', () => {
+    const direct = run(
+      {
+        id: 'direct',
+        visibleFields: [
+          {
+            id: 'title',
+            profile: 'structured-label',
+            text: 'alpha',
+            role: 'primary',
+            destinationEligible: true
+          },
+          {
+            id: 'path',
+            profile: 'structured-label',
+            text: 'beta',
+            role: 'secondary',
+            destinationEligible: true
+          }
+        ],
+        evidence: []
+      },
+      'alpha beta'
+    )
+    const mixed = run(
+      {
+        id: 'mixed',
+        visibleFields: [
+          {
+            id: 'title',
+            profile: 'structured-label',
+            text: 'alpha',
+            role: 'primary',
+            destinationEligible: true
+          },
+          {
+            id: 'worktree',
+            profile: 'structured-label',
+            text: 'beta',
+            role: 'container',
+            destinationEligible: false
+          }
+        ],
+        evidence: []
+      },
+      'alpha beta'
+    )
+
+    expect(direct).not.toBeNull()
+    expect(mixed).not.toBeNull()
+    expect(direct?.rank.coverage).toBe(1)
+    expect(mixed?.rank.coverage).toBe(2)
+    if (direct && mixed) {
+      expect(comparePaletteDocumentRank(direct.rank, mixed.rank)).toBeLessThan(0)
+    }
   })
 })

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../shared/worktree/types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
-import { LINEAGE_HYDRATION_TIMEOUT_MS } from './worktrees'
+import { LINEAGE_HYDRATION_TIMEOUT_MS } from './worktrees/metadata/host-lineage-listing'
 import { getSshProviderAuthority, rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { listWorktreesMock, getSshGitProviderMock } from './worktrees-test-module-mocks'
 import { handlers, ipcEvent, setupWorktreeHandlers, store } from './worktrees-test-harness'

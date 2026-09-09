@@ -86,6 +86,19 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
     })
   })
 
+  it('patches same-state working into passive monitoring', () => {
+    const result = patchDashboardSnapshotFromAgentStatus(
+      snapshot(),
+      event({ state: 'working', workingMode: 'monitoring', stateStartedAt: 100 })
+    )
+
+    expect(result.snapshot.cards[0]).toMatchObject({
+      bucket: 'working',
+      dotState: 'working',
+      workingMode: 'monitoring'
+    })
+  })
+
   it('ignores stale, wrong-workspace, and session-only events', () => {
     const original = snapshot()
     expect(

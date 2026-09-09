@@ -8,18 +8,24 @@ function createWebviewRef(): {
   ref: React.RefObject<Electron.WebviewTag | null>
   findInPage: ReturnType<typeof vi.fn>
   stopFindInPage: ReturnType<typeof vi.fn>
+  addEventListener: ReturnType<typeof vi.fn>
+  removeEventListener: ReturnType<typeof vi.fn>
 } {
   const findInPage = vi.fn()
   const stopFindInPage = vi.fn()
+  // Held apart from ref.current so a test that swaps the guest under the same ref can still ask
+  // what happened to the node it swapped out.
+  const addEventListener = vi.fn()
+  const removeEventListener = vi.fn()
   const ref = {
     current: {
       findInPage,
       stopFindInPage,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
+      addEventListener,
+      removeEventListener
     } as unknown as Electron.WebviewTag
   }
-  return { ref, findInPage, stopFindInPage }
+  return { ref, findInPage, stopFindInPage, addEventListener, removeEventListener }
 }
 
 function openFindWithQuery(query: string): ReturnType<typeof createWebviewRef> {
@@ -100,5 +106,30 @@ describe('BrowserFind session flags', () => {
       vi.advanceTimersByTime(250)
     })
     expect(webview.findInPage).toHaveBeenCalledTimes(1)
+  })
+})
+
+// Why this case exists now: a client-hosted pane used to be rebuilt when its page generation
+// changed, which took the listener with it. It re-attaches a new guest under the same mount
+// instead, so nothing but the generation tells the find bar its node is dead.
+describe('BrowserFind listener rebinding', () => {
+  it('moves the found-in-page listener onto a guest swapped in under the same mount', () => {
+    const first = createWebviewRef()
+    const { rerender } = render(
+      <BrowserFind isOpen onClose={vi.fn()} webviewRef={first.ref} guestGeneration={1} />
+    )
+    const staleListener = first.addEventListener.mock.calls.find(
+      (call) => call[0] === 'found-in-page'
+    )?.[1]
+    expect(staleListener).toBeTypeOf('function')
+
+    const second = createWebviewRef()
+    first.ref.current = second.ref.current
+    rerender(<BrowserFind isOpen onClose={vi.fn()} webviewRef={first.ref} guestGeneration={2} />)
+
+    expect(second.addEventListener).toHaveBeenCalledWith('found-in-page', expect.any(Function))
+    // Why the old guest is asserted too: the pane no longer owns it, but the host may still hold it
+    // alive across the restart, and a listener left behind counts matches into a dead bar forever.
+    expect(first.removeEventListener).toHaveBeenCalledWith('found-in-page', staleListener)
   })
 })

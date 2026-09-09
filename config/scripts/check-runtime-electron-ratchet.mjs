@@ -34,7 +34,11 @@ const BASELINE_PATH = path.join(ROOT, 'config', 'runtime-electron-baseline.txt')
 // itself and the RPC server that fronts it.
 const ENTRY_POINTS = [
   path.join(ROOT, 'src', 'main', 'runtime', 'orca-runtime.ts'),
-  path.join(ROOT, 'src', 'main', 'runtime', 'runtime-rpc.ts')
+  path.join(ROOT, 'src', 'main', 'runtime', 'runtime-rpc.ts'),
+  // Why orcad too: it imports ipc/pty directly to install the PTY controller, so its
+  // graph is strictly larger than the two runtime entries. Measuring only those let the
+  // two numbers drift — the gate would read zero while the shipped artifact regressed.
+  path.join(ROOT, 'src', 'main', 'orcad', 'main.ts')
 ]
 
 // Native addons and electron cannot be bundled; externalising them is what the

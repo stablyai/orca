@@ -53,7 +53,7 @@ type CreatePrIntentReviewGeneration =
 
 export type CreatePrIntentGeneratedReviewFields =
   | { ok: true; fields: CreatePrIntentReviewFields }
-  | { ok: false; error: string | null }
+  | { ok: false; error: string }
 
 export function createCreatePrIntentRunToken(input: Omit<CreatePrIntentRunToken, 'startedAt'>) {
   return { ...input, startedAt: Date.now() }
@@ -208,15 +208,13 @@ export function resolveCreatePrIntentGeneratedReviewFields(
   if (!generated.success) {
     return { ok: false, error: generated.error }
   }
-  if (!generated.fields.body.trim()) {
-    return { ok: false, error: null }
-  }
   return {
     ok: true,
     fields: {
       // Why: intent auto-submits, so generated details must not retarget the review without confirmation.
       base: current.base,
       title: generated.fields.title.trim() || current.title,
+      // Why: a description is optional everywhere else (composer, GitHub/GitLab), so an intentionally empty generated body is a valid result, not a failure.
       body: generated.fields.body,
       draft: generated.fields.draft
     }

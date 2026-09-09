@@ -108,7 +108,7 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:393 / :801 (unparseable auth failure)',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime rejected the pairing token.'
+    message: 'Remote Orca runtime returned an invalid E2EE auth frame.'
   },
   {
     producer: 'remote-runtime-client.ts:415',

@@ -10,6 +10,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { selectRuntimeAgentOrchestrationBatch } from '../sidebar/worktree-agent-orchestration-batch'
+import { selectRuntimeAgentOrchestrationForWorktree } from '../sidebar/worktree-agent-row-selectors'
 import type * as DashboardSnapshotWorkspacesModule from './dashboard-snapshot-workspaces'
 import type * as AgentRowLineageModule from './agent-row-lineage'
 
@@ -199,6 +200,23 @@ describe('buildDashboardSnapshot', () => {
     expect(card.stateChangedAt).toBe(NOW - 5000)
     // No ack yet → unseen, mirroring the sidebar's unvisited signal.
     expect(card.unseen).toBe(true)
+  })
+
+  it('keeps monitoring in the working bucket with a passive dot state', () => {
+    const snapshot = buildDashboardSnapshot(
+      baseState({
+        agentStatusByPaneKey: {
+          [PANE_KEY]: entry({ state: 'working', workingMode: 'monitoring' })
+        }
+      }),
+      NOW
+    )
+
+    expect(snapshot.cards[0]).toMatchObject({
+      bucket: 'working',
+      dotState: 'working',
+      workingMode: 'monitoring'
+    })
   })
 
   it('publishes terminal-backed orchestrated workers under their direct parent', () => {
@@ -736,7 +754,10 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].task).toBe('Batched orchestration task')
   })
 
-  it('releases stale batch references when production moves from multi to singleton to zero', () => {
+  // Why identity, not release: the batch is a view of the shared orchestration index, which
+  // mounted sidebar cards read through. A dashboard that drops below two worktrees must not
+  // invalidate it, and nothing the index reads changed across these transitions.
+  it('keeps batch records live and correct when production moves from multi to singleton to zero', () => {
     const secondLeafId = '77777777-7777-4777-8777-777777777777'
     const firstPaneKey = makePaneKey('tab-w1', LEAF_ID)
     const secondPaneKey = makePaneKey('tab-w2', secondLeafId)
@@ -771,13 +792,17 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
     const afterSingleton = selectRuntimeAgentOrchestrationBatch(multiState, requested)
-    expect(afterSingleton).not.toBe(firstBatch)
-    expect(afterSingleton.get('w1')).not.toBe(firstW1)
+    expect(afterSingleton).toBe(firstBatch)
+    expect(afterSingleton.get('w1')).toBe(firstW1)
 
     buildDashboardSnapshot(baseState({ repos: [], worktreesByRepo: {} }), NOW)
     const afterZero = selectRuntimeAgentOrchestrationBatch(multiState, requested)
-    expect(afterZero).not.toBe(afterSingleton)
-    expect(afterZero.get('w1')).not.toBe(afterSingleton.get('w1'))
+    expect(afterZero).toBe(firstBatch)
+    for (const worktreeId of requested) {
+      expect(afterZero.get(worktreeId)).toBe(
+        selectRuntimeAgentOrchestrationForWorktree(multiState, worktreeId)
+      )
+    }
   })
 
   it('scans orchestration runtime once for a dashboard snapshot', () => {

@@ -1,11 +1,10 @@
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoUpdatePersistenceOperations } from './repo-update-operations'
 
 export type ProjectHostSetupUpdateOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   updateRepo: RepoUpdatePersistenceOperations['updateRepo']
   scheduleSave: () => void
 }

@@ -4,24 +4,24 @@ Three layers of coverage, because each catches what the others structurally cann
 
 ## 1. Unit — runs everywhere, every PR
 
-| Suite | Pins |
-|---|---|
-| `src/main/wsl/wsl-runner.test.ts` | Separator, lane selection, fencing, WSLENV, guest cwd, script interpreter, budget split, refusal on unresolved PATH |
-| `src/main/wsl/wsl-guest-environment.test.ts` | Burst collapse, per-distro isolation, malformed-payload rejection, transient vs permanent, retry windows, joiner budget |
-| `src/main/wsl/wsl-w1-w3-contract.test.ts` | The W1→W3 chain end to end: absolute `wsl.exe`, argv array, bounded call, no `--`, script byte-identical, WSLENV, no shell on probe, login PATH still applied |
-| `src/shared/source-scan/source-tree-scan.test.ts` | The guard helpers. A guard that under-reports is worse than none |
+| Suite                                             | Pins                                                                                                                                                          |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main/wsl/wsl-runner.test.ts`                 | Separator, lane selection, fencing, WSLENV, guest cwd, script interpreter, budget split, refusal on unresolved PATH                                           |
+| `src/main/wsl/wsl-guest-environment.test.ts`      | Burst collapse, per-distro isolation, malformed-payload rejection, transient vs permanent, retry windows, joiner budget                                       |
+| `src/main/wsl/wsl-w1-w3-contract.test.ts`         | The W1→W3 chain end to end: absolute `wsl.exe`, argv array, bounded call, no `--`, script byte-identical, WSLENV, no shell on probe, login PATH still applied |
+| `src/shared/source-scan/source-tree-scan.test.ts` | The guard helpers. A guard that under-reports is worse than none                                                                                              |
 
 ## 2. Ratchets — the goalposts, enforced continuously
 
-| Guard | Measures |
-|---|---|
-| `wsl-invocation-boundary.test.ts` | Files spawning `wsl.exe` outside the runner, plus bash-only payloads that fail to declare `shell: 'bash'` |
-| `windows-console-visibility.test.ts` | Direct child-process calls missing `windowsHide` |
-| `child-process-import-boundary.test.ts` | Files importing `child_process` outside the chokepoint |
-| `wsl-exec-mode-separator.test.ts` | The banned `--` separator |
-| `pty-descendant-termination-job-coverage.test.ts` | Every sweep passes `terminateOwnedTree` |
+| Guard                                             | Measures                                                                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `wsl-invocation-boundary.test.ts`                 | Files spawning `wsl.exe` outside the runner, plus bash-only payloads that fail to declare `shell: 'bash'` |
+| `windows-console-visibility.test.ts`              | Direct child-process calls missing `windowsHide`                                                          |
+| `child-process-import-boundary.test.ts`           | Files importing `child_process` outside the chokepoint                                                    |
+| `wsl-exec-mode-separator.test.ts`                 | The banned `--` separator                                                                                 |
+| `pty-descendant-termination-job-coverage.test.ts` | Every sweep passes `terminateOwnedTree`                                                                   |
 
-Each fails on a **new** offender *and* on a **stale** entry, so the count can only fall. Verify a guard by planting a violation and watching it get named — that step has found a bug in the guard itself three times.
+Each fails on a **new** offender _and_ on a **stale** entry, so the count can only fall. Verify a guard by planting a violation and watching it get named — that step has found a bug in the guard itself three times.
 
 ## 3. Real-binary — the assertions nothing else can make
 
@@ -48,4 +48,4 @@ Recorded rather than implied, because a guard that looks complete is worse than 
 
 ### Verifying a guard change
 
-Plant a violation and watch it fail. Every guard fix in this workstream that was verified only by reading was wrong — three consecutive attempts at an exact lexer each shipped a desync that *reduced* the offender count, which read as progress. Plant at least: a plain call, one in a template-literal-heavy file, one in a regex-heavy file, `windowsHide: false`, a ternary first argument, and a renamed import.
+Plant a violation and watch it fail. Every guard fix in this workstream that was verified only by reading was wrong — three consecutive attempts at an exact lexer each shipped a desync that _reduced_ the offender count, which read as progress. Plant at least: a plain call, one in a template-literal-heavy file, one in a regex-heavy file, `windowsHide: false`, a ternary first argument, and a renamed import.

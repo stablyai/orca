@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { isTransientSqliteContention } from '../sqlite/sqlite-read-failure'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { getCodexSessionBackfillStateDirPath } from './codex-home-paths'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
@@ -118,7 +119,7 @@ export async function runCodexSessionIndexHeal(
     }
   }
 
-  const pending = collectPendingHealThreads(paths)
+  const pending = await collectPendingHealThreads(paths)
   const summary: CodexSessionIndexHealSummary = {
     outcome: 'completed',
     pendingThreads: pending.length,
@@ -231,7 +232,7 @@ async function healOneThread(
       recordHealOutcome(paths, thread, 'missing')
       return
     }
-    if (/SQLITE_(?:BUSY|LOCKED)|database (?:is )?(?:busy|locked)/i.test(message)) {
+    if (isTransientSqliteContention(message)) {
       // Why: an active Codex process can briefly own sqlite; leave the id off
       // the ledger and abort this pass so a later startup resumes it.
       throw error
@@ -267,6 +268,7 @@ function buildNativeHealInvocation(
   return {
     command: spawnCmd,
     args: spawnArgs,
+    cliPath: command,
     // Why: pin the real home explicitly — nested Orca launches can inherit a
     // managed CODEX_HOME from the daemon environment, which would index the
     // wrong sqlite DB.

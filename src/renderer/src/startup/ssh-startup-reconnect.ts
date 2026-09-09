@@ -6,7 +6,9 @@ export type SshStartupReconnectResult = {
 
 export async function reconnectSshTargetForRendererStartup(args: {
   targetId: string
-  timeoutMs: number
+  /** Omitted for a connect nobody is waiting on — no timer, so it cannot report
+   *  a timeout the caller has no use for. */
+  timeoutMs?: number
   connect: (targetId: string) => Promise<SshConnectionState | null>
   publishState: (targetId: string, state: SshConnectionState) => void
   onFailure: (targetId: string, error: unknown) => void
@@ -14,10 +16,16 @@ export async function reconnectSshTargetForRendererStartup(args: {
   const { targetId, timeoutMs, connect, publishState, onFailure } = args
   let timeoutId: ReturnType<typeof setTimeout> | null = null
   try {
-    const timeout = new Promise<never>((_resolve, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('SSH reconnect timeout')), timeoutMs)
-    })
-    const state = await Promise.race([connect(targetId), timeout])
+    const connected = connect(targetId)
+    const state =
+      timeoutMs === undefined
+        ? await connected
+        : await Promise.race([
+            connected,
+            new Promise<never>((_resolve, reject) => {
+              timeoutId = setTimeout(() => reject(new Error('SSH reconnect timeout')), timeoutMs)
+            })
+          ])
     // Why: the state-change IPC can trail connect's resolution. Publish the
     // authoritative result before restored terminals inspect renderer state.
     if (state) {

@@ -11,7 +11,7 @@ import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetr
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
-import type { RepoSlice } from '@/store/slices/repos'
+import type { RepoSlice } from '@/store/repos/repo-state'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'

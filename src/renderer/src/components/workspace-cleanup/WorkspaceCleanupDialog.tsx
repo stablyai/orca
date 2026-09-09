@@ -29,10 +29,7 @@ import {
 } from './workspace-cleanup-dialog-notices'
 import { WorkspaceCleanupRowList } from './workspace-cleanup-row-list'
 import { formatWorkspaceCleanupScanNotice } from './workspace-cleanup-scan-notice'
-import {
-  applyWorkspaceCleanupGitEvidence,
-  needsWorkspaceCleanupGitEvidence
-} from './workspace-cleanup-git-evidence'
+import { applyWorkspaceCleanupGitEvidence } from './workspace-cleanup-git-evidence'
 import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-state'
 import {
   useWorkspaceCleanupDialogLifecycle,
@@ -41,13 +38,13 @@ import {
 import { useWorkspaceCleanupFacetRows } from './use-workspace-cleanup-facet-rows'
 import { useWorkspaceCleanupGitEvidence } from './use-workspace-cleanup-git-evidence'
 import { useWorkspaceCleanupRowOrder } from './use-workspace-cleanup-row-order'
+import { openWorkspaceCleanupForgetLocally } from './workspace-cleanup-forget-locally-button'
 import {
   formatVanishedSelectionNotice,
   formatWithheldSelectionNotice,
   toggleSetMember
 } from './workspace-cleanup-selection-model'
 
-/** One filterable list of every workspace Orca knows about. */
 export default function WorkspaceCleanupDialog(): React.JSX.Element | null {
   const lifecycle = useWorkspaceCleanupDialogLifecycle()
   if (!lifecycle.mountedContent) {
@@ -79,8 +76,6 @@ function WorkspaceCleanupDialogContent({
     useShallow(selectWorkspaceCleanupDeletionPhases)
   )
   const browse = useWorkspaceCleanupBrowseState()
-  // Why: facet counts/options are only rendered inside the filter popover;
-  // tracking its open state lets their O(N) passes skip while it is closed.
   const [facetPanelOpen, setFacetPanelOpen] = useState(false)
   const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(() => new Set())
   const [rowsScrollElement, setRowsScrollElement] = useState<HTMLDivElement | null>(null)
@@ -115,7 +110,9 @@ function WorkspaceCleanupDialogContent({
   )
 
   const candidates = useMemo(() => scan?.candidates ?? [], [scan?.candidates])
-  const gitEvidenceNeeded = open && needsWorkspaceCleanupGitEvidence(browse.filters, browse.sort)
+  // The browse view promises Git facts for every row. The broad scan defers
+  // some reads for performance, so fill those gaps while the modal is open.
+  const gitEvidenceNeeded = open
   const gitEvidence = useWorkspaceCleanupGitEvidence({
     enabled: gitEvidenceNeeded,
     candidates,
@@ -168,7 +165,9 @@ function WorkspaceCleanupDialogContent({
           'components.workspace.cleanup.browse.measureSizesFailed',
           'Could not scan workspace sizes'
         ),
-        { description: scanError instanceof Error ? scanError.message : String(scanError) }
+        {
+          description: scanError instanceof Error ? scanError.message : String(scanError)
+        }
       )
     })
   }, [mountedRef, refreshWorkspaceSpace])
@@ -234,8 +233,6 @@ function WorkspaceCleanupDialogContent({
     if (loading) {
       return
     }
-    // Why: a settled refresh reconciles by host-qualified identity — selections survive it,
-    // and only rows that truly no longer exist drop (with a visible reason).
     pruneVanishedSelections()
   }, [candidateIdentities, deletingIdentities, loading])
 
@@ -312,13 +309,9 @@ function WorkspaceCleanupDialogContent({
     [selectableIdentities, setSelectedIds]
   )
 
-  // Why: stable per-row handlers so React.memo keeps unchanged CandidateRow
-  // instances from re-rendering on scan stream-in and selection changes.
   const openConfirmRemove = removal.openConfirmRemove
   const handleRemoveRow = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
-      // Why: rows stay actionable while a rescan streams; the confirm-time
-      // preflight is the safety gate, not the scan state.
       if (removalInFlightRef.current) {
         return
       }
@@ -327,7 +320,6 @@ function WorkspaceCleanupDialogContent({
     },
     [openConfirmRemove, removalInFlightRef, setSelectedIds]
   )
-
   const handleViewCandidate = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
       markCandidateViewed(candidate)
@@ -362,9 +354,6 @@ function WorkspaceCleanupDialogContent({
               loading={loading}
               scannedAt={scan?.scannedAt ?? null}
               scanProgress={scanProgress}
-              // Why: leaving the progress view no longer closes the dialog, so the
-              // list is reachable mid-batch; a second batch would silently no-op.
-              // A streaming rescan does NOT gate deletion — preflight does.
               deleteDisabled={
                 selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
               }
@@ -419,6 +408,8 @@ function WorkspaceCleanupDialogContent({
                   onView={handleViewCandidate}
                   onIgnore={ignoreCandidate}
                   onRemove={handleRemoveRow}
+                  onForgetLocally={openWorkspaceCleanupForgetLocally}
+                  onDeleteAnyway={removal.confirmUnverifiedRemoval}
                 />
               </div>
             </ScrollArea>

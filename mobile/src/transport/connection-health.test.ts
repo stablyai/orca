@@ -127,6 +127,18 @@ describe('classifyConnection Tailscale hint', () => {
     })
     expect(verdictDisplayLabel(verdict)).not.toContain('Tailscale')
   })
+
+  it('does not call an idle Relay path Connecting when no retry is active', () => {
+    const verdict = classifyConnection({
+      state: 'disconnected',
+      reconnectAttempts: 0,
+      lastConnectedAt: 1_000,
+      pendingPath: 'relay',
+      nowMs: 1_000_000
+    })
+
+    expect(verdict).toEqual({ kind: 'normal', label: 'Disconnected' })
+  })
 })
 
 // Issue #10119: every redial re-enters 'connecting', which used to revert an

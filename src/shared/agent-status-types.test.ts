@@ -60,6 +60,19 @@ describe('parseAgentStatusPayload', () => {
     }
   })
 
+  it('accepts monitoring only as an optional working discriminator', () => {
+    expect(parseAgentStatusPayload('{"state":"working","workingMode":"monitoring"}')).toMatchObject(
+      { state: 'working', workingMode: 'monitoring' }
+    )
+    expect(
+      parseAgentStatusPayload('{"state":"done","workingMode":"monitoring"}')?.workingMode
+    ).toBeUndefined()
+    expect(
+      parseAgentStatusPayload('{"state":"working","workingMode":"unknown"}')?.workingMode
+    ).toBeUndefined()
+    expect(parseAgentStatusPayload('{"state":"working"}')?.workingMode).toBeUndefined()
+  })
+
   it('returns null for invalid state', () => {
     expect(parseAgentStatusPayload('{"state":"running"}')).toBeNull()
     expect(parseAgentStatusPayload('{"state":"idle"}')).toBeNull()
@@ -586,7 +599,14 @@ describe('agentSubagentsEqual', () => {
 // they used to take, including where stringify would have altered the payload.
 describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
   const CASES: Record<string, unknown>[] = [
-    { state: 'working', prompt: 'p', agentType: 'grok', toolName: 'sh', toolInput: 'ls' },
+    {
+      state: 'working',
+      workingMode: 'monitoring',
+      prompt: 'p',
+      agentType: 'grok',
+      toolName: 'sh',
+      toolInput: 'ls'
+    },
     { state: 'done', prompt: '', agentType: 'devin', interrupted: true },
     // stringify DROPS undefined-valued keys; the direct path passes them through
     {

@@ -184,6 +184,8 @@ export function snapshotCodexRuntimeSettingsBaseline(
 export type CodexSettingsPromotionHomes = {
   runtimeHomePath: string
   systemHomePath: string
+  /** Linux spelling of the source config directory when its host path is a drvfs drive. */
+  systemConfigDir?: string
 }
 
 export type CodexSettingsPromotionPlan = {

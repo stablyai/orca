@@ -1,3 +1,4 @@
+import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
@@ -47,9 +48,8 @@ export function buildOpenCodeUsageSummary(
     byProject.set(row.projectLabel, (byProject.get(row.projectLabel) ?? 0) + row.totalTokens)
   }
 
-  const topModel = [...byModel.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
-  const topProject =
-    [...byProject.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
+  const topModel = highestUsageKey(byModel)
+  const topProject = highestUsageKey(byProject)
 
   return {
     scope,
@@ -150,25 +150,23 @@ export function buildOpenCodeUsageRecentSessions(
   filteredSessions: OpenCodeUsageSession[],
   limit = 10
 ): OpenCodeUsageSessionRow[] {
-  return filteredSessions.slice(0, limit).map(
-    (session): OpenCodeUsageSessionRow => ({
-      sessionId: session.sessionId,
-      lastActiveAt: session.lastTimestamp,
-      durationMinutes: Math.max(
-        0,
-        Math.round(
-          (new Date(session.lastTimestamp).getTime() - new Date(session.firstTimestamp).getTime()) /
-            60_000
-        )
-      ),
-      projectLabel: session.primaryProjectLabel,
-      model: session.primaryModel,
-      events: session.eventCount,
-      inputTokens: session.totalInputTokens,
-      cachedInputTokens: session.totalCachedInputTokens,
-      outputTokens: session.totalOutputTokens,
-      reasoningOutputTokens: session.totalReasoningOutputTokens,
-      totalTokens: session.totalTokens
-    })
-  )
+  return filteredSessions.slice(0, limit).map((session): OpenCodeUsageSessionRow => ({
+    sessionId: session.sessionId,
+    lastActiveAt: session.lastTimestamp,
+    durationMinutes: Math.max(
+      0,
+      Math.round(
+        (new Date(session.lastTimestamp).getTime() - new Date(session.firstTimestamp).getTime()) /
+          60_000
+      )
+    ),
+    projectLabel: session.primaryProjectLabel,
+    model: session.primaryModel,
+    events: session.eventCount,
+    inputTokens: session.totalInputTokens,
+    cachedInputTokens: session.totalCachedInputTokens,
+    outputTokens: session.totalOutputTokens,
+    reasoningOutputTokens: session.totalReasoningOutputTokens,
+    totalTokens: session.totalTokens
+  }))
 }

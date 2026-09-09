@@ -39,7 +39,7 @@ export function useNativeChatComposerKeyDown({
   setDraft,
   setCaret,
   setHistory
-}: UseNativeChatComposerKeyDownArgs): KeyboardEventHandler<HTMLTextAreaElement> {
+}: UseNativeChatComposerKeyDownArgs): KeyboardEventHandler<HTMLElement> {
   return useCallback(
     (event) => {
       if (isComposing() || event.nativeEvent.isComposing || event.keyCode === 229) {

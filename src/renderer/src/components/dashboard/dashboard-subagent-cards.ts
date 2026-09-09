@@ -1,6 +1,7 @@
 import type { DashboardCardSubagent } from '../../../../shared/dashboard-snapshot'
 import { nonEmpty } from './dashboard-card-labels'
 import type { DashboardAgentRow } from './useDashboardData'
+import { dashboardCardDotState } from './dashboard-row-bucket'
 
 /** Subagent child rows, grouped under the parent pane whose session spawned
  *  them — they have no pane of their own, so the board nests them on the card. */
@@ -22,7 +23,7 @@ export function groupSubagentsByParentPaneKey(
         nonEmpty(row.entry.orchestration?.displayName) ??
         nonEmpty(row.entry.prompt) ??
         row.agentType,
-      dotState: row.state
+      dotState: dashboardCardDotState(row.state)
     }
     const existing = byParentPaneKey.get(parentPaneKey)
     if (existing) {

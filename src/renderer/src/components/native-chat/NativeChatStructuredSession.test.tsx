@@ -1,0 +1,884 @@
+// @vitest-environment happy-dom
+
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import React, { forwardRef, useImperativeHandle } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import { decodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
+
+const mocks = vi.hoisted(() => ({
+  call: vi.fn(),
+  fileLinkClick: vi.fn(),
+  mode: 'static' as 'static' | 'outbox',
+  messageListProps: null as null | {
+    allowFileUriLinks?: boolean
+    onLinkClick?: (...args: unknown[]) => void
+    showTurnStatus?: boolean
+    runtimeContext?: unknown
+  },
+  composerProps: null as null | {
+    structuredTransport?: Record<string, unknown>
+    isWorking?: boolean
+  },
+  questionCardProps: null as NativeChatQuestionCardProps | null,
+  promptItems: [] as AgentJournalRenderItem[],
+  respond: vi.fn(),
+  handlePasteEvent: vi.fn(),
+  pasteFromClipboard: vi.fn(),
+  submissions: [] as unknown[],
+  monitoringBackgroundTasks: false,
+  supportsBackgroundTaskStop: false,
+  supportsBackgroundTaskStopAll: true,
+  backgroundTasks: [] as AgentSessionBackgroundTask[],
+  stopBackgroundTask: vi.fn()
+}))
+
+vi.mock('@/runtime/structured-agent-session-client', () => ({
+  callStructuredAgentSession: mocks.call
+}))
+
+vi.mock('./use-structured-agent-session', async () => {
+  const { useStructuredAgentSessionOutbox } = await import('./use-structured-agent-session-outbox')
+  return {
+    useStructuredAgentSession: (props: {
+      sessionId: string
+      target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
+    }) => {
+      const outbox = useStructuredAgentSessionOutbox({
+        sessionId: props.sessionId,
+        target: props.target,
+        fence: 1,
+        submissions: mocks.submissions as never
+      })
+      return {
+        messages:
+          mocks.mode === 'outbox'
+            ? []
+            : [
+                {
+                  id: 'message-1',
+                  role: 'assistant',
+                  source: 'transcript',
+                  timestamp: 1,
+                  blocks: [{ type: 'text', text: '[file](file:///repo/src/main.ts)' }]
+                }
+              ],
+        status: 'ready' as const,
+        error: outbox.error,
+        hasOlder: false,
+        loadingOlder: false,
+        loadOlder: vi.fn(),
+        prompts: mocks.promptItems,
+        outbox: outbox.outbox,
+        blockedClientMessageId: outbox.blockedClientMessageId,
+        send: outbox.send,
+        retry: outbox.retry,
+        isWorking: false,
+        isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
+        supportsBackgroundTaskStop: mocks.supportsBackgroundTaskStop,
+        supportsBackgroundTaskStopAll: mocks.supportsBackgroundTaskStopAll,
+        backgroundTasks: mocks.backgroundTasks,
+        turnId: null,
+        cancel: vi.fn(),
+        stopBackgroundTask: (taskId?: string) => mocks.stopBackgroundTask(props.sessionId, taskId),
+        respond: mocks.respond,
+        optionSnapshot: [
+          {
+            id: 'model',
+            label: 'Model',
+            category: 'model',
+            kind: {
+              type: 'select',
+              currentValue: 'gpt-live',
+              choices: [{ value: 'gpt-live', label: 'GPT Live' }]
+            },
+            valueSource: 'reported',
+            settable: true
+          }
+        ],
+        optionSurface: {
+          getSnapshot: () => [],
+          setOption: vi.fn(),
+          invokeAction: vi.fn(),
+          subscribe: () => () => {}
+        },
+        setStructuredOption: vi.fn()
+      }
+    }
+  }
+})
+
+vi.mock('./use-native-chat-font-scale', () => ({
+  useNativeChatFontScale: () => ({ scale: 1 })
+}))
+
+vi.mock('./use-native-chat-file-link-context', () => ({
+  useNativeChatFileLinkContext: () => ({
+    worktreeId: 'wt-1',
+    worktreePath: '/repo',
+    runtimeEnvironmentId: null
+  })
+}))
+
+vi.mock('./use-native-chat-file-link-click', () => ({
+  useNativeChatFileLinkClick: (context: unknown) => (context ? mocks.fileLinkClick : undefined)
+}))
+
+vi.mock('./NativeChatMessageList', () => ({
+  NativeChatMessageList: (props: typeof mocks.messageListProps) => {
+    mocks.messageListProps = props
+    return <div data-testid="message-list" />
+  }
+}))
+
+vi.mock('./NativeChatComposer', () => ({
+  NativeChatComposer: forwardRef((props: typeof mocks.composerProps, ref) => {
+    mocks.composerProps = props
+    useImperativeHandle(ref, () => ({
+      focus: () => true,
+      insertTypedText: () => true,
+      handlePasteEvent: mocks.handlePasteEvent,
+      pasteFromClipboard: mocks.pasteFromClipboard
+    }))
+    return <textarea data-testid="structured-composer" />
+  })
+}))
+vi.mock('./NativeChatEmptyState', () => ({ NativeChatEmptyState: () => null }))
+vi.mock('./NativeChatApprovalCard', () => ({ NativeChatApprovalCard: () => null }))
+vi.mock('./NativeChatQuestionCard', () => ({
+  NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
+    mocks.questionCardProps = props
+    return null
+  }
+}))
+
+import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+
+describe('NativeChatStructuredSession', () => {
+  afterEach(() => {
+    cleanup()
+    mocks.call.mockReset()
+    mocks.mode = 'static'
+    mocks.messageListProps = null
+    mocks.composerProps = null
+    mocks.questionCardProps = null
+    mocks.promptItems = []
+    mocks.respond.mockReset()
+    mocks.handlePasteEvent.mockReset()
+    mocks.pasteFromClipboard.mockReset()
+    mocks.submissions = []
+    mocks.monitoringBackgroundTasks = false
+    mocks.supportsBackgroundTaskStop = false
+    mocks.supportsBackgroundTaskStopAll = true
+    mocks.stopBackgroundTask.mockReset()
+    mocks.backgroundTasks = []
+  })
+
+  it('routes app-menu paste into the structured composer', () => {
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-paste"
+        sessionId="session-paste"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    const composer = screen.getByTestId('structured-composer')
+    composer.focus()
+    window.dispatchEvent(new Event('orca-app-menu-paste', { cancelable: true }))
+
+    expect(mocks.pasteFromClipboard).toHaveBeenCalledOnce()
+  })
+
+  it('wires remote structured file links through the host-aware native chat opener', () => {
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-1"
+        sessionId="session-1"
+        target={{ kind: 'environment', environmentId: 'env-1' }}
+        agent="codex"
+      />
+    )
+
+    expect(mocks.messageListProps?.allowFileUriLinks).toBe(true)
+    const event = { preventDefault: vi.fn(), stopPropagation: vi.fn() }
+    mocks.messageListProps?.onLinkClick?.(event, 'file:///repo/src/a.ts')
+    expect(mocks.fileLinkClick).toHaveBeenCalledWith(event, 'file:///repo/src/a.ts')
+  })
+
+  // Turn status and transcript image previews shipped Codex-first. Every
+  // structured session renders through the same list, so neither is agent-gated.
+  it.each(['codex', 'claude'] as const)(
+    'renders the same structured transcript chrome for %s',
+    (agent) => {
+      render(
+        <NativeChatStructuredSession
+          isVisible
+          tabId="structured-tab-parity"
+          sessionId="session-parity"
+          target={{ kind: 'local' }}
+          agent={agent}
+        />
+      )
+
+      expect(mocks.messageListProps?.showTurnStatus).toBe(true)
+      expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
+    }
+  )
+
+  it('places background monitoring above the usable composer and stops without an active turn', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.supportsBackgroundTaskStop = true
+    mocks.backgroundTasks = [
+      { id: 'task-command', kind: 'command', description: 'sleep 180' },
+      { id: 'task-agent', kind: 'agent' }
+    ]
+    mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-background"
+        sessionId="session-background"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+
+    const status = screen
+      .getByText('Monitoring background tasks')
+      .closest('[data-native-chat-background-tasks="true"]')
+    const composer = screen.getByTestId('structured-composer')
+    if (!status) {
+      throw new Error('background task status was not rendered')
+    }
+    expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(mocks.composerProps?.isWorking).toBe(false)
+    expect(screen.queryByRole('list', { name: 'Running background tasks' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Stop / })).toBeNull()
+
+    const disclosure = screen.getByRole('button', { name: 'Monitoring background tasks' })
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(disclosure)
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('list', { name: 'Running background tasks' })).toBeTruthy()
+    expect(screen.getByText('sleep 180')).toBeTruthy()
+    expect(screen.getByText('Background agent')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stop sleep 180' }))
+    await waitFor(() =>
+      expect(mocks.stopBackgroundTask).toHaveBeenCalledWith('session-background', 'task-command')
+    )
+  })
+
+  it('tracks concurrent task stops independently and clears each pending result', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.supportsBackgroundTaskStop = true
+    mocks.backgroundTasks = [
+      { id: 'task-one', kind: 'command', description: 'First task' },
+      { id: 'task-two', kind: 'command', description: 'Second task' }
+    ]
+    let finishFirst!: (value: unknown) => void
+    let finishSecond!: (value: unknown) => void
+    mocks.stopBackgroundTask.mockImplementation(
+      (_sessionId: string, taskId: string) =>
+        new Promise((resolve) => {
+          if (taskId === 'task-one') {
+            finishFirst = resolve
+          } else {
+            finishSecond = resolve
+          }
+        })
+    )
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-concurrent-background"
+        sessionId="session-concurrent-background"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
+    const firstStop = screen.getByRole('button', { name: 'Stop First task' })
+    const secondStop = screen.getByRole('button', { name: 'Stop Second task' })
+
+    fireEvent.click(firstStop)
+    fireEvent.click(secondStop)
+    expect((firstStop as HTMLButtonElement).disabled).toBe(true)
+    expect((secondStop as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => finishFirst({ cancelled: true }))
+    await waitFor(() => expect((firstStop as HTMLButtonElement).disabled).toBe(false))
+    expect((secondStop as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => finishSecond(null))
+    await waitFor(() => expect((secondStop as HTMLButtonElement).disabled).toBe(false))
+  })
+
+  it('keeps a stale session stop result from clearing the current session pending state', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.supportsBackgroundTaskStop = true
+    mocks.backgroundTasks = [{ id: 'task-one', kind: 'command', description: 'Shared task' }]
+    let finishOld!: (value: unknown) => void
+    let finishCurrent!: (value: unknown) => void
+    mocks.stopBackgroundTask.mockImplementation(
+      (sessionId: string) =>
+        new Promise((resolve) => {
+          if (sessionId === 'session-old') {
+            finishOld = resolve
+          } else {
+            finishCurrent = resolve
+          }
+        })
+    )
+    const { rerender } = render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-stale-background"
+        sessionId="session-old"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Stop Shared task' }))
+
+    rerender(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-stale-background"
+        sessionId="session-current"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    const currentStop = screen.getByRole('button', { name: 'Stop Shared task' })
+    expect((currentStop as HTMLButtonElement).disabled).toBe(false)
+    fireEvent.click(currentStop)
+    expect((currentStop as HTMLButtonElement).disabled).toBe(true)
+
+    await act(async () => finishOld({ cancelled: true }))
+    expect((currentStop as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => finishCurrent({ cancelled: true }))
+    await waitFor(() => expect((currentStop as HTMLButtonElement).disabled).toBe(false))
+  })
+
+  it('keeps the expanded all-task stop fallback for a taskless older host', async () => {
+    mocks.monitoringBackgroundTasks = true
+    mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-taskless-background"
+        sessionId="session-taskless-background"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Stop background tasks' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
+    expect(screen.getByText('Task details are unavailable for this session.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Stop background tasks' }))
+
+    await waitFor(() =>
+      expect(mocks.stopBackgroundTask).toHaveBeenCalledWith(
+        'session-taskless-background',
+        undefined
+      )
+    )
+  })
+
+  it('routes a bare model command to the native option picker', async () => {
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-1"
+        sessionId="session-1"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const dispatchCommand = mocks.composerProps?.structuredTransport?.dispatchCommand as
+      | ((text: string) => Promise<{ accepted: boolean }>)
+      | undefined
+
+    await act(async () => {
+      await expect(dispatchCommand?.('/model')).resolves.toMatchObject({ accepted: true })
+    })
+
+    expect(mocks.composerProps?.structuredTransport?.optionPickerRequest).toEqual({
+      id: 'model',
+      sequence: 1
+    })
+  })
+
+  it('retries an unconfirmed transport send and clears the delivery notice', async () => {
+    mocks.mode = 'outbox'
+    mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValueOnce({
+      ok: true,
+      value: {
+        submission: {
+          clientMessageId: 'client-1',
+          dispatchState: 'accepted'
+        }
+      }
+    })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-1"
+        sessionId="session-1"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('hello', [])).toBe(true)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
+
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull())
+  })
+
+  it('resends a transport-unconfirmed head so later messages are not wedged', async () => {
+    mocks.mode = 'outbox'
+    mocks.submissions = []
+    mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'client-1', dispatchState: 'accepted' } }
+    })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-wedge"
+        sessionId="session-wedge"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('first', [])).toBe(true)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+
+    expect(send?.('second', [])).toBe(true)
+    // The head is probed automatically, clears, and the queue drains.
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3), { timeout: 10000 })
+    await waitFor(() => expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull())
+  }, 20000)
+
+  it('probes without retryUnknown so the host cannot redispatch', async () => {
+    mocks.mode = 'outbox'
+    mocks.submissions = []
+    mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'client-1', dispatchState: 'accepted' } }
+    })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-probe-flag"
+        sessionId="session-probe-flag"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('first', [])).toBe(true)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2), { timeout: 10000 })
+
+    const first = mocks.call.mock.calls[0]?.[2] as Record<string, unknown>
+    const probe = mocks.call.mock.calls[1]?.[2] as Record<string, unknown>
+    expect(probe.retryUnknown).toBeUndefined()
+    // Same operation id: both dedupe layers key off it.
+    expect((probe.envelope as { clientOperationId: string }).clientOperationId).toBe(
+      (first.envelope as { clientOperationId: string }).clientOperationId
+    )
+  }, 20000)
+
+  it('parks a host-confirmed unknown instead of probing it', async () => {
+    mocks.mode = 'outbox'
+    mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'client-1', dispatchState: 'accepted' } }
+    })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-parked"
+        sessionId="session-parked"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('first', [])).toBe(true)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+
+    const sent = mocks.call.mock.calls[0]?.[2] as { envelope: { clientOperationId: string } }
+    // The host now reports it as an unresolved unknown: redispatch is the user's call.
+    mocks.submissions = [
+      {
+        clientMessageId: sent.envelope.clientOperationId,
+        fence: 1,
+        payloadFingerprint: 'fp',
+        dispatchState: 'unknown',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null
+      }
+    ]
+    // Queue a second message purely to re-render so the effect observes the
+    // new submissions; it must stay wedged behind the parked head.
+    await act(async () => {
+      send?.('second', [])
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+    })
+    expect(mocks.call).toHaveBeenCalledOnce()
+  }, 20000)
+
+  it('still probes while streaming batches rebuild the submissions array', async () => {
+    mocks.mode = 'outbox'
+    mocks.submissions = []
+    mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'client-1', dispatchState: 'accepted' } }
+    })
+
+    const makeView = (): React.ReactElement => (
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-churn"
+        sessionId="session-churn"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const { rerender } = render(makeView())
+
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('first', [])).toBe(true)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+
+    // Each batch mints a fresh submissions array for an unrelated message. An
+    // array-identity dependency restarts the backoff on every one of these, so a
+    // stream that outlasts the delay would never let the probe fire.
+    for (let index = 0; index < 12; index += 1) {
+      mocks.submissions = [
+        {
+          clientMessageId: `other-${index}`,
+          fence: 1,
+          payloadFingerprint: 'fp',
+          dispatchState: 'accepted',
+          providerItemId: null,
+          reason: null,
+          submittedAt: index,
+          resolvedAt: index
+        }
+      ]
+      await act(async () => {
+        rerender(makeView())
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      })
+    }
+
+    // Asserted with no trailing grace period: the probe must have fired *during*
+    // the stream, not after it went quiet.
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+  }, 20000)
+
+  it('restarts probe delay when the runtime target changes', async () => {
+    mocks.mode = 'outbox'
+    mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'client-1', dispatchState: 'accepted' } }
+    })
+
+    const makeView = (
+      target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
+    ) => (
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-target-switch"
+        sessionId="session-target-switch"
+        target={target}
+        agent="codex"
+      />
+    )
+    const { rerender } = render(makeView({ kind: 'local' }))
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('first', [])).toBe(true)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    rerender(makeView({ kind: 'environment', environmentId: 'env-1' }))
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 600))
+    })
+    expect(mocks.call).toHaveBeenCalledOnce()
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2), { timeout: 1500 })
+  }, 10000)
+
+  it('never auto-probes an entry the user already force-retried', async () => {
+    mocks.mode = 'outbox'
+    mocks.submissions = []
+    // Both the original send and the user's explicit Retry fail at the transport.
+    mocks.call.mockRejectedValue(new Error('socket closed'))
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-forced"
+        sessionId="session-forced"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('first', [])).toBe(true)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
+
+    // User force-retries: this request legitimately carries retryUnknown.
+    fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    const forcedRequest = mocks.call.mock.calls[1]?.[2] as Record<string, unknown> | undefined
+    expect(forcedRequest?.retryUnknown).toBe(true)
+
+    // That retry also failed at the transport. The probe must NOT pick it up, or it
+    // would re-send retryUnknown automatically and redispatch to the agent.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 3000))
+    })
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+  }, 20000)
+
+  it('does not hot-loop when the host answers pending', async () => {
+    mocks.mode = 'outbox'
+    mocks.call.mockResolvedValue({
+      ok: true,
+      value: { submission: { clientMessageId: 'client-1', dispatchState: 'pending' } }
+    })
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-pending"
+        sessionId="session-pending"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+
+    const send = mocks.composerProps?.structuredTransport?.send as
+      | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+      | undefined
+    expect(send?.('first', [])).toBe(true)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+
+    // A pending row parks the entry under the backoff instead of re-dispatching
+    // immediately. Without that, this window is an unbounded back-to-back RPC flood.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 2500))
+    })
+    expect(mocks.call.mock.calls.length).toBeLessThanOrEqual(3)
+  }, 20000)
+
+  it('keeps probing past the old five-attempt budget', async () => {
+    mocks.mode = 'outbox'
+    mocks.call.mockRejectedValue(new Error('socket closed'))
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(
+        <NativeChatStructuredSession
+          isVisible
+          tabId="structured-tab-budget"
+          sessionId="session-budget"
+          target={{ kind: 'local' }}
+          agent="codex"
+        />
+      )
+
+      const send = mocks.composerProps?.structuredTransport?.send as
+        | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
+        | undefined
+      expect(send?.('first', [])).toBe(true)
+
+      // Backoff is 1+2+4+8+16 = 31s for five probes, which was the old hard budget.
+      // Step past it; a seventh call proves the probe re-arms instead of giving up.
+      for (let step = 0; step < 12; step += 1) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(8_000)
+        })
+      }
+      expect(mocks.call.mock.calls.length).toBeGreaterThanOrEqual(7)
+    } finally {
+      vi.useRealTimers()
+    }
+  }, 30000)
+
+  it('passes Claude grouped questions and one shared answer through the card', () => {
+    mocks.promptItems = [
+      {
+        itemId: 'question-item',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: {
+          kind: 'question',
+          question: '2 grouped questions from Claude',
+          options: [],
+          questions: [
+            {
+              id: 'q1',
+              header: 'Targets',
+              question: 'Which targets?',
+              multiSelect: true,
+              options: [
+                { id: 'target-web', label: 'Web' },
+                { id: 'target-mobile', label: 'Mobile' }
+              ],
+              freeTextQuestionId: 'q1'
+            },
+            {
+              id: 'q2',
+              header: 'Host',
+              question: 'Where should it run?',
+              multiSelect: false,
+              options: [],
+              freeTextQuestionId: 'q2'
+            }
+          ],
+          resolution: {
+            state: 'pending',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        }
+      }
+    ]
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-questions"
+        sessionId="session-questions"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+
+    const card = mocks.questionCardProps
+    if (!card) {
+      throw new Error('question card was not rendered')
+    }
+    expect(card.prompt.questions).toHaveLength(2)
+    expect(card.prompt.questions[0]).toMatchObject({
+      question: 'Which targets?',
+      multiSelect: true,
+      options: [{ label: 'Web' }, { label: 'Mobile' }]
+    })
+    expect(card.allowOther).toEqual([true, true])
+
+    card.onAnswer([
+      { indices: [0, 1], other: '' },
+      { indices: [], other: 'SSH host' }
+    ])
+    const encoded = mocks.respond.mock.calls[0]?.[1]
+    expect(decodeAgentSessionQuestionAnswers(encoded)).toEqual([
+      { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
+      { questionId: 'q2', optionIds: [], other: 'SSH host' }
+    ])
+  })
+
+  it('keeps legacy single-question option ids and free text behavior', () => {
+    mocks.promptItems = [
+      {
+        itemId: 'legacy-question-item',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: {
+          kind: 'question',
+          question: 'Pick a library',
+          options: [
+            { id: 'q1:choice-1', label: 'React' },
+            { id: 'q1:choice-2', label: 'Vue' }
+          ],
+          freeTextQuestionId: 'q1',
+          resolution: {
+            state: 'pending',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        }
+      }
+    ]
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        tabId="structured-tab-legacy-question"
+        sessionId="session-legacy-question"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+
+    const card = mocks.questionCardProps
+    if (!card) {
+      throw new Error('question card was not rendered')
+    }
+    expect(card.prompt.questions).toEqual([
+      {
+        question: 'Pick a library',
+        multiSelect: false,
+        options: [{ label: 'React' }, { label: 'Vue' }]
+      }
+    ])
+    card.onAnswer([{ indices: [1], other: '' }])
+    expect(mocks.respond).toHaveBeenCalledWith(mocks.promptItems[0], 'q1:choice-2')
+  })
+})

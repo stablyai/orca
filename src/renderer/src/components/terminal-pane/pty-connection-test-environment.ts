@@ -72,7 +72,8 @@ export function installTerminalTestGlobals(): void {
         restoreTerminalFit: vi.fn().mockResolvedValue({ restored: true })
       },
       agentStatus: {
-        inferInterrupt: vi.fn().mockResolvedValue(false)
+        inferInterrupt: vi.fn().mockResolvedValue(false),
+        reconcileEndedProcess: vi.fn()
       }
     },
     dispatchEvent: vi.fn(),

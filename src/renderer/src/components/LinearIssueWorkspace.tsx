@@ -1,79 +1,22 @@
-/* eslint-disable max-lines -- Why: the Linear issue page co-locates the
-   full-page layout with its hydration/comment state so the selected issue
-   surface stays coherent with the existing Linear drawer behavior. */
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Linear issue hydration and comments are loaded from provider IPC for the selected issue while preserving edit guards. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ArrowRight,
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Clipboard,
-  Copy,
-  ExternalLink,
-  FolderKanban,
-  FolderOpen,
-  GitBranch,
-  LoaderCircle,
-  Plus,
-  RefreshCw,
-  X
-} from 'lucide-react'
-import { toast } from 'sonner'
+import React, { useCallback, useMemo } from 'react'
 import { VisuallyHidden } from 'radix-ui'
 
-import { LinearIcon } from '@/components/icons/LinearIcon'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import {
-  initLinearIssueEditState,
-  LinearIssueCommentFooter,
-  LinearIssueEditSection,
-  type LinearEditState,
-  type LinearLocalComment
-} from '@/components/LinearItemDrawer'
-import { Button } from '@/components/ui/button'
-import { ButtonGroup } from '@/components/ui/button-group'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { LinearIssueTextEditor } from '@/components/LinearIssueTextEditor'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { buildLinearIssueContextSnapshot } from '@/lib/linear-issue-context-snapshot'
 import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
-import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
-import {
-  buildLinearIssueBranchName,
-  formatLinearIssueRelativeTime
-} from '@/components/linear-issue-workspace-text'
-import { getLinearProjectSearchRequestQuery } from '@/components/linear-project-search-query'
-import {
-  linearCreateSubIssue,
-  linearGetIssue,
-  linearIssueComments,
-  linearListProjects,
-  linearUpdateIssue
-} from '@/runtime/runtime-linear-client'
-import type {
-  LinearComment,
-  LinearIssue,
-  LinearIssueChildSummary
-} from '../../../shared/linear/issue-types'
-import type { LinearProjectSummary } from '../../../shared/linear/project-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { LinearIssueActivity } from './linear-issue-activity'
+import { LinearIssueSubIssues } from './linear-issue-sub-issues'
+import { useLinearIssueWorkspaceDetail } from './linear-issue-workspace-detail-state'
+import { LinearIssueWorkspaceHeader } from './linear-issue-workspace-header'
+import { LinearIssueWorkspaceSidebar } from './linear-issue-workspace-sidebar'
 
 type LinearIssueWorkspaceProps = {
   issue: LinearIssue | null
@@ -85,433 +28,134 @@ type LinearIssueWorkspaceProps = {
   sourceContext?: TaskSourceContext | null
 }
 
-async function copyTextToClipboard(text: string, label: string): Promise<void> {
-  try {
-    await window.api.ui.writeClipboardText(text)
-    toast.success(
-      translate('auto.components.LinearIssueWorkspace.7835483c43', '{{value0}} copied', {
-        value0: label
-      })
-    )
-  } catch {
-    toast.error(
-      translate('auto.components.LinearIssueWorkspace.9bcbaa2737', 'Failed to copy {{value0}}', {
-        value0: label.toLowerCase()
-      })
-    )
-  }
+type LinearIssueWorkspaceIssueProps = Omit<
+  LinearIssueWorkspaceProps,
+  'issue' | 'variant' | 'backLabel'
+> & {
+  issue: LinearIssue
+  variant: 'sheet' | 'page'
+  backLabel: string
+  requestKey: string
 }
 
-function LinearIssueAvatar({
-  avatarUrl,
-  name,
-  className = 'size-6'
-}: {
-  avatarUrl?: string
-  name?: string
-  className?: string
-}): React.JSX.Element {
-  if (avatarUrl) {
-    return <img src={avatarUrl} alt={name ?? ''} className={`${className} shrink-0 rounded-full`} />
-  }
-
-  const initial = name?.trim().charAt(0).toUpperCase() || '?'
-  return (
-    <span
-      className={`${className} flex shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground`}
-      aria-hidden="true"
-    >
-      {initial}
-    </span>
-  )
-}
-
-function LinearIssueSubIssueButton({
+function LinearIssueWorkspaceIssue({
   issue,
+  onUse,
   onOpenIssue,
-  sourceContext
-}: {
-  issue: LinearIssue
-  onOpenIssue: (issue: LinearIssue) => void
-  sourceContext?: TaskSourceContext | null
-}): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
+  onClose,
+  variant,
+  backLabel,
+  sourceContext,
+  requestKey
+}: LinearIssueWorkspaceIssueProps): React.JSX.Element {
+  const settings = useAppStore((state) => state.settings)
   const providerSettings = sourceContext ?? settings
-  const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
-  const [open, setOpen] = useState(false)
-  const [title, setTitle] = useState('')
-  const [optimisticSubIssues, setOptimisticSubIssues] = useState<{
-    issueId: string
-    subIssues: LinearIssueChildSummary[]
-  }>(() => ({
-    issueId: issue.id,
-    subIssues: []
-  }))
-  const [submitting, setSubmitting] = useState(false)
-  const [openingSubIssueId, setOpeningSubIssueId] = useState<string | null>(null)
-  const mountedRef = useMountedRef()
-
-  const subIssues = useMemo(() => {
-    const baseSubIssues = issue.subIssues ?? []
-    if (optimisticSubIssues.issueId !== issue.id || optimisticSubIssues.subIssues.length === 0) {
-      return baseSubIssues
-    }
-    const baseIds = new Set(baseSubIssues.map((subIssue) => subIssue.id))
-    const additions = optimisticSubIssues.subIssues.filter((subIssue) => !baseIds.has(subIssue.id))
-    return additions.length === 0 ? baseSubIssues : [...baseSubIssues, ...additions]
-  }, [issue.id, issue.subIssues, optimisticSubIssues])
-
-  const handleOpenSubIssue = useCallback(
-    async (subIssue: LinearIssueChildSummary) => {
-      setOpeningSubIssueId(subIssue.id)
-      try {
-        const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId, {
-          sourceContext
-        })
-        if (!mountedRef.current) {
-          return
-        }
-        if (fullIssue) {
-          onOpenIssue(fullIssue)
-        } else {
-          toast.error(
-            translate('auto.components.LinearIssueWorkspace.9a1317cdd3', 'Failed to load sub-issue')
-          )
-        }
-      } catch (error) {
-        if (mountedRef.current) {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : translate(
-                  'auto.components.LinearIssueWorkspace.9a1317cdd3',
-                  'Failed to load sub-issue'
-                )
-          )
-        }
-      } finally {
-        if (mountedRef.current) {
-          setOpeningSubIssueId(null)
-        }
-      }
-    },
-    [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue, sourceContext]
+  const allWorktrees = useAllWorktrees()
+  const folderWorkspaces = useAppStore((state) => state.folderWorkspaces)
+  const attachmentWorkspaces = useMemo(
+    () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
+    [allWorktrees, folderWorkspaces]
   )
+  const detail = useLinearIssueWorkspaceDetail({ issue, providerSettings, requestKey })
+  const attachedWorkspace = useMemo(
+    () => findLinearIssueWorkspaceAttachment(attachmentWorkspaces, detail.displayed),
+    [attachmentWorkspaces, detail.displayed]
+  )
+  const attachedWorkspaceLabel = attachedWorkspace
+    ? getWorktreeAttachmentLabel(attachedWorkspace)
+    : null
 
-  const handleCreate = useCallback(async () => {
-    const trimmed = title.trim()
-    if (!trimmed) {
-      return
-    }
-    setSubmitting(true)
-    try {
-      const result = await linearCreateSubIssue(providerSettings, {
-        parentIssueId: issue.id,
-        teamId: issue.team.id,
-        title: trimmed,
-        workspaceId: issue.workspaceId,
-        projectId: issue.project?.id ?? null
-      })
-      if (result.ok) {
-        const child = {
-          id: result.id,
-          identifier: result.identifier,
-          title: result.title || trimmed,
-          url: result.url
-        }
-        setOptimisticSubIssues((current) => {
-          const currentSubIssues = current.issueId === issue.id ? current.subIssues : []
-          if (
-            currentSubIssues.some((subIssue) => subIssue.id === child.id) ||
-            issue.subIssues?.some((subIssue) => subIssue.id === child.id)
-          ) {
-            return current
-          }
-          return { issueId: issue.id, subIssues: [...currentSubIssues, child] }
-        })
-        toast.success(
-          translate('auto.components.LinearIssueWorkspace.aeed19d003', 'Created {{value0}}', {
-            value0: result.identifier
-          })
-        )
-        setTitle('')
-        setOpen(false)
-      } else {
-        toast.error(result.error)
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : translate(
-              'auto.components.LinearIssueWorkspace.b25e453c9d',
-              'Failed to create sub-issue'
-            )
-      )
-    } finally {
-      setSubmitting(false)
-    }
-  }, [
-    issue.id,
-    issue.project?.id,
-    issue.subIssues,
-    issue.team.id,
-    issue.workspaceId,
-    providerSettings,
-    title
-  ])
+  const handleUseIssue = useCallback((): void => {
+    onUse(detail.displayed)
+  }, [detail.displayed, onUse])
 
-  return (
-    <section className="mt-10 max-w-[820px]">
-      {subIssues.length > 0 ? (
-        <div className="mb-3 space-y-1">
-          {subIssues.map((subIssue) => (
-            <button
-              key={subIssue.id}
-              type="button"
-              onClick={() => void handleOpenSubIssue(subIssue)}
-              disabled={openingSubIssueId !== null}
-              className="flex min-h-8 w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <span className="shrink-0 font-mono text-xs">{subIssue.identifier}</span>
-              <span className="min-w-0 flex-1 truncate">{subIssue.title}</span>
-              {openingSubIssueId === subIssue.id ? (
-                <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
-              ) : (
-                <ArrowRight className="size-3.5 shrink-0" />
-              )}
-            </button>
-          ))}
+  const handleOpenOrUseIssue = useCallback((): void => {
+    openLinearIssueWorkspaceOrStart(detail.displayed, () => onUse(detail.displayed))
+  }, [detail.displayed, onUse])
+
+  const content = (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      <LinearIssueWorkspaceHeader
+        issue={detail.displayed}
+        issueLoading={detail.issueLoading}
+        attachedWorkspace={attachedWorkspace !== null}
+        variant={variant}
+        backLabel={backLabel}
+        onClose={onClose}
+        onOpenOrUseIssue={handleOpenOrUseIssue}
+        onUseIssue={handleUseIssue}
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
+        <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
+          <main className="min-w-0">
+            <LinearIssueTextEditor
+              issue={detail.displayed}
+              onIssueChange={detail.handleIssueTextChange}
+              sourceContext={sourceContext}
+            />
+            <LinearIssueSubIssues
+              issue={detail.displayed}
+              onOpenIssue={onOpenIssue}
+              sourceContext={sourceContext}
+            />
+            <LinearIssueActivity
+              issue={detail.displayed}
+              comments={detail.comments}
+              commentsLoading={detail.commentsLoading}
+              commentsError={detail.commentsError}
+              onRetryComments={detail.retryComments}
+              onCommentAdded={detail.handleCommentAdded}
+              sourceContext={sourceContext}
+            />
+          </main>
+          <LinearIssueWorkspaceSidebar
+            issue={detail.displayed}
+            comments={detail.comments}
+            editState={detail.editState}
+            attachedWorkspaceLabel={attachedWorkspaceLabel}
+            onEditStateChange={detail.handleEditStateChange}
+            onProjectChanged={detail.handleProjectChanged}
+            onOpenAttachedWorkspace={handleOpenOrUseIssue}
+            sourceContext={sourceContext}
+          />
         </div>
-      ) : null}
-
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="flex h-9 items-center gap-2 rounded-md px-1 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <Plus className="size-4" />
-            <span>
-              {translate('auto.components.LinearIssueWorkspace.8c55d6696a', 'Add sub-issues')}
-            </span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80 p-3" align="start">
-          <div className="space-y-3">
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void handleCreate()
-                }
-              }}
-              placeholder={translate(
-                'auto.components.LinearIssueWorkspace.c182e02de5',
-                'Sub-issue title'
-              )}
-              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                onClick={() => void handleCreate()}
-                disabled={!title.trim() || submitting}
-              >
-                {submitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
-                {translate('auto.components.LinearIssueWorkspace.42589845bc', 'Create')}
-              </Button>
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-    </section>
+      </div>
+    </div>
   )
-}
 
-function LinearIssueSidebarProjectCard({
-  issue,
-  onProjectChanged,
-  sourceContext
-}: {
-  issue: LinearIssue
-  onProjectChanged: (project: LinearProjectSummary) => void
-  sourceContext?: TaskSourceContext | null
-}): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
-  const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  const [projects, setProjects] = useState<LinearProjectSummary[]>([])
-  const [loading, setLoading] = useState(false)
-  const [savingProjectId, setSavingProjectId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    const requestQuery = getLinearProjectSearchRequestQuery(query)
-    if (requestQuery === null) {
-      // Oversized pasted queries stay visible but must not reach provider IPC/RPC.
-      setProjects([])
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    const timeout = window.setTimeout(() => {
-      setLoading(true)
-      void linearListProjects(providerSettings, requestQuery, 20, issue.workspaceId)
-        .then((result) => {
-          if (!cancelled) {
-            setProjects(result.items)
-          }
-        })
-        .catch((error) => {
-          if (!cancelled) {
-            toast.error(
-              error instanceof Error
-                ? error.message
-                : translate(
-                    'auto.components.LinearIssueWorkspace.38b80780c2',
-                    'Failed to load projects'
-                  )
-            )
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setLoading(false)
-          }
-        })
-    }, 150)
-    return () => {
-      cancelled = true
-      window.clearTimeout(timeout)
-    }
-  }, [issue.workspaceId, open, providerSettings, query])
-
-  const handleSelectProject = useCallback(
-    async (project: LinearProjectSummary) => {
-      setSavingProjectId(project.id)
-      try {
-        const result = await linearUpdateIssue(
-          providerSettings,
-          issue.id,
-          { projectId: project.id },
-          issue.workspaceId
-        )
-        if (result.ok) {
-          onProjectChanged(project)
-          patchLinearIssue(issue.id, { project }, { sourceContext })
-          toast.success(
-            translate('auto.components.LinearIssueWorkspace.f9d4ef9807', 'Project updated')
-          )
-          setOpen(false)
-        } else {
-          toast.error(result.error)
-        }
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.LinearIssueWorkspace.8b5b593053',
-                'Failed to update project'
-              )
-        )
-      } finally {
-        setSavingProjectId(null)
-      }
-    },
-    [
-      issue.id,
-      issue.workspaceId,
-      onProjectChanged,
-      patchLinearIssue,
-      providerSettings,
-      sourceContext
-    ]
-  )
+  if (variant === 'page') {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+        {content}
+      </div>
+    )
+  }
 
   return (
-    <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
-      <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-        <span>{translate('auto.components.LinearIssueWorkspace.b51276c8d6', 'Project')}</span>
-        <ChevronDown className="size-3.5" />
-      </div>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            className="m-3 flex min-h-9 w-[calc(100%-1.5rem)] items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            <FolderKanban className="size-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">
-              {issue.project?.name ??
-                translate('auto.components.LinearIssueWorkspace.519c3587f3', 'Add to project')}
-            </span>
-            <ChevronDown className="size-3.5 shrink-0" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72 p-2" align="start">
-          <div className="space-y-2">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={translate(
-                'auto.components.LinearIssueWorkspace.db3f269d98',
-                'Search projects'
-              )}
-              className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            />
-            <div className="max-h-64 overflow-y-auto scrollbar-sleek">
-              {loading ? (
-                <div className="flex items-center gap-2 px-2 py-3 text-sm text-muted-foreground">
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                  {translate('auto.components.LinearIssueWorkspace.937ba6ad9a', 'Loading projects')}
-                </div>
-              ) : projects.length > 0 ? (
-                projects.map((project) => (
-                  <button
-                    key={project.id}
-                    type="button"
-                    onClick={() => void handleSelectProject(project)}
-                    disabled={savingProjectId !== null}
-                    className="flex min-h-8 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-70"
-                  >
-                    <span
-                      className="size-2 shrink-0 rounded-full bg-muted"
-                      style={project.color ? { backgroundColor: project.color } : undefined}
-                    />
-                    <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                    {savingProjectId === project.id ? (
-                      <LoaderCircle className="size-3.5 animate-spin" />
-                    ) : issue.project?.id === project.id ? (
-                      <Check className="size-3.5" />
-                    ) : null}
-                  </button>
-                ))
-              ) : (
-                <div className="px-2 py-3 text-sm text-muted-foreground">
-                  {query.trim()
-                    ? translate(
-                        'auto.components.LinearIssueWorkspace.c11b4e3cc2',
-                        'No projects found.'
-                      )
-                    : translate(
-                        'auto.components.LinearIssueWorkspace.76ffd3c937',
-                        'Search for a project to add.'
-                      )}
-                </div>
-              )}
-            </div>
-          </div>
-        </PopoverContent>
-      </Popover>
-    </section>
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-[min(92vw,1180px)] bg-background p-0 sm:max-w-[1180px]"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
+        <VisuallyHidden.Root asChild>
+          <SheetTitle>
+            {detail.displayed.title ??
+              translate('auto.components.LinearIssueWorkspace.61f424f8ca', 'Linear issue')}
+          </SheetTitle>
+        </VisuallyHidden.Root>
+        <VisuallyHidden.Root asChild>
+          <SheetDescription>
+            {translate(
+              'auto.components.LinearIssueWorkspace.ad5dec37b7',
+              'Preview, edit, and start work from the selected issue.'
+            )}
+          </SheetDescription>
+        </VisuallyHidden.Root>
+        {content}
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -524,605 +168,27 @@ export default function LinearIssueWorkspace({
   backLabel = 'Back',
   sourceContext
 }: LinearIssueWorkspaceProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const providerSettings = sourceContext ?? settings
-  const allWorktrees = useAllWorktrees()
-  const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
-  const attachmentWorkspaces = useMemo(
-    () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
-    [allWorktrees, folderWorkspaces]
-  )
-  const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
-  const [issueLoading, setIssueLoading] = useState(false)
-  const [comments, setComments] = useState<LinearComment[]>([])
-  const [commentsLoading, setCommentsLoading] = useState(false)
-  const [commentsError, setCommentsError] = useState<string | null>(null)
-  const [editState, setEditState] = useState<LinearEditState | null>(null)
-  const requestIdRef = useRef(0)
-  const hydratedIssueKeyRef = useRef<string | null>(null)
-  const hasEditedRef = useRef(false)
-  const optimisticCommentsRef = useRef<LinearComment[]>([])
-  const mountedRef = useMountedRef()
-
-  const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
-    hasEditedRef.current = true
-    setFullIssue((prev) => (prev ? { ...prev, ...patch } : prev))
-    setEditState((prev) => (prev ? { ...prev, ...patch } : prev))
-  }, [])
-
-  const handleIssueTextChange = useCallback(
-    (patch: Partial<Pick<LinearIssue, 'title' | 'description'>>) => {
-      hasEditedRef.current = true
-      setFullIssue((prev) => (prev ? { ...prev, ...patch } : prev))
-    },
-    []
-  )
-
-  const loadComments = useCallback(
-    async (targetIssue: LinearIssue, requestId: number): Promise<void> => {
-      if (mountedRef.current) {
-        setCommentsLoading(true)
-        setCommentsError(null)
-      }
-      try {
-        let fetched = (await linearIssueComments(
-          providerSettings,
-          targetIssue.id,
-          targetIssue.workspaceId
-        )) as LinearComment[]
-        if (!mountedRef.current || requestId !== requestIdRef.current) {
-          return
-        }
-        const optimistic = optimisticCommentsRef.current
-        if (optimistic.length > 0) {
-          const fetchedIds = new Set(fetched.map((comment) => comment.id))
-          fetched = [...fetched, ...optimistic.filter((comment) => !fetchedIds.has(comment.id))]
-        }
-        setComments(fetched)
-      } catch (error) {
-        if (mountedRef.current && requestId === requestIdRef.current) {
-          setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.')
-        }
-      } finally {
-        if (mountedRef.current && requestId === requestIdRef.current) {
-          setCommentsLoading(false)
-        }
-      }
-    },
-    [mountedRef, providerSettings]
-  )
-
-  useEffect(() => {
-    if (!issue) {
-      hydratedIssueKeyRef.current = null
-      setFullIssue(null)
-      setIssueLoading(false)
-      setComments([])
-      setCommentsError(null)
-      setEditState(null)
-      hasEditedRef.current = false
-      optimisticCommentsRef.current = []
-      return
+  const settings = useAppStore((state) => state.settings)
+  if (!issue) {
+    if (variant === 'page') {
+      return (
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm" />
+      )
     }
-
-    const issueKey = `${sourceContext?.hostId ?? settings?.activeRuntimeEnvironmentId ?? 'local'}:${issue.workspaceId ?? 'selected'}:${issue.id}`
-    if (hydratedIssueKeyRef.current === issueKey) {
-      return
-    }
-    hydratedIssueKeyRef.current = issueKey
-
-    requestIdRef.current += 1
-    const requestId = requestIdRef.current
-    hasEditedRef.current = false
-    optimisticCommentsRef.current = []
-    setFullIssue(issue)
-    setEditState(initLinearIssueEditState(issue))
-    setComments([])
-    setCommentsError(null)
-    setIssueLoading(true)
-
-    // Why: issue hydration and comments are separate surfaces; a comments
-    // failure should not blank the issue detail the user selected.
-    void linearGetIssue(providerSettings, issue.id, issue.workspaceId)
-      .then((issueResult) => {
-        if (!mountedRef.current || requestId !== requestIdRef.current) {
-          return
-        }
-        if (issueResult) {
-          const fetched = issueResult as LinearIssue
-          setFullIssue((prev) => {
-            if (!hasEditedRef.current || !prev) {
-              return fetched
-            }
-            // Why: late hydration can carry pre-edit field data; keep the
-            // optimistic fields while accepting fresh non-field detail data.
-            return {
-              ...fetched,
-              state: prev.state,
-              title: prev.title,
-              description: prev.description,
-              priority: prev.priority,
-              assignee: prev.assignee,
-              estimate: prev.estimate,
-              labelIds: prev.labelIds,
-              labels: prev.labels
-            }
-          })
-          if (!hasEditedRef.current) {
-            setEditState(initLinearIssueEditState(fetched))
-          }
-        }
-      })
-      .catch(() => {
-        /* The list issue remains useful if detail hydration is temporarily unavailable. */
-      })
-      .finally(() => {
-        if (mountedRef.current && requestId === requestIdRef.current) {
-          setIssueLoading(false)
-        }
-      })
-
-    void loadComments(issue, requestId)
-  }, [issue, loadComments, mountedRef, providerSettings, settings, sourceContext?.hostId])
-
-  const displayed = fullIssue ?? issue
-
-  const attachedWorkspace = useMemo(
-    () => (displayed ? findLinearIssueWorkspaceAttachment(attachmentWorkspaces, displayed) : null),
-    [attachmentWorkspaces, displayed]
-  )
-  const attachedWorkspaceLabel = attachedWorkspace
-    ? getWorktreeAttachmentLabel(attachedWorkspace)
-    : null
-
-  const handleUseIssue = useCallback((): void => {
-    if (!displayed) {
-      return
-    }
-    onUse(displayed)
-  }, [displayed, onUse])
-
-  const handleOpenOrUseIssue = useCallback((): void => {
-    if (!displayed) {
-      return
-    }
-    openLinearIssueWorkspaceOrStart(displayed, () => onUse(displayed))
-  }, [displayed, onUse])
-
-  const handleCommentAdded = useCallback((comment: LinearLocalComment) => {
-    const newComment: LinearComment = {
-      id: comment.id || createBrowserUuid(),
-      body: comment.body,
-      createdAt: comment.createdAt,
-      user: { displayName: 'You' }
-    }
-    optimisticCommentsRef.current.push(newComment)
-    setComments((prev) => [...prev, newComment])
-  }, [])
-
-  const handleProjectChanged = useCallback((project: LinearProjectSummary) => {
-    setFullIssue((prev) => (prev ? { ...prev, project } : prev))
-  }, [])
-
-  const actionItems = useMemo(() => {
-    if (!displayed) {
-      return []
-    }
-    return [
-      {
-        label: translate('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL'),
-        icon: Clipboard,
-        action: () => void copyTextToClipboard(displayed.url, 'URL')
-      },
-      {
-        label: translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier'),
-        icon: Clipboard,
-        action: () => void copyTextToClipboard(displayed.identifier, 'Identifier')
-      },
-      {
-        label: translate(
-          'auto.components.LinearIssueWorkspace.5d670ec8dc',
-          'Copy suggested branch name'
-        ),
-        icon: GitBranch,
-        action: () =>
-          void copyTextToClipboard(buildLinearIssueBranchName(displayed), 'Suggested branch name')
-      },
-      {
-        label: translate('auto.components.LinearIssueWorkspace.f6c6381593', 'Copy prompt'),
-        icon: Clipboard,
-        action: () => {
-          const renderedText = buildLinearIssueContextSnapshot(displayed, comments)
-          const prompt =
-            buildContainedLinkedContextBlock({
-              provider: 'linear',
-              version: 1,
-              renderedText
-            }) ?? renderedText
-          void copyTextToClipboard(prompt, 'Prompt')
-        }
-      }
-    ]
-  }, [comments, displayed])
-
-  const content = displayed ? (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
-      <header className="flex h-[61px] flex-none items-center justify-between gap-4 border-b border-border/60 px-5">
-        <div className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-          {variant === 'page' ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="-ml-2 shrink-0 gap-1.5"
-              aria-label={backLabel}
-            >
-              <ChevronLeft className="size-4" />
-              {backLabel}
-            </Button>
-          ) : null}
-          <LinearIcon className="size-4 shrink-0 text-muted-foreground" />
-          <span className="truncate font-medium text-foreground">
-            {displayed.workspaceName ??
-              translate('auto.components.LinearIssueWorkspace.65239a714b', 'Linear')}
-          </span>
-          <ChevronRight className="size-3.5 shrink-0" />
-          <span className="shrink-0">
-            {translate('auto.components.LinearIssueWorkspace.f63ef94ea8', 'Issues')}
-          </span>
-          <ChevronRight className="size-3.5 shrink-0" />
-          <span className="shrink-0 font-mono">{displayed.identifier}</span>
-          <span className="min-w-0 truncate font-medium text-foreground">{displayed.title}</span>
-          {issueLoading ? <LoaderCircle className="size-3.5 shrink-0 animate-spin" /> : null}
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <span className="hidden px-2 text-sm text-muted-foreground md:inline">2 / 17</span>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => void copyTextToClipboard(displayed.url, 'URL')}
-                aria-label={translate(
-                  'auto.components.LinearIssueWorkspace.97c19a84f1',
-                  'Copy Linear URL'
-                )}
-              >
-                <Copy className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.LinearIssueWorkspace.9a9a884236', 'Copy URL')}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => void window.api.shell.openUrl(displayed.url)}
-                aria-label={translate(
-                  'auto.components.LinearIssueWorkspace.openOnLinear',
-                  'Open on Linear'
-                )}
-              >
-                <ExternalLink className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.LinearIssueWorkspace.openOnLinear', 'Open on Linear')}
-            </TooltipContent>
-          </Tooltip>
-          {attachedWorkspace ? (
-            <DropdownMenu modal={false}>
-              <ButtonGroup>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleOpenOrUseIssue}
-                  className="gap-1.5 whitespace-nowrap"
-                  aria-label={translate(
-                    'auto.components.LinearIssueWorkspace.openAttachedWorkspace',
-                    'Open workspace attached to issue'
-                  )}
-                >
-                  <FolderOpen className="size-3.5" />
-                  {translate(
-                    'auto.components.LinearIssueWorkspace.openWorkspace',
-                    'Open workspace'
-                  )}
-                </Button>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    aria-label={translate(
-                      'auto.components.LinearIssueWorkspace.moreWorkspaceActions',
-                      'More issue workspace actions'
-                    )}
-                  >
-                    <ChevronDown className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </ButtonGroup>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={handleUseIssue}>
-                  <Plus className="size-4" />
-                  {translate(
-                    'auto.components.LinearIssueWorkspace.startNewWorkspace',
-                    'Start new workspace'
-                  )}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleOpenOrUseIssue}
-              className="gap-1.5 whitespace-nowrap"
-              aria-label={translate(
-                'auto.components.LinearIssueWorkspace.30a7f56c0a',
-                'Start workspace from issue'
-              )}
-            >
-              {translate('auto.components.LinearIssueWorkspace.e1e0a9bca9', 'Start workspace')}
-              <ArrowRight className="size-3.5" />
-            </Button>
-          )}
-          {variant === 'sheet' ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={onClose}
-                  aria-label={translate(
-                    'auto.components.LinearIssueWorkspace.7a4997d8bb',
-                    'Close Linear issue preview'
-                  )}
-                >
-                  <X className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {translate('auto.components.LinearIssueWorkspace.df4c86ed12', 'Close')}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
-        </div>
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
-        <div className="mx-auto grid w-full grid-cols-1 gap-10 px-7 py-10 lg:grid-cols-[minmax(0,1fr)_320px] lg:px-10 xl:px-12">
-          <main className="min-w-0">
-            <LinearIssueTextEditor
-              issue={displayed}
-              onIssueChange={handleIssueTextChange}
-              sourceContext={sourceContext}
-            />
-
-            <LinearIssueSubIssueButton
-              issue={displayed}
-              onOpenIssue={onOpenIssue}
-              sourceContext={sourceContext}
-            />
-
-            <section className="mt-12 border-t border-border/60 pt-9">
-              <div className="mb-8 flex items-center justify-between gap-3">
-                <h2 className="text-xl font-semibold text-foreground">
-                  {translate('auto.components.LinearIssueWorkspace.543970c87a', 'Activity')}
-                </h2>
-                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <LinearIssueAvatar
-                    avatarUrl={displayed.assignee?.avatarUrl}
-                    name={displayed.assignee?.displayName}
-                    className="size-6"
-                  />
-                </div>
-              </div>
-
-              <div className="mb-7 flex items-center gap-3 text-sm text-muted-foreground">
-                <LinearIssueAvatar
-                  avatarUrl={displayed.assignee?.avatarUrl}
-                  name={displayed.assignee?.displayName}
-                  className="size-5"
-                />
-                <span>
-                  {displayed.assignee?.displayName ??
-                    translate('auto.components.LinearIssueWorkspace.8a33c85e9c', 'Someone')}{' '}
-                  {translate(
-                    'auto.components.LinearIssueWorkspace.fabbd3f974',
-                    'updated the issue ·'
-                  )}{' '}
-                  {formatLinearIssueRelativeTime(displayed.updatedAt)}
-                </span>
-              </div>
-
-              {commentsError ? (
-                <div className="mb-4 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  <span>{commentsError}</span>
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => void loadComments(displayed, requestIdRef.current)}
-                    disabled={commentsLoading}
-                    className="gap-1"
-                  >
-                    {commentsLoading ? (
-                      <LoaderCircle className="size-3 animate-spin" />
-                    ) : (
-                      <RefreshCw className="size-3" />
-                    )}
-                    {translate('auto.components.LinearIssueWorkspace.b0eac92d85', 'Retry')}
-                  </Button>
-                </div>
-              ) : null}
-
-              {commentsLoading && comments.length === 0 ? (
-                <div className="mb-5 flex items-center justify-center py-8">
-                  <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-                </div>
-              ) : comments.length > 0 ? (
-                <div className="mb-6 flex flex-col gap-5">
-                  {comments.map((comment) => (
-                    <article key={comment.id} className="flex gap-3">
-                      <LinearIssueAvatar
-                        avatarUrl={comment.user?.avatarUrl}
-                        name={comment.user?.displayName}
-                        className="size-7"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex min-w-0 items-center gap-2 text-sm">
-                          <span className="truncate font-semibold text-foreground">
-                            {comment.user?.displayName ??
-                              translate(
-                                'auto.components.LinearIssueWorkspace.ca8778c124',
-                                'Unknown'
-                              )}
-                          </span>
-                          <span className="shrink-0 text-muted-foreground">
-                            {formatLinearIssueRelativeTime(comment.createdAt)}
-                          </span>
-                        </div>
-                        <div className="rounded-lg border border-border/60 bg-card px-4 py-3">
-                          <CommentMarkdown
-                            content={comment.body}
-                            className="text-[14px] leading-7"
-                          />
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : null}
-
-              <LinearIssueCommentFooter
-                issueId={displayed.id}
-                workspaceId={displayed.workspaceId}
-                onCommentAdded={handleCommentAdded}
-                variant="linear-page"
-                sourceContext={sourceContext}
-              />
-            </section>
-          </main>
-
-          <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
-            {editState ? (
-              <LinearIssueEditSection
-                issue={displayed}
-                editState={editState}
-                onEditStateChange={handleEditStateChange}
-                layout="properties"
-                sourceContext={sourceContext}
-              />
-            ) : null}
-            <LinearIssueSidebarProjectCard
-              issue={displayed}
-              onProjectChanged={handleProjectChanged}
-              sourceContext={sourceContext}
-            />
-            <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
-              <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-                <span>
-                  {translate('auto.components.LinearIssueWorkspace.workspaceSection', 'Workspace')}
-                </span>
-              </div>
-              <div className="p-3">
-                {attachedWorkspaceLabel ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenOrUseIssue}
-                    aria-label={translate(
-                      'auto.components.LinearIssueWorkspace.openAttachedWorkspace',
-                      'Open workspace attached to issue'
-                    )}
-                    className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                  >
-                    <FolderOpen className="size-4 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{attachedWorkspaceLabel}</span>
-                  </button>
-                ) : (
-                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                    {translate('auto.components.LinearIssueWorkspace.noWorkspaceYet', 'None yet')}
-                  </div>
-                )}
-              </div>
-            </section>
-            <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
-              <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-                <span>
-                  {translate('auto.components.LinearIssueWorkspace.c23e79e5c0', 'Actions')}
-                </span>
-                <ChevronDown className="size-3.5" />
-              </div>
-              <div className="space-y-1 p-3">
-                {actionItems.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <Tooltip key={item.label}>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          onClick={item.action}
-                          className="flex min-h-9 w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground transition hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        >
-                          <Icon className="size-4 shrink-0" />
-                          <span className="truncate">{item.label}</span>
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" sideOffset={6}>
-                        {item.label}
-                      </TooltipContent>
-                    </Tooltip>
-                  )
-                })}
-              </div>
-            </section>
-          </aside>
-        </div>
-      </div>
-    </div>
-  ) : null
-
-  if (variant === 'page') {
-    return (
-      <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
-        {content}
-      </div>
-    )
+    return <Sheet open={false} onOpenChange={(open) => !open && onClose()} />
   }
-
+  const requestKey = `${sourceContext?.hostId ?? settings?.activeRuntimeEnvironmentId ?? 'local'}:${issue.workspaceId ?? 'selected'}:${issue.id}`
   return (
-    <Sheet open={issue !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className="w-[min(92vw,1180px)] bg-background p-0 sm:max-w-[1180px]"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault()
-        }}
-      >
-        <VisuallyHidden.Root asChild>
-          <SheetTitle>
-            {displayed?.title ??
-              translate('auto.components.LinearIssueWorkspace.61f424f8ca', 'Linear issue')}
-          </SheetTitle>
-        </VisuallyHidden.Root>
-        <VisuallyHidden.Root asChild>
-          <SheetDescription>
-            {translate(
-              'auto.components.LinearIssueWorkspace.ad5dec37b7',
-              'Preview, edit, and start work from the selected issue.'
-            )}
-          </SheetDescription>
-        </VisuallyHidden.Root>
-
-        {content}
-      </SheetContent>
-    </Sheet>
+    <LinearIssueWorkspaceIssue
+      key={requestKey}
+      issue={issue}
+      onUse={onUse}
+      onOpenIssue={onOpenIssue}
+      onClose={onClose}
+      variant={variant}
+      backLabel={backLabel}
+      sourceContext={sourceContext}
+      requestKey={requestKey}
+    />
   )
 }

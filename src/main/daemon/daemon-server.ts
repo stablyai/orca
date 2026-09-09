@@ -1,854 +1,255 @@
-/* eslint-disable max-lines -- Why: one class owns the daemon socket protocol, routing, stream fanout, and session lifecycle. */
-import { createServer, type Server, type Socket } from 'node:net'
 import { randomUUID } from 'node:crypto'
-import { performance } from 'node:perf_hooks'
-import { writeFileSync, chmodSync, unlinkSync } from 'node:fs'
-import { StringDecoder } from 'node:string_decoder'
-import { encodeNdjson, createNdjsonParser } from './ndjson'
-import { TerminalHost } from './terminal-host'
-import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import type { Socket } from 'node:net'
+import { setImmediate as waitForImmediate } from 'node:timers/promises'
+import { extractHiddenStartupRendererQueryData } from '../../shared/terminal-reply-query-extraction'
 import {
   BackgroundTransientFactRelay,
   BACKGROUND_STREAM_DROP_ENABLED
 } from './daemon-background-transient-facts'
-import { extractHiddenStartupRendererQueryData } from '../../shared/terminal-reply-query-extraction'
-import {
-  recordDaemonStreamBacklogEvent,
-  startDaemonStreamBacklogProbe
-} from './daemon-stream-backlog-probe'
-import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
-import type { SubprocessHandle } from './session-subprocess-handle'
-import { checkPtySpawnHealth } from './pty-subprocess'
+import { DaemonClientConnections } from './daemon-client-connections'
+import { DaemonEndpointLifecycle } from './daemon-endpoint-lifecycle'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
-import { isTuiAgent } from '../../shared/tui-agent-config'
-import { parsePtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
-import { unlinkOwnedDaemonPidFile, unlinkOwnedDaemonTokenFile } from './daemon-spawner'
-import {
-  DAEMON_ENDPOINT_LOST_MESSAGE,
-  DaemonEndpointUnavailableError,
-  type DaemonEndpointOwnershipState,
-  getDaemonSocketBindPath,
-  publishDaemonEndpoint,
-  readDaemonEndpointOwnershipState,
-  type DaemonSocketIdentity
-} from './daemon-endpoint-ownership'
-import { probeSocketConnect } from './daemon-endpoint-probe'
+import { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
+import { DaemonRequestRouter } from './daemon-request-router'
+import { DaemonServerLifecycle } from './daemon-server-lifecycle'
+import type { DaemonServerOptions } from './daemon-server-options'
+import { DaemonSessionAttachments } from './daemon-session-attachments'
+import { DaemonSessionBackgroundRouting } from './daemon-session-background-routing'
+import { startDaemonStreamBacklogProbe } from './daemon-stream-backlog-probe'
+import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import { DaemonTerminalAdmission } from './daemon-terminal-admission'
+import { checkPtySpawnHealth } from './pty-subprocess'
+import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
+import { TerminalHost } from './terminal-host'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
-  PROTOCOL_VERSION,
   NOTIFY_PREFIX,
-  SessionNotFoundError,
-  TerminalAttachCanceledError,
-  type HelloMessage,
+  PROTOCOL_VERSION,
   type DaemonRequest
 } from './types'
-import {
-  isAgentSessionExecutionClaim,
-  isAgentSessionSurfaceBinding
-} from '../../shared/agent-session-host-authority'
-import { TerminalHistorySeedTransferRegistry } from './terminal-history-seed-transfer-registry'
-
-export type DaemonServerOptions = {
-  socketPath: string
-  tokenPath: string
-  pidPath?: string
-  launchNonce?: string
-  startedAtMs?: number
-  publishEndpointOwnership?: () => void
-  /** Reported in the hello so a repaired PID record can carry the real owner's metadata. */
-  entryPath?: string
-  appVersion?: string
-  spawnerExecPath?: string
-  /** Direct-construction seam for protocol fixture tests; production never overrides it. */
-  protocolVersion?: number
-  onIdleShutdown?: () => void
-  onRpcShutdown?: () => void
-  /** Direct-construction-only controls; production uses the compiled initial-adoption timeout. */
-  initialAdoptionTestConfig?: {
-    timeoutMs: number
-    clock: {
-      setTimeout(callback: () => void, delayMs: number): unknown
-      clearTimeout(handle: unknown): void
-      now(): number
-    }
-  }
-  ptySpawnHealthCheck?: () => Promise<void>
-  preparePtySpawn?: () => Promise<void>
-  // Why: login-session death detection (#7936) probes on PTY-exit bursts and fresh app connections.
-  onPtySessionExit?: (sessionId: string) => void
-  onAuthenticatedClientPair?: () => void
-  log?: DaemonFileLog
-  spawnSubprocess: (opts: {
-    sessionId: string
-    cols: number
-    rows: number
-    cwd?: string
-    env?: Record<string, string>
-    command?: string
-    shellOverride?: string
-    isCanceled?: () => boolean
-    // Async production spawns and sync test stubs share this boundary.
-  }) => SubprocessHandle | Promise<SubprocessHandle>
-}
-
-type ConnectedClient = {
-  clientId: string
-  controlSocket: Socket
-  streamSocket: Socket | null
-  authenticatedPairEstablished: boolean
-}
-
-type PendingPtySpawnPreparation = {
-  canceled: boolean
-  // Why: `canceled` is only polled between spawn steps; the signal is what
-  // actually interrupts an in-progress cwd probe on a dead share.
-  readonly controller: AbortController
-  cancelTimer?: ReturnType<typeof setTimeout>
-  // Why: preparations are keyed by sessionId, but a control-socket close must
-  // cancel only the disconnecting client's preps, not another client's (F4).
-  clientId: string
-  requestId: string
-}
-
-function cancelPtySpawnPreparation(preparation: PendingPtySpawnPreparation): void {
-  preparation.canceled = true
-  preparation.controller.abort()
-}
-
-type PendingShutdownReply = {
-  start: () => void
-}
+import { encodeNdjson } from './ndjson'
 
 export class DaemonServer {
-  // Why: survive long enough to adopt a first client pair, but don't orphan forever if the parent crashes first.
   private static readonly INITIAL_ADOPTION_TIMEOUT_MS = 2 * 60 * 1000
-  private static readonly SHUTDOWN_REPLY_FLUSH_TIMEOUT_MS = 1_000
-  private static readonly ENDPOINT_OWNERSHIP_POLL_MS = 30 * 1000
-  private static readonly ENDPOINT_OWNERSHIP_LOSS_CONFIRMATIONS = 2
-  private server: Server | null = null
-  private token: string
-  private host: TerminalHost
-  private socketPath: string
-  private tokenPath: string
-  private pidPath: string | null
-  private launchNonce: string | null
-  private startedAtMs: number | null
-  private publishEndpointOwnership: () => void
-  private entryPath: string | null
-  private appVersion: string | null
-  private spawnerExecPath: string | null
-  private ownedSocketIdentity: DaemonSocketIdentity | null = null
-  /** Set once start() has been rejected, so async publication can tell it is no longer wanted. */
-  private startupFailure: Error | null = null
-  private endpointOwnershipTimer: ReturnType<typeof setInterval> | null = null
-  private endpointOwnershipLossStreak = 0
-  /**
-   * Sticky, and not inferred from `ownedSocketIdentity`: retiring nulls that, so a socket accepted
-   * before the takeover could finish its hello and reopen sessions on an unreachable daemon.
-   */
-  private endpointOwnershipLost = false
-  private protocolVersion: number
-  private onIdleShutdown: () => void
-  private onRpcShutdown: () => void
-  private onAuthenticatedClientPair: () => void
-  private ptySpawnHealthCheck: () => Promise<void>
-  private preparePtySpawn: () => Promise<void>
-  private log: DaemonFileLog
-  private transportSockets = new Set<Socket>()
-  private createOrAttachInFlight = 0
-  private idleShutdownState: 'running' | 'idle-shutdown-pending' | 'shutting-down' = 'running'
-  private initialAdoptionTimer: unknown = null
-  private initialAdoptionDeadlineMs: number | null = null
-  private retirementRequested = false
-  private shutdownPromise: Promise<void> | null = null
-  private ordinaryShutdownServerClose: Promise<void> | null = null
-  private pendingShutdownReplies = new Map<string, PendingShutdownReply>()
-  private initialAdoptionTimeoutMs: number
-  private lifecycleClock: NonNullable<DaemonServerOptions['initialAdoptionTestConfig']>['clock']
 
-  private clients = new Map<string, ConnectedClient>()
-  private streamDataBatcher = new DaemonStreamDataBatcher(
-    (clientId) => this.clients.get(clientId),
-    {
-      isSessionDroppable: (sessionId) =>
-        BACKGROUND_STREAM_DROP_ENABLED && this.transientFactRelay.isBackgrounded(sessionId),
-      salvageDroppedData: (dropped) => {
-        if (!dropped.includes('\x1b')) {
-          return ''
-        }
-        const extracted = extractHiddenStartupRendererQueryData(dropped, '')
-        return (
-          extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
-        )
-      }
-    }
-  )
-  // Facts ride the stream queue as control entries so they hold byte order (else a fact could arrive after the reveal snapshot).
-  private transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
-    const clientId = this.streamClientIdBySessionId.get(sessionId)
-    if (clientId) {
-      this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
-        type: 'event',
-        event: 'transientFact',
-        sessionId,
-        payload: fact
-      })
-    }
-  })
-  private streamClientIdBySessionId = new Map<string, string>()
-  private attachTokenBySessionId = new Map<string, symbol>()
-  private lastInputAtBySessionId = new Map<string, number>()
-  private pendingPtySpawnPreparations = new Map<string, Set<PendingPtySpawnPreparation>>()
-  private historySeedTransfers = new TerminalHistorySeedTransferRegistry()
+  private readonly log: DaemonFileLog
+  private readonly host: TerminalHost
+  private readonly transientFactRelay: BackgroundTransientFactRelay
+  private readonly streamDataBatcher: DaemonStreamDataBatcher
+  private readonly attachments: DaemonSessionAttachments
+  private readonly historySeedTransfers = new TerminalHistorySeedTransferRegistry()
+  private readonly preparations: DaemonPtySpawnPreparations
+  private readonly connections: DaemonClientConnections
+  private readonly endpoint: DaemonEndpointLifecycle
+  private readonly lifecycle: DaemonServerLifecycle
+  private readonly admission: DaemonTerminalAdmission
+  private readonly requestRouter: DaemonRequestRouter
   private stopStreamBacklogProbe: () => void = () => {}
 
-  // Why: bypass batching within this window so keystroke echo/redraws skip the daemon's fixed batch delay.
-  private static readonly INTERACTIVE_OUTPUT_WINDOW_MS = 100
-  private static readonly INTERACTIVE_OUTPUT_MAX_CHARS = 1024
+  constructor(options: DaemonServerOptions) {
+    this.log = options.log ?? createNoopDaemonFileLog()
+    this.host = new TerminalHost({
+      spawnSubprocess: options.spawnSubprocess,
+      reportReadinessEvent: (event, details) => this.log.log(event, details),
+      onSessionReaped: (sessionId) => {
+        this.attachments.release(sessionId)
+        this.transientFactRelay.onSessionExit(sessionId)
+        this.streamDataBatcher.refreshSessionDroppability(sessionId)
+        options.onPtySessionExit?.(sessionId)
+        this.lifecycle.reevaluateIdleShutdown()
+      }
+    })
+    this.attachments = new DaemonSessionAttachments(this.host)
+    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) => {
+      const clientId = this.attachments.clientIdForSession(sessionId)
+      if (clientId) {
+        this.streamDataBatcher.enqueueControlEvent(clientId, sessionId, {
+          type: 'event',
+          event: 'transientFact',
+          sessionId,
+          payload: fact
+        })
+      }
+    })
+    this.streamDataBatcher = new DaemonStreamDataBatcher(
+      (clientId) => this.connections.get(clientId),
+      {
+        isSessionDroppable: (sessionId) =>
+          BACKGROUND_STREAM_DROP_ENABLED && this.transientFactRelay.isBackgrounded(sessionId),
+        salvageDroppedData: (dropped) => {
+          if (!dropped.includes('\x1b')) {
+            return ''
+          }
+          const extracted = extractHiddenStartupRendererQueryData(dropped, '')
+          return (
+            extracted.statelessQueryData + extracted.statefulQueryData + extracted.oscColorQueryData
+          )
+        }
+      }
+    )
+    this.preparations = new DaemonPtySpawnPreparations(
+      options.preparePtySpawn ?? (() => Promise.resolve())
+    )
 
-  constructor(opts: DaemonServerOptions) {
-    this.socketPath = opts.socketPath
-    this.tokenPath = opts.tokenPath
-    this.pidPath = opts.pidPath ?? null
-    this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
-    this.launchNonce =
-      opts.launchNonce ??
-      (this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION ? randomUUID() : null)
-    this.startedAtMs =
-      opts.startedAtMs ??
-      (this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION
+    const protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION
+    const launchNonce =
+      options.launchNonce ??
+      (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION ? randomUUID() : null)
+    const startedAtMs =
+      options.startedAtMs ??
+      (protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION
         ? Date.now() - process.uptime() * 1000
         : null)
-    this.publishEndpointOwnership = opts.publishEndpointOwnership ?? (() => {})
-    this.entryPath = opts.entryPath ?? null
-    this.appVersion = opts.appVersion ?? null
-    this.spawnerExecPath = opts.spawnerExecPath ?? null
-    this.onIdleShutdown = opts.onIdleShutdown ?? (() => {})
-    this.onRpcShutdown = opts.onRpcShutdown ?? (() => {})
-    this.initialAdoptionTimeoutMs =
-      opts.initialAdoptionTestConfig?.timeoutMs ?? DaemonServer.INITIAL_ADOPTION_TIMEOUT_MS
-    this.lifecycleClock = opts.initialAdoptionTestConfig?.clock ?? {
-      setTimeout: (callback, delayMs) => {
+    const token = randomUUID()
+
+    this.connections = new DaemonClientConnections({
+      token,
+      protocolVersion,
+      identity: {
+        launchNonce,
+        startedAtMs,
+        entryPath: options.entryPath ?? null,
+        appVersion: options.appVersion ?? null,
+        spawnerExecPath: options.spawnerExecPath ?? null
+      },
+      log: this.log,
+      streamDataBatcher: this.streamDataBatcher,
+      isAcceptingWork: () => this.lifecycle.isAcceptingWork(),
+      onTransportChanged: () => this.lifecycle.reevaluateIdleShutdown(),
+      onConnectionAccepted: () => this.lifecycle.onConnectionAccepted(),
+      onAuthenticatedPair: () => {
+        options.onAuthenticatedClientPair?.()
+        this.lifecycle.onAuthenticatedPair()
+      },
+      onLastAuthenticatedClientDisconnected: () =>
+        this.lifecycle.onLastAuthenticatedClientDisconnected(),
+      onControlRequest: (socket, clientId, request) =>
+        void this.handleRequest(socket, clientId, request),
+      onControlReplaced: (clientId) => {
+        this.preparations.cancelForClient(clientId)
+        this.historySeedTransfers.clearOwner(clientId)
+      },
+      onClientDisconnected: (clientId) => {
+        this.preparations.cancelForClient(clientId)
+        this.historySeedTransfers.clearOwner(clientId)
+        this.streamDataBatcher.clear(clientId)
+        this.attachments.detachClientSessions(clientId)
+      },
+      onStreamDisconnected: (clientId) => {
+        this.preparations.cancelForClient(clientId)
+        this.streamDataBatcher.clear(clientId)
+        this.attachments.detachClientSessions(clientId)
+      }
+    })
+    this.endpoint = new DaemonEndpointLifecycle({
+      socketPath: options.socketPath,
+      tokenPath: options.tokenPath,
+      pidPath: options.pidPath ?? null,
+      launchNonce,
+      token,
+      publishEndpointOwnership: options.publishEndpointOwnership ?? (() => {}),
+      log: this.log,
+      isServing: () => this.lifecycle.isAcceptingWork(),
+      onOwnershipLost: () => this.lifecycle.onEndpointOwnershipLost()
+    })
+    const lifecycleClock = options.initialAdoptionTestConfig?.clock ?? {
+      setTimeout: (callback: () => void, delayMs: number) => {
         const timer = setTimeout(callback, delayMs)
         timer.unref()
         return timer
       },
-      clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+      clearTimeout: (handle: unknown) => clearTimeout(handle as ReturnType<typeof setTimeout>),
       now: () => Date.now()
     }
-    this.token = randomUUID()
-    this.onAuthenticatedClientPair = opts.onAuthenticatedClientPair ?? (() => {})
-    this.host = new TerminalHost({
-      spawnSubprocess: opts.spawnSubprocess,
-      // Why a closure: this.log is assigned after this constructor call, and the
-      // callback only fires once a session is live.
-      reportReadinessEvent: (event, details) => this.log.log(event, details),
-      // Why host-level and not the attach callback: a session whose client transport already dropped
-      // has no attachment left to fire exit bookkeeping, and the daemon must still notice it can idle.
-      onSessionReaped: (sessionId) => {
-        this.streamClientIdBySessionId.delete(sessionId)
-        this.attachTokenBySessionId.delete(sessionId)
-        this.lastInputAtBySessionId.delete(sessionId)
-        this.transientFactRelay.onSessionExit(sessionId)
-        this.streamDataBatcher.refreshSessionDroppability(sessionId)
-        opts.onPtySessionExit?.(sessionId)
-        this.reevaluateIdleShutdown()
-      }
+    this.lifecycle = new DaemonServerLifecycle({
+      protocolVersion,
+      initialAdoptionTimeoutMs:
+        options.initialAdoptionTestConfig?.timeoutMs ?? DaemonServer.INITIAL_ADOPTION_TIMEOUT_MS,
+      clock: lifecycleClock,
+      endpoint: this.endpoint,
+      log: this.log,
+      isIdle: () => this.isIdle(),
+      disposeResources: () => this.disposeResources(),
+      onIdleShutdown: options.onIdleShutdown ?? (() => {}),
+      onRpcShutdown: options.onRpcShutdown ?? (() => {})
     })
-    this.ptySpawnHealthCheck = opts.ptySpawnHealthCheck ?? checkPtySpawnHealth
-    this.preparePtySpawn = opts.preparePtySpawn ?? (() => Promise.resolve())
+    this.admission = new DaemonTerminalAdmission({
+      host: this.host,
+      connections: this.connections,
+      endpoint: this.endpoint,
+      preparations: this.preparations,
+      attachments: this.attachments,
+      historySeedTransfers: this.historySeedTransfers,
+      transientFactRelay: this.transientFactRelay,
+      streamDataBatcher: this.streamDataBatcher,
+      log: this.log,
+      isAcceptingWork: () => this.lifecycle.isAcceptingWork(),
+      requestEndpointRetirement: () => this.endpoint.requestRetirementForLoss(),
+      reevaluateIdleShutdown: () => this.lifecycle.reevaluateIdleShutdown()
+    })
+    this.requestRouter = new DaemonRequestRouter({
+      host: this.host,
+      connections: this.connections,
+      lifecycle: this.lifecycle,
+      admission: this.admission,
+      preparations: this.preparations,
+      attachments: this.attachments,
+      historySeedTransfers: this.historySeedTransfers,
+      sessionBackgroundRouting: new DaemonSessionBackgroundRouting({
+        host: this.host,
+        attachments: this.attachments,
+        transientFactRelay: this.transientFactRelay,
+        streamDataBatcher: this.streamDataBatcher
+      }),
+      streamDataBatcher: this.streamDataBatcher,
+      ptySpawnHealthCheck: options.ptySpawnHealthCheck ?? checkPtySpawnHealth,
+      log: this.log
+    })
     this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(() => ({
-      clients: Array.from(this.clients.values(), (client) => ({
+      clients: Array.from(this.connections.values(), (client) => ({
         clientId: client.clientId,
         socketBufferedBytes: client.streamSocket?.writableLength ?? 0,
         batcherQueuedChars: this.streamDataBatcher.queuedCharsForClient(client.clientId)
       })),
       backgroundedSessionIdSuffixes: this.transientFactRelay.backgroundedSessionIdSuffixes()
     }))
-    this.log = opts.log ?? createNoopDaemonFileLog()
   }
 
-  async start(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.server = createServer((socket) => this.handleConnection(socket))
-      // Permanent, not `once`: an unhandled 'error' is an uncaught exception, so a post-startup
-      // accept failure (EMFILE) would kill a daemon hosting every terminal.
-      let startupSettled = false
-      const onServerError = (err: Error): void => {
-        if (startupSettled) {
-          // The daemon is serving; an operational error must not read as a startup failure.
-          this.log.log('server-error', { message: err.message })
-          console.warn(`[daemon] Socket server error: ${err.message}`)
-          return
-        }
-        startupSettled = true
-        // Publishing is async, so the continuation reads this and tears down instead of arming
-        // a daemon whose caller was already told startup failed.
-        this.startupFailure = err
-        reject(err)
-      }
-
-      this.server.on('error', onServerError)
-
-      // Private bind name, linked into place: libuv's close-time unlink can then only ever
-      // remove our own name, never a replacement daemon's endpoint.
-      const bindPath =
-        process.platform === 'win32' ? this.socketPath : getDaemonSocketBindPath(this.socketPath)
-
-      this.server.listen(bindPath, () => {
-        try {
-          // So the endpoint is never briefly reachable with default permissions.
-          chmodSync(bindPath, 0o600)
-        } catch {
-          // Best-effort on platforms that support it
-        }
-        const abandonStartup = (error: unknown): void => {
-          startupSettled = true
-          const server = this.server
-          this.server = null
-          // Settle before close: an accepted connection defers the close callback indefinitely.
-          reject(error)
-          server?.close()
-          if (process.platform !== 'win32') {
-            try {
-              unlinkSync(bindPath)
-            } catch {
-              // Already consumed by a successful link or rename, or never created.
-            }
-          }
-        }
-        void this.publishAndArm(bindPath).then(() => {
-          // The server can fail while publishing awaits its probe; resolving then would strand a
-          // live daemon behind a caller told startup failed, who would launch a replacement.
-          if (this.startupFailure) {
-            this.retireUnstartedDaemon()
-            abandonStartup(this.startupFailure)
-            return
-          }
-          // Serving from here, so later server errors are logged, not treated as startup failure.
-          startupSettled = true
-          resolve()
-        }, abandonStartup)
-      })
-    })
+  start(): Promise<void> {
+    return this.lifecycle.start((socket) => this.connections.accept(socket))
   }
 
-  /**
-   * Takes the canonical endpoint, then makes this listener adoptable — in that order. Never rolled
-   * back: an aborting daemon just closes, and the next publisher replaces the dead entry.
-   */
-  private async publishAndArm(bindPath: string): Promise<void> {
-    const outcome = await publishDaemonEndpoint(bindPath, this.socketPath, probeSocketConnect)
-    if (outcome.status !== 'published') {
-      // The only point the design declines to serve, so a field regression surfaces here.
-      this.log.log('endpoint-publish-declined', { reason: outcome.status })
-      console.warn(`[daemon] Endpoint unavailable at startup: reason=${outcome.status}`)
-      throw new DaemonEndpointUnavailableError(outcome.status)
+  shutdown(): Promise<void> {
+    return this.lifecycle.shutdown()
+  }
+
+  private isIdle(): boolean {
+    if (this.admission.inFlight > 0 || this.host.listSessions().length > 0) {
+      return false
     }
-    this.ownedSocketIdentity = outcome.identity
-    let publishedOwnership = false
-    try {
-      // The PID/nonce record must exist before the token makes this listener adoptable.
-      this.publishEndpointOwnership()
-      publishedOwnership = true
-      writeFileSync(this.tokenPath, this.token, { mode: 0o600 })
-    } catch (error) {
-      // Roll back only a record we wrote; anything else at that path belongs to another daemon.
-      if (publishedOwnership && this.pidPath && this.launchNonce) {
-        unlinkOwnedDaemonPidFile(this.pidPath, process.pid, this.launchNonce)
-      }
-      this.ownedSocketIdentity = null
-      throw error
-    }
-    if (this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
-      // A parent crash before the first client pair must not strand an empty daemon forever.
-      this.armInitialAdoptionTimeout()
-    }
-    this.startEndpointOwnershipWatch()
-  }
-
-  /**
-   * Stands down a daemon that published after its startup was already reported failed. The
-   * endpoint stays, as on every exit path — removing it could delete a replacement's name.
-   */
-  private retireUnstartedDaemon(): void {
-    this.stopEndpointOwnershipWatch()
-    this.cancelInitialAdoptionTimer()
-    this.unlinkOwnedEndpointArtifacts()
-  }
-
-  async shutdown(): Promise<void> {
-    if (this.shutdownPromise) {
-      return this.shutdownPromise
-    }
-    const serverClose = this.beginOrdinaryShutdownFence()
-    this.shutdownPromise = this.finishOrdinaryShutdown(serverClose)
-    return this.shutdownPromise
-  }
-
-  private beginOrdinaryShutdownFence(): Promise<void> {
-    this.idleShutdownState = 'shutting-down'
-    this.cancelInitialAdoptionTimer()
-    this.ordinaryShutdownServerClose ??= this.beginServerClose()
-    return this.ordinaryShutdownServerClose
-  }
-
-  private async finishOrdinaryShutdown(serverClose: Promise<void>): Promise<void> {
-    this.unlinkOwnedEndpointArtifacts()
-    await this.disposeDaemonResources()
-    await serverClose
-  }
-
-  private async finishRpcShutdown(serverClose: Promise<void>): Promise<void> {
-    await this.finishOrdinaryShutdown(serverClose)
-    this.onRpcShutdown()
-  }
-
-  private unlinkOwnedEndpointArtifacts(): void {
-    // Ownership-checked so a late replacement's token or PID record is never removed.
-    unlinkOwnedDaemonTokenFile(this.tokenPath, this.token)
-    if (this.pidPath && this.launchNonce) {
-      unlinkOwnedDaemonPidFile(this.pidPath, process.pid, this.launchNonce)
-    }
-    // The endpoint is deliberately left: fencing its removal against a replacement that published
-    // meanwhile was this component's largest source of defects, and a dead entry costs nothing.
-    this.ownedSocketIdentity = null
-  }
-
-  private startEndpointOwnershipWatch(): void {
-    if (process.platform === 'win32' || !this.ownedSocketIdentity) {
-      return
-    }
-    this.endpointOwnershipTimer = setInterval(
-      () => this.checkEndpointOwnership(),
-      DaemonServer.ENDPOINT_OWNERSHIP_POLL_MS
-    )
-    // A liveness poll must never be the reason the process cannot exit.
-    this.endpointOwnershipTimer.unref()
-  }
-
-  private stopEndpointOwnershipWatch(): void {
-    if (this.endpointOwnershipTimer === null) {
-      return
-    }
-    clearInterval(this.endpointOwnershipTimer)
-    this.endpointOwnershipTimer = null
-  }
-
-  /**
-   * Retires a daemon that no longer owns the canonical endpoint.
-   *
-   * Such a daemon keeps hosting PTYs no client can reach — terminals that take input and never
-   * run it. Retirement drains rather than kills: sessions finish and the process exits once idle.
-   */
-  private checkEndpointOwnership(): void {
-    if (process.platform === 'win32' || !this.ownedSocketIdentity || this.shutdownPromise) {
-      return
-    }
-    // An inconclusive stat resets too: EACCES must not retire a daemon that is still serving.
-    if (this.observeEndpointOwnership() !== 'lost') {
-      return
-    }
-    this.endpointOwnershipLossStreak++
-    // Two, though a single rename leaves no gap to misread: this is a backstop, not the detector.
-    if (this.endpointOwnershipLossStreak < DaemonServer.ENDPOINT_OWNERSHIP_LOSS_CONFIRMATIONS) {
-      return
-    }
-    this.requestRetirementForLostEndpoint()
-  }
-
-  /**
-   * Whether the endpoint demonstrably no longer resolves to this daemon. Only positive evidence
-   * counts — treating an unreadable stat as loss would refuse sessions on a healthy daemon.
-   */
-  private hasLostEndpointOwnership(): boolean {
-    if (this.endpointOwnershipLost) {
+    if (this.endpoint.lost) {
       return true
     }
-    return this.observeEndpointOwnership() === 'lost'
+    return this.connections.transportCount === 0 && this.connections.size === 0
   }
 
-  /**
-   * Reads ownership and keeps the watchdog's loss streak honest. Both callers come through here
-   * because the watchdog retires on *consecutive* losses: a read that skipped the streak let two
-   * losses separated by an owned observation count as consecutive, poisoning a healthy daemon.
-   */
-  private observeEndpointOwnership(): DaemonEndpointOwnershipState {
-    // The running check, not just `shutdownPromise`: both shutdown routes close the server before
-    // assigning it, and in that window the listener is gone while the recorded identity is not.
-    if (
-      process.platform === 'win32' ||
-      !this.ownedSocketIdentity ||
-      this.idleShutdownState !== 'running'
-    ) {
-      return 'indeterminate'
-    }
-    const state = readDaemonEndpointOwnershipState(this.socketPath, this.ownedSocketIdentity)
-    if (state !== 'lost') {
-      this.endpointOwnershipLossStreak = 0
-    }
-    return state
-  }
-
-  private requestRetirementForLostEndpoint(): void {
-    // Recorded before any dedup and not gated on retirement: folding the two together left the
-    // loss unrecorded when already retiring, and a later hello returned the daemon to service.
-    const alreadyLost = this.endpointOwnershipLost
-    this.endpointOwnershipLost = true
-    this.ownedSocketIdentity = null
-    if (!alreadyLost) {
-      this.log.log('endpoint-ownership-lost', { socketPath: this.socketPath })
-      console.warn(
-        '[daemon] Endpoint ownership lost to another daemon — retiring once existing sessions end'
-      )
-    }
-    this.retirementRequested = true
-    // The identity it compares against was just cleared, so every later tick early-returns.
-    this.stopEndpointOwnershipWatch()
-    this.reevaluateIdleShutdown()
-  }
-
-  private async disposeDaemonResources(): Promise<void> {
-    this.stopEndpointOwnershipWatch()
+  private async disposeResources(): Promise<void> {
+    this.endpoint.stopOwnershipWatch()
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
-    this.cancelAllPendingPtySpawnPreparations()
+    this.preparations.cancelAll()
     try {
       await this.host.dispose()
-    } catch (err) {
-      // Why: an unreapable child must not block daemon exit — post-exit it reparents to init anyway.
+    } catch (error) {
       this.log.log('shutdown-dispose-failed', {
-        error: err instanceof Error ? err.message : String(err)
+        error: error instanceof Error ? error.message : String(error)
       })
     }
     this.streamDataBatcher.clear()
     this.historySeedTransfers.dispose()
-    this.pendingShutdownReplies.clear()
-
-    for (const [, client] of this.clients) {
-      client.controlSocket.destroy()
-      client.streamSocket?.destroy()
-    }
-    this.clients.clear()
-    for (const socket of this.transportSockets) {
-      socket.destroy()
-    }
-    this.transportSockets.clear()
-  }
-
-  private beginServerClose(): Promise<void> {
-    const server = this.server
-    this.server = null
-    if (!server) {
-      return Promise.resolve()
-    }
-    return new Promise<void>((resolve) => {
-      // Why: close synchronously before any awaited cleanup so no new transport enters after the empty proof.
-      server.close(() => {
-        // Why: libuv unlinks the path this server bound, which is our private bind name and is
-        // already gone. Nothing removes the canonical endpoint — a departing daemon leaves it
-        // for the next publisher to replace — so closing late cannot delete a replacement's.
-        resolve()
-      })
-    })
-  }
-
-  private isIdle(): boolean {
-    if (this.createOrAttachInFlight > 0 || this.host.listSessions().length > 0) {
-      return false
-    }
-    // Why open connections stop counting once the endpoint is lost: they belong to clients that
-    // reached this daemon before the takeover, and holding them open cannot make it reachable to
-    // anyone new. Waiting for them turns a drained retirement into an orphan that outlives its
-    // usefulness — the sessions are gone and nothing can route a new one here.
-    if (this.endpointOwnershipLost) {
-      return true
-    }
-    return this.transportSockets.size === 0 && this.clients.size === 0
-  }
-
-  private reevaluateIdleShutdown(): void {
-    if (this.idleShutdownState !== 'running') {
-      return
-    }
-    if (this.retirementRequested) {
-      this.cancelInitialAdoptionTimer()
-      if (this.isIdle()) {
-        this.beginIdleShutdown()
-      }
-      return
-    }
-    if (!this.isIdle() || this.initialAdoptionDeadlineMs === null) {
-      this.cancelInitialAdoptionTimer()
-      return
-    }
-    if (this.initialAdoptionTimer !== null) {
-      return
-    }
-    const remainingMs = Math.max(0, this.initialAdoptionDeadlineMs - this.lifecycleClock.now())
-    if (remainingMs === 0) {
-      this.initialAdoptionDeadlineMs = null
-      this.retirementRequested = true
-      this.beginIdleShutdown()
-      return
-    }
-    this.initialAdoptionTimer = this.lifecycleClock.setTimeout(() => {
-      this.initialAdoptionTimer = null
-      this.initialAdoptionDeadlineMs = null
-      this.retirementRequested = true
-      this.beginIdleShutdown()
-    }, remainingMs)
-  }
-
-  private armInitialAdoptionTimeout(): void {
-    this.initialAdoptionDeadlineMs = this.lifecycleClock.now() + this.initialAdoptionTimeoutMs
-    this.reevaluateIdleShutdown()
-  }
-
-  private cancelInitialAdoptionTimer(): void {
-    if (this.initialAdoptionTimer === null) {
-      return
-    }
-    this.lifecycleClock.clearTimeout(this.initialAdoptionTimer)
-    this.initialAdoptionTimer = null
-  }
-
-  private beginIdleShutdown(): void {
-    this.initialAdoptionTimer = null
-    if (this.idleShutdownState !== 'running') {
-      return
-    }
-    this.idleShutdownState = 'idle-shutdown-pending'
-    if (!this.isIdle()) {
-      // Why: work admitted before the fence wins; clear pending state to keep it usable.
-      this.idleShutdownState = 'running'
-      this.reevaluateIdleShutdown()
-      return
-    }
-
-    this.idleShutdownState = 'shutting-down'
-    // beginServerClose() runs synchronously up to server.close() before any yield to a racing connection.
-    const serverClose = this.beginServerClose()
-    this.shutdownPromise = this.finishIdleShutdown(serverClose)
-  }
-
-  private async finishIdleShutdown(serverClose: Promise<void>): Promise<void> {
-    this.unlinkOwnedEndpointArtifacts()
-    await this.disposeDaemonResources()
-    await serverClose
-    this.onIdleShutdown()
-  }
-
-  private handleConnection(socket: Socket): void {
-    this.cancelInitialAdoptionTimer()
-    this.transportSockets.add(socket)
-    const removeTransport = (): void => {
-      this.transportSockets.delete(socket)
-      this.reevaluateIdleShutdown()
-    }
-    socket.once('close', removeTransport)
-    socket.on('error', () => socket.destroy())
-
-    if (this.idleShutdownState !== 'running') {
-      // Why: a connection accepted just before close() gets an explicit retry signal instead of dying mid-auth.
-      socket.end(
-        encodeNdjson({
-          type: 'hello',
-          ok: false,
-          error: 'Daemon temporarily unavailable; reconnect',
-          retryable: true
-        })
-      )
-      return
-    }
-    // Why: keep UTF-8 sequences intact across socket chunks before NDJSON parsing.
-    const decoder = new StringDecoder('utf8')
-    const parser = createNdjsonParser(
-      (msg) => this.handleFirstMessage(socket, msg, parser),
-      () => {
-        socket.destroy()
-      }
-    )
-
-    socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
-  }
-
-  private handleFirstMessage(
-    socket: Socket,
-    msg: unknown,
-    _parser: ReturnType<typeof createNdjsonParser>
-  ): void {
-    const hello = msg as HelloMessage
-    if (hello.type !== 'hello') {
-      this.log.log('client-hello-rejected', { reason: 'expected-hello' })
-      socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Expected hello' }))
-      socket.destroy()
-      return
-    }
-
-    if (hello.version !== this.protocolVersion) {
-      this.log.log('client-hello-rejected', {
-        reason: 'protocol-mismatch',
-        clientVersion: hello.version
-      })
-      socket.write(
-        encodeNdjson({
-          type: 'hello',
-          ok: false,
-          error: 'Protocol version mismatch'
-        })
-      )
-      socket.destroy()
-      return
-    }
-
-    if (hello.token !== this.token) {
-      this.log.log('client-hello-rejected', {
-        reason: 'invalid-token',
-        role: hello.role
-      })
-      socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Invalid token' }))
-      socket.destroy()
-      return
-    }
-
-    this.log.log('client-hello-accepted', {
-      role: hello.role,
-      clientId: hello.clientId
-    })
-    socket.write(
-      encodeNdjson({
-        type: 'hello',
-        ok: true,
-        ...(this.launchNonce && this.startedAtMs
-          ? {
-              daemonIdentity: {
-                pid: process.pid,
-                startedAtMs: this.startedAtMs,
-                launchNonce: this.launchNonce,
-                ...(this.entryPath ? { entryPath: this.entryPath } : {}),
-                ...(this.appVersion ? { appVersion: this.appVersion } : {}),
-                ...(this.spawnerExecPath ? { spawnerExecPath: this.spawnerExecPath } : {})
-              }
-            }
-          : {})
-      })
-    )
-
-    if (hello.role === 'control') {
-      const previous = this.clients.get(hello.clientId)
-      const client: ConnectedClient = {
-        clientId: hello.clientId,
-        controlSocket: socket,
-        streamSocket: null,
-        authenticatedPairEstablished: false
-      }
-      this.clients.set(hello.clientId, client)
-      this.setupControlSocket(socket, hello.clientId)
-      if (previous) {
-        // Why: reconnect reuses clientId before stale close fires; cancel the old owner's preflight at handoff.
-        this.cancelPendingPtySpawnPreparationsForClient(hello.clientId)
-        this.historySeedTransfers.clearOwner(hello.clientId)
-        this.recordFullyAuthenticatedDisconnect(previous.authenticatedPairEstablished)
-        // Why: tear down the old sockets after installing the new owner so a stale close can't delete the replacement.
-        previous.streamSocket?.destroy()
-        previous.controlSocket.destroy()
-      }
-    } else if (hello.role === 'stream') {
-      const client = this.clients.get(hello.clientId)
-      if (!client) {
-        // Why: a stream socket is meaningless without its control socket; drop the orphan.
-        socket.destroy()
-        return
-      }
-      this.setupStreamSocket(socket, client)
-      client.authenticatedPairEstablished = true
-      // Why: one-shot health probes authenticate only a control socket; they are not fresh app activity.
-      this.onAuthenticatedClientPair()
-      // A complete app connection (unlike a probe) re-owns the endpoint and cancels pending
-      // retirement — but not a retirement caused by losing the endpoint itself. A client that
-      // connected before the takeover cannot make this daemon reachable again, and treating it
-      // as re-ownership would reopen session creation on a daemon nothing can find.
-      this.initialAdoptionDeadlineMs = null
-      this.cancelInitialAdoptionTimer()
-      if (!this.endpointOwnershipLost) {
-        this.retirementRequested = false
-      }
-    }
-  }
-
-  private setupControlSocket(socket: Socket, clientId: string): void {
-    // Why: decode as a UTF-8 stream so emoji/Unicode split across chunks isn't corrupted.
-    const decoder = new StringDecoder('utf8')
-    const parser = createNdjsonParser(
-      (msg) => this.handleRequest(socket, clientId, msg as DaemonRequest),
-      () => {} // Ignore parse errors
-    )
-
-    // Remove the initial data listener and replace with the RPC parser
-    socket.removeAllListeners('data')
-    socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
-
-    socket.on('close', () => {
-      const client = this.clients.get(clientId)
-      if (client?.controlSocket !== socket) {
-        return
-      }
-      // Why: a client that disconnects mid-preflight would otherwise still create
-      // its daemon PTY, orphaning a durable, unattached session — cancel its preps (F4).
-      this.cancelPendingPtySpawnPreparationsForClient(clientId)
-      this.historySeedTransfers.clearOwner(clientId)
-      const wasFullyAuthenticated = client.authenticatedPairEstablished
-      this.streamDataBatcher.clear(clientId)
-      this.detachClientSessions(clientId)
-      client.streamSocket?.destroy()
-      this.clients.delete(clientId)
-      this.recordFullyAuthenticatedDisconnect(wasFullyAuthenticated)
-      this.reevaluateIdleShutdown()
-    })
-  }
-
-  private recordFullyAuthenticatedDisconnect(wasFullyAuthenticated: boolean): void {
-    if (
-      !wasFullyAuthenticated ||
-      [...this.clients.values()].some((remaining) => remaining.authenticatedPairEstablished) ||
-      this.idleShutdownState !== 'running'
-    ) {
-      return
-    }
-    // Why: once the last full client is gone, incomplete transports may block retirement but never erase it.
-    this.retirementRequested = true
-  }
-
-  private setupStreamSocket(socket: Socket, client: ConnectedClient): void {
-    const previous = client.streamSocket
-    socket.removeAllListeners('data')
-    client.streamSocket = socket
-    // Why: 'drain' is the wake-up for the batcher's shallow-gate held bulk.
-    socket.on('drain', () => {
-      this.streamDataBatcher.flush(client.clientId)
-    })
-
-    const cleanup = (): void => {
-      socket.removeListener('close', cleanup)
-      socket.removeListener('error', cleanup)
-      if (this.clients.get(client.clientId) !== client || client.streamSocket !== socket) {
-        return
-      }
-      // Why: a preflight that outlives its output channel would create an unattached daemon PTY.
-      this.cancelPendingPtySpawnPreparationsForClient(client.clientId)
-      this.streamDataBatcher.clear(client.clientId)
-      this.detachClientSessions(client.clientId)
-      client.streamSocket = null
-    }
-
-    socket.on('close', cleanup)
-    socket.on('error', cleanup)
-
-    if (previous && previous !== socket) {
-      // Why: replacing a stream socket must not leave the old channel alive and untracked.
-      previous.destroy()
-    }
+    // Let canceled in-flight RPCs enqueue their protocol errors before transport destruction.
+    await waitForImmediate()
+    this.connections.dispose()
   }
 
   private async handleRequest(
@@ -857,660 +258,23 @@ export class DaemonServer {
     request: DaemonRequest
   ): Promise<void> {
     const isNotify = request.id.startsWith(NOTIFY_PREFIX)
-
     try {
-      const result = await this.routeRequest(clientId, request)
+      const result = await this.requestRouter.route(clientId, request)
       if (!isNotify) {
-        const pendingShutdown = this.pendingShutdownReplies.get(
-          this.shutdownReplyKey(clientId, request.id)
-        )
         socket.write(encodeNdjson({ id: request.id, ok: true, payload: result }), () => {
-          pendingShutdown?.start()
+          this.lifecycle.startPendingShutdownReply(clientId, request.id)
         })
       }
-    } catch (err) {
+    } catch (error) {
       if (!isNotify) {
         socket.write(
           encodeNdjson({
             id: request.id,
             ok: false,
-            error: err instanceof Error ? err.message : String(err)
+            error: error instanceof Error ? error.message : String(error)
           })
         )
       }
     }
-  }
-
-  private shutdownReplyKey(clientId: string, requestId: string): string {
-    return `${clientId}\u0000${requestId}`
-  }
-
-  private deferShutdownUntilReply(
-    clientId: string,
-    requestId: string,
-    socket: Socket,
-    finish: () => Promise<void>
-  ): void {
-    const key = this.shutdownReplyKey(clientId, requestId)
-    let started = false
-    let timer: ReturnType<typeof setTimeout>
-    const start = (): void => {
-      if (started) {
-        return
-      }
-      started = true
-      clearTimeout(timer)
-      socket.off('close', start)
-      socket.off('error', start)
-      this.pendingShutdownReplies.delete(key)
-      if (!this.shutdownPromise) {
-        this.shutdownPromise = finish()
-      }
-    }
-    // Why: a non-reading peer must not pin a fenced daemon by holding its ack behind permanent socket backpressure.
-    timer = setTimeout(start, DaemonServer.SHUTDOWN_REPLY_FLUSH_TIMEOUT_MS)
-    timer.unref()
-    socket.once('close', start)
-    socket.once('error', start)
-    this.pendingShutdownReplies.set(key, { start })
-  }
-
-  /**
-   * Registers a cancellable preparation without doing spawn preflight. Every
-   * createOrAttach registers one, including attach-only: without it the server
-   * cannot match the client's cancel, and an attach-only request queued behind a
-   * hung create is bounded by neither side.
-   */
-  private registerPtySpawnPreparation(
-    sessionId: string,
-    clientId: string,
-    requestId: string,
-    cancelAfterMs: unknown
-  ): PendingPtySpawnPreparation {
-    const preparation: PendingPtySpawnPreparation = {
-      canceled: false,
-      controller: new AbortController(),
-      clientId,
-      requestId
-    }
-    if (Number.isSafeInteger(cancelAfterMs) && Number(cancelAfterMs) > 0) {
-      preparation.cancelTimer = setTimeout(
-        () => {
-          cancelPtySpawnPreparation(preparation)
-        },
-        Math.min(Number(cancelAfterMs), 300_000)
-      )
-      preparation.cancelTimer.unref()
-    }
-    const pending = this.pendingPtySpawnPreparations.get(sessionId) ?? new Set()
-    pending.add(preparation)
-    this.pendingPtySpawnPreparations.set(sessionId, pending)
-    return preparation
-  }
-
-  private async preparePtySpawnUnlessCanceled(
-    sessionId: string,
-    preparation: PendingPtySpawnPreparation
-  ): Promise<void> {
-    // Why: registered before the async probe so a concurrent close can cancel this creation before a subprocess exists.
-    await this.preparePtySpawn()
-    if (preparation.canceled) {
-      throw new TerminalAttachCanceledError(sessionId)
-    }
-  }
-
-  private finishPtySpawnPreparation(
-    sessionId: string,
-    preparation: PendingPtySpawnPreparation
-  ): void {
-    if (preparation.cancelTimer) {
-      clearTimeout(preparation.cancelTimer)
-    }
-    const pending = this.pendingPtySpawnPreparations.get(sessionId)
-    pending?.delete(preparation)
-    if (pending?.size === 0) {
-      this.pendingPtySpawnPreparations.delete(sessionId)
-    }
-  }
-
-  private cancelPendingPtySpawnPreparations(
-    sessionId: string,
-    request?: { clientId: string; requestId?: string }
-  ): boolean {
-    const pending = this.pendingPtySpawnPreparations.get(sessionId)
-    if (!pending) {
-      return false
-    }
-    let canceled = false
-    for (const preparation of pending) {
-      if (
-        request &&
-        (preparation.clientId !== request.clientId ||
-          (request.requestId !== undefined && preparation.requestId !== request.requestId))
-      ) {
-        continue
-      }
-      cancelPtySpawnPreparation(preparation)
-      canceled = true
-    }
-    return canceled
-  }
-
-  private cancelAllPendingPtySpawnPreparations(): void {
-    for (const sessionId of this.pendingPtySpawnPreparations.keys()) {
-      this.cancelPendingPtySpawnPreparations(sessionId)
-    }
-  }
-
-  private cancelPendingPtySpawnPreparationsForClient(clientId: string): void {
-    for (const pending of this.pendingPtySpawnPreparations.values()) {
-      for (const preparation of pending) {
-        if (preparation.clientId === clientId) {
-          cancelPtySpawnPreparation(preparation)
-        }
-      }
-    }
-  }
-
-  private detachClientSessions(clientId: string): void {
-    const attachments: { sessionId: string; token: symbol }[] = []
-    for (const [sessionId, attachedClientId] of this.streamClientIdBySessionId) {
-      if (attachedClientId !== clientId) {
-        continue
-      }
-      const token = this.attachTokenBySessionId.get(sessionId)
-      if (token) {
-        attachments.push({ sessionId, token })
-      }
-      this.streamClientIdBySessionId.delete(sessionId)
-      this.attachTokenBySessionId.delete(sessionId)
-    }
-    if (attachments.length > 0) {
-      this.host.detachClients(attachments)
-    }
-  }
-
-  private detachSessionForClient(sessionId: string, clientId: string): void {
-    if (this.streamClientIdBySessionId.get(sessionId) !== clientId) {
-      return
-    }
-    const token = this.attachTokenBySessionId.get(sessionId)
-    if (token) {
-      this.host.detach(sessionId, token)
-    }
-    this.streamClientIdBySessionId.delete(sessionId)
-    this.attachTokenBySessionId.delete(sessionId)
-  }
-
-  private async routeRequest(clientId: string, request: DaemonRequest): Promise<unknown> {
-    const client = this.clients.get(clientId)
-
-    switch (request.type) {
-      case 'startHistorySeedTransfer': {
-        if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
-          throw new Error('Daemon client connection is incomplete; reconnect')
-        }
-        const transferId = this.historySeedTransfers.start(clientId, request.payload)
-        return { transferId }
-      }
-
-      case 'appendHistorySeedTransfer':
-        this.historySeedTransfers.append(
-          clientId,
-          request.payload.transferId,
-          request.payload.index,
-          request.payload.data
-        )
-        return {}
-
-      case 'finishHistorySeedTransfer':
-        this.historySeedTransfers.finish(clientId, request.payload.transferId)
-        return {}
-
-      case 'abortHistorySeedTransfer':
-        this.historySeedTransfers.abort(clientId, request.payload.transferId)
-        return {}
-
-      case 'createOrAttach': {
-        if (this.idleShutdownState !== 'running') {
-          throw new Error('Daemon temporarily unavailable; reconnect')
-        }
-        if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
-          // Why: a control-only replacement can't own terminal admission or erase the prior client's retirement request.
-          throw new Error('Daemon client connection is incomplete; reconnect')
-        }
-        const p = request.payload
-        const attachOnly = p.attachOnly === true
-        // Why check here and not only on the watchdog: publishing cannot be made atomic against
-        // a publisher preempted between proving an entry dead and replacing it, so this daemon
-        // can lose the endpoint at any moment. The watchdog notices within a poll, which is far
-        // too late if a session was accepted in between — that session is then reachable by
-        // nobody, and the user sees a terminal that acknowledges input and never runs it.
-        // Why creation only: an attach reaches a session this daemon already hosts, over a
-        // connection that already exists. Refusing that would break the drain a retiring daemon
-        // depends on, and it strands nothing — the session is already here.
-        if (!attachOnly && this.hasLostEndpointOwnership()) {
-          this.requestRetirementForLostEndpoint()
-          throw new Error(DAEMON_ENDPOINT_LOST_MESSAGE)
-        }
-        this.createOrAttachInFlight++
-        let routedSessionId = p.sessionId
-        let result: Awaited<ReturnType<TerminalHost['createOrAttach']>>
-        let spawnPreparation: PendingPtySpawnPreparation | null = null
-        try {
-          if (
-            p.agentSessionEnsure !== undefined &&
-            (!isAgentSessionExecutionClaim(p.agentSessionEnsure.claim) ||
-              !isAgentSessionSurfaceBinding(p.agentSessionEnsure.surface))
-          ) {
-            throw new Error('agent_session_identity_required')
-          }
-          spawnPreparation = this.registerPtySpawnPreparation(
-            p.sessionId,
-            clientId,
-            request.id,
-            p.cancelAfterMs
-          )
-          if (!attachOnly) {
-            await this.preparePtySpawnUnlessCanceled(p.sessionId, spawnPreparation)
-          }
-          if (p.historySeed !== undefined && p.historySeedTransferId !== undefined) {
-            throw new Error('Multiple terminal history seed sources')
-          }
-          const historySeedChunks =
-            p.historySeedTransferId !== undefined
-              ? this.historySeedTransfers.take(clientId, p.historySeedTransferId)
-              : p.historySeed !== undefined
-                ? [p.historySeed]
-                : undefined
-          result = await this.host.createOrAttach({
-            sessionId: p.sessionId,
-            cols: p.cols,
-            rows: p.rows,
-            cwd: p.cwd,
-            env: p.env,
-            envToDelete: p.envToDelete,
-            command: p.command,
-            startupCommandDelivery: p.startupCommandDelivery,
-            ...(attachOnly ? { attachOnly: true } : {}),
-            // Why: RPC payloads are untrusted JSON; persist only the allowlisted routing enum, never arbitrary identity.
-            ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
-            shellOverride: p.shellOverride,
-            terminalWindowsWslDistro: p.terminalWindowsWslDistro,
-            terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
-            shellReadySupported: p.shellReadySupported,
-            historySeedChunks,
-            startupIngress: parsePtyStartupIngressIntent(p.startupIngress),
-            ...(p.shellReadyTimeoutMs !== undefined
-              ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
-              : {}),
-            ...(p.agentSessionEnsure ? { agentSessionEnsure: p.agentSessionEnsure } : {}),
-            ...(spawnPreparation
-              ? {
-                  isCanceled: () => spawnPreparation?.canceled === true,
-                  cancelSignal: spawnPreparation.controller.signal
-                }
-              : {}),
-            onSessionResolved: (sessionId) => {
-              routedSessionId = sessionId
-            },
-            streamClient: {
-              onData: (data, rawLength = data.length, transformed = false, seq) => {
-                // Scan BEFORE enqueue: the batcher may drop this chunk, but its facts must be captured regardless.
-                this.transientFactRelay.onSessionData(routedSessionId, data)
-                const lastInputAt = this.lastInputAtBySessionId.get(routedSessionId)
-                const isInteractiveOutput =
-                  data.length <= DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS &&
-                  lastInputAt !== undefined &&
-                  performance.now() - lastInputAt <= DaemonServer.INTERACTIVE_OUTPUT_WINDOW_MS
-                this.streamDataBatcher.enqueue(clientId, routedSessionId, data, {
-                  flushImmediately: isInteractiveOutput,
-                  flushMaxChars: DaemonServer.INTERACTIVE_OUTPUT_MAX_CHARS,
-                  rawLength,
-                  transformed,
-                  seq
-                })
-              },
-              onExit: (code, incarnationId, cause) => {
-                // Why: exit tears down renderer handlers, so it must ride the ordered queue behind final output.
-                this.log.log('session-exited', {
-                  sessionId: routedSessionId,
-                  code,
-                  cause: cause?.kind
-                })
-                this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
-                  type: 'event',
-                  event: 'exit',
-                  sessionId: routedSessionId,
-                  payload: { code, incarnationId, ...(cause ? { cause } : {}) }
-                })
-                this.streamDataBatcher.flush(clientId)
-                recordDaemonStreamBacklogEvent('sessionExit', {
-                  sessionIdSuffix: routedSessionId.slice(-10)
-                })
-                this.transientFactRelay.onSessionExit(routedSessionId)
-                this.streamDataBatcher.refreshSessionDroppability(routedSessionId)
-                this.streamClientIdBySessionId.delete(routedSessionId)
-                this.attachTokenBySessionId.delete(routedSessionId)
-                this.lastInputAtBySessionId.delete(routedSessionId)
-                this.reevaluateIdleShutdown()
-              }
-            }
-          })
-        } finally {
-          if (spawnPreparation) {
-            this.finishPtySpawnPreparation(p.sessionId, spawnPreparation)
-          }
-          this.createOrAttachInFlight--
-          this.reevaluateIdleShutdown()
-        }
-        routedSessionId = result.agentSessionEnsure?.owner.ptyId ?? p.sessionId
-        if (
-          this.clients.get(clientId) !== client ||
-          !client.authenticatedPairEstablished ||
-          client.streamSocket === null
-        ) {
-          this.host.detach(routedSessionId, result.attachToken)
-          throw new TerminalAttachCanceledError(routedSessionId)
-        }
-        this.streamClientIdBySessionId.set(routedSessionId, clientId)
-        this.attachTokenBySessionId.set(routedSessionId, result.attachToken)
-        this.streamDataBatcher.refreshSessionDroppability(routedSessionId)
-        // Why an attach-time marker: background resync can precede this attach, so scan suppression must start at the new stream's head.
-        if (this.transientFactRelay.isBackgrounded(routedSessionId)) {
-          this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
-            type: 'event',
-            event: 'sessionBackgroundMarker',
-            sessionId: routedSessionId,
-            payload: { background: true }
-          })
-        }
-        this.log.log(result.isNew ? 'session-created' : 'session-attached', {
-          sessionId: routedSessionId,
-          pid: result.pid
-        })
-        return {
-          isNew: result.isNew,
-          snapshot: result.snapshot,
-          pid: result.pid,
-          shellState: result.shellState,
-          incarnationId: result.incarnationId,
-          ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
-          wslDistro: result.wslDistro,
-          ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),
-          ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
-        }
-      }
-
-      case 'cancelCreateOrAttach':
-        return {
-          canceled: this.cancelPendingPtySpawnPreparations(request.payload.sessionId, {
-            clientId,
-            ...(typeof request.payload.requestId === 'string'
-              ? { requestId: request.payload.requestId }
-              : {})
-          })
-        }
-
-      case 'closeStartupQueryAuthority':
-        return {
-          appliedSeq: this.host.closeStartupQueryAuthority(request.payload.sessionId)
-        }
-
-      case 'write':
-        try {
-          this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())
-          this.host.write(request.payload.sessionId, request.payload.data)
-        } catch (err) {
-          this.lastInputAtBySessionId.delete(request.payload.sessionId)
-          if (err instanceof SessionNotFoundError) {
-            this.sendExitEvent(client, request.payload.sessionId, -1)
-          }
-          throw err
-        }
-        return {}
-
-      case 'resize':
-        try {
-          this.host.resize(request.payload.sessionId, request.payload.cols, request.payload.rows)
-        } catch (err) {
-          if (err instanceof SessionNotFoundError) {
-            this.sendExitEvent(client, request.payload.sessionId, -1)
-          }
-          throw err
-        }
-        return {}
-
-      case 'pausePty':
-        this.host.pauseProducer(request.payload.sessionId)
-        return {}
-
-      case 'resumePty':
-        this.host.resumeProducer(request.payload.sessionId)
-        return {}
-
-      case 'setSessionBackground': {
-        const sessionId = request.payload.sessionId
-        const background = request.payload.background === true
-        recordDaemonStreamBacklogEvent('setSessionBackground', {
-          sessionIdSuffix: sessionId.slice(-10),
-          background
-        })
-        const backgroundChanged = this.transientFactRelay.setSessionBackground(
-          sessionId,
-          background
-        )
-        this.streamDataBatcher.refreshSessionDroppability(sessionId)
-        if (!backgroundChanged) {
-          return {}
-        }
-        if (background) {
-          // Seed the fresh relay tracker with the emulator's dangling escape so a handoff-split sequence still parses.
-          this.transientFactRelay.seedSessionScanState(
-            sessionId,
-            this.host.getPartialEscapeTailAnsi(sessionId)
-          )
-        }
-        const streamClientId = this.streamClientIdBySessionId.get(sessionId)
-        if (!streamClientId) {
-          // Not attached yet — the attach-time marker covers the handoff.
-          return {}
-        }
-        // Reveal intentionally keeps the queued tail: main needs those bytes, and the normal flush/drain delivers them in order ahead of the marker.
-        const mode2031State = this.transientFactRelay.getMode2031ReplyScanState(sessionId)
-        const scanSeedAnsi = background
-          ? ''
-          : mode2031State.pendingSubscribe
-            ? mode2031State.tail
-            : this.host.getPartialEscapeTailAnsi(sessionId)
-        this.streamDataBatcher.enqueueControlEvent(streamClientId, sessionId, {
-          type: 'event',
-          event: 'sessionBackgroundMarker',
-          sessionId,
-          payload: {
-            background,
-            ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {}),
-            ...(mode2031State.pendingSubscribe ? { mode2031PendingSubscribe: true as const } : {})
-          }
-        })
-        return {}
-      }
-
-      case 'kill': {
-        const canceledPendingSpawn = this.cancelPendingPtySpawnPreparations(
-          request.payload.sessionId
-        )
-        this.lastInputAtBySessionId.delete(request.payload.sessionId)
-        const attribution = {
-          sessionId: request.payload.sessionId,
-          immediate: request.payload.immediate === true,
-          // Daemon control identity, not the paired-device bearer credential.
-          clientId
-        }
-        try {
-          await this.host.kill(request.payload.sessionId, {
-            immediate: request.payload.immediate
-          })
-        } catch (error) {
-          // Why: a kill that wins before session registration already canceled the pending spawn, so its intent is done.
-          if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
-            this.log.log('session-kill-failed', attribution)
-            throw error
-          }
-        }
-        this.log.log('session-killed', attribution)
-        return {}
-      }
-
-      case 'signal':
-        this.host.signal(request.payload.sessionId, request.payload.signal)
-        return {}
-
-      case 'detach':
-        this.detachSessionForClient(request.payload.sessionId, clientId)
-        this.log.log('session-detached', {
-          sessionId: request.payload.sessionId
-        })
-        return {}
-
-      case 'getCwd':
-        return { cwd: await this.host.getCwd(request.payload.sessionId) }
-
-      case 'getForegroundProcess':
-        return {
-          foregroundProcess: this.host.getForegroundProcess(request.payload.sessionId)
-        }
-
-      case 'inspectProcess':
-        return this.host.inspectProcess(request.payload.sessionId)
-
-      case 'confirmForegroundProcess':
-        return {
-          foregroundProcess: await this.host.confirmForegroundProcess(request.payload.sessionId)
-        }
-
-      case 'clearScrollback':
-        this.host.clearScrollback(request.payload.sessionId)
-        return {}
-
-      case 'listSessions':
-        return { sessions: this.host.listSessions() }
-
-      case 'shutdownIfIdle': {
-        const authenticatedClient = this.clients.get(clientId)
-        const retiring =
-          authenticatedClient !== undefined &&
-          authenticatedClient.streamSocket !== null &&
-          this.clients.size === 1 &&
-          this.createOrAttachInFlight === 0 &&
-          this.host.listSessions().length === 0 &&
-          [...this.transportSockets].every(
-            (transport) =>
-              transport === authenticatedClient.controlSocket ||
-              transport === authenticatedClient.streamSocket
-          )
-        if (!retiring) {
-          return { retiring: false }
-        }
-        this.idleShutdownState = 'shutting-down'
-        this.initialAdoptionDeadlineMs = null
-        this.retirementRequested = false
-        this.cancelInitialAdoptionTimer()
-        // Why: close before acknowledging retirement so no new terminal races between the empty proof and disposal.
-        const serverClose = this.beginServerClose()
-        this.deferShutdownUntilReply(clientId, request.id, authenticatedClient.controlSocket, () =>
-          this.finishIdleShutdown(serverClose)
-        )
-        return { retiring: true }
-      }
-
-      case 'getSnapshot': {
-        const snapshotStart = performance.now()
-        const requestedScrollbackRows = request.payload.scrollbackRows
-        const scrollbackRows =
-          typeof requestedScrollbackRows === 'number' && Number.isFinite(requestedScrollbackRows)
-            ? Math.max(0, Math.min(50_000, Math.floor(requestedScrollbackRows)))
-            : undefined
-        const snapshot = this.host.getSnapshot(request.payload.sessionId, {
-          scrollbackRows
-        })
-        const snapshotMs = performance.now() - snapshotStart
-        if (snapshotMs >= 25) {
-          // Serialize stalls block the daemon's single thread; surface them to attribute field typing stalls (issue #5096 family).
-          recordDaemonStreamBacklogEvent('slowGetSnapshot', {
-            sessionIdSuffix: request.payload.sessionId.slice(-10),
-            snapshotMs: Math.round(snapshotMs)
-          })
-        }
-        return { snapshot }
-      }
-
-      case 'getSize':
-        return { size: this.host.getAppliedSize(request.payload.sessionId) }
-
-      case 'takePendingOutput':
-        // Why no await: with includeSnapshot, drain+serialize must share one sync turn or cold restore replays doubled PTY bytes.
-        return this.host.takePendingOutput(
-          request.payload.sessionId,
-          request.payload.includeSnapshot === true,
-          { teardownSnapshot: request.payload.teardownSnapshot === true }
-        )
-
-      case 'ping':
-        return { pong: true }
-
-      case 'systemResolverHealth':
-        return { health: await readCurrentProcessMacSystemResolverHealth() }
-
-      case 'ptySpawnHealth':
-        await this.ptySpawnHealthCheck()
-        return { healthy: true }
-
-      case 'shutdown': {
-        this.log.log('shutdown', {
-          reason: 'rpc',
-          killSessions: request.payload.killSessions === true
-        })
-        const serverClose = this.beginOrdinaryShutdownFence()
-        if (request.payload.killSessions) {
-          try {
-            await this.host.dispose()
-          } catch (err) {
-            // Why: shutdown must always self-terminate; failed owners stay retryable for the follow-up shutdown() below.
-            this.log.log('shutdown-dispose-failed', {
-              error: err instanceof Error ? err.message : String(err)
-            })
-          }
-        }
-        const controlSocket = this.clients.get(clientId)?.controlSocket
-        if (controlSocket) {
-          this.deferShutdownUntilReply(clientId, request.id, controlSocket, () =>
-            this.finishRpcShutdown(serverClose)
-          )
-        } else if (!this.shutdownPromise) {
-          this.shutdownPromise = this.finishRpcShutdown(serverClose)
-        }
-        return {}
-      }
-    }
-    throw new Error(`Unknown request type: ${(request as { type: string }).type}`)
-  }
-
-  private sendExitEvent(
-    client: ConnectedClient | undefined,
-    sessionId: string,
-    code: number
-  ): void {
-    if (!client?.streamSocket) {
-      return
-    }
-    // Why: write/resize don't wait for replies, so this synthetic exit is the renderer's only signal to clear stale pane bindings.
-    this.streamDataBatcher.enqueueControlEvent(client.clientId, sessionId, {
-      type: 'event',
-      event: 'exit',
-      sessionId,
-      payload: { code }
-    })
-    this.streamDataBatcher.flush(client.clientId)
   }
 }

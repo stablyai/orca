@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { _clearGitHubPRRefreshStartedEntriesForTest } from './github'
+import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import {
   createTestStore,
   makePR,
@@ -409,6 +409,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       pr
     )
     expect(mockApi.gh.refreshPRNow).toHaveBeenCalledWith({
+      reason: 'manual',
       candidate: expect.objectContaining({
         repoId,
         repoPath,

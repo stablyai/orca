@@ -176,6 +176,25 @@ describe('query reply ordering (termenv OSC-then-CPR)', () => {
     vi.useRealTimers()
   })
 
+  it('preserves reverse query order when CPR arrives before the color query', async () => {
+    vi.useFakeTimers()
+    const pty: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => pty.push(data),
+      onEmission: () => {}
+    })
+    const write = hostWrites(ingress, pty)
+
+    write(CPR_REPLY)
+    write(OSC_11_REPLY)
+    await vi.advanceTimersByTimeAsync(200)
+
+    expect(pty).toEqual([CPR_REPLY, OSC_11_REPLY])
+    ingress.drainAndClose()
+    vi.useRealTimers()
+  })
+
   it('keeps a CPR immediate when no color reply is deferred', () => {
     vi.useFakeTimers()
     const pty: string[] = []

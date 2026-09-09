@@ -41,6 +41,16 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     ).toBe('csi-u')
   })
 
+  // Why: OMP wraps Pi, so an OMP-labelled title still reaches a Pi reader. Owner-pinning made the
+  // stored pane title read "OMP" for every OMP pane (#16373), so an omp profile without the Pi
+  // encoding sends Esc+CR — which submits instead of inserting a newline (#9703).
+  it('recovers CSI-u from an OMP title, which wraps the same Pi reader', () => {
+    const state = { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} }
+    for (const title of ['⠸ OMP', 'OMP ready', 'OMP', 'OMP - action required']) {
+      expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', title)).toBe('csi-u')
+    }
+  })
+
   it('keeps trusted process and shell evidence authoritative over titles', () => {
     const state = {
       paneForegroundAgentByPaneKey: {

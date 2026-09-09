@@ -49,7 +49,11 @@ export function patchDashboardSnapshotFromAgentStatus(
   const stateChanged = event.stateStartedAt > card.stateChangedAt
   const unseen = stateChanged ? card.startedAt !== 0 : card.unseen
   const dotState = event.state
-  const bucket = dashboardBucketForDotState(dashboardCardDisplayState({ dotState, unseen }))
+  const workingMode =
+    event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
+  const bucket = dashboardBucketForDotState(
+    dashboardCardDisplayState({ dotState, workingMode, unseen })
+  )
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),
@@ -62,6 +66,7 @@ export function patchDashboardSnapshotFromAgentStatus(
       : {}),
     bucket,
     dotState,
+    workingMode,
     unseen,
     stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,
     statusUpdatedAt: event.receivedAt,

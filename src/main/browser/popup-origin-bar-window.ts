@@ -88,6 +88,47 @@ function clampPopupContentSize(options: PopupChildWindowOptions): {
   }
 }
 
+// Fail-closed teardown: the window never loads, and late onClosed listeners still fire so the
+// caller's popup bookkeeping cannot leak an entry for a window that no longer exists.
+function closeUnpreparedPopup(
+  window: BaseWindow,
+  contentWebContents: Electron.WebContents,
+  originBarWebContents: Electron.WebContents
+): PopupOriginBarWindow {
+  const closedListeners: (() => void)[] = []
+  let closed = false
+  window.once('closed', () => {
+    closed = true
+    for (const listener of closedListeners.splice(0)) {
+      listener()
+    }
+  })
+  if (!contentWebContents.isDestroyed()) {
+    contentWebContents.close()
+  }
+  if (!originBarWebContents.isDestroyed()) {
+    originBarWebContents.close()
+  }
+  if (!window.isDestroyed()) {
+    window.close()
+  }
+  return {
+    contentWebContents,
+    close: (): void => {
+      if (!window.isDestroyed()) {
+        window.close()
+      }
+    },
+    onClosed: (listener: () => void): void => {
+      if (closed) {
+        listener()
+        return
+      }
+      closedListeners.push(listener)
+    }
+  }
+}
+
 /**
  * Hosts a guest-opened popup inside an Orca-built window whose top strip is a
  * separate, Orca-controlled WebContentsView showing the popup's current
@@ -96,7 +137,10 @@ function clampPopupContentSize(options: PopupChildWindowOptions): {
  */
 export function openPopupWithOriginBar(
   options: PopupChildWindowOptions,
-  initialUrl: string
+  initialUrl: string,
+  // Why: the only point that provably precedes the popup's first load — per-WebContents policy
+  // that must hold before content runs (route-guest WebRTC) has to be applied here or not at all.
+  prepareContent?: (contents: Electron.WebContents) => boolean
 ): PopupOriginBarWindow {
   const { width, height } = clampPopupContentSize(options)
   const initialOrigin = describePopupOrigin(initialUrl)
@@ -119,6 +163,7 @@ export function openPopupWithOriginBar(
   const originBarView = new WebContentsView({
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   })
+  const originBarWebContents = originBarView.webContents
   const contentView = new WebContentsView({
     // Why: Electron rejects an explicitly undefined webContents; omitting it
     // lets WebContentsView create contents for Cmd/Ctrl-click popups.
@@ -147,6 +192,9 @@ export function openPopupWithOriginBar(
   layoutViews()
 
   const contentWebContents = contentView.webContents
+  if (prepareContent && !prepareContent(contentWebContents)) {
+    return closeUnpreparedPopup(window, contentWebContents, originBarWebContents)
+  }
   let currentUrl = initialUrl
   const renderOrigin = (): void => {
     const { label, insecure } = describePopupOrigin(currentUrl)
@@ -159,15 +207,15 @@ export function openPopupWithOriginBar(
     }
     // Why: textContent + JSON encoding — the URL is attacker-controlled and
     // must never be interpolated into the bar's markup.
-    void originBarView.webContents
+    void originBarWebContents
       .executeJavaScript(
         `document.body.classList.toggle('insecure', ${insecure ? 'true' : 'false'});` +
           `document.getElementById('origin').textContent = ${JSON.stringify(label)};`
       )
       .catch(() => {})
   }
-  originBarView.webContents.once('did-finish-load', renderOrigin)
-  void originBarView.webContents.loadURL(
+  originBarWebContents.once('did-finish-load', renderOrigin)
+  void originBarWebContents.loadURL(
     `data:text/html;charset=utf-8,${encodeURIComponent(ORIGIN_BAR_HTML)}`
   )
 
@@ -209,6 +257,10 @@ export function openPopupWithOriginBar(
       // Why: close() (not destroy) so the page's unload handlers run — OAuth
       // pages often notify the opener from unload.
       contentWebContents.close()
+    }
+    // Why: BaseWindow does not destroy child WebContentsView contents when it closes.
+    if (!originBarWebContents.isDestroyed()) {
+      originBarWebContents.close()
     }
     for (const listener of closedListeners) {
       listener()

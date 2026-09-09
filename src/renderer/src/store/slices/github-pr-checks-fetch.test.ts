@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { prChecksCacheSuffix, prCommentsCacheSuffix } from './github'
+import { prChecksCacheSuffix, prCommentsCacheSuffix } from '../github/cache-identity'
 import {
   createTestStore,
   githubSourceContext,

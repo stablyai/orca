@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
+  createVisibleWorktreeTerminalActivityProjection,
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
@@ -48,6 +49,28 @@ describe('visible worktree activity inputs', () => {
 
     expect(second).toBe(first)
     expect(second['wt-1']).toBe(first['wt-1'])
+  })
+  it('inspects only the changed bucket in a 300-worktree title publication', () => {
+    const inspected: string[] = []
+    const projector = createVisibleWorktreeTerminalActivityProjection((worktreeId) =>
+      inspected.push(worktreeId)
+    )
+    const tabs = Object.fromEntries(
+      Array.from({ length: 300 }, (_, index) => {
+        const worktreeId = `wt-${index}`
+        return [worktreeId, [terminalTab(`tab-${index}`, `Title ${index}`)]]
+      })
+    )
+    const first = projector.project(tabs)
+    inspected.length = 0
+    const changedWorktreeId = 'wt-173'
+    const second = projector.project({
+      ...tabs,
+      [changedWorktreeId]: [{ ...tabs[changedWorktreeId][0], title: 'Changed display title' }]
+    })
+
+    expect(second).toBe(first)
+    expect(inspected).toEqual([changedWorktreeId])
   })
 
   it('updates terminal activity projection when tab ids change', () => {

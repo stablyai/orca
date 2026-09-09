@@ -120,8 +120,7 @@ function installApi(cachedScan: WorkspaceCleanupScanResult | null): ScanRig {
       scan: rig.scan,
       getCachedScan: vi.fn().mockResolvedValue(cachedScan),
       dismiss: vi.fn().mockResolvedValue(undefined),
-      clearDismissals: vi.fn().mockResolvedValue(undefined),
-      hasKillableLocalProcesses: vi.fn().mockResolvedValue({ hasKillableProcesses: false })
+      clearDismissals: vi.fn().mockResolvedValue(undefined)
     },
     workspaceSpace: {
       getCachedAnalysis: vi.fn().mockResolvedValue(null),
@@ -351,7 +350,18 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
   })
 
   it('reports selections removed by facet filters', async () => {
-    installApi(cachedFleet())
+    installApi({
+      scannedAt: CACHED_AT,
+      candidates: [
+        makeCandidate({
+          worktreeId: 'repo1::/tmp/alpha',
+          displayName: 'alpha',
+          blockers: ['pinned']
+        }),
+        makeCandidate({ worktreeId: 'repo1::/tmp/beta', displayName: 'beta' })
+      ],
+      errors: []
+    })
     await renderDialog()
     await openDialog()
 
@@ -363,7 +373,11 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
           ...browse,
           filters: {
             ...browse.filters,
-            safety: { ...browse.filters.safety, tiers: ['review'] }
+            safety: {
+              ...browse.filters.safety,
+              blockers: ['pinned'],
+              blockerMode: 'none-of'
+            }
           }
         }
       })
@@ -464,17 +478,16 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     expect(holders.infoToasts).toContain('1 selected workspace no longer exists.')
   })
 
-  it('keeps selected review rows outside the select-all scope', async () => {
+  it('keeps selected active workspaces outside the select-all scope', async () => {
     installApi({
       scannedAt: CACHED_AT,
       candidates: [
         makeCandidate({ worktreeId: 'repo1::/tmp/ready', displayName: 'ready' }),
         makeCandidate({
-          worktreeId: 'repo1::/tmp/review',
-          displayName: 'review',
-          tier: 'review',
-          selectedByDefault: false,
-          git: { clean: null, upstreamAhead: 0, upstreamBehind: 0, checkedAt: null }
+          worktreeId: 'repo1::/tmp/active',
+          displayName: 'active',
+          reasons: [],
+          blockers: ['active-workspace']
         })
       ],
       errors: []
@@ -482,7 +495,7 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     await renderDialog()
     await openDialog()
 
-    await act(async () => rowCheckbox('review')?.click())
+    await act(async () => rowCheckbox('active')?.click())
     const selectAll = container?.querySelector<HTMLElement>(
       '[aria-label="Select 1 safety-checked workspace"]'
     )
@@ -490,10 +503,10 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
 
     await act(async () => selectAll?.click())
     expect(rowCheckbox('ready')?.getAttribute('aria-checked')).toBe('true')
-    expect(rowCheckbox('review')?.getAttribute('aria-checked')).toBe('true')
+    expect(rowCheckbox('active')?.getAttribute('aria-checked')).toBe('true')
 
     await act(async () => selectAll?.click())
     expect(rowCheckbox('ready')?.getAttribute('aria-checked')).toBe('false')
-    expect(rowCheckbox('review')?.getAttribute('aria-checked')).toBe('true')
+    expect(rowCheckbox('active')?.getAttribute('aria-checked')).toBe('true')
   })
 })

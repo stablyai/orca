@@ -9,7 +9,8 @@ import { quoteBashString } from '../wsl-bash-command'
 import { runWslProcess } from '../wsl/wsl-runner'
 import {
   buildSkillDiscoverySources,
-  compareSkills,
+  sortDiscoveredSkills,
+  sortSkillDiscoverySources,
   sourceKindForSkill,
   sourceLabelForSkill,
   stablePathId,
@@ -17,6 +18,8 @@ import {
 } from './skill-discovery-sources'
 import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sources-wsl'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
+import { SKILL_STAGING_GLOB } from './skill-delete/staging-names'
+import { skillFileMaxDepth } from '../../shared/skill-discovery-depth'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const WSL_SCAN_TIMEOUT_MS = 10_000
@@ -42,11 +45,11 @@ export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): 
     `    printf '%s\\0%s\\0%s\\0%s\\0%s\\0' S "$root_index" "$skill_file" "$canonical_path" "$updated_at"`,
     `    printf '%s' "$encoded_markdown"`,
     `    printf '\\0'`,
-    `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" -type f -name 'SKILL.md' -print0 2>/dev/null)`,
+    `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" \\( -name '${SKILL_STAGING_GLOB}' -prune \\) -o \\( -type f -name 'SKILL.md' -print0 \\) 2>/dev/null)`,
     '}'
   ]
   roots.forEach((root, index) => {
-    const maxDepth = root.sourceKind === 'plugin' ? 10 : 5
+    const maxDepth = skillFileMaxDepth(root.sourceKind)
     lines.push(`scan_root ${index} ${quoteBashString(root.path)} ${maxDepth}`)
   })
   return lines.join('\n')
@@ -160,10 +163,8 @@ export function parseWslSkillDiscoveryOutput(
     }
   })
   return {
-    skills: [...skillsByCanonicalPath.values()].sort(compareSkills),
-    sources: sources.sort((a, b) =>
-      a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
-    ),
+    skills: sortDiscoveredSkills([...skillsByCanonicalPath.values()]),
+    sources: sortSkillDiscoverySources(sources),
     scannedAt
   }
 }

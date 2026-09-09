@@ -56,7 +56,7 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
-  it('keeps workspace delete unassigned until users customize it', () => {
+  it('binds immediate workspace delete without claiming terminal split right', () => {
     const binding = {
       key: 'Backspace',
       code: 'Backspace',
@@ -66,13 +66,28 @@ describe('keybindings', () => {
       shift: true
     }
 
-    expect(getEffectiveKeybindingsForAction('workspace.delete', 'linux')).toEqual([])
-    expect(keybindingMatchesAction('workspace.delete', binding, 'linux')).toBe(false)
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'darwin')).toEqual([
+      'Mod+Shift+Backspace'
+    ])
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'linux')).toEqual([
+      'Mod+Shift+Backspace'
+    ])
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'win32')).toEqual([
+      'Mod+Shift+Backspace'
+    ])
+    expect(keybindingMatchesAction('workspace.delete', binding, 'linux')).toBe(true)
     expect(
       keybindingMatchesAction('workspace.delete', binding, 'linux', {
-        'workspace.delete': ['Mod+Shift+Backspace']
+        'workspace.delete': []
       })
-    ).toBe(true)
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'workspace.delete',
+        { key: 'd', code: 'KeyD', control: false, meta: true, alt: true, shift: false },
+        'darwin'
+      )
+    ).toBe(false)
   })
 
   it('keeps workspace board unassigned until users customize it', () => {

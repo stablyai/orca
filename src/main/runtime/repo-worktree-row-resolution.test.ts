@@ -5,6 +5,7 @@ import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import type { Store } from '../persistence'
 import {
+  listStoredWorktreeRowsForRepo,
   resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
   type RepoWorktreeRowDeps
@@ -111,6 +112,70 @@ describe('host-qualified scoped worktree resolution', () => {
       displayName: 'feature'
     })
   })
+  it('uses the host-qualified metadata owner when a legacy row has another host', async () => {
+    const deps = createDeps([
+      repo('shared', '/remote/repo', {
+        connectionId: 'builder',
+        executionHostId: 'ssh:builder'
+      })
+    ])
+    const worktreeId = 'shared::/same/worktree'
+    const remoteMeta = {
+      displayName: 'remote workspace',
+      hostId: 'ssh:builder',
+      instanceId: 'remote-instance'
+    } as unknown as WorktreeMeta
+    deps.metaById[worktreeId] = {
+      displayName: 'stale local workspace',
+      hostId: 'local',
+      instanceId: 'local-instance'
+    } as unknown as WorktreeMeta
+    ;(
+      deps.store as Store & {
+        getWorktreeMetaForHost: () => WorktreeMeta
+      }
+    ).getWorktreeMetaForHost = () => remoteMeta
+
+    const rows = await resolveRepoWorktreeRows(
+      deps,
+      deps.store.getRepos()[0]!,
+      deps.metaById,
+      new Map()
+    )
+
+    expect(rows[0]).toMatchObject({
+      displayName: 'remote workspace',
+      hostId: 'ssh:builder',
+      instanceId: 'remote-instance'
+    })
+  })
+
+  it('restores canonical-only SSH rows without leaking colliding local metadata', () => {
+    const local = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const remote = repo('shared', '/remote/repo', {
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+    const deps = createDeps([local, remote])
+    deps.metaById['shared::/local/worktree'] = {
+      displayName: 'local workspace',
+      hostId: 'local'
+    } as WorktreeMeta
+    ;(
+      deps.store as Store & {
+        getAllWorktreeMetaForHost: () => Record<string, WorktreeMeta>
+      }
+    ).getAllWorktreeMetaForHost = () => ({
+      'shared::/remote/worktree': {
+        displayName: 'remote workspace',
+        hostId: 'ssh:builder'
+      } as unknown as WorktreeMeta
+    })
+
+    expect(listStoredWorktreeRowsForRepo(deps.store, remote, 2)).toEqual([
+      expect.objectContaining({ path: '/remote/worktree' })
+    ])
+  })
 
   it.each([
     ['runtime:windows', String.raw`C:\Users\dev\orca worktree`],
@@ -198,5 +263,90 @@ describe('host-qualified scoped worktree resolution', () => {
     )
 
     expect(getRepos).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * #16243: the renderer can only address a workspace by `id:<repoId>::<path>`, and this scoped
+ * lookup is what a host-qualified removal resolves through. It matched the id byte for byte while a
+ * `path:` selector has always compared through `normalizeRuntimePathForComparison`, so a stored id
+ * spelling its path differently from `git worktree list` resolved for the CLI and not for the UI.
+ */
+describe('scoped worktree id resolution across path spellings (#16243)', () => {
+  it.each([
+    ['a trailing slash', '/same/worktree', 'shared::/same/worktree/'],
+    ['a doubled separator', '/same/worktree', 'shared::/same//worktree'],
+    ['an NFD name', '/same/café', `shared::${'/same/café'.normalize('NFD')}`]
+  ])('resolves the scanned row when the id carries %s', async (_label, scannedPath, worktreeId) => {
+    const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const deps = createDeps([owner])
+    deps.scanRepo.mockImplementation(async () => ({
+      ok: true,
+      worktrees: [gitWorktree(scannedPath)]
+    }))
+
+    await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toMatchObject({
+      id: `shared::${scannedPath}`,
+      path: scannedPath
+    })
+  })
+
+  it('still refuses the same path under a different repo id', async () => {
+    const deps = createDeps([
+      repo('shared', '/local/repo', { executionHostId: 'local' }),
+      repo('unrelated', '/unrelated/repo', { executionHostId: 'local' })
+    ])
+
+    await expect(
+      resolveScopedWorktreeIdRow(deps, 'unrelated::/same/worktree/', 'local')
+    ).resolves.toBeNull()
+  })
+
+  it('refuses rather than guessing when two rows spell one path', async () => {
+    const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const deps = createDeps([owner])
+    deps.scanRepo.mockImplementation(async () => ({
+      ok: true,
+      worktrees: [gitWorktree('/same/worktree'), gitWorktree('/same//worktree')]
+    }))
+
+    await expect(
+      resolveScopedWorktreeIdRow(deps, 'shared::/same/worktree/', 'local')
+    ).resolves.toBeNull()
+  })
+
+  it('prefers the exactly matching row over an equivalent spelling', async () => {
+    const owner = repo('shared', '/local/repo', { executionHostId: 'local' })
+    const deps = createDeps([owner])
+    deps.scanRepo.mockImplementation(async () => ({
+      ok: true,
+      worktrees: [gitWorktree('/same//worktree'), gitWorktree('/same/worktree')]
+    }))
+
+    await expect(
+      resolveScopedWorktreeIdRow(deps, 'shared::/same//worktree', 'local')
+    ).resolves.toMatchObject({ id: 'shared::/same//worktree' })
+  })
+
+  // #15598/#15616: the backslash spelling is what a pre-restart Windows registration recorded.
+  it('resolves a Windows backslash id against the forward-slash spelling git reports', async () => {
+    const path = 'D:/Agentic/game2/battle-core'
+    const owner = repo('shared', 'D:/Agentic/game2', { executionHostId: 'runtime:windows' })
+    const deps = createDeps([owner])
+    deps.scanRepo.mockImplementation(async () => ({ ok: true, worktrees: [gitWorktree(path)] }))
+
+    await expect(
+      resolveScopedWorktreeIdRow(deps, 'shared::D:\\Agentic\\game2\\battle-core', 'runtime:windows')
+    ).resolves.toMatchObject({ id: `shared::${path}`, path })
+  })
+
+  it.each([
+    ['no repo boundary', 'not-an-id'],
+    ['an empty path', 'shared::']
+  ])('keeps exact matching for a malformed id with %s', async (_label, worktreeId) => {
+    const deps = createDeps([repo('shared', '/local/repo', { executionHostId: 'local' })])
+
+    await expect(resolveScopedWorktreeIdRow(deps, worktreeId, 'local')).resolves.toBeNull()
+    expect(deps.scanRepo).not.toHaveBeenCalled()
   })
 })

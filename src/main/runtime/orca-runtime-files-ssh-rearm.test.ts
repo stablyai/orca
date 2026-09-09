@@ -62,7 +62,7 @@ function createRuntimeFileCommands(): RuntimeFileCommands {
     resolveWorktreeSelector: vi.fn(async () => ({ id: 'wt-1', repoId: 'repo-1', path: ROOT_PATH })),
     resolveRuntimeFileTarget: vi.fn(async () => ({
       worktree: { id: 'wt-1', repoId: 'repo-1', path: ROOT_PATH },
-      connectionId: CONNECTION_ID
+      executionHostId: `ssh:${CONNECTION_ID}`
     })),
     resolveRuntimeGitTarget: vi.fn(),
     openFile: vi.fn()

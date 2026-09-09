@@ -137,6 +137,35 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
+  it('purges only the selected host when a normal worktree id is owned locally and over SSH', async () => {
+    const worktreeId = 'repo-1::/workspace/feature-wt'
+    const localRepo = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = {
+      ...localRepo,
+      displayName: 'ssh',
+      connectionId: 'conn-1'
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ hostId: 'local' }))
+    mockKnownFeatureWorktree()
+    removeWorktreeMock.mockResolvedValue({})
+
+    await handlers['worktrees:remove'](null, { worktreeId, hostId: 'local' })
+
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+    expect(advertisedUrlWatcherForgetWorktreeMock).not.toHaveBeenCalled()
+    expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
+
   it('tombstones a cleanup-batch removal without scheduling singular sidecar writes', async () => {
     mockKnownFeatureWorktree()
     getEffectiveHooksMock.mockReturnValue(null)
@@ -471,7 +500,9 @@ describe('registerWorktreeHandlers', () => {
       runtime: runtimeStub,
       resolvedWorktreeId: worktreeId,
       localProvider: ptyProvider,
-      onPtyStopped: clearProviderPtyStateMock
+      onPtyStopped: clearProviderPtyStateMock,
+      // Folder-workspace removal best-effort closes structured sessions the PTY sweeps cannot see.
+      closeStructuredSessions: true
     })
     expect(killAllProcessesForWorktreeMock.mock.invocationCallOrder[0]).toBeLessThan(
       store.removeWorktreeMeta.mock.invocationCallOrder[0]
@@ -482,6 +513,29 @@ describe('registerWorktreeHandlers', () => {
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-folder'
     })
+  })
+
+  it('purges a folder workspace after a rejected best-effort PTY sweep', async () => {
+    const worktreeId = 'repo-folder::/workspace/folder::workspace:child-1'
+    store.getRepo.mockReturnValue({
+      id: 'repo-folder',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder'
+    })
+    killAllProcessesForWorktreeMock.mockRejectedValue(new Error('terminal inventory unavailable'))
+
+    await handlers['worktrees:remove'](null, { worktreeId })
+
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-folder'
+    })
+    expect(store.removeWorktreeMeta.mock.invocationCallOrder[0]).toBeLessThan(
+      mainWindow.webContents.send.mock.invocationCallOrder[0]
+    )
   })
 
   // Folder projects can be SSH-backed, and folder workspace ids are `repoId::path::workspace:<uuid>`
@@ -512,7 +566,8 @@ describe('registerWorktreeHandlers', () => {
       localProvider: sshPtyProvider,
       onPtyStopped: clearProviderPtyStateMock,
       includeProviderInventory: true,
-      includeLocalRegistry: false
+      includeLocalRegistry: false,
+      closeStructuredSessions: true
     })
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:conn-1')
     expect(advertisedUrlWatcherForgetWorktreeMock).not.toHaveBeenCalled()
@@ -545,7 +600,8 @@ describe('registerWorktreeHandlers', () => {
       localProvider: runtimePtyProvider,
       onPtyStopped: clearProviderPtyStateMock,
       includeProviderInventory: false,
-      includeLocalRegistry: false
+      includeLocalRegistry: false,
+      closeStructuredSessions: true
     })
     expect(getSshPtyProviderMock).not.toHaveBeenCalled()
   })

@@ -195,13 +195,57 @@ describe('activateBrowserPagePaletteResult', () => {
     })
   })
 
+  it('rejects colliding child ids before mutating either host', () => {
+    seedStore({
+      worktreesByRepo: {
+        'repo-1': [makeWorktree({ hostId: 'ssh:host-1' })],
+        'repo-2': [makeWorktree({ repoId: 'repo-2', hostId: 'ssh:host-2' })]
+      },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          makeBrowserTab({ executionHostId: 'ssh:host-1', groupId: 'group-host-1' }),
+          makeBrowserTab({ executionHostId: 'ssh:host-2', groupId: 'group-host-2' })
+        ]
+      },
+      groupsByWorktree: {
+        'wt-1': [makeGroup({ id: 'group-host-1' }), makeGroup({ id: 'group-host-2' })]
+      }
+    })
+
+    const before = useAppStore.getState()
+    expect(activateBrowserPagePaletteResult({ ...target, executionHostId: 'ssh:host-2' })).toEqual({
+      status: 'failed',
+      reason: 'missing-tab'
+    })
+    expect(useAppStore.getState()).toBe(before)
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('keeps browser workspaces with distinct unified tabs in multiple groups activatable', () => {
+    seedStore({
+      unifiedTabsByWorktree: {
+        'wt-1': [makeBrowserTab(), makeBrowserTab({ id: 'second-view', groupId: 'group-2' })]
+      },
+      groupsByWorktree: {
+        'wt-1': [
+          makeGroup(),
+          makeGroup({ id: 'group-2', activeTabId: 'second-view', tabOrder: ['second-view'] })
+        ]
+      }
+    })
+    expect(activateBrowserPagePaletteResult(target).status).toBe('activated')
+  })
+
   it('activates pages in remote folder workspaces', () => {
     const worktreeId = folderWorkspaceKey('folder-1')
     seedStore({
       worktreesByRepo: {},
       folderWorkspaces: [makeFolderWorkspace({ executionHostId: 'ssh:host-1' })],
       browserTabsByWorktree: { [worktreeId]: [makeWorkspace({ worktreeId })] },
-      browserPagesByWorkspace: { 'ws-1': [makePage({ worktreeId })] }
+      browserPagesByWorkspace: { 'ws-1': [makePage({ worktreeId })] },
+      unifiedTabsByWorktree: { [worktreeId]: [makeBrowserTab({ worktreeId })] },
+      groupsByWorktree: { [worktreeId]: [makeGroup({ worktreeId })] },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
     })
 
     expect(
@@ -335,12 +379,15 @@ describe('activateBrowserPagePaletteResult group focus', () => {
     expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-1')
   })
 
-  it('still activates the page when no unified tab backs the browser workspace', () => {
+  // Nothing renders the workspace without its unified tab, so reporting success
+  // would leave the previously active tab on screen.
+  it('fails instead of activating when no unified tab backs the browser workspace', () => {
     seedStore({ unifiedTabsByWorktree: {}, groupsByWorktree: { 'wt-1': [] } })
 
-    expect(activateBrowserPagePaletteResult(target)).toMatchObject({
-      status: 'activated'
+    expect(activateBrowserPagePaletteResult(target)).toEqual({
+      status: 'failed',
+      reason: 'missing-tab'
     })
-    expect(useAppStore.getState().activeBrowserTabId).toBe('ws-1')
+    expect(useAppStore.getState().activeBrowserTabId).toBeNull()
   })
 })

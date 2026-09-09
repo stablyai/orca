@@ -10,6 +10,7 @@ import {
   symlinkSync,
   writeFileSync
 } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setAppEnvironment } from '../../shared/app-environment'
@@ -18,7 +19,12 @@ const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
 }))
 
-import { OpenCodeHookService, _internals } from './hook-service'
+import {
+  OpenCodeHookService,
+  _internals,
+  getOpenCodeFamilyPluginSource,
+  getOpenCodePluginSource
+} from './hook-service'
 
 beforeEach(() => {
   setAppEnvironment({
@@ -35,6 +41,47 @@ beforeEach(() => {
 const { isUsableId, toSafeDirName } = _internals
 
 describe('OpenCode hook plugin source', () => {
+  it('preserves the public module surface', async () => {
+    const module = await import('./hook-service')
+
+    expect(Object.keys(module).sort()).toEqual([
+      'OpenCodeHookService',
+      '_internals',
+      'getOpenCodeFamilyPluginSource',
+      'getOpenCodePluginSource',
+      'openCodeHookService'
+    ])
+    expect(Object.keys(module._internals).sort()).toEqual([
+      'getOpenCodePluginSource',
+      'isUsableId',
+      'toSafeDirName'
+    ])
+  })
+
+  it('keeps family routing and session-start policy separate', () => {
+    const primarySource = getOpenCodePluginSource()
+    const familySource = getOpenCodeFamilyPluginSource('/hook/mimo-code', {
+      emitSessionStart: false
+    })
+
+    expect(primarySource).toContain('http://127.0.0.1:${coords.port}/hook/opencode')
+    expect(primarySource).toContain('post("SessionStart", { sessionID: info.id })')
+    expect(familySource).toContain('http://127.0.0.1:${coords.port}/hook/mimo-code')
+    expect(familySource).not.toContain('post("SessionStart", { sessionID: info.id })')
+    expect(familySource).toContain('export const OrcaOpenCodeStatusPlugin')
+  })
+
+  it('keeps generated plugin bytes stable across the module split', () => {
+    const digest = (source: string): string => createHash('sha256').update(source).digest('hex')
+
+    expect(digest(getOpenCodePluginSource())).toBe(
+      'd14859a36c88aefe3a45cd232789503296e0a23438b151c773414bad64ab8eaa'
+    )
+    expect(
+      digest(getOpenCodeFamilyPluginSource('/hook/mimo-code', { emitSessionStart: false }))
+    ).toBe('4de14bee0c27ce55f29f70b19aa6ce9967e09b098bba139fb88f0511af7d4fca')
+  })
+
   it('filters child sessions via parentID lookup before forwarding events', () => {
     const source = _internals.getOpenCodePluginSource()
 

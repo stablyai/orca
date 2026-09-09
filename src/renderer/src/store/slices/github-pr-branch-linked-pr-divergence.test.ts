@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { _clearGitHubPRRefreshStartedEntriesForTest } from './github'
+import { _clearGitHubPRRefreshStartedEntriesForTest } from '../github/request-coordination'
 import {
   createTestStore,
   installLinkedPRClearStub,

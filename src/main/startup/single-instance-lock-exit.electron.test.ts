@@ -6,11 +6,8 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-lock'
 
-// Why #11935: the lock-loss gate runs before Electron `ready`, where `app.quit()` is deferred, so a
-// duplicate headless `orca serve` kept executing the rest of startup, reached Linux Ozone/X11 init
-// with no display, died with SIGSEGV, and systemd restarted it until the leaked AppImage FUSE mounts
-// hit the kernel's 1000-mount ceiling. This runs the gate's own termination statement, lifted out of
-// `src/main/index.ts`, under the real Electron binary.
+// Why: `app.quit()` is deferred before Electron `ready`, so fatal startup gates must use the
+// synchronous `app.exit()`. Run their shipped termination statements under the real binary.
 //
 // Why not a live lock race: Chromium's Linux ProcessSingleton only answers a second process once the
 // browser IO thread is up, which needs `ready` and therefore a display. On a display-less CI runner
@@ -19,10 +16,10 @@ import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-loc
 // only a real process can settle is what the loser does next, which is what this file pins.
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
-const LOCK_LOST = 'LOCK_LOST'
+const GATE_ENTERED = 'GATE_ENTERED'
 const CONTINUED_INTO_STARTUP = 'CONTINUED_INTO_STARTUP'
 const REACHED_TAIL = 'REACHED_TAIL'
-const MARKER_ENV = 'ORCA_LOCK_FIXTURE_MARKER'
+const MARKER_ENV = 'ORCA_PRE_READY_EXIT_FIXTURE_MARKER'
 
 const fixtureRoots: string[] = []
 
@@ -32,12 +29,15 @@ afterAll(() => {
   }
 })
 
-/** The `app.*` call the shipped lock-loss gate executes, so a revert to `app.quit()` fails here. */
-function readLockLossTermination(): string {
-  const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-  const start = source.indexOf('if (!hasSingleInstanceLock) {')
+/** Read the `app.*` termination statement from a pre-ready gate in the shipped entrypoint. */
+function readPreReadyTermination(gate: string): string {
+  const source = readFileSync(
+    join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
+    'utf8'
+  )
+  const start = source.indexOf(gate)
   expect(start).toBeGreaterThanOrEqual(0)
-  const end = source.indexOf('\n}', start)
+  const end = source.indexOf('\n  }', start)
   expect(end).toBeGreaterThan(start)
 
   return source
@@ -56,7 +56,7 @@ function buildFixtureMain(termination: string): string {
     `const marker = process.env.${MARKER_ENV}`,
     `const mark = (name) => appendFileSync(marker, name + '\\n')`,
     `const SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE = ${SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE}`,
-    `mark('${LOCK_LOST}')`,
+    `mark('${GATE_ENTERED}')`,
     termination,
     `mark('${CONTINUED_INTO_STARTUP}')`,
     // Why: stand in for the rest of `src/main/index.ts`, which on the reported host was display init.
@@ -67,15 +67,15 @@ function buildFixtureMain(termination: string): string {
 
 type FixtureRun = { status: number | null; markers: string[] }
 
-function runLockLossGate(termination: string): FixtureRun {
-  const root = mkdtempSync(join(tmpdir(), 'orca-lock-loss-'))
+function runPreReadyGate(termination: string): FixtureRun {
+  const root = mkdtempSync(join(tmpdir(), 'orca-pre-ready-exit-'))
   fixtureRoots.push(root)
   const dir = join(root, 'fixture')
   const marker = join(root, 'markers.log')
   mkdirSync(dir, { recursive: true })
   writeFileSync(
     join(dir, 'package.json'),
-    '{ "name": "orca-lock-loss-fixture", "main": "main.js" }'
+    '{ "name": "orca-pre-ready-exit-fixture", "main": "main.js" }'
   )
   writeFileSync(join(dir, 'main.js'), buildFixtureMain(termination))
   writeFileSync(marker, '')
@@ -93,23 +93,34 @@ function runLockLossGate(termination: string): FixtureRun {
   }
 }
 
-describe('#11935 pre-ready lock-loss termination under real Electron', () => {
+describe('pre-ready termination under real Electron', () => {
   it('stops the duplicate launch before any further startup runs, with the already-running code', () => {
-    const termination = readLockLossTermination()
+    const termination = readPreReadyTermination('if (!hasLock) {')
     // Why: an empty slice would let the fixture fall through to its own exit and pass vacuously.
     expect(termination).not.toBe('')
 
-    const run = runLockLossGate(termination)
+    const run = runPreReadyGate(termination)
 
-    expect(run.markers).toEqual([LOCK_LOST])
+    expect(run.markers).toEqual([GATE_ENTERED])
     expect(run.status).toBe(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
   }, 90_000)
 
+  it('#17615 stops serve when display setup fails instead of entering Chromium startup', () => {
+    const termination = readPreReadyTermination(
+      'if (state.isServeMode && !state.headlessBrowserDisplayAvailable) {'
+    )
+
+    const run = runPreReadyGate(termination)
+
+    expect(run.markers).toEqual([GATE_ENTERED])
+    expect(run.status).toBe(1)
+  }, 90_000)
+
   it('reproduces the deferred graceful quit that let the doomed launch keep booting', () => {
-    const run = runLockLossGate('app.quit()')
+    const run = runPreReadyGate('app.quit()')
 
     // Why: pins the Electron semantic the fix rests on — pre-`ready` `quit()` schedules, it does not stop.
-    expect(run.markers).toEqual([LOCK_LOST, CONTINUED_INTO_STARTUP, REACHED_TAIL])
+    expect(run.markers).toEqual([GATE_ENTERED, CONTINUED_INTO_STARTUP, REACHED_TAIL])
     expect(run.status).not.toBe(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
   }, 90_000)
 })

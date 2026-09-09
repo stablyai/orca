@@ -275,7 +275,7 @@ export function PaletteFilterFieldOptions({
           aria-label={group.heading}
           tabIndex={-1}
           onKeyDown={handleListKeyDown}
-          className="popover-scroll-content scrollbar-sleek overflow-y-auto py-1"
+          className="scrollbar-sleek overflow-y-auto py-1"
           style={{ maxHeight: FILTER_OPTION_LIST_MAX_HEIGHT }}
         >
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>

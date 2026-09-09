@@ -1,6 +1,7 @@
 import {
   dashboardCardDisplayState,
   type DashboardCard,
+  type DashboardCardDisplayState,
   type DashboardCardDotState
 } from '../../../../shared/dashboard-snapshot'
 
@@ -8,7 +9,7 @@ import {
  *  acknowledged finish into `idle`, which is right for bucket counts but loses the one
  *  distinction the map exists to show: finished-and-unread vs finished-and-still-yours.
  *  Kept local so `DashboardCardDotState` — which crosses the pop-out bridge — is unchanged. */
-export type AgentMapNodeStatus = DashboardCardDotState | 'done-seen'
+export type AgentMapNodeStatus = DashboardCardDisplayState | 'done-seen'
 
 export function agentMapDurationMinutes(card: DashboardCard, now: number): number {
   if (!Number.isFinite(card.startedAt) || card.startedAt <= 0) {
@@ -89,7 +90,7 @@ export function selectAgentMapRecentFlareStatuses(
 export type AgentMapStatusCounts = Record<AgentMapNodeStatus, number>
 
 export function emptyAgentMapStatusCounts(): AgentMapStatusCounts {
-  return { working: 0, blocked: 0, waiting: 0, done: 0, 'done-seen': 0, idle: 0 }
+  return { working: 0, monitoring: 0, blocked: 0, waiting: 0, done: 0, 'done-seen': 0, idle: 0 }
 }
 
 /** Finished work you have already opened is still yours to land, but it is not asking for

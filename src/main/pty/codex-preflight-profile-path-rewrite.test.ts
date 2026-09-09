@@ -162,13 +162,13 @@ describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH'
     expect(readFileSync(fixture.codexMarker, 'utf-8').trim()).toBe('--alias-flag --version')
   })
 
-  // Why: pins the defect itself, so a regression back to an unqualified name fails here.
-  it('would run the impostor if the preflight carried an unqualified command name', () => {
+  // Why: an unqualified preflight is rejected so profile PATH entries cannot hijack it.
+  it('skips an unqualified preflight value while still launching codex', () => {
     const fixture = buildFixture()
 
     launchCodexThroughRcfile(fixture, 'orca')
 
-    expect(existsSync(fixture.hijackMarker)).toBe(true)
+    expect(existsSync(fixture.hijackMarker)).toBe(false)
     expect(existsSync(fixture.intendedMarker)).toBe(false)
     expect(existsSync(fixture.codexMarker)).toBe(true)
   })

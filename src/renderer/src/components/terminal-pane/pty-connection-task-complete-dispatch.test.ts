@@ -479,8 +479,8 @@ describe('connectPanePty', () => {
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '\u280b OMP')
     expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '\u280b OMP')
     titleHandler('π: tmp', 'π: tmp')
-    expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'OMP ready')
-    expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', 'OMP ready')
+    expect(deps.setRuntimePaneTitle).toHaveBeenLastCalledWith('tab-1', 1, 'OMP: tmp')
+    expect(deps.updateTabTitle).toHaveBeenLastCalledWith('tab-1', 'OMP: tmp')
 
     const statusHandler = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'working'; prompt: string; agentType: 'pi' }) => void)

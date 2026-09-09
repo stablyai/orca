@@ -1,5 +1,9 @@
 // @vitest-environment happy-dom
 
+vi.mock('@/components/confirmation-dialog-context', () => ({
+  useConfirmationDialog: () => vi.fn().mockResolvedValue(false)
+}))
+
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +12,7 @@ import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import type { WorktreeMetaBatchUpdate } from '../../store/slices/worktree-helpers'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-status-defaults'
 import {
   WORKSPACE_STATUS_DRAG_IDS_TYPE,
@@ -369,7 +374,13 @@ async function dropWorktreesOnStatusLane(
 
 function committedStatusUpdates(): Map<string, Partial<WorktreeMeta>> {
   expect(mockStore.updateWorktreesMeta).toHaveBeenCalledTimes(1)
-  return mockStore.updateWorktreesMeta.mock.calls[0]![0] as Map<string, Partial<WorktreeMeta>>
+  const input = mockStore.updateWorktreesMeta.mock.calls[0]![0] as
+    | readonly WorktreeMetaBatchUpdate[]
+    | ReadonlyMap<string, Partial<WorktreeMeta>>
+  if ('get' in input) {
+    return new Map(input)
+  }
+  return new Map(input.map((entry) => [entry.worktreeId, entry.updates]))
 }
 
 describe('WorktreeList status-lane drop carries visible lineage children (#9083)', () => {

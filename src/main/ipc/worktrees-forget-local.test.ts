@@ -156,6 +156,22 @@ describe('registerWorktreeHandlers', () => {
       expect(removeWorktreeMock).not.toHaveBeenCalled()
     })
 
+    it('purges metadata after a rejected best-effort PTY sweep', async () => {
+      const worktreeId = 'repo-1::/workspace/feature-wt'
+      killAllProcessesForWorktreeMock.mockRejectedValue(new Error('terminal inventory unavailable'))
+
+      await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).resolves.toEqual({})
+
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+        repoId: 'repo-1'
+      })
+      expect(store.removeWorktreeMeta.mock.invocationCallOrder[0]).toBeLessThan(
+        mainWindow.webContents.send.mock.invocationCallOrder[0]
+      )
+      expect(removeWorktreeMock).not.toHaveBeenCalled()
+    })
+
     it('sweeps a connected SSH owner through its PTY provider', async () => {
       const worktreeId = 'repo-gone::/workspace/feature-wt'
       const sshProvider = {} as never

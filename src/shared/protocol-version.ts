@@ -1,6 +1,7 @@
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
+  SKILL_DELETE_CAPABILITY,
   SKILL_INSTALL_CAPABILITY,
   SKILL_INSTALL_CANCEL_CAPABILITY,
   SKILL_INSTALL_PROGRESS_CAPABILITY,
@@ -39,6 +40,8 @@ export const TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY = 'task-source-context.v1' a
 export const WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY = 'workspace-run-context.v1' as const
 export const WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY =
   'worktree.linked-work-item-context.v1' as const
+export const WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY =
+  'worktree.github-pr-suppression.v1' as const
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 export const ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY = 'orchestration.federation.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY =
@@ -49,6 +52,12 @@ export const ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY =
   'orchestration.worker-stop-verdict.v1' as const
 export const ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY =
   'orchestration.worker-launch-preferences.v1' as const
+export const ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY =
+  'orchestration.federation-structured-read.v1' as const
+export const ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY =
+  'orchestration.federation-fleet-snapshot.v1' as const
+export const ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY =
+  'orchestration.federation-release-archive.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
 export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
 export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
@@ -57,6 +66,9 @@ export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
 export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
   'linear.issue-attribute-filter.v1' as const
+export const JIRA_USER_FIELDS_RUNTIME_CAPABILITY = 'jira.user-fields.v1' as const
+export const JIRA_USER_FIELDS_UPDATE_REQUIRED_MESSAGE =
+  'Creating Jira issues with user fields requires a newer Orca server. Update the server and try again.'
 // Why: signals the host exposes the Agent Session History scanner over RPC
 // (aiVault.listSessions). Registered unconditionally for every build, so it is a
 // STATIC capability advertised by getStatus() automatically — NOT a runtime
@@ -73,11 +85,24 @@ export const BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY = 'browser.certificate
 // treat a preallocated page ID as canonical when this is advertised.
 export const BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY =
   'browser.tab-create-known-id.v1' as const
+export const BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY = 'browser.clientHost.v1' as const
+export const BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY =
+  'browser.clientHost.pageMetadata.v1' as const
+export const BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY =
+  'browser.clientHost.automation.v1' as const
+// Why: without it a client-placed browser.upload would resolve remote paths on the desktop filesystem, so uploads fail closed instead.
+export const BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY =
+  'browser.clientHost.fileChannel.v1' as const
+export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.v1' as const
+export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
+  'network.browserTunnel.executionHosts.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops
 // unknown keys), so a mobile xterm query reply would land as ordinary
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
+// Why: without this, prompt request IDs and waitSubmitMs are stripped and a retry would resend raw input.
+export const TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY = 'terminal.prompt-delivery.v1' as const
 // Why: paired clients may unmount xterm only when the host can return a
 // bounded, sequenced scrollback snapshot for lossless reveal.
 export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parking.v1' as const
@@ -85,7 +110,8 @@ export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parki
 // terminal creation, so mobile must hide Quick Commands unless both are present.
 export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-commands.v1' as const
 // Why: older hosts strip worktree.create's clientMutationId, so mobile must only
-// replay ambiguous cutovers when the host advertises idempotent create support.
+// replay ambiguous cutovers when the host advertises idempotent create support;
+// status.worktreeCreateIdempotency carries the optional host retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
 export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
@@ -94,6 +120,13 @@ export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentia
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'terminal.create-idempotency.v2' as const
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
+export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
+  'session-tabs.authoritative-inventory.v1' as const
+// Why: a client advertising this retains every terminal retirement proof it receives until the
+// surface is published live again, so a session-tabs stream sends each proof once instead of
+// repeating the host's whole bounded list on every title tick.
+export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
+  'session-tabs.retirement-proof-delta.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
@@ -101,6 +134,38 @@ export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
   'agent-session.omp-resume-path.v1' as const
+// Why: structured sessions are journal-backed, not PTY-backed, so an incapable client must not
+// receive their journal or drive their lifecycle. Mobile may receive a metadata-only placeholder;
+// the host still refuses agentSession.* methods and destructive tab mutations without capability.
+export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: paired clients advertise Claude-structured support so the host can gate its agent-specific
+// journal and lifecycle surfaces independently from Codex support.
+export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
+  'agent-session.structured.claude.v1' as const
+// Why: paired structured clients explicitly hold every visible session surface, allowing the host
+// to stop provider children after the last surface closes without tying lifetime to a transport.
+export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =
+  'agent-session.structured.hold.v1' as const
+// Why: a client holding only a session id — an Agent Session History row — asks the host to
+// republish that chat's tab. An older host has no such method, and a client must learn that during
+// negotiation rather than by calling and reading a refusal it cannot distinguish from a real one.
+export const STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY =
+  'agent-session.structured.reveal.v1' as const
+// Why: `agentSession.create` gains an optional `resumeFrom`, and its params are a STRICT union — an
+// older host rejects the unknown key as a schema error, which a client cannot tell from a real
+// refusal. Worse, without probing, a client cannot know whether a host that accepted the call
+// adopted the conversation or quietly started a blank one. Negotiate before offering the action.
+export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
+  'agent-session.structured.resume-history.v1' as const
+// Why: agentSession.subscribeStatus is additive to a surface that already shipped, so a host
+// advertising agent-session.structured.v1 may still answer it with method_not_found. Clients must
+// probe before subscribing or they reconnect forever and never show any status at all.
+export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.status-feed.v1' as const
+// The RPC is registered unconditionally; per-session rewind support is a separate check.
+export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
+// Readers must understand a monitoring roster with no available stop control.
+export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
+  'agent-session.background-task-stop.v1' as const
 // Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
@@ -109,10 +174,50 @@ export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
   'Remote file changes require a newer Orca server. Update the HUB and try again.'
+export const GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY = 'github.markPRReadyForReview' as const
+export const GITHUB_MARK_PR_READY_UPDATE_REQUIRED_MESSAGE =
+  'Marking a pull request ready requires a newer Orca server. Update the server and try again.'
+export const GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY =
+  'gitlab.updateMR.readyForReview.v1' as const
+export const GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE =
+  'Marking a merge request ready requires a newer Orca server. Update the server and try again.'
 export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-source-defaults.v1' as const
+// Why: older hosts drop automation.list's selector and answer with the whole authority, so a scoped client must not read that as one host's rows.
+export const AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY =
+  'automation.list-host-scope.v1' as const
+export const AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE =
+  'Filtering automations by host requires a newer Orca server. Update the HUB and try again.'
+// Why: without server-side owner preconditions a mutation could run against a host the user never saw, so unfenced rows stay view-only.
+export const AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY = 'automation.owner-fencing.v1' as const
+export const AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE =
+  'Editing automations on this host requires a newer Orca server. Update the HUB and try again.'
+export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
+  'automation.create-idempotency.v1' as const
+
+// Generic native clients include the CLI and must not claim Electron-only page
+// placement support.
+export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+] as const
+
+// Electron clients can decode client-hosted page placement; becoming a page
+// host still requires the separate authenticated browser-client lease.
+export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
+  ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  // Why: only the renderer runs the retirement-proof ledger; CLI and mobile must keep full lists.
+  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
+] as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -123,9 +228,18 @@ export const RUNTIME_CAPABILITIES = [
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_AUTOMATION_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_FILE_CHANNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
+  BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   'terminal.binary-stream.v1',
   'terminal.multiplex.v1',
   'workspace-ports.v1',
@@ -134,22 +248,35 @@ export const RUNTIME_CAPABILITIES = [
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
+  JIRA_USER_FIELDS_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,
+  TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY,
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
+  GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
+  GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
@@ -161,7 +288,11 @@ export const RUNTIME_CAPABILITIES = [
   SKILL_INSTALL_RESULT_V2_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY,
   SKILL_MANAGEMENT_CAPABILITY,
-  SKILL_INSTALL_PROVIDERS_CAPABILITY
+  SKILL_INSTALL_PROVIDERS_CAPABILITY,
+  SKILL_DELETE_CAPABILITY,
+  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
+  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})
