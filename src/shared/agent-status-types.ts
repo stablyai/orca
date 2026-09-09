@@ -102,6 +102,8 @@ export type AgentSubagentSnapshot = {
 }
 
 export type AgentStatusEntry = {
+  /** Renderer-local status-feed confirmation for children; absent on hook rows. */
+  subagentObservation?: 'live' | 'unverifiable'
   state: AgentStatusState
   /** Ongoing work that does not require foreground agent execution. Only valid while working. */
   workingMode?: AgentWorkingMode
