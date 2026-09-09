@@ -41,6 +41,13 @@
 }
 
 @theme inline {
+  --color-file-icon-red: var(--file-icon-red);
+  --color-file-icon-blue: var(--file-icon-blue);
+  --color-file-icon-green: var(--file-icon-green);
+  --color-file-icon-orange: var(--file-icon-orange);
+  --color-file-icon-violet: var(--file-icon-violet);
+  --color-file-icon-cyan: var(--file-icon-cyan);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -130,6 +137,13 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
+  --file-icon-red: var(--color-red-600);
+  --file-icon-blue: var(--color-blue-600);
+  --file-icon-green: var(--color-green-700);
+  --file-icon-orange: var(--color-orange-700);
+  --file-icon-violet: var(--color-violet-600);
+  --file-icon-cyan: var(--color-cyan-700);
+
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
@@ -254,6 +268,13 @@
 /* ── Dark Mode ───────────────────────────────────────── */
 
 .dark {
+  --file-icon-red: var(--color-red-400);
+  --file-icon-blue: var(--color-blue-400);
+  --file-icon-green: var(--color-green-400);
+  --file-icon-orange: var(--color-orange-400);
+  --file-icon-violet: var(--color-violet-400);
+  --file-icon-cyan: var(--color-cyan-400);
+
   --orca-security-background: #0a0a0a;
   --orca-security-foreground: #fafafa;
   --orca-security-card: #171717;
