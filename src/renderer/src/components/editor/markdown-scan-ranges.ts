@@ -15,7 +15,7 @@ export function markdownFenceRanges(content: string): MarkdownFenceRanges {
 
     const lineText = line.replace(/(?:\r\n|\n|\r)$/u, '')
     if (openFence) {
-      // Built once per fence: rebuilding it per line recompiled the same regex for every fenced line.
+      // Why: built once per fence; a per-line rebuild recompiles the same regex for every fenced line.
       if (openFence.closingPattern.test(lineText)) {
         ranges.push([openFence.start, offset + line.length])
         openFence = null
