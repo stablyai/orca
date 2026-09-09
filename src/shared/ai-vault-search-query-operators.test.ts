@@ -61,12 +61,29 @@ describe('the shapes where the panel parser used to answer differently', () => {
     expect(parseVaultQuery(query)[key]).toEqual([])
   })
 
-  it.each(['"" empty', "'' empty"])('reads the empty quotes in %s as an empty term', (query) => {
-    // Same reason one level up: the old parser searched for the two characters
-    // and found nothing, where an empty term matches everything and leaves the
-    // rest of the query to do the work.
-    expect(parseVaultQuery(query).terms).toEqual(['', 'empty'])
+  it.each([
+    ['repo:"  " x', 'repoTerms'],
+    ['path:"  " x', 'pathTerms']
+  ] as const)('drops the whitespace-only operator value in %s too', (query, key) => {
+    // Same defect as `repo:""` wearing a different hat: an untrimmed `"  "`
+    // survives as a term, matches no label, and empties the list.
+    expect(splitAiVaultSearchQuery(query)[key]).toEqual([])
+    expect(parseVaultQuery(query)[key]).toEqual([])
   })
+
+  it('trims a quoted operator value rather than searching for the spaces', () => {
+    expect(splitAiVaultSearchQuery('repo:" session-search "').repoTerms).toEqual(['session-search'])
+  })
+
+  it.each(['"" empty', "'' empty", '"  " empty'])(
+    'reads the empty quotes in %s as an empty term',
+    (query) => {
+      // Same reason one level up: the old parser searched for the two characters
+      // and found nothing, where an empty term matches everything and leaves the
+      // rest of the query to do the work.
+      expect(parseVaultQuery(query).terms).toEqual(['', 'empty'])
+    }
+  )
 
   it.each([
     ['"foo"bar', { terms: ['foo', 'bar'], repoTerms: [], pathTerms: [] }],

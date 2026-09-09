@@ -12,10 +12,17 @@ export type SessionSearchCursorRejection = 'stale-generation' | 'different-query
 export class SessionSearchCursorError extends Error {
   constructor(
     readonly rejection: SessionSearchCursorRejection,
-    /** The generation the cursor was minted in; absent when it could not be read. */
-    readonly expectedGeneration?: number,
-    /** The generation the index is at now. */
-    readonly actualGeneration?: number
+    /**
+     * The generation the index is at now. Always present: the engine knows it
+     * before it looks at the cursor at all.
+     */
+    readonly actualGeneration: number,
+    /**
+     * The generation the cursor claims it was minted in. Absent only when the
+     * cursor could not be decoded far enough to carry a number, which is one of
+     * the `malformed` cases.
+     */
+    readonly expectedGeneration?: number
   ) {
     super(`Search cursor rejected: ${rejection}`)
     this.name = 'SessionSearchCursorError'
@@ -55,33 +62,42 @@ export function encodeSessionSearchCursor(generation: number, offset: number, ke
   return Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url')
 }
 
-/** The offset this cursor points at, or a typed rejection. */
+/**
+ * The offset this cursor points at, or a typed rejection.
+ *
+ * Every rejection carries `actualGeneration`, and every one that could read a
+ * generation out of the cursor carries `expectedGeneration` too, so a caller
+ * can tell "the index moved under you, ask for page one" from "this cursor is
+ * not ours" and act on the first without showing anyone an error.
+ */
 export function decodeSessionSearchCursor(cursor: string, generation: number, key: string): number {
   let payload: CursorPayload
   try {
     payload = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8')) as CursorPayload
   } catch {
-    throw new SessionSearchCursorError('malformed')
+    throw new SessionSearchCursorError('malformed', generation)
   }
+  // A generation that survived parsing is worth reporting even when the rest of
+  // the payload is unusable: it is what tells the caller which snapshot the
+  // cursor thought it was walking.
+  const claimed =
+    typeof payload?.g === 'number' && Number.isFinite(payload.g) ? payload.g : undefined
   if (
-    typeof payload?.g !== 'number' ||
+    claimed === undefined ||
     !Number.isInteger(payload?.o) ||
     payload.o < 0 ||
     typeof payload?.k !== 'string'
   ) {
-    throw new SessionSearchCursorError('malformed')
+    throw new SessionSearchCursorError('malformed', generation, claimed)
   }
   // Generation first: a caller who changed the query AND waited through a
   // publish should hear about the index moving, which is the condition it
   // cannot fix by paging again.
-  // Both generations travel with the rejection so a caller can tell "the index
-  // moved under you, ask for page one" from "this cursor is not ours", and act
-  // on the first without showing anyone an error.
-  if (payload.g !== generation) {
-    throw new SessionSearchCursorError('stale-generation', payload.g, generation)
+  if (claimed !== generation) {
+    throw new SessionSearchCursorError('stale-generation', generation, claimed)
   }
   if (payload.k !== key) {
-    throw new SessionSearchCursorError('different-query', payload.g, generation)
+    throw new SessionSearchCursorError('different-query', generation, claimed)
   }
   return payload.o
 }

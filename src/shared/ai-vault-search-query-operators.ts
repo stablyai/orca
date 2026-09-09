@@ -6,7 +6,7 @@ export type AiVaultSearchQuerySplit = {
   text: string
   /** The same free text as tokens with quotes stripped; what a substring matcher wants. */
   terms: readonly string[]
-  /** Operator values exactly as typed: the panel folds case, the index does not. */
+  /** Operator values as typed apart from surrounding space: the panel folds case, the index does not. */
   repoTerms: readonly string[]
   pathTerms: readonly string[]
 }
@@ -33,8 +33,12 @@ export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit 
       const quoted = readQuoted(query, at)
       const value = quoted?.value ?? readBare(query, at)
       index = quoted ? quoted.end : at + value.length
-      if (value) {
-        ;(operator[1]!.toLowerCase() === 'repo' ? repoTerms : pathTerms).push(value)
+      // Trimmed for the same reason an empty value is dropped: `repo:"  "` is
+      // not a narrowing anyone typed on purpose, and an untrimmed one matches
+      // no label at all, which silently empties the list.
+      const operand = value.trim()
+      if (operand) {
+        ;(operator[1]!.toLowerCase() === 'repo' ? repoTerms : pathTerms).push(operand)
       }
       continue
     }
@@ -42,7 +46,10 @@ export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit 
     const value = quoted?.value ?? readBare(query, index)
     const end = quoted ? quoted.end : index + value.length
     spans.push(query.slice(index, end))
-    terms.push(value)
+    // The span keeps the query verbatim for FTS; only the substring matcher's
+    // copy is trimmed, so `"  "` reads as the empty term `""` already does
+    // rather than as a term no session's text contains.
+    terms.push(value.trim())
     index = end
   }
   return { text: spans.join(' '), terms, repoTerms, pathTerms }

@@ -118,7 +118,8 @@ export class SessionSearchEngine {
     const generation = this.store.generation
     const scope = request.scope ?? 'all'
     const sort = request.filters?.sort ?? 'relevance'
-    const split = splitAiVaultSearchQuery(request.query.slice(0, SESSION_SEARCH_QUERY_MAX_LENGTH))
+    const capped = request.query.slice(0, SESSION_SEARCH_QUERY_MAX_LENGTH)
+    const split = splitAiVaultSearchQuery(capped)
     const retrievalScope: RetrievalScope = {
       scope,
       sort,
@@ -163,7 +164,8 @@ export class SessionSearchEngine {
         // gave up at its scan ceiling returns no hits, and so does a search that
         // genuinely matched nothing.
         candidates: incomplete,
-        snippets: hits.filter((hit) => hit.evidence?.snippetTruncated).length
+        snippets: hits.filter((hit) => hit.evidence?.snippetTruncated).length,
+        query: capped.length < request.query.length || plan.truncated
       },
       generation,
       durationMs: performance.now() - startedAt

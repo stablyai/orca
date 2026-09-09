@@ -123,6 +123,13 @@ export type SessionSearchTruncation = {
   candidates: boolean
   /** Hits on this page whose snippet was cut. */
   snippets: number
+  /**
+   * The query itself was cut before it was searched: past the length ceiling,
+   * or past the number of terms the planner will plan. The terms that survived
+   * were searched in full, so a hit is still a hit; a miss is not proof of
+   * absence.
+   */
+  query: boolean
 }
 
 export type SessionSearchResponse = {
