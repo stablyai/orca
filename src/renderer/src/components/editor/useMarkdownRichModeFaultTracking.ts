@@ -10,10 +10,9 @@ type UseMarkdownRichModeFaultTrackingParams = {
   setMarkdownRichModeFaultedContent: (fileId: string, content: string | null) => void
 }
 
-// Why: getMarkdownRenderMode only decides source-vs-rich-vs-preview for the
-// content it's given; recording that a Rich attempt fell back (or recovered)
-// as durable per-tab state is a side effect, so it belongs in an effect keyed
-// off the render model's output rather than during render itself.
+// Why: recording that a Rich attempt fell back or recovered is durable per-tab
+// state, a side effect, so it lives in an effect keyed off the render model's
+// output, never inside render.
 export function useMarkdownRichModeFaultTracking({
   fileId,
   mdViewMode,
@@ -29,8 +28,8 @@ export function useMarkdownRichModeFaultTracking({
       setMarkdownRichModeFaultedContent(fileId, inlineMarkdownContent)
       return
     }
-    // Why: a successful Rich attempt for this content means it's no longer a
-    // fault, whatever content is currently stored for this tab.
+    // Why: a successful Rich attempt for this content clears the fault,
+    // whatever content is currently stored for this tab.
     setMarkdownRichModeFaultedContent(fileId, null)
   }, [
     fileId,

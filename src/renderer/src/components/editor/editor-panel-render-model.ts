@@ -127,9 +127,8 @@ export function getEditorPanelRenderModel({
     !inlineFileContent.loadError &&
     activeFile.conflict?.kind !== 'conflict-placeholder' &&
     activeFile.conflict?.conflictStatus !== 'unresolved'
-  // Why: classifying scans the whole document, so it only runs while the user
-  // is looking at Rich mode. Source-view tabs read the stored fault instead
-  // (see useMarkdownRichModeFaultTracking) rather than re-scanning.
+  // Why: classification scans the whole document, so it runs only in Rich
+  // mode; Source-view tabs read the stored fault (useMarkdownRichModeFaultTracking).
   const richModeEligibility =
     canRenderInlineMarkdown && mdViewMode === 'rich'
       ? getCachedMarkdownRichModeEligibility({
