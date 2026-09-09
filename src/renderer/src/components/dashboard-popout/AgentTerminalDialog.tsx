@@ -78,6 +78,7 @@ function AgentTerminalFrame({
           ptyId={card.ptyId}
           terminalInput={card.terminalInput ?? null}
           className={previewClassName}
+          onRequestClose={() => onOpenChange(false)}
         />
       ) : (
         <div className="min-h-0 flex-1 px-2.5 pb-2 text-[11px] text-muted-foreground">
@@ -98,8 +99,8 @@ function AgentTerminalFrame({
  * The near-fullscreen live-terminal dialog for one agent. Hosted by the BOARD,
  * not the card: sending a message flips the agent's bucket, which remounts its
  * card in another column — a card-owned dialog would close mid-conversation.
- * Only an explicit close (button, click-outside, Esc outside the terminal)
- * dismisses it.
+ * Only an explicit close (button, click-outside, Esc outside the terminal, or
+ * the pane-close chord from inside it) dismisses it.
  */
 export function AgentTerminalDialog({
   card,
