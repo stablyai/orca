@@ -5,6 +5,10 @@ import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-
 import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent-test-state'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
+  RESUMABLE_TUI_AGENTS,
+  type AgentProviderSessionMetadata
+} from '../../../shared/agent-session-resume'
+import {
   hasHostSessionMirrorHydrated,
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
@@ -193,6 +197,72 @@ describe('parked mirrored-pane resume replay', () => {
     expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
     expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
+
+  it.each(
+    RESUMABLE_TUI_AGENTS.flatMap((agent) =>
+      (['working', 'done'] as const).flatMap((checkpointState) =>
+        [
+          { livePtyIds: ['pty-host-old-1'], expectedLaunches: 0 },
+          { livePtyIds: [], expectedLaunches: 1 },
+          { livePtyIds: ['other-pane-pty'], expectedLaunches: 1 }
+        ].map((scenario) => ({ agent, checkpointState, ...scenario }))
+      )
+    )
+  )(
+    'checks exact live ownership before resuming $agent $checkpointState with $livePtyIds',
+    ({ agent, checkpointState, livePtyIds, expectedLaunches }) => {
+      const worktree = makeRuntimeOwnedWorktree()
+      seedState(worktree)
+      const paneKey = seedSleepingRecord(worktree.id, 'completed-session')
+      const providerSession: AgentProviderSessionMetadata = {
+        key: agent === 'antigravity' ? 'conversation_id' : 'session_id',
+        id: 'completed-session',
+        ...(agent === 'pi' || agent === 'prime-agent'
+          ? { transcriptPath: `/remote/${agent}/session.jsonl` }
+          : {})
+      }
+      const record = {
+        ...useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]!,
+        agent,
+        providerSession
+      }
+      const stalePaneKey = makePaneKey('old-tab', LEAF_ID)
+      useAppStore.setState({
+        ptyIdsByTabId: { [WEB_TAB_ID]: [...livePtyIds] },
+        sleepingAgentSessionsByPaneKey: {
+          [stalePaneKey]: {
+            ...record,
+            paneKey: stalePaneKey,
+            tabId: 'old-tab',
+            state: checkpointState,
+            origin: 'quit'
+          }
+        },
+        agentStatusByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            tabId: WEB_TAB_ID,
+            worktreeId: worktree.id,
+            agentType: record.agent,
+            providerSession: record.providerSession,
+            state: 'done',
+            prompt: '',
+            updatedAt: 2000,
+            stateStartedAt: 2000,
+            stateHistory: []
+          }
+        }
+      })
+      markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+
+      expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(expectedLaunches)
+      const after = useAppStore.getState()
+      expect(after.tabsByWorktree[worktree.id]).toHaveLength(1 + expectedLaunches)
+      expect(after.tabsByWorktree[worktree.id]?.[0]?.id).toBe(WEB_TAB_ID)
+      expect(after.sleepingAgentSessionsByPaneKey[stalePaneKey]).toBeUndefined()
+      expect(Object.keys(after.pendingStartupByTabId)).toHaveLength(expectedLaunches)
+    }
+  )
 
   it('drops the hydrated verdict when the host reconnects under a new runtime id', () => {
     connectRuntime('runtime-a')
