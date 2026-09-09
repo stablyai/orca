@@ -1,5 +1,6 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import type { SessionSearchUnavailableFeature } from './session-search-index-capabilities'
 
 // ENGINE types, deliberately not in src/shared: nothing here is a wire type.
 // PR 5 owns the public contract and lifts what a caller may actually receive;
@@ -59,7 +60,13 @@ export type SessionSearchRoute = 'phrase' | 'and' | 'or' | 'typo+phrase' | 'typo
  */
 export type SessionSearchPlannerReport = {
   route: SessionSearchRoute
-  /** Query terms after typo repair, when any were changed. */
+  /**
+   * The whole body the repaired plan searched, in query order, when any term
+   * was changed. Not just the corrected terms: a caller rendering "searched
+   * for" needs the query it actually ran, and a repair never drops a term the
+   * original kept. A corrected term carries the index's own spelling, which the
+   * tokenizer has case-folded; untouched terms keep the case they were typed in.
+   */
   repairedTerms?: string[]
   /** The corpus the route ran against; today always the requested scope. */
   tier: SessionSearchScope
@@ -120,6 +127,12 @@ export type SessionSearchTruncation = {
 
 export type SessionSearchResponse = {
   hits: SessionSearchHit[]
+  /**
+   * Engine features the index on disk cannot serve, empty on a current index.
+   * A route ladder missing its repair rung still answers; saying so is what
+   * keeps the answer honest.
+   */
+  unavailable: readonly SessionSearchUnavailableFeature[]
   planner: SessionSearchPlannerReport
   page: SessionSearchPage
   truncated: SessionSearchTruncation

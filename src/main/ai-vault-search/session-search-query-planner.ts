@@ -53,11 +53,21 @@ export function indexTokens(query: string, limit = Number.POSITIVE_INFINITY): st
   return out
 }
 
-export function planSessionSearchQuery(query: string): SessionSearchQueryPlan {
+/**
+ * `literal` overrides the shape test. Typo repair re-plans the query it
+ * corrected, and a corrected spelling can look like ordinary prose even though
+ * what was typed was a literal: `parseJsonn(the, data)` has the punctuation that
+ * makes it literal, `parsejson the data` does not. Without the override the
+ * re-plan would drop `the` as a stop word, so the repaired query would search
+ * for less than the original asked for and `repairedTerms` would report a body
+ * the user never typed.
+ */
+export function planSessionSearchQuery(
+  query: string,
+  literal = isLiteralQuery(query)
+): SessionSearchQueryPlan {
   const raw = indexTokens(query, MAX_BODY_TERMS)
-  let body = isLiteralQuery(query)
-    ? raw
-    : raw.filter((token) => !STOP_WORDS.has(token.toLowerCase()))
+  let body = literal ? raw : raw.filter((token) => !STOP_WORDS.has(token.toLowerCase()))
   if (body.length < 2) {
     body = raw
   }
@@ -71,7 +81,7 @@ export function planSessionSearchQuery(query: string): SessionSearchQueryPlan {
     }
   }
   return {
-    literal: isLiteralQuery(query),
+    literal,
     terms: [...terms, ...extra].slice(0, MAX_TERMS),
     body: body.slice(0, MAX_BODY_TERMS)
   }
