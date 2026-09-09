@@ -1,4 +1,10 @@
 import type { MarkdownToken } from '@tiptap/core'
+import {
+  isInsideRange,
+  markdownCodeSpanRanges,
+  markdownFenceRanges,
+  type MarkdownFenceRanges
+} from './markdown-scan-ranges'
 
 // Toggle summaries can render at heading scales 1–5, mirroring the plain
 // heading levels the slash menu / toolbar dropdown offer (h1–h5).
@@ -35,10 +41,6 @@ export type DetailsHtmlBlock = {
   openingAttributes: string
   inner: string
 }
-
-// Fence ranges depend only on the scanned string, so callers scanning one body
-// repeatedly compute them once and share them across sibling matches.
-export type MarkdownFenceRanges = readonly (readonly [number, number])[]
 
 export type DetailsSummaryHtml = {
   attributes: string
@@ -91,54 +93,41 @@ export function renderDetailsAttributes(attrs: Record<string, unknown> | undefin
   return attributes.join(' ')
 }
 
-function markdownFenceRanges(content: string): MarkdownFenceRanges {
-  const ranges: [number, number][] = []
-  let offset = 0
-  let openFence: { closingPattern: RegExp; start: number } | null = null
+// marked's block scanner calls this on raw, not-yet-lexed source to decide
+// where to cut a paragraph, so it must independently exclude fenced code and
+// inline code spans or a `<details` mention inside either gets treated as a
+// real block boundary. CommonMark also requires an HTML block's opening tag
+// to start a line (indented at most three spaces); mid-line text can't open
+// one.
+export function findDetailsBlockStart(content: string): number {
+  const fenceRanges = markdownFenceRanges(content)
+  const codeSpanRanges = markdownCodeSpanRanges(content)
+  const tagPattern = /<details\b/gi
 
-  for (const lineMatch of content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)) {
-    const line = lineMatch[0]
-    if (line === '') {
-      break
+  for (;;) {
+    const match = tagPattern.exec(content)
+    if (!match) {
+      return -1
     }
 
-    const lineText = line.replace(/(?:\r\n|\n|\r)$/u, '')
-    if (openFence) {
-      // Built once per fence: rebuilding it per line recompiled the same regex for every fenced line.
-      if (openFence.closingPattern.test(lineText)) {
-        ranges.push([openFence.start, offset + line.length])
-        openFence = null
-      }
-    } else {
-      const openingFenceMatch = lineText.match(/^ {0,3}(`{3,}|~{3,})/u)
-      if (openingFenceMatch?.[1]) {
-        openFence = {
-          closingPattern: new RegExp(
-            `^ {0,3}${openingFenceMatch[1][0]}{${openingFenceMatch[1].length},}\\s*$`
-          ),
-          start: offset
-        }
-      }
+    const index = match.index
+    if (isInsideRange(index, fenceRanges) || isInsideRange(index, codeSpanRanges)) {
+      continue
     }
 
-    offset += line.length
+    const lineStart = content.lastIndexOf('\n', index - 1) + 1
+    const indent = content.slice(lineStart, index)
+    if (indent.length <= 3 && /^ *$/.test(indent)) {
+      return index
+    }
   }
-
-  if (openFence) {
-    ranges.push([openFence.start, content.length])
-  }
-
-  return ranges
-}
-
-function isInsideRange(index: number, ranges: MarkdownFenceRanges): boolean {
-  return ranges.some(([start, end]) => index >= start && index < end)
 }
 
 export function matchDetailsHtmlBlock(
   content: string,
   start: number,
-  precomputedFenceRanges?: MarkdownFenceRanges
+  precomputedFenceRanges?: MarkdownFenceRanges,
+  precomputedCodeSpanRanges?: MarkdownFenceRanges
 ): DetailsHtmlBlock | null {
   const openingMatch = content.slice(start).match(/^<details\b[^>]*>/i)
   if (!openingMatch) {
@@ -148,6 +137,7 @@ export function matchDetailsHtmlBlock(
   const detailsTagPattern = /<\/?details\b[^>]*>/gi
   detailsTagPattern.lastIndex = start
   const fenceRanges = precomputedFenceRanges ?? markdownFenceRanges(content)
+  const codeSpanRanges = precomputedCodeSpanRanges ?? markdownCodeSpanRanges(content)
 
   let depth = 0
 
@@ -158,7 +148,10 @@ export function matchDetailsHtmlBlock(
     }
 
     const tag = tagMatch[0]
-    if (tagMatch.index !== start && isInsideRange(tagMatch.index, fenceRanges)) {
+    if (
+      tagMatch.index !== start &&
+      (isInsideRange(tagMatch.index, fenceRanges) || isInsideRange(tagMatch.index, codeSpanRanges))
+    ) {
       continue
     }
 
@@ -276,8 +269,9 @@ const MAX_DETAILS_NESTING_LEVELS = 16
 function stripEditableNestedDetails(bodyHtml: string, nestingLevel: number): string | null {
   let result = ''
   let index = 0
-  // Why: without sharing this, N sibling toggles rescan the whole body N times.
+  // Why: without sharing these, N sibling toggles rescan the whole body N times.
   let fenceRanges: MarkdownFenceRanges | null = null
+  let codeSpanRanges: MarkdownFenceRanges | null = null
 
   for (;;) {
     const nestedStart = indexOfAsciiIgnoreCase(bodyHtml, '<details', index)
@@ -290,7 +284,8 @@ function stripEditableNestedDetails(bodyHtml: string, nestingLevel: number): str
     }
 
     fenceRanges ??= markdownFenceRanges(bodyHtml)
-    const nested = matchDetailsHtmlBlock(bodyHtml, nestedStart, fenceRanges)
+    codeSpanRanges ??= markdownCodeSpanRanges(bodyHtml)
+    const nested = matchDetailsHtmlBlock(bodyHtml, nestedStart, fenceRanges, codeSpanRanges)
     if (!nested || !isEditableDetailsHtmlBlock(nested, nestingLevel + 1)) {
       return null
     }
