@@ -149,6 +149,7 @@ export function WorktreeCardParentContent({
             prDisplay={statusLaneReview}
             newCardStyle={newCardStyle}
             hasBranchIdentity={Boolean(branchIdentityDisplay)}
+            needsAttentionReason={worktree.needsAttention}
           />
         </div>
       ) : null}

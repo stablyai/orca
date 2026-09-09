@@ -15,8 +15,15 @@ import {
 } from './runtime-managed-worktree-metadata'
 import { resolveRuntimeGitHubWorktreeBase } from './runtime-github-worktree-base'
 import { resolveRuntimeGitLabWorktreeBase } from './runtime-gitlab-worktree-base'
+import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 
 export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithCreateManagedWorktree {
+  private notificationDispatch: ((args: NotificationDispatchRequest) => void) | null = null
+
+  setNotificationDispatch(dispatch: ((args: NotificationDispatchRequest) => void) | null): void {
+    this.notificationDispatch = dispatch
+  }
+
   protected createManagedRemoteWorktree(
     repo: Repo,
     args: RuntimeRemoteWorktreeCreateArgs
@@ -166,7 +173,17 @@ export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithC
         invalidateResolved: () => this.invalidateResolvedWorktreeCache(),
         invalidateScan: (repoId) => this.invalidateWorktreeScanCacheForRepo(repoId),
         notifyChanged: (repoId) => this.notifyWorktreesChanged(repoId),
-        showWorktree: (selector) => this.showManagedWorktree(selector)
+        showWorktree: (selector) => this.showManagedWorktree(selector),
+        notifyNeedsAttentionChange: (args) => {
+          this.notificationDispatch?.({
+            source: 'needs-attention',
+            worktreeId: args.worktreeId,
+            worktreeLabel: args.worktreeLabel,
+            repoLabel: this.store.getRepo(args.repoId)?.displayName,
+            needsAttentionReason: args.needsAttentionReason,
+            notificationId: `needs-attention:${args.worktreeId}`
+          })
+        }
       }
     })
   }

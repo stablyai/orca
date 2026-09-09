@@ -25,10 +25,118 @@ import {
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
 
+// Why: module-level (not local to registerNotificationHandlers) so dispatchNotification's
+// direct-call path (see setNotificationDispatch in register-core-handlers.ts) shares cooldown
+// state with the ipcMain.handle path. registerNotificationHandlers clears both below on every
+// call, restoring "fresh per session" semantics — callers must wire setNotificationDispatch
+// after registerNotificationHandlers so a direct dispatch never sees stale pre-session state.
+const recentDesktopNotifications = new Map<string, number>()
+const recentMobileNotifications = new Map<string, number>()
+
+// Why: agent-task-complete and terminal-bell intentionally share one cooldown bucket per
+// worktree (they often co-fire and only the first should surface), but needs-attention is a
+// fully independent external-tool signal — sharing that bucket let a just-fired agent
+// notification silently swallow a distinct needs-attention notification for 5s afterward.
+function getNotificationDedupeKey(args: NotificationDispatchRequest): string {
+  const worktreeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
+  return args.source === 'needs-attention' ? `needs-attention:${worktreeKey}` : worktreeKey
+}
+
+/**
+ * Core native-notification dispatch: settings gates, cooldown/dedupe, mobile fan-out, and
+ * the actual Electron Notification. Exported (not just wired as an ipcMain handler) so
+ * main-process code — e.g. a worktree metadata change triggered by a headless CLI call with
+ * no renderer involved — can trigger a notification directly, without an IPC round-trip.
+ */
+export function dispatchNotification(
+  store: Store,
+  runtime: OrcaRuntimeService | undefined,
+  args: NotificationDispatchRequest
+): NotificationDispatchResult | Promise<NotificationDispatchResult> {
+  // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
+  if (
+    args.source === 'agent-task-complete' ||
+    args.source === 'terminal-bell' ||
+    args.source === 'needs-attention'
+  ) {
+    const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
+    if (!isMainWindowVisible(activeWindow)) {
+      setTrayAttention(true)
+    }
+  }
+
+  const settings = store.getSettings().notifications
+  if (!settings.enabled) {
+    return { delivered: false, reason: 'disabled' }
+  }
+
+  if (
+    (args.source === 'agent-task-complete' && !settings.agentTaskComplete) ||
+    (args.source === 'terminal-bell' && !settings.terminalBell) ||
+    (args.source === 'needs-attention' && !settings.needsAttention)
+  ) {
+    return { delivered: false, reason: 'source-disabled' }
+  }
+
+  const notificationOptions = buildNotificationOptions(args)
+
+  // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
+  if (runtime && args.source !== 'test') {
+    const dedupeKey = getNotificationDedupeKey(args)
+    if (reserveNotificationCooldown(recentMobileNotifications, dedupeKey, Date.now())) {
+      runtime.dispatchMobileNotification({
+        type: 'notification',
+        source: args.source,
+        title: notificationOptions.title,
+        body: notificationOptions.body,
+        worktreeId: args.worktreeId,
+        ...(args.notificationId ? { notificationId: args.notificationId } : {})
+      })
+    }
+  }
+
+  const browserWindow =
+    BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null
+  if (
+    settings.suppressWhenFocused &&
+    args.isActiveWorktree &&
+    browserWindow &&
+    browserWindow.isFocused()
+  ) {
+    return { delivered: false, reason: 'suppressed-focus' }
+  }
+
+  // Why: the Settings test button is an explicit, often-repeated user action, so it bypasses burst dedupe.
+  if (args.source !== 'test') {
+    // Dedupe by worktree, not source — agent-finish and terminal-bell often fire in one chunk; surface only
+    // the first. needs-attention gets its own bucket (see getNotificationDedupeKey) since it's independent.
+    const dedupeKey = getNotificationDedupeKey(args)
+    if (!reserveNotificationCooldown(recentDesktopNotifications, dedupeKey, Date.now())) {
+      return { delivered: false, reason: 'cooldown' }
+    }
+  }
+
+  if (!Notification.isSupported()) {
+    return { delivered: false, reason: 'not-supported' }
+  }
+
+  if (process.platform !== 'darwin') {
+    return deliverNativeNotification(args, notificationOptions, settings)
+  }
+  // Why: macOS silently swallows notifications while permission is denied/undecided (verified macOS 26); skip so the renderer can show a fallback.
+  return readNotificationAuthorizationStatus().then((authorization) => {
+    if (authorization === 'denied' || authorization === 'not-determined') {
+      recordNotificationDeliveryOutcome('failed')
+      return { delivered: false, reason: 'blocked-by-system' }
+    }
+    return deliverNativeNotification(args, notificationOptions, settings)
+  })
+}
+
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
-  const recentDesktopNotifications = new Map<string, number>()
-  const recentMobileNotifications = new Map<string, number>()
   resetNotificationPermissionEvidence()
+  recentDesktopNotifications.clear()
+  recentMobileNotifications.clear()
 
   ipcMain.removeHandler('notifications:openSystemSettings')
   ipcMain.removeHandler('notifications:getPermissionStatus')
@@ -104,85 +212,8 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   })
 
   ipcMain.removeHandler('notifications:dispatch')
-  ipcMain.handle(
-    'notifications:dispatch',
-    (
-      _event,
-      args: NotificationDispatchRequest
-    ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
-      // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
-      if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
-        const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
-        if (!isMainWindowVisible(activeWindow)) {
-          setTrayAttention(true)
-        }
-      }
-
-      const settings = store.getSettings().notifications
-      if (!settings.enabled) {
-        return { delivered: false, reason: 'disabled' }
-      }
-
-      if (
-        (args.source === 'agent-task-complete' && !settings.agentTaskComplete) ||
-        (args.source === 'terminal-bell' && !settings.terminalBell)
-      ) {
-        return { delivered: false, reason: 'source-disabled' }
-      }
-
-      const notificationOptions = buildNotificationOptions(args)
-
-      // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
-      if (runtime && args.source !== 'test') {
-        const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-        if (reserveNotificationCooldown(recentMobileNotifications, dedupeKey, Date.now())) {
-          runtime.dispatchMobileNotification({
-            type: 'notification',
-            source: args.source,
-            title: notificationOptions.title,
-            body: notificationOptions.body,
-            worktreeId: args.worktreeId,
-            ...(args.notificationId ? { notificationId: args.notificationId } : {})
-          })
-        }
-      }
-
-      const browserWindow =
-        BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null
-      if (
-        settings.suppressWhenFocused &&
-        args.isActiveWorktree &&
-        browserWindow &&
-        browserWindow.isFocused()
-      ) {
-        return { delivered: false, reason: 'suppressed-focus' }
-      }
-
-      // Why: the Settings test button is an explicit, often-repeated user action, so it bypasses burst dedupe.
-      if (args.source !== 'test') {
-        // Dedupe by worktree, not source — agent-finish and terminal-bell often fire in one chunk; surface only the first.
-        const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-        if (!reserveNotificationCooldown(recentDesktopNotifications, dedupeKey, Date.now())) {
-          return { delivered: false, reason: 'cooldown' }
-        }
-      }
-
-      if (!Notification.isSupported()) {
-        return { delivered: false, reason: 'not-supported' }
-      }
-
-      if (process.platform !== 'darwin') {
-        return deliverNativeNotification(args, notificationOptions, settings)
-      }
-      // Why: macOS silently swallows notifications while permission is denied/undecided (verified macOS 26); skip so the renderer can show a fallback.
-      return readNotificationAuthorizationStatus().then((authorization) => {
-        if (authorization === 'denied' || authorization === 'not-determined') {
-          recordNotificationDeliveryOutcome('failed')
-          return { delivered: false, reason: 'blocked-by-system' }
-        }
-        return deliverNativeNotification(args, notificationOptions, settings)
-      })
-    }
+  ipcMain.handle('notifications:dispatch', (_event, args: NotificationDispatchRequest) =>
+    dispatchNotification(store, runtime, args)
   )
 
   registerNotificationSoundHandlers(store)

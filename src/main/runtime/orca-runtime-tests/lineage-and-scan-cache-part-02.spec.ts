@@ -36,6 +36,86 @@ describe('OrcaRuntimeService', () => {
     expect(setWorktreeMeta).toHaveBeenCalledWith(TEST_WORKTREE_ID, { comment: 'keep me' })
   })
 
+  it('dispatches a notification only when needsAttention is newly set to a different reason', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({ instanceId: 'child-instance' })
+    }
+    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+      return metaById[worktreeId]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const notificationDispatch = vi.fn()
+    runtime.setNotificationDispatch(notificationDispatch)
+
+    // First set: unset -> set fires.
+    await runtime.updateManagedWorktreeMeta(`id:${TEST_WORKTREE_ID}`, {
+      needsAttention: 'PR #996: 1 unresolved thread'
+    })
+    expect(notificationDispatch).toHaveBeenCalledTimes(1)
+    expect(notificationDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'needs-attention',
+        worktreeId: TEST_WORKTREE_ID,
+        needsAttentionReason: 'PR #996: 1 unresolved thread',
+        notificationId: `needs-attention:${TEST_WORKTREE_ID}`
+      })
+    )
+
+    // Resending the same reason must not spam another notification.
+    await runtime.updateManagedWorktreeMeta(`id:${TEST_WORKTREE_ID}`, {
+      needsAttention: 'PR #996: 1 unresolved thread'
+    })
+    expect(notificationDispatch).toHaveBeenCalledTimes(1)
+
+    // A genuinely changed reason fires again.
+    await runtime.updateManagedWorktreeMeta(`id:${TEST_WORKTREE_ID}`, {
+      needsAttention: 'PR #996: 2 unresolved threads'
+    })
+    expect(notificationDispatch).toHaveBeenCalledTimes(2)
+
+    // Clearing must not fire a notification.
+    await runtime.updateManagedWorktreeMeta(`id:${TEST_WORKTREE_ID}`, { needsAttention: null })
+    expect(notificationDispatch).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses the just-set displayName in the notification when both change in one call', async () => {
+    const metaById: Record<string, WorktreeMeta> = {
+      [TEST_WORKTREE_ID]: makeWorktreeMeta({
+        instanceId: 'child-instance',
+        displayName: 'old-name'
+      })
+    }
+    const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
+      metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+      return metaById[worktreeId]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const notificationDispatch = vi.fn()
+    runtime.setNotificationDispatch(notificationDispatch)
+
+    await runtime.updateManagedWorktreeMeta(`id:${TEST_WORKTREE_ID}`, {
+      displayName: 'new-name',
+      needsAttention: 'PR #996: 1 unresolved thread'
+    })
+
+    expect(notificationDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeLabel: 'new-name' })
+    )
+  })
+
   it('ignores stale instance-mismatched lineage when validating manual cycle repairs', async () => {
     const parentPath = '/tmp/worktree-a'
     const childPath = '/tmp/worktree-b'

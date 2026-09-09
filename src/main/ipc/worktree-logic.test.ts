@@ -601,6 +601,7 @@ describe('mergeWorktree', () => {
       displayName: 'My Feature',
       displayNameMode: 'fixed',
       comment: 'WIP',
+      needsAttention: null,
       linkedIssue: 42,
       linkedPR: 10,
       linkedLinearIssue: null,
