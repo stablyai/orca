@@ -1,104 +1,102 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
-import type { SessionFileDiscovery } from '../ai-vault/session-scanner-types'
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
+import type { SessionSearchRootListing } from './session-search-scan-roots'
 
 /** A scan root the index could not read, and what stopped it. */
 export type SessionSearchDegradedRoot = { root: string; reason: string }
 
-// Why the indexer probes at all: the walker swallows a readdir failure and
+/** What the last full sweeps saw of one root, carried between passes. */
+export type SessionSearchRootState = {
+  /** Transcripts it listed when it was last seen holding any. */
+  lastHealthyCount: number
+  /** Consecutive full sweeps that listed it, successfully, as empty. */
+  emptySweeps: number
+}
+
+export type SessionSearchRootHealth = {
+  degraded: SessionSearchDegradedRoot[]
+  /** Carried forward; only a census writes it. */
+  states: Map<string, SessionSearchRootState>
+}
+
+// Why the indexer probes at all: the file walker swallows a readdir failure and
 // returns, so an EACCES root and an agent that was never installed both arrive
 // as "no files". Reporting the first as an empty index would be the
 // loss-of-contact-as-absence mistake docs/reference/ssh-execution-boundary.md
 // forbids, so an empty root is re-checked and only ENOENT counts as absent.
 const ABSENT_ROOT = new Set(['ENOENT', 'ENOTDIR'])
 
-export type SessionSearchRootHealthOptions = {
-  signal?: AbortSignal
-  /** What each root listed last time, so a tree that emptied out is visible. */
-  previousFileCounts?: ReadonlyMap<string, number>
-}
-
-/** Transcripts each root listed, for comparison against the next sweep. */
-export function rootFileCounts(discoveries: readonly SessionFileDiscovery[]): Map<string, number> {
-  const counts = new Map<string, number>()
-  for (const discovery of discoveries) {
-    counts.set(discovery.rootDir, (counts.get(discovery.rootDir) ?? 0) + discovery.files.length)
-  }
-  return counts
-}
+/** How many consecutive listable-but-empty sweeps mean the user emptied it. */
+const EMPTY_SWEEPS_BEFORE_TRUSTED = 2
 
 /**
- * Carries a root's last healthy count forward across a sweep that listed it
- * empty. Without this the alarm is single-shot: the degraded sweep's zero
- * becomes the baseline, the next sweep compares zero against zero, and the
- * unmounted tree is retired on the second pass instead of the first.
- */
-export function withLastHealthyRootCounts(
-  previous: ReadonlyMap<string, number>,
-  observed: ReadonlyMap<string, number>
-): Map<string, number> {
-  const merged = new Map(previous)
-  for (const [root, count] of observed) {
-    if (count > 0) {
-      merged.set(root, count)
-    }
-  }
-  return merged
-}
-
-/**
- * Classifies the roots a sweep just walked. Only roots that yielded nothing are
- * probed: a root that returned files is readable by construction, which keeps
- * the cost at one readdir per genuinely empty tree.
+ * Classifies the roots a pass walked. Only roots that listed nothing are
+ * probed: one that returned files is readable by construction.
  *
- * A readable but suddenly empty root counts too. An unmounted SSH home or a
- * detached external drive often reads as a present, listable, empty directory,
- * and every transcript under it then answers ENOENT at once. Going from N to
- * zero is not something an agent's transcript store does on its own.
+ * The rule an empty root is judged by, and why it takes two sweeps:
+ *
+ * - Cannot be listed at all: degraded, keeping its last healthy count. An
+ *   unmounted SSH home or a detached drive is not an emptied one, and its
+ *   transcripts must not be retired on an ENOENT they all answer at once.
+ * - Lists successfully but empty, having held transcripts before: degraded for
+ *   now. This is what a freshly unmounted volume also looks like, and one sweep
+ *   cannot tell the two apart.
+ * - Lists successfully but empty on two consecutive full sweeps: the user
+ *   really did delete them. Degraded clears and the rows retire. Without this
+ *   the alarm never releases, so a legitimately emptied root pins the whole
+ *   index at `degraded` for the life of the process.
+ *
+ * Only a full sweep counts toward that tally. A recent-window cycle can see a
+ * root that went to zero, but it is not a census and must not conclude one.
  */
-export async function degradedSessionSearchRoots(
-  discoveries: readonly SessionFileDiscovery[],
-  issues: readonly AiVaultScanIssue[],
-  options: SessionSearchRootHealthOptions = {}
-): Promise<SessionSearchDegradedRoot[]> {
-  const { signal } = options
+export async function sessionSearchRootHealth(args: {
+  listings: readonly SessionSearchRootListing[]
+  issues: readonly AiVaultScanIssue[]
+  previous: ReadonlyMap<string, SessionSearchRootState>
+  /** True for a full sweep, whose observation is allowed to move the tally. */
+  census: boolean
+  signal?: AbortSignal
+}): Promise<SessionSearchRootHealth> {
   const degraded = new Map<string, string>()
-  for (const issue of issues) {
-    if (issue.kind !== 'notice' && discoveries.some((one) => one.rootDir === issue.path)) {
+  const states = new Map(args.previous)
+  for (const issue of args.issues) {
+    if (issue.kind !== 'notice' && args.listings.some((one) => one.root === issue.path)) {
       degraded.set(issue.path, issue.message)
     }
   }
-  const counts = rootFileCounts(discoveries)
-  for (const [root, count] of counts) {
-    if (count > 0 || degraded.has(root) || signal?.aborted) {
+  for (const listing of args.listings) {
+    const previous = args.previous.get(listing.root) ?? { lastHealthyCount: 0, emptySweeps: 0 }
+    if (listing.files > 0) {
+      states.set(listing.root, { lastHealthyCount: listing.files, emptySweeps: 0 })
       continue
     }
-    const previous = options.previousFileCounts?.get(root) ?? 0
-    if (previous > 0) {
-      degraded.set(root, `Listed no transcripts where it listed ${previous} before.`)
+    if (degraded.has(listing.root) || args.signal?.aborted) {
       continue
     }
-    const reason = await unreadableRootReason(root, signal)
-    if (reason) {
-      degraded.set(root, reason)
+    const unreadable = await unreadableRootReason(listing.root, args.signal)
+    if (unreadable !== null) {
+      degraded.set(listing.root, unreadable)
+      continue
+    }
+    // Listable and empty. The tally only advances on a census, so a cycle reads
+    // the sweep's count without ever concluding a root was emptied.
+    const emptySweeps = previous.emptySweeps + (args.census ? 1 : 0)
+    if (args.census) {
+      states.set(listing.root, { ...previous, emptySweeps })
+    }
+    if (previous.lastHealthyCount > 0 && emptySweeps < EMPTY_SWEEPS_BEFORE_TRUSTED) {
+      degraded.set(
+        listing.root,
+        `Listed no transcripts where it listed ${previous.lastHealthyCount} before.`
+      )
+      continue
+    }
+    if (args.census && emptySweeps >= EMPTY_SWEEPS_BEFORE_TRUSTED) {
+      // Believed: stop carrying a healthy count that is no longer true.
+      states.set(listing.root, { lastHealthyCount: 0, emptySweeps })
     }
   }
-  return [...degraded].map(([root, reason]) => ({ root, reason }))
-}
-
-/** True when a path lives under a root this sweep could not trust. */
-export function underDegradedRoot(
-  path: string,
-  degradedRoots: readonly SessionSearchDegradedRoot[]
-): boolean {
-  // Both separators: discovery joins with the platform's, and a root can arrive
-  // from a config value written with the other one.
-  return degradedRoots.some(
-    (degraded) =>
-      path === degraded.root ||
-      path.startsWith(`${degraded.root}/`) ||
-      path.startsWith(`${degraded.root}\\`)
-  )
+  return { degraded: [...degraded].map(([root, reason]) => ({ root, reason })), states }
 }
 
 async function unreadableRootReason(root: string, signal?: AbortSignal): Promise<string | null> {
@@ -115,4 +113,19 @@ async function unreadableRootReason(root: string, signal?: AbortSignal): Promise
     }
     return error instanceof Error ? error.message : String(error)
   }
+}
+
+/** True when a path lives under a root this pass could not trust. */
+export function underDegradedRoot(
+  path: string,
+  degradedRoots: readonly SessionSearchDegradedRoot[]
+): boolean {
+  // Both separators: discovery joins with the platform's, and a root can arrive
+  // from a config value written with the other one.
+  return degradedRoots.some(
+    (degraded) =>
+      path === degraded.root ||
+      path.startsWith(`${degraded.root}/`) ||
+      path.startsWith(`${degraded.root}\\`)
+  )
 }

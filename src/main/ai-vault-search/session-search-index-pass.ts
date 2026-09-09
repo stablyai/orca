@@ -60,6 +60,11 @@ export async function runSessionSearchIndexPass(
       options.onSkipped?.(candidate)
       continue
     }
+    // Discovery's size, not the post-read one. A file that grew between the
+    // stat and the read is charged short, deliberately: the allowance paces a
+    // cycle rather than accounting for it, the error is bounded by what one
+    // cycle's writers appended, and re-statting every file to close it would
+    // cost more than the number is worth.
     const bytes = forced ? (candidate.file.sizeBytes ?? 0) : unreadBytes(store, candidate)
     if (options.allowance && !options.allowance.spend(bytes)) {
       deferred.push(...candidates.slice(index))

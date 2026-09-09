@@ -10,12 +10,13 @@ import { retireDeletedSessionSearchSources } from './session-search-deleted-sour
 import { runSessionSearchIndexPass } from './session-search-index-pass'
 import type { SessionSearchIndexingStatus } from './session-search-indexing-status'
 import {
-  degradedSessionSearchRoots,
-  rootFileCounts,
-  type SessionSearchDegradedRoot
+  sessionSearchRootHealth,
+  type SessionSearchDegradedRoot,
+  type SessionSearchRootState
 } from './session-search-root-health'
 import {
   discoverSessionSearchCandidates,
+  sessionSearchRootListings,
   type SessionSearchScanRoots
 } from './session-search-scan-roots'
 import type { SessionSearchStore } from './session-search-store'
@@ -31,8 +32,8 @@ export type SessionSearchBackfillArgs = {
   status: SessionSearchIndexingStatus
   /** Oldest transcript mtime worth indexing, or null for all history. */
   cutoffMs: number | null
-  /** What each root listed last sweep, so a tree that went empty is visible. */
-  previousRootFileCounts?: ReadonlyMap<string, number>
+  /** What the last sweeps saw of each root, so a tree that went empty is visible. */
+  previousRootStates?: ReadonlyMap<string, SessionSearchRootState>
   pace?: (signal?: AbortSignal) => Promise<void>
   signal?: AbortSignal
 }
@@ -40,7 +41,7 @@ export type SessionSearchBackfillArgs = {
 export type SessionSearchBackfillResult = {
   /** Paths to watch for disappearance, plus whatever this sweep could not settle. */
   watchPaths: Set<string>
-  rootFileCounts: Map<string, number>
+  rootStates: Map<string, SessionSearchRootState>
   degradedRoots: SessionSearchDegradedRoot[]
   /** False when the sweep was aborted; it stays due until one finishes. */
   completed: boolean
@@ -93,11 +94,16 @@ export async function runSessionSearchBackfill(
         message: refusal.message
       })
     }
-    const counts = rootFileCounts(swept.discoveries)
-    const degradedRoots = await degradedSessionSearchRoots(swept.discoveries, issues, {
-      signal,
-      previousFileCounts: args.previousRootFileCounts
+    const health = await sessionSearchRootHealth({
+      listings: sessionSearchRootListings(args.roots, swept.discoveries),
+      issues,
+      previous: args.previousRootStates ?? new Map(),
+      // A sweep walks every root without a limit, so its observation is the one
+      // allowed to conclude that a root really was emptied.
+      census: completed,
+      signal
     })
+    const degradedRoots = health.degraded
     const discoveredPaths = new Set(swept.candidates.map((candidate) => candidate.file.path))
     const retirement = completed
       ? await retireSweptAwaySources(args, discoveredPaths, degradedRoots)
@@ -109,7 +115,7 @@ export async function runSessionSearchBackfill(
         ...retirement.unverifiable,
         ...retirement.unchecked
       ]),
-      rootFileCounts: counts,
+      rootStates: health.states,
       degradedRoots,
       completed
     }

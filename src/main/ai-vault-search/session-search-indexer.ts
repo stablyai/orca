@@ -21,7 +21,7 @@ import {
   sessionSearchHistoryCutoffMs,
   widensSessionSearchHistory
 } from './session-search-retention-policy'
-import { withLastHealthyRootCounts } from './session-search-root-health'
+import type { SessionSearchRootState } from './session-search-root-health'
 import { removeSessionSearchDatabase } from './session-search-schema'
 import type { SessionSearchScanRoots } from './session-search-scan-roots'
 import { SessionSearchStore } from './session-search-store'
@@ -80,7 +80,7 @@ export class SessionSearchIndexer {
   private store: SessionSearchStore | null = null
   private unregister: (() => void) | null = null
   private previousRecent = new Set<string>()
-  private rootFileCounts = new Map<string, number>()
+  private rootStates = new Map<string, SessionSearchRootState>()
   private historyDays: number | null
   private started = false
   private paused = false
@@ -162,7 +162,7 @@ export class SessionSearchIndexer {
       removeSessionSearchDatabase(this.options.databasePath)
       this.pending.clear()
       this.previousRecent = new Set()
-      this.rootFileCounts = new Map()
+      this.rootStates = new Map()
       this.openStore()
       this.fullSweepDue = true
     })
@@ -271,13 +271,11 @@ export class SessionSearchIndexer {
       roots: this.options.roots,
       status: this.indexingStatus,
       cutoffMs,
-      previousRootFileCounts: this.rootFileCounts,
+      previousRootStates: this.rootStates,
       pace: this.pace,
       signal
     })
-    // Last healthy count, not last count: a degraded sweep's zero would
-    // otherwise become the baseline and the next sweep would retire the tree.
-    this.rootFileCounts = withLastHealthyRootCounts(this.rootFileCounts, sweep.rootFileCounts)
+    this.rootStates = sweep.rootStates
     this.indexingStatus.setDegradedRoots(sweep.degradedRoots)
     this.indexingStatus.sweepFinished(sweep.completed)
     if (!sweep.completed) {
@@ -307,7 +305,7 @@ export class SessionSearchIndexer {
       retirementChecksPerCycle: this.options.retirementChecksPerCycle,
       // Read but not written: a recent-window discovery is not a census, so it
       // can spot a root that went to zero without redefining what healthy was.
-      previousRootFileCounts: this.rootFileCounts,
+      previousRootStates: this.rootStates,
       signal
     })
     // Work that was drained and then not read is a hole in the index, not

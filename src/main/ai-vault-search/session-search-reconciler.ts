@@ -16,12 +16,14 @@ import type { SessionSearchIndexingStatus } from './session-search-indexing-stat
 import type { SessionSearchPendingFile } from './session-search-pending-files'
 import type { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import {
-  degradedSessionSearchRoots,
-  type SessionSearchDegradedRoot
+  sessionSearchRootHealth,
+  type SessionSearchDegradedRoot,
+  type SessionSearchRootState
 } from './session-search-root-health'
 import {
   discoverSessionSearchCandidates,
   sessionSearchAgentForPath,
+  sessionSearchRootListings,
   type SessionSearchScanRoots
 } from './session-search-scan-roots'
 import type { SessionSearchStore } from './session-search-store'
@@ -44,8 +46,8 @@ export type SessionSearchReconcileArgs = {
   previousRecent: ReadonlySet<string>
   /** Stats a cycle spends proving deletions; the rest stay watched. */
   retirementChecksPerCycle?: number
-  /** What each root listed when it was last healthy, so a tree that went empty is visible. */
-  previousRootFileCounts?: ReadonlyMap<string, number>
+  /** What the last sweeps saw of each root; read, never written, by a cycle. */
+  previousRootStates?: ReadonlyMap<string, SessionSearchRootState>
   signal?: AbortSignal
 }
 
@@ -138,10 +140,17 @@ export async function runSessionSearchReconcileCycle(
 
     // Before the retirement, not after it: the cycle deletes rows too, so it
     // needs the same fence the sweep has or one interval undoes the sweep's care.
-    const degradedRoots = await degradedSessionSearchRoots(swept.discoveries, issues, {
-      signal,
-      previousFileCounts: args.previousRootFileCounts
-    })
+    const degradedRoots = (
+      await sessionSearchRootHealth({
+        listings: sessionSearchRootListings(args.roots, swept.discoveries),
+        issues,
+        previous: args.previousRootStates ?? new Map(),
+        // A recent-window discovery can see a root that went to zero, but it is
+        // not a census and must never conclude one was emptied.
+        census: false,
+        signal
+      })
+    ).degraded
     const retirement = completed
       ? await retireDeletedSessionSearchSources(
           store,

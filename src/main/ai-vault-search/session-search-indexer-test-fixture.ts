@@ -125,3 +125,27 @@ export async function renameReplaceTranscript(
   const later = new Date(before.mtimeMs + 5_000)
   await utimes(path, later, later)
 }
+
+/**
+ * A message-graph transcript, the shape OpenClaw, Pi, OMP and Prime Agent
+ * write. The session id comes from the file name, so callers name the file.
+ */
+export async function writeMessageGraphTranscript(
+  path: string,
+  turns: readonly string[]
+): Promise<void> {
+  await mkdir(dirname(path), { recursive: true })
+  const lines = turns.flatMap((turn, index) => [
+    JSON.stringify({
+      type: 'message',
+      timestamp: new Date(CLOCK_EPOCH_MS + index * 120_000).toISOString(),
+      message: { role: 'user', content: turn }
+    }),
+    JSON.stringify({
+      type: 'message',
+      timestamp: new Date(CLOCK_EPOCH_MS + index * 120_000 + 60_000).toISOString(),
+      message: { role: 'assistant', content: `noted: ${turn}` }
+    })
+  ])
+  await writeFile(path, `${lines.join('\n')}\n`)
+}

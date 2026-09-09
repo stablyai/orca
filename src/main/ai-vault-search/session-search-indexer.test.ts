@@ -492,39 +492,61 @@ it('reads a stale file at its current stat, not the one it was recorded with', a
 // Round 2, item 1: the sweep kept the rows and a cycle twenty seconds later
 // deleted them, because the degraded-root fence was on the sweep path only.
 it.skipIf(!CAN_DENY_READ)(
-  'keeps an unmounted root through the cycles that follow the sweep',
+  'keeps an unlistable root through the cycles that follow the sweep',
   async () => {
     await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
     await newIndexer().start()
     expect(sessionsMatching('removable')).toEqual([SESSION_ID])
 
-    await rm(harness.claudeProjectDir, { recursive: true, force: true })
-    await indexer?.reconcile({ full: true })
-    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+    await chmod(harness.roots.claudeProjectsDir ?? '', 0o000)
+    try {
+      await indexer?.reconcile({ full: true })
+      expect(sessionsMatching('removable')).toEqual([SESSION_ID])
 
-    await nextCycle()
-    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
-    expect(indexer?.status().phase).toBe('degraded')
+      await nextCycle()
+      expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+      expect(indexer?.status().phase).toBe('degraded')
+    } finally {
+      await chmod(harness.roots.claudeProjectsDir ?? '', 0o755)
+    }
   }
 )
 
-// Round 2, item 3: the alarm was single-shot. The degraded sweep's zero became
-// the baseline, so the second sweep compared zero with zero and retired.
-it.skipIf(!CAN_DENY_READ)('keeps an unmounted root across repeated sweeps', async () => {
+// Round 3, item 2: the alarm has to release. A root the user legitimately
+// emptied would otherwise stay degraded for the life of the process, pinning
+// the phase and never retiring the rows.
+it('retires a root the user really emptied, once a second sweep agrees', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['a session the user deleted'], SESSION_ID)
+  await newIndexer().start()
+
+  // The root itself stays readable; only its transcripts are gone.
+  await rm(harness.claudeProjectDir, { recursive: true, force: true })
+  await indexer?.reconcile({ full: true })
+  // One sweep cannot tell this from a freshly unmounted volume.
+  expect(sessionsMatching('deleted')).toEqual([SESSION_ID])
+  expect(indexer?.status().phase).toBe('degraded')
+
+  await indexer?.reconcile({ full: true })
+  expect(sessionsMatching('deleted')).toEqual([])
+  expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
+})
+
+// Round 3, item 2, the other half: a root that cannot be listed is never
+// believed to be empty, however many times it is asked.
+it.skipIf(!CAN_DENY_READ)('keeps an unlistable root degraded across repeated sweeps', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
   await newIndexer().start()
 
-  await rm(harness.claudeProjectDir, { recursive: true, force: true })
-  await indexer?.reconcile({ full: true })
-  await indexer?.reconcile({ full: true })
-  expect(sessionsMatching('removable')).toEqual([SESSION_ID])
-  expect(indexer?.status().phase).toBe('degraded')
-
-  // Remounted: the root lists transcripts again and the alarm clears.
-  await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
-  await indexer?.reconcile({ full: true })
-  expect(indexer?.status().degradedRoots).toEqual([])
-  expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+  await chmod(harness.roots.claudeProjectsDir ?? '', 0o000)
+  try {
+    for (let sweep = 0; sweep < 5; sweep++) {
+      await indexer?.reconcile({ full: true })
+    }
+    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+    expect(indexer?.status().phase).toBe('degraded')
+  } finally {
+    await chmod(harness.roots.claudeProjectsDir ?? '', 0o755)
+  }
 })
 
 // Round 2, item 2: a forced whole re-read of an unchanged file writes an
