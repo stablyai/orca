@@ -64,7 +64,10 @@ function SidebarCreateMenu({
               size="icon-xs"
               type="button"
               className="text-muted-foreground"
-              aria-label={translate('auto.components.sidebar.SidebarHeader.createMenu', 'Create')}
+              aria-label={translate(
+                'auto.components.sidebar.SidebarHeader.createMenu',
+                'Create — new workspace or add project'
+              )}
               data-workspace-board-preserve-open={boardAttr}
               data-contextual-tour-target="workspace-create-control"
             >
@@ -73,7 +76,10 @@ function SidebarCreateMenu({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate('auto.components.sidebar.SidebarHeader.createMenu', 'Create')}
+          {translate(
+            'auto.components.sidebar.SidebarHeader.createMenu',
+            'Create — new workspace or add project'
+          )}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent

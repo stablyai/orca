@@ -93,8 +93,10 @@ vi.mock('@/components/ui/popover', () => ({
 let container: HTMLDivElement
 let root: Root
 
+const CREATE_BUTTON_LABEL = 'Create \u2014 new workspace or add project'
+
 function createButton(): HTMLButtonElement {
-  const button = container.querySelector<HTMLButtonElement>('[aria-label="Create"]')
+  const button = container.querySelector<HTMLButtonElement>(`[aria-label="${CREATE_BUTTON_LABEL}"]`)
   if (!button) {
     throw new Error('Create button not rendered')
   }
@@ -194,6 +196,16 @@ describe('SidebarHeader', () => {
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
   })
 
+  it('exposes a create button disclosing that workspaces can be created and projects added', () => {
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+
+    const button = createButton()
+    expect(button.getAttribute('aria-label')).toBe(CREATE_BUTTON_LABEL)
+    expect(container.textContent).toContain(CREATE_BUTTON_LABEL)
+  })
+
   it('omits the shortcut hint when workspace creation is unassigned', async () => {
     mocks.shortcutLabel.current = null
     act(() => {
@@ -282,7 +294,7 @@ describe('SidebarHeader', () => {
     })
 
     expect(container.querySelector('[aria-label="Turn off activity view"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="Create"]')).toBeTruthy()
+    expect(container.querySelector(`[aria-label="${CREATE_BUTTON_LABEL}"]`)).toBeTruthy()
     expect(container.querySelector('[aria-label="Workspace options"]')).toBeNull()
     expect(container.querySelector('[aria-label="Add Project"]')).toBeNull()
   })
@@ -298,7 +310,7 @@ describe('SidebarHeader', () => {
     expect(headerClasses.has('h-8')).toBe(true)
     expect(container.querySelector('[aria-label="View activity"]')).toBeTruthy()
     expect(container.querySelector('[aria-label="Add Project"]')).toBeNull()
-    expect(container.querySelector('[aria-label="Create"]')).toBeTruthy()
+    expect(container.querySelector(`[aria-label="${CREATE_BUTTON_LABEL}"]`)).toBeTruthy()
   })
 
   it('keeps the same actions on one row at compact width', async () => {
@@ -309,7 +321,7 @@ describe('SidebarHeader', () => {
 
     expect(container.querySelector('[aria-label="Add Project"]')).toBeNull()
     expect(container.querySelector('[aria-label="View activity"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="Create"]')).toBeTruthy()
+    expect(container.querySelector(`[aria-label="${CREATE_BUTTON_LABEL}"]`)).toBeTruthy()
     expect(container.querySelector('[aria-label="Workspace options"]')).toBeTruthy()
     expect(container.querySelector('[aria-label="More workspace actions"]')).toBeNull()
 
@@ -350,7 +362,7 @@ describe('SidebarHeader', () => {
       })
       expect(container.querySelector('[aria-label="More workspace actions"]')).toBeNull()
       expect(container.querySelector('[aria-label="Add Project"]')).toBeNull()
-      expect(container.querySelector('[aria-label="Create"]')).toBeTruthy()
+      expect(container.querySelector(`[aria-label="${CREATE_BUTTON_LABEL}"]`)).toBeTruthy()
       expect(container.querySelector('[aria-label="Workspace options"]')).toBeTruthy()
     }
   })
