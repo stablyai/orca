@@ -3,7 +3,10 @@ export const LOC_BLOCK_END = '<!-- /orca-pr-loc -->'
 export const LOC_HANDS_OFF_COMMENT =
   '<!-- Programmatic LoC summary. Do not edit by hand; rewritten on every commit. -->'
 
-const TEST_DIR_SEGMENT = /(?:^|\/)(?:__tests__|e2e|tests)(?:\/|$)/i
+// Why the __-wrapped names: they are unambiguous test-data markers, so a dir
+// cannot be one by accident. Bare `fixtures/` is deliberately absent — it reads
+// as a plausible prod module name, and this classifier bills every PR.
+const TEST_DIR_SEGMENT = /(?:^|\/)(?:__tests__|__fixtures__|__snapshots__|e2e|tests)(?:\/|$)/i
 const TEST_FILENAME = /\.(?:test|spec|e2e)\.[^/]+$/i
 
 export function isTestPath(path) {

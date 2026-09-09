@@ -47,7 +47,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 vi.mock('./worktree-remote', () => ({
   notifyWorktreesChanged: vi.fn()
 }))
-vi.mock('./repos', () => ({
+vi.mock('./repos/repos-changed-notification', () => ({
   notifyReposChanged: vi.fn()
 }))
 vi.mock('./registered-worktree-roots-cache', () => ({
@@ -58,7 +58,7 @@ vi.mock('../worktree-root-preparation', () => ({
 }))
 
 import { notifyWorktreesChanged } from './worktree-remote'
-import { notifyReposChanged } from './repos'
+import { notifyReposChanged } from './repos/repos-changed-notification'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { notifyMainWindowBecameVisible } from '../window/main-window-visibility'

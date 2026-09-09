@@ -48,12 +48,16 @@ function recordRendererBreadcrumbTrace(
 // suppressed count instead.
 const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
 const PARK_VERDICT_CHURN_BREADCRUMB = 'terminal_park_verdict_churn'
+const REACT_COMMIT_CASCADE_BREADCRUMB = 'react_commit_cascade'
+const REPLAY_GUARD_WEDGED_BREADCRUMB = 'terminal_replay_guard_wedged_release'
 const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
   'terminal_safe_fit_retry_exhausted',
   DUPLICATE_TAB_OWNER_BREADCRUMB,
   PARK_VERDICT_CHURN_BREADCRUMB,
+  REACT_COMMIT_CASCADE_BREADCRUMB,
+  REPLAY_GUARD_WEDGED_BREADCRUMB,
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
 ])
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
@@ -67,6 +71,11 @@ const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
 // 30-entry ring to two such bursts. `suppressedSinceLast` keeps the pane count
 // — the only signal these carry — in one slot.
 const NAME_ONLY_COALESCED_BREADCRUMB_NAMES = new Set(['terminal_safe_fit_retry_exhausted'])
+// Why: the 30-slot ring is the scarce sink; the durable span stream is not. For
+// bounded-rate pane telemetry whose multiplicity is the whole signal, spans are the
+// only place a burst survives the restart that clears the ring, so coalesce the ring
+// but keep every event's span.
+const PER_EVENT_TRACED_COALESCED_BREADCRUMB_NAMES = new Set([REPLAY_GUARD_WEDGED_BREADCRUMB])
 
 function rendererBreadcrumbCoalesceKey(
   name: string,
@@ -75,12 +84,26 @@ function rendererBreadcrumbCoalesceKey(
   if (NAME_ONLY_COALESCED_BREADCRUMB_NAMES.has(name)) {
     return name
   }
+  // Why presence and not value: `ptyId`/`tabIdHash` are absent on the restore call
+  // site (layout-serialization restoreScrollbackBuffers) and present on reattach, so
+  // their presence is the call-site identity a mixed burst would otherwise lose. Four
+  // slots per storm at most, regardless of pane count.
+  if (name === REPLAY_GUARD_WEDGED_BREADCRUMB) {
+    return `${name}:${data?.ptyId ? 'pty' : ''}:${data?.tabIdHash ? 'tab' : ''}`
+  }
   // Why trigger and not name alone: `burst` means damping engaged a commit
   // short of React #185, `window` means slow benign churn. Collapsing them
   // would drop the near-crash signal into a slow-churn slot. Still bounded —
   // two slots per storm regardless of tab count.
   if (name === PARK_VERDICT_CHURN_BREADCRUMB) {
     return `${name}:${String(data?.trigger ?? '')}`
+  }
+  // Why keyed on surface and driver frame: the popout and the main window can
+  // cascade independently, and two different driving writes are two different
+  // bugs that last-write coalescing would collapse into one. A driverless crumb
+  // (storeWrites 0, a useState loop) keys separately for the same reason.
+  if (name === REACT_COMMIT_CASCADE_BREADCRUMB) {
+    return `${name}:${String(data?.rendererSurface ?? '')}:${String(data?.driverFrame ?? '')}`
   }
   // Preserve distinct GPU failures and atlas-reset triggers while coalescing each storm.
   if (name === TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB) {
@@ -122,13 +145,44 @@ function rendererBreadcrumbCoalesceKey(
           data?.errorMessage
         ]
       : [data?.reasonStack, data?.reasonType, data?.reasonName]
-  return JSON.stringify([name, message, ...sourceIdentity])
+  // Why: error storms re-serialize the same message + up-to-4KB stack per event just to build a map key — reuse the last key on field-equality.
+  if (
+    lastCoalesceKey !== null &&
+    lastCoalesceName === name &&
+    lastCoalesceMessage === message &&
+    arraysShallowEqual(lastCoalesceSource, sourceIdentity)
+  ) {
+    return lastCoalesceKey
+  }
+  const key = JSON.stringify([name, message, ...sourceIdentity])
+  lastCoalesceName = name
+  lastCoalesceMessage = message
+  lastCoalesceSource = sourceIdentity
+  lastCoalesceKey = key
+  return key
 }
 
-export function recordRendererBreadcrumbFromRenderer(args?: {
-  name?: unknown
-  data?: unknown
-}): void {
+let lastCoalesceName: string | null = null
+let lastCoalesceMessage: string | undefined
+let lastCoalesceSource: unknown[] | null = null
+let lastCoalesceKey: string | null = null
+
+function arraysShallowEqual(a: unknown[] | null, b: unknown[]): boolean {
+  if (!a || a.length !== b.length) {
+    return false
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false
+    }
+  }
+  return true
+}
+
+export function recordRendererBreadcrumbFromRenderer(
+  args?: { name?: unknown; data?: unknown },
+  origin?: string
+): void {
   if (!args || typeof args.name !== 'string') {
     return
   }
@@ -136,19 +190,28 @@ export function recordRendererBreadcrumbFromRenderer(args?: {
   if (COALESCED_RENDERER_BREADCRUMB_NAMES.has(args.name)) {
     const coalesceKey = rendererBreadcrumbCoalesceKey(args.name, data)
     if (!coalesceKey) {
-      recordCrashBreadcrumb(args.name, data)
+      if (origin) {
+        recordCrashBreadcrumb(args.name, data, origin)
+      } else {
+        recordCrashBreadcrumb(args.name, data)
+      }
       recordRendererBreadcrumbTrace(args.name, data)
       return
     }
     const coalesceResult = recordCoalescedCrashBreadcrumb({
       name: args.name,
       data,
-      coalesceKey,
-      minIntervalMs: RENDERER_BREADCRUMB_COALESCE_MS
+      coalesceKey: origin ? `${origin}\u0000${coalesceKey}` : coalesceKey,
+      minIntervalMs: RENDERER_BREADCRUMB_COALESCE_MS,
+      ...(origin ? { origin } : {})
     })
-    // Why: tracing every suppressed duplicate would preserve the same
-    // serialization and disk churn that breadcrumb coalescing removes.
-    if (coalesceResult) {
+    if (PER_EVENT_TRACED_COALESCED_BREADCRUMB_NAMES.has(args.name)) {
+      // Why the raw data: every event already gets its own span, so folding the ring's
+      // running count in here would double-count in any span-stream total.
+      recordRendererBreadcrumbTrace(args.name, data)
+    } else if (coalesceResult) {
+      // Why gated: tracing every suppressed duplicate would preserve the same
+      // serialization and disk churn that breadcrumb coalescing removes.
       recordRendererBreadcrumbTrace(
         args.name,
         coalesceResult.suppressedSinceLast > 0
@@ -157,7 +220,11 @@ export function recordRendererBreadcrumbFromRenderer(args?: {
       )
     }
   } else {
-    recordCrashBreadcrumb(args.name, data)
+    if (origin) {
+      recordCrashBreadcrumb(args.name, data, origin)
+    } else {
+      recordCrashBreadcrumb(args.name, data)
+    }
     recordRendererBreadcrumbTrace(args.name, data)
   }
 }

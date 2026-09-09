@@ -1,3 +1,4 @@
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
 import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import type {
@@ -29,7 +30,12 @@ export type RemoteBrowserContextMenu = {
   selectionText: string
 }
 
+export const REMOTE_BROWSER_FIND_UNAVAILABLE_NOTICE_ID = 'remote-browser-find-unavailable'
+
 export type RemoteBrowserPaneNotice = {
+  // Identifies a notice that can be re-raised or retracted by whoever set it; an unidentified
+  // notice is a one-off.
+  id?: string
   kind: 'direct' | 'consequence'
   text: string
 }
@@ -142,6 +148,44 @@ export function readRemoteCssViewportSize(result: unknown): RemoteBrowserViewpor
     return width && height ? { width, height } : null
   } catch {
     return null
+  }
+}
+
+// Why: one runtime screencast is shared, and any later subscriber can re-emulate the page at
+// its own size without notifying this pane. The cached CSS viewport — and this pane's own
+// requested size — only describe the page while frames still report the size we asked for;
+// once someone else owns the viewport, the per-frame device size is the only accurate basis
+// for pointer mapping. Same guard covers our own resize before the restart lands.
+export function resolveRemoteBrowserCssViewport(input: {
+  cssViewportSize: RemoteBrowserViewportSize | null
+  requestedViewportSize: RemoteBrowserViewportSize | null
+  frameMetadata: BrowserScreencastFrameMetadata | null
+  naturalSize: RemoteBrowserViewportSize
+}): RemoteBrowserViewportSize {
+  const deviceWidth = getPositiveFiniteNumber(input.frameMetadata?.deviceWidth)
+  const deviceHeight = getPositiveFiniteNumber(input.frameMetadata?.deviceHeight)
+  const requestedWidth = getPositiveFiniteNumber(input.requestedViewportSize?.width)
+  const requestedHeight = getPositiveFiniteNumber(input.requestedViewportSize?.height)
+  const framesMatchRequest =
+    (deviceWidth === null || requestedWidth === null || deviceWidth === requestedWidth) &&
+    (deviceHeight === null || requestedHeight === null || deviceHeight === requestedHeight)
+  if (!framesMatchRequest) {
+    return {
+      width: deviceWidth ?? input.naturalSize.width,
+      height: deviceHeight ?? input.naturalSize.height
+    }
+  }
+  return {
+    width:
+      getPositiveFiniteNumber(input.cssViewportSize?.width) ??
+      requestedWidth ??
+      deviceWidth ??
+      input.naturalSize.width,
+    height:
+      getPositiveFiniteNumber(input.cssViewportSize?.height) ??
+      requestedHeight ??
+      deviceHeight ??
+      input.naturalSize.height
   }
 }
 

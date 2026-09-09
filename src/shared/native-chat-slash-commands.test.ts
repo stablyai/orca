@@ -4,6 +4,8 @@ import {
   filterSlashCommands,
   getAgentSlashCommands,
   isSlashCommandDraft,
+  sessionReportedSkillNames,
+  sessionSlashCommandSuggestions,
   slashCommandDispatchText
 } from './native-chat-slash-commands'
 
@@ -62,5 +64,29 @@ describe('dispatch vs completion text', () => {
 
   it('completion text has a trailing space (Tab completes for arguments)', () => {
     expect(applySlashSuggestion({ name: 'model' })).toBe('/model ')
+  })
+})
+
+describe('a session that reports its own command surface', () => {
+  const reported = [
+    { name: 'clear', kind: 'command' as const },
+    { name: 'opsx:apply', kind: 'command' as const },
+    { name: 'ref-oss', kind: 'skill' as const }
+  ]
+
+  it('offers exactly the reported commands, described from the curated catalog', () => {
+    expect(sessionSlashCommandSuggestions('claude', reported)).toEqual([
+      { name: 'clear', description: 'Clear conversation history' },
+      { name: 'opsx:apply' }
+    ])
+  })
+
+  it('does not resurrect a curated command the session never reported', () => {
+    const names = sessionSlashCommandSuggestions('claude', reported).map((c) => c.name)
+    expect(names).not.toContain('compact')
+  })
+
+  it('splits skills out for the picker to group on its own', () => {
+    expect(sessionReportedSkillNames(reported)).toEqual(['ref-oss'])
   })
 })

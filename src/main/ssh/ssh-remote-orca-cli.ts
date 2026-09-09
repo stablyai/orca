@@ -1,10 +1,13 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
+import { projectRemoteAppStatus } from '../../shared/cli-app-status-projection'
 import { randomUUID } from 'node:crypto'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
-import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
+import { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   HostCliUnavailableError,
@@ -18,6 +21,7 @@ import {
   optionalRemoteCliNumber,
   optionalRemoteCliString,
   parseRemoteCliArgs,
+  readRemoteRetryRequestFlag,
   requiredRemoteCliString,
   resolveRemoteCliHandle
 } from './ssh-remote-cli-args'
@@ -100,7 +104,7 @@ async function runLegacyRemoteOrcaCli(
   json: boolean,
   passthroughFailure: HostCliUnavailableError
 ): Promise<RemoteOrcaCliResult> {
-  const dispatcher = new RpcDispatcher({ runtime })
+  const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
   const help = getRemoteLinearHelp(parsed)
   if (help) {
     return { stdout: `${help}\n`, stderr: '', exitCode: 0 }
@@ -153,7 +157,7 @@ async function dispatchRemoteCli(
   const compatibilityEnvelope: RuntimeOrchestrationEnvelope = {
     compatibilityInvocationId: randomUUID(),
     orchestrationRequestId:
-      optionalRemoteCliString(parsed.flags, 'retry-request') ??
+      readRemoteRetryRequestFlag(parsed.flags) ??
       (command === 'orchestration check' || command === 'orchestration ask'
         ? randomUUID()
         : undefined),
@@ -171,14 +175,16 @@ async function dispatchRemoteCli(
       }
       const status = response.result as RuntimeStatus
       const cliStatus: CliStatusResult = {
-        app: {
-          running: true,
-          pid: null,
-          ...(status.desktopWindowStatus ? { desktopWindowStatus: status.desktopWindowStatus } : {})
-        },
+        target: { kind: 'environment', environment: 'ssh' },
+        // Why: this answers for the Orca host the caller reached over SSH, not for the caller's
+        // machine. It used to report running:true unconditionally, which claimed a desktop app
+        // even for a headless `serve`; share the same projection the paired-server path uses so
+        // both transports answer the question the same way (STA-4792 defect 4).
+        app: projectRemoteAppStatus(status),
         runtime: {
           state: status.graphStatus === 'ready' ? 'ready' : 'graph_not_ready',
           reachable: true,
+          connectionState: runtimeHostConnectionState({ hasStatusEntry: true, status }),
           runtimeId: status.runtimeId
         },
         graph: { state: status.graphStatus }

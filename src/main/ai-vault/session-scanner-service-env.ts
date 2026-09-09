@@ -8,7 +8,8 @@
  */
 
 // What Node and libuv need to start and resolve a home, temp dir and locale.
-const RUNTIME_ENV_ALLOWLIST = [
+// Exported for sibling plain-node forks (the WSL transcript fs process).
+export const RUNTIME_ENV_ALLOWLIST = [
   'PATH',
   'HOME',
   'USERPROFILE',
@@ -33,6 +34,7 @@ const RUNTIME_ENV_ALLOWLIST = [
 // dropping one hides every session of a user who relocated that agent's home.
 const AGENT_ROOT_ENV_ALLOWLIST = [
   'CODEX_HOME',
+  'CLINE_SESSION_DATA_DIR',
   'COPILOT_HOME',
   'DEVIN_HOME',
   'GROK_HOME',
@@ -49,7 +51,7 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   'XDG_DATA_HOME'
 ] as const
 
-function pickAllowedEnv(
+export function pickAllowedEnv(
   keys: readonly string[],
   baseEnv: NodeJS.ProcessEnv,
   platform: NodeJS.Platform

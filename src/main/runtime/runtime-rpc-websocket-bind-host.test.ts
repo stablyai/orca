@@ -518,6 +518,109 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     }
   })
 
+  it('honours a pinned bind host over exposeNetworkByDefault (orcad --bind)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      // Why both: an unattended host passes an explicit answer, and it must outrank every
+      // implicit widen — otherwise "default loopback" is only true until something else wins.
+      exposeNetworkByDefault: true,
+      pinnedBindHost: '127.0.0.1'
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      expect(new URL(server.getWebSocketEndpoint()!).hostname).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('stays pinned to loopback even after a device has connected once', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why this case specifically: the unpinned default widens at the NEXT startup once any
+    // network-reach device has connected. A loopback orcad would therefore go wide one
+    // restart after its first client paired — silently, and without the operator asking.
+    const registry = new DeviceRegistry(userDataPath)
+    const device = registry.getOrCreatePendingDevice('CLI', 'runtime', 'network')
+    registry.updateLastSeen(device.deviceId)
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      pinnedBindHost: '127.0.0.1'
+    })
+
+    await server.start()
+    try {
+      expect(
+        server
+          .getDeviceRegistry()
+          ?.listDevices()
+          .some((d) => d.lastSeenAt > 0)
+      ).toBe(true)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('refuses a runtime-widening pairing offer while the bind is pinned to loopback', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      pinnedBindHost: '127.0.0.1'
+    })
+
+    await server.start()
+    try {
+      // A paired client can reach this RPC. Without the pin's refusal it would rebind the
+      // listener to every interface, undoing the operator's bind policy from the outside.
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(offer.available).toBe(false)
+      if (!offer.available) {
+        expect(offer.reason).toBe('network_exposure_failed')
+      }
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('still widens on request when the operator pinned the wide address', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      pinnedBindHost: '0.0.0.0'
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      await server.ensureNetworkExposure()
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('refuses to widen a pairing offer that arrives after the server has stopped', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({

@@ -7,6 +7,10 @@ import type {
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
+import {
+  annotateOmittedHostScope,
+  type WithAnnotatedHostScope
+} from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
   getOptionalNullableNumberFlag,
@@ -171,16 +175,22 @@ async function getCreateRepoSelector(
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
-    const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreePsResult>>(
+      'worktree.ps',
+      { limit: getOptionalPositiveIntegerFlag(flags, 'limit') }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatWorktreePs)
   },
   'worktree list': async ({ flags, client, json }) => {
-    const result = await client.call<RuntimeWorktreeListResult>('worktree.list', {
-      repo: getOptionalStringFlag(flags, 'repo'),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeWorktreeListResult>>(
+      'worktree.list',
+      {
+        repo: getOptionalStringFlag(flags, 'repo'),
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+      }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatWorktreeList)
   },
   'worktree show': async ({ flags, client, cwd, json }) => {
@@ -229,15 +239,22 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const activate = flags.get('activate') === true || flags.get('run-hooks') === true
+    const name = getRequiredStringFlag(flags, 'name')
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
-      name: getRequiredStringFlag(flags, 'name'),
+      name,
+      displayName: name,
+      displayNameKind: 'user',
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
-      activate: flags.get('activate') === true || flags.get('run-hooks') === true,
+      activate,
+      // Why: the CLI pairs as a runtime device but is not a viewer, so caller-scoped
+      // delivery would make --activate a no-op against a remote runtime.
+      ...(activate ? { navigation: 'all' as const } : {}),
       ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),

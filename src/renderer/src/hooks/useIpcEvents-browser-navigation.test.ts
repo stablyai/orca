@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveBrowserSessionTabTarget } from './useIpcEvents'
+import { resolveBrowserSessionTabTarget } from './ipc-events/browser-session-tab-target'
 import { createHarnessStoreState, loadIpcEventsHarness } from './ipc-events-test-harness'
 
 describe('browser navigation updates', () => {

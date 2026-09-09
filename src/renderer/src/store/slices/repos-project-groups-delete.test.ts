@@ -31,6 +31,7 @@ const projectGroup: ProjectGroup = {
 }
 
 const reposRemove = vi.fn()
+const reposRemoveForHost = vi.fn()
 const projectGroupsDelete = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
@@ -38,6 +39,8 @@ const runtimeEnvironmentTransportCall = vi.fn()
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   reposRemove.mockReset()
+  reposRemoveForHost.mockReset()
+  reposRemoveForHost.mockResolvedValue(undefined)
   reposRemove.mockResolvedValue(undefined)
   projectGroupsDelete.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -47,7 +50,7 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      repos: { remove: reposRemove },
+      repos: { remove: reposRemove, removeForHost: reposRemoveForHost },
       projectGroups: { delete: projectGroupsDelete },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
@@ -191,6 +194,53 @@ describe('project group deletion store routing', () => {
     expect(reposRemove).toHaveBeenCalledWith({ repoId: 'direct' })
     expect(reposRemove).toHaveBeenCalledWith({ repoId: 'nested' })
     expect(store.getState().repos).toEqual([siblingRepo])
+  })
+
+  it('processes local/direct-SSH same-ID contained rows sequentially', async () => {
+    const localRepo = {
+      ...remoteRepo,
+      id: 'shared',
+      path: '/local/shared',
+      projectGroupId: projectGroup.id,
+      executionHostId: 'local' as const
+    }
+    const sshRepo = {
+      ...localRepo,
+      path: '/ssh/shared',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1' as const
+    }
+    projectGroupsDelete.mockResolvedValue(true)
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      repos: [localRepo, sshRepo],
+      settings: { activeRuntimeEnvironmentId: null } as never
+    })
+
+    await expect(
+      store.getState().deleteProjectGroupWithContainedProjects(projectGroup.id, {
+        removeContainedProjects: true
+      })
+    ).resolves.toEqual({
+      status: 'deleted-group',
+      groupId: projectGroup.id,
+      requestedProjectIds: ['shared', 'shared'],
+      removedProjectIds: ['shared'],
+      failedProjectRemovals: [
+        {
+          projectId: 'shared',
+          reason: 'Project remained in Orca after removeProject completed.'
+        }
+      ]
+    })
+
+    expect(reposRemoveForHost).toHaveBeenCalledWith({
+      repoId: 'shared',
+      hostId: 'local'
+    })
+    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'shared' })
+    expect(store.getState().repos).toEqual([])
   })
 
   it('does not remove contained projects when group deletion fails', async () => {

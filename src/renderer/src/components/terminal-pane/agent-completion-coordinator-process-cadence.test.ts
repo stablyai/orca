@@ -248,8 +248,9 @@ describe('agent completion coordinator', () => {
       getSettings: () => null,
       inspectProcess: vi.fn(async () => ({
         foregroundProcess: null,
-        hasChildProcesses: true,
-        unavailable: true as const
+        hasChildProcesses: false as const,
+        verdict: 'unverifiable' as const,
+        reason: 'transport_loss' as const
       })),
       dispatchCompletion,
       isLive: () => true
@@ -273,8 +274,9 @@ describe('agent completion coordinator', () => {
       getSettings: () => null,
       inspectProcess: vi.fn(async () => ({
         foregroundProcess: null,
-        hasChildProcesses: true,
-        unavailable: true as const
+        hasChildProcesses: false as const,
+        verdict: 'unverifiable' as const,
+        reason: 'transport_loss' as const
       })),
       dispatchCompletion,
       isLive: () => true
@@ -304,7 +306,12 @@ describe('agent completion coordinator', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     result = processResult(null, false)
     await vi.advanceTimersByTimeAsync(750)
-    result = { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+    result = {
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      verdict: 'unverifiable',
+      reason: 'transport_loss'
+    }
     await vi.advanceTimersByTimeAsync(750)
     result = processResult(null, false)
     await vi.advanceTimersByTimeAsync(1_500)

@@ -22,6 +22,7 @@ import {
   DEFAULT_BROWSER_ANNOTATION_PRIORITY,
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
+import { useBrowserPageAnnotationViewportTracking } from './use-browser-page-annotation-viewport-tracking'
 import { runBrowserGrabActionShortcut } from './browser-page-grab-action'
 import type { BrowserPageGrabToastState, GrabIntent } from '../describe-page/browser-page-types'
 
@@ -43,18 +44,30 @@ const annotationAddedGrabToastMessage = (): string =>
 
 export function useBrowserPageGrabAnnotations({
   browserTabId,
+  toolTargetId = browserTabId,
   isActive,
   grab,
   containerRef,
+  trackingContainer,
+  trackingScroller,
   webviewRef,
   setBrowserOverlayViewport,
   browserAnnotationsLength,
   setBrowserAnnotationTrayOpen
 }: {
+  /** Scopes the stored annotations. Stable for the life of the surface. */
   browserTabId: string
+  /**
+   * The id main resolves to a guest. Defaults to the annotation scope, which is the same string
+   * for a browser page — a preview re-mints this on recovery, and its annotations must not be
+   * orphaned when it does.
+   */
+  toolTargetId?: string
   isActive: boolean
   grab: GrabModeHook
   containerRef: MutableRefObject<HTMLDivElement | null>
+  trackingContainer?: HTMLDivElement | null
+  trackingScroller?: HTMLDivElement | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   browserAnnotationsLength: number
@@ -75,7 +88,7 @@ export function useBrowserPageGrabAnnotations({
   handleCancelPendingBrowserAnnotation: () => void
   handleGrabActionShortcut: (key: 'c' | 's') => void
 } {
-  const browserTabIdRef = useRef(browserTabId)
+  const toolTargetIdRef = useRef(toolTargetId)
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
   const grabIntentRef = useRef(grabIntent)
@@ -88,12 +101,12 @@ export function useBrowserPageGrabAnnotations({
   const grabPayloadRef = useRef(grab.payload)
 
   useLayoutEffect(() => {
-    browserTabIdRef.current = browserTabId
+    toolTargetIdRef.current = toolTargetId
     grabIntentRef.current = grabIntent
     pendingAnnotationPayloadRef.current = pendingAnnotationPayload
     grabRef.current = grab
     grabPayloadRef.current = grab.payload
-  }, [browserTabId, grab, grabIntent, pendingAnnotationPayload])
+  }, [grab, grabIntent, pendingAnnotationPayload, toolTargetId])
   // Why: Radix fires onOpenChange(false) before onSelect, so this flag lets onOpenChange skip the rearm that would clear the payload first.
   const grabMenuActionTakenRef = useRef(false)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -171,32 +184,17 @@ export function useBrowserPageGrabAnnotations({
     showGrabToast
   ])
 
-  useEffect(() => {
-    if (!isActive || (!pendingAnnotationPayload && browserAnnotationsLength === 0)) {
-      return
-    }
-
-    const observedContainer = containerRef.current
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined' || !observedContainer
-        ? null
-        : new ResizeObserver(() => {
-            setBrowserOverlayViewport((current) => ({ ...current, version: current.version + 1 }))
-          })
-    if (resizeObserver && observedContainer) {
-      resizeObserver.observe(observedContainer)
-    }
-
-    return () => {
-      resizeObserver?.disconnect()
-    }
-  }, [
-    browserAnnotationsLength,
-    containerRef,
+  useBrowserPageAnnotationViewportTracking({
     isActive,
-    pendingAnnotationPayload,
+    pendingAnnotation: pendingAnnotationPayload,
+    annotationCount: browserAnnotationsLength,
+    container: trackingContainer ?? containerRef.current,
+    scroller:
+      trackingScroller ??
+      containerRef.current?.querySelector<HTMLDivElement>('[data-browser-page-scroller]') ??
+      null,
     setBrowserOverlayViewport
-  ])
+  })
 
   const startGrabIntent = useCallback(
     (nextIntent: GrabIntent): void => {
@@ -225,7 +223,7 @@ export function useBrowserPageGrabAnnotations({
         grabIntent,
         grab,
         grabPayloadRef,
-        browserTabIdRef,
+        toolTargetIdRef,
         recordFeatureInteraction,
         showGrabToast
       })

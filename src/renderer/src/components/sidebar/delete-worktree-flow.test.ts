@@ -32,6 +32,8 @@ const mocks = vi.hoisted(() => {
       }
     }),
     openModal: vi.fn(),
+    setRightSidebarTab: vi.fn(),
+    setRightSidebarOpen: vi.fn(),
     removeWorktree: vi.fn().mockResolvedValue({ ok: true }),
     gitStatusByWorktree: {} as Record<string, unknown[]>,
     deleteStateByWorktreeId: {} as Record<
@@ -344,6 +346,27 @@ describe('delete worktree flow', () => {
       )
       expect(onDeleted).toHaveBeenCalledWith([{ id: 'wt-1', executionHostId: null }])
     })
+  })
+
+  it('opens the diff without re-seeding a shell when View changes is clicked', async () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    mocks.state.removeWorktree.mockResolvedValueOnce({ ok: false, error: 'changed files' })
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+
+    expect(runWorktreeBatchDelete(['wt-1'])).toBe(true)
+
+    await vi.waitFor(() => expect(showDeleteWorktreeFailureToast).toHaveBeenCalled())
+    const toastOptions = vi.mocked(showDeleteWorktreeFailureToast).mock.calls[0]?.[0]
+    toastOptions?.onViewChanges()
+
+    // Why: the Source Control panel is the surface; seeding a shell would repopulate a
+    // workspace the user is trying to delete and erase its closed-last-terminal tombstone.
+    const { activateAndRevealWorktree } = await import('@/lib/worktree-activation')
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      providesInitialSurface: true
+    })
+    expect(mocks.state.setRightSidebarTab).toHaveBeenCalledWith('source-control')
+    expect(mocks.state.setRightSidebarOpen).toHaveBeenCalledWith(true)
   })
 
   it('does not offer force delete for a locked worktree', async () => {

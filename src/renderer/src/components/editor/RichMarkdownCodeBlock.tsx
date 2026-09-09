@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
@@ -6,159 +7,11 @@ import { Copy, Check } from 'lucide-react'
 import { useAppStore } from '@/store'
 import MermaidBlock from './MermaidBlock'
 import { translate } from '@/i18n/i18n'
-
-/**
- * Common languages shown in the selector. The user can also type a language
- * name directly in the markdown fence (```rust) and it will be preserved —
- * this list is just for quick picking in the UI.
- */
-const LANGUAGES = [
-  {
-    value: '',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.13822cdfda', 'Plain text')
-    }
-  },
-  {
-    value: 'bash',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.4227cf50fe', 'Bash')
-    }
-  },
-  { value: 'c', label: 'C' },
-  {
-    value: 'cpp',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.4daed43ae3', 'C++')
-    }
-  },
-  {
-    value: 'css',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.026653f21f', 'CSS')
-    }
-  },
-  {
-    value: 'diff',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.bf6ee5caaa', 'Diff')
-    }
-  },
-  {
-    value: 'go',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.edfcc64182', 'Go')
-    }
-  },
-  {
-    value: 'graphql',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.706fd85738', 'GraphQL')
-    }
-  },
-  {
-    value: 'html',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.8c4a3fa02d', 'HTML')
-    }
-  },
-  {
-    value: 'java',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.36536ad539', 'Java')
-    }
-  },
-  {
-    value: 'javascript',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.a209c57063', 'JavaScript')
-    }
-  },
-  {
-    value: 'json',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.78eba32de4', 'JSON')
-    }
-  },
-  {
-    value: 'kotlin',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.bcb236e2d8', 'Kotlin')
-    }
-  },
-  {
-    value: 'markdown',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.983b9576b4', 'Markdown')
-    }
-  },
-  {
-    value: 'mermaid',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.89d6cc14fb', 'Mermaid')
-    }
-  },
-  {
-    value: 'python',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.2391f9cda9', 'Python')
-    }
-  },
-  {
-    value: 'ruby',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.96182a2f64', 'Ruby')
-    }
-  },
-  {
-    value: 'rust',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.e72e6b03f4', 'Rust')
-    }
-  },
-  {
-    value: 'scss',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.5af8251002', 'SCSS')
-    }
-  },
-  {
-    value: 'shell',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.d01f55be57', 'Shell')
-    }
-  },
-  {
-    value: 'sql',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.3009f722b9', 'SQL')
-    }
-  },
-  {
-    value: 'swift',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.9e384d48dc', 'Swift')
-    }
-  },
-  {
-    value: 'typescript',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.88d777bc07', 'TypeScript')
-    }
-  },
-  {
-    value: 'xml',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.5ef5605cb7', 'XML')
-    }
-  },
-  {
-    value: 'yaml',
-    get label() {
-      return translate('auto.components.editor.RichMarkdownCodeBlock.74eab1d9b2', 'YAML')
-    }
-  }
-]
+import {
+  getCodeBlockLanguageLabel,
+  getCodeBlockLanguages,
+  isKnownCodeBlockLanguage
+} from './rich-markdown-code-block-languages'
 
 export function RichMarkdownCodeBlock({
   node,
@@ -167,6 +20,10 @@ export function RichMarkdownCodeBlock({
   useTranslation()
   const language = (node.attrs.language as string) || ''
   const [copied, setCopied] = useState(false)
+  // Why: ProseMirror renders every node view in the document, so eagerly
+  // mounting the full language list cost ~25 <option> elements per code block —
+  // in a large document that dwarfs the prose DOM and slows every keystroke.
+  const [languageListMounted, setLanguageListMounted] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
   // Why: clipboard IPC can resolve after the node view unmounts; avoid
   // starting a reset timer that will outlive the component.
@@ -194,6 +51,15 @@ export function RichMarkdownCodeBlock({
     },
     [clearCopiedResetTimer]
   )
+
+  const mountLanguageList = useCallback(() => {
+    if (languageListMounted) {
+      return
+    }
+    // Why: the native popup opens as this same discrete event's default action,
+    // so the list must be in the DOM before React's normal flush would land.
+    flushSync(() => setLanguageListMounted(true))
+  }, [languageListMounted])
 
   const onChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -233,15 +99,25 @@ export function RichMarkdownCodeBlock({
         contentEditable={false}
         value={language}
         onChange={onChange}
+        onMouseDown={mountLanguageList}
+        onFocus={mountLanguageList}
       >
-        {LANGUAGES.map((lang) => (
-          <option key={lang.value} value={lang.value}>
-            {lang.label}
-          </option>
-        ))}
+        {languageListMounted ? (
+          getCodeBlockLanguages().map((lang) => (
+            <option key={lang.value} value={lang.value}>
+              {lang.label}
+            </option>
+          ))
+        ) : (
+          // Why: a closed <select> only paints its selected option, so until the
+          // user reaches for the list one entry renders the same visible label.
+          <option value={language}>{getCodeBlockLanguageLabel(language)}</option>
+        )}
         {/* If the document has a language not in our list, show it as-is */}
-        {language && !LANGUAGES.some((l) => l.value === language) ? (
-          <option value={language}>{language}</option>
+        {languageListMounted && language && !isKnownCodeBlockLanguage(language) ? (
+          <option key={language} value={language}>
+            {language}
+          </option>
         ) : null}
       </select>
       <button

@@ -4,7 +4,10 @@ import { normalizePaletteText } from './normalized-text'
 export const PALETTE_QUERY_MAX_TOKENS = 16
 
 const DIGIT = /\p{N}/u
-const ALPHANUMERIC = /[\p{L}\p{N}]/u
+// Why symbols count as content: an emoji is \p{So} and an arrow is \p{Sm}, so a
+// letters-and-digits test would classify `🚀` as punctuation and drop the token —
+// and the palette input expands `:rocket:` into exactly that.
+const ALPHANUMERIC = /[\p{L}\p{N}\p{S}\p{Extended_Pictographic}]/u
 const LETTERS_ONLY = /^\p{L}+$/u
 const LATIN_OR_DIGIT = /^[\p{Script=Latin}\p{Nd}]$/u
 const IDENTIFIER_PUNCTUATION = /[./#!_-]/
@@ -28,7 +31,13 @@ export type PaletteQueryToken = {
 export type PreparedPaletteQuery =
   | { state: 'empty' }
   | { state: 'invalid'; reason: 'too-large' | 'too-many-tokens' }
-  | { state: 'ready'; normalized: string; tokens: readonly PaletteQueryToken[] }
+  | {
+      state: 'ready'
+      normalized: string
+      tokens: readonly PaletteQueryToken[]
+      /** Count before duplicate-token removal; destination recognition uses the complete query. */
+      tokenCountBeforeDeduplication: number
+    }
 
 function splitComponents(text: string): string[] {
   const components: string[] = []
@@ -79,14 +88,16 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (isWorktreePaletteQueryTooLarge(query)) {
     return { state: 'invalid', reason: 'too-large' }
   }
-  const normalized = normalizePaletteText(query).normalized.trim()
+  // Field text is single-spaced, and this value has no source-offset mapping to preserve.
+  const normalized = normalizePaletteText(query).normalized.replace(/ +/g, ' ').trim()
   if (!normalized) {
     return { state: 'empty' }
   }
 
   const seen = new Set<string>()
   const tokens: PaletteQueryToken[] = []
-  for (const raw of normalized.split(' ')) {
+  const rawTokens = normalized.split(' ').filter(Boolean)
+  for (const raw of rawTokens) {
     if (!raw || seen.has(raw)) {
       continue
     }
@@ -100,7 +111,12 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (tokens.length > PALETTE_QUERY_MAX_TOKENS) {
     return { state: 'invalid', reason: 'too-many-tokens' }
   }
-  return { state: 'ready', normalized, tokens }
+  return {
+    state: 'ready',
+    normalized,
+    tokens,
+    tokenCountBeforeDeduplication: rawTokens.length
+  }
 }
 
 export function isLetterOnlyWord(word: string): boolean {

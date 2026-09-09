@@ -1,4 +1,5 @@
 import { keybindingMatchesInput } from '../../../../shared/keybindings'
+import { isHangulJamoKeyText } from './hangul-jamo-key'
 import { getLayoutBaseCharacterForCode } from '../../lib/keyboard-layout/layout-base-character'
 import {
   isTerminalImeCandidateDigitKeyEvent,
@@ -38,6 +39,10 @@ export type XtermBypassOptions = {
    *  Windows/Linux should only bubble to clipboard when something is selected,
    *  otherwise it must reach the shell as SIGINT. */
   hasSelection: boolean
+  /** True when the renderer runs inside iOS/iPadOS WebKit, where the system
+   *  composes CJK text by rewriting the field instead of running a composition
+   *  session. See `terminal-ios-hangul-preedit.ts`. */
+  isIosWeb?: boolean
 }
 
 export type XtermImeKeyboardOptions = {
@@ -50,6 +55,11 @@ export type XtermImeKeyboardOptions = {
   /** True for the narrow Linux path where the IME emits an orphaned letter
    *  keyup but no composition/input events before its candidate digit. */
   linuxOrphanCandidateDigitGuardActive?: boolean
+  /** True when the most recent preedit was Hangul, where a digit ends the
+   *  syllable and is literal text. Only the orphan-keyup guard is barred from
+   *  claiming it (#15299): ibus-hangul's Hanja lookup table does index by digit,
+   *  but only over a live preedit the composition guards already own. */
+  hangulPreedit?: boolean
   // Required so no caller silently falls back to non-mac 229 suppression,
   // which re-swallows the first key after a macOS IME input-source switch.
   isMac: boolean
@@ -89,6 +99,50 @@ function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
 }
 
+/**
+ * Why: iOS/iPadOS composes CJK text by rewriting the field through
+ * `beforeinput`/`input`, with no composition session, and that only runs when
+ * the printable keydown reaches the default handler. xterm has to stay out of
+ * the way for those keys so `terminal-ios-hangul-preedit.ts` can read the
+ * resulting edits. `keypress` is included because `_keyPress` would otherwise
+ * send the glyph a second time alongside the preedit commit.
+ */
+export function shouldBypassXtermForIosTextEdit(
+  event: XtermBypassEvent,
+  isIosWeb: boolean
+): boolean {
+  if (!isIosWeb || event.ctrlKey || event.metaKey || event.altKey) {
+    return false
+  }
+  if (event.isComposing === true) {
+    // Why: input sources that do run a composition session stay with xterm's
+    // CompositionHelper, which already commits them correctly.
+    return false
+  }
+  if (!isXtermHandledKeyEvent(event.type) && event.type !== 'keypress') {
+    return false
+  }
+  // Why jamo and not every non-ASCII key: nothing downstream re-sends a key
+  // this claims. A Cyrillic or kana key would lose its keydown, its keypress,
+  // and then its `input` too — xterm drops a composed insert while a key is
+  // down — and reach the PTY as nothing at all.
+  return isHangulJamoKeyText(event.key)
+}
+
+/** Returns whether the Linux orphan-keyup window may claim this digit. */
+function claimsOrphanCandidateDigit(
+  event: XtermBypassEvent,
+  options: XtermImeKeyboardOptions
+): boolean {
+  return (
+    options.linuxOrphanCandidateDigitGuardActive === true &&
+    isTerminalImeCandidateDigitKeyEvent(event) &&
+    // Why: the orphan window arms off a bare keyup and cannot see which engine
+    // produced it, so a Hangul syllable's terminating digit must opt out.
+    options.hangulPreedit !== true
+  )
+}
+
 /** Returns whether xterm must not process an IME-owned keyboard event. */
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
@@ -98,17 +152,14 @@ export function shouldSuppressTerminalImeKeyboardEvent(
     compositionActive,
     candidateKeyGuardActive,
     pendingCandidateKeyReleaseActive,
-    linuxOrphanCandidateDigitGuardActive = false,
     isMac,
     isLinux
   } = options
-  const suppressOrphanCandidateDigit =
-    isLinux && linuxOrphanCandidateDigitGuardActive && isTerminalImeCandidateDigitKeyEvent(event)
   const suppressCandidateKey =
     isLinux &&
     (pendingCandidateKeyReleaseActive ||
       (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
-      suppressOrphanCandidateDigit)
+      claimsOrphanCandidateDigit(event, options))
   if (event.type === 'keypress') {
     // Why: a suppressed candidate keydown is not preventDefault-ed by xterm,
     // so its native keypress still fires and _keyPress would forward the
@@ -147,8 +198,7 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
     event.type === 'keydown' &&
     options.isLinux &&
     ((options.candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
-      (options.linuxOrphanCandidateDigitGuardActive === true &&
-        isTerminalImeCandidateDigitKeyEvent(event)))
+      claimsOrphanCandidateDigit(event, options))
   )
 }
 
@@ -241,6 +291,9 @@ export function shouldBypassXtermKeyboardEvent(
   event: XtermBypassEvent,
   options: XtermBypassOptions
 ): boolean {
+  if (shouldBypassXtermForIosTextEdit(event, options.isIosWeb === true)) {
+    return true
+  }
   if (!isXtermHandledKeyEvent(event.type)) {
     return false
   }

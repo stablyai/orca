@@ -208,6 +208,44 @@ describe('SourceControlBranchContextRow', () => {
     expect(markup).toContain('Retry')
   })
 
+  // A branch rebased onto origin/main still tracks its pre-rebase remote branch,
+  // so upstream ↑↓ answered a question nobody asked here. One count, against the
+  // base ref, on the line that names it.
+  it('counts commits against the compare base, on the base line', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={{ ...readySummary, baseRef: 'refs/remotes/origin/main', commitsAhead: 5 }}
+        compareBaseRef={null}
+        headDisplay={{ kind: 'branch', branchName: 'feature/rebased' }}
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    // Anchor on the base-ref button, not on 'origin/main' — the group's
+    // head→base aria-label repeats the base ref at the top of the markup.
+    const baseIndex = markup.indexOf('aria-label="Change base ref:')
+    expect(markup.indexOf('↑5')).toBeGreaterThan(baseIndex)
+    expect(markup).toContain('aria-label="5 commits ahead of origin/main"')
+    // Nothing claims the branch is behind — that count is not available.
+    expect(markup).not.toContain('↓')
+  })
+
+  it('shows the count on the base line when there is no head identity', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={{ ...readySummary, commitsAhead: 3 }}
+        compareBaseRef={null}
+        headDisplay={null}
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    expect(markup).toContain('↑3')
+    expect(markup).toContain('aria-label="3 commits ahead of origin/FRONT-192-ZisVoucherStrip"')
+  })
+
   it('renders a compact external review link when a manual URL is available', () => {
     const markup = renderToStaticMarkup(
       <SourceControlBranchContextRow
@@ -319,35 +357,35 @@ describe('SourceControlBranchContextRow branch line total', () => {
     }
   })
 
-  // Lines measure the branch's work, commits measure the comparison, so each sits
-  // on the line that names its subject. Adjacency is what made them read as one
-  // number in the first place.
-  it('puts the chip on the head line, ahead of the base line and its commit count', () => {
-    const markup = renderWithLineTotal(
-      { added: 8259, removed: 670, mergeBase: 'base' },
-      {
-        ...readySummary,
-        commitsAhead: 2
-      }
-    )
-    const headIndex = markup.indexOf('data-testid="source-control-head-identity"')
-    const chipIndex = markup.indexOf('data-testid="source-control-branch-line-total"')
-    const aheadIndex = markup.indexOf('↑2')
-    const reviewIndex = markup.indexOf('aria-label="Open review page in browser"')
-
-    expect(headIndex).toBeGreaterThan(-1)
-    expect(chipIndex).toBeGreaterThan(headIndex)
-    expect(aheadIndex).toBeGreaterThan(chipIndex)
-    expect(reviewIndex).toBeGreaterThan(aheadIndex)
-  })
-
-  it('keeps the ahead count out of the line-total colors', () => {
+  // Regression: with no upstream divergence this is the only count left, so
+  // dropping it left a pushed, rebased branch showing no divergence at all.
+  it('counts commits against the compare base on the base line', () => {
     const markup = renderWithLineTotal(
       { added: 8259, removed: 670, mergeBase: 'base' },
       { ...readySummary, commitsAhead: 2 }
     )
-    // The `↑2` span must carry the muted class, not added-green — two adjacent
-    // green numbers counting different units is the bug this guards.
+
+    expect(markup).toContain('↑2')
+    expect(markup).toContain('2 commits ahead of origin/FRONT-192-ZisVoucherStrip')
+    // It belongs to the base line, after the base-ref button.
+    expect(markup.indexOf('↑2')).toBeGreaterThan(markup.indexOf('aria-label="Change base ref:'))
+    // Nothing claims the branch is behind its base — that count does not exist.
+    expect(markup).not.toContain('↓')
+  })
+
+  it('keeps the commit count out of the line-total colors', () => {
+    const markup = renderToStaticMarkup(
+      <SourceControlBranchContextRow
+        summary={{ ...readySummary, commitsAhead: 2 }}
+        compareBaseRef={null}
+        headDisplay={{ kind: 'branch', branchName: 'feature/line-total' }}
+        branchLineTotal={{ added: 8259, removed: 670, mergeBase: 'base' }}
+        onChangeBaseRef={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+
+    // Two adjacent green numbers counting different units is the bug this guards.
     const aheadSpan = markup.slice(
       markup.lastIndexOf('<span', markup.indexOf('↑2')),
       markup.indexOf('↑2')

@@ -124,7 +124,7 @@ describe('getBranchCompare', () => {
       nameStatus: 'M\tfile-a.ts\nR100\told-name.ts\tnew-name.ts\nC100\told-copy.ts\tnew-copy.ts\n',
       numstat:
         '10\t2\tfile-a.ts\n1\t1\told-name.ts => new-name.ts\n3\t0\told-copy.ts => new-copy.ts\n',
-      revList: '7\n'
+      revList: '4\t7\n'
     })
 
     const result = await getBranchCompare('/repo', 'origin/main')
@@ -137,6 +137,7 @@ describe('getBranchCompare', () => {
       mergeBase: 'merge-base-oid',
       changedFiles: 3,
       commitsAhead: 7,
+      commitsBehind: 4,
       status: 'ready'
     })
     expect(result.entries).toEqual([
@@ -144,6 +145,30 @@ describe('getBranchCompare', () => {
       { path: 'new-name.ts', oldPath: 'old-name.ts', status: 'renamed', added: 1, removed: 1 },
       { path: 'new-copy.ts', oldPath: 'old-copy.ts', status: 'copied', added: 3, removed: 0 }
     ])
+  })
+
+  // Why: a rebased branch is ahead AND behind; the symmetric --left-right range is the
+  // only form that reports both, and its columns are left=behind, right=ahead.
+  it('counts both divergence directions from one symmetric rev-list', async () => {
+    mockBranchCompareGit({
+      branch: 'main\n',
+      probe: { 'refs/remotes/origin/main^{commit}': 'base-oid\n' },
+      headOid: 'head-oid\n',
+      baseOid: 'base-oid\n',
+      mergeBase: 'merge-base-oid\n',
+      nameStatus: '',
+      numstat: '',
+      revList: '12\t33\n'
+    })
+
+    const result = await getBranchCompare('/repo', 'origin/main')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['rev-list', '--left-right', '--count', 'base-oid...head-oid'],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+    expect(result.summary.commitsAhead).toBe(33)
+    expect(result.summary.commitsBehind).toBe(12)
   })
 
   it('returns invalid-base when the compare ref does not resolve', async () => {
@@ -198,6 +223,7 @@ describe('getBranchCompare', () => {
       mergeBase: null,
       changedFiles: 0,
       commitsAhead: 0,
+      commitsBehind: 0,
       status: 'ready'
     })
     expect(result.entries).toEqual([])
@@ -228,7 +254,7 @@ describe('getBranchCompare', () => {
       mergeBase: 'merge-base-oid\n',
       nameStatus: 'M\tdocs/日本語/sample.md\n',
       numstat: '2\t1\tdocs/日本語/sample.md\n',
-      revList: '1\n'
+      revList: '0\t1\n'
     })
 
     const result = await getBranchCompare('/repo', 'origin/main')
@@ -282,7 +308,7 @@ describe('getBranchCompare', () => {
       mergeBase: 'merge-base-oid\n',
       nameStatus: '',
       numstat: '',
-      revList: '0\n'
+      revList: '0\t0\n'
     })
 
     const result = await getBranchCompare('/repo', 'origin/main')
@@ -303,7 +329,7 @@ describe('getBranchCompare', () => {
       mergeBase: 'merge-base-oid\n',
       nameStatus: '',
       numstat: '',
-      revList: '0\n'
+      revList: '0\t0\n'
     })
 
     const result = await getBranchCompare('/repo', 'refs/remotes/origin/main')

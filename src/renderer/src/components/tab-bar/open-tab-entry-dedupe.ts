@@ -3,7 +3,9 @@
 
 import { normalizeRelativePath } from '@/lib/path'
 import { isCaseInsensitiveRuntimeRoot } from '../../../../shared/cross-platform-path'
+import { normalizeBrowserHistoryUrl } from '../../../../shared/workspace-session-browser-history'
 import type { OpenTabSearchResult } from './open-tab-search'
+import type { BrowserHistoryOmniboxRow } from './tab-create-entry-active-option'
 import type { TabEntryOption } from './tab-create-entry-action'
 
 // NFC so a macOS NFD directory listing matches the NFC path an editor recorded.
@@ -35,4 +37,45 @@ export function dropFileEntriesCoveredByTabResults(
       option.classification.kind !== 'existing-file' ||
       !openPaths.has(comparisonKey(option.classification.relativePath, foldCase))
   )
+}
+
+// A page already open in a browser tab is the same destination as its history
+// row, and switching beats navigating; the same trade the file rows above make.
+export function dropHistoryRowsCoveredByBrowserPages(
+  rows: readonly BrowserHistoryOmniboxRow[],
+  tabResults: readonly OpenTabSearchResult[]
+): readonly BrowserHistoryOmniboxRow[] {
+  if (rows.length === 0) {
+    return rows
+  }
+  const openUrls = new Set<string>()
+  for (const result of tabResults) {
+    if (result.source === 'browser') {
+      openUrls.add(normalizeBrowserHistoryUrl(result.url))
+    }
+  }
+  if (openUrls.size === 0) {
+    return rows
+  }
+  const retained = rows.filter((row) => !openUrls.has(row.entry.normalizedUrl))
+  return retained.length === rows.length ? rows : retained
+}
+
+// The history row carries a real page title, so it beats the bare typed-URL row
+// it duplicates — mirroring the address bar's synthetic-row fold.
+export function dropUrlEntriesCoveredByHistoryRows(
+  options: readonly TabEntryOption[],
+  rows: readonly BrowserHistoryOmniboxRow[]
+): readonly TabEntryOption[] {
+  if (rows.length === 0) {
+    return options
+  }
+  const historyUrls = new Set(rows.map((row) => row.entry.normalizedUrl))
+  const retained = options.filter(
+    (option) =>
+      (option.classification.kind !== 'explicit-url' &&
+        option.classification.kind !== 'host-url') ||
+      !historyUrls.has(normalizeBrowserHistoryUrl(option.classification.url))
+  )
+  return retained.length === options.length ? options : retained
 }

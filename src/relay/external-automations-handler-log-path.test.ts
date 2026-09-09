@@ -2,11 +2,6 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RelayDispatcher } from './dispatcher'
-
-type ReferencedLogReader = {
-  readReferencedLogFile(content: string): Promise<{ content: string } | null>
-}
 
 describe('ExternalAutomationsHandler referenced log paths', () => {
   let hermesHome: string
@@ -34,12 +29,9 @@ describe('ExternalAutomationsHandler referenced log paths', () => {
     await mkdir(dirname(logPath), { recursive: true })
     await writeFile(logPath, 'remote dot-dot-prefixed log line\n', 'utf-8')
 
-    const { ExternalAutomationsHandler } = await import('./external-automations-handler')
-    const handler = new ExternalAutomationsHandler({
-      onRequest: () => {}
-    } as unknown as RelayDispatcher) as unknown as ReferencedLogReader
+    const { readHermesReferencedLogFile } = await import('./hermes-output-run-files')
 
-    const result = await handler.readReferencedLogFile(`Latest log path: ${logPath}
+    const result = await readHermesReferencedLogFile(`Latest log path: ${logPath}
 Run summary: monitor automation completed successfully.`)
 
     expect(result?.content).toBe('remote dot-dot-prefixed log line\n')

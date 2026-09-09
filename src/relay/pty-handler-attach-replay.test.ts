@@ -1,5 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import * as ptyShellUtils from './pty-shell-utils'
+import {
+  PTY_ATTACH_PROVEN_EXITED_MARKER,
+  isProvenExitedPtyAttachRefusal
+} from '../shared/pty-attach-absence-evidence'
 
 const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -32,14 +36,17 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
-import { PtyHandler, attachIdentityMismatches } from './pty-handler'
-import type { RelayDispatcher } from './dispatcher'
+import { attachIdentityMismatches, type PtyHandler } from './pty-handler'
 import {
   beginPtyHandlerTest,
   createPtyRequestHelpers,
+  createTestPtyHandler,
+  testPtyId,
   endPtyHandlerTest
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
+
+const PTY_1 = testPtyId(1)
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -83,19 +90,28 @@ describe('PtyHandler', () => {
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
     try {
       await expect(
-        dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
-      ).rejects.toThrow('PTY "pty-1" not found')
+        dispatcher.callRequest('pty.attach', { id: PTY_1, suppressReplayNotification: true })
+      ).rejects.toThrow(`PTY "${PTY_1}" not found (${PTY_ATTACH_PROVEN_EXITED_MARKER})`)
     } finally {
       aliveSpy.mockRestore()
     }
 
     // The stale entry is reaped: cache-eviction observers fire and the map slot
     // is freed so a later attach also cleanly reports not-found.
-    expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-dead:0' }])
+    expect(exits).toEqual([{ id: PTY_1, paneKey: 'tab-dead:0' }])
     expect(handler.activePtyCount).toBe(0)
-    await expect(
-      dispatcher.callRequest('pty.attach', { id: 'pty-1', suppressReplayNotification: true })
-    ).rejects.toThrow('PTY "pty-1" not found')
+    const unknownId = await dispatcher
+      .callRequest('pty.attach', { id: PTY_1, suppressReplayNotification: true })
+      .then(
+        () => new Error('expected the attach to be refused'),
+        (error: Error) => error
+      )
+
+    // The second refusal is the shape a restarted relay gives for every id the previous one minted:
+    // same words, no liveness check behind them. Only the probed one may be read as a death
+    // (docs/reference/ssh-execution-boundary.md).
+    expect(unknownId.message).toContain(`PTY "${PTY_1}" not found`)
+    expect(isProvenExitedPtyAttachRefusal(unknownId)).toBe(false)
   })
 
   it('settles concurrent immediate shutdown when attach proves the shell exited', async () => {
@@ -110,12 +126,12 @@ describe('PtyHandler', () => {
 
     let shutdown: Promise<unknown> | undefined
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockImplementation(() => {
-      shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      shutdown = dispatcher.callRequest('pty.shutdown', { id: PTY_1, immediate: true })
       return false
     })
     try {
-      await expect(dispatcher.callRequest('pty.attach', { id: 'pty-1' })).rejects.toThrow(
-        'PTY "pty-1" not found'
+      await expect(dispatcher.callRequest('pty.attach', { id: PTY_1 })).rejects.toThrow(
+        `PTY "${PTY_1}" not found`
       )
       await expect(shutdown).resolves.toBeUndefined()
     } finally {
@@ -144,7 +160,7 @@ describe('PtyHandler', () => {
     const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(true)
     try {
       const result = await attachPty({
-        id: 'pty-1',
+        id: PTY_1,
         suppressReplayNotification: true
       })
       expect(result).toEqual({ incarnationId: spawn.incarnationId, replay: 'prompt$ ' })
@@ -168,7 +184,7 @@ describe('PtyHandler', () => {
     dataCallback!('buffered output')
 
     const result = await attachPty({
-      id: 'pty-1',
+      id: PTY_1,
       suppressReplayNotification: true
     })
 
@@ -197,7 +213,7 @@ describe('PtyHandler', () => {
     } as never)
 
     const result = await attachPty({
-      id: 'pty-1',
+      id: PTY_1,
       suppressReplayNotification: true
     })
 
@@ -264,11 +280,11 @@ describe('PtyHandler', () => {
     dataCallback!('buffered output')
     dispatcher.notify.mockClear()
 
-    const result = await attachPty({ id: 'pty-1' })
+    const result = await attachPty({ id: PTY_1 })
 
     expect(result).toEqual({ incarnationId: spawn.incarnationId })
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.replay', {
-      id: 'pty-1',
+      id: PTY_1,
       data: 'buffered output'
     })
     vi.advanceTimersByTime(8)
@@ -306,15 +322,15 @@ describe('PtyHandler', () => {
 
     await expect(
       attachPty({
-        id: 'pty-1',
+        id: PTY_1,
         expectedPaneKey: 'tab-b:leaf-b',
         expectedTabId: 'tab-b'
       })
-    ).rejects.toThrow('PTY "pty-1" not found')
+    ).rejects.toThrow(`PTY "${PTY_1}" not found`)
 
     await expect(
       attachPty({
-        id: 'pty-1',
+        id: PTY_1,
         expectedPaneKey: 'tab-a:leaf-a',
         expectedTabId: 'tab-a'
       })
@@ -336,7 +352,7 @@ describe('PtyHandler', () => {
 
     exitCallback!({ exitCode: 0 })
     expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', {
-      id: 'pty-1',
+      id: PTY_1,
       code: 0,
       incarnationId: spawn.incarnationId
     })
@@ -356,7 +372,7 @@ describe('PtyHandler', () => {
       tryNotifyPtyExit,
       legacyRetentionBelowLowWater: true
     })
-    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    handler = createTestPtyHandler(dispatcher)
     let exitCallback: ((info: { exitCode: number }) => void) | undefined
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -372,7 +388,7 @@ describe('PtyHandler', () => {
 
     capacityListener?.()
     expect(tryNotifyPtyExit).toHaveBeenLastCalledWith({
-      id: 'pty-1',
+      id: PTY_1,
       code: 0,
       incarnationId: spawn.incarnationId
     })
@@ -397,11 +413,11 @@ describe('PtyHandler', () => {
     exitCallback!({ exitCode: 0 })
 
     expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
-      id: 'pty-1',
+      id: PTY_1,
       data: 'final output'
     })
     expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.exit', {
-      id: 'pty-1',
+      id: PTY_1,
       code: 0,
       incarnationId: spawn.incarnationId
     })
@@ -427,7 +443,7 @@ describe('PtyHandler', () => {
     dataCallback!('initial output')
 
     const r1 = await attachPty({
-      id: 'pty-1',
+      id: PTY_1,
       suppressReplayNotification: true
     })
     expect(r1).toEqual({ incarnationId: spawn.incarnationId, replay: 'initial output' })
@@ -435,7 +451,7 @@ describe('PtyHandler', () => {
     dataCallback!(' more')
 
     const r2 = await attachPty({
-      id: 'pty-1',
+      id: PTY_1,
       suppressReplayNotification: true
     })
     expect(r2).toEqual({ incarnationId: spawn.incarnationId, replay: 'initial output more' })
@@ -457,7 +473,7 @@ describe('PtyHandler', () => {
     dataCallback!('Mon Apr 28\r\n')
 
     const firstAttach = await attachPty({
-      id: 'pty-1',
+      id: PTY_1,
       suppressReplayNotification: true
     })
     expect(firstAttach.incarnationId).toBe(spawn.incarnationId)
@@ -465,7 +481,7 @@ describe('PtyHandler', () => {
     dataCallback!('Tue Apr 29\r\n')
 
     const secondAttach = await attachPty({
-      id: 'pty-1',
+      id: PTY_1,
       suppressReplayNotification: true
     })
     expect(secondAttach.incarnationId).toBe(spawn.incarnationId)
@@ -473,7 +489,7 @@ describe('PtyHandler', () => {
     dataCallback!('Wed Apr 30\r\n')
 
     const result = await attachPty({
-      id: 'pty-1',
+      id: PTY_1,
       suppressReplayNotification: true
     })
     expect(result).toEqual({

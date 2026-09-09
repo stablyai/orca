@@ -59,7 +59,7 @@ export function FileExplorerFilesTreePane({
   handleExplorerBackgroundContextMenuCapture,
   handleExplorerBackgroundDoubleClick
 }: FileExplorerFilesTreePaneProps): React.JSX.Element {
-  const { dirCache, rootCache, rootError } = tree
+  const { loadingDirPaths, rootCache, rootError } = tree
   const { selectedPaths, preserveSelectionForContextMenu, copyPathsForNode } = selection
   const {
     scrollRef,
@@ -111,8 +111,8 @@ export function FileExplorerFilesTreePane({
   // when the tree is empty, still loading, or showing a read error.
   const isEmptyState = visibleRowCount === 0 && !inlineInput
   const isNameFilterLoading = nameFilterSource?.relativePaths === null
-  const isLoading =
-    isEmptyState && (hasNameFilter ? isNameFilterLoading : (rootCache?.loading ?? true))
+  const isRootLoading = !rootCache || (!!worktreePath && loadingDirPaths.has(worktreePath))
+  const isLoading = isEmptyState && (hasNameFilter ? isNameFilterLoading : isRootLoading)
   const treeError = hasNameFilter ? nameFilterFiles.loadError : rootError
   const hasError = isEmptyState && !isLoading && !!treeError
   const showTree = !isEmptyState
@@ -177,7 +177,7 @@ export function FileExplorerFilesTreePane({
           ignoredByRelativePath={ignoredByRelativePath}
           expanded={rowExpandedPaths}
           canCollapseFolderSubtree={!hasNameFilter}
-          dirCache={dirCache}
+          loadingDirPaths={loadingDirPaths}
           selectedPaths={selectedPaths}
           activeFileId={activeFileId}
           flashingPath={flashingPath}

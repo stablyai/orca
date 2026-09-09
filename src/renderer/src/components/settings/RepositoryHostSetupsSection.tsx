@@ -229,12 +229,17 @@ export function RepositoryHostSetupsSection({
           const runtimeOwnerState = runtimeOwnerEnvironmentId
             ? runtimeHostConnectionState({
                 hasStatusEntry: Boolean(runtimeOwnerStatusEntry),
-                status: runtimeOwnerStatusEntry?.status
+                status: runtimeOwnerStatusEntry?.status,
+                remoteControl:
+                  runtimeOwnerStatusEntry?.remoteControl ??
+                  runtimeOwnerStatusEntry?.status?.remoteControl ??
+                  null
               })
             : null
           const runtimeOwnerReachable =
             runtimeOwnerState === null || isConnectedRuntimeHostState(runtimeOwnerState)
           const runtimeOwnerWorkspaceWindowClosed = runtimeOwnerState === 'workspace-window-closed'
+          const runtimeOwnerRuntimeUnavailable = runtimeOwnerState === 'runtime-unavailable'
           const runtimeOwnerHostId = runtimeOwnerEnvironmentId
             ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
             : null
@@ -261,6 +266,7 @@ export function RepositoryHostSetupsSection({
             setup.setupState === 'ready' &&
             runtimeOwnerReachable &&
             !runtimeOwnerWorkspaceWindowClosed &&
+            !runtimeOwnerRuntimeUnavailable &&
             (nestedSshStatus === undefined || nestedSshStatus === 'connected')
           const setupStateLabel = !runtimeOwnerReachable
             ? translate(
@@ -272,14 +278,16 @@ export function RepositoryHostSetupsSection({
                   'auto.components.settings.RepositoryPane.hostStateWorkspaceWindowClosed',
                   'Workspace window closed'
                 )
-              : nestedSshStatus === null
+              : runtimeOwnerRuntimeUnavailable
                 ? translate('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
-                : nestedSshStatus !== undefined && nestedSshStatus !== 'connected'
-                  ? translate(
-                      'auto.components.settings.RepositoryPane.hostStateDisconnected',
-                      'Disconnected'
-                    )
-                  : getSetupStateLabel(setup.setupState)
+                : nestedSshStatus === null
+                  ? translate('auto.components.settings.RepositoryPane.hostStateUnknown', 'Unknown')
+                  : nestedSshStatus !== undefined && nestedSshStatus !== 'connected'
+                    ? translate(
+                        'auto.components.settings.RepositoryPane.hostStateDisconnected',
+                        'Disconnected'
+                      )
+                    : getSetupStateLabel(setup.setupState)
           const setupHostLabel =
             runtimeOwnerEnvironmentId && executionHost?.kind === 'ssh'
               ? translate(

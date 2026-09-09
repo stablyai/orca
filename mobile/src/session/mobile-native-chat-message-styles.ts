@@ -80,6 +80,18 @@ export const styles = StyleSheet.create({
     fontFamily: typography.monoFamily,
     fontSize: MONO_SIZE
   },
+  toolRunActive: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 3
+  },
+  toolRunActiveLabel: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.bodySize
+  },
   toolRunBody: {
     paddingLeft: spacing.sm,
     borderLeftWidth: 2,

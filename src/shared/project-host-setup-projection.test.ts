@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
-  getProjectHostSetupWorktreeMeta,
   isGitHubBackedRepo,
   getProjectIdForProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
+import { getProjectHostSetupWorktreeMeta } from './project-host-setup-lookup'
 import type { Repo } from './repo-types'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName'>): Repo {
@@ -662,5 +662,25 @@ describe('derived project identity stability', () => {
       })
     ])
     expect(projection.projects.map((project) => project.id)).toEqual(['github:acme/app'])
+  })
+})
+
+describe('getProjectHostSetupWorktreeMeta host selection', () => {
+  it("picks the setup for the repo's own execution host when a repoId spans two hosts", () => {
+    const sshRepo = repo({
+      id: 'repo-shared',
+      path: '/remote/orca',
+      displayName: 'orca',
+      connectionId: 'build-box'
+    })
+    // Local first in the array: a repoId-only match would stamp the wrong host durably.
+    const setups = [
+      ...projectHostSetupProjectionFromRepos([
+        repo({ id: 'repo-shared', path: '/local/orca', displayName: 'orca' })
+      ]).setups,
+      ...projectHostSetupProjectionFromRepos([sshRepo]).setups
+    ]
+
+    expect(getProjectHostSetupWorktreeMeta(setups, sshRepo).hostId).toBe('ssh:build-box')
   })
 })

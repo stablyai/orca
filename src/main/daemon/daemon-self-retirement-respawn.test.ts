@@ -15,6 +15,7 @@ function fixtureSubprocess(): SubprocessHandle {
     write: () => {},
     resize: () => {},
     kill: () => queueMicrotask(() => onExit?.(0)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: () => queueMicrotask(() => onExit?.(137)),
     signal: () => {},
     onData: () => {},

@@ -18,6 +18,7 @@ import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
+import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
 import { toDisplayUrl } from '../describe-page/browser-page-url-display'
 import {
   canReconnectRemoteBrowserStream,
@@ -40,6 +41,7 @@ export function RemoteBrowserPageViewport({
   certificateFailure,
   remotePageHandle,
   activeRuntimeEnvironmentId,
+  worktreeId,
   runtimeWorktree,
   runtimeTarget,
   onReload,
@@ -63,6 +65,7 @@ export function RemoteBrowserPageViewport({
   certificateFailure: BrowserCertificateFailure | null
   remotePageHandle: RemoteBrowserPageHandle | null
   activeRuntimeEnvironmentId: string
+  worktreeId: string
   runtimeWorktree: string
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   onReload: () => void
@@ -191,6 +194,16 @@ export function RemoteBrowserPageViewport({
           className="absolute bottom-4 left-1/2 z-30 flex max-w-md -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
         >
           <span>{remoteError}</span>
+          {/* Why: the runtime refuses server screencast for a client-placed page, so reconnecting
+              can never render it here. A new server-placed page is the only way through. */}
+          {remotePageHandle?.placement?.kind === 'client' ? (
+            <ReopenBrowserPageOnServerButton
+              environmentId={remotePageHandle.environmentId}
+              worktreeId={worktreeId}
+              lastCommittedUrl={browserTab.url}
+              className="h-6 shrink-0 px-2 text-xs"
+            />
+          ) : null}
           {canReconnectRemoteBrowserStream(streamStatus) ? (
             <Button
               size="sm"

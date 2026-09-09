@@ -1,10 +1,14 @@
 import type { SshPtySourceAckPublication } from './ssh-pty-source-obligation-contract'
-import { reclaimPublishedSourcePrefix, type TokenRecord } from './ssh-pty-source-obligation-state'
+import {
+  reclaimPublishedSourcePrefix,
+  type SpanRecord,
+  type TokenRecord
+} from './ssh-pty-source-obligation-state'
 
 export function createSshPtySourceAckPublication(
   token: TokenRecord,
   endSu: number,
-  spanOwners: Map<string, TokenRecord>,
+  spanOwners: Map<string, SpanRecord>,
   onPublished: () => void
 ): SshPtySourceAckPublication {
   let settled = false

@@ -8,6 +8,7 @@ import { createRetiredNameLookup } from '../shared/worktree/retired-name-registr
 import type { SshTarget } from '../shared/ssh-types'
 import { MAX_RETIREMENT_NAMESPACES } from './worktree-retirement-namespace'
 import { getRuntimeOwnedSshTargetId } from './ssh/ssh-connection-store'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 const testState = { dir: '' }
 
@@ -45,6 +46,9 @@ function sshTarget(id: string, overrides: Partial<SshTarget> = {}): SshTarget {
 async function reloadStore() {
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
+  // Why here: userData resolves through AppEnvironment, and this must point at this
+  // file's temp dir rather than the global fake's shared one, after resetModules.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return new Store()
 }

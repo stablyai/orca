@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Orca Relay Operations</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23171717'/%3E%3Ctext x='16' y='22' text-anchor='middle' font-family='sans-serif' font-weight='700' font-size='17' fill='white'%3EO%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">O</span>
+        <div>
+          <strong>Orca Relay</strong>
+          <span>Operations</span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="segmented" aria-label="Environment">
+          <button type="button" data-environment="production" aria-pressed="true">Production</button>
+          <button type="button" data-environment="staging" aria-pressed="false">Staging</button>
+        </div>
+        <select id="window" aria-label="Metrics window">
+          <option value="60">Last hour</option>
+          <option value="360" selected>Last 6 hours</option>
+          <option value="1440">Last 24 hours</option>
+        </select>
+        <button type="button" id="refresh" class="button secondary">Refresh</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow" id="environment-label">Production · us-central1</p>
+          <h1>Relay data plane</h1>
+          <p class="lede">Private, aggregate operations view. No account, host, device, or pairing identifiers.</p>
+        </div>
+        <div class="freshness">
+          <span class="status-dot neutral" id="freshness-dot"></span>
+          <span id="freshness">Loading current state…</span>
+        </div>
+      </section>
+
+      <div id="error" class="banner error hidden" role="alert"></div>
+      <div id="warnings" class="banner warning hidden"></div>
+
+      <section class="summary-grid" id="summary" aria-label="Relay summary">
+        <article class="metric-card skeleton"></article>
+        <article class="metric-card skeleton"></article>
+        <article class="metric-card skeleton"></article>
+        <article class="metric-card skeleton"></article>
+      </section>
+
+      <section class="panel topology-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Topology</p><h2>Request path</h2></div>
+          <span class="meta" id="topology-meta"></span>
+        </div>
+        <div class="topology" id="topology"></div>
+      </section>
+
+      <section class="section-heading"><div><p class="eyebrow">Traffic</p><h2>Signals in selected window</h2></div></section>
+      <section class="chart-grid" id="charts"></section>
+
+      <section class="two-column">
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">Compute</p><h2>Relay cells</h2></div><a class="meta panel-link" id="compute-link" target="_blank" rel="noreferrer">Open in GCP ↗</a></div>
+          <p class="panel-note">Configured admission is shown below. Live director admission and heartbeat state stays unavailable because this dashboard has no Relay-admin identity.</p>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Cell</th><th>State</th><th>Observed</th><th>Capacity</th><th>Image</th></tr></thead>
+            <tbody id="cells"></tbody>
+          </table></div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">Control plane</p><h2>Services</h2></div></div>
+          <div class="service-list" id="services"></div>
+        </article>
+      </section>
+
+      <section class="three-column">
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">Guardrails</p><h2>Alert policies</h2></div><a class="meta panel-link" id="alert-link" target="_blank" rel="noreferrer">Open incidents ↗</a></div>
+          <div class="list" id="alerts"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">Delivery</p><h2>Recent workflows</h2></div></div>
+          <div class="list" id="workflows"></div>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="eyebrow">Planning</p><h2>Monthly run-rate</h2></div></div>
+          <div id="cost"></div>
+        </article>
+      </section>
+
+      <section class="panel hidden" id="power-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Staging only</p><h2>Power workflow</h2></div>
+          <span class="badge">GitHub guarded</span>
+        </div>
+        <p class="muted">Dispatches the reviewed GitHub workflow. It never changes GCP resources directly from this process.</p>
+        <div class="power-actions">
+          <button class="button secondary" type="button" data-power="status">Check status</button>
+          <button class="button secondary" type="button" data-power="wake">Wake configured cells</button>
+          <button class="button secondary" type="button" data-power="sleep">Sleep staging</button>
+          <span id="power-result" class="meta"></span>
+        </div>
+      </section>
+    </main>
+    <footer>Orca Relay Operations · Server-side credentials · Read-only by default</footer>
+  </body>
+</html>

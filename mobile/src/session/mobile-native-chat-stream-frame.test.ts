@@ -37,6 +37,36 @@ describe('applyMobileNativeChatStreamFrame', () => {
     })
   })
 
+  it('marks a pending snapshot so the caller can settle the view but not the read', () => {
+    const merger = createNativeChatMerger()
+    const result = applyMobileNativeChatStreamFrame({
+      merger,
+      frame: { type: 'snapshot', messages: [], hasMore: false, pending: true },
+      limit: 40,
+      replaceSnapshot: true
+    })
+
+    expect(result).toEqual({
+      kind: 'messages',
+      messages: [],
+      hasMore: false,
+      windowReplaced: true,
+      pending: true
+    })
+  })
+
+  it('leaves an ordinary snapshot unmarked', () => {
+    const merger = createNativeChatMerger()
+    const result = applyMobileNativeChatStreamFrame({
+      merger,
+      frame: { type: 'snapshot', messages: [message('a')], hasMore: false },
+      limit: 40,
+      replaceSnapshot: true
+    })
+
+    expect(result).not.toHaveProperty('pending')
+  })
+
   it('merges reconnect snapshots and live appends into the bounded window', () => {
     const merger = createNativeChatMerger()
     replaceList(merger, [message('a'), message('b')])

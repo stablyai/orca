@@ -12,7 +12,7 @@ const {
   spawnMock,
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
-  readWindowsConptyProcessIdsMock,
+  readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsMock,
@@ -26,7 +26,7 @@ const {
   spawnMock: vi.fn(),
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
-  readWindowsConptyProcessIdsMock: vi.fn(),
+  readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsMock: vi.fn(),
@@ -40,6 +40,8 @@ vi.mock('fs', () => ({
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
+  renameSync: vi.fn(),
+  rmSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
 
@@ -84,8 +86,9 @@ vi.mock('./agent-foreground-process', () => ({
     resolveAgentForegroundProcessMock(...args)
 }))
 
-vi.mock('./windows-conpty-process-membership', () => ({
-  readWindowsConptyProcessIds: (...args: unknown[]) => readWindowsConptyProcessIdsMock(...args)
+vi.mock('./windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
+  isWindowsPtyJobReadable: () => true
 }))
 
 vi.mock('../wsl', () => ({
@@ -137,7 +140,7 @@ describe('LocalPtyProvider', () => {
       writeFileSyncMock,
       prepareMacosTccLoginShellMock,
       resolveAgentForegroundProcessMock,
-      readWindowsConptyProcessIdsMock,
+      readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
       wslUncDirectoryExistsMock,
@@ -188,6 +191,22 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
     })
 
+    it('re-reads buildSpawnEnv after a reentrant configuration change', async () => {
+      const initialBuildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      const configuredBuildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      provider.configure({
+        get buildSpawnEnv() {
+          provider.configure({ buildSpawnEnv: configuredBuildSpawnEnv })
+          return initialBuildSpawnEnv
+        }
+      })
+
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      expect(initialBuildSpawnEnv).not.toHaveBeenCalled()
+      expect(configuredBuildSpawnEnv).toHaveBeenCalledOnce()
+    })
+
     it.each([
       // fish EXPORTS fish_history, so an Orca launched from a fish pane hands every
       // pane the LAUNCHING worktree's session — even with isolation off (STA-4682).
@@ -208,6 +227,32 @@ describe('LocalPtyProvider', () => {
       }
 
       expect(spawnMock.mock.calls.at(-1)![2].env.fish_history).toBe(expected)
+    })
+
+    it.each([
+      // HISTFILE is exported, so an Orca launched from a pane in another worktree
+      // hands every pane that worktree's history file — isolation off included.
+      [
+        'an inherited Orca path',
+        '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history',
+        undefined
+      ],
+      ['a user value', '/home/me/.zsh_history', '/home/me/.zsh_history']
+    ])('history isolation off: %s HISTFILE', async (_kind, inherited, expected) => {
+      const previous = process.env.HISTFILE
+      process.env.HISTFILE = inherited
+      try {
+        // No worktreeId: the history-disabled branch of spawn.
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        if (previous === undefined) {
+          delete process.env.HISTFILE
+        } else {
+          process.env.HISTFILE = previous
+        }
+      }
+
+      expect(spawnMock.mock.calls.at(-1)![2].env.HISTFILE).toBe(expected)
     })
 
     it('does not inherit NODE_ENV from the Orca process env', async () => {
@@ -407,6 +452,71 @@ describe('LocalPtyProvider', () => {
       expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
     })
 
+    it('does not forward a half-activated conda env into the shell', async () => {
+      // Why: CONDA_SHLVL asserts CONDA_PREFIX exists; forwarding the sentinel
+      // alone makes the user's rc-file conda hook raise a TypeError (#14195).
+      const saved = {
+        CONDA_SHLVL: process.env.CONDA_SHLVL,
+        CONDA_PREFIX: process.env.CONDA_PREFIX,
+        CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV,
+        CONDA_PROMPT_MODIFIER: process.env.CONDA_PROMPT_MODIFIER,
+        CONDA_EXE: process.env.CONDA_EXE
+      }
+      delete process.env.CONDA_PREFIX
+      process.env.CONDA_SHLVL = '1'
+      process.env.CONDA_DEFAULT_ENV = 'base'
+      process.env.CONDA_PROMPT_MODIFIER = '(base) '
+      process.env.CONDA_EXE = '/opt/miniconda3/bin/conda'
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+      expect(env.CONDA_PROMPT_MODIFIER).toBeUndefined()
+      expect(env.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
+    })
+
+    it('drops the conda sentinel when the client asks to delete CONDA_PREFIX', async () => {
+      // Why: envToDelete runs after the inherited-env scrub, so the coherence
+      // pass must run last or it re-creates the exact broken pair it prevents.
+      const saved = {
+        CONDA_SHLVL: process.env.CONDA_SHLVL,
+        CONDA_PREFIX: process.env.CONDA_PREFIX,
+        CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV
+      }
+      process.env.CONDA_SHLVL = '1'
+      process.env.CONDA_PREFIX = '/opt/miniconda3'
+      process.env.CONDA_DEFAULT_ENV = 'base'
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24, envToDelete: ['CONDA_PREFIX'] })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.CONDA_PREFIX).toBeUndefined()
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+    })
+
     it('uses shell wrapper when MiMo home must survive shell startup', async () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {
@@ -421,7 +531,7 @@ describe('LocalPtyProvider', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[1]).toEqual(['-l'])
       expect(spawnCall[2].env.ZDOTDIR).toMatch(/shell-ready[\\/]zsh/)
-      expect(spawnCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+      expect(spawnCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
     })
 
     it('promotes the agent-teams shim onto the Windows `Path` spelling', async () => {

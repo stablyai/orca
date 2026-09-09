@@ -209,6 +209,40 @@ describe('SshGitProvider', () => {
     await second
   })
 
+  it('isolates non-interactive lanes between provider instances', async () => {
+    const completeRequests: (() => void)[] = []
+    mux.request.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeRequests.push(() =>
+            resolve({ stdout: '', stderr: '', exitCode: 0, timedOut: false })
+          )
+        })
+    )
+    const otherProvider = new SshGitProvider('conn-2', mux as never)
+
+    const first = provider.execNonInteractive('pnpm', ['install'], '/home/user/repo', 8000)
+    const second = otherProvider.execNonInteractive('pnpm', ['install'], '/home/user/repo', 8000)
+
+    await waitForRequestCount(mux.request, 2)
+    expect(mux.request).toHaveBeenCalledTimes(2)
+    completeRequests.forEach((complete) => complete())
+    await Promise.all([first, second])
+  })
+
+  it('forwards leading global Git options without reordering argv', async () => {
+    mux.request.mockResolvedValue({ stdout: '', stderr: '' })
+    const args = ['-c', 'maintenance.auto=false', 'fetch', 'origin', 'main']
+
+    await provider.exec(args, '/home/user/repo')
+
+    expect(mux.request).toHaveBeenCalledWith('git.exec', {
+      args,
+      cwd: '/home/user/repo',
+      __streamResponse: true
+    })
+  })
+
   it('cancels a queued non-interactive exec without canceling the active relay child', async () => {
     const completeRequests: (() => void)[] = []
     mux.request.mockImplementation(

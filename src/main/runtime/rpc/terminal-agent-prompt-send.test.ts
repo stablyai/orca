@@ -81,8 +81,37 @@ describe('terminal agent prompt send RPC', () => {
     expect(sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: 'echo x', enter: true, interrupt: false },
-      { beforeWrite: undefined }
+      { beforeWrite: undefined, signal: undefined }
     )
     expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
+  })
+
+  it('forwards the request signal to a plain send so an abandoned call stops before Enter', async () => {
+    const sendTerminal = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      accepted: true,
+      bytesWritten: 7
+    })
+    const runtime = makeRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      isTerminalRunningSettledPromptAgent: vi.fn().mockResolvedValue(false),
+      sendTerminal
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const controller = new AbortController()
+
+    const response = await dispatcher.dispatch(
+      makeRequest({
+        terminal: 'terminal-1',
+        text: 'echo x',
+        enter: true,
+        client: { id: 'orca-cli', type: 'desktop' }
+      }),
+      { signal: controller.signal }
+    )
+
+    expect(response.ok).toBe(true)
+    expect(sendTerminal.mock.calls[0][2].signal).toBe(controller.signal)
   })
 })

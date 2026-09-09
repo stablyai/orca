@@ -92,6 +92,20 @@ describe('native preload destructive app actions', () => {
     })
   }
 
+  it('exposes the durable checkpoint join the lazy-chunk recovery reload depends on', async () => {
+    const api = await loadApi()
+    invoke.mockResolvedValue({ ok: true })
+
+    await expect(api.app.awaitBeforeUnloadCheckpoint()).resolves.toBeUndefined()
+    expect(invoke).toHaveBeenCalledWith('app:await-before-unload-checkpoint')
+
+    invoke.mockResolvedValue({ ok: false })
+
+    await expect(api.app.awaitBeforeUnloadCheckpoint()).rejects.toThrow(
+      'Failed to persist renderer state before unload.'
+    )
+  })
+
   it('preserves both macOS keyboard preload adapters', async () => {
     const api = await loadApi()
     invoke.mockResolvedValue(undefined)

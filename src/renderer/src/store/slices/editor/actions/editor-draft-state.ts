@@ -14,6 +14,9 @@ export type EditorDraftState = {
   clearEditorDrafts: (fileIds: string[]) => void
   markdownViewMode: Record<string, MarkdownViewMode>
   setMarkdownViewMode: (fileId: string, mode: MarkdownViewMode) => void
+  // Why: per-file opt-in to open an oversized markdown file in the rich editor despite the size limit.
+  markdownRichModeSizeOverride: Record<string, boolean>
+  setMarkdownRichModeSizeOverride: (fileId: string, enabled: boolean) => void
   editorViewMode: Record<string, EditorViewMode>
   setEditorViewMode: (fileId: string, mode: EditorViewMode) => void
   markdownFrontmatterVisible: Record<string, boolean>
@@ -69,6 +72,24 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
       set((s) => ({
         markdownViewMode: { ...s.markdownViewMode, [fileId]: mode }
       })),
+
+    // Rich-markdown size-limit override
+    markdownRichModeSizeOverride: {},
+    setMarkdownRichModeSizeOverride: (fileId, enabled) =>
+      set((s) => {
+        // Why: default is false — delete rather than store it so the record stays minimal.
+        if (!enabled) {
+          if (!(fileId in s.markdownRichModeSizeOverride)) {
+            return s
+          }
+          const next = { ...s.markdownRichModeSizeOverride }
+          delete next[fileId]
+          return { markdownRichModeSizeOverride: next }
+        }
+        return {
+          markdownRichModeSizeOverride: { ...s.markdownRichModeSizeOverride, [fileId]: true }
+        }
+      }),
 
     // Editor view mode (edit vs changes-diff). See EditorViewMode.
     editorViewMode: {},

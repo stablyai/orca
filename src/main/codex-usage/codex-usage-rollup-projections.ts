@@ -1,3 +1,4 @@
+import { highestUsageKey } from '../usage/highest-usage-key'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -57,9 +58,8 @@ export function buildSummary(
     }
   }
 
-  const topModel = [...byModel.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
-  const topProject =
-    [...byProject.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] ?? null
+  const topModel = highestUsageKey(byModel)
+  const topProject = highestUsageKey(byProject)
 
   return {
     scope,

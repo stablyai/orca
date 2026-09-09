@@ -30,7 +30,11 @@ import {
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import { buildPosixAgentHookPostCommand } from './hook-post-command'
+import {
+  POSIX_HOOK_STDIN_DRAIN_COMMAND,
+  WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
+} from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 
 let tmpDir: string
@@ -526,6 +530,37 @@ describe('wrapPosixHookCommand', () => {
     }
   )
 
+  it('emits a fallback response before draining when the caller supplies one', () => {
+    const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+    expect(cmd).toBe(
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else printf '%s\\n' '{"a":"b"}'; ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    )
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'writes the fallback response and still drains a large stdin payload',
+    () => {
+      const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+      const result = spawnSync('/bin/sh', ['-c', cmd], {
+        input: Buffer.alloc(1_000_000, 'x'),
+        encoding: 'utf8'
+      })
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('{"a":"b"}\n')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'runs the script instead of the fallback when the script is present',
+    () => {
+      const scriptPath = join(tmpDir, 'present-hook.sh')
+      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'from-script\\n'\n", { mode: 0o755 })
+      const cmd = wrapPosixHookCommand(scriptPath, {}, { fallbackStdout: '{"a":"b"}' })
+      const result = spawnSync('/bin/sh', ['-c', cmd], { encoding: 'utf8' })
+      expect(result.stdout).toBe('from-script\n')
+    }
+  )
+
   it.skipIf(process.platform === 'win32')(
     'drains stdin when a directory occupies the managed script path',
     () => {
@@ -573,7 +608,7 @@ describe('wrapPosixHookCommand', () => {
 })
 
 const qualifiedWindowsPowerShellCommand =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
 function decodeWindowsHookCommand(command: string): string {
   const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
@@ -583,8 +618,13 @@ function decodeWindowsHookCommand(command: string): string {
 
 function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "''")}'`
+  // Why: the execution-policy bypass rides in the payload, not on the command
+  // line, so the launcher cannot spell the AV-blocked flag triple (#16003).
   // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
-  return `$ProgressPreference='SilentlyContinue'; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  // Why the guard is spelled by import: the launcher owns stdin on the missing-script path,
+  // so it obeys the shared Windows rule (#11549), and re-typing it here would let the two
+  // drift back apart.
+  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 describe('wrapWindowsHookCommand', () => {
@@ -604,6 +644,25 @@ describe('wrapWindowsHookCommand', () => {
     expect(decodeWindowsHookCommand(command)).toContain(
       "$env:ORCA_COPILOT_HOOK_EVENT = 'UserPromptSubmit'; if (Test-Path"
     )
+  })
+
+  // Why the ordering matters: a gate event reads silence as deny (#2426), and outside an
+  // Orca pane the guard exits before the read — so an answer placed after the drain never
+  // reaches the agent at all when the caller abandons the pipe (#11549).
+  it('answers before it guards, and guards before it owns stdin', () => {
+    const decoded = decodeWindowsHookCommand(
+      wrapWindowsHookCommand(
+        'C:\\hooks\\cursor-hook.cmd',
+        {},
+        { fallbackStdout: '{"permission":"allow"}' }
+      )
+    )
+    const answer = decoded.indexOf('Write-Output \'{"permission":"allow"}\'')
+    const guard = decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
+    const ownsStdin = decoded.indexOf('[Console]::In.ReadToEnd()')
+    expect(answer).toBeGreaterThan(-1)
+    expect(guard).toBeGreaterThan(answer)
+    expect(ownsStdin).toBeGreaterThan(guard)
   })
 
   // Why: a user profile path like `C:\Users\Jane Doe` is the regression from
@@ -710,6 +769,17 @@ describe('wrapRuntimeHomeHookCommand', () => {
       expect(command).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/)
     }
   )
+
+  it('hides the console on the Git Bash branch too, and still avoids the denied triple', () => {
+    // Why: this branch launches PowerShell from bash, where the parent has no
+    // console to inherit — Windows allocates a fresh one per hook event unless
+    // the switch says otherwise (#14815), and the AV verdict on the flag triple
+    // applies to the exact same string (#16003).
+    const command = wrapRuntimeHomeHookCommand('claude-hook')
+
+    expect(command).toContain('powershell.exe" -NoProfile -EncodedCommand ')
+    expect(command).not.toMatch(/-ExecutionPolicy/i)
+  })
 
   it('rejects a script base name that could inject shell syntax', () => {
     expect(() => wrapRuntimeHomeHookCommand('claude-hook; echo injected')).toThrow(
@@ -824,6 +894,26 @@ describe('buildWindowsAgentHookPostCommand', () => {
 
     expect(command).toMatch(/^"%SystemRoot%\\System32\\curl\.exe"/)
     expect(command).not.toMatch(/^curl\.exe\b/)
+  })
+})
+
+describe('buildPosixAgentHookPostCommand', () => {
+  it('uses raw JSON only when the listener advertises support', () => {
+    const command = buildPosixAgentHookPostCommand('claude').join('\n')
+
+    expect(command).toContain('ORCA_AGENT_HOOK_TRANSPORT:-}')
+    expect(command).toContain('raw-json-v1')
+    expect(command).toContain('command -v base64')
+    expect(command).toContain('command -v tr')
+    expect(command).toContain('Content-Type: application/json')
+    expect(command).toContain('X-Orca-Agent-Hook-Meta-Encoding: base64')
+    expect(command).toContain('X-Orca-Agent-Hook-Meta: ${orca_hook_metadata}')
+    expect(command).toContain("printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s'")
+    expect(command).toContain('$ORCA_PANE_KEY')
+    expect(command).toContain('$ORCA_WORKTREE_ID')
+    expect(command).toContain('--data-binary @-')
+    expect(command).toContain('Content-Type: application/x-www-form-urlencoded')
+    expect(command).toContain('--data-urlencode "payload@-"')
   })
 })
 

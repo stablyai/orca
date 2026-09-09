@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../execution-host'
 import {
   composeWorktreeHostIdentity,
+  getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from './host-qualified-identity'
@@ -57,5 +58,30 @@ describe('worktree host identity', () => {
     // encodeURIComponent escapes '|' as %7C, which is what makes the split exact.
     expect(toSshExecutionHostId('we|rd')).not.toContain('|')
     expect(toRuntimeExecutionHostId('we|rd')).not.toContain('|')
+  })
+
+  it('rejects identities without a host separator', () => {
+    expect(getExecutionHostIdFromWorktreeHostIdentity('ssh:build-box')).toBeUndefined()
+  })
+
+  // An unqualified row must not be assumed local: a destructive action keyed off
+  // this would then run against the wrong host.
+  it('leaves an unqualified identity without a host', () => {
+    expect(
+      getExecutionHostIdFromWorktreeHostIdentity(
+        composeWorktreeHostIdentity(undefined, WORKTREE_ID)
+      )
+    ).toBeUndefined()
+  })
+
+  it('recovers the host from a qualified identity', () => {
+    expect(
+      getExecutionHostIdFromWorktreeHostIdentity(composeWorktreeHostIdentity('local', WORKTREE_ID))
+    ).toBe('local')
+    expect(
+      getExecutionHostIdFromWorktreeHostIdentity(
+        composeWorktreeHostIdentity(toSshExecutionHostId('build-box'), WORKTREE_ID)
+      )
+    ).toBe(toSshExecutionHostId('build-box'))
   })
 })

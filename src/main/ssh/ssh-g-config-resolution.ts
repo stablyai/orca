@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../../shared/child-process/run-process'
 import { existsSync } from 'node:fs'
 import { readdir, readFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
@@ -248,47 +248,24 @@ async function expandSiteInclude(pattern: string, baseDir: string): Promise<stri
 
 // Why: `ssh -G <host>` asks OpenSSH for the effective config, including
 // Include/Match/wildcard inheritance, without reimplementing OpenSSH matching.
-export function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
-  return new Promise((resolve) => {
-    let settled = false
-    let child: ReturnType<typeof execFile> | undefined
-    const timer = setTimeout(() => {
-      if (settled) {
-        return
-      }
-      settled = true
-      child?.kill()
-      resolve(null)
-    }, SSH_G_TIMEOUT_MS)
-
-    const settle = (callback: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      callback()
+export async function resolveWithSshG(host: string): Promise<SshResolvedConfig | null> {
+  // Why: '--' prevents host labels starting with '-' from becoming SSH flags.
+  // ssh.exe is console-subsystem, so this probe used to flash a conhost that
+  // took foreground mid-typing on every connect and reconnect (#10488);
+  // runProcess hides it and owns the timeout.
+  try {
+    const result = await runProcess({
+      program: 'ssh',
+      args: sshGArgsForHost(host),
+      timeoutMs: SSH_G_TIMEOUT_MS
+    })
+    if (result.code !== 0 || result.timedOut) {
+      return null
     }
-
-    // Why: '--' prevents host labels starting with '-' from becoming SSH flags.
-    // execFile's timeout only signals ssh; keep the null fallback for stuck callbacks.
-    try {
-      child = execFile(
-        'ssh',
-        sshGArgsForHost(host),
-        { timeout: SSH_G_TIMEOUT_MS },
-        (err, stdout) => {
-          if (err) {
-            settle(() => resolve(null))
-            return
-          }
-          settle(() => resolve(parseSshGOutput(stdout)))
-        }
-      )
-    } catch {
-      settle(() => resolve(null))
-    }
-  })
+    return parseSshGOutput(result.stdout)
+  } catch {
+    return null
+  }
 }
 
 export function parseSshGOutput(stdout: string): SshResolvedConfig {

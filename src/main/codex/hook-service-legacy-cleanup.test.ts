@@ -54,7 +54,7 @@ function legacyManagedHookCommand(): string {
 }
 
 describe('CodexHookService', () => {
-  it('removes legacy Orca-managed hooks from system ~/.codex during install', () => {
+  it('removes legacy Orca-managed hooks from system ~/.codex during install', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     const legacyCommand = legacyManagedHookCommand()
@@ -102,7 +102,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
@@ -117,7 +117,7 @@ describe('CodexHookService', () => {
     expect(systemToml).not.toContain(':session_start:0:0')
   })
 
-  it('removes very large legacy Orca-managed hook lists from system ~/.codex', () => {
+  it('removes very large legacy Orca-managed hook lists from system ~/.codex', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     const legacyCommand = legacyManagedHookCommand()
@@ -136,7 +136,7 @@ describe('CodexHookService', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     try {
-      expect(new CodexHookService().install().state).toBe('installed')
+      expect((await new CodexHookService().install()).state).toBe('installed')
 
       expect(warnSpy).not.toHaveBeenCalledWith(
         '[codex-hook-service] failed to clean legacy Codex hooks',
@@ -151,18 +151,18 @@ describe('CodexHookService', () => {
     expect(systemHooks.hooks.Stop).toBeUndefined()
   }, 30_000)
 
-  it('removes the legacy Orca Codex profile file when it only contains managed hooks', () => {
+  it('removes the legacy Orca Codex profile file when it only contains managed hooks', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const profilePath = join(systemCodexHome, 'orca-agent-status.config.toml')
     mkdirSync(systemCodexHome, { recursive: true })
     writeFileSync(profilePath, LEGACY_ORCA_PROFILE_LINES.join('\n'), 'utf-8')
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     expect(existsSync(profilePath)).toBe(false)
   })
 
-  it('removes only the legacy Orca block from a user-edited Codex profile file', () => {
+  it('removes only the legacy Orca block from a user-edited Codex profile file', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const profilePath = join(systemCodexHome, 'orca-agent-status.config.toml')
     mkdirSync(systemCodexHome, { recursive: true })
@@ -172,7 +172,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    expect(new CodexHookService().install().state).toBe('installed')
+    expect((await new CodexHookService().install()).state).toBe('installed')
 
     const profileConfig = readFileSync(profilePath, 'utf-8')
     expect(profileConfig).toContain('model = "gpt-5.5"')
@@ -180,7 +180,7 @@ describe('CodexHookService', () => {
     expect(profileConfig).not.toContain('codex-hook')
   })
 
-  it('cleans legacy system and profile hooks when runtime hooks.json is malformed during remove', () => {
+  it('cleans legacy system and profile hooks when runtime hooks.json is malformed during remove', async () => {
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     mkdirSync(managedCodexHome, { recursive: true })
     writeFileSync(join(managedCodexHome, 'hooks.json'), '{not json', 'utf-8')
@@ -209,7 +209,7 @@ describe('CodexHookService', () => {
     )
     writeFileSync(profilePath, LEGACY_ORCA_PROFILE_LINES.join('\n'), 'utf-8')
 
-    const status = new CodexHookService().remove()
+    const status = await new CodexHookService().remove()
 
     expect(status.state).toBe('error')
     expect(status.detail).toBe('Could not parse Codex hooks.json')
@@ -221,7 +221,7 @@ describe('CodexHookService', () => {
     expect(existsSync(profilePath)).toBe(false)
   })
 
-  it('sanitizes runtime hooks.json metadata during remove even without managed hooks', () => {
+  it('sanitizes runtime hooks.json metadata during remove even without managed hooks', async () => {
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
     mkdirSync(managedCodexHome, { recursive: true })
@@ -244,7 +244,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
 
-    const status = new CodexHookService().remove()
+    const status = await new CodexHookService().remove()
 
     expect(status.state).toBe('not_installed')
     const hooksConfig = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
@@ -256,7 +256,7 @@ describe('CodexHookService', () => {
     expect(hooksConfig.hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: 'user-hook' }] }])
   })
 
-  it('cleans duplicate Codex hook representations while keeping status hooks in runtime CODEX_HOME', () => {
+  it('cleans duplicate Codex hook representations while keeping status hooks in runtime CODEX_HOME', async () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     const systemTomlPath = join(systemCodexHome, 'config.toml')
@@ -307,7 +307,7 @@ describe('CodexHookService', () => {
     writeFileSync(legacyProfilePath, LEGACY_ORCA_PROFILE_LINES.join('\n'), 'utf-8')
 
     const service = new CodexHookService()
-    expect(service.install().state).toBe('installed')
+    expect((await service.install()).state).toBe('installed')
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')

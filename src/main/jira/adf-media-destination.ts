@@ -25,7 +25,7 @@ export function escapeMarkdownLinkDestination(url: string): string | null {
   }
 
   let encoded = ''
-  for (let i = 0; i < url.length; ) {
+  for (let i = 0; i < url.length;) {
     const char = url[i] ?? ''
     if (char === '%') {
       const hex = url.slice(i + 1, i + 3)

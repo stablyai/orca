@@ -13,16 +13,11 @@ import { queueWatcherEvents } from './filesystem-watcher-event-batch'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
 import { reserveWatcherChild, WatcherChildCapacityError } from './parcel-watcher-child-registry'
+import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
+import { resolveWslInteropSpawnCwd } from '../wsl-interop-spawn-directory'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
-}
-
-type DebouncedBatch = {
-  events: WatcherEvent[]
-  overflowed: boolean
-  timer: ReturnType<typeof setTimeout> | null
-  firstEventAt: number
 }
 
 export type WatchedRoot = {
@@ -171,7 +166,7 @@ export async function createWslWatcher(
   const root: WatchedRoot = {
     subscription: null!,
     listeners: new Map(),
-    batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+    batch: createDebouncedBatch(),
     rootPath: worktreePath
   }
 
@@ -199,6 +194,9 @@ export async function createWslWatcher(
   }
 
   function ingestFrame(frame: string): void {
+    if (root.batch.cancelled) {
+      return
+    }
     const nextSnapshot = parseSnapshotFrame(frame, distro)
     if (!prevSnapshot) {
       prevSnapshot = nextSnapshot
@@ -245,9 +243,13 @@ export async function createWslWatcher(
     throw new WatcherChildCapacityError()
   }
   try {
-    child = spawn('wsl.exe', ['-d', distro, '--', 'sh', '-s', '--', linuxPath], {
+    child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s', '--', linuxPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true
+      windowsHide: true,
+      // Why explicit (#16463): the watched directory rides in argv, and an
+      // inherited cwd is a worktree that can be deleted -- after which every
+      // watcher start fails `spawn wsl.exe ENOENT`.
+      cwd: resolveWslInteropSpawnCwd()
     })
   } catch (error) {
     releaseChildReservation()

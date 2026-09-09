@@ -6,17 +6,14 @@ import { useAppStore } from '@/store'
 
 function cacheWithChildren(paths: string[]): DirCache {
   return {
-    children: paths.map(
-      (path): TreeNode => ({
-        name: path.split(/[\\/]/).at(-1) ?? path,
-        path,
-        relativePath: path,
-        isDirectory: false,
-        depth: 0,
-        operationOwner: { kind: 'local' }
-      })
-    ),
-    loading: false,
+    children: paths.map((path): TreeNode => ({
+      name: path.split(/[\\/]/).at(-1) ?? path,
+      path,
+      relativePath: path,
+      isDirectory: false,
+      depth: 0,
+      operationOwner: { kind: 'local' }
+    })),
     operationOwner: { kind: 'local' }
   }
 }
@@ -434,7 +431,9 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     }
 
     expect(setDirCache).toHaveBeenCalledOnce()
-    expect(keyVisits).toBe(entryCount * 2)
+    // One scan, in purgeDirCacheSubtrees. The casing-fallback index stays unbuilt because every
+    // lookup here hits `dirPath in cache` directly.
+    expect(keyVisits).toBe(entryCount)
     expect(expandedPathReads).toBe(expandedPaths.length)
     expect(remainingExpanded).toEqual(new Set())
   })

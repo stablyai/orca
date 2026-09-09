@@ -136,6 +136,7 @@ describe('useIpcEvents browser tab create routing', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
+        automations: { onChanged: () => () => {} },
         worktrees: {
           onChanged: () => () => {},
           onGitStatusMetadataChanged: () => () => {},
@@ -241,7 +242,9 @@ describe('useIpcEvents browser tab create routing', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} }
       }

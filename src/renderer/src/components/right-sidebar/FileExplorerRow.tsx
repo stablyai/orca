@@ -196,7 +196,9 @@ export function FileExplorerRow({
               {node.isSymlink ? (
                 <Link className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                <FileIcon className="size-3 shrink-0 text-muted-foreground" />
+                React.createElement(FileIcon, {
+                  className: 'size-3 shrink-0 text-muted-foreground'
+                })
               )}
             </>
           )}

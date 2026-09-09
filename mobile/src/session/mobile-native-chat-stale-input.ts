@@ -55,6 +55,7 @@ export async function healMobileNativeChatStaleInput(args: {
       terminal: args.terminal,
       deviceToken: args.deviceToken,
       imagePaths: [],
+      followedByText: false,
       ...(args.deadline === undefined ? {} : { deadline: args.deadline })
     })
   } catch {

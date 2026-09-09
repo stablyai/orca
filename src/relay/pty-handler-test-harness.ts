@@ -1,8 +1,20 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import * as ptyShellUtils from './pty-shell-utils'
+import * as ptyChildProcessInspection from './pty-child-process-inspection'
 import { PtyHandler } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
+
+export const TEST_PTY_ID_MINT_EPOCH = 'test-mint-epoch'
+
+// Why encoded: production escapes the epoch at the mint site. A test epoch with a
+// reserved character would otherwise diverge silently across ~40 assertions.
+export function testPtyId(sequence: number): string {
+  return `pty2:${encodeURIComponent(TEST_PTY_ID_MINT_EPOCH)}:${sequence}`
+}
+
+export function createTestPtyHandler(dispatcher: MockDispatcher): PtyHandler {
+  return new PtyHandler(dispatcher as unknown as RelayDispatcher, undefined, TEST_PTY_ID_MINT_EPOCH)
+}
 
 export type TestRequestContext = {
   isStale: () => boolean
@@ -103,12 +115,12 @@ export function beginPtyHandlerTest(mocks: PtyHandlerTestMocks): {
     notifyOutput: vi.fn(),
     dispose: vi.fn()
   })
-  vi.spyOn(ptyShellUtils, 'processHasChildren').mockResolvedValue(false)
+  vi.spyOn(ptyChildProcessInspection, 'processHasChildren').mockResolvedValue(false)
 
   mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
   const dispatcher = createMockDispatcher()
-  const handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+  const handler = createTestPtyHandler(dispatcher)
   return { dispatcher, handler, originalPlatform }
 }
 

@@ -44,6 +44,9 @@ vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+vi.mock('../ssh/ssh-target-registry', async () =>
+  (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
+)
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
@@ -115,6 +118,7 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'pnpm worktree:setup',
       undefined,
+      undefined,
       undefined
     )
     expect(result).toMatchObject({
@@ -166,6 +170,7 @@ describe('registerWorktreeHandlers', () => {
       '/workspace/improve-dashboard',
       'pnpm worktree:setup # worktree',
       undefined,
+      undefined,
       undefined
     )
     expect(result).toEqual(
@@ -200,14 +205,14 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    const result = await handlers['worktrees:create'](null, {
+    const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'improve-dashboard',
       sparseCheckout: {
         directories: [' packages/web ', 'apps\\api\\', 'packages/web/'],
         presetId: 'preset-1'
       }
-    })
+    })) as { timing?: { preparedCheckout?: { status: string; reason?: string } } }
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(addSparseWorktreeMock).toHaveBeenCalledWith(
@@ -234,6 +239,11 @@ describe('registerWorktreeHandlers', () => {
         sparseBaseRef: 'origin/main',
         sparsePresetId: 'preset-1'
       })
+    })
+    // A sparse create can never claim a prepared checkout; say so rather than looking like a miss.
+    expect(result.timing?.preparedCheckout).toEqual({
+      status: 'miss',
+      reason: 'sparse_checkout'
     })
   })
 

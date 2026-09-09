@@ -2,6 +2,7 @@ import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
@@ -20,6 +21,9 @@ export function canUseParentPrChecksGitHubPRCacheEntry(
 } {
   const pr = prEntry?.data
   if (!pr) {
+    return false
+  }
+  if (isGitHubPRSuppressed(worktree, pr.number)) {
     return false
   }
   const prFetchedAt = prEntry.fetchedAt

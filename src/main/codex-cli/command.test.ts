@@ -4,6 +4,7 @@ import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   getVersionManagerBinPaths,
+  withCliRuntimeOnPath,
   resolveClaudeCommand,
   resolveCliCommands,
   resolveCodexCommand
@@ -311,5 +312,81 @@ describe('getVersionManagerBinPaths', () => {
 
     expect(paths).toContain(join(root, '.local', 'bin'))
     expect(paths).toContain(join(root, 'AppData', 'Roaming', 'npm'))
+  })
+})
+
+describe('withCliRuntimeOnPath', () => {
+  it('pairs a version-manager CLI with its sibling node (stablyai/orca#10932)', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    const v22 = join(root, '.nvm', 'versions', 'node', 'v22.9.0', 'bin')
+    makeExecutable(join(v20, 'node'))
+    makeExecutable(join(v20, 'codex'))
+    makeExecutable(join(v22, 'node'))
+
+    // default is v22, but codex only exists under v20
+    const env = { PATH: [v22, '/usr/bin'].join(delimiter) }
+    const codex = resolveCodexCommand({ platform: 'darwin', pathEnv: env.PATH, homePath: root })
+    expect(codex).toBe(join(v20, 'codex'))
+
+    const paired = withCliRuntimeOnPath(codex, env, { platform: 'darwin' })
+    // the shebang's `node` must now come from v20, not v22
+    expect(paired.PATH.split(delimiter)[0]).toBe(v20)
+  })
+
+  it('leaves PATH untouched for a CLI whose directory ships no node', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const brew = join(root, 'opt', 'homebrew', 'bin')
+    makeExecutable(join(brew, 'codex'))
+    const env = { PATH: '/usr/bin' }
+
+    expect(withCliRuntimeOnPath(join(brew, 'codex'), env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('leaves PATH untouched for a bare command name', () => {
+    const env = { PATH: '/usr/bin' }
+    expect(withCliRuntimeOnPath('codex', env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('is a no-op when the runtime directory already leads PATH', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    makeExecutable(join(v20, 'node'))
+    makeExecutable(join(v20, 'codex'))
+    const env = { PATH: [v20, '/usr/bin'].join(delimiter) }
+
+    expect(withCliRuntimeOnPath(join(v20, 'codex'), env, { platform: 'darwin' })).toBe(env)
+  })
+
+  it('reads the Windows path key the child will actually use, whatever its casing', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    makeExecutable(join(v20, 'node.exe'))
+    makeExecutable(join(v20, 'codex.cmd'))
+    // Why: win32 resolves env names case-insensitively, so a block may spell it
+    // any way. Reading a narrower set than the twin-dedupe deletes would drop
+    // this entry unread and hand the child a PATH containing only our directory.
+    const env = { path: 'C:\\Windows;C:\\Windows\\System32', HOME: 'x' }
+
+    const paired = withCliRuntimeOnPath(join(v20, 'codex.cmd'), env, { platform: 'win32' })
+    expect(paired.path).toBe([v20, 'C:\\Windows', 'C:\\Windows\\System32'].join(';'))
+    expect(Object.keys(paired).filter((key) => key.toLowerCase() === 'path')).toEqual(['path'])
+  })
+
+  it('writes the Windows Path key without leaving a differently-cased twin', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-pair-'))
+    const v20 = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
+    makeExecutable(join(v20, 'node.exe'))
+    makeExecutable(join(v20, 'codex.cmd'))
+    // Why both keys: with only `Path` seeded the assertion is vacuous — the
+    // helper cannot invent a `PATH` key, so the dedupe loop could be deleted
+    // wholesale and this test would still pass.
+    const env = { Path: 'C:\\Windows;C:\\Windows\\System32', PATH: 'C:\\Stale' }
+
+    const paired = withCliRuntimeOnPath(join(v20, 'codex.cmd'), env, { platform: 'win32' })
+    expect(Object.keys(paired)).toEqual(['Path'])
+    // Why the whole string: splitting on the host delimiter while joining on ';'
+    // shredded every drive letter into `C;\\Windows`.
+    expect(paired.Path).toBe([v20, 'C:\\Windows', 'C:\\Windows\\System32'].join(';'))
   })
 })

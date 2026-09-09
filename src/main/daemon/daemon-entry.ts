@@ -25,6 +25,7 @@ import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
 import { publishDaemonPidFile } from './daemon-spawner'
+import { isNativePtyException } from './daemon-native-pty-exception'
 
 export type ParsedDaemonArgs = {
   socketPath: string
@@ -149,15 +150,7 @@ async function main(): Promise<void> {
   // crash the daemon — masking those would hide real issues.
   process.on('uncaughtException', (err) => {
     const msg = err?.message ?? ''
-    const isNativeError =
-      err?.name === 'Error' &&
-      (msg.includes('pty') ||
-        msg.includes('Pty') ||
-        msg.includes('EIO') ||
-        msg.includes('EPIPE') ||
-        msg.includes('EBADF') ||
-        msg.includes('ENXIO'))
-    if (isNativeError) {
+    if (isNativePtyException(err)) {
       daemonLog.log('uncaught-exception-suppressed', { name: err?.name, message: msg })
       console.error('[daemon] Native PTY exception (suppressed):', err)
       return
@@ -327,8 +320,9 @@ async function main(): Promise<void> {
   warmWindowsConptyOnce()
 }
 
-// Only auto-run when executed directly (not imported for testing)
-const isDirectExecution = !process.env.VITEST
+// Only auto-run when executed directly (not imported for testing, or for the build guard's
+// load check — see config/scripts/build-orcad.mjs).
+const isDirectExecution = !process.env.VITEST && !process.env.ORCA_DAEMON_ENTRY_LOAD_CHECK
 if (isDirectExecution) {
   main().catch((err) => {
     console.error('[daemon] Fatal:', err)

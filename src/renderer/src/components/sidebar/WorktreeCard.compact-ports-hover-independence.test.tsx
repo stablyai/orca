@@ -13,7 +13,7 @@ import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports
 const fetchHostedReviewForBranch = vi.fn()
 const fetchIssue = vi.fn()
 const fetchLinearIssue = vi.fn()
-const setWorkspacePortScan = vi.fn()
+const replaceWorkspacePortScans = vi.fn()
 const setWorkspacePortScanRefreshing = vi.fn()
 const cacheTimerMocks = vi.hoisted(() => ({
   usePromptCacheCountdownStartedAt: vi.fn()
@@ -43,7 +43,7 @@ vi.mock('@/store', () => ({
       recordFeatureInteraction: vi.fn(),
       remoteBranchConflictByWorktreeId: {},
       setRemoteBrowserPageHandle: vi.fn(),
-      setWorkspacePortScan,
+      replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing,
       settings,
       sshConnectionStates: new Map(),

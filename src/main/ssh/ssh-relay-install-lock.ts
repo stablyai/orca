@@ -74,6 +74,7 @@ export async function acquireInstallLock(
 
   const start = Date.now()
   let lastStaleCheckAt = Number.NEGATIVE_INFINITY
+  let lastWaitLogAt = Number.NEGATIVE_INFINITY
   while (true) {
     // Why: a crashed GC can leave the stable sibling claim behind. The shared
     // waiter recovers stale claims instead of polling that orphan forever.
@@ -121,7 +122,8 @@ export async function acquireInstallLock(
       ).catch(() => 'BUSY')
       options?.signal?.throwIfAborted()
       if (steal.trim().endsWith('OK')) {
-        console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
+        const reason = steal.trim().endsWith('REBOOT_OK') ? 'previous-boot' : 'stale'
+        console.warn(`[ssh-relay] Stealing ${reason} install lock at ${lockDir}`)
         const claimedAfterSteal = await isRelayGcClaimed(
           conn,
           remoteRelayDir,
@@ -134,6 +136,10 @@ export async function acquireInstallLock(
         await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
         options?.signal?.throwIfAborted()
       }
+    }
+    if (Date.now() - lastWaitLogAt >= INSTALL_LOCK_STALE_RECHECK_MS) {
+      lastWaitLogAt = Date.now()
+      console.info(`[ssh-relay] Waiting for install lock at ${lockDir}`)
     }
     if (Date.now() - start >= INSTALL_LOCK_TIMEOUT_MS) {
       throw new Error(

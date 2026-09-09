@@ -1,12 +1,19 @@
-import type { DashboardAgentRow } from './useDashboardData'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
-export type AgentRowLineageTree<T extends DashboardAgentRow> = {
+/** Minimal row shape the lineage rules need; DashboardAgentRow satisfies it,
+ *  and other surfaces (e.g. the Agents thread list) can feed synthetic rows. */
+export type AgentLineageSourceRow = {
+  paneKey: string
+  entry: Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
+}
+
+export type AgentRowLineageTree<T extends AgentLineageSourceRow> = {
   rootRows: T[]
   childrenByParentPaneKey: Map<string, T[]>
   childPaneKeys: Set<string>
 }
 
-function buildPaneKeyByTerminalHandle<T extends DashboardAgentRow>(
+function buildPaneKeyByTerminalHandle<T extends AgentLineageSourceRow>(
   rows: readonly T[]
 ): Map<string, string> {
   const paneKeyByTerminalHandle = new Map<string, string>()
@@ -18,7 +25,7 @@ function buildPaneKeyByTerminalHandle<T extends DashboardAgentRow>(
   return paneKeyByTerminalHandle
 }
 
-export function resolveAgentRowParentPaneKey<T extends DashboardAgentRow>(
+export function resolveAgentRowParentPaneKey<T extends AgentLineageSourceRow>(
   row: T,
   rowsByPaneKey: ReadonlyMap<string, T>,
   paneKeyByTerminalHandle: ReadonlyMap<string, string>
@@ -48,7 +55,7 @@ export function resolveAgentRowParentPaneKey<T extends DashboardAgentRow>(
   return undefined
 }
 
-export function buildAgentRowLineageTree<T extends DashboardAgentRow>(
+export function buildAgentRowLineageTree<T extends AgentLineageSourceRow>(
   rows: readonly T[]
 ): AgentRowLineageTree<T> {
   const rowsByPaneKey = new Map<string, T>()

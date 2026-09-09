@@ -5,10 +5,13 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
+import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import type { OpenTabSearchResult } from './open-tab-search'
+import type { OpenTabSearchEntries } from './open-tab-search-entries'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { TabEntryOption } from './tab-create-entry-action'
+import { encodePaletteIdentity } from '@/lib/palette-match/palette-ranking'
 
 // Why: the real entry-action module pulls in runtime IPC + the app store; these
 // tests only need a controllable option list beneath the tab rows.
@@ -19,7 +22,12 @@ vi.mock('./tab-create-entry-action', () => ({
   isTabEntryAbsolutePathLike: () => false
 }))
 vi.mock('../quick-open-file-list', () => ({
-  useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
+  useRuntimeFileListForWorktree: () => ({
+    files: [],
+    loading: false,
+    loadError: null,
+    truncated: false
+  })
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],
@@ -38,22 +46,19 @@ const tabSearchMock = vi.hoisted(() => {
   }
   return {
     hold: null as string | null,
-    resultsByQuery: {} as Record<string, unknown[]>,
+    resultsByQuery: {} as Record<string, OpenTabSearchResult[]>,
     // Retention re-checks each row against the live query with the real engines,
     // so every registered row needs the searchable entry it came from.
-    entries(): unknown {
-      const rows = Object.values(tabSearchMock.resultsByQuery).flat() as {
-        source: string
-        tabId?: string
-        title: string
-        contentType: string
-        relativePath?: string | null
-      }[]
+    entries(): OpenTabSearchEntries {
+      const rows = Object.values(tabSearchMock.resultsByQuery).flat()
       return {
         browserPages: [],
         simulatorTabs: [],
         workspaceTabs: rows
-          .filter((row) => row.source === 'workspace')
+          .filter(
+            (row): row is Extract<OpenTabSearchResult, { source: 'workspace' }> =>
+              row.source === 'workspace'
+          )
           .map((row) => ({
             tab: {
               id: row.tabId,
@@ -61,8 +66,8 @@ const tabSearchMock = vi.hoisted(() => {
               groupId: 'g',
               worktreeId: worktree.id,
               contentType: row.contentType
-            },
-            worktree,
+            } as SearchableWorkspaceTab['tab'],
+            worktree: worktree as SearchableWorkspaceTab['worktree'],
             repoName: 'octo/rocket',
             worktreeSortIndex: 0,
             groupSortIndex: 0,
@@ -80,6 +85,7 @@ const tabSearchMock = vi.hoisted(() => {
               repoName: 'octo/rocket'
             }),
             agentMetadata: [],
+            occupantAgent: null,
             isCurrentTab: false,
             isCurrentWorktree: true
           }))
@@ -127,11 +133,15 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
+function openWorkspaceTabId(tabId: string): string {
+  return encodePaletteIdentity(['workspace-tab', 'local', 'wt', tabId])
+}
+
 function terminalResult(overrides: Partial<OpenTabSearchResult> = {}): OpenTabSearchResult {
   return {
     executionHostId: 'local',
     source: 'workspace',
-    id: 'open-tab:workspace:tab-1',
+    id: openWorkspaceTabId('tab-1'),
     title: 'Add tab search and jump in worktree',
     matchedText: null,
     worktreeId: 'wt',
@@ -140,6 +150,7 @@ function terminalResult(overrides: Partial<OpenTabSearchResult> = {}): OpenTabSe
     entityId: 'term-1',
     groupId: 'g',
     relativePath: null,
+    occupantAgent: null,
     ...overrides
   } as OpenTabSearchResult
 }
@@ -258,7 +269,11 @@ describe('TabBarCreateEntry tab results', () => {
   it('shows the matched text rather than the shared label when tabs share a title (AE2)', () => {
     tabSearchMock.resultsByQuery['fix the flaky'] = [
       terminalResult({ title: 'Claude Code', matchedText: 'fix the flaky retry test' }),
-      terminalResult({ id: 'open-tab:workspace:tab-2', tabId: 'tab-2', title: 'Claude Code' })
+      terminalResult({
+        id: openWorkspaceTabId('tab-2'),
+        tabId: 'tab-2',
+        title: 'Claude Code'
+      })
     ]
     renderEntry()
 
@@ -409,7 +424,11 @@ describe('TabBarCreateEntry tab results', () => {
     activationMocks.workspace.mockReturnValue({ status: 'failed', reason: 'missing-tab' })
     tabSearchMock.resultsByQuery['add tab'] = [
       terminalResult(),
-      terminalResult({ id: 'open-tab:workspace:tab-2', tabId: 'tab-2', title: 'second tab' })
+      terminalResult({
+        id: openWorkspaceTabId('tab-2'),
+        tabId: 'tab-2',
+        title: 'second tab'
+      })
     ]
     const onDidOpenEntry = vi.fn()
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)

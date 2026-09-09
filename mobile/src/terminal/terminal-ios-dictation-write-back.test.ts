@@ -1,9 +1,9 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 
-const sessionRouteSource = readFileSync(
-  new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
-  'utf8'
+const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
+const sendActionsSource = readMobileSessionRouteSource(
+  '../session/use-mobile-session-terminal-send-actions.ts'
 )
 
 // Why: iOS terminates an active keyboard-dictation (and IME) session whenever
@@ -13,13 +13,11 @@ const sessionRouteSource = readFileSync(
 // apply dash normalization only on the send/mirror path. See stablyai/orca#7925.
 describe('terminal iOS dictation write-back', () => {
   it('does not write normalized text back into the buffered command input value', () => {
-    expect(sessionRouteSource).toContain('onChangeText={setInput}')
-    expect(sessionRouteSource).not.toContain(
-      'setInput((previousText) => normalizeTerminalTextInput'
-    )
+    expect(commandDockSource).toContain('onChangeText={bufferedTerminalDraftState.setInput}')
+    expect(commandDockSource).not.toContain('setInput((previousText) => normalizeTerminalTextInput')
   })
 
   it('still normalizes the buffered command text at send time', () => {
-    expect(sessionRouteSource).toContain('normalizeTerminalTextInput(input)')
+    expect(sendActionsSource).toContain('normalizeTerminalTextInput(draft)')
   })
 })

@@ -164,4 +164,58 @@ describe('pr-refresh-coordinator', () => {
       'feature/0'
     ])
   })
+
+  it.each([
+    { primaryResetAt: 4, retryDisabledUntil: 5_000, expectedGateUntil: 5_000 },
+    { primaryResetAt: 6, retryDisabledUntil: 5_000, expectedGateUntil: 6_000 }
+  ])(
+    'uses the later manual gate when the primary reset is $primaryResetAt seconds',
+    async ({ primaryResetAt, retryDisabledUntil, expectedGateUntil }) => {
+      const { refreshPRNow, reportVisiblePRRefreshCandidates } =
+        await import('./pr-refresh-coordinator')
+      const candidate = makeCandidate()
+      getPRForBranchOutcomeMock.mockResolvedValueOnce({
+        kind: 'upstream-error',
+        errorType: 'rate_limited',
+        message: 'limited',
+        fetchedAt: Date.now(),
+        retryDisabledUntil
+      })
+
+      reportVisiblePRRefreshCandidates([candidate], 1, 1)
+      await refreshPRNow(candidate)
+      getPRForBranchOutcomeMock.mockClear()
+      repositoryRateLimitGuardMock.mockImplementation((_repository, bucket) =>
+        bucket === 'core'
+          ? { blocked: true, remaining: 0, limit: 5_000, resetAt: primaryResetAt }
+          : { blocked: false }
+      )
+
+      const outcome = await refreshPRNow(candidate)
+
+      expect(outcome).toEqual({
+        kind: 'upstream-error',
+        errorType: 'rate_limited',
+        message: 'GitHub is temporarily limiting requests. Try again after the limit resets.',
+        fetchedAt: 1_000,
+        nextAutoRetryAt: expectedGateUntil,
+        retryDisabledUntil: expectedGateUntil
+      })
+      expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
+      expect(sendMock.mock.calls.map(([, event]) => event).at(-1)).toEqual(
+        expect.objectContaining({
+          reason: 'manual',
+          status: 'paused',
+          pausedUntil: expectedGateUntil,
+          skippedReason: 'rate-limit'
+        })
+      )
+
+      getPRForBranchOutcomeMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: expectedGateUntil })
+      await vi.advanceTimersByTimeAsync(expectedGateUntil - Date.now() - 1)
+      expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(getPRForBranchOutcomeMock).toHaveBeenCalledOnce()
+    }
+  )
 })

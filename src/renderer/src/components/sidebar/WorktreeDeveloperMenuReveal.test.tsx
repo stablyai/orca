@@ -66,7 +66,8 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuSub: passthrough,
     DropdownMenuSubContent: passthrough,
     DropdownMenuSubTrigger: passthrough,
-    DropdownMenuTrigger: passthrough
+    DropdownMenuTrigger: passthrough,
+    DropdownMenuShortcut: passthrough
   }
 })
 

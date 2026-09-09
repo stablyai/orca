@@ -11,6 +11,7 @@ import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { uploadDirectoryViaSystemSsh } from './ssh-system-fallback'
 import type { SshTarget } from '../../shared/ssh-types'
+import { relayArtifactFilenames } from '../../shared/relay-artifacts'
 
 const RELAY_VERSION = '0.1.0+systemtransport'
 
@@ -54,9 +55,13 @@ exec /bin/sh -c "$cmd"
 }
 
 function writeFakeRelay(dir: string): void {
-  writeFileSync(join(dir, 'relay-watcher.js'), '')
-  writeFileSync(join(dir, 'relay-ai-vault-service.js'), '')
-  writeFileSync(join(dir, 'managed-hook-runtime.js'), '')
+  // Stage every companion the manifest declares — relay.js gets real content
+  // below — so adding one cannot silently fail the completeness probe here.
+  for (const filename of relayArtifactFilenames(false)) {
+    if (filename !== 'relay.js') {
+      writeFileSync(join(dir, filename), '')
+    }
+  }
   writeFileSync(
     join(dir, 'relay.js'),
     `

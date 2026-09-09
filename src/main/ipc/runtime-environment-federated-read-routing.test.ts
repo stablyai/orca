@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/pairing'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/protocol-version'
 import { addEnvironmentFromPairingCode } from '../../shared/runtime-environment-store'
 
 const { sendRemoteRuntimeRequestMock, sendRemoteRuntimeSharedControlRequestMock } = vi.hoisted(
@@ -20,7 +23,10 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 vi.mock('./runtime-environment-request-connections', () => ({
   sendRemoteRuntimeConnectionRequest: vi.fn(),
   sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  reconnectRemoteRuntimeSharedControlConnection: vi.fn()
+  reconnectRemoteRuntimeSharedControlConnection: vi.fn(),
+  retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+  ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+  pauseRemoteRuntimeSharedControlRetry: vi.fn()
 }))
 
 import {
@@ -124,7 +130,9 @@ describe('federated read RPC transport routing', () => {
       'orchestration.federationAck',
       { dispatchId: 'dispatch-1', throughSequence: 4 },
       15_000,
-      envelope
+      envelope,
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -166,7 +174,9 @@ describe('federated read RPC transport routing', () => {
       'orchestration.federationPull',
       { dispatchId: 'dispatch-1', afterSequence: 0, limit: 50 },
       15_000,
-      envelope
+      envelope,
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })

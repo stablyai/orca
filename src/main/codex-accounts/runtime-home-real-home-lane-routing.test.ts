@@ -18,6 +18,18 @@ import {
   testState,
   writePaneRegistry
 } from './runtime-home-service-test-harness'
+import { hasCompletedCodexSessionBackfillMarker } from '../codex/codex-session-backfill-marker'
+import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-scan-dates'
+
+function expectBaselineKeptWithLaunchDatePending(markerPath: string): void {
+  const marker = JSON.parse(readFileSync(markerPath, 'utf-8')) as {
+    pendingScanDates?: unknown
+  }
+  expect(marker.pendingScanDates).toEqual([getCodexSessionBackfillDate()])
+  expect(
+    hasCompletedCodexSessionBackfillMarker(markerPath, join(getSystemCodexHomePath(), 'sessions'))
+  ).toBe(true)
+}
 
 vi.mock('electron', () => ({
   app: {
@@ -54,7 +66,9 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(existsSync(markerPath)).toBe(false)
+    expect(
+      hasCompletedCodexSessionBackfillMarker(markerPath, join(getSystemCodexHomePath(), 'sessions'))
+    ).toBe(false)
     service.finishHostSystemDefaultSessionMigrationPass()
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       true
@@ -82,7 +96,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       false
     )
-    expect(existsSync(markerPath)).toBe(false)
+    expectBaselineKeptWithLaunchDatePending(markerPath)
     service.prepareForCodexLaunch()
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       false
@@ -101,7 +115,7 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(null, { reattached: true })).toBe(
       false
     )
-    expect(existsSync(markerPath)).toBe(false)
+    expectBaselineKeptWithLaunchDatePending(markerPath)
     store.updateSettings({
       codexSessionSourceHome: { host: join(testState.fakeHomeDir, 'moved-history'), wsl: {} }
     })
@@ -140,7 +154,9 @@ describe('CodexRuntimeHomeService', () => {
     mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
     writeFileSync(markerPath, '{}\n', 'utf-8')
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
-    expect(existsSync(markerPath)).toBe(false)
+    expect(
+      hasCompletedCodexSessionBackfillMarker(markerPath, join(getSystemCodexHomePath(), 'sessions'))
+    ).toBe(false)
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       true
     )

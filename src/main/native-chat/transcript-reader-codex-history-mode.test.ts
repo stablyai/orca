@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { extractPendingAsk } from '../../shared/native-chat-ask'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 import { readNativeChatTranscript } from './transcript-reader'
 import { readNativeChatTranscriptTail } from './transcript-tail-reader'
@@ -246,5 +247,44 @@ describe('Codex transcript history modes', () => {
       role: 'tool',
       blocks: [{ type: 'tool-result', output: 'ok' }]
     })
+  })
+
+  it('passes an argument payload through untouched, so no consumer changes shape', () => {
+    const call = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          id: 'call-2',
+          name: 'shell',
+          arguments: '{"command":["bash","-lc","echo hi"]}'
+        }
+      }),
+      'fallback-args'
+    )
+
+    expect(call?.blocks[0]).toMatchObject({
+      type: 'tool-call',
+      name: 'shell',
+      input: '{"command":["bash","-lc","echo hi"]}'
+    })
+  })
+
+  it('does not raise a question card from an unrelated tool that carries a questions payload', () => {
+    const call = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'function_call',
+          id: 'call-3',
+          name: 'some_mcp_tool',
+          arguments: '{"questions":[{"question":"Which branch?","options":["main","dev"]}]}'
+        }
+      }),
+      'fallback-questions'
+    )
+
+    expect(call).not.toBeNull()
+    expect(extractPendingAsk(call ? [call] : [])).toBeNull()
   })
 })

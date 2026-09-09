@@ -420,8 +420,9 @@ test.describe('floating workspace reopen WebGL recovery @headful', () => {
     expect(afterReopen.equals(baseline), 'reopened terminal should render clean glyphs').toBe(true)
   })
 
-  test('window focus regain recovers the corrupted atlas (harness control)', async ({
-    orcaPage
+  test('system resume recovers the corrupted atlas (harness control)', async ({
+    orcaPage,
+    electronApp
   }) => {
     // Why: control proving the injected corruption is exactly the class the
     // existing recovery machinery heals — isolating the reopen gap above as a
@@ -431,13 +432,17 @@ test.describe('floating workspace reopen WebGL recovery @headful', () => {
     const { baseline, corrupted } = shots!
     expect(corrupted.equals(baseline)).toBe(false)
 
-    await orcaPage.evaluate(() => {
-      window.dispatchEvent(new Event('focus'))
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      const mainWindow = BrowserWindow.getAllWindows()[0]
+      if (!mainWindow) {
+        throw new Error('Orca window unavailable for system resume')
+      }
+      mainWindow.webContents.send('system:resumed')
     })
     await settleRecoveryWindows(orcaPage)
 
-    const afterFocus = await screenshotFloatingTerminal(orcaPage)
-    console.log(`[floating-control] healedByFocus=${afterFocus.equals(baseline)}`)
-    expect(afterFocus.equals(baseline), 'window focus should heal the atlas').toBe(true)
+    const afterResume = await screenshotFloatingTerminal(orcaPage)
+    console.log(`[floating-control] healedByResume=${afterResume.equals(baseline)}`)
+    expect(afterResume.equals(baseline), 'system resume should heal the atlas').toBe(true)
   })
 })

@@ -50,6 +50,7 @@ export function useWorktreeCardFoundation({
         // Why: the same workspace ID can exist under two hosts. Naming the owner
         // keeps the dialog on the clicked row instead of the ambiguous lookup.
         repoId: worktree.repoId,
+        executionHostId: worktree.hostId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,
@@ -66,6 +67,7 @@ export function useWorktreeCardFoundation({
       openModal('edit-meta', {
         worktreeId: worktree.id,
         repoId: worktree.repoId,
+        executionHostId: worktree.hostId,
         currentDisplayName: worktree.displayName,
         currentIssue: worktree.linkedIssue,
         currentPR: worktree.linkedPR,

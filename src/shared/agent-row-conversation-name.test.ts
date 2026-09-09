@@ -37,6 +37,34 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Investigate replay bug')
   })
 
+  it('names a split pane from its own live title, not the tab title', () => {
+    // Why: the tab title is the FOCUSED pane's, so the sibling must not read it.
+    const tab = makeTab({ title: '\u2733 Linear work log' })
+    expect(getAgentRowConversationName(tab, 'claude', false, '\u2733 Redis cache strategy')).toBe(
+      'Redis cache strategy'
+    )
+    // OpenCode's semantic title is a live title too, so it follows the pane.
+    expect(
+      getAgentRowConversationName(tab, 'opencode', false, 'OC | build the release pipeline')
+    ).toBe('OC | build the release pipeline')
+    // No resolvable pane title: no live title at all, never the sibling's.
+    expect(getAgentRowConversationName(tab, 'claude', false, null)).toBeNull()
+    // A single-pane tab passes undefined and is untouched.
+    expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Linear work log')
+  })
+
+  it('keeps tab-owned names above the pane title', () => {
+    // Why: the user gave these to the whole tab, and none of them flip on focus.
+    const custom = makeTab({ customTitle: 'Patient sync spike' })
+    expect(getAgentRowConversationName(custom, 'claude', false, 'Redis cache strategy')).toBe(
+      'Patient sync spike'
+    )
+    const quick = makeTab({ quickCommandLabel: 'Run tests' })
+    expect(getAgentRowConversationName(quick, 'claude', false, null)).toBe('Run tests')
+    const generated = makeTab({ generatedTitle: 'Fix intake flow' })
+    expect(getAgentRowConversationName(generated, 'claude', true, null)).toBe('Fix intake flow')
+  })
+
   it('strips leading status decoration from agent-set titles', () => {
     expect(
       getAgentRowConversationName(makeTab({ title: '✳ Fix patient intake flow' }), 'claude', false)

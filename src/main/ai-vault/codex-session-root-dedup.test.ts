@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import {
+  dedupeCodexRolloutCopyAliases,
   dedupeCodexRolloutFileAliases,
   dedupeCodexSessionsBySessionId
 } from './codex-session-root-dedup'
@@ -201,6 +202,106 @@ describe('dedupeCodexRolloutFileAliases', () => {
       hardlinkIdentity: '1:42'
     }
     expect(dedupeCodexRolloutFileAliases([perAccount, real], accessors)).toEqual([real])
+  })
+})
+
+describe('dedupeCodexRolloutCopyAliases', () => {
+  type Candidate = {
+    agent: string
+    path: string
+    codexHome: string | null
+  }
+  const accessors = {
+    isCodex: (candidate: Candidate) => candidate.agent === 'codex',
+    getFilePath: (candidate: Candidate) => candidate.path,
+    getCodexHome: (candidate: Candidate) => candidate.codexHome
+  }
+
+  it('collapses cross-volume copies only after session_meta proves the same id', async () => {
+    const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+    const managed = {
+      agent: 'codex',
+      path: MANAGED_HOME_ROLLOUT,
+      codexHome: MANAGED_HOME
+    }
+    const readSessionMetaId = vi.fn(async () => 'shared-session-id')
+
+    await expect(
+      dedupeCodexRolloutCopyAliases([managed, real], accessors, readSessionMetaId)
+    ).resolves.toEqual([real])
+    expect(readSessionMetaId).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps same-name files when ids differ or metadata cannot prove identity', async () => {
+    const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+    const managed = {
+      agent: 'codex',
+      path: MANAGED_HOME_ROLLOUT,
+      codexHome: MANAGED_HOME
+    }
+
+    await expect(
+      dedupeCodexRolloutCopyAliases([real, managed], accessors, async (path) =>
+        path === REAL_HOME_ROLLOUT ? 'real-id' : 'managed-id'
+      )
+    ).resolves.toEqual([real, managed])
+    await expect(
+      dedupeCodexRolloutCopyAliases([real, managed], accessors, async () => null)
+    ).resolves.toEqual([real, managed])
+  })
+
+  it('does not compare copies across native and WSL execution namespaces', async () => {
+    const rolloutName = REAL_HOME_ROLLOUT.split('/').at(-1)
+    const native = {
+      agent: 'codex',
+      path: `C:\\Users\\ada\\.codex\\sessions\\${rolloutName}`,
+      codexHome: null
+    }
+    const wsl = {
+      agent: 'codex',
+      path: `\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\${rolloutName}`,
+      codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex'
+    }
+    const readSessionMetaId = vi.fn(async () => 'shared-session-id')
+
+    await expect(
+      dedupeCodexRolloutCopyAliases([native, wsl], accessors, readSessionMetaId)
+    ).resolves.toEqual([native, wsl])
+    expect(readSessionMetaId).not.toHaveBeenCalled()
+  })
+
+  it('proves only contested same-name candidates', async () => {
+    const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+    const managed = { agent: 'codex', path: MANAGED_HOME_ROLLOUT, codexHome: MANAGED_HOME }
+    const lone = {
+      agent: 'codex',
+      path: '/Users/ada/.codex/sessions/rollout-2026-08-20T09-00-00-lone.jsonl',
+      codexHome: null
+    }
+    const readSessionMetaId = vi.fn(async () => 'shared-session-id')
+
+    await expect(
+      dedupeCodexRolloutCopyAliases([real, managed, lone], accessors, readSessionMetaId)
+    ).resolves.toEqual([real, lone])
+    expect(readSessionMetaId).toHaveBeenCalledTimes(2)
+  })
+
+  // Why: the proof reads run inside the scan's 130s deadline, so a superseded
+  // scan must stop rather than drain a whole second history copy (#17888).
+  it('stops proving copies once the scan is cancelled', async () => {
+    const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+    const managed = { agent: 'codex', path: MANAGED_HOME_ROLLOUT, codexHome: MANAGED_HOME }
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      dedupeCodexRolloutCopyAliases(
+        [real, managed],
+        accessors,
+        async () => 'shared-session-id',
+        controller.signal
+      )
+    ).rejects.toThrow()
   })
 })
 

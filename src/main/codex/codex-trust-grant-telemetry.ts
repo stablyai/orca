@@ -16,10 +16,9 @@ export type CodexTrustGrantFallbackReason =
   | 'retry-cached'
   | 'error'
 
-/** Closed classification of `reason: 'error'` fallbacks. Errors cross the
- *  grant-bridge envelope as message text (only timeout/unsupported keep their
- *  name), so classes are matched on the bounded message shapes each layer
- *  produces — never forwarded raw. */
+/** Closed classification of `reason: 'error'` fallbacks. Only timeout and
+ *  unsupported carry a stable error name, so the rest are matched on the
+ *  bounded message shapes each layer produces — never forwarded raw. */
 export type CodexTrustGrantErrorClass =
   | 'binary-missing'
   | 'timeout'

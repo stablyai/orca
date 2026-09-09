@@ -163,7 +163,9 @@ describe('codex-specific resume behavior', () => {
       process.platform,
       stats
     )
-    expect(stats.incremental).toBe(1)
+    // The append is dismissed without a read, so it is an early stop rather
+    // than an incremental parse.
+    expect(stats).toMatchObject({ earlyStopped: 1, incremental: 0 })
     expect(grown).toBeNull()
   })
 

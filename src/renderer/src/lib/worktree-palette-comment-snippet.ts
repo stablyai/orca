@@ -21,6 +21,17 @@ export function extractWorktreePaletteCommentSnippet(
     snippetEnd++
   }
 
+  // Why: the offsets above count UTF-16 code units and the boundary loops test one unit at
+  // a time, so either edge can land between the halves of a surrogate pair \u2014 CJK text backs
+  // up the full 10 iterations without ever finding whitespace. Snap outward to keep the pair
+  // whole; matchRange derives from snippetStart, so widening by one keeps it correct.
+  if (snippetStart > 0 && (comment.charCodeAt(snippetStart) & 0xfc00) === 0xdc00) {
+    snippetStart -= 1
+  }
+  if (snippetEnd < comment.length && (comment.charCodeAt(snippetEnd - 1) & 0xfc00) === 0xd800) {
+    snippetEnd += 1
+  }
+
   const prefix = snippetStart > 0 ? '\u2026' : ''
   const suffix = snippetEnd < comment.length ? '\u2026' : ''
   return {

@@ -1,7 +1,9 @@
+import { escapeRegex } from '../../../../shared/string-utils'
+
 export function getCardOpeningTag(markup: string, worktreeId: string): string {
   return (
     markup.match(
-      new RegExp(`<section[^>]*data-worktree-card-id="${escapeRegExp(worktreeId)}"[^>]*>`)
+      new RegExp(`<section[^>]*data-worktree-card-id="${escapeRegex(worktreeId)}"[^>]*>`)
     )?.[0] ?? ''
   )
 }
@@ -12,7 +14,7 @@ export function getOptionOpeningTag(markup: string, worktreeId: string): string 
   // The worktree id is the suffix after the encoded host separator (STA-4343).
   return (
     markup.match(
-      new RegExp(`<div[^>]*id="worktree-list-option-[^"]*%7C${escapeRegExp(worktreeId)}"[^>]*>`)
+      new RegExp(`<div[^>]*id="worktree-list-option-[^"]*%7C${escapeRegex(worktreeId)}"[^>]*>`)
     )?.[0] ?? ''
   )
 }
@@ -24,7 +26,7 @@ export function getFolderWorkspaceSurfaceOpeningTag(
   return (
     markup.match(
       new RegExp(
-        `<div[^>]*id="worktree-list-option-[^"]*%3A${escapeRegExp(folderWorkspaceId)}"[^>]*>` +
+        `<div[^>]*id="worktree-list-option-[^"]*%3A${escapeRegex(folderWorkspaceId)}"[^>]*>` +
           `[\\s\\S]*?<div class="relative"[^>]*>`
       )
     )?.[0] ?? ''
@@ -52,8 +54,4 @@ export function getFlushCardContentStart(args: {
     flushCardMargin +
     Math.max(flushCardMinimumInset, args.cardContentIndent - flushCardPullback)
   )
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

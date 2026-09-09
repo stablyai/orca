@@ -12,6 +12,20 @@ export class SearchSubprocessLineAccumulator {
   }
 
   push(rawChunk: Buffer | string, onLine: (line: string) => void): boolean {
+    // Three bytes per UTF-16 code unit bounds UTF-8 size without re-encoding complete batches.
+    if (
+      typeof rawChunk === 'string' &&
+      this.bytes === 0 &&
+      rawChunk.endsWith('\n') &&
+      rawChunk.length * 3 <= this.maxLineBytes
+    ) {
+      const lines = rawChunk.split('\n')
+      lines.pop()
+      for (const line of lines) {
+        onLine(line)
+      }
+      return true
+    }
     const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk, 'utf8')
     let cursor = 0
     while (cursor < chunk.length) {

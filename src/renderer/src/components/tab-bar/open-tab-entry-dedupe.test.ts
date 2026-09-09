@@ -24,7 +24,8 @@ function editorTab(
     tabId: 'tab-1',
     entityId: 'file-1',
     groupId: 'group-1',
-    relativePath
+    relativePath,
+    occupantAgent: null
   }
 }
 
@@ -88,7 +89,9 @@ describe('dropFileEntriesCoveredByTabResults', () => {
         worktreeId: 'wt-1',
         contentType: 'browser',
         pageId: 'page-1',
-        workspaceId: 'ws-1'
+        url: 'https://example.com/zebra',
+        workspaceId: 'ws-1',
+        faviconUrl: null
       },
       {
         executionHostId: 'local',

@@ -14,6 +14,7 @@ import { translate } from '@/i18n/i18n'
 import { showDictationStartErrorToast } from './dictation-start-error-toast'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { DICTATION_CONTROL_EVENT, type DictationControlAction } from './dictation-control-events'
+import { publishDictationMeter } from './dictation-meter-store'
 
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
@@ -28,7 +29,7 @@ export function DictationController() {
     flushBufferedAudio,
     discardBufferedAudio,
     getCapturedChunkCount
-  } = useAudioCapture()
+  } = useAudioCapture(publishDictationMeter)
 
   const dictationStateRef = useRef(dictationState)
   dictationStateRef.current = dictationState

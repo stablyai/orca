@@ -6,7 +6,7 @@ import {
   detectInstalledAgentsWithShellPathHydration,
   refreshShellPathAndDetectAgents,
   runPreflightCheck
-} from '../../../ipc/preflight'
+} from '../../../preflight/agent-detection'
 
 const PreflightCheck = z.object({
   force: z.boolean().optional()

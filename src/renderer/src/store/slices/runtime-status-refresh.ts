@@ -1,11 +1,13 @@
+import type { RuntimeEnvironmentStatus } from './runtime-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
 
 export async function refreshRuntimeEnvironmentStatus(
   environmentId: string,
   timeoutMs: number,
-  publish: (status: RuntimeStatus | null) => void
+  publish: (status: RuntimeEnvironmentStatus) => void
 ): Promise<boolean> {
   const expectedEnvironmentRevision = getRuntimeEnvironmentRevision(environmentId)
   try {
@@ -17,13 +19,18 @@ export async function refreshRuntimeEnvironmentStatus(
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentRevision) {
       return false
     }
-    publish(status)
+    publish({ status, checkedAt: Date.now() })
     return true
-  } catch {
+  } catch (error: unknown) {
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentRevision) {
       return false
     }
-    publish(null)
+    const remoteControl = extractRuntimeTransportDiagnostics(error)
+    publish({
+      status: null,
+      ...(remoteControl ? { remoteControl } : {}),
+      checkedAt: Date.now()
+    })
     return false
   }
 }

@@ -1,4 +1,4 @@
-import type { CacheEntry } from '@/store/slices/github'
+import type { CacheEntry } from '@/store/github/cache-model'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

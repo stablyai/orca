@@ -77,7 +77,11 @@ describe('Last-status persistence', () => {
         worktreeId: 'wt-1',
         receivedAt: expect.any(Number),
         stateStartedAt: expect.any(Number),
-        payload: expect.objectContaining({ state: 'working', prompt: 'persist me' })
+        payload: expect.objectContaining({
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'persist me'
+        })
       })
       expect(file.entries[PANE].launchToken).toBeUndefined()
       expect(file.entries[PANE].launchTokenHash).toBe(

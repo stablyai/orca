@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
+import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
+import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from './first-work-structured-session-rename'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 
 const {
@@ -81,6 +85,132 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     gitExecFileAsyncMock.mockImplementation(
       gitResponder({ currentBranch: 'you/Nautilus', hasUpstream: false })
     )
+  })
+
+  it.each([
+    ['claude', WORKTREE_ID],
+    ['codex', WORKTREE_ID],
+    ['claude', FOLDER_WORKTREE_ID],
+    ['codex', FOLDER_WORKTREE_ID]
+  ] as const)(
+    'renames %s workspace %s on live work without a subscriber, preserving replay, dedupe and retries',
+    async (agent, workspaceId) => {
+      const { deps, setDisplayName } = makeDeps({
+        getFolderWorkspacePath: () => '/workspace/platform',
+        isPendingFirstAgentMessageRename: () => true
+      })
+      const items: AgentJournalRenderItem[] = []
+      const journal = {
+        snapshot: () => ({ items }),
+        lastActivityAt: () => 1,
+        isReadOnly: false
+      } as unknown as AgentSessionJournal
+      const pending: Promise<void>[] = []
+      const observe = vi.fn((summary, options) => {
+        const work = maybeAutoRenameWorkspaceOnFirstStructuredTurn(summary, options, deps)
+        if (work) {
+          pending.push(work)
+        }
+      })
+      const feed = new StructuredAgentSessionStatusFeed({
+        sessions: new Map([
+          ['session', { journal, params: { location: { workspaceId }, provider: agent } }]
+        ]),
+        getRecord: () => null,
+        now: () => 1,
+        onStatusChanged: observe
+      })
+      const user = {
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] }
+      } as AgentJournalRenderItem
+      const turn = {
+        body: {
+          kind: 'status',
+          text: 'Working',
+          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+        }
+      } as AgentJournalRenderItem
+      items.push(user, turn)
+      feed.publish('session', journal, { replay: true })
+      await Promise.all(pending)
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+
+      items.pop()
+      feed.publish('session', journal)
+      items.push(turn)
+      generateBranchNameMock.mockResolvedValueOnce({ success: false, error: 'temporary failure' })
+      feed.publish('session', journal)
+      await Promise.all(pending)
+      expect(generateBranchNameMock).toHaveBeenCalledOnce()
+      expect(setDisplayName).not.toHaveBeenCalled()
+      const callsBeforeOutput = observe.mock.calls.length
+      for (let index = 0; index < 100; index++) {
+        feed.publish('session', journal)
+      }
+      expect(observe).toHaveBeenCalledTimes(callsBeforeOutput)
+
+      items.pop()
+      feed.publish('session', journal)
+      items.push(turn)
+      feed.publish('session', journal)
+      await Promise.all(pending)
+      expect(generateBranchNameMock).toHaveBeenCalledTimes(2)
+      expect(setDisplayName).toHaveBeenCalledWith(workspaceId, 'Fix auth')
+      if (workspaceId === FOLDER_WORKTREE_ID) {
+        expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+      } else {
+        expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+          ['branch', '-m', 'you/fix-auth'],
+          expect.anything()
+        )
+      }
+    }
+  )
+
+  it('does not probe git for a folder-project structured session with a synthetic worktree id', async () => {
+    const workspaceId = `${REPO_ID}::/workspace/platform::workspace:123e4567-e89b-12d3-a456-426614174000`
+    const { deps, setDisplayName, setRenameError } = makeDeps({
+      getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
+    })
+    const journal = {
+      isReadOnly: false,
+      lastActivityAt: () => 1,
+      snapshot: () => ({
+        items: [
+          { body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] } },
+          {
+            body: {
+              kind: 'status',
+              text: 'Working',
+              turnLifecycle: { turnId: 'turn-1', state: 'running' }
+            }
+          }
+        ]
+      })
+    } as unknown as AgentSessionJournal
+    const location = { workspaceId, workspaceKind: 'git-worktree' as const }
+    const pending: Promise<void>[] = []
+    const feed = new StructuredAgentSessionStatusFeed({
+      sessions: new Map([['session', { journal, params: { location, provider: 'codex' } }]]),
+      getRecord: () => null,
+      now: () => 1,
+      onStatusChanged: (summary, options) => {
+        expect(summary.workspaceId).toBe(workspaceId)
+        const work = maybeAutoRenameWorkspaceOnFirstStructuredTurn(summary, options, deps)
+        if (work) {
+          pending.push(work)
+        }
+      }
+    })
+
+    feed.publish('session', journal)
+    await Promise.all(pending)
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+    expect(generateBranchNameMock).not.toHaveBeenCalled()
+    expect(setDisplayName).not.toHaveBeenCalled()
+    expect(setRenameError).toHaveBeenCalledWith(workspaceId, null)
   })
 
   it('keeps incidental work-item markers from overriding the generated display name', async () => {
@@ -232,6 +362,30 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(setDisplayName).toHaveBeenCalledWith(FOLDER_WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(FOLDER_WORKTREE_ID)
   })
+
+  it.each([true, false])(
+    'preserves a manual folder name during generation (pending=%s)',
+    async (pendingAfterRename) => {
+      let name = 'Platform workspace'
+      let pending = true
+      const { deps, setDisplayName } = makeDeps({
+        resolveWorktreeIdForTab: () => FOLDER_WORKTREE_ID,
+        getFolderWorkspacePath: () => '/workspace/platform',
+        isPendingFirstAgentMessageRename: () => pending,
+        getCurrentDisplayName: () => name
+      })
+      generateBranchNameMock.mockImplementationOnce(async () => {
+        name = 'My manual title'
+        pending = pendingAfterRename
+        return { success: true, slug: 'fix-auth' }
+      })
+
+      await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+
+      expect(generateBranchNameMock).toHaveBeenCalledOnce()
+      expect(setDisplayName).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not rename folder workspace titles without the pending marker', async () => {
     const { deps, setDisplayName } = makeDeps({

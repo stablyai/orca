@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
+import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
@@ -51,6 +52,10 @@ export class FakeRelaySession extends FakeSession implements MobileRelayRpcSessi
   // Why: production-realistic defaults — fictional fake values hid three
   // live defects in this subsystem (latch, churn, int32 timer overflow).
   getAttachDeadlineAt = () => Date.now() + 10_000
+  readonly dialStage = new RelayDialStageTracker()
+  getDialStage = () => this.dialStage.getDialStage()
+  onDialStageChange = (listener: (stage: RelayDialStage) => void) =>
+    this.dialStage.onDialStageChange(listener)
   getResumeExpiresAt = () => this.resumeExpiry
   getResumeConfirmation = () => ({
     v: 1 as const,
@@ -118,6 +123,36 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
       }
     }
   })
+  private pairingRejected = false
+  setPairingRejected = vi.fn((rejected: boolean) => {
+    if (this.pairingRejected === rejected) {
+      return
+    }
+    this.pairingRejected = rejected
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  isPairingRejected = () => this.pairingRejected
+  private hostSignedOut = false
+  setHostSignedOut = vi.fn((signedOut: boolean) => {
+    if (this.hostSignedOut === signedOut) {
+      return
+    }
+    this.hostSignedOut = signedOut
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  isHostSignedOut = () => this.hostSignedOut
+  // Mirrors LogicalClientConnectionPath.clearAfterConnected.
+  publishState(state: ConnectionState): void {
+    if (state === 'connected') {
+      this.pairingRejected = false
+      this.hostSignedOut = false
+    }
+    super.publishState(state)
+  }
   setRecoveryAttempt = vi.fn((attempt: number) => {
     const previous = this.getReconnectAttempt()
     this.recoveryAttempt = attempt

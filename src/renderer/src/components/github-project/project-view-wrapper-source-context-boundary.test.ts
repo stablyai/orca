@@ -51,17 +51,18 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
   })
 
   it('passes the matched repo source context into the repo-backed GitHub dialog', () => {
-    const source = componentSource('ProjectViewWrapper.tsx')
+    const actionSource = componentSource('useProjectRowActions.ts')
+    const wrapperSource = componentSource('ProjectViewWrapper.tsx')
     const contextSection = sourceBetween(
-      source,
-      'const resolvedDialogRepo = resolvedDialogRepoItem',
-      'const resolvedMissingRepoDialogs'
+      actionSource,
+      'const dialogRepo = resolvedDialogRepoItem',
+      'const missingDialogs'
     )
-    const dialogSection = sourceBetween(source, '<GitHubItemDialog', 'onUse={(item) => {')
+    const dialogSection = sourceBetween(wrapperSource, '<GitHubItemDialog', 'onUse={(item) => {')
 
-    expect(source).toContain('buildTaskSourceContextFromRepo')
+    expect(actionSource).toContain('buildTaskSourceContextFromRepo')
     expect(contextSection).toContain("provider: 'github'")
-    expect(contextSection).toContain('repo: resolvedDialogRepo')
-    expect(dialogSection).toContain('sourceContext={resolvedDialogSourceContext}')
+    expect(contextSection).toContain('repo: dialogRepo')
+    expect(dialogSection).toContain('sourceContext={rowActions.dialogSourceContext}')
   })
 })

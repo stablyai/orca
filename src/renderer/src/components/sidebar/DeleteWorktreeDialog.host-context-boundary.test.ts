@@ -14,7 +14,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 
 describe('DeleteWorktreeDialog host-context boundaries', () => {
   it('preloads git status from the selected worktree owner instead of the focused host', () => {
-    const effect = sourceBetween(SOURCE, 'const targets = deleteTargets.filter(', 'return () => {')
+    const effect = sourceBetween(SOURCE, 'deleteTargets.filter(', 'return () => {')
 
     expect(effect).toContain('getSettingsForWorktreeRuntimeOwner')
     expect(effect).toContain('worktreesByRepo: useAppStore.getState().worktreesByRepo')
@@ -28,7 +28,7 @@ describe('DeleteWorktreeDialog host-context boundaries', () => {
     expect(SOURCE).not.toContain('useAppStore((state) => state.gitStatusByWorktree)')
     expect(effect).toContain('useAppStore.getState().gitStatusByWorktree')
     expect(effect).toContain('const controller = new AbortController()')
-    expect(effect).toContain('{ signal: controller.signal }')
+    expect(effect).toContain('signal: controller.signal')
     expect(effect).toContain('controller.abort()')
   })
 })

@@ -4,6 +4,7 @@ const {
   handleMock,
   execFileMock,
   execFileAsyncMock,
+  runWslProcessMock,
   hydrateShellPathMock,
   mergePathSegmentsMock,
   getActiveMultiplexerMock,
@@ -18,6 +19,7 @@ const {
   handleMock: vi.fn(),
   execFileMock: vi.fn(),
   execFileAsyncMock: vi.fn(),
+  runWslProcessMock: vi.fn(),
   hydrateShellPathMock: vi.fn(),
   mergePathSegmentsMock: vi.fn(),
   getActiveMultiplexerMock: vi.fn(),
@@ -45,6 +47,9 @@ vi.mock('child_process', () => {
     spawn: vi.fn()
   }
 })
+
+// WSL commands now route through the runner, not execFile('wsl.exe', ...).
+vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('../startup/hydrate-shell-path', () => ({
   hydrateShellPath: hydrateShellPathMock,
@@ -83,7 +88,7 @@ vi.mock('../gitea/client', () => ({
   getGiteaAuthStatus: getGiteaAuthStatusMock
 }))
 
-import { registerPreflightHandlers, runPreflightCheck } from './preflight'
+import { _resetPreflightCache, registerPreflightHandlers, runPreflightCheck } from './preflight'
 import {
   defaultAzureDevOpsStatus,
   defaultBitbucketStatus,
@@ -101,6 +106,7 @@ describe('preflight', () => {
       {
         handleMock,
         execFileAsyncMock,
+        runWslProcessMock,
         hydrateShellPathMock,
         mergePathSegmentsMock,
         getActiveMultiplexerMock,
@@ -146,11 +152,13 @@ describe('preflight', () => {
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(4, 'gh', ['auth', 'status'], {
       encoding: 'utf-8',
-      timeout: 5000
+      timeout: 5000,
+      windowsHide: true
     })
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(5, 'glab', ['auth', 'status'], {
       encoding: 'utf-8',
-      timeout: 5000
+      timeout: 5000,
+      windowsHide: true
     })
   })
 
@@ -254,7 +262,7 @@ describe('preflight', () => {
       configurable: true,
       value: 'win32'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
+    execFileAsyncMock.mockImplementation(async (command) => {
       if (command === 'git') {
         return { stdout: 'git version 2.0.0\n' }
       }
@@ -264,32 +272,216 @@ describe('preflight', () => {
       if (command === 'glab') {
         throw Object.assign(new Error('spawn glab ENOENT'), { code: 'ENOENT' })
       }
-      if (command === 'wsl.exe') {
-        const script = String(args[5])
-        if (script.includes('gh') && script.includes('--version')) {
-          return { stdout: 'gh version 2.0.0\n' }
-        }
-        if (script.includes('gh') && script.includes('auth status')) {
-          return { stdout: 'github.com\n  - Active account: true\n' }
-        }
-        throw new Error(`unexpected WSL script ${script}`)
-      }
       throw new Error(`unexpected command ${String(command)}`)
+    })
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
+      if (script.includes('gh') && script.includes('--version')) {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: 'gh version 2.0.0\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      if (script.includes('gh') && script.includes('auth status')) {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: 'github.com\n  - Active account: true\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      throw new Error(`unexpected WSL script ${script}`)
     })
 
     const status = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
 
     expect(status.gh).toEqual({ installed: true, authenticated: true })
-    expect(execFileAsyncMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*--version/)],
-      { encoding: 'utf-8', timeout: 5000 }
+    expect(runWslProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        distro: 'Ubuntu',
+        loginPath: 'preferred',
+        script: expect.stringMatching(/gh[\s\S]*--version/)
+      })
     )
-    expect(execFileAsyncMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringMatching(/gh[\s\S]*auth status/)],
-      { encoding: 'utf-8', timeout: 5000 }
+    expect(runWslProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        distro: 'Ubuntu',
+        loginPath: 'preferred',
+        script: expect.stringMatching(/gh[\s\S]*auth status/)
+      })
     )
+  })
+
+  describe('WSL preflight caching', () => {
+    // Why win32 + these stubs: a WSL target probes git/gh/glab through the
+    // runner, so every case below counts runner spawns rather than execFile.
+    function stubWslProbes(): void {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      execFileAsyncMock.mockImplementation(async () => {
+        throw Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' })
+      })
+      runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => ({
+        environmentResolved: true,
+        code: 0,
+        stdout: script.includes('auth status')
+          ? 'github.com\n  - Active account: true\n'
+          : 'version 2.0.0\n',
+        stderr: '',
+        timedOut: false
+      }))
+    }
+
+    it('reuses the cached result instead of re-spawning wsl.exe probes', async () => {
+      stubWslProbes()
+
+      const first = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      const spawnsAfterFirst = runWslProcessMock.mock.calls.length
+      const second = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+
+      expect(spawnsAfterFirst).toBeGreaterThan(0)
+      expect(runWslProcessMock.mock.calls.length).toBe(spawnsAfterFirst)
+      expect(second).toEqual(first)
+    })
+
+    it('keeps each distro on its own cache entry', async () => {
+      stubWslProbes()
+
+      await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      const spawnsAfterUbuntu = runWslProcessMock.mock.calls.length
+      await runPreflightCheck(false, { wslDistro: 'Debian' })
+
+      expect(runWslProcessMock.mock.calls.length).toBeGreaterThan(spawnsAfterUbuntu)
+      expect(runWslProcessMock).toHaveBeenCalledWith(expect.objectContaining({ distro: 'Debian' }))
+    })
+
+    it('re-probes when the caller forces a refresh', async () => {
+      stubWslProbes()
+
+      await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      const spawnsAfterFirst = runWslProcessMock.mock.calls.length
+      await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
+
+      expect(runWslProcessMock.mock.calls.length).toBeGreaterThan(spawnsAfterFirst)
+    })
+
+    it('collapses concurrent callers onto one probe set', async () => {
+      stubWslProbes()
+
+      const [first, second] = await Promise.all([
+        runPreflightCheck(false, { wslDistro: 'Ubuntu' }),
+        runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      ])
+      const singleRunSpawns = runWslProcessMock.mock.calls.length
+
+      runWslProcessMock.mockClear()
+      await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
+
+      expect(first).toEqual(second)
+      // One shared run, not two: a second full set would double the spawn count.
+      expect(singleRunSpawns).toBe(runWslProcessMock.mock.calls.length)
+    })
+
+    // Why this matters: an unreachable distro reports the same `installed:
+    // false` as a distro with no tooling, so a session-lifetime cache would pin
+    // "git not installed" until relaunch. The TTL must let it recover.
+    // Why these two: a slower run settling last must not overwrite a newer
+    // answer, or a forced refresh silently returns to the status it replaced.
+    it('does not let a superseded probe overwrite a newer forced refresh', async () => {
+      stubWslProbes()
+      // Why gate on phase captured at call time: the stale run's three
+      // --version probes all start before the refresh, and all report nothing
+      // installed, so it never issues auth calls. The two runs are then
+      // trivially distinguishable in the cached result.
+      let phase: 'stale' | 'fresh' = 'stale'
+      let releaseStale!: () => void
+      const staleGate = new Promise<void>((resolve) => {
+        releaseStale = resolve
+      })
+      runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
+        const isStale = phase === 'stale'
+        if (isStale) {
+          await staleGate
+        }
+        return {
+          environmentResolved: true,
+          code: isStale ? 1 : 0,
+          stdout: isStale
+            ? ''
+            : script.includes('auth status')
+              ? 'github.com\n  - Active account: true\n'
+              : 'version 2.0.0\n',
+          stderr: '',
+          timedOut: false
+        }
+      })
+
+      const stalePending = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      phase = 'fresh'
+      const fresh = await runPreflightCheck(true, { wslDistro: 'Ubuntu' })
+      expect(fresh.git).toEqual({ installed: true })
+
+      releaseStale()
+      const staleResult = await stalePending
+      expect(staleResult.git).toEqual({ installed: false })
+
+      // The superseded run still returns its own answer to its own caller, but
+      // must not have become the cached one.
+      const cachedNow = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      expect(cachedNow.git).toEqual({ installed: true })
+    })
+
+    it('does not repopulate a cache that was reset while a probe was in flight', async () => {
+      stubWslProbes()
+      let release!: () => void
+      const gate = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
+        await gate
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: script.includes('auth status')
+            ? 'github.com\n  - Active account: true\n'
+            : 'version 2.0.0\n',
+          stderr: '',
+          timedOut: false
+        }
+      })
+
+      const inFlight = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      _resetPreflightCache()
+      release()
+      await inFlight
+
+      runWslProcessMock.mockClear()
+      await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+      expect(runWslProcessMock.mock.calls.length).toBeGreaterThan(0)
+    })
+
+    it('re-probes after the cache entry expires so a transient failure self-heals', async () => {
+      vi.useFakeTimers()
+      try {
+        stubWslProbes()
+        runWslProcessMock.mockRejectedValue(new Error('distro not running'))
+
+        const failed = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+        expect(failed.git).toEqual({ installed: false })
+
+        stubWslProbes()
+        runWslProcessMock.mockClear()
+        vi.advanceTimersByTime(30_000 + 1)
+        const recovered = await runPreflightCheck(false, { wslDistro: 'Ubuntu' })
+
+        expect(runWslProcessMock.mock.calls.length).toBeGreaterThan(0)
+        expect(recovered.git).toEqual({ installed: true })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   it('uses the persisted Windows Path when probing host CLIs', async () => {
@@ -314,6 +506,7 @@ describe('preflight', () => {
     expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, 'gh', ['--version'], {
       encoding: 'utf-8',
       timeout: 5000,
+      windowsHide: true,
       env: expect.objectContaining({
         Path: 'C:\\Windows\\System32;C:\\Program Files\\GitHub CLI'
       })
@@ -327,28 +520,23 @@ describe('preflight', () => {
         configurable: true,
         value: 'win32'
       })
-      execFileAsyncMock.mockImplementation((command, args) => {
+      execFileAsyncMock.mockImplementation((command) => {
         if (command === 'git') {
           return Promise.resolve({ stdout: 'git version 2.0.0\n' })
         }
         if (command === 'gh' || command === 'glab') {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
-        if (
-          command === 'wsl.exe' &&
-          Array.isArray(args) &&
-          String(args.at(-1)).includes("'gh' --version")
-        ) {
+        throw new Error(`unexpected command ${String(command)}`)
+      })
+      runWslProcessMock.mockImplementation(({ script }: { script: string }) => {
+        if (script.includes("'gh' --version")) {
           return new Promise(() => {})
         }
-        if (
-          command === 'wsl.exe' &&
-          Array.isArray(args) &&
-          String(args.at(-1)).includes("'glab' --version")
-        ) {
+        if (script.includes("'glab' --version")) {
           return Promise.reject(Object.assign(new Error('spawn ENOENT'), { code: 'ENOENT' }))
         }
-        throw new Error(`unexpected command ${String(command)}`)
+        throw new Error(`unexpected WSL script ${script}`)
       })
 
       const statusPromise = runPreflightCheck(false, { wslDistro: 'Ubuntu' })
@@ -429,26 +617,33 @@ describe('preflight', () => {
       configurable: true,
       value: 'win32'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command === 'wsl.exe') {
-        const script = String(args[5])
-        if (script.includes('git') && script.includes('--version')) {
-          return { stdout: 'git version 2.0.0\n' }
-        }
-        if (script.includes('gh') && script.includes('--version')) {
-          return { stdout: 'gh version 2.0.0\n' }
-        }
-        if (script.includes('glab') && script.includes('--version')) {
-          return { stdout: 'glab version 1.92.1\n' }
-        }
-        if (script.includes('gh') && script.includes('auth status')) {
-          return { stdout: 'github.com\n  - Active account: true\n' }
-        }
-        if (script.includes('glab') && script.includes('auth status')) {
-          return { stdout: 'Logged in to gitlab.com\n' }
-        }
-      }
+    execFileAsyncMock.mockImplementation(async (command) => {
       throw new Error(`unexpected command ${String(command)}`)
+    })
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
+      const ok = (stdout: string) => ({
+        environmentResolved: true,
+        code: 0,
+        stdout,
+        stderr: '',
+        timedOut: false
+      })
+      if (script.includes('git') && script.includes('--version')) {
+        return ok('git version 2.0.0\n')
+      }
+      if (script.includes('gh') && script.includes('--version')) {
+        return ok('gh version 2.0.0\n')
+      }
+      if (script.includes('glab') && script.includes('--version')) {
+        return ok('glab version 1.92.1\n')
+      }
+      if (script.includes('gh') && script.includes('auth status')) {
+        return ok('github.com\n  - Active account: true\n')
+      }
+      if (script.includes('glab') && script.includes('auth status')) {
+        return ok('Logged in to gitlab.com\n')
+      }
+      throw new Error(`unexpected WSL script ${script}`)
     })
 
     await expect(runPreflightCheck(true, { wslDistro: 'Ubuntu' })).resolves.toMatchObject({

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolvePaneAgentOwner } from './pane-agent-owner'
+import { resolvePaneAgentOwner, resolvePaneAgentOwnerRecord } from './pane-agent-owner'
 
 describe('resolvePaneAgentOwner', () => {
   it('leads with launch intent', () => {
@@ -37,8 +37,64 @@ describe('resolvePaneAgentOwner', () => {
     ).toBe('omp')
   })
 
+  it('preserves the pre-tranche precedence for every conflicting owner tier', () => {
+    expect(
+      resolvePaneAgentOwnerRecord({
+        launchAgent: 'claude',
+        hookAgent: 'codex',
+        siblingHookAgent: 'gemini',
+        completedHookAgent: 'pi',
+        sleepingSessionAgent: 'omp'
+      })
+    ).toEqual({ agent: 'claude', ownerIsLaunch: true })
+    expect(
+      resolvePaneAgentOwnerRecord({
+        hookAgent: 'claude',
+        siblingHookAgent: 'codex',
+        completedHookAgent: 'gemini',
+        siblingCompletedHookAgent: 'pi',
+        sleepingSessionAgent: 'omp'
+      })
+    ).toEqual({ agent: 'claude', ownerIsLaunch: false })
+    expect(
+      resolvePaneAgentOwnerRecord({
+        siblingHookAgent: 'codex',
+        completedHookAgent: 'claude',
+        siblingCompletedHookAgent: 'gemini',
+        sleepingSessionAgent: 'omp'
+      })
+    ).toEqual({ agent: 'codex', ownerIsLaunch: false })
+    expect(
+      resolvePaneAgentOwnerRecord({
+        completedHookAgent: 'claude',
+        siblingCompletedHookAgent: 'codex',
+        sleepingSessionAgent: 'gemini'
+      })
+    ).toEqual({ agent: 'claude', ownerIsLaunch: false })
+  })
+
   it('returns null when no owner evidence exists', () => {
     expect(resolvePaneAgentOwner({})).toBeNull()
     expect(resolvePaneAgentOwner({ launchAgent: null, hookAgent: undefined })).toBeNull()
+    expect(resolvePaneAgentOwnerRecord({})).toBeNull()
+  })
+
+  it('marks launch-tier evidence as launch ownership and status-tier as inferred', () => {
+    expect(resolvePaneAgentOwnerRecord({ launchAgent: 'pi', hookAgent: 'omp' })).toEqual({
+      agent: 'pi',
+      ownerIsLaunch: true
+    })
+    expect(resolvePaneAgentOwnerRecord({ startupLaunchAgent: 'pi', hookAgent: 'omp' })).toEqual({
+      agent: 'pi',
+      ownerIsLaunch: true
+    })
+    expect(resolvePaneAgentOwnerRecord({ hookAgent: 'omp' })).toEqual({
+      agent: 'omp',
+      ownerIsLaunch: false
+    })
+    expect(resolvePaneAgentOwnerRecord({ completedHookAgent: 'pi' })).toEqual({
+      agent: 'pi',
+      ownerIsLaunch: false
+    })
   })
 })

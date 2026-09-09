@@ -1,4 +1,5 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
+import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
 
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
@@ -8,6 +9,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
+          ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
           '    // Why: /reload re-registers the active session, but it is not a',
           '    // turn boundary and must not clear the visible status or unread state.',
           "    if (event.reason === 'reload') return",
@@ -29,6 +31,34 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
         ]
       : []
   const ownerEnv = kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
+
+  // Why: OMP suppresses its approval lifecycle unless an extension listens for it,
+  // and it is the only signal that the run is parked on a permission prompt rather
+  // than still working. Prime has no OMP runtime, so the handlers would be dead there.
+  const approvalHandlers =
+    kind === 'prime-agent'
+      ? []
+      : [
+          `  pi.on('tool_approval_requested', (event${ctxParam}) => {`,
+          ...captureSessionMetadata,
+          '    if (!isOmpRuntime()) return',
+          "    post('tool_approval_requested', {",
+          '      tool_name: event.toolName,',
+          '      reason: event.reason,',
+          '      approval_mode: event.approvalMode,',
+          '    })',
+          '  })',
+          '',
+          `  pi.on('tool_approval_resolved', (event${ctxParam}) => {`,
+          ...captureSessionMetadata,
+          '    if (!isOmpRuntime()) return',
+          "    post('tool_approval_resolved', {",
+          '      tool_name: event.toolName,',
+          '      approved: event.approved,',
+          '    })',
+          '  })',
+          ''
+        ]
 
   return [
     '// Why: pi assistant messages carry content as an array of parts',
@@ -76,6 +106,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
     '    agentEndReported = false',
+    // Why: a turn cannot begin under a dialog holding input focus, so this is the one
+    // boundary that can recover a modal whose close never arrived.
+    ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    piTurnInFlight = true'] : []),
     "    post('agent_start')",
     '  })',
     '',
@@ -102,6 +135,8 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    })',
     '  })',
     '',
+    ...approvalHandlers,
+    ...getPiAgentStatusUiPromptHandlerSourceLines(kind),
     "  // Why: capture the assistant's final text on each completed message",
     '  // so the dashboard preview reflects the most recent reply even before',
     '  // agent_end fires. message_end is the right hook because pi guarantees',
@@ -115,7 +150,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  })',
     '',
     '  // Why: modern Pi stays non-idle across retry/compaction/follow-up work,',
-    '  // while legacy Pi/OMP becomes idle after its final agent_end handlers.',
+    '  // while legacy Pi becomes idle after its final agent_end handlers.',
+    '  // OMP instead marks non-terminal agent_end events with willContinue, so it',
+    '  // returns before the recheck timer is ever armed.',
     '  const AGENT_END_IDLE_RECHECK_MS = 25',
     '  const AGENT_END_IDLE_RECHECK_MAX_MS = 250',
     '  let agentSettledSupported = false',
@@ -135,6 +172,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  function postAgentEndOnce(): void {',
     '    if (agentEndReported) return',
     '    agentEndReported = true',
+    // Why: distinct from agentEndReported, which also dedupes the completion post and so
+    // starts false on a pane that has not run a turn yet — that pane is idle, not busy.
+    ...(kind === 'pi' ? ['    piTurnInFlight = false'] : []),
     "    post('agent_end')",
     '  }',
     '',
@@ -167,8 +207,16 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    postAgentEndOnce()',
     '  })',
     '',
-    "  pi.on('agent_end', (_event, ctx) => {",
+    "  pi.on('agent_end', (event, ctx) => {",
     ...captureSessionMetadata,
+    '    if (event?.willContinue === true) {',
+    '      clearPendingAgentEndCheck()',
+    '      return',
+    '    }',
+    '    if (isOmpRuntime()) {',
+    '      postAgentEndOnce()',
+    '      return',
+    '    }',
     '    if (agentSettledSupported) return',
     "    if (!ctx || typeof ctx.isIdle !== 'function') {",
     '      postAgentEndOnce()',

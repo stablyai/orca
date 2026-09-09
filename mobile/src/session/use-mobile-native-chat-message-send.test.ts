@@ -77,12 +77,10 @@ describe('useMobileNativeChatMessageSend', () => {
 
   const sentArgs = (): {
     text?: string
-    clearInputFirst?: boolean
     resolvedLaunchDraft?: { text: string; createdAt: number }
   } =>
     sendWithOutcome.mock.calls[0]![0] as {
       text?: string
-      clearInputFirst?: boolean
       resolvedLaunchDraft?: { text: string; createdAt: number }
     }
   const clearArgs = (): { clearInput?: string } =>
@@ -146,32 +144,36 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sendWithOutcome).not.toHaveBeenCalled()
   })
 
-  it('drops the body write\u2019s own Ctrl+U prefix once the dedicated clear ran', async () => {
+  it('keeps the body write free of the dedicated terminal control', async () => {
     // A Ctrl+U written immediately before body text in the SAME write arrives as
     // a literal control character, so it would head the received message.
     mount(() => ({ text: DRAFT, createdAt: 1 }))
     await act(async () => {
       await api!.send('hello')
     })
-    expect(sentArgs().clearInputFirst).toBe(false)
+    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
-  it('keeps the single-Ctrl+U prefix when no dedicated clear ran', async () => {
+  it('writes a single Ctrl+U separately when no launch draft is parked', async () => {
     mount(() => null)
     await act(async () => {
       await api!.send('hello')
     })
-    expect(sentArgs().clearInputFirst).toBe(true)
+    expect(clearArgs().clearInput).toBe('\x15')
+    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
   })
 
-  it('writes no clear at all when nothing is parked on the line', async () => {
+  it('writes the ordinary clear before the body', async () => {
     mount(() => null)
     await act(async () => {
       await api!.send('hello')
     })
-    expect(clearInputWrite).not.toHaveBeenCalled()
+    expect(clearInputWrite).toHaveBeenCalledTimes(1)
+    expect(clearInputWrite.mock.invocationCallOrder[0]).toBeLessThan(
+      sendWithOutcome.mock.invocationCallOrder[0]!
+    )
   })
 
   it('reads the draft at send time, so a retired seed stops widening the clear', async () => {
@@ -184,9 +186,11 @@ describe('useMobileNativeChatMessageSend', () => {
     await act(async () => {
       await api!.send('second')
     })
-    expect(sendWithOutcome.mock.calls[1]![0]).toMatchObject({ clearInputFirst: true })
-    expect(clearInputWrite).toHaveBeenCalledTimes(1)
-    expect(sendWithOutcome.mock.calls[0]![0]).toMatchObject({ clearInputFirst: false })
+    expect(clearInputWrite).toHaveBeenCalledTimes(2)
+    expect(clearInputWrite.mock.calls[0]![0]).toMatchObject({
+      clearInput: buildAgentTuiClearInputForText(DRAFT)
+    })
+    expect(clearInputWrite.mock.calls[1]![0]).toMatchObject({ clearInput: '\x15' })
   })
 
   it('does not clear an image send after the image was pasted', async () => {
@@ -196,7 +200,7 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send('caption', ['file:///a.png'])
     })
     expect(clearInputWrite).not.toHaveBeenCalled()
-    expect(sentArgs().clearInputFirst).toBe(false)
+    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 

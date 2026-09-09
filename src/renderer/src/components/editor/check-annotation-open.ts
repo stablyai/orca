@@ -30,7 +30,7 @@ export function openAnnotationLocation(params: {
 
   // Why: reuse the shared activation path so an annotation jump lands in the
   // same history stack as sidebar, palette, and terminal-link navigation.
-  activateAndRevealWorktree(worktreeId)
+  activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
 
   store.openFile(
     {

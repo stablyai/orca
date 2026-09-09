@@ -1,13 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillPackageManifestV1 } from '../../shared/skill-package-manifest'
 
-const { execFileAsyncMock } = vi.hoisted(() => ({ execFileAsyncMock: vi.fn() }))
+const { runWslProcessMock } = vi.hoisted(() => ({ runWslProcessMock: vi.fn() }))
 
-vi.mock('node:child_process', () => ({
-  execFile: Object.assign(vi.fn(), {
-    [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
-  })
-}))
+vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import {
   createWslSkillInstallFilesystem,
@@ -17,7 +13,13 @@ import {
 const WSL_ROOT = '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\.agents\\skills'
 
 beforeEach(() => {
-  execFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+  runWslProcessMock.mockReset().mockResolvedValue({
+    environmentResolved: true,
+    code: 0,
+    stdout: '',
+    stderr: '',
+    timedOut: false
+  })
 })
 
 describe('WslSkillInstallFilesystem', () => {
@@ -44,7 +46,7 @@ describe('WslSkillInstallFilesystem', () => {
       )
     }
 
-    expect(execFileAsyncMock).toHaveBeenCalledTimes(8)
+    expect(runWslProcessMock).toHaveBeenCalledTimes(8)
   })
 
   it('applies and verifies manifest modes through bounded guest argv batches', async () => {
@@ -57,8 +59,8 @@ describe('WslSkillInstallFilesystem', () => {
     } as SkillPackageManifestV1
     await filesystem.prepareExtractedSkill(`${WSL_ROOT}\\.orca-skill-extract-1\\skill`, manifest)
 
-    expect(execFileAsyncMock).toHaveBeenCalledTimes(2)
-    const calls = execFileAsyncMock.mock.calls.map(([, args]) => args as string[])
+    expect(runWslProcessMock).toHaveBeenCalledTimes(2)
+    const calls = runWslProcessMock.mock.calls.map(([spec]) => spec.args as string[])
     expect(calls[0]).toEqual(
       expect.arrayContaining([
         '600',
@@ -85,7 +87,7 @@ describe('WslSkillInstallFilesystem', () => {
       'C:\\Users\\jin\\repo\\.agents\\skills\\.skill.orca-staging-1',
       'C:\\Users\\jin\\repo\\.agents\\skills\\skill'
     )
-    expect(execFileAsyncMock.mock.calls[0]?.[1]).toEqual(
+    expect(runWslProcessMock.mock.calls[0]?.[0].args).toEqual(
       expect.arrayContaining([
         '/mnt/c/Users/jin/repo/.agents/skills/.skill.orca-staging-1',
         '/mnt/c/Users/jin/repo/.agents/skills/skill'
@@ -94,7 +96,7 @@ describe('WslSkillInstallFilesystem', () => {
     await expect(filesystem.remove('C:\\Users\\jin\\repo\\unrelated')).rejects.toThrow(
       'skill-install-wsl-path-outside-root'
     )
-    expect(execFileAsyncMock).toHaveBeenCalledOnce()
+    expect(runWslProcessMock).toHaveBeenCalledOnce()
   })
 
   it('uses manifest mode provenance for Windows-backed WSL paths', async () => {
@@ -113,7 +115,7 @@ describe('WslSkillInstallFilesystem', () => {
       manifest
     )
 
-    expect(execFileAsyncMock).not.toHaveBeenCalled()
+    expect(runWslProcessMock).not.toHaveBeenCalled()
   })
 
   it('rejects a path from another distro before spawning wsl.exe', async () => {
@@ -121,7 +123,7 @@ describe('WslSkillInstallFilesystem', () => {
     await expect(
       filesystem.remove('\\\\wsl.localhost\\Debian\\home\\jin\\.agents\\skills\\skill')
     ).rejects.toThrow('skill-install-wsl-path-invalid')
-    expect(execFileAsyncMock).not.toHaveBeenCalled()
+    expect(runWslProcessMock).not.toHaveBeenCalled()
   })
 
   it('authorizes a historical provider root before update or removal', async () => {
@@ -132,11 +134,24 @@ describe('WslSkillInstallFilesystem', () => {
 
     await filesystem.remove(`${historicalRoot}\\private-skill`)
 
-    expect(execFileAsyncMock).toHaveBeenCalledOnce()
-    expect(execFileAsyncMock.mock.calls[0]?.[1]).toEqual(
+    expect(runWslProcessMock).toHaveBeenCalledOnce()
+    expect(runWslProcessMock.mock.calls[0]?.[0].args).toEqual(
       expect.arrayContaining([
         '/home/jin/.local/share/orca/claude-accounts/old/auth/skills/private-skill'
       ])
+    )
+  })
+
+  it('surfaces a nonzero guest exit as a guest-operation failure', async () => {
+    runWslProcessMock.mockResolvedValueOnce({
+      code: 42,
+      stdout: '',
+      stderr: 'mode mismatch',
+      timedOut: false
+    })
+    const filesystem = new WslSkillInstallFilesystem('Ubuntu-24.04', [WSL_ROOT])
+    await expect(filesystem.remove(`${WSL_ROOT}\\private-skill`)).rejects.toThrow(
+      'skill-install-wsl-guest-operation-failed'
     )
   })
 })

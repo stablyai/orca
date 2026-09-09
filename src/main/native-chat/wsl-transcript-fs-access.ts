@@ -1,29 +1,58 @@
 import { createReadStream, type Dirent, type Stats } from 'node:fs'
-import { lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
+import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { runWslTranscriptFsTask, type WslTranscriptFsTaskPriority } from './wsl-transcript-fs-gate'
-import { wslTranscriptFsRouteKey } from './wsl-transcript-fs-route'
+import {
+  closeWslTranscriptFsProcess,
+  isWslTranscriptFsProcessHandle,
+  openWslTranscriptFsProcess,
+  readWslTranscriptFsProcess,
+  runWslTranscriptFsProcess,
+  type WslTranscriptFsProcessHandle
+} from './wsl-transcript-fs-process-dispatch'
+import type { WslTranscriptFsReusableProcessCall } from './wsl-transcript-fs-process-protocol'
+import { wslTranscriptFsLaneKey } from './wsl-transcript-fs-route'
 
 /** Never nest a gated call inside another — that deadlocks the scan slot. */
 
 // Why: one deadline per chunk instead of one for the whole file, so a large
 // healthy-but-slow transcript is not false-failed by a whole-file timeout.
 export const WSL_TRANSCRIPT_READ_CHUNK_BYTES = 1024 * 1024
-type Operation = Parameters<typeof runWslTranscriptFsTask>[0]['operation']
 
-function runPathOperation<T>(
-  operation: Operation,
-  path: string,
+export type TranscriptFileHandle = FileHandle | WslTranscriptFsProcessHandle
+
+// One request object drives both the gate's dedupe/route key and the child
+// call, so the two can never disagree on the operation or path.
+function runReusableFsOperation<T>(
+  request: WslTranscriptFsReusableProcessCall,
   priority: WslTranscriptFsTaskPriority,
   signal: AbortSignal | undefined,
-  task: () => Promise<T>,
-  options?: { dedupe?: boolean; onAbandonedResult?: (value: T) => void }
+  localTask: () => Promise<T>
 ): Promise<T> {
-  return isWslUncPath(path)
-    ? runWslTranscriptFsTask({ operation, path, priority, signal, ...options }, task)
-    : task()
+  return isWslUncPath(request.path)
+    ? runWslTranscriptFsTask(
+        { operation: request.operation, path: request.path, priority, signal },
+        (taskSignal) =>
+          runWslTranscriptFsProcess<T>(
+            request,
+            taskSignal,
+            wslTranscriptFsLaneKey(request.path, priority)
+          )
+      )
+    : localTask()
+}
+
+export function wslGatedAccess(
+  path: string,
+  priority: WslTranscriptFsTaskPriority,
+  signal?: AbortSignal
+): Promise<boolean> {
+  return runReusableFsOperation({ operation: 'access', path }, priority, signal, async () => {
+    await access(path)
+    return true
+  })
 }
 
 export function wslGatedStat(
@@ -31,7 +60,7 @@ export function wslGatedStat(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Promise<Stats> {
-  return runPathOperation('stat', path, priority, signal, () => stat(path))
+  return runReusableFsOperation({ operation: 'stat', path }, priority, signal, () => stat(path))
 }
 
 export function wslGatedLstat(
@@ -39,7 +68,7 @@ export function wslGatedLstat(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Promise<Stats> {
-  return runPathOperation('lstat', path, priority, signal, () => lstat(path))
+  return runReusableFsOperation({ operation: 'lstat', path }, priority, signal, () => lstat(path))
 }
 
 export function wslGatedReaddir(
@@ -47,7 +76,7 @@ export function wslGatedReaddir(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Promise<Dirent[]> {
-  return runPathOperation('readdir', path, priority, signal, () =>
+  return runReusableFsOperation({ operation: 'readdir', path }, priority, signal, () =>
     readdir(path, { withFileTypes: true })
   )
 }
@@ -58,7 +87,9 @@ export function wslGatedReadFile(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Promise<string> {
-  return runPathOperation('readfile', path, priority, signal, () => readFile(path, encoding))
+  return runReusableFsOperation({ operation: 'readfile', path, encoding }, priority, signal, () =>
+    readFile(path, encoding)
+  )
 }
 
 // dedupe:false — two joiners would share one FileHandle and both close it.
@@ -66,13 +97,22 @@ export function wslGatedOpen(
   path: string,
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
-): Promise<FileHandle> {
-  return runPathOperation('open', path, priority, signal, () => open(path, 'r'), {
-    dedupe: false,
-    // An unabortable open can still succeed after its caller timed out or
-    // cancelled; without this the descriptor leaks for the process lifetime.
-    onAbandonedResult: (handle) => void closeTranscriptHandle(handle, path)
-  })
+): Promise<TranscriptFileHandle> {
+  if (!isWslUncPath(path)) {
+    return open(path, 'r')
+  }
+  return runWslTranscriptFsTask<TranscriptFileHandle>(
+    {
+      operation: 'open',
+      path,
+      priority,
+      signal,
+      dedupe: false,
+      onAbandonedResult: (handle) => void closeTranscriptHandle(handle, path)
+    },
+    (taskSignal) =>
+      openWslTranscriptFsProcess(path, taskSignal, wslTranscriptFsLaneKey(path, priority))
+  )
 }
 
 /**
@@ -82,7 +122,7 @@ export function wslGatedOpen(
  * (often `Buffer.allocUnsafe`) stays uninitialized.
  */
 export function wslGatedRead(
-  handle: FileHandle,
+  handle: TranscriptFileHandle,
   path: string,
   buffer: Buffer,
   offset: number,
@@ -91,69 +131,37 @@ export function wslGatedRead(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Promise<{ bytesRead: number; buffer: Buffer }> {
-  return runPathOperation(
-    'read',
-    path,
-    priority,
-    signal,
-    () => handle.read(buffer, offset, length, position),
-    { dedupe: false }
+  // Handle kind decides before path spelling: a process-owned handle must never
+  // hit the FileHandle branch even if a caller re-derives the path off-UNC.
+  if (!isWslUncPath(path) && !isWslTranscriptFsProcessHandle(handle)) {
+    return (handle as FileHandle).read(buffer, offset, length, position)
+  }
+  return runWslTranscriptFsTask(
+    { operation: 'read', path, priority, signal, dedupe: false },
+    async (taskSignal) => {
+      if (!isWslTranscriptFsProcessHandle(handle)) {
+        // The vitest fallback: a FileHandle read fills the caller's buffer itself.
+        return (handle as FileHandle).read(buffer, offset, length, position)
+      }
+      const body = await readWslTranscriptFsProcess(handle, position, length, taskSignal)
+      buffer.set(body, offset)
+      return { bytesRead: body.byteLength, buffer }
+    }
   )
 }
 
-// A blocked `uv_fs_close` holds a libuv threadpool thread just like a blocked
-// read does, but it is invisible to the gate — so UNC teardown drains one handle
-// at a time. Unbounded fire-and-forget closes are what would exhaust the pool the
-// gate's two permits are sized against, re-creating the process-wide stall the
-// gate exists to prevent; serializing them costs at most one extra busy thread.
-// The queue cannot grow without bound: opens on a stuck route already fast-fail.
-// Keyed by route like the gate's own admission, because a close that blocks on a
-// stalled distro never settles — a shared queue would strand every later close,
-// including handles on healthy distros, for the process lifetime.
-const MAX_CONCURRENT_UNC_CLOSES_PER_ROUTE = 1
-type RouteCloseQueue = { queued: FileHandle[]; active: number }
-const closeQueuesByRoute = new Map<string, RouteCloseQueue>()
-
-function drainQueuedCloses(route: string): void {
-  const lane = closeQueuesByRoute.get(route)
-  if (!lane) {
-    return
+/** Never gated; process-owned handles retire on the client's bounded deadline. */
+export function closeTranscriptHandle(handle: TranscriptFileHandle, path: string): Promise<void> {
+  if (isWslTranscriptFsProcessHandle(handle)) {
+    void closeWslTranscriptFsProcess(handle).catch(() => {})
+    return Promise.resolve()
   }
-  while (lane.active < MAX_CONCURRENT_UNC_CLOSES_PER_ROUTE) {
-    const handle = lane.queued.shift()
-    if (!handle) {
-      if (lane.active === 0) {
-        closeQueuesByRoute.delete(route)
-      }
-      return
-    }
-    lane.active += 1
-    void handle
-      .close()
-      .catch(() => {})
-      .finally(() => {
-        lane.active -= 1
-        drainQueuedCloses(route)
-      })
-  }
-}
-
-/**
- * Never gated. Off UNC this is the prior contract verbatim — the caller awaits
- * fd teardown and a close failure surfaces. On UNC it is fire-and-forget:
- * closing a handle on a stalled mount can itself block, and a gated close would
- * burn a permit and a waiter deadline purely for teardown. One leaked fd until
- * the OS unblocks beats a second blocked waiter.
- */
-export function closeTranscriptHandle(handle: FileHandle, path: string): Promise<void> {
   if (!isWslUncPath(path)) {
     return handle.close()
   }
-  const route = wslTranscriptFsRouteKey(path)
-  const lane = closeQueuesByRoute.get(route) ?? { queued: [], active: 0 }
-  closeQueuesByRoute.set(route, lane)
-  lane.queued.push(handle)
-  drainQueuedCloses(route)
+  // Only the vitest fallback pairs a FileHandle with a UNC path; mirror the
+  // process-handle contract there: fire-and-forget, close failures swallowed.
+  void handle.close().catch(() => {})
   return Promise.resolve()
 }
 

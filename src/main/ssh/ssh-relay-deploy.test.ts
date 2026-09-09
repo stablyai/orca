@@ -52,10 +52,6 @@ vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
-vi.mock('./ssh-relay-endpoint-credential', () => ({
-  writeRelayEndpointCredential: vi.fn().mockResolvedValue(undefined)
-}))
-
 // Why: the versioned-install modules shell out for install state, locking,
 // and GC. Stub them so deploy tests need no real SSH connection.
 vi.mock('./ssh-relay-versioned-install', () => ({
@@ -186,9 +182,9 @@ describe('deployAndLaunchRelay', () => {
     expect(progress).toContain('Starting relay...')
   })
 
-  it('does not launch fresh after unconfirmed stale-socket cleanup', async () => {
+  it('does not launch fresh after an unconfirmed endpoint-incumbent probe', async () => {
     const conn = makeMockConnection()
-    const unconfirmedCleanup = Object.assign(new Error('socket cleanup still running'), {
+    const unconfirmedCleanup = Object.assign(new Error('endpoint probe still running'), {
       sshChannelCloseConfirmed: false
     })
     vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('stale relay reconnect failed'))

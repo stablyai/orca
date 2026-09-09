@@ -60,7 +60,11 @@ export function createMarkdownPreviewActions(
         if (!fileInfo) {
           return
         }
-        get().openFile(fileInfo, { preview: false, targetGroupId: groupId })
+        get().openFile(fileInfo, {
+          preview: false,
+          targetGroupId: groupId,
+          focusEditor: true
+        })
         get().recordFeatureInteraction('markdown-file-created')
       } catch (err) {
         toast.error(extractIpcErrorMessage(err, 'Failed to create untitled markdown file.'))

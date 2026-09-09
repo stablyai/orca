@@ -46,6 +46,7 @@ function createRecordingSubprocess() {
     kill() {
       killed = true
     },
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill() {
       killed = true
     },

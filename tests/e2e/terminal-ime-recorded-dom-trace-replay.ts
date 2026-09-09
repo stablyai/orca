@@ -166,7 +166,7 @@ export async function replayRecordedImeDomTrace(
   const samples: ReplayedCompositionSample[] = []
   let compositionOpen = false
 
-  for (let index = 0; index < trace.dom.length; ) {
+  for (let index = 0; index < trace.dom.length;) {
     const group = nextRecordedEventGroup(trace.dom, index)
     const recorded = group[0]
     await dispatchRecordedEvents(page, group)

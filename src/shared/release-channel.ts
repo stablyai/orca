@@ -54,20 +54,64 @@ export function hasDedicatedReleaseRepo(channel: ReleaseChannel): channel is Ded
 }
 
 /**
+ * The platforms each dev channel actually builds for. Split from
+ * `hasDedicatedReleaseRepo` because "published to its own repo" and "built for
+ * this OS" stopped coinciding once the dev workflows gained a Windows job —
+ * Linux has no dev-channel artifact yet, so it still falls back to stable/RC.
+ */
+const DEV_CHANNEL_PLATFORMS: Readonly<Record<DedicatedRepoChannel, readonly NodeJS.Platform[]>> = {
+  hourly: ['darwin', 'win32'],
+  daily: ['darwin', 'win32'],
+  adhoc: ['darwin', 'win32']
+}
+
+/** Human-readable list of where dev builds exist, for picker copy that would
+ *  otherwise have to restate the table above and drift from it. */
+export const DEV_CHANNEL_PLATFORM_LABEL = 'macOS and Windows'
+
+/**
  * Shared so the picker, the main-process check, and any future surface cannot
  * drift on where a channel is available.
- *
- * Why this rides on the dev-channel list: all dev channels are produced only by
- * macOS workflows, so none has an artifact to offer elsewhere. If one ever
- * gains a Windows or Linux job, split the two concepts apart — they coincide
- * today, but "published to its own repo" and "built for macOS only" are not the
- * same claim.
  */
 export function isChannelSupportedOnPlatform(
   channel: ReleaseChannel,
   platform: NodeJS.Platform
 ): boolean {
-  return !hasDedicatedReleaseRepo(channel) || platform === 'darwin'
+  if (!hasDedicatedReleaseRepo(channel)) {
+    return true
+  }
+  return DEV_CHANNEL_PLATFORMS[channel].includes(platform)
+}
+
+/**
+ * True when the running build cannot reach `targetChannel` through the in-app
+ * updater and the installer has to be run by hand instead.
+ *
+ * Windows dev builds ship unsigned, because SignPath's approval waits are
+ * budgeted in hours and cannot fit an hourly cadence. electron-updater
+ * Authenticode-verifies every installer it downloads against the publisherName
+ * baked into the *installed* app's app-update.yml, so a signed stable or RC
+ * rejects an unsigned dev installer outright with ERR_UPDATER_INVALID_SIGNATURE
+ * — and no change to a future build can fix the copies already installed.
+ *
+ * Dev builds omit that name, so verification is skipped there and every route
+ * *out* of a dev channel, including back to stable, still works in-app. Only
+ * the way in is blocked, and only on Windows.
+ *
+ * A null `runningChannel` (an unparseable version) is treated as signed: the
+ * conservative answer sends someone to a working download rather than to an
+ * update that fails with a signature error.
+ */
+export function requiresManualDevChannelInstall(options: {
+  platform: NodeJS.Platform
+  runningChannel: ReleaseChannel | null
+  targetChannel: ReleaseChannel
+}): boolean {
+  const { platform, runningChannel, targetChannel } = options
+  if (platform !== 'win32' || !hasDedicatedReleaseRepo(targetChannel)) {
+    return false
+  }
+  return runningChannel === null || !hasDedicatedReleaseRepo(runningChannel)
 }
 
 export function getReleaseRepoForChannel(channel: ReleaseChannel): string {
@@ -206,6 +250,58 @@ export function getReleaseNotesUrlForVersion(version: string | null): string {
     : `https://github.com/${repo}/releases`
 }
 
+/**
+ * The electron-updater manifest each platform's updater fetches before it can
+ * install anything. A release without one has nothing that platform can use,
+ * which is how a build whose Windows leg failed — or one whose Windows leg is
+ * still running — stays out of that platform's picker instead of becoming a row
+ * that 404s on download.
+ */
+const PLATFORM_UPDATE_MANIFESTS: Partial<Record<NodeJS.Platform, readonly string[]>> = {
+  darwin: ['latest-mac.yml'],
+  win32: ['latest.yml'],
+  // Both, because one release carries x64 and arm64 and either makes it installable.
+  linux: ['latest-linux.yml', 'latest-linux-arm64.yml']
+}
+
+export function getUpdateManifestNamesForPlatform(platform: NodeJS.Platform): readonly string[] {
+  return PLATFORM_UPDATE_MANIFESTS[platform] ?? []
+}
+
+/** True when the release carries an artifact this platform's updater can install. */
+export function hasInstallableArtifactForPlatform(
+  platform: NodeJS.Platform,
+  assetNames: readonly string[]
+): boolean {
+  const manifests = getUpdateManifestNamesForPlatform(platform)
+  // Why permissive on an unknown platform: a filter that hides every build is a
+  // worse failure than one that offers a build the download step will report on.
+  if (manifests.length === 0) {
+    return true
+  }
+  return manifests.some((manifest) => assetNames.includes(manifest))
+}
+
+/** Matches the electron-builder `artifactName` for each platform's directly
+ *  runnable installer — the file someone downloads when the in-app updater
+ *  cannot make the jump. */
+const PLATFORM_INSTALLER_PATTERNS: Partial<Record<NodeJS.Platform, RegExp>> = {
+  darwin: /\.dmg$/i,
+  win32: /windows-setup\.exe$/i,
+  linux: /\.AppImage$/i
+}
+
+export function findInstallerAssetName(
+  platform: NodeJS.Platform,
+  assetNames: readonly string[]
+): string | null {
+  const pattern = PLATFORM_INSTALLER_PATTERNS[platform]
+  if (!pattern) {
+    return null
+  }
+  return assetNames.find((name) => pattern.test(name)) ?? null
+}
+
 export type ReleaseBuild = {
   tag: string
   version: string
@@ -215,6 +311,10 @@ export type ReleaseBuild = {
   name: string | null
   publishedAt: string | null
   releaseUrl: string
+  /** Direct download for this platform's installer, or null when the release
+   *  published none. Drives the Windows bootstrap path, where a signed build
+   *  cannot reach a dev channel through the updater. */
+  installerUrl: string | null
 }
 
 /** Newest first, so the picker's first row is always the channel's current tip. */

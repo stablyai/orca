@@ -34,6 +34,7 @@ import {
   subtractCodexUsage
 } from './session-scanner-values'
 import { remoteSessionContentLines } from './remote-session-content-lines'
+import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
@@ -270,6 +271,15 @@ function codexResumeStateFromParseState(
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeCodexRecordLine(state, line),
+    consumeLineBytes: (line) => {
+      const timelineOnlyRecord = readCodexTimelineOnlyRecord(line)
+      if (timelineOnlyRecord) {
+        updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
+      } else {
+        consumeCodexRecordLine(state, line.toString('utf8'))
+      }
+    },
+    shouldStop: () => state.rejectedWorkerSession,
     clone: () =>
       codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
     touchFile: (file) => {
@@ -305,12 +315,8 @@ async function parseCodexSessionLines(args: {
   })
 }
 
-function extractCodexThreadSource(payload: Record<string, unknown>): string | null {
-  return extractString(payload.thread_source) ?? extractString(payload.threadSource)
-}
-
 function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
-  const threadSource = extractCodexThreadSource(payload)
+  const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
   if (threadSource) {
     return threadSource.toLowerCase() !== 'user'
   }

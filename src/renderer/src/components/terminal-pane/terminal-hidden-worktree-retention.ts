@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
@@ -9,6 +9,7 @@ import {
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 
 // Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap
 // at the 5k-row default scrollback and ~19MB at 50k (plus per-pane queues),
@@ -29,6 +30,22 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 // eviction, not demotion.
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 15 * 60_000
+
+export function createTerminalWorktreeTopologyProjection(
+  onInspectBucket?: (worktreeId: string) => void
+) {
+  return createWorktreeTabBucketProjection<TerminalTab, TerminalTab>({
+    projectTab: (tab) => tab,
+    isSameProjectedTab: (previousTab, nextTab) =>
+      previousTab.id === nextTab.id &&
+      previousTab.ptyId === nextTab.ptyId &&
+      previousTab.worktreeId === nextTab.worktreeId &&
+      previousTab.pendingActivationSpawn === nextTab.pendingActivationSpawn &&
+      previousTab.generation === nextTab.generation &&
+      previousTab.startupCwd === nextTab.startupCwd,
+    onInspectBucket
+  })
+}
 
 export function hasPendingRetentionSpawnWork(
   tab: Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>,
@@ -64,7 +81,7 @@ export function classifyEvictionExemptTerminalPty(
   ptyId: string | null | undefined,
   worktreeId: string
 ): EvictionExemptTerminalPtyRoute | null {
-  if (!ptyId || isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+  if (!ptyId || isRemoteExecutionHostPtyId(ptyId)) {
     return null
   }
   const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)

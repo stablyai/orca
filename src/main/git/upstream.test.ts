@@ -363,6 +363,16 @@ describe('getUpstreamStatus', () => {
       if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'pr-pynickle-orca') {
         return Promise.resolve({ stdout: 'https://github.com/pynickle/orca.git\n' })
       }
+      if (args[0] === 'remote' && args[1] === '-v') {
+        return Promise.resolve({
+          stdout: [
+            'origin\thttps://github.com/stablyai/orca.git (fetch)',
+            'origin\thttps://github.com/stablyai/orca.git (push)',
+            'pr-pynickle-orca\thttps://github.com/pynickle/orca.git (fetch)',
+            'pr-pynickle-orca\thttps://github.com/pynickle/orca.git (push)'
+          ].join('\n')
+        })
+      }
       if (args[0] === 'remote') {
         return Promise.resolve({ stdout: 'origin\npr-pynickle-orca\n' })
       }

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { buildSearchableBrowserPages } from './browser-palette-page-entries'
 import { searchBrowserPages } from './browser-palette-search'
 
@@ -128,6 +130,152 @@ function buildFixture(
 }
 
 describe('buildSearchableBrowserPages', () => {
+  it('treats an unstamped legacy worktree as local when its tab is stamped', () => {
+    expect(
+      buildFixture({
+        worktrees: [worktreeA],
+        unifiedTabsByWorktree: {
+          'wt-1': [browserUnifiedTab('tab-local', 'ws-1', 'wt-1', 'local')]
+        }
+      }).map((entry) => entry.workspace.id)
+    ).toEqual(['ws-1', 'ws-1', 'ws-2'])
+  })
+
+  it('keeps same-id browser tabs isolated by execution host', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
+    const remote = makeWorktree({
+      id: sharedId,
+      hostId: 'runtime:host-b',
+      displayName: 'Remote workspace'
+    })
+    const localWorkspace = makeWorkspace({
+      id: 'ws-local',
+      worktreeId: sharedId,
+      activePageId: 'page-local'
+    })
+    const remoteWorkspace = makeWorkspace({
+      id: 'ws-remote',
+      worktreeId: sharedId,
+      activePageId: 'page-remote'
+    })
+    const entries = buildSearchableBrowserPages({
+      worktrees: [local, remote],
+      repoMap,
+      worktreeOrder: new Map([
+        [getWorktreeHostIdentity(local), 0],
+        [getWorktreeHostIdentity(remote), 1]
+      ]),
+      browserTabsByWorktree: {
+        [sharedId]: [localWorkspace, remoteWorkspace]
+      },
+      browserPagesByWorkspace: {
+        'ws-local': [
+          makePage({
+            id: 'page-local',
+            workspaceId: 'ws-local',
+            worktreeId: sharedId,
+            title: 'Local docs'
+          })
+        ],
+        'ws-remote': [
+          makePage({
+            id: 'page-remote',
+            workspaceId: 'ws-remote',
+            worktreeId: sharedId,
+            title: 'Remote docs'
+          })
+        ]
+      },
+      unifiedTabsByWorktree: {
+        [sharedId]: [
+          browserUnifiedTab('tab-local', 'ws-local', sharedId, 'local'),
+          browserUnifiedTab('tab-remote', 'ws-remote', sharedId, 'runtime:host-b')
+        ]
+      },
+      activeBrowserTabId: null,
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
+
+    expect(entries.map((entry) => [entry.page.id, entry.worktree.hostId])).toEqual([
+      ['page-local', 'local'],
+      ['page-remote', 'runtime:host-b']
+    ])
+    expect(
+      searchBrowserPages(entries, 'docs').map((result) => [result.pageId, result.executionHostId])
+    ).toEqual([
+      ['page-local', 'local'],
+      ['page-remote', 'runtime:host-b']
+    ])
+  })
+
+  it('does not re-host a tab whose stamped owner is absent from the catalog', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const remote = makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
+    const entries = buildSearchableBrowserPages({
+      worktrees: [remote],
+      repoMap,
+      worktreeOrder: new Map([[getWorktreeHostIdentity(remote), 0]]),
+      browserTabsByWorktree: {
+        [sharedId]: [
+          makeWorkspace({ id: 'ws-local', worktreeId: sharedId, activePageId: 'page-local' })
+        ]
+      },
+      browserPagesByWorkspace: {
+        'ws-local': [makePage({ id: 'page-local', workspaceId: 'ws-local', worktreeId: sharedId })]
+      },
+      unifiedTabsByWorktree: {
+        [sharedId]: [browserUnifiedTab('tab-local', 'ws-local', sharedId, 'local')]
+      },
+      activeBrowserTabId: null,
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
+
+    expect(entries).toEqual([])
+  })
+
+  it('does not route one ambiguous legacy browser bucket to both hosts', () => {
+    const sharedId = 'repo-shared::/workspace'
+    const workspace = makeWorkspace({ worktreeId: sharedId })
+
+    expect(
+      buildSearchableBrowserPages({
+        worktrees: [
+          makeWorktree({ id: sharedId, hostId: 'local' }),
+          makeWorktree({ id: sharedId, hostId: 'runtime:host-b' })
+        ],
+        repoMap,
+        worktreeOrder,
+        browserTabsByWorktree: { [sharedId]: [workspace] },
+        browserPagesByWorkspace: { [workspace.id]: [makePage({ worktreeId: sharedId })] },
+        activeBrowserTabId: null,
+        activeWorktreeId: null,
+        activeTabType: 'terminal'
+      })
+    ).toEqual([])
+  })
+
+  it('omits a browser row whose backing tab id is duplicated', () => {
+    const browserTab = browserUnifiedTab('shared-tab', 'ws-1', 'wt-1')
+    expect(
+      buildSearchableBrowserPages({
+        worktrees: [worktreeA],
+        repoMap,
+        worktreeOrder,
+        browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
+        browserPagesByWorkspace: { 'ws-1': [makePage()] },
+        unifiedTabsByWorktree: {
+          'wt-1': [browserTab, { ...browserTab, contentType: 'terminal' }]
+        },
+        activeBrowserTabId: null,
+        activeWorktreeId: null,
+        activeTabType: 'terminal'
+      })
+    ).toEqual([])
+  })
+
   it('builds one entry per page across every workspace in a worktree', () => {
     const entries = buildFixture()
 
@@ -191,12 +339,116 @@ describe('buildSearchableBrowserPages', () => {
     expect(entries[0].worktreeSortIndex).toBe(Number.MAX_SAFE_INTEGER)
   })
 
+  it('reads page recency from the owning workspace unified tab, clamped to page age', () => {
+    function browserTab(overrides: Partial<Tab>): Tab {
+      return {
+        id: 'tab-ws-1',
+        entityId: 'ws-1',
+        groupId: 'group-1',
+        worktreeId: 'wt-1',
+        contentType: 'browser',
+        label: 'Example',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 0,
+        ...overrides
+      }
+    }
+
+    const [unfocused] = buildSearchableBrowserPages({
+      worktrees: [worktreeA],
+      repoMap,
+      worktreeOrder,
+      browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
+      browserPagesByWorkspace: { 'ws-1': [makePage()] },
+      unifiedTabsByWorktree: { 'wt-1': [browserTab({})] },
+      activeBrowserTabId: null,
+      activeWorktreeId: null,
+      activeTabType: 'browser'
+    })
+    expect(unfocused.lastActiveAt).toBeNull()
+
+    const entries = buildSearchableBrowserPages({
+      worktrees: [worktreeA],
+      repoMap,
+      worktreeOrder,
+      browserTabsByWorktree: { 'wt-1': [makeWorkspace({ pageIds: ['page-1', 'page-2'] })] },
+      browserPagesByWorkspace: {
+        'ws-1': [makePage(), makePage({ id: 'page-2', createdAt: 9000 })]
+      },
+      unifiedTabsByWorktree: { 'wt-1': [browserTab({ lastFocusedAt: 4000 })] },
+      activeBrowserTabId: null,
+      activeWorktreeId: null,
+      activeTabType: 'browser'
+    })
+
+    expect(entries.map((entry) => entry.lastActiveAt)).toEqual([4000, 9000])
+    expect(entries.map((entry) => entry.lastFocusedAt)).toEqual([4000, undefined])
+  })
+
+  it('moves the workspace-focus proxy when the active browser page changes', () => {
+    const browserTab: Tab = {
+      id: 'tab-ws-1',
+      entityId: 'ws-1',
+      groupId: 'group-1',
+      worktreeId: 'wt-1',
+      contentType: 'browser',
+      label: 'Example',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 0,
+      lastFocusedAt: 8_000
+    }
+    const pages = [makePage({ createdAt: 1_000 }), makePage({ id: 'page-2', createdAt: 2_000 })]
+    const build = (activePageId: string) =>
+      buildSearchableBrowserPages({
+        worktrees: [worktreeA],
+        repoMap,
+        worktreeOrder,
+        browserTabsByWorktree: {
+          'wt-1': [makeWorkspace({ activePageId, pageIds: ['page-1', 'page-2'] })]
+        },
+        browserPagesByWorkspace: { 'ws-1': pages },
+        unifiedTabsByWorktree: { 'wt-1': [browserTab] },
+        activeBrowserTabId: null,
+        activeWorktreeId: null,
+        activeTabType: 'browser'
+      })
+
+    expect(build('page-1').map((entry) => entry.lastActiveAt)).toEqual([8_000, 2_000])
+    expect(build('page-2').map((entry) => entry.lastActiveAt)).toEqual([1_000, 8_000])
+    expect(build('page-1').map((entry) => entry.lastFocusedAt)).toEqual([8_000, undefined])
+    expect(build('page-2').map((entry) => entry.lastFocusedAt)).toEqual([undefined, 8_000])
+  })
+
   it('feeds Cmd+J browser search the same ranking as the inline builder did', () => {
     const results = searchBrowserPages(buildFixture(), 'docs')
 
-    // Current page first, then the two url-only matches in the active worktree,
-    // then the other worktree's title match.
-    expect(results.map((result) => result.pageId)).toEqual(['page-1', 'page-2', 'page-3', 'page-4'])
+    // Primary title proofs lead URL-only proofs even across worktrees.
+    expect(results.map((result) => result.pageId)).toEqual(['page-1', 'page-4', 'page-2', 'page-3'])
     expect(results[0].isCurrentPage).toBe(true)
   })
 })
+
+function browserUnifiedTab(
+  id: string,
+  entityId: string,
+  worktreeId: string,
+  executionHostId?: Tab['executionHostId']
+): Tab {
+  return {
+    id,
+    entityId,
+    groupId: `group-${id}`,
+    worktreeId,
+    ...(executionHostId ? { executionHostId } : {}),
+    contentType: 'browser',
+    label: entityId,
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}

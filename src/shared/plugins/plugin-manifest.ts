@@ -11,8 +11,6 @@ import {
   pluginVmRecipeContributionSchema
 } from './plugin-content-pack-contributions'
 import {
-  isPluginManifestId,
-  isSafePluginId,
   pluginCommandIdSchema,
   pluginIdSchema,
   pluginRelativePathSchema
@@ -150,14 +148,6 @@ export function qualifiedPluginKey(manifest: Pick<PluginManifest, 'publisher' | 
   return `${manifest.publisher}.${manifest.id}`
 }
 
-export function isQualifiedPluginKey(value: string): boolean {
-  const parts = value.split('.')
-  if (parts.length !== 2) {
-    return false
-  }
-  return isSafePluginId(parts[0]!) && isSafePluginId(parts[1]!)
-}
-
 export type PluginManifestParseResult =
   | { ok: true; manifest: PluginManifest }
   | { ok: false; error: string }
@@ -193,22 +183,4 @@ export function satisfiesOrcaEngineRange(hostVersion: string, range: string): bo
   return true
 }
 
-/** Sidebar tab key for a plugin panel: `plugin:<publisher>.<id>/<panelId>`. */
-export function pluginPanelTabKey(qualifiedKey: string, panelId: string): `plugin:${string}` {
-  return `plugin:${qualifiedKey}/${panelId}`
-}
-
-export function isPluginPanelTabKey(tab: string): tab is `plugin:${string}` {
-  if (!tab.startsWith('plugin:')) {
-    return false
-  }
-  const rest = tab.slice('plugin:'.length)
-  const [qualifiedKey, panelId, ...extra] = rest.split('/')
-  return (
-    extra.length === 0 &&
-    !!qualifiedKey &&
-    !!panelId &&
-    isQualifiedPluginKey(qualifiedKey) &&
-    isPluginManifestId(panelId)
-  )
-}
+export { isPluginPanelTabKey, isQualifiedPluginKey, pluginPanelTabKey } from './plugin-tab-key'

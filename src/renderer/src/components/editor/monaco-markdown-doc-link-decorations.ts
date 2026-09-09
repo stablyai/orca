@@ -1,35 +1,67 @@
 import type { editor, IDisposable, IRange } from 'monaco-editor'
 import { getMarkdownDocLinkTarget } from './markdown-doc-links'
+import { forEachLine } from './text-line-offsets'
 
-function getInlineCodeSpans(line: string): { start: number; end: number }[] {
-  const spans: { start: number; end: number }[] = []
+const BACKTICK = 96
+const BACKSLASH = 92
+
+// Why: spans are stored as flat [start, end, start, end, …] absolute offsets so
+// a full-document scan allocates one reusable array instead of an object per span.
+function collectInlineCodeSpans(
+  content: string,
+  lineStart: number,
+  lineEnd: number,
+  spans: number[]
+): void {
+  spans.length = 0
   let start = -1
 
-  for (let index = 0; index < line.length; index += 1) {
-    if (line[index] !== '`' || (index > 0 && line[index - 1] === '\\')) {
+  for (let index = lineStart; index < lineEnd; index += 1) {
+    if (
+      content.charCodeAt(index) !== BACKTICK ||
+      (index > lineStart && content.charCodeAt(index - 1) === BACKSLASH)
+    ) {
       continue
     }
     if (start === -1) {
       start = index
     } else {
-      spans.push({ start, end: index + 1 })
+      spans.push(start, index + 1)
       start = -1
     }
   }
-
-  return spans
 }
 
-function isInsideSpan(index: number, spans: { start: number; end: number }[]): boolean {
-  return spans.some((span) => index >= span.start && index < span.end)
+function isInsideSpan(index: number, spans: number[]): boolean {
+  for (let cursor = 0; cursor < spans.length; cursor += 2) {
+    if (index >= spans[cursor] && index < spans[cursor + 1]) {
+      return true
+    }
+  }
+  return false
+}
+
+const FENCE_PREFIX_RE = /\s*(?:```|~~~)/y
+
+function startsCodeFence(content: string, lineStart: number, lineEnd: number): boolean {
+  FENCE_PREFIX_RE.lastIndex = lineStart
+  // Why: a sticky `\s*` run can cross the newline into the next line, so an
+  // out-of-line match is rejected to stay identical to the old per-line regex.
+  return FENCE_PREFIX_RE.test(content) && FENCE_PREFIX_RE.lastIndex <= lineEnd
 }
 
 export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
   const ranges: IRange[] = []
+  const inlineCodeSpans: number[] = []
   let insideFence = false
+  // Why: `indexOf` on the whole document would rescan the tail once per line.
+  // Both cursors only ever move forward, and every probe position is
+  // monotonic, so the delimiter search stays linear in document length.
+  let nextOpen = content.indexOf('[[')
+  let nextClose = content.indexOf(']]')
 
-  forEachMarkdownLine(content, (line, lineNumber) => {
-    if (/^\s*(```|~~~)/.test(line)) {
+  forEachLine(content, (lineStart, lineEnd, lineNumber) => {
+    if (startsCodeFence(content, lineStart, lineEnd)) {
       insideFence = !insideFence
       return
     }
@@ -37,25 +69,37 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
       return
     }
 
-    const inlineCodeSpans = getInlineCodeSpans(line)
-    let searchFrom = 0
-    while (searchFrom < line.length) {
-      const start = line.indexOf('[[', searchFrom)
-      if (start === -1) {
+    let spansCollected = false
+    let searchFrom = lineStart
+    while (searchFrom < lineEnd) {
+      if (nextOpen !== -1 && nextOpen < searchFrom) {
+        nextOpen = content.indexOf('[[', searchFrom)
+      }
+      const start = nextOpen
+      if (start === -1 || start + 2 > lineEnd) {
         break
       }
-      const end = line.indexOf(']]', start + 2)
-      if (end === -1) {
+      if (nextClose !== -1 && nextClose < start + 2) {
+        nextClose = content.indexOf(']]', start + 2)
+      }
+      const end = nextClose
+      if (end === -1 || end + 2 > lineEnd) {
         break
+      }
+      // Why: most lines hold no wiki link, so the inline-code scan is deferred
+      // until one is actually found.
+      if (!spansCollected) {
+        collectInlineCodeSpans(content, lineStart, lineEnd, inlineCodeSpans)
+        spansCollected = true
       }
       if (!isInsideSpan(start, inlineCodeSpans)) {
-        const target = getMarkdownDocLinkTarget(line.slice(start + 2, end))
+        const target = getMarkdownDocLinkTarget(content.slice(start + 2, end))
         if (target) {
           ranges.push({
             startLineNumber: lineNumber,
-            startColumn: start + 1,
+            startColumn: start - lineStart + 1,
             endLineNumber: lineNumber,
-            endColumn: end + 3
+            endColumn: end - lineStart + 3
           })
         }
       }
@@ -64,23 +108,6 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
   })
 
   return ranges
-}
-
-function forEachMarkdownLine(
-  content: string,
-  visit: (line: string, lineNumber: number) => void
-): void {
-  let lineStart = 0
-  let lineNumber = 1
-  for (let index = 0; index <= content.length; index += 1) {
-    if (index < content.length && content.charCodeAt(index) !== 10) {
-      continue
-    }
-    const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
-    visit(content.slice(lineStart, lineEnd), lineNumber)
-    lineStart = index + 1
-    lineNumber += 1
-  }
 }
 
 export type MarkdownDocLinkDecorationController = {

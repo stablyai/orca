@@ -19,7 +19,7 @@ export function BrowserTerminalLinkActionsSetting({
 }: BrowserTerminalLinkActionsSettingProps): React.JSX.Element {
   const title = translate(
     'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
-    'Show terminal link actions'
+    'Show link actions'
   )
   const description = getTerminalLinkActionsDescription({ isMac })
 

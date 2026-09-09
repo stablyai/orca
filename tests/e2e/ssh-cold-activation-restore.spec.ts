@@ -1,4 +1,4 @@
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -6,6 +6,10 @@ import {
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import {
+  createRemoteTerminalTab,
+  readRemoteTerminalTabs
+} from './helpers/docker-ssh-relay-terminal-tabs'
 import {
   cleanupDockerSshRelayTarget,
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
@@ -20,40 +24,6 @@ const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const TAB_COUNT = 6
 
 test.use({ seedTestRepo: false })
-
-async function createRemoteTerminalTab(page: Page, worktreeId: string): Promise<void> {
-  const tabId = await page.evaluate((id) => {
-    const state = window.__store?.getState()
-    if (!state) {
-      throw new Error('Store unavailable')
-    }
-    const tab = state.createTab(id, undefined, undefined, { activate: true })
-    state.setActiveTab(tab.id)
-    state.setActiveTabType('terminal')
-    return tab.id
-  }, worktreeId)
-  await expect
-    .poll(() => page.evaluate(() => window.__store?.getState().activeTabId ?? null), {
-      timeout: 10_000
-    })
-    .toBe(tabId)
-  await waitForActiveTerminalManager(page, 60_000)
-  await waitForActivePanePtyId(page, 60_000)
-}
-
-async function readRemoteTerminalTabs(
-  page: Page,
-  worktreeId: string
-): Promise<{ id: string; ptyId: string | null }[]> {
-  return page.evaluate(
-    (id) =>
-      (window.__store?.getState().tabsByWorktree[id] ?? []).map((tab) => ({
-        id: tab.id,
-        ptyId: tab.ptyId
-      })),
-    worktreeId
-  )
-}
 
 function readRemoteProof(target: DockerSshRelayTarget, path: string): string | null {
   try {

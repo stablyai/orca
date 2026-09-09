@@ -1,6 +1,7 @@
 import type { AgentType } from './agent-status-types'
 import { sessionOptionValueIsValid } from './agent-session-option-catalog'
 import type {
+  NativeChatSessionOptionSettingsMutation,
   PersistedNativeChatSessionOptions,
   SessionOptionValue
 } from './native-chat-session-options'
@@ -26,6 +27,68 @@ export function resolveNativeChatSessionOptionDefaults(
     }
   }
   return values
+}
+
+/** Why only these two: they are the only ids the picker persists into
+ *  `nativeChatSessionOptions` that both structured providers also accept as
+ *  strings. Claude's `fastMode` is a boolean the durable `Record<string, string>`
+ *  record cannot carry, and the providers' remaining keys are settable only
+ *  mid-session, never seeded at launch. */
+export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort'] as const
+
+/** The saved selection a structured create seeds into its reservation, narrowed
+ *  to the wire-safe string subset the durable record and both providers accept. */
+export function resolveStructuredLaunchSeedOptions(
+  persisted: PersistedNativeChatSessionOptions | null | undefined,
+  agent: AgentType
+): Record<string, string> | undefined {
+  const defaults = resolveNativeChatSessionOptionDefaults(persisted, agent)
+  if (!defaults) {
+    return undefined
+  }
+  const seeded: Record<string, string> = {}
+  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+    const value = defaults[id]
+    if (typeof value === 'string' && value.trim()) {
+      seeded[id] = value
+    }
+  }
+  return Object.keys(seeded).length > 0 ? seeded : undefined
+}
+
+/** Fold a settled batch of picks onto the durable record. A surface that must send the
+ *  whole object back — rather than merging key by key — applies them in one pass so a
+ *  later pick in the batch cannot drop an earlier one. */
+export function applyNativeChatSessionOptionPicks(args: {
+  persisted: PersistedNativeChatSessionOptions | null | undefined
+  agent: AgentType
+  picks: Extract<NativeChatSessionOptionSettingsMutation, { type: 'apply-picks' }>['picks']
+}): PersistedNativeChatSessionOptions {
+  let persisted = args.persisted ?? {}
+  for (const pick of args.picks) {
+    persisted = updateNativeChatSessionOptionDefaults({ persisted, agent: args.agent, ...pick })
+  }
+  return persisted
+}
+
+/** Applies one host-owned delta to the latest record. Returning null means the
+ * authoritative model list found nothing to retire. */
+export function applyNativeChatSessionOptionSettingsMutation(
+  persisted: PersistedNativeChatSessionOptions | null | undefined,
+  mutation: NativeChatSessionOptionSettingsMutation
+): PersistedNativeChatSessionOptions | null {
+  if (mutation.type === 'apply-picks') {
+    return applyNativeChatSessionOptionPicks({
+      persisted,
+      agent: mutation.agent,
+      picks: mutation.picks
+    })
+  }
+  const modelId = persisted?.[mutation.agent]?.model
+  if (!modelId || mutation.availableModelIds.includes(modelId)) {
+    return null
+  }
+  return clearNativeChatSessionOptionModel(persisted, mutation.agent)
 }
 
 /** Why: an authoritative probe proved this id gone, and a stale `model` is emitted

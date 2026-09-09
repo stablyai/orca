@@ -117,6 +117,8 @@ export type FilesystemApi = {
       connectionId?: string
       excludePaths?: string[]
       requestToken?: string
+      maxResults?: number
+      searchQuery?: string
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>

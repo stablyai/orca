@@ -23,6 +23,26 @@ export type ObservedSkillPackage = {
   treeEntries: SkillGitTreeFileEntry[]
 }
 
+export function observedSkillPackagesMatch(
+  left: ObservedSkillPackage,
+  right: ObservedSkillPackage
+): boolean {
+  return (
+    left.files.length === right.files.length &&
+    left.files.every((file, index) => {
+      const other = right.files[index]
+      return (
+        file.path === other.path &&
+        file.size === other.size &&
+        file.executable === other.executable &&
+        file.classification === other.classification &&
+        file.exactSha256 === other.exactSha256 &&
+        file.identitySha256 === other.identitySha256
+      )
+    })
+  )
+}
+
 // Why: package identity compares a live user directory against a tree the generator read
 // from a clean checkout, so anything the OS deposits on its own counts as drift the user
 // never caused. One Finder visit writes .DS_Store, and that alone made the copy

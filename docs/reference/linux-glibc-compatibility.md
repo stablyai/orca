@@ -6,6 +6,14 @@ Packaging enforces this floor automatically; keep it in mind when adding or
 upgrading native dependencies. (The optional speech feature is the one
 exception — see below.)
 
+## Local package build prerequisites
+
+`pnpm run build:linux` produces AppImage, deb, and RPM artifacts. The RPM target
+requires `rpmbuild` on `PATH`; install `rpm` on Ubuntu/Debian, `rpm-build` on
+Fedora/RHEL, or `rpm` through Homebrew on macOS, then verify it with
+`rpmbuild --version` before packaging. Cross-host builds have the same
+requirement.
+
 ## Why this needs attention
 
 A native module (`.node`) links against the glibc of the machine that compiled
@@ -25,11 +33,11 @@ broke launch on Ubuntu 20.04 ([#9902](https://github.com/stablyai/orca/issues/99
 The specific trap is glibc's 2.32–2.34 "libpthread/libutil merge", which moved
 several long-stable functions into libc under brand-new symbol versions:
 
-| Symbol            | New version   | node-pty use            |
-| ----------------- | ------------- | ----------------------- |
-| `pthread_sigmask` | `GLIBC_2.32`  | reset child signal mask |
-| `openpty`         | `GLIBC_2.34`  | allocate the pty        |
-| `forkpty`         | `GLIBC_2.34`  | fork the shell          |
+| Symbol            | New version  | node-pty use            |
+| ----------------- | ------------ | ----------------------- |
+| `pthread_sigmask` | `GLIBC_2.32` | reset child signal mask |
+| `openpty`         | `GLIBC_2.34` | allocate the pty        |
+| `forkpty`         | `GLIBC_2.34` | fork the shell          |
 
 Electron itself (glibc 2.25) and the other bundled native modules
 (`sherpa-onnx`, `@parcel/watcher`, both prebuilt on old glibc) stay well under
@@ -81,6 +89,32 @@ The one carve-out is the `sherpa-onnx` speech prebuilt, which already requires
 libstdc++ floor — its glibc needs are still checked. Speech-to-text therefore
 needs a host with libstdc++ from GCC 11+ (Ubuntu 21.10 / 22.04 LTS or newer); the
 app itself still launches on stock 20.04.
+
+**3. Check before loading, on hosts that ship without a compiler (`orcad`).**
+The two gates above protect the packaged desktop app, where the binary is built and
+verified by the same pipeline. `orcad` is deployed to hosts Orca never built on, so it
+adds a runtime precondition
+([`src/main/orcad/node-pty-precondition.ts`](../../src/main/orcad/node-pty-precondition.ts)),
+run from `main.ts` before anything requires `node-pty`. It loads the addon in a **child
+process**, so a binary the loader refuses — or one that aborts outright — is data rather
+than this process's death, and the operator gets a sentence naming the host's libc, its
+Node ABI, its prebuild slot and the command to run. A proven-unloadable binary exits 78
+(`EX_CONFIG`) instead of reaching the `require`; a probe that never answered is reported
+as unverifiable and boots anyway, because a silent probe is not evidence. Whatever it
+finds is published in `status.get`'s `degradations[]` under `terminal_unavailable`.
+
+**4. Ship the binary, built from patched sources.**
+[`config/scripts/build-orcad-prebuilds.mjs`](../../config/scripts/build-orcad-prebuilds.mjs)
+(`pnpm run build:orcad-prebuilds`, after `build:orcad`) compiles node-pty for the current
+host and files it under `out/orcad/prebuilds/<slot>/`, where a slot is
+`linux-{x64,arm64}-{glibc,musl}` or `darwin-{x64,arm64}`. libc is part of the slot name
+because node-pty's own loader falls back to `prebuilds/<platform>-<arch>` and cannot tell
+glibc from musl — a glibc binary parked there is loaded on Alpine and dies at `dlopen`.
+The script refuses to compile a tree where `config/patches/node-pty@1.1.0.patch` is not
+applied: without the patch the prebuilt is a #9902 crash shipped as an artifact rather
+than a first-connect error. CI runs it once per slot inside the matching container
+(`--slot=` forces the label), merges the trees, and `--require-slots` fails a release with
+a hole in the matrix.
 
 ## Adding or upgrading a native dependency
 

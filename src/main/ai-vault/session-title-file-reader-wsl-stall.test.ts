@@ -24,7 +24,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readAiVaultSessionTitlesFromFiles } from './session-title-file-reader'
 import { resetSessionParseCacheForTests } from './session-scanner-parse-cache'
-import { WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS } from '../native-chat/wsl-transcript-fs-gate'
+import {
+  resetWslTranscriptFsGateForTests,
+  WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS
+} from '../native-chat/wsl-transcript-fs-gate'
 
 let releaseStall: (() => void) | undefined
 let tempRoot: string | undefined
@@ -47,6 +50,7 @@ function userRecord(sessionId: string, text: string): string {
 }
 
 beforeEach(async () => {
+  resetWslTranscriptFsGateForTests()
   resetSessionParseCacheForTests()
   mocks.lstat.mockReset()
   releaseStall = undefined

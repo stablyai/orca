@@ -90,21 +90,62 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
   }
 }
 
+// Why: structurally matches BrowserCookieImportExecutionResult so call sites pass the store
+// result straight through. 'client' = this desktop ran the import; 'remote' = the paired runtime.
+export type BrowserCookieImportExecution = {
+  executionHostLabel: string
+  executionMachine: 'client' | 'remote'
+  executionRemoteEnvironment: boolean
+}
+
+// Why: for a remote environment the same Import control silently runs on either machine, so the
+// success toast must say where the cookies were read and stored. Local imports need no location.
+function cookieImportLocationDescription(execution: BrowserCookieImportExecution): string | null {
+  if (!execution.executionRemoteEnvironment) {
+    return null
+  }
+  return execution.executionMachine === 'client'
+    ? translate(
+        'auto.lib.browser.cookie.import.toast.locationClientHosted',
+        'Read from this device and stored here for the {{value0}} workspace.',
+        { value0: execution.executionHostLabel }
+      )
+    : translate(
+        'auto.lib.browser.cookie.import.toast.locationRemoteHost',
+        'Read from browsers on {{value0}} and stored there.',
+        { value0: execution.executionHostLabel }
+      )
+}
+
 function emitGoogleCookieImportWarning(
   summary: BrowserCookieImportSummary,
-  executionHostLabel: string
+  execution: BrowserCookieImportExecution
 ): void {
   if (!summary.googleCookiesSkipped) {
     return
   }
-  toast.warning(
-    translate(
-      'auto.lib.browser.cookie.import.toast.googleCookiesSkipped',
-      'Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.',
-      { value0: executionHostLabel }
-    ),
-    { duration: 12000 }
-  )
+  // Why: the sign-in must happen in the jar the import populated — the named workspace for a
+  // remote environment, any Orca browser locally. Client-hosted pages render on this desktop, so
+  // say that or the instruction reads as "go to the other machine".
+  const message = !execution.executionRemoteEnvironment
+    ? translate(
+        'auto.lib.browser.cookie.import.toast.googleCookiesSkippedLocal',
+        'Google cookies were not imported. Open a browser in Orca with this profile, then sign into Google.'
+      )
+    : execution.executionMachine === 'client'
+      ? translate(
+          'auto.lib.browser.cookie.import.toast.googleCookiesSkippedClientHosted',
+          'Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile — it opens on this device — then sign into Google.',
+          { value0: execution.executionHostLabel }
+        )
+      : // Why: not the legacy googleCookiesSkipped key — reworded copy must not inherit the old
+        // catalog entry, which i18next prefers over the inline default.
+        translate(
+          'auto.lib.browser.cookie.import.toast.googleCookiesSkippedRemoteWorkspace',
+          'Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google.',
+          { value0: execution.executionHostLabel }
+        )
+  toast.warning(message, { duration: 12000 })
 }
 
 // Why (STA-4300): these cookies were skipped rather than downgraded to unpartitioned, so the import
@@ -128,14 +169,19 @@ function emitPartitionSkippedImportWarning(summary: BrowserCookieImportSummary):
 export function emitBrowserCookieImportToast(
   summary: BrowserCookieImportSummary,
   successMessage: string,
-  executionHostLabel: string
+  execution: BrowserCookieImportExecution
 ): void {
   const warning = summary.warning
   if (warning) {
     toast.warning(formatCookieImportWarning(warning))
   } else {
-    toast.success(successMessage)
+    const description = cookieImportLocationDescription(execution)
+    if (description) {
+      toast.success(successMessage, { description })
+    } else {
+      toast.success(successMessage)
+    }
   }
-  emitGoogleCookieImportWarning(summary, executionHostLabel)
+  emitGoogleCookieImportWarning(summary, execution)
   emitPartitionSkippedImportWarning(summary)
 }

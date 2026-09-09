@@ -2,7 +2,7 @@ import { readdir, rmdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 
 const RELEASE_ENTRY_NAME = /^[a-f0-9-]{36}\.(?:owner|released)$/
-const RECOVERY_RMDIR_IGNORED_CODES = new Set(['ENOENT', 'ENOTEMPTY', 'EEXIST', 'EBUSY'])
+const LOCK_DIRECTORY_RMDIR_IGNORED_CODES = new Set(['ENOENT', 'ENOTEMPTY', 'EEXIST', 'EBUSY'])
 
 async function unlinkIfPresent(path: string): Promise<void> {
   await unlink(path).catch((error) => {
@@ -17,7 +17,7 @@ async function removeDirectoryIfPresent(
   removeDirectory: (path: string) => Promise<void>
 ): Promise<void> {
   await removeDirectory(path).catch((error) => {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+    if (!LOCK_DIRECTORY_RMDIR_IGNORED_CODES.has((error as NodeJS.ErrnoException).code ?? '')) {
       throw error
     }
   })
@@ -46,7 +46,7 @@ export async function reclaimReleasedSkillInstallLock(path: string): Promise<voi
       .map((entry) => unlinkIfPresent(join(path, entry.name)))
   )
   await rmdir(path).catch((error) => {
-    if (!RECOVERY_RMDIR_IGNORED_CODES.has((error as NodeJS.ErrnoException).code ?? '')) {
+    if (!LOCK_DIRECTORY_RMDIR_IGNORED_CODES.has((error as NodeJS.ErrnoException).code ?? '')) {
       throw error
     }
   })

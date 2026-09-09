@@ -10,7 +10,7 @@ const {
   spawnMock,
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
-  readWindowsConptyProcessIdsMock,
+  readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsMock,
@@ -24,7 +24,7 @@ const {
   spawnMock: vi.fn(),
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
-  readWindowsConptyProcessIdsMock: vi.fn(),
+  readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsMock: vi.fn(),
@@ -38,6 +38,8 @@ vi.mock('fs', () => ({
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
+  renameSync: vi.fn(),
+  rmSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
 
@@ -82,8 +84,9 @@ vi.mock('./agent-foreground-process', () => ({
     resolveAgentForegroundProcessMock(...args)
 }))
 
-vi.mock('./windows-conpty-process-membership', () => ({
-  readWindowsConptyProcessIds: (...args: unknown[]) => readWindowsConptyProcessIdsMock(...args)
+vi.mock('./windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
+  isWindowsPtyJobReadable: () => true
 }))
 
 vi.mock('../wsl', () => ({
@@ -140,7 +143,7 @@ describe('LocalPtyProvider', () => {
       writeFileSyncMock,
       prepareMacosTccLoginShellMock,
       resolveAgentForegroundProcessMock,
-      readWindowsConptyProcessIdsMock,
+      readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
       wslUncDirectoryExistsMock,
@@ -176,7 +179,10 @@ describe('LocalPtyProvider', () => {
       provider.configure({ onExit })
       const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
       await provider.shutdown(id, { immediate: true })
-      expect(onExit).toHaveBeenCalledWith(id, -1, incarnationId)
+      expect(onExit).toHaveBeenCalledWith(id, -1, incarnationId, {
+        kind: 'unknown',
+        reason: 'stop_unverified'
+      })
     })
 
     it('does not destroy after an intentional Windows shutdown kill', async () => {

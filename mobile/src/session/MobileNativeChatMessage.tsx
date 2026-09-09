@@ -1,138 +1,19 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { ArrowUp, ChevronDown, Copy, SquareChevronRight } from 'lucide-react-native'
-import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
-import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
-import { pairToolBlocks, splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
-import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
-import {
-  createToolInputDisplay,
-  summarizeToolRun,
-  truncateToolDetail
-} from '../../../src/shared/native-chat-tool-summary'
+import { ArrowUp, Copy } from 'lucide-react-native'
+import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
+import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import { ToolRun } from './MobileNativeChatToolRun'
+import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { colors } from '../theme/mobile-theme'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
-
-const MAX_VISIBLE_TOOL_PAIRS = 6
-const MAX_TOOL_RUN_DIFF_ROWS = 240
-
-function DiffView({ lines }: { lines: DiffLine[] }): React.JSX.Element {
-  return (
-    <View style={styles.diff}>
-      {lines.map((line, i) => (
-        <Text
-          key={i}
-          style={[
-            styles.diffLine,
-            line.kind === 'add' && styles.diffAdd,
-            line.kind === 'del' && styles.diffDel,
-            line.kind === 'meta' && styles.diffMeta
-          ]}
-        >
-          {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
-          {line.text}
-        </Text>
-      ))}
-    </View>
-  )
-}
-
-/** A single inline tool line — `▸ ToolName  preview` — that expands in place to
- *  show the call's diff/input or the result's body. Mirrors the reference design
- *  where tool calls read as flat lines in the conversation, not boxed blocks. */
-function ResultBody({
-  output,
-  isError,
-  diff
-}: {
-  output: string
-  isError?: boolean
-  diff: DiffLine[] | null
-}): React.JSX.Element {
-  if (diff) {
-    return <DiffView lines={diff} />
-  }
-  return (
-    <View style={[styles.toolResult, isError && styles.toolResultError]}>
-      <Text style={styles.mono}>{truncateToolDetail(output)}</Text>
-    </View>
-  )
-}
-
-/** One request: a tool call and its result rendered together as a single
- *  expandable line. `defaultExpanded` lets the group toggle open every line. */
-function ToolLine({
-  pair,
-  defaultExpanded,
-  diffLineLimit,
-  onOpenFile
-}: {
-  pair: ToolPair
-  defaultExpanded: boolean
-  diffLineLimit: number
-  onOpenFile?: (relativePath: string) => void
-}): React.JSX.Element {
-  const [expanded, setExpanded] = useState(defaultExpanded)
-  const { call, result } = pair
-  const name = call ? call.name : 'Result'
-  const inputDisplay = call ? createToolInputDisplay(call.input) : null
-  const preview = inputDisplay?.label ?? result?.output.split('\n')[0]?.slice(0, 80) ?? ''
-  // Why: collapsed tool rows are the common path; defer bounded diff parsing
-  // and detail formatting until the user asks to reveal the detail.
-  const callDiff = expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
-  const resultDiff = expanded && result ? diffFromText(result.output, diffLineLimit) : null
-  const callDetail = expanded && inputDisplay && !callDiff ? inputDisplay.formatDetail() : undefined
-  const hasDetail = callDiff !== null || result !== undefined || inputDisplay?.hasDetail === true
-  // The group toggle opens every line at once, bypassing the tap guard, so the
-  // panel has to consult it too — else a detail-less row echoes its own label
-  // under itself and no tap can dismiss it.
-  const showDetail = hasDetail && expanded
-  // A tool that targets a file (Read/Edit/Write…) renders its preview as a
-  // tappable link that opens the file, independent of the line's expand tap.
-  const filePath = inputDisplay?.filePath ?? null
-  const openable = filePath !== null && onOpenFile !== undefined
-  return (
-    <View>
-      <Pressable
-        style={styles.toolLine}
-        onPress={() => hasDetail && setExpanded((v) => !v)}
-        hitSlop={6}
-      >
-        {showDetail ? (
-          <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} />
-        ) : (
-          <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
-        )}
-        <Text style={styles.toolName}>{name}</Text>
-        {preview ? (
-          <Text
-            style={[styles.toolPreview, openable && styles.toolPreviewLink]}
-            numberOfLines={1}
-            onPress={openable ? () => onOpenFile!(filePath!) : undefined}
-            suppressHighlighting={!openable}
-          >
-            {preview}
-          </Text>
-        ) : null}
-      </Pressable>
-      {showDetail ? (
-        <View style={styles.toolDetail}>
-          {callDiff ? <DiffView lines={callDiff} /> : null}
-          {callDetail ? <Text style={styles.mono}>{callDetail}</Text> : null}
-          {result ? (
-            <ResultBody output={result.output} isError={result.isError} diff={resultDiff} />
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  )
-}
 
 function Prose({
   block,
@@ -150,7 +31,9 @@ function Prose({
     // markdown renderer's light-on-dark palette.
     if (invert) {
       return (
-        <Text style={[styles.userText, { fontSize: TEXT_SIZE * fontScale }]}>{block.text}</Text>
+        <Text selectable style={[styles.userText, { fontSize: TEXT_SIZE * fontScale }]}>
+          {block.text}
+        </Text>
       )
     }
     return (
@@ -178,67 +61,6 @@ function Prose({
     )
   }
   return null
-}
-
-/** A run of a message's tool calls/results, collapsed to a one-line summary that
- *  expands to the individual inline tool lines. `defaultExpanded` lets the global
- *  toolbar toggle drive every run at once while still allowing per-run override. */
-function ToolRun({
-  blocks,
-  defaultExpanded,
-  trailing,
-  onOpenFile
-}: {
-  blocks: NativeChatBlock[]
-  defaultExpanded: boolean
-  trailing?: React.ReactNode
-  onOpenFile?: (relativePath: string) => void
-}): React.JSX.Element {
-  const [open, setOpen] = useState(defaultExpanded)
-  const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
-  const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
-  let callCount = 0
-  for (const block of blocks) {
-    if (block.type === 'tool-call') {
-      callCount++
-    }
-  }
-  callCount ||= pairs.length
-  const summary = summarizeToolRun(blocks)
-  return (
-    <View style={styles.toolRun}>
-      <View style={styles.toolRunHeader}>
-        <Pressable style={styles.toolRunToggle} onPress={() => setOpen((v) => !v)} hitSlop={6}>
-          {open ? (
-            <ChevronDown size={15} color={colors.textMuted} strokeWidth={2} />
-          ) : (
-            <SquareChevronRight size={15} color={colors.textMuted} strokeWidth={2} />
-          )}
-          <Text style={styles.toolRunCount}>{callCount}×</Text>
-          <Text style={styles.toolRunLabel} numberOfLines={1}>
-            {summary || `${callCount} tool ${callCount === 1 ? 'call' : 'calls'}`}
-          </Text>
-        </Pressable>
-        {trailing}
-      </View>
-      {open ? (
-        <View style={styles.toolRunBody}>
-          {pairs.map((pair, i) => (
-            <ToolLine
-              key={i}
-              pair={pair}
-              defaultExpanded={defaultExpanded}
-              diffLineLimit={diffLineLimit}
-              onOpenFile={onOpenFile}
-            />
-          ))}
-          {callCount > pairs.length ? (
-            <Text style={styles.toolPreview}>… {callCount - pairs.length} more tool calls</Text>
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  )
 }
 
 /** Subtle top-right controls for an agent message: copy its prose, or scroll so
@@ -280,7 +102,13 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   messageIndex,
   onScrollToMessage,
-  onOpenFile
+  onOpenFile,
+  turnStatus,
+  turnExpanded,
+  turnKey,
+  onToggleTurn,
+  activeTurnIsWorking,
+  structuredActivityUi = false
 }: {
   message: NativeChatMessage
   toolsExpanded?: boolean
@@ -291,6 +119,18 @@ function MobileNativeChatMessageImpl({
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
+  /** This turn's status row, rendered under a user message (desktop parity). */
+  turnStatus?: NativeChatTurnStatus | null
+  /** Whether the turn caret has disclosed this turn's activity. */
+  turnExpanded?: boolean
+  /** Set only when this row's turn has settled and can disclose its activity. */
+  turnKey?: string
+  /** Stable across renders; the row supplies its own key when tapped. */
+  onToggleTurn?: (turnKey: string) => void
+  /** Session-level working state for this message's turn; gates the live tool row. */
+  activeTurnIsWorking?: boolean
+  /** Structured lane only: live tool progress plus the turn-status disclosure. */
+  structuredActivityUi?: boolean
 }): React.JSX.Element {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
@@ -310,6 +150,20 @@ function MobileNativeChatMessageImpl({
   // tool calls fold into a collapsible run beneath. The user's own messages get
   // an inverted (filled accent) bubble so they stand apart from agent prose.
   const { prose, tools } = splitNativeChatBlocks(message.blocks)
+  const activeCall = structuredActivityUi
+    ? selectActiveToolCall(tools, { activeTurnIsWorking })
+    : null
+  // A completed turn's activity belongs behind the turn-status caret. Leaving the
+  // grouped row visible made a failed child command read as a failed response.
+  // The composer's global Tools toggle still overrides this, or it would silently
+  // do nothing on every settled turn.
+  const settledToolsHidden =
+    structuredActivityUi &&
+    activeCall == null &&
+    activeTurnIsWorking === false &&
+    !turnExpanded &&
+    !toolsExpanded
+  const showToolRun = tools.length > 0 && !settledToolsHidden
 
   const handleCopy = (): void => {
     const text = nativeChatMessageText(message.blocks)
@@ -338,39 +192,52 @@ function MobileNativeChatMessageImpl({
   ) : null
 
   return (
-    <View style={[styles.row, isUser && styles.rowUser]}>
-      <View
-        style={[
-          styles.content,
-          isUser && styles.userBubble,
-          isReasoning && styles.reasoning,
-          copied && styles.copied
-        ]}
-      >
-        {prose.map((block, index) => (
-          <Prose
-            key={index}
-            block={block}
-            invert={isUser}
-            fontScale={fontScale}
-            onOpenFile={onOpenFile}
-          />
-        ))}
-        {tools.length > 0 ? (
-          <ToolRun
-            // Why: a global toggle intentionally resets all per-run/per-line
-            // overrides in one remount, avoiding an effect-driven second render.
-            key={toolsExpanded ? 'expanded' : 'collapsed'}
-            blocks={tools}
-            defaultExpanded={toolsExpanded}
-            trailing={controls}
-            onOpenFile={onOpenFile}
-          />
-        ) : controls ? (
-          <View style={styles.controlsRow}>{controls}</View>
-        ) : null}
+    <>
+      <View style={[styles.row, isUser && styles.rowUser]}>
+        <View
+          style={[
+            styles.content,
+            isUser && styles.userBubble,
+            isReasoning && styles.reasoning,
+            copied && styles.copied
+          ]}
+        >
+          {prose.map((block, index) => (
+            <Prose
+              key={index}
+              block={block}
+              invert={isUser}
+              fontScale={fontScale}
+              onOpenFile={onOpenFile}
+            />
+          ))}
+          {showToolRun ? (
+            <ToolRun
+              // Why: a global toggle intentionally resets all per-run/per-line
+              // overrides in one remount, avoiding an effect-driven second render.
+              key={`${toolsExpanded ? 'expanded' : 'collapsed'}:${turnExpanded ? 'turn' : 'flat'}`}
+              blocks={tools}
+              defaultExpanded={turnExpanded || toolsExpanded}
+              expandChildren={turnExpanded ? false : toolsExpanded}
+              activeCall={activeCall}
+              trailing={controls}
+              onOpenFile={onOpenFile}
+            />
+          ) : controls ? (
+            <View style={styles.controlsRow}>{controls}</View>
+          ) : null}
+        </View>
       </View>
-    </View>
+      {turnStatus ? (
+        <MobileNativeChatTurnStatus
+          startedAt={turnStatus.startedAt}
+          thinking={turnStatus.thinking}
+          workedSeconds={turnStatus.workedSeconds}
+          expanded={turnExpanded ?? false}
+          onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
+        />
+      ) : null}
+    </>
   )
 }
 

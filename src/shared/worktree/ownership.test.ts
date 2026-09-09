@@ -507,10 +507,10 @@ describe('agent scratch worktrees', () => {
           isMainWorktree: false
         }),
         knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo),
-        agentScratchWorktreePathMatcher: createAgentScratchWorktreePathMatcher([
-          repo.path,
-          linkedCheckoutPath
-        ])
+        agentScratchWorktreePathMatcher: createAgentScratchWorktreePathMatcher(
+          [repo.path, linkedCheckoutPath],
+          []
+        )
       })
     ).toBe('agent-scratch')
   })

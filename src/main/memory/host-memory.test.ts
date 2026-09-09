@@ -1,18 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import os from 'node:os'
 
-const { execFileMock, readFileMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
+const { runProcessMock, readFileMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn(),
   readFileMock: vi.fn()
 }))
 
-vi.mock('node:child_process', () => ({
-  execFile: (
-    file: string,
-    args: string[],
-    options: unknown,
-    callback: (error: Error | null, stdout: string) => void
-  ) => execFileMock(file, args, options, callback)
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcess: runProcessMock
 }))
 
 vi.mock('node:fs/promises', () => ({
@@ -27,7 +22,7 @@ async function loadHostMemory() {
 describe('host memory', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    execFileMock.mockReset()
+    runProcessMock.mockReset()
     readFileMock.mockReset()
     vi.spyOn(os, 'totalmem').mockReturnValue(1_000)
     vi.spyOn(os, 'freemem').mockReturnValue(100)
@@ -37,9 +32,13 @@ describe('host memory', () => {
 
   it('uses macOS memory-pressure availability instead of immediate free pages', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('darwin')
-    execFileMock.mockImplementation((_file, _args, _options, callback) =>
-      callback(null, 'System-wide memory free percentage: 79%')
-    )
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: 'System-wide memory free percentage: 79%',
+      stderr: '',
+      timedOut: false
+    })
     const { collectHostMemory } = await loadHostMemory()
 
     const host = await collectHostMemory()
@@ -54,15 +53,18 @@ describe('host memory', () => {
       cpuCoreCount: 2,
       loadAverage1m: 1.5
     })
-    expect(execFileMock.mock.calls[0][0]).toBe('/usr/bin/memory_pressure')
-    expect(execFileMock.mock.calls[0][1]).toEqual(['-Q'])
+    expect(runProcessMock).toHaveBeenCalledWith({
+      program: '/usr/bin/memory_pressure',
+      args: ['-Q'],
+      env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
+      maxOutputBytes: 64 * 1024,
+      timeoutMs: 1_000
+    })
   })
 
   it('falls back once when macOS availability cannot be read', async () => {
     vi.spyOn(os, 'platform').mockReturnValue('darwin')
-    execFileMock.mockImplementation((_file, _args, _options, callback) =>
-      callback(new Error('unsupported'), '')
-    )
+    runProcessMock.mockRejectedValue(new Error('unsupported'))
     const { collectHostMemory } = await loadHostMemory()
 
     const first = await collectHostMemory()
@@ -75,7 +77,7 @@ describe('host memory', () => {
       memoryUsagePercent: 90
     })
     expect(second.availableMemorySource).toBe('free-memory')
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(runProcessMock).toHaveBeenCalledTimes(1)
   })
 
   it('uses Linux MemAvailable and keeps the value within physical RAM', async () => {
@@ -103,7 +105,7 @@ describe('host memory', () => {
 
     expect(host.availableMemory).toBe(100)
     expect(host.availableMemorySource).toBe('free-memory')
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
     expect(readFileMock).not.toHaveBeenCalled()
   })
 })

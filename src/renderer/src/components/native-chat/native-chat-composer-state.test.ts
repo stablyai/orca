@@ -16,6 +16,7 @@ import {
   slashCommandDispatchText,
   type SlashCommandSuggestion
 } from './native-chat-composer-state'
+import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 
@@ -236,6 +237,46 @@ describe('native skill and command picker', () => {
     }
   })
 
+  it('lets a session report replace the disk scan and enrich the names it knows', () => {
+    const items = buildNativeChatPickerItems(
+      [],
+      [
+        skill({
+          name: 'ref-oss',
+          description: 'On disk',
+          skillFilePath: '/home/ref-oss/SKILL.md',
+          sourceKind: 'home'
+        }),
+        skill({ name: 'stale-on-disk', skillFilePath: '/home/stale/SKILL.md', sourceKind: 'home' })
+      ],
+      '',
+      '/',
+      ['dataviz', 'ref-oss']
+    )
+    // The scanned-but-unreported skill is gone; the reported-but-unscanned one is
+    // offered without a scope, and sorts after the one the scan located.
+    expect(items.map((item) => item.name)).toEqual(['ref-oss', 'dataviz'])
+    expect(items[0]).toMatchObject({ kind: 'skill', description: 'On disk' })
+    expect(items[1]).toMatchObject({ kind: 'skill', description: null, sources: [] })
+  })
+
+  it('keeps the disk scan only when a session report is absent', () => {
+    const items = buildNativeChatPickerItems(
+      [],
+      [skill({ name: 'ref-oss', skillFilePath: '/home/ref-oss/SKILL.md' })],
+      '',
+      '/',
+      undefined
+    )
+    expect(items.map((item) => item.name)).toEqual(['ref-oss'])
+    expect(buildNativeChatPickerItems([], [skill({})], '', '/', [])).toEqual([])
+  })
+
+  it('rejects a session-reported name that is not a safe insertion token', () => {
+    const items = buildNativeChatPickerItems([], [], '', '/', ['ok', 'two words', 'cle\u200bar'])
+    expect(items.map((item) => item.name)).toEqual(['ok'])
+  })
+
   it('ranks exact, prefix, fuzzy, then description matches within a group', () => {
     const items = buildNativeChatPickerItems(
       [],
@@ -381,4 +422,32 @@ describe('native skill and command picker', () => {
       ).mode
     ).toBe('none')
   })
+})
+
+it('preserves known skill completion for unclassified session members only', () => {
+  const commands = sessionSlashCommandSuggestions('claude', [
+    { name: 'clear', kind: 'command', kindUnspecified: true },
+    { name: 'typescript', kind: 'command', kindUnspecified: true },
+    { name: 'project-check', kind: 'command', kindUnspecified: true }
+  ])
+  const diskSkills = [
+    skill({ description: 'TypeScript skill' }),
+    skill({ name: 'not-loaded', skillFilePath: '/not-loaded/SKILL.md' })
+  ]
+  const items = buildNativeChatPickerItems(commands, diskSkills, '', '/', [])
+  expect(items.map(({ name, kind }) => ({ name, kind }))).toEqual([
+    { name: 'clear', kind: 'command' },
+    { name: 'project-check', kind: 'command' },
+    { name: 'typescript', kind: 'skill' }
+  ])
+  expect(items[2]).toMatchObject({
+    description: 'TypeScript skill',
+    sources: [{ sourceKind: 'repo' }]
+  })
+  const classified = sessionSlashCommandSuggestions('claude', [
+    { name: 'typescript', kind: 'command' }
+  ])
+  expect(
+    buildNativeChatPickerItems(classified, diskSkills, '', '/', []).map(({ kind }) => kind)
+  ).toEqual(['command'])
 })

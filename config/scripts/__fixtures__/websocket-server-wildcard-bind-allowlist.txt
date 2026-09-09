@@ -1,0 +1,14 @@
+# Files allowed to construct a `ws` server that binds a port without pinning `host`.
+#
+# `ws` accepts `{ port }` alone and silently binds the wildcard address. A server
+# reached over 127.0.0.1 must pin `host: '127.0.0.1'`, or a foreign loopback
+# listener can hold the same port and answer in its place -- which is how
+# relay-control-client.test.ts came to fail with a real HTTP 401 in a test that
+# was simulating silence.
+#
+# This list only shrinks. Adding a line also requires raising the pin in
+# websocket-server-loopback-bind.test.ts, which is deliberate friction.
+
+# Deliberate, not drift: this mock is dialled by a phone on the LAN, so it has to
+# be reachable on a real interface. A loopback bind would make it unreachable.
+mobile/scripts/mock-server.ts

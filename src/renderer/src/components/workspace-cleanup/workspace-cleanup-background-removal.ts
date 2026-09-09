@@ -56,6 +56,7 @@ export type WorkspaceCleanupBackgroundRemovalArgs = {
     begin: () => Promise<void>
     finish: () => Promise<void>
   }
+  getRemoveOptions?: (candidate: WorkspaceCleanupCandidate) => WorkspaceCleanupRemoveOptions
 }
 
 export function startWorkspaceCleanupBackgroundRemoval({
@@ -68,7 +69,8 @@ export function startWorkspaceCleanupBackgroundRemoval({
   onRowFailed,
   removalTimeoutMs = DEFAULT_WORKSPACE_CLEANUP_REMOVAL_TIMEOUT_MS,
   removalSettlementGraceMs = DEFAULT_WORKSPACE_CLEANUP_SETTLEMENT_GRACE_MS,
-  snapshotPruneBatch
+  snapshotPruneBatch,
+  getRemoveOptions
 }: WorkspaceCleanupBackgroundRemovalArgs): void {
   if (candidates.length === 0) {
     try {
@@ -79,7 +81,6 @@ export function startWorkspaceCleanupBackgroundRemoval({
     return
   }
 
-  const count = candidates.length
   const removedIds: string[] = []
   const removedIdentities: string[] = []
   const failures: WorkspaceCleanupFailure[] = []
@@ -95,7 +96,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
 
   const emitProgress = (): void => {
     onProgress({
-      totalCount: count,
+      totalCount: candidates.length,
       processedCount,
       removedCount: removedIds.length,
       failedCount: failures.length
@@ -199,6 +200,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
           const outcome = await waitForWorkspaceCleanupRemovalWithTimeout(
             removeCandidates([candidate.worktreeId], {
               approvedCandidates: [candidate],
+              ...getRemoveOptions?.(candidate),
               ...(snapshotPruneBatchActive && snapshotPruneBatch
                 ? { snapshotPruneBatchId: snapshotPruneBatch.batchId }
                 : {})

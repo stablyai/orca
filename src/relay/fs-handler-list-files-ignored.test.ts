@@ -122,6 +122,94 @@ describe('relay quick open ignored file listing', () => {
     expect(callIndex).toBe(1)
   })
 
+  it('searches the complete stream and retains only ranked fuzzy matches', async () => {
+    const ignoredProc = createMockProcess()
+    spawnMock.mockReturnValue(ignoredProc)
+    const promise = listFilesWithRg('/remote/root', [], {
+      maxResults: 2,
+      searchQuery: 'sct'
+    })
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0][1]).toContain('--no-ignore-vcs')
+    ;(ignoredProc.stdout as unknown as EventEmitter).emit(
+      'data',
+      `${Array.from({ length: 100_100 }, (_, index) => `data/payload-${index}.bin`).join('\n')}\n`
+    )
+    ;(ignoredProc.stdout as unknown as EventEmitter).emit(
+      'data',
+      'src/components/target.ts\nscripts/check-target.ts\n'
+    )
+    ignoredProc.emit('close', 0, null)
+
+    await expect(promise).resolves.toEqual(['scripts/check-target.ts', 'src/components/target.ts'])
+  })
+
+  it('retries a transient remote rg spawn failure without reporting ripgrep as missing', async () => {
+    const failed = createMockProcess()
+    const succeeded = createMockProcess()
+    Object.defineProperty(failed, 'pid', { value: undefined })
+    spawnMock.mockReturnValueOnce(failed).mockReturnValueOnce(succeeded)
+
+    const promise = listFilesWithRg('/remote/root', [], {
+      maxResults: 32,
+      searchQuery: 'target'
+    })
+    ;(failed.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
+    failed.emit('error', Object.assign(new Error('spawn rg EAGAIN'), { code: 'EAGAIN' }))
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    ;(succeeded.stdout as unknown as EventEmitter).emit(
+      'data',
+      'src/target.ts\nsrc/another-target.ts\n'
+    )
+    succeeded.emit('close', 0, null)
+
+    await expect(promise).resolves.toEqual(['src/target.ts', 'src/another-target.ts'])
+  })
+
+  it('retries a synchronous transient remote rg spawn failure', async () => {
+    const succeeded = createMockProcess()
+    spawnMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error('spawn rg ETXTBSY'), { code: 'ETXTBSY' })
+    })
+    spawnMock.mockReturnValueOnce(succeeded)
+
+    const promise = listFilesWithRg('/remote/root', [], {
+      maxResults: 32,
+      searchQuery: 'target'
+    })
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+    ;(succeeded.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
+    succeeded.emit('close', 0, null)
+
+    await expect(promise).resolves.toEqual(['src/target.ts'])
+  })
+
+  it('runs the ignored pass after an unbounded primary listing retry succeeds', async () => {
+    const failedPrimary = createMockProcess()
+    const succeededPrimary = createMockProcess()
+    const ignored = createMockProcess()
+    Object.defineProperty(failedPrimary, 'pid', { value: undefined })
+    spawnMock
+      .mockReturnValueOnce(failedPrimary)
+      .mockReturnValueOnce(succeededPrimary)
+      .mockReturnValueOnce(ignored)
+
+    const promise = listFilesWithRg('/remote/root')
+    failedPrimary.emit('error', Object.assign(new Error('spawn rg EAGAIN'), { code: 'EAGAIN' }))
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
+
+    ;(succeededPrimary.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\n')
+    succeededPrimary.emit('close', 0, null)
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(3))
+    ;(ignored.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\n')
+    ignored.emit('close', 0, null)
+
+    await expect(promise).resolves.toEqual(['src/index.ts', 'dist/generated.js'])
+    expect(spawnMock.mock.calls[2][1]).toContain('--no-ignore-vcs')
+  })
+
   it.each(['error-first', 'close-first'] as const)(
     'tags a %s pre-spawn listing failure without starting the ignored pass',
     async (order) => {

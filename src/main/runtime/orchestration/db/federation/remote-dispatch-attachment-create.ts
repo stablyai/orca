@@ -2,15 +2,19 @@ import type { WorkerDispatchState, RemoteDispatchAttachmentRow } from '../../typ
 import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
+import { insertRemoteDispatchAttachmentRow } from '../dispatch-row-writer'
 
 export function createRemoteDispatchAttachment(
   this: OrchestrationDb,
   params: {
     dispatchId: string
+    runId: string
     taskId: string
     homePeerFingerprint: string
     protocolVersion: number
     runtimeEpoch: string
+    /** Child depth computed by the Run home; absent from an old client = 1 (fails closed). */
+    depth?: number
     mutationReceipt: {
       callerFingerprint: string
       requestId: string
@@ -40,6 +44,16 @@ export function createRemoteDispatchAttachment(
         `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
       )
     }
+    if (!params.runId?.trim()) {
+      throw new OrchestrationError('invalid_argument', 'Missing Run ID')
+    }
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO runs (id, objective, home_database, consumer_generation, legacy)
+         VALUES (?, ?, 'remote', 0, 0)`
+      )
+      .run(params.runId, `Coordinated from ${params.homePeerFingerprint}`)
+    this.requireRun(params.runId)
     ensureMutationReceiptCapacity(this.db)
     this.db
       .prepare(
@@ -54,19 +68,15 @@ export function createRemoteDispatchAttachment(
         params.mutationReceipt.payloadHash,
         JSON.stringify({ accepted: { dispatchId: params.dispatchId } })
       )
-    this.db
-      .prepare(
-        `INSERT INTO remote_dispatch_attachments (
-           dispatch_id, task_id, home_peer_fingerprint, protocol_version, runtime_epoch
-         ) VALUES (?, ?, ?, ?, ?)`
-      )
-      .run(
-        params.dispatchId,
-        params.taskId,
-        params.homePeerFingerprint,
-        params.protocolVersion,
-        params.runtimeEpoch
-      )
+    insertRemoteDispatchAttachmentRow(this.db, {
+      dispatchId: params.dispatchId,
+      runId: params.runId,
+      taskId: params.taskId,
+      homePeerFingerprint: params.homePeerFingerprint,
+      protocolVersion: params.protocolVersion,
+      runtimeEpoch: params.runtimeEpoch,
+      depth: params.depth ?? 1
+    })
     this.db.exec('COMMIT')
     return this.getRemoteDispatchAttachment(params.dispatchId) as RemoteDispatchAttachmentRow
   } catch (error) {

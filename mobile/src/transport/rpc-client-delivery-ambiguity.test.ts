@@ -15,6 +15,10 @@ vi.mock('./e2ee', () => ({
   decryptBytes: (bytes: Uint8Array) => bytes
 }))
 
+vi.mock('./mobile-runtime-capability-negotiation', () => ({
+  negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
+}))
+
 class MockWebSocket {
   static CONNECTING = 0
   static OPEN = 1

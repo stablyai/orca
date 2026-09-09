@@ -15,5 +15,6 @@ describe('remote browser link routing', () => {
 
     expect(openRequest).toContain('workspaceId: worktreeId')
     expect(openRequest).toContain('expectedRuntimeEnvironmentId: runtimeEnvironmentId')
+    expect(openRequest).toContain("placementPreference: 'server'")
   })
 })

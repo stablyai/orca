@@ -29,18 +29,7 @@ export async function discoverRemoteSourceCandidates(args: {
   const files = await mapRemoteScanBatches(
     paths,
     REMOTE_DISCOVERY_CONCURRENCY,
-    (path) =>
-      statRemoteSessionFile(
-        args.context.provider,
-        path,
-        args.source.agent,
-        args.context.executionHostId,
-        args.issues,
-        {
-          missingIsExpected: Boolean(args.source.fixedChildFileSegments),
-          signal: args.context.signal
-        }
-      ),
+    (path) => statRemoteCandidateFile(path, args.source, args.context, args.issues),
     args.context.signal
   )
   return files
@@ -50,6 +39,46 @@ export async function discoverRemoteSourceCandidates(args: {
       file,
       subagentTranscriptCount: partition?.subagentTranscriptCounts.get(file.path) ?? 0
     }))
+}
+
+async function statRemoteCandidateFile(
+  path: string,
+  source: RemoteSessionSource,
+  context: RemoteScannerContext,
+  issues: AiVaultScanIssue[]
+): Promise<FileWithMtime | null> {
+  const file = await statRemoteSessionFile(
+    context.provider,
+    path,
+    source.agent,
+    context.executionHostId,
+    issues,
+    {
+      missingIsExpected: Boolean(source.fixedChildFileSegments),
+      signal: context.signal
+    }
+  )
+  if (!file || !source.contentDependencyPath) {
+    return file
+  }
+  const dependency = await statRemoteSessionFile(
+    context.provider,
+    source.contentDependencyPath(path),
+    source.agent,
+    context.executionHostId,
+    issues,
+    { missingIsExpected: true, signal: context.signal }
+  )
+  if (!dependency) {
+    return file
+  }
+  const mtimeMs = Math.max(file.mtimeMs, dependency.mtimeMs)
+  return {
+    ...file,
+    mtimeMs,
+    modifiedAt: new Date(mtimeMs).toISOString(),
+    sizeBytes: (file.sizeBytes ?? 0) + (dependency.sizeBytes ?? 0)
+  }
 }
 
 async function listRemoteFixedChildFiles(

@@ -84,14 +84,18 @@ describe('Azure DevOps pull request creation', () => {
     globalThis.fetch = fetchMock as never
 
     await expect(
-      createAzureDevOpsPullRequest('/repo', {
-        provider: 'azure-devops',
-        base: 'origin/main',
-        head: 'refs/heads/feature/azure',
-        title: 'Add Azure create',
-        body: 'Body',
-        draft: true
-      })
+      createAzureDevOpsPullRequest(
+        '/repo',
+        {
+          provider: 'azure-devops',
+          base: 'origin/main',
+          head: 'refs/heads/feature/azure',
+          title: 'Add Azure create',
+          body: 'Body',
+          draft: true
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 37,
@@ -136,13 +140,17 @@ describe('Azure DevOps pull request creation', () => {
     globalThis.fetch = fetchMock as never
 
     await expect(
-      createAzureDevOpsPullRequest('/repo', {
-        provider: 'azure-devops',
-        base: 'main',
-        head: 'feature/server',
-        title: 'Server create',
-        body: 'Body'
-      })
+      createAzureDevOpsPullRequest(
+        '/repo',
+        {
+          provider: 'azure-devops',
+          base: 'main',
+          head: 'feature/server',
+          title: 'Server create',
+          body: 'Body'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 51,
@@ -161,12 +169,16 @@ describe('Azure DevOps pull request creation', () => {
     globalThis.fetch = fetchMock as never
 
     await expect(
-      createAzureDevOpsPullRequest('/repo', {
-        provider: 'azure-devops',
-        base: 'main',
-        head: 'feature/azure',
-        title: 'Do not retry'
-      })
+      createAzureDevOpsPullRequest(
+        '/repo',
+        {
+          provider: 'azure-devops',
+          base: 'main',
+          head: 'feature/azure',
+          title: 'Do not retry'
+        },
+        'local'
+      )
     ).resolves.toMatchObject({ ok: false, code: 'validation' })
     expect(fetchMock).toHaveBeenCalledOnce()
   })
@@ -197,7 +209,7 @@ describe('Azure DevOps pull request creation', () => {
           head: 'feature/azure',
           title: 'Remote Azure create'
         },
-        'ssh-1'
+        'ssh:ssh-1'
       )
     ).resolves.toMatchObject({
       ok: true,
@@ -215,12 +227,16 @@ describe('Azure DevOps pull request creation', () => {
     ) as never
 
     await expect(
-      createAzureDevOpsPullRequest('/repo', {
-        provider: 'azure-devops',
-        base: 'main',
-        head: 'feature/azure',
-        title: 'Add Azure create'
-      })
+      createAzureDevOpsPullRequest(
+        '/repo',
+        {
+          provider: 'azure-devops',
+          base: 'main',
+          head: 'feature/azure',
+          title: 'Add Azure create'
+        },
+        'local'
+      )
     ).resolves.toMatchObject({
       ok: false,
       code: 'auth_required'

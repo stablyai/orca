@@ -134,6 +134,64 @@ function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorksp
 }
 
 describe('workspace-tab-palette-search', () => {
+  it('stamps the row execution host so activation never resolves by id alone', () => {
+    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
+    // host's workspace behind a row labelled with this one's name and branch.
+    const worktree = makeWorktree({ hostId: 'ssh:box' })
+    const entries = buildEntries({ worktrees: [worktree] })
+    const [result] = searchWorkspaceTabs(entries, '')
+    expect(result.executionHostId).toBe('ssh:box')
+  })
+
+  it('omits colliding tab ids even when only one record has an open file', () => {
+    const orphaned = makeUnifiedTab({
+      id: 'unified-editor-dup',
+      contentType: 'editor',
+      entityId: 'missing-file'
+    })
+    const resolvable = makeUnifiedTab({
+      id: 'unified-editor-dup',
+      contentType: 'editor',
+      entityId: SRC_APP_PATH
+    })
+    const entries = buildEntries({
+      unifiedTabsByWorktree: { 'wt-1': [orphaned, resolvable] },
+      openFiles: [makeOpenFile()]
+    })
+
+    expect(entries).toEqual([])
+  })
+
+  it('omits an editor row whose explicit file host disagrees with its unique worktree', () => {
+    const remote = makeWorktree({ hostId: 'ssh:remote' })
+    const editor = makeUnifiedTab({
+      id: 'remote-editor',
+      entityId: SRC_APP_PATH,
+      contentType: 'editor',
+      executionHostId: 'ssh:remote'
+    })
+    const entries = buildEntries({
+      worktrees: [remote],
+      unifiedTabsByWorktree: { 'wt-1': [editor] },
+      openFiles: [makeOpenFile({ externalSshTargetId: 'other-host' })]
+    })
+
+    expect(entries).toEqual([])
+  })
+  it('omits a tab id when a session persisted it twice', () => {
+    const duplicate = makeUnifiedTab({ id: 'unified-terminal-dup' })
+    const entries = buildEntries({
+      unifiedTabsByWorktree: {
+        'wt-1': [makeUnifiedTab(), duplicate, { ...duplicate }]
+      }
+    })
+
+    const tabIds = entries.map((entry) => entry.tab.id)
+    expect(tabIds).toEqual(['unified-terminal-1'])
+
+    const results = searchWorkspaceTabs(entries, 'unified')
+    expect(results.map((result) => result.tabId)).toEqual(tabIds)
+  })
   it('uses the same title precedence as the tab strip and honors generated-title disabling', () => {
     const enabledEntries = buildEntries({
       tabsByWorktree: {
@@ -514,9 +572,8 @@ describe('workspace-tab-palette-search', () => {
       title: 'Fix login race',
       secondaryText: '',
       secondaryRanges: [],
-      // The bare alias matches exactly, so it outranks "terminal tab"; its range
-      // indexes the alias string, not the row.
-      typeAliasMatch: { text: 'terminal', ranges: [{ start: 0, end: 8 }] }
+      // Equal-strength aliases use the builder's stable display order.
+      typeAliasMatch: { text: 'terminal tab', ranges: [{ start: 0, end: 8 }] }
     })
   })
 
@@ -558,5 +615,33 @@ describe('workspace-tab-palette-search', () => {
   it('rejects a query with more unique tokens than the matcher accepts', () => {
     const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
     expect(searchWorkspaceTabs(buildEntries(), query)).toEqual([])
+  })
+
+  it('stamps grok occupancy from the idle OSC title the sidebar already shows', () => {
+    const titledOnly = buildEntries({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'grok' })] },
+      unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'grok' })] }
+    })
+    expect(titledOnly[0]?.occupantAgent).toBe('grok')
+    expect(searchWorkspaceTabs(titledOnly, 'grok')[0]?.occupantAgent).toBe('grok')
+  })
+
+  it('stamps occupancy from the live unified label when the terminal record title is stale', () => {
+    const staleRecord = buildEntries({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'Terminal 1' })] },
+      unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'grok' })] }
+    })
+    expect(staleRecord[0]?.title).toBe('grok')
+    expect(staleRecord[0]?.occupantAgent).toBe('grok')
+  })
+
+  it('does not stamp grok occupancy from a hyphenated filename-style title', () => {
+    const hyphenated = buildEntries({
+      tabsByWorktree: { 'wt-1': [makeTerminalTab({ title: 'session-scanner-grok-parser' })] },
+      unifiedTabsByWorktree: {
+        'wt-1': [makeUnifiedTab({ label: 'session-scanner-grok-parser' })]
+      }
+    })
+    expect(hyphenated[0]?.occupantAgent).toBeNull()
   })
 })

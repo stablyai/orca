@@ -26,6 +26,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
@@ -53,7 +54,7 @@ describe('projectGroups IPC validation', () => {
     mockWindow.webContents.send.mockReset()
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('rejects malformed local project group create arguments before persistence', () => {

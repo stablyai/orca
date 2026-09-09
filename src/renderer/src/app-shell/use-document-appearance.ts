@@ -6,17 +6,18 @@ import { useAppStore } from '../store'
 
 /** Applies the settings-driven theme and app font to the document root. */
 export function useDocumentAppearance(): void {
-  const settings = useAppStore((s) => s.settings)
+  const theme = useAppStore((s) => s.settings?.theme)
+  const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
 
   useEffect(() => {
-    if (!settings) {
+    if (!theme) {
       return
     }
 
-    if (settings.theme === 'dark') {
+    if (theme === 'dark') {
       applyDocumentTheme('dark')
       return undefined
-    } else if (settings.theme === 'light') {
+    } else if (theme === 'light') {
       applyDocumentTheme('light')
       return undefined
     }
@@ -30,12 +31,12 @@ export function useDocumentAppearance(): void {
     }
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
-  }, [settings])
+  }, [theme])
 
   useEffect(() => {
     document.documentElement.style.setProperty(
       '--app-font-family',
-      buildAppFontFamily(settings?.appFontFamily)
+      buildAppFontFamily(appFontFamily)
     )
-  }, [settings?.appFontFamily])
+  }, [appFontFamily])
 }

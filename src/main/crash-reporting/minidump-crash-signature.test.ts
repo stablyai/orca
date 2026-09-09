@@ -194,6 +194,22 @@ function buildDump(options: {
   return { dump: builder.build(streams) }
 }
 
+/** Offset of a stream's directory entry: `{type, size, rva}`. */
+function streamEntry(dump: Buffer, type: number): number {
+  const directoryRva = dump.readUInt32LE(12)
+  for (let index = 0; index < dump.readUInt32LE(8); index += 1) {
+    const entry = directoryRva + index * 12
+    if (dump.readUInt32LE(entry) === type) {
+      return entry
+    }
+  }
+  throw new Error(`no stream of type ${type}`)
+}
+
+function moduleListRva(dump: Buffer): number {
+  return dump.readUInt32LE(streamEntry(dump, STREAM_TYPE_MODULE_LIST) + 8)
+}
+
 const FATAL_LINE =
   '[8104:1234:0815/143022.123456:FATAL:render_frame_impl.cc(4821)] Check failed: !is_detached_.'
 
@@ -338,6 +354,37 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.exceptionAddress).toBe('0x7ff800001234')
     expect(signature?.faultingModule).toBe('chrome_elf.dll')
     expect(signature?.faultingModuleOffset).toBe('0x1234')
+  })
+
+  it('resolves a faulting module past index 1024 on a real macOS image count', () => {
+    // A measured macOS renderer carries 1042 loaded images; a cap below that
+    // dropped the whole module list, so no macOS report could name a module.
+    const modules = Array.from({ length: 1042 }, (_, index) => ({
+      base: 0x1_0000_0000n + BigInt(index) * 0x1_0000n,
+      size: 0x1000,
+      name: `/Applications/Orca.app/Contents/Frameworks/lib${index}.dylib`
+    }))
+    const { dump } = buildDump({
+      exception: { code: 11, address: 0x1_0000_0000n + 1030n * 0x1_0000n + 0x24n },
+      modules
+    })
+
+    const signature = parseMinidumpCrashSignature(dump)
+
+    expect(signature?.faultingModule).toBe('lib1030.dylib')
+    expect(signature?.faultingModuleOffset).toBe('0x24')
+  })
+
+  it('still drops the module list when the claimed module count is absurd', () => {
+    const { dump } = buildDump({
+      exception: { code: 11, address: 0x7ff7_0000_0010n },
+      modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
+    })
+    const corrupt = Buffer.from(dump)
+    corrupt.writeUInt32LE(0xffff_ffff, moduleListRva(corrupt))
+
+    expect(() => parseMinidumpCrashSignature(corrupt)).not.toThrow()
+    expect(parseMinidumpCrashSignature(corrupt)?.faultingModule).toBeUndefined()
   })
 
   it('omits the faulting module when no image range covers the address', () => {

@@ -1,2 +1,2 @@
 export { default } from './assemble-chrome/browser-workspace-pane'
-export type { BrowserFindShortcutScope } from './describe-page/browser-page-types'
+export type { BrowserChromeShortcutScope } from './describe-page/browser-page-types'

@@ -10,8 +10,8 @@ const MODES = new Set([
   'electron-fixed',
   'firefox-auth',
   'firefox-fixed',
-  // Replicates the SHIPPED app exactly (setupClientHintsOverride +
-  // applyGoogleAuthUserAgent): Firefox UA is written to the WebContents on auth
+  // Replicates the app as it shipped before the UA rewrite was removed
+  // (cleaned Chrome-shaped session UA + the Google auth Firefox switch): Firefox UA is written to the WebContents on auth
   // navs and to the request header only for auth-host URLs; every other request
   // keeps whatever UA the WebContents carries. Logs incoming vs outgoing
   // identity for ALL requests to expose cross-host mismatches during the flow.
@@ -185,7 +185,7 @@ app.whenReady().then(async () => {
         if (mode === 'app-fixed' && currentUa === identities.firefox) {
           removeClientHints(headers)
         } else {
-          // Real setupClientHintsOverride builds Chrome hints once from the
+          // The retired client-hints rewrite built Chrome hints once from the
           // session's cleaned UA (a closure), never from the per-request UA.
           applyChromeClientHints(headers, identities.cleaned)
         }

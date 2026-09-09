@@ -23,31 +23,60 @@ const ESC = String.fromCharCode(0x1b)
 /* oxlint-disable no-control-regex -- grammars match terminal ESC/BEL sequences by definition */
 // Known accepted collision: xterm.js encodes MODIFIED F3 (Shift/Ctrl/Alt+F3) as
 // `CSI 1 ; <mod> R`, which is indistinguishable from a CPR report (a classic
-// VT ambiguity). Such a keystroke is sent immediately instead of debounced —
-// byte order is still preserved (the immediate path flushes pending input
-// first), it just skips input-intent/activity bookkeeping. Harmless, so we
-// keep the reply grammar complete rather than special-casing it.
-const CPR_OR_DSR_RE = new RegExp('^\\u001b\\[\\??[0-9;]*[Rn]$')
-const DEVICE_ATTRIBUTES_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c$')
+// VT ambiguity). Such a keystroke is sent immediately and shares the bounded reply
+// budget, so a pathological reply flood can shed it. It is also held behind a deferred
+// reply like any CPR, so within that window (bounded by the host's echo budget) a
+// keystroke typed after it can reach the pty first. Accepted: it needs the chord and a
+// following keypress inside a live colour-query deferral, and we keep the reply grammar
+// complete rather than special-casing an unresolvable ambiguity.
+const CPR_OR_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\??[0-9;]*[Rn]')
+const DEVICE_ATTRIBUTES_PREFIX_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c')
 // 4/6 = pixel-size reports, 8 = text-area size in characters (answer to CSI 18t).
-const WINDOW_SIZE_REPORT_RE = new RegExp('^\\u001b\\[[468];[0-9]+;[0-9]+t$')
+const WINDOW_SIZE_REPORT_PREFIX_RE = new RegExp('^\\u001b\\[[468];[0-9]+;[0-9]+t')
 // `?` optional: private-mode reports carry it (DECRPM), ANSI-mode reports don't.
-const DECRPM_RE = new RegExp('^\\u001b\\[\\??[0-9;]*\\$y$')
+const DECRPM_PREFIX_RE = new RegExp('^\\u001b\\[\\??[0-9;]*\\$y')
 // Kitty keyboard protocol flags report: CSI ? flags u. The `?` distinguishes it
 // from kitty-protocol *keystrokes* (CSI code;mods u), which must stay batched.
-const KITTY_FLAGS_RE = new RegExp('^\\u001b\\[\\?[0-9]+u$')
+const KITTY_FLAGS_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9]+u')
 // OSC color/title responses: ESC ] Ps ; body ST (ST = BEL or ESC backslash).
-const OSC_RESPONSE_RE = new RegExp('^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)$')
+const OSC_RESPONSE_PREFIX_RE = new RegExp(
+  '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
+)
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
-const DCS_RESPONSE_RE = new RegExp('^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\$')
+const DCS_RESPONSE_PREFIX_RE = new RegExp(
+  '^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\'
+)
 // Private-mode DSR (CSI ? … n) — e.g. color-scheme `?997;1n` — often lands cooked.
 // Prefix form peels consecutive replies out of one coalesced payload.
 const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n')
 const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
   '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
 )
+const QUERY_REPLY_PREFIX_RES = [
+  CPR_OR_DSR_PREFIX_RE,
+  DEVICE_ATTRIBUTES_PREFIX_RE,
+  WINDOW_SIZE_REPORT_PREFIX_RE,
+  DECRPM_PREFIX_RE,
+  KITTY_FLAGS_PREFIX_RE,
+  OSC_RESPONSE_PREFIX_RE,
+  DCS_RESPONSE_PREFIX_RE
+] as const
 /* oxlint-enable no-control-regex */
+
+function terminalQueryReplyEnd(data: string, start: number): number {
+  if (start >= data.length || data[start] !== ESC) {
+    return -1
+  }
+  const slice = data.slice(start)
+  for (const re of QUERY_REPLY_PREFIX_RES) {
+    const match = re.exec(slice)
+    if (match?.[0]) {
+      return start + match[0].length
+    }
+  }
+  return -1
+}
 
 /**
  * True when `data` (from xterm.onData) is a synthetic reply the emulator
@@ -60,18 +89,7 @@ const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
  * as replies — with the single documented modified-F3/CPR collision above.
  */
 export function isTerminalQueryReply(data: string): boolean {
-  if (data.length < 3 || data[0] !== ESC) {
-    return false
-  }
-  return (
-    CPR_OR_DSR_RE.test(data) ||
-    DEVICE_ATTRIBUTES_RE.test(data) ||
-    WINDOW_SIZE_REPORT_RE.test(data) ||
-    DECRPM_RE.test(data) ||
-    KITTY_FLAGS_RE.test(data) ||
-    OSC_RESPONSE_RE.test(data) ||
-    DCS_RESPONSE_RE.test(data)
-  )
+  return data.length >= 3 && terminalQueryReplyEnd(data, 0) === data.length
 }
 
 /** End index (exclusive) of one cooked-echo-risk reply at `start`, else -1. */
@@ -114,6 +132,24 @@ export function extractOnlyCookedEchoSafeQueryReplies(data: string): string[] | 
   return replies.length > 0 ? replies : null
 }
 
+/** If `data` is entirely one or more consecutive query replies, return each reply. */
+export function extractOnlyTerminalQueryReplies(data: string): string[] | null {
+  if (data.length < 3 || data[0] !== ESC) {
+    return null
+  }
+  const replies: string[] = []
+  let offset = 0
+  while (offset < data.length) {
+    const end = terminalQueryReplyEnd(data, offset)
+    if (end === -1) {
+      return null
+    }
+    replies.push(data.slice(offset, end))
+    offset = end
+  }
+  return replies.length > 0 ? replies : null
+}
+
 /**
  * Query replies that must use the ECHO-safe write path on POSIX PTYs so cooked
  * prompts do not paint reply bytes (e.g. `997;1n` on `npx` confirm, #13137).
@@ -125,22 +161,4 @@ export function extractOnlyCookedEchoSafeQueryReplies(data: string): string[] | 
 export function needsCookedEchoSafeQueryReply(data: string): boolean {
   const replies = extractOnlyCookedEchoSafeQueryReplies(data)
   return replies !== null && replies.length === 1
-}
-
-/** True if at least one extracted cooked-echo-risk reply is accepted by `answer`. */
-export function answerEachCookedEchoSafeQueryReply(
-  data: string,
-  answer: (reply: string) => boolean
-): boolean {
-  const replies = extractOnlyCookedEchoSafeQueryReplies(data)
-  if (!replies) {
-    return false
-  }
-  let accepted = false
-  for (const part of replies) {
-    if (answer(part)) {
-      accepted = true
-    }
-  }
-  return accepted
 }

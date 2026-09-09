@@ -13,6 +13,7 @@ import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
 
 export function resolveCheckRunDetailsFixCheck(
   check: PRCheckDetail,
@@ -83,7 +84,7 @@ export function resolveHostedReviewForCheckRunDetailsFix(
   if (linkedGitLabMR !== null) {
     return null
   }
-  return pr ? gitHubPRToChecksPanelReview(pr) : null
+  return pr && !isGitHubPRSuppressed(worktree, pr.number) ? gitHubPRToChecksPanelReview(pr) : null
 }
 
 export function buildCheckRunDetailsFixBasePrompt(args: {

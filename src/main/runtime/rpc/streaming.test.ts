@@ -5,7 +5,6 @@ import { defineMethod, defineStreamingMethod, type RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
@@ -313,19 +312,10 @@ describe('RpcDispatcher streaming', () => {
       cleanupSubscriptionIfOwnedByConnection: vi.fn(
         registry.cleanupSubscriptionIfOwnedByConnection
       ),
-      waitForTerminal: vi.fn(
-        () =>
-          new Promise<RuntimeTerminalWait>((resolve) => {
-            resolveExit = () =>
-              resolve({
-                handle: 'terminal-1',
-                condition: 'exit',
-                satisfied: true,
-                status: 'exited',
-                exitCode: 0
-              })
-          })
-      )
+      subscribeToPtyExit: vi.fn((_ptyId: string, listener: () => void) => {
+        resolveExit = listener
+        return vi.fn()
+      })
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
@@ -340,7 +330,7 @@ describe('RpcDispatcher streaming', () => {
     await vi.waitFor(() => expect(registry.peekCleanup('terminal-1:desktop-1')).toBeDefined())
     // Cleanup now registers before snapshot work so a disconnect cannot orphan
     // a desktop width floor; wait for the actual exit waiter before resolving it.
-    await vi.waitFor(() => expect(runtime.waitForTerminal).toHaveBeenCalled())
+    await vi.waitFor(() => expect(runtime.subscribeToPtyExit).toHaveBeenCalled())
     resolveExit()
     await dispatchPromise
 

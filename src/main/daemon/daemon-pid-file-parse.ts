@@ -9,6 +9,26 @@ export type ParsedDaemonPid = {
   spawnerExecPath: string | null
 }
 
+/**
+ * Best-effort pid recovery from a record parseDaemonPidFile rejected. The pid is the first key
+ * JSON.stringify writes, so a torn write usually preserves it; it gates whether a corrupt record
+ * may be quarantined (a process still answering for this pid keeps its conservative veto).
+ *
+ * The digit run must be terminated by a following non-digit byte: a torn write can cut inside
+ * the digits, and a truncated prefix is a different pid — probing it attributes an unrelated
+ * process's liveness to this record (a dead prefix would quarantine on false evidence; an
+ * immortal one, e.g. Windows System pid 4, would veto forever). Digits at end-of-bytes are
+ * therefore unsalvageable; the writer of such a prefix died mid-write, so no probe is needed.
+ */
+export function salvagePidFromCorruptDaemonRecord(contents: string): number | null {
+  const match = /"pid"\s*:\s*(\d+)(?=\D)/.exec(contents)
+  if (!match) {
+    return null
+  }
+  const pid = Number(match[1])
+  return Number.isSafeInteger(pid) && pid > 0 ? pid : null
+}
+
 export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   const trimmed = contents.trim()
   try {

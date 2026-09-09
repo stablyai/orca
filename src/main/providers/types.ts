@@ -18,6 +18,7 @@ export type {
 // ─── Filesystem Provider ────────────────────────────────────────────
 
 export type {
+  FileRangeReadResult,
   FileReadLimits,
   FileReadResult,
   FileStat,
@@ -25,6 +26,8 @@ export type {
   IFilesystemProvider,
   TerminalArtifactAccessOptions
 } from './filesystem-provider-contract'
+
+export { FileRangeReadUnsupportedError } from './filesystem-provider-contract'
 
 // ─── Git Provider ───────────────────────────────────────────────────
 

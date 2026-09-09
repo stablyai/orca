@@ -3,6 +3,9 @@ import type { OrchestrationMailboxLeaf } from './mailbox-owner'
 export type OrchestrationMailboxDeliveryFlight = {
   enterTimer: ReturnType<typeof setTimeout> | null
   stagedMessageIds: string[]
+  submitEnter: (() => void) | null
+  deferredUntilIdle: boolean
+  idleObservedWhileDeferred: boolean
 }
 
 export type ParkedOrchestrationMailboxDelivery = {
@@ -28,13 +31,49 @@ export class OrchestrationMailboxPointerState {
   }
 
   beginFlight(ptyId: string): OrchestrationMailboxDeliveryFlight {
-    const flight = { enterTimer: null, stagedMessageIds: [] }
+    const flight = {
+      enterTimer: null,
+      stagedMessageIds: [],
+      submitEnter: null,
+      deferredUntilIdle: false,
+      idleObservedWhileDeferred: false
+    }
     this.flightsByPtyId.set(ptyId, flight)
     return flight
   }
 
   isCurrentFlight(ptyId: string, flight: OrchestrationMailboxDeliveryFlight): boolean {
     return this.flightsByPtyId.get(ptyId) === flight
+  }
+
+  deferFlightUntilIdle(ptyId: string): boolean {
+    const flight = this.flightsByPtyId.get(ptyId)
+    if (!flight) {
+      return false
+    }
+    if (flight.enterTimer != null) {
+      clearTimeout(flight.enterTimer)
+      flight.enterTimer = null
+    }
+    flight.deferredUntilIdle = true
+    flight.idleObservedWhileDeferred = false
+    return true
+  }
+
+  takeDeferredEnter(ptyId: string): (() => void) | null {
+    const flight = this.flightsByPtyId.get(ptyId)
+    if (!flight?.deferredUntilIdle) {
+      return null
+    }
+    if (!flight.submitEnter) {
+      flight.idleObservedWhileDeferred = true
+      return null
+    }
+    const submitEnter = flight.submitEnter
+    flight.submitEnter = null
+    flight.deferredUntilIdle = false
+    flight.idleObservedWhileDeferred = false
+    return submitEnter
   }
 
   settleFlight(

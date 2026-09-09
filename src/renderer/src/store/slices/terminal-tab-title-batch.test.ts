@@ -24,6 +24,7 @@ import {
   seedStore
 } from './store-test-helpers'
 import type { GeneratedTabTitleUpdate } from './terminal-tab-title-batch'
+import { adoptTerminalTabOwnerMetadataOnlyBuckets } from './terminal-tab-owner-index'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -98,6 +99,64 @@ describe('terminal tab title batches', () => {
         `Remote agent ${index}`
       )
     }
+  })
+
+  it('inspects only the changed bucket for a warm title change across 300 worktrees', () => {
+    const store = createTestStore()
+    const fixture = makeScaleState(300)
+    seedStore(store, {
+      worktreesByRepo: { repo1: fixture.worktrees },
+      tabsByWorktree: fixture.tabsByWorktree,
+      unifiedTabsByWorktree: fixture.unifiedTabsByWorktree
+    })
+    store.getState().updateTabTitle('tab-299', 'First warm title')
+
+    const idReadsByWorktree = Array.from({ length: 300 }, () => 0)
+    for (let index = 0; index < 300; index += 1) {
+      const tab = store.getState().tabsByWorktree[`wt-${index}`]?.[0]
+      if (!tab) {
+        throw new Error(`missing scale tab ${index}`)
+      }
+      const id = tab.id
+      Object.defineProperty(tab, 'id', {
+        configurable: true,
+        enumerable: true,
+        get() {
+          idReadsByWorktree[index] += 1
+          return id
+        }
+      })
+    }
+
+    let outerKeyVisits = 0
+    let bucketVisits = 0
+    const currentTabsByWorktree = store.getState().tabsByWorktree
+    const observedTabsByWorktree = new Proxy(currentTabsByWorktree, {
+      ownKeys(target) {
+        outerKeyVisits += 1
+        return Reflect.ownKeys(target)
+      },
+      get(target, property, receiver) {
+        if (typeof property === 'string' && property.startsWith('wt-')) {
+          bucketVisits += 1
+        }
+        return Reflect.get(target, property, receiver)
+      }
+    })
+    adoptTerminalTabOwnerMetadataOnlyBuckets(currentTabsByWorktree, observedTabsByWorktree, [])
+    store.setState({ tabsByWorktree: observedTabsByWorktree })
+    outerKeyVisits = 0
+    bucketVisits = 0
+
+    store.getState().updateTabTitle('tab-299', 'Second warm title')
+
+    expect(idReadsByWorktree[299]).toBeGreaterThan(0)
+    expect(idReadsByWorktree.slice(0, 299).reduce((sum, count) => sum + count, 0)).toBe(0)
+    expect(outerKeyVisits).toBe(1)
+    // The unavoidable outer-map copy reads 300 buckets; staging and cache adoption
+    // read the changed owner twice. A second fleet traversal would add 300 more.
+    expect(bucketVisits).toBe(302)
+    expect(store.getState().tabsByWorktree['wt-299']?.[0]?.title).toBe('Second warm title')
   })
 
   it('preserves ordered duplicate updates and last-owner duplicate-id routing', () => {

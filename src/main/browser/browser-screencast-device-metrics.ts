@@ -29,6 +29,9 @@ export function createBrowserScreencastDeviceMetrics(
     const viewportWidth = positiveInteger(options.viewportWidth)
     const viewportHeight = positiveInteger(options.viewportHeight)
     if (!viewportWidth || !viewportHeight) {
+      if (deviceMetricsOverridden) {
+        await clearDeviceMetricsOverride()
+      }
       return
     }
     const deviceScaleFactor = positiveNumber(options.deviceScaleFactor) ?? 1

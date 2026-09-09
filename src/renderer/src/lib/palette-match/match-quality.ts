@@ -59,10 +59,14 @@ export function paletteResultQualityClassRank(value: PaletteResultQualityClass):
 export function resolvePaletteResultQualityClass(args: {
   worstQuality: PaletteMatchQuality
   usesSupportingEvidence: boolean
+  isContainerOnly?: boolean
 }): PaletteResultQualityClass {
-  const { worstQuality, usesSupportingEvidence } = args
+  const { worstQuality, usesSupportingEvidence, isContainerOnly } = args
   if (isFuzzyPaletteMatchQuality(worstQuality)) {
     return 'fuzzy-evidence'
+  }
+  if (isContainerOnly) {
+    return isExactPaletteMatchQuality(worstQuality) ? 'exact-evidence' : 'partial-evidence'
   }
   if (usesSupportingEvidence) {
     return isExactPaletteMatchQuality(worstQuality) ? 'exact-evidence' : 'partial-evidence'

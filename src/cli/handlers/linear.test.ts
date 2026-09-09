@@ -117,6 +117,46 @@ describe('orca linear CLI handlers', () => {
     )
   })
 
+  it('prints truncation on human stdout and in JSON without using stderr for JSON', async () => {
+    const listResult = {
+      issues: [
+        {
+          id: 'issue-1',
+          identifier: 'ENG-1',
+          title: 'Fix auth',
+          url: 'https://linear.app/acme/issue/ENG-1',
+          labels: [],
+          workspace: { id: 'workspace-1', name: 'Acme' }
+        }
+      ],
+      truncated: true,
+      meta: {
+        limit: 1,
+        returned: 1,
+        hasMore: true,
+        nextCursor: 'next-page',
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1',
+        partial: false,
+        workspaceErrors: []
+      }
+    }
+    queueFixtures(callMock, okFixture('req_list', listResult))
+    await main(['linear', 'list-issues', '--limit', '1'], '/tmp/repo')
+    expect(vi.mocked(console.log).mock.calls[0][0]).toContain('truncated: showing 1')
+    expect(
+      vi.mocked(console.error).mock.calls.some((call) => String(call[0]).includes('more results'))
+    ).toBe(true)
+
+    vi.mocked(console.log).mockClear()
+    vi.mocked(console.error).mockClear()
+    queueFixtures(callMock, okFixture('req_list_json', listResult))
+    await main(['linear', 'list-issues', '--limit', '1', '--json'], '/tmp/repo')
+    const jsonOut = String(vi.mocked(console.log).mock.calls[0][0])
+    expect(jsonOut).toContain('"truncated": true')
+    expect(vi.mocked(console.error)).not.toHaveBeenCalled()
+  })
+
   it('keeps global boolean flags before Linear commands from consuming command tokens', async () => {
     queueFixtures(callMock, okFixture('req_linear', issueResult()))
 

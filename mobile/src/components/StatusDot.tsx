@@ -12,6 +12,16 @@ const stateColors: Record<ConnectionState, string> = {
   'auth-failed': colors.statusRed
 }
 
+export function statusDotColor(state: ConnectionState, verdict?: ConnectionVerdict): string {
+  if (verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed') {
+    return colors.statusRed
+  }
+  if (verdict?.kind === 'warning' || (verdict?.kind === 'normal' && verdict.label.endsWith('…'))) {
+    return colors.statusAmber
+  }
+  return stateColors[state] ?? colors.textMuted
+}
+
 // Why: when caller passes a verdict, the dot color reflects the verdict's
 // severity instead of the raw transport state. This avoids the "amber dot
 // next to red 'Can't reach desktop' label" mismatch — the underlying
@@ -24,12 +34,7 @@ export function StatusDot({
   state: ConnectionState
   verdict?: ConnectionVerdict
 }) {
-  const color =
-    verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed'
-      ? colors.statusRed
-      : verdict?.kind === 'warning'
-        ? colors.statusAmber
-        : (stateColors[state] ?? colors.textMuted)
+  const color = statusDotColor(state, verdict)
   return <View style={[styles.dot, { backgroundColor: color }]} />
 }
 

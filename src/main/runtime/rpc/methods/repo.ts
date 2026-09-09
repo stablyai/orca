@@ -15,7 +15,8 @@ const RepoSelector = z.object({
 
 const RepoPath = z.object({
   path: requiredString('Missing repo path'),
-  kind: z.enum(['git', 'folder']).optional()
+  kind: z.enum(['git', 'folder']).optional(),
+  displayName: OptionalString
 })
 
 const RepoCreate = z.object({
@@ -190,7 +191,7 @@ export const REPO_METHODS: RpcMethod[] = [
     params: RepoPath,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
-        await context.runtime.addRepo(params.path, params.kind),
+        await context.runtime.addRepo(params.path, params.kind, undefined, params.displayName),
         context
       )
     })

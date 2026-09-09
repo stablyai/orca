@@ -14,6 +14,8 @@ import {
   type WorkspaceCleanupRemovalProgress
 } from './workspace-cleanup-background-removal'
 import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-removal-candidates'
+import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
+import { useWorkspaceCleanupUnverifiedRemoval } from './use-workspace-cleanup-unverified-removal'
 
 export type WorkspaceCleanupRemovalController = {
   confirming: boolean
@@ -24,11 +26,12 @@ export type WorkspaceCleanupRemovalController = {
   /** Synchronous guard; state alone lags a second confirm click. */
   removalInFlightRef: { current: boolean }
   /** Keyed by host-qualified identity so a failure marks only the confirmed host's row. */
-  rowFailures: Record<string, string>
+  rowFailures: Record<string, WorkspaceCleanupFailure>
   resetRowFailures: () => void
   resetForReopen: () => void
   openConfirmRemove: (candidates: readonly WorkspaceCleanupCandidate[]) => void
   confirmRemove: () => void
+  confirmUnverifiedRemoval: (candidate: WorkspaceCleanupCandidate) => void
   cancelConfirmRemove: () => void
   backToList: () => void
 }
@@ -60,7 +63,7 @@ export function useWorkspaceCleanupRemoval({
   const [deletionPhaseByIdentity, setDeletionPhaseByIdentity] = useState<
     Record<string, 'queued' | 'deleting'>
   >({})
-  const [rowFailures, setRowFailures] = useState<Record<string, string>>({})
+  const [rowFailures, setRowFailures] = useState<Record<string, WorkspaceCleanupFailure>>({})
   const removalInFlightRef = useRef(false)
   // Why: the dialog stays mounted across cleanup runs, so late settlements from
   // an earlier batch must not mutate a newer batch's row state.
@@ -92,6 +95,13 @@ export function useWorkspaceCleanupRemoval({
     },
     [clearWorktreeDeleteState]
   )
+
+  const confirmUnverifiedRemoval = useWorkspaceCleanupUnverifiedRemoval({
+    setRowFailures,
+    setDeletionPhaseByIdentity,
+    clearQueuedDeleteState,
+    onDeselect
+  })
 
   const openConfirmRemove = useCallback((candidates: readonly WorkspaceCleanupCandidate[]) => {
     const nextCandidates = filterWorkspaceCleanupRemovalCandidates(
@@ -174,22 +184,7 @@ export function useWorkspaceCleanupRemoval({
       removalInFlightRef.current = false
     }
     try {
-      const beginSnapshotPruneBatch = window.api.workspaceCleanup.beginRemovalSnapshotPruneBatch
-      const recordSnapshotPrune = window.api.workspaceCleanup.recordRemovalSnapshotPrune
-      const finishSnapshotPruneBatch = window.api.workspaceCleanup.finishRemovalSnapshotPruneBatch
-      const snapshotPruneBatch =
-        typeof beginSnapshotPruneBatch === 'function' &&
-        typeof recordSnapshotPrune === 'function' &&
-        typeof finishSnapshotPruneBatch === 'function'
-          ? (() => {
-              const batchId = crypto.randomUUID()
-              return {
-                batchId,
-                begin: () => beginSnapshotPruneBatch({ batchId }),
-                finish: () => finishSnapshotPruneBatch({ batchId })
-              }
-            })()
-          : undefined
+      const snapshotPruneBatch = createWorkspaceCleanupSnapshotPruneBatch()
       startWorkspaceCleanupBackgroundRemoval({
         candidates: removableCandidates,
         removeCandidates,
@@ -215,9 +210,9 @@ export function useWorkspaceCleanupRemoval({
           })
         },
         onResult: (result) => {
-          const nextFailures: Record<string, string> = {}
+          const nextFailures: Record<string, WorkspaceCleanupFailure> = {}
           for (const failure of result.failures) {
-            nextFailures[getWorkspaceCleanupFailureIdentity(failure)] = failure.message
+            nextFailures[getWorkspaceCleanupFailureIdentity(failure)] = failure
             // Why: defensively covers failures that never reached onRowFailed.
             clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
           }
@@ -243,7 +238,7 @@ export function useWorkspaceCleanupRemoval({
               delete next[identity]
             }
             for (const failure of result.failures) {
-              next[getWorkspaceCleanupFailureIdentity(failure)] = failure.message
+              next[getWorkspaceCleanupFailureIdentity(failure)] = failure
             }
             return next
           })
@@ -277,6 +272,7 @@ export function useWorkspaceCleanupRemoval({
     resetForReopen,
     openConfirmRemove,
     confirmRemove,
+    confirmUnverifiedRemoval,
     cancelConfirmRemove,
     backToList
   }

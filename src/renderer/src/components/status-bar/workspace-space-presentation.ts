@@ -255,14 +255,6 @@ export function isWorkspaceSpaceRowReadyToDelete(
   )
 }
 
-export function getWorkspaceSpaceGitStatusRefreshCandidates(
-  rows: readonly WorkspaceSpaceWorktree[]
-): WorkspaceSpaceWorktree[] {
-  return rows.filter(
-    (worktree) => worktree.canDelete && worktree.status === 'ok' && !worktree.isMainWorktree
-  )
-}
-
 export function resolveWorkspaceSpaceInspectedWorktreeId(
   rows: readonly WorkspaceSpaceWorktree[],
   currentIdentity: string | null

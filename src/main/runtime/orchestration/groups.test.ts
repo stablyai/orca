@@ -18,7 +18,10 @@ function makeSummary(
     connected: opts.connected ?? true,
     writable: opts.writable ?? true,
     lastOutputAt: opts.lastOutputAt ?? null,
-    preview: opts.preview ?? ''
+    preview: opts.preview ?? '',
+    // Why spread and not a default: `agentIdentity` absent is meaningful (unknown), so the
+    // helper must be able to produce a summary that genuinely lacks the field.
+    ...(opts.agentIdentity ? { agentIdentity: opts.agentIdentity } : {})
   }
 }
 
@@ -97,209 +100,108 @@ describe('resolveGroupAddress', () => {
   })
 
   describe('agent name groups', () => {
-    it('matches @claude by terminal title', () => {
+    // Why identity and not title: these groups used to match `@<name>` against the terminal
+    // title, so any pane whose task text mentioned an agent received that agent's messages.
+    // Routing now reads the identity the host resolved from launch/process evidence it owns.
+
+    it('routes to every pane the host resolved as that agent', () => {
       const terminals = [
-        makeSummary('term_a', { title: 'Claude Code' }),
-        makeSummary('term_b', { title: 'Claude Code' }),
-        makeSummary('term_c', { title: 'Codex CLI' })
+        makeSummary('term_a', { agentIdentity: 'claude' }),
+        makeSummary('term_b', { agentIdentity: 'claude' }),
+        makeSummary('term_c', { agentIdentity: 'codex' })
       ]
-      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
+      expect(resolveGroupAddress('@claude', 'term_a', terminals, noStatus)).toEqual(['term_b'])
     })
 
-    it('matches @mimo by terminal title', () => {
+    it.each([
+      ['@codex', 'codex'],
+      ['@openclaude', 'openclaude'],
+      ['@mimo', 'mimo-code'],
+      ['@gemini', 'gemini'],
+      ['@droid', 'droid'],
+      ['@grok', 'grok'],
+      ['@cursor', 'cursor'],
+      ['@opencode', 'opencode']
+    ])('routes %s to its agent id', (group, agentIdentity) => {
       const terminals = [
-        makeSummary('term_a', { title: 'mimo' }),
-        makeSummary('term_b', { title: 'MiMo Code session' }),
-        makeSummary('term_c', { title: 'OpenCode' })
+        makeSummary('sender'),
+        makeSummary('target', { agentIdentity: agentIdentity as never }),
+        makeSummary('other', { agentIdentity: 'claude' })
       ]
-      const result = resolveGroupAddress('@mimo', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
+      const expected = agentIdentity === 'claude' ? ['target', 'other'] : ['target']
+      expect(resolveGroupAddress(group, 'sender', terminals, noStatus)).toEqual(expected)
     })
 
-    it('matches @openclaude by terminal title', () => {
-      const terminals = [
-        makeSummary('term_a', { title: 'OpenClaude' }),
-        makeSummary('term_b', { title: 'OpenClaude running' }),
-        makeSummary('term_c', { title: 'Claude Code' })
-      ]
-      const result = resolveGroupAddress('@openclaude', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
+    it('is case-insensitive for the group address', () => {
+      const terminals = [makeSummary('sender'), makeSummary('target', { agentIdentity: 'claude' })]
+      expect(resolveGroupAddress('@CLAUDE', 'sender', terminals, noStatus)).toEqual(['target'])
     })
 
-    it('does not match OpenClaude titles through @claude', () => {
+    it('excludes the sender even when the sender is that agent', () => {
       const terminals = [
-        makeSummary('term_a', { title: 'Claude Code' }),
-        makeSummary('term_b', { title: 'OpenClaude running' })
+        makeSummary('sender', { agentIdentity: 'grok' }),
+        makeSummary('target', { agentIdentity: 'grok' })
       ]
-      const result = resolveGroupAddress('@claude', 'term_a', terminals, noStatus)
-      expect(result).toEqual([])
+      expect(resolveGroupAddress('@grok', 'sender', terminals, noStatus)).toEqual(['target'])
     })
 
-    it('matches @codex by terminal title', () => {
-      const terminals = [
-        makeSummary('term_a', { title: 'Codex CLI' }),
-        makeSummary('term_b', { title: 'Codex CLI' })
-      ]
-      const result = resolveGroupAddress('@codex', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
+    describe('a task title can no longer redirect a message', () => {
+      // The bug. Recorded titles of this exact shape exist: a Grok pane named
+      // "Switch Claude and Codex off the load balancer… - grok" received both @claude and @codex.
+      it('does not route @claude to a Codex pane whose task text names Claude', () => {
+        const terminals = [
+          makeSummary('sender'),
+          makeSummary('codex_pane', {
+            agentIdentity: 'codex',
+            title: 'Review the Claude session-history fix'
+          })
+        ]
+        expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
+      })
+
+      it('does not route @codex to a Grok pane whose task text names Codex', () => {
+        const terminals = [
+          makeSummary('sender'),
+          makeSummary('grok_pane', {
+            agentIdentity: 'grok',
+            title: 'Switch Claude and Codex off the load balancer… - grok'
+          })
+        ]
+        expect(resolveGroupAddress('@codex', 'sender', terminals, noStatus)).toEqual([])
+        expect(resolveGroupAddress('@grok', 'sender', terminals, noStatus)).toEqual(['grok_pane'])
+      })
+
+      it('does not route @cursor to a pane merely discussing a text cursor', () => {
+        const terminals = [
+          makeSummary('sender'),
+          makeSummary('claude_pane', {
+            agentIdentity: 'claude',
+            title: 'fix the text cursor blink'
+          })
+        ]
+        expect(resolveGroupAddress('@cursor', 'sender', terminals, noStatus)).toEqual([])
+      })
     })
 
-    it('matches @droid by terminal title and excludes sender', () => {
-      const terminals = [
-        makeSummary('term_a', { title: 'Droid ready' }),
-        makeSummary('term_b', { title: 'Droid ready' }),
-        makeSummary('term_c', { title: 'Droid - action required' })
-      ]
-      const result = resolveGroupAddress('@droid', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b', 'term_c'])
+    describe('unknown identity fails closed', () => {
+      // Why: `agentIdentity` is absent when the host predates the field or had no evidence
+      // beyond the title. Delivery is an action, so unknown must not deliver. The sender sees
+      // no recipients, which is visible and recoverable; a message in the wrong agent's prompt
+      // is neither.
+      it('does not route to a pane with no resolved identity, whatever its title says', () => {
+        const terminals = [makeSummary('sender'), makeSummary('unknown', { title: 'Claude Code' })]
+        expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
+      })
+
+      it('still routes the identity-free groups, which do not depend on the field', () => {
+        const terminals = [makeSummary('sender'), makeSummary('other', { title: 'Claude Code' })]
+        expect(resolveGroupAddress('@all', 'sender', terminals, noStatus)).toEqual(['other'])
+      })
     })
 
-    it('does not match Android, path, or hyphenated tokens through @droid', () => {
-      const terminals = [
-        makeSummary('term_a', { title: 'Codex CLI' }),
-        makeSummary('term_b', { title: 'Android build' }),
-        makeSummary('term_c', { title: '/tmp/android' }),
-        makeSummary('term_d', { title: 'my-droid-worker' })
-      ]
-      const result = resolveGroupAddress('@droid', 'term_a', terminals, noStatus)
-      expect(result).toEqual([])
-    })
-
-    it('is case-insensitive for group address', () => {
-      const terminals = [makeSummary('term_a'), makeSummary('term_b', { title: 'Claude Code' })]
-      const result = resolveGroupAddress('@Claude', 'term_a', terminals, noStatus)
-      expect(result).toEqual(['term_b'])
-    })
-
-    it('matches @grok as a standalone title token and excludes sender', () => {
-      const terminals = [
-        makeSummary('term_a', { title: 'Grok' }),
-        makeSummary('term_b', { title: 'GROK CLI' }),
-        makeSummary('term_c', { title: '⠋ Grok' }),
-        makeSummary('term_d', { title: 'ngrok' }),
-        makeSummary('term_e', { title: '/tmp/grok' }),
-        makeSummary('term_f', { title: 'my-grok-worker' }),
-        makeSummary('term_g', { title: 'Codex CLI' })
-      ]
-
-      const result = resolveGroupAddress('@GrOk', 'term_a', terminals, noStatus)
-
-      expect(result).toEqual(['term_b', 'term_c'])
-    })
-
-    // Why: the resolver sees the raw OSC title, and Grok CLI's real working/session
-    // titles carry a trailing " - grok" identity or a spinner-collapsed "⠋ grok"
-    // (see terminal-title-agent-type.ts). Prove those production shapes resolve.
-    it('matches real Grok OSC working and session titles', () => {
-      const terminals = [
-        makeSummary('coordinator', { title: 'Coordinator' }),
-        makeSummary('term_rotating', { title: '⠋ - fix the flaky suite - grok' }),
-        makeSummary('term_collapsed', { title: '⠋ grok' }),
-        makeSummary('term_session', { title: 'Fix the auth bug - grok' })
-      ]
-
-      const result = resolveGroupAddress('@grok', 'coordinator', terminals, noStatus)
-
-      expect(result).toEqual(['term_rotating', 'term_collapsed', 'term_session'])
-    })
-
-    // Why: Windows agent titles can surface the launcher process name (`grok.exe`);
-    // the shared matcher accepts .exe/.cmd/.bat/.ps1 suffixes but still rejects
-    // arbitrary dotted fragments like `grok.py`.
-    it('matches Windows launcher-suffix titles but not arbitrary dotted tokens', () => {
-      const terminals = [
-        makeSummary('coordinator', { title: 'Coordinator' }),
-        makeSummary('term_exe', { title: 'grok.exe' }),
-        makeSummary('term_cmd', { title: 'grok.cmd running' }),
-        makeSummary('term_dotted', { title: 'grok.py' })
-      ]
-
-      const result = resolveGroupAddress('@grok', 'coordinator', terminals, noStatus)
-
-      expect(result).toEqual(['term_exe', 'term_cmd'])
-    })
-
-    // Why: these are the titles cursor-agent natively emits and the ones Orca synthesizes
-    // from Cursor hooks, so each must resolve.
-    it('matches native and Orca-synthesized Cursor titles', () => {
-      const terminals = [
-        makeSummary('coordinator', { title: 'Coordinator' }),
-        makeSummary('term_native', { title: 'Cursor Agent' }),
-        makeSummary('term_working', { title: '⠋ Cursor Agent' }),
-        makeSummary('term_idle', { title: 'Cursor ready' }),
-        makeSummary('term_permission', { title: 'Cursor - action required' })
-      ]
-
-      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
-
-      expect(result).toEqual(['term_native', 'term_working', 'term_idle', 'term_permission'])
-    })
-
-    it('is case-insensitive for @cursor', () => {
-      const terminals = [
-        makeSummary('coordinator', { title: 'Coordinator' }),
-        makeSummary('term_b', { title: 'CURSOR READY' })
-      ]
-
-      const result = resolveGroupAddress('@CuRsOr', 'coordinator', terminals, noStatus)
-
-      expect(result).toEqual(['term_b'])
-    })
-
-    // Why: this is the false positive that a whole-token matcher cannot catch. Claude
-    // and Codex put their task summary in the OSC title, and none of Claude's status
-    // prefixes carries its own name, so "cursor" as ordinary editor vocabulary is the
-    // only agent token such a title has. Routing @cursor there would write into a live
-    // non-Cursor agent's prompt.
-    it('does not match another agent whose task title mentions a text cursor', () => {
-      const terminals = [
-        makeSummary('coordinator', { title: 'Coordinator' }),
-        makeSummary('term_claude_working', {
-          title: '⠋ preserve cursor visibility across replays'
-        }),
-        makeSummary('term_claude_idle', { title: '✳ Fix the text cursor blink' }),
-        makeSummary('term_claude_dot', { title: '. fix cursor position' }),
-        makeSummary('term_claude_star', { title: '* cursor rendering done' }),
-        makeSummary('term_codex', { title: '⠋ Codex: fix cursor offsets' }),
-        makeSummary('term_grok', { title: '⠋ - restoring cursor state - grok' }),
-        makeSummary('term_shell', { title: 'Terminal Cursor and Orca slows down' })
-      ]
-
-      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
-
-      expect(result).toEqual([])
-    })
-
-    // Why: pin the deliberate tradeoff. A renamed Cursor pane outranks its OSC title, so it
-    // is group-unaddressable and resolves to nothing instead of resolving loosely. A silent
-    // miss (address it by handle) is preferred over delivering into another agent's prompt.
-    it('does not match a renamed Cursor terminal or the bare process name', () => {
-      const terminals = [
-        makeSummary('coordinator', { title: 'Coordinator' }),
-        makeSummary('term_renamed', { title: 'Cursor - reviewer' }),
-        makeSummary('term_worker', { title: 'cursor worker 2' }),
-        makeSummary('term_process', { title: 'cursor-agent' })
-      ]
-
-      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
-
-      expect(result).toEqual([])
-    })
-
-    it('does not match cursor paths, hyphenated compounds, or dotted tokens', () => {
-      const terminals = [
-        makeSummary('coordinator', { title: 'Coordinator' }),
-        makeSummary('term_rules', { title: '~/cursor-rules' }),
-        makeSummary('term_path', { title: '/tmp/cursor' }),
-        makeSummary('term_worker', { title: 'my-cursor-worker' }),
-        makeSummary('term_file', { title: 'render-cursor-after-bracketed-paste' }),
-        makeSummary('term_dotted', { title: 'cursor.ts' })
-      ]
-
-      const result = resolveGroupAddress('@cursor', 'coordinator', terminals, noStatus)
-
-      expect(result).toEqual([])
+    it('returns no recipients for an unknown group', () => {
+      const terminals = [makeSummary('sender'), makeSummary('target', { agentIdentity: 'claude' })]
+      expect(resolveGroupAddress('@nonsense', 'sender', terminals, noStatus)).toEqual([])
     })
   })
 

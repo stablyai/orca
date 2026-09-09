@@ -13,4 +13,10 @@ export type CodexConfigSyncStallReason =
 
 export type CodexConfigSyncStatus =
   | { state: 'synced'; reason: null; systemConfigPath: string }
-  | { state: 'stalled'; reason: CodexConfigSyncStallReason; systemConfigPath: string }
+  | {
+      state: 'stalled'
+      reason: CodexConfigSyncStallReason
+      systemConfigPath: string
+      /** Optional for compatibility with status producers that cannot resolve the managed path. */
+      managedStatePath?: string
+    }

@@ -115,6 +115,18 @@ describe('setActiveWorktree focus handling', () => {
 })
 
 describe('markWorktreeVisited', () => {
+  it('stamps a host-qualified key when the worktree owner is known', () => {
+    const store = createTestStore()
+    const worktree = makeWorktree({ id: 'repo1::/hosted', repoId: 'repo1', hostId: 'ssh:builder' })
+    store.setState({ worktreesByRepo: { repo1: [worktree] } } as Partial<AppState>)
+
+    store.getState().markWorktreeVisited(worktree.id, 1000)
+
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      [`ssh:builder|${worktree.id}`]: 1000
+    })
+  })
+
   it('is monotonic: an older timestamp does not regress the stored value', () => {
     const store = createTestStore()
     store.getState().markWorktreeVisited('wt-1', 1000)
@@ -153,6 +165,28 @@ describe('markWorktreeVisited', () => {
     } as Partial<AppState>)
     store.getState().pruneLastVisitedTimestamps()
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/a': 100 })
+  })
+
+  it('prunes host-qualified recency by host while retaining a same-id twin', () => {
+    const store = createTestStore()
+    const id = 'repo1::/shared'
+    const local = makeWorktree({ id, repoId: 'repo1', path: '/shared', hostId: 'local' })
+    const ssh = makeWorktree({ id, repoId: 'repo1', path: '/shared', hostId: 'ssh:builder' })
+    store.setState({
+      worktreesByRepo: { repo1: [local, ssh] },
+      lastVisitedAtByWorktreeId: {
+        [`local|${id}`]: 100,
+        [`ssh:builder|${id}`]: 200,
+        'local|repo1::/gone': 300
+      }
+    } as Partial<AppState>)
+
+    store.getState().pruneLastVisitedTimestamps()
+
+    expect(store.getState().lastVisitedAtByWorktreeId).toEqual({
+      [`local|${id}`]: 100,
+      [`ssh:builder|${id}`]: 200
+    })
   })
 
   it('pruneLastVisitedTimestamps preserves entries for not-yet-hydrated repos (e.g. SSH pre-connect)', () => {

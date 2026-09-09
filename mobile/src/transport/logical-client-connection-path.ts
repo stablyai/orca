@@ -4,6 +4,8 @@ export class LogicalClientConnectionPath {
   private migration: MobileConnectionPath | null = null
   private recovery: MobileConnectionPath | null = null
   private recoveryAttempt = 0
+  private pairingRejected = false
+  private hostSignedOut = false
   private readonly listeners = new Set<() => void>()
 
   constructor(private readonly isConnected: () => boolean) {}
@@ -24,10 +26,33 @@ export class LogicalClientConnectionPath {
       : activeAttempt
   }
 
+  isPairingRejected(): boolean {
+    return this.pairingRejected
+  }
+
+  setPairingRejected(rejected: boolean): void {
+    this.update(() => {
+      this.pairingRejected = rejected
+    })
+  }
+
+  isHostSignedOut(): boolean {
+    return this.hostSignedOut
+  }
+
+  setHostSignedOut(signedOut: boolean): void {
+    this.update(() => {
+      this.hostSignedOut = signedOut
+    })
+  }
+
   clearAfterConnected(): void {
     this.migration = null
     this.recovery = null
     this.recoveryAttempt = 0
+    // Why: an authenticated session is the desktop accepting this device.
+    this.pairingRejected = false
+    this.hostSignedOut = false
   }
 
   setRecovery(path: MobileConnectionPath | null, attempt?: number): void {
@@ -55,8 +80,15 @@ export class LogicalClientConnectionPath {
   private update(apply: () => void): void {
     const previousPath = this.pending()
     const previousAttempt = this.reconnectAttempt(0)
+    const previousRejected = this.pairingRejected
+    const previousSignedOut = this.hostSignedOut
     apply()
-    if (previousPath === this.pending() && previousAttempt === this.reconnectAttempt(0)) {
+    if (
+      previousPath === this.pending() &&
+      previousAttempt === this.reconnectAttempt(0) &&
+      previousRejected === this.pairingRejected &&
+      previousSignedOut === this.hostSignedOut
+    ) {
       return
     }
     for (const listener of this.listeners) {
