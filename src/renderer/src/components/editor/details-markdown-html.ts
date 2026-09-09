@@ -184,7 +184,11 @@ function hasOnlySupportedDetailsAttributes(rawAttributes: string): boolean {
   return (
     rawAttributes
       .replace(/\s+open(?:\s*=\s*(?:""|"open"|''|'open'|open))?(?=\s|$)/giu, '')
-      .replace(/\s+class\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/giu, '')
+      // HTML attribute names ignore case; class tokens do not.
+      .replace(
+        /\s+[cC][lL][aA][sS][sS]\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/gu,
+        ''
+      )
       .replace(
         /\s+data-orca-toggle\s*=\s*(?:"heading-[1-5]"|'heading-[1-5]'|heading-[1-5])(?=\s|$)/giu,
         ''
