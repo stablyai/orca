@@ -7,6 +7,8 @@ import {
 } from '../../shared/clipboard-text'
 import {
   callComputerSidecarAction,
+  callComputerSidecarPermissionStatus,
+  callComputerSidecarSnapshot,
   callComputerSidecarCapabilities,
   resetComputerSidecarForTest
 } from './sidecar-client'
@@ -73,6 +75,20 @@ describe('computer sidecar client', () => {
     resetComputerSidecarForTest()
     forkMock.mockReset()
     vi.useRealTimers()
+  })
+
+  it('uses the observation sidecar for permission checks and preserves denial', async () => {
+    const snapshot = callComputerSidecarSnapshot({ app: 'com.apple.finder' })
+    const child = children[0]!
+    child.emit('message', { id: child.sent[0]!.id, ok: true, result: {} })
+    await snapshot
+    const status = callComputerSidecarPermissionStatus()
+    await vi.waitFor(() => expect(child.sent).toHaveLength(2))
+    expect(child.sent[1]!.method).toBe('permissionsStatus')
+    const denied = { accessibility: 'not-granted', screenshots: 'granted' }
+    child.emit('message', { id: child.sent[1]!.id, ok: true, result: denied })
+    await expect(status).resolves.toEqual(denied)
+    expect(forkMock).toHaveBeenCalledOnce()
   })
 
   it('ignores stale child exit and error after a replacement sidecar starts', async () => {

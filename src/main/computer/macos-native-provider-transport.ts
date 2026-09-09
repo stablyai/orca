@@ -76,8 +76,7 @@ export async function startMacOSNativeProviderSocket({
   const socketToken = randomUUID()
   const socketTokenPath = join(socketDirectory, 'provider.token')
   writeFileSync(socketTokenPath, socketToken, { encoding: 'utf8', mode: 0o600 })
-  // Why: launching the nested helper via LaunchServices can make TCC evaluate
-  // Orca.app as responsible; the signed helper executable owns this grant.
+  // TCC can attribute this child to its launcher; permission probes must use this process.
   const provider = spawnProvider(helperExecutablePath, socketPath, socketTokenPath)
   const providerFailure = waitForProviderLaunchFailure(provider)
   const connectAbort = new AbortController()

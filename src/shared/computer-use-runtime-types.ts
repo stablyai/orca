@@ -144,6 +144,7 @@ export type ComputerProviderCapabilities = {
       moveResize: boolean
     }
     observation: {
+      permissionStatus?: boolean
       screenshot: boolean
       annotatedScreenshot: boolean
       elementFrames: boolean

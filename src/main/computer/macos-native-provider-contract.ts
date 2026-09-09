@@ -2,6 +2,7 @@ import type net from 'node:net'
 import type { ComputerProviderCapabilities } from '../../shared/runtime-types'
 
 export type NativeMethod =
+  | 'permissionsStatus'
   | 'handshake'
   | 'listApps'
   | 'listWindows'
@@ -19,7 +20,7 @@ export type NativeMethod =
 
 export type NativeActionMethod = Exclude<
   NativeMethod,
-  'handshake' | 'listApps' | 'listWindows' | 'getAppState' | 'terminate'
+  'permissionsStatus' | 'handshake' | 'listApps' | 'listWindows' | 'getAppState' | 'terminate'
 >
 
 export type NativeResponse =
