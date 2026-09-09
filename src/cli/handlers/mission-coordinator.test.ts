@@ -44,6 +44,13 @@ function fixture(options: ProbeOptions = {}) {
           return response({ handle: options.active })
         }
         throw new RuntimeClientError('no_active_terminal', 'no_active_terminal')
+      case 'terminal.resolveIdentity':
+        return response({
+          identity: {
+            handle: params?.terminal,
+            live: options.staleHandle !== true
+          }
+        })
       case 'terminal.show':
         if (options.staleHandle) {
           throw new RuntimeClientError('terminal_gone', 'terminal gone')
@@ -211,7 +218,9 @@ describe('Mission coordinator ownership', () => {
     vi.stubEnv('ORCA_TERMINAL_HANDLE', 'term_environment')
     const probe = fixture()
     await probe.run()
-    expect(probe.call).toHaveBeenCalledWith('terminal.show', { terminal: 'term_environment' })
+    expect(probe.call).toHaveBeenCalledWith('terminal.resolveIdentity', {
+      terminal: 'term_environment'
+    })
     expect(probe.call).toHaveBeenCalledWith(
       'orchestration.runCreate',
       expect.objectContaining({ from: 'term_environment' })

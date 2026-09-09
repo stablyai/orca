@@ -2,7 +2,6 @@ import { resolveOrchestrationMigrationStartVersion } from '../../orchestration-s
 import { SCHEMA_VERSION } from '../contract-constants'
 import type { OrchestrationDb } from '../orchestration-db'
 import { applySchemaMigrationsV13ToV30 } from './migrate-v13-v30'
-import { applySchemaMigrationV31 } from './migrate-v31'
 import { applySchemaMigrationsV2ToV12 } from './migrate-v2-v12'
 import { migrateMailboxPointerEnterV33 } from './migrate-mailbox-pointer-enter-v33'
 import { migrateRoleMailboxDeliveryV34 } from './migrate-role-mailbox-delivery-v34'

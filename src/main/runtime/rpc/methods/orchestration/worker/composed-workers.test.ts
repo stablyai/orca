@@ -190,6 +190,7 @@ describe('orchestration RPC methods', () => {
     it('does not retry a stalled reused Codex terminal after submission became indeterminate', async () => {
       setup()
       mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
       vi.spyOn(runtime, 'getTerminalRunningTuiAgent').mockResolvedValue('codex')
       vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
         new Error('agent_prompt_stalled')
@@ -229,6 +230,7 @@ describe('orchestration RPC methods', () => {
     it('does not retry a stalled reused non-Codex terminal', async () => {
       setup()
       mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
       vi.spyOn(runtime, 'getTerminalRunningTuiAgent').mockResolvedValue('claude')
       vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
         new Error('agent_prompt_stalled')
@@ -507,6 +509,7 @@ describe('orchestration RPC methods', () => {
       setup()
       mockCurrentWorkerStart()
       const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
       vi.spyOn(runtime, 'getTerminalRunningTuiAgent').mockResolvedValue('claude')
       const task = db.createTask({ spec: 'reuse exact worker' })
 

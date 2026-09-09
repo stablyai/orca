@@ -10,7 +10,7 @@ import {
 } from '../../collaboration/collaboration-runtime-registry'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
-import { resolveRunScope } from './orchestration-run-scope'
+import { resolveRunScope } from './orchestration/runs/run-scope'
 
 const TopicList = z
   .array(z.string().min(1, 'topic names must be non-empty'))

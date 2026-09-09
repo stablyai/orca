@@ -43,8 +43,6 @@ import {
   resolveOrchestrationCliExecutable
 } from './orchestration-recovery-command'
 
-const LONG_POLL_CLIENT_GRACE_MS = 10_000
-
 const loadWebSocketTransport = async () => await import('./websocket-transport.js')
 
 export class RuntimeClient {
@@ -192,7 +190,6 @@ export class RuntimeClient {
     }
     return resolveLongPollMethodTimeoutMs(method, params, this.requestTimeoutMs)
   }
-
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
     if (this.remotePairing) {

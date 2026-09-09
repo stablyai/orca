@@ -80,16 +80,11 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     // Only a stop begun in THIS runtime can claim the exit; a `stopping` row left durable by a
     // killed process would otherwise absorb a much later crash as a clean stop.
     const stopping = this._orchestrationDb.getWorkerDispatch?.(dispatch.id)
-    if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
-      this._orchestrationDb.settleWorkerStop(dispatch.id)
-      return
-    }
-
-    // A proven exit for this stop intent wins over the close promise's later settlement.
     if (
+      stopping?.state === 'stopping' &&
+      stopping.runtime_epoch === this.getRuntimeId() &&
       cause.kind === 'operator_close' &&
       processDeathCertified &&
-      this._orchestrationDb.getWorkerDispatch(dispatch.id)?.state === 'stopping' &&
       this._orchestrationDb.isDispatchProcessCurrent({
         dispatchId: dispatch.id,
         paneKey,

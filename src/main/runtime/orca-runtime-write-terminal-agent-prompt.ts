@@ -136,29 +136,61 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         ? launchAgent
         : null
     const inputAccepted: RuntimeTerminalPromptDelivery = {
-      requestId: options.requestId, stages: ['input_accepted'], provider: settlementAgent ?? 'unsupported',
-      observation: settlementAgent ? 'supported' : 'unsupported', processIncarnation: binding.processIncarnation,
-      generation, baselineWorkingSequence: baseline.workingSequence,
-      baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt, baselinePermissionSequence: baseline.permissionSequence
+      requestId: options.requestId,
+      stages: ['input_accepted'],
+      provider: settlementAgent ?? 'unsupported',
+      observation: settlementAgent ? 'supported' : 'unsupported',
+      processIncarnation: binding.processIncarnation,
+      generation,
+      baselineWorkingSequence: baseline.workingSequence,
+      baselineExplicitWorkingStartedAt: baseline.explicitWorkingStartedAt,
+      baselinePermissionSequence: baseline.permissionSequence
     }
     const checkpoint: RuntimeTerminalSend = {
-      handle, accepted: true, bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1, prompt: inputAccepted
+      handle,
+      accepted: true,
+      bytesWritten: Buffer.byteLength(pastePayload, 'utf8') + 1,
+      prompt: inputAccepted
     }
     options.onInputAccepted?.(checkpoint)
-    if (!settlementAgent) return { submits: 1, prompt: inputAccepted }
-    this.registerAgentPromptRequest(ptyId, generation, options.requestId, baseline.workingSequence, baseline.explicitWorkingStartedAt)
+    if (!settlementAgent) {
+      return { submits: 1, prompt: inputAccepted }
+    }
+    this.registerAgentPromptRequest(
+      ptyId,
+      generation,
+      options.requestId,
+      baseline.workingSequence,
+      baseline.explicitWorkingStartedAt
+    )
     try {
       await verifyAgentPromptSubmission({
-        baseline, readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
-        acceptTurnStart: (evidence) => this.acceptAgentPromptTurnStart(ptyId, generation, options.requestId!, baseline.workingSequence, baseline.explicitWorkingStartedAt, evidence),
-        allowOutputEvidence: false, expectedOmpPromptFingerprint, signal: options.signal,
+        baseline,
+        readActivity: () => this.getAgentPromptActivity(handle, ptyId, waitTextCache),
+        acceptTurnStart: (evidence) =>
+          this.acceptAgentPromptTurnStart(
+            ptyId,
+            generation,
+            options.requestId!,
+            baseline.workingSequence,
+            baseline.explicitWorkingStartedAt,
+            evidence
+          ),
+        allowOutputEvidence: false,
+        expectedOmpPromptFingerprint,
+        signal: options.signal,
         timeoutMs: options.observationTimeoutMs ?? effectTimeoutMs
       })
       this.agentPromptAcceptedGenerationByPtyId.set(ptyId, generation)
       this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
-      return { submits: 1, prompt: { ...inputAccepted, stages: ['input_accepted', 'turn_started'] } }
+      return {
+        submits: 1,
+        prompt: { ...inputAccepted, stages: ['input_accepted', 'turn_started'] }
+      }
     } catch (error) {
-      if (error instanceof Error && error.message === 'agent_prompt_stalled') return { submits: 1, prompt: inputAccepted }
+      if (error instanceof Error && error.message === 'agent_prompt_stalled') {
+        return { submits: 1, prompt: inputAccepted }
+      }
       if (error instanceof Error && error.message === 'agent_prompt_blocked') {
         this.forgetAgentPromptRequest(ptyId, generation, options.requestId)
         return { submits: 1, prompt: { ...inputAccepted, observation: 'permission' } }
