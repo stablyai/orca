@@ -219,6 +219,10 @@ describe('AgentKanbanCard', () => {
     expect(footer).toHaveTextContent('dashboard-review')
     // The message line is attributed to the user again — the name moved up.
     expect(screen.getByText('You')).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-project-context')).toHaveAttribute(
+      'title',
+      'Orca / dashboard-review'
+    )
   })
 
   it('heads the card with the worktree when no name resolves, without repeating it', () => {
@@ -239,6 +243,13 @@ describe('AgentKanbanCard', () => {
 
     expect(screen.getByLabelText('Orca')).toBeInTheDocument()
     expect(screen.getByText('🐳')).toBeInTheDocument()
+  })
+
+  it('keeps the project visible when the session has no conversation name', () => {
+    renderCard({ card: card({ repoName: 'SignalWalker' }), now: 2_000 })
+
+    expect(screen.getByTestId('dashboard-project-context')).toHaveTextContent('SignalWalker')
+    expect(screen.getByTestId('dashboard-project-context')).not.toHaveTextContent(' / ')
   })
 
   it('skips structured-clone rerenders until visible card data or its age changes', () => {

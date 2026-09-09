@@ -215,6 +215,8 @@ export const AgentKanbanCard = memo(
     // twice.
     const heading = card.conversationName ?? card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
+    const projectLabel =
+      card.repoName.trim() || translate('dashboardPopout.card.unknownProject', 'Unknown project')
 
     return (
       <div
@@ -250,6 +252,23 @@ export const AgentKanbanCard = memo(
               {heading}
             </span>
             {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
+          </div>
+
+          <div
+            className="flex min-w-0 items-center gap-1 text-[10.5px] leading-tight text-muted-foreground"
+            data-dashboard-project-context
+            data-testid="dashboard-project-context"
+            title={worktreeInFooter ? `${projectLabel} / ${card.worktreeName}` : projectLabel}
+          >
+            <span className="truncate font-medium text-foreground/70">{projectLabel}</span>
+            {worktreeInFooter ? (
+              <>
+                <span aria-hidden className="text-muted-foreground/50">
+                  /
+                </span>
+                <span className="truncate">{card.worktreeName}</span>
+              </>
+            ) : null}
           </div>
 
           {card.lastUserMessage || card.lastAgentMessage ? (

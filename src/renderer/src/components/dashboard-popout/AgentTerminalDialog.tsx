@@ -40,6 +40,7 @@ function AgentTerminalFrame({
   onOpenChange,
   onReveal
 }: AgentTerminalFrameProps): React.JSX.Element {
+  const workspaceLabel = [card.repoName, card.worktreeName].filter(Boolean).join(' / ')
   const reveal = (): void => {
     onReveal({
       repoId: card.repoId,
@@ -57,7 +58,17 @@ function AgentTerminalFrame({
         <span className="inline-flex shrink-0">
           <AgentIcon agent={agentTypeToIconAgent(card.agentType)} size={13} />
         </span>
-        {title}
+        <div className="min-w-0 flex-1">
+          {title}
+          <div
+            className="truncate text-[10px] font-normal text-muted-foreground"
+            title={workspaceLabel}
+            data-dashboard-workspace-context
+            data-testid="dashboard-workspace-context"
+          >
+            {workspaceLabel}
+          </div>
+        </div>
         <span className="text-[11px] text-muted-foreground">
           {formatAgentTypeLabel(card.agentType)} ·{' '}
           {agentStateLabel(dashboardCardDisplayState(card))}
@@ -138,7 +149,7 @@ export function AgentTerminalDialog({
             card={card}
             title={
               <DialogTitle className="text-[12px] leading-normal font-semibold">
-                {card.worktreeName}
+                {card.conversationName ?? card.worktreeName}
               </DialogTitle>
             }
             onOpenChange={onOpenChange}
@@ -189,7 +200,7 @@ export function AgentTerminalPanel({
         card={card}
         title={
           <h2 id={titleId} className="text-[12px] leading-normal font-semibold">
-            {card.worktreeName}
+            {card.conversationName ?? card.worktreeName}
           </h2>
         }
         previewClassName="h-auto min-h-0 flex-1"

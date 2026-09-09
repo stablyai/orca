@@ -91,6 +91,25 @@ describe('AgentTerminalDialog', () => {
     expect(screen.getByTestId('preview')).toHaveAttribute('data-terminal-input', 'null')
   })
 
+  it('shows project and worktree context in the terminal header', () => {
+    render(
+      <AgentTerminalDialog
+        card={card({
+          repoName: 'SignalWalker',
+          worktreeName: 'path3',
+          conversationName: 'Resume check'
+        })}
+        onOpenChange={() => {}}
+        onReveal={() => {}}
+      />
+    )
+
+    expect(screen.getByRole('heading', { name: 'Resume check' })).toBeInTheDocument()
+    expect(screen.getByTestId('dashboard-workspace-context')).toHaveTextContent(
+      'SignalWalker / path3'
+    )
+  })
+
   it('does not claim a remote pane closed when the card carries no live pty', () => {
     render(
       <AgentTerminalDialog
