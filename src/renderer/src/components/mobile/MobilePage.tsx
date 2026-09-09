@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { resolveClientEnvironmentInfo } from '@/lib/client-environment-info'
 import type { Platform, StepIndex } from './MobileHero'
 import type { IosChannel } from './mobile-platform-copy'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
@@ -20,7 +19,7 @@ import { useMobilePairingQrInvalidation } from './use-mobile-pairing-qr-invalida
 import { useMobileInstallActions } from './use-mobile-install-actions'
 import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
-import { buildMobileRelayDiagnosticsPayload } from './mobile-relay-diagnostics-payload'
+import { collectMobileRelayDiagnosticsPayload } from './mobile-relay-diagnostics-payload'
 import {
   type MobilePairingAddressChange,
   useMobilePairingAddressPreference
@@ -149,18 +148,9 @@ export default function MobilePage(): React.JSX.Element {
       return
     }
     // Why: users share this payload — an address (selected or relay cell) would leak a LAN/Tailscale IP or hostname.
-    const [relayStatus, environment] = await Promise.all([
-      window.api.mobile
-        .getRelayStatus()
-        .then((detail) => detail.status)
-        .catch(() => 'offline' as const),
-      resolveClientEnvironmentInfo()
-    ])
-    const payload = buildMobileRelayDiagnosticsPayload({
+    const payload = await collectMobileRelayDiagnosticsPayload({
       connectionMode,
-      failure: relayMintFailure,
-      relayStatus,
-      appVersion: environment.appVersion
+      failure: relayMintFailure
     })
     try {
       await window.api.ui.writeClipboardText(JSON.stringify(payload, null, 2))
