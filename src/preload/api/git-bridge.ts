@@ -4,8 +4,25 @@ import type { GitStagingArea, GitUpstreamStatus } from '../../shared/git-status-
 import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { PreloadApi } from '../api-types'
+import type { GitBlameResult } from '../../shared/git-blame'
+import type { GitStashCreateOptions, GitStashFile, GitStashSummary } from '../../shared/git-stash'
 
 export const gitApi = {
+	blame: (args: {
+		worktreePath: string
+		relativePath: string
+		connectionId?: string
+		requestToken?: string
+	}): Promise<GitBlameResult> => ipcRenderer.invoke('git:blame', args),
+	cancelBlame: (args: { requestToken: string }): Promise<void> =>
+		ipcRenderer.invoke('git:cancelBlame', args),
+  stashList: (args: { worktreePath: string; connectionId?: string; requestToken?: string }): Promise<GitStashSummary[]> => ipcRenderer.invoke('git:stashList', args),
+  stashFiles: (args: { worktreePath: string; ref: string; connectionId?: string; requestToken?: string }): Promise<GitStashFile[]> => ipcRenderer.invoke('git:stashFiles', args),
+  stashCancel: (args: { requestToken: string }): Promise<void> => ipcRenderer.invoke('git:stashCancel', args),
+  stashCreate: (args: { worktreePath: string; connectionId?: string } & GitStashCreateOptions): Promise<void> => ipcRenderer.invoke('git:stashCreate', args),
+  stashApply: (args: { worktreePath: string; ref: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashApply', args),
+  stashPop: (args: { worktreePath: string; ref: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashPop', args),
+  stashDrop: (args: { worktreePath: string; ref: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashDrop', args),
   status: (args: {
     worktreePath: string
     connectionId?: string

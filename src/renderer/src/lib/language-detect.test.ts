@@ -47,6 +47,12 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\Users\\alice\\.codex\\LOG.JSONL')).toBe('jsonl')
   })
 
+  it('maps gitignore-compatible filenames to the ignore language id', () => {
+    expect(detectLanguage('.gitignore')).toBe('ignore')
+    expect(detectLanguage('packages/web/.prettierignore')).toBe('ignore')
+    expect(detectLanguage('.dockerignore')).toBe('ignore')
+  })
+
   it('maps .cts/.mts files to the Monaco built-in typescript language id (case-insensitive)', () => {
     expect(detectLanguage('config/vitest.config.mts')).toBe('typescript')
     expect(detectLanguage('scripts/postinstall.cts')).toBe('typescript')

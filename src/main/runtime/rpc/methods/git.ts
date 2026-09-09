@@ -3,6 +3,9 @@ import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-gene
 import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
   GitBranchCompare,
+	GitBlame,
+  GitStashCreate,
+  GitStashRef,
   GitBulkPaths,
   GitCheckIgnored,
   GitCheckout,
@@ -22,6 +25,32 @@ import {
 } from './git-params'
 
 export const GIT_METHODS: RpcMethod[] = [
+	defineMethod({
+		name: 'git.blame',
+		params: GitBlame,
+		handler: async (params, { runtime, signal }) =>
+			runtime.getRuntimeGitBlame(params.worktree, params.relativePath, { signal })
+	}),
+  defineMethod({
+    name: 'git.stashList',
+    params: WorktreeSelector,
+    handler: async (params, { runtime, signal }) => runtime.listRuntimeGitStashes(params.worktree, signal)
+  }),
+  defineMethod({
+    name: 'git.stashFiles',
+    params: GitStashRef,
+    handler: async (params, { runtime, signal }) => runtime.listRuntimeGitStashFiles(params.worktree, params.ref, signal)
+  }),
+  defineMethod({
+    name: 'git.stashCreate',
+    params: GitStashCreate,
+    handler: async (params, { runtime }) => runtime.createRuntimeGitStash(params.worktree, params)
+  }),
+  ...(['apply', 'pop', 'drop'] as const).map((action) => defineMethod({
+    name: `git.stash${action[0].toUpperCase()}${action.slice(1)}`,
+    params: GitStashRef,
+    handler: async (params, { runtime }) => runtime.mutateRuntimeGitStash(params.worktree, action, params.ref)
+  })),
   defineMethod({
     name: 'git.status',
     params: GitStatusParams,

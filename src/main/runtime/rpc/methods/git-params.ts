@@ -45,6 +45,20 @@ export const GitFilePath = WorktreeSelector.extend({
     .pipe(z.string().min(1, 'Missing file path'))
 })
 
+export const GitBlame = WorktreeSelector.extend({
+	relativePath: z.string().min(1, 'Missing relative path')
+})
+
+export const GitStashRef = WorktreeSelector.extend({
+  ref: z.string().regex(/^stash@\{\d+\}$/, 'Invalid stash reference')
+})
+
+export const GitStashCreate = WorktreeSelector.extend({
+  message: z.string().max(500).optional(),
+  includeUntracked: z.boolean().optional(),
+  keepIndex: z.boolean().optional()
+})
+
 export const GitDiff = GitFilePath.extend({
   staged: z.boolean(),
   compareAgainstHead: z.boolean().optional()

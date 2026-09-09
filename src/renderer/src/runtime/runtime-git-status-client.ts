@@ -7,6 +7,51 @@ import type {
 import { resolveLocalWorktreePath, type RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import type { GitBlameResult } from '../../../shared/git-blame'
+
+export async function getRuntimeGitBlame(
+	context: RuntimeGitContext,
+	relativePath: string,
+	signal?: AbortSignal
+): Promise<GitBlameResult> {
+	if (signal?.aborted) {
+		throw createGitBlameAbortError()
+	}
+	const target = getActiveRuntimeTarget(context.settings)
+	if (target.kind === 'local' || !context.worktreeId) {
+		const requestToken = `git-blame-${Date.now()}-${Math.random().toString(36).slice(2)}`
+		const cancel = (): void => {
+			void window.api.git.cancelBlame({ requestToken }).catch(() => {})
+		}
+		signal?.addEventListener('abort', cancel, { once: true })
+		try {
+			const result = await window.api.git.blame({
+				worktreePath: resolveLocalWorktreePath(context),
+				relativePath,
+				connectionId: context.connectionId,
+				requestToken
+			})
+			if (signal?.aborted) {
+				throw createGitBlameAbortError()
+			}
+			return result
+		} finally {
+			signal?.removeEventListener('abort', cancel)
+		}
+	}
+	return callRuntimeRpc<GitBlameResult>(
+		target,
+		'git.blame',
+		{ worktree: toRuntimeWorktreeSelector(context.worktreeId), relativePath },
+		{ timeoutMs: 15_000, signal }
+	)
+}
+
+function createGitBlameAbortError(): Error {
+	const error = new Error('Git blame request aborted')
+	error.name = 'AbortError'
+	return error
+}
 
 export async function getRuntimeGitStatus(
   context: RuntimeGitContext,

@@ -16,6 +16,8 @@ import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-histo
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { GitProviderStatusOptions } from './git-provider-status-options'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
+import type { GitBlameResult } from '../../shared/git-blame'
+import type { GitStashCreateOptions, GitStashFile, GitStashSummary } from '../../shared/git-stash'
 
 export type { GitProviderStatusOptions } from './git-provider-status-options'
 
@@ -28,6 +30,17 @@ export type IGitProvider = {
   ): Promise<GitStatusResult>
   checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]>
   getHistory(worktreePath: string, options?: GitHistoryOptions): Promise<GitHistoryResult>
+	getBlame(
+		worktreePath: string,
+		relativePath: string,
+		options?: { signal?: AbortSignal }
+	): Promise<GitBlameResult>
+  listStashes(worktreePath: string, options?: { signal?: AbortSignal }): Promise<GitStashSummary[]>
+  listStashFiles(worktreePath: string, ref: string, options?: { signal?: AbortSignal }): Promise<GitStashFile[]>
+  createStash(worktreePath: string, options: GitStashCreateOptions): Promise<void>
+  applyStash(worktreePath: string, ref: string): Promise<void>
+  popStash(worktreePath: string, ref: string): Promise<void>
+  dropStash(worktreePath: string, ref: string): Promise<void>
   commit(worktreePath: string, message: string): Promise<{ success: boolean; error?: string }>
   getStagedCommitContext(worktreePath: string): Promise<CommitMessageDraftContext | null>
   getDiff(

@@ -17,6 +17,7 @@ import { computeDiff, type GitExec } from './git-handler-ops'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
 import { stableInFlightKey } from '../shared/in-flight-promise-dedupe'
+import { parseGitBlamePorcelain } from '../shared/git-blame'
 
 function resolveSubmoduleStatusArea(
   params: Record<string, unknown>
@@ -28,6 +29,29 @@ function resolveSubmoduleStatusArea(
 }
 
 export class GitHandlerReadOperations extends GitHandlerOperationContext {
+	async blame(params: Record<string, unknown>, context: RequestContext) {
+		const worktreePath = params.worktreePath as string
+		const relativePath = params.relativePath as string
+		const resolved = path.resolve(worktreePath, relativePath)
+		const rel = path.relative(path.resolve(worktreePath), resolved)
+		if (
+			!relativePath ||
+			relativePath.includes('\0') ||
+			path.isAbsolute(relativePath) ||
+			rel === '..' ||
+			rel.startsWith(`..${path.sep}`) ||
+			path.isAbsolute(rel)
+		) {
+			throw new Error(`Path "${relativePath}" resolves outside the worktree`)
+		}
+		const result = await this.git(
+			['blame', '--line-porcelain', '--', relativePath],
+			worktreePath,
+			{ signal: context.signal }
+		)
+		return parseGitBlamePorcelain(result.stdout)
+	}
+
   async getStatus(params: Record<string, unknown>, context: RequestContext) {
     this.gitDiffReadDedupe.clear()
     return getStatusOp(this.git.bind(this), streamRelayGitStdout, params, {

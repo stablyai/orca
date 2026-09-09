@@ -36,6 +36,7 @@ type SourceControlHeaderToolbarProps = {
   branchCompareRefreshDisabled: boolean
   diffCommentCount: number
   onExpandNotes: () => void
+  onCreateGitignore?: () => void
   branchSummary: GitBranchCompareSummary | null
   compareBaseRef: string | null
   headDisplay?: WorktreeGitIdentityDisplay | null
@@ -138,6 +139,7 @@ function renderOverflowMenu(
     | 'branchCompareRefreshDisabled'
     | 'diffCommentCount'
     | 'onExpandNotes'
+    | 'onCreateGitignore'
   >
 ): React.JSX.Element {
   return <SourceControlHeaderOverflowMenu {...props} />
@@ -164,6 +166,7 @@ export function SourceControlHeaderToolbar({
   branchCompareRefreshDisabled,
   diffCommentCount,
   onExpandNotes,
+  onCreateGitignore,
   branchSummary,
   compareBaseRef,
   headDisplay = null,
@@ -181,7 +184,8 @@ export function SourceControlHeaderToolbar({
     onRefreshBranchCompare,
     branchCompareRefreshDisabled,
     diffCommentCount,
-    onExpandNotes
+    onExpandNotes,
+    onCreateGitignore
   }
 
   const expandFilter = useCallback(() => {

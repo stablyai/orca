@@ -6,8 +6,67 @@ import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-histo
 import type { GitConflictOperation } from '../../shared/git-status-types'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { SshGitNoninteractiveProvider } from './ssh-git-noninteractive-provider'
+import type { GitBlameResult } from '../../shared/git-blame'
+import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
+import type { GitStashCreateOptions, GitStashFile, GitStashSummary } from '../../shared/git-stash'
 
 export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
+	private async stashRequest<T>(method: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+		try {
+			return (await this.mux.request(method, params, signal ? { signal } : undefined)) as T
+		} catch (error) {
+			if (isJsonRpcMethodNotFoundError(error)) {
+				throw new Error('Git stashes are unavailable on this host. Reconnect to update Orca, then try again.')
+			}
+			throw error
+		}
+	}
+
+	listStashes(worktreePath: string, options?: { signal?: AbortSignal }): Promise<GitStashSummary[]> {
+		return this.stashRequest('git.stashList', { worktreePath }, options?.signal)
+	}
+
+	listStashFiles(worktreePath: string, ref: string, options?: { signal?: AbortSignal }): Promise<GitStashFile[]> {
+		return this.stashRequest('git.stashFiles', { worktreePath, ref }, options?.signal)
+	}
+
+	createStash(worktreePath: string, options: GitStashCreateOptions): Promise<void> {
+		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashCreate', { worktreePath, ...options }))
+	}
+
+	applyStash(worktreePath: string, ref: string): Promise<void> {
+		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashApply', { worktreePath, ref }))
+	}
+
+	popStash(worktreePath: string, ref: string): Promise<void> {
+		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashPop', { worktreePath, ref }))
+	}
+
+	dropStash(worktreePath: string, ref: string): Promise<void> {
+		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashDrop', { worktreePath, ref }))
+	}
+
+	async getBlame(
+		worktreePath: string,
+		relativePath: string,
+		options?: { signal?: AbortSignal }
+	): Promise<GitBlameResult> {
+		try {
+			return (await this.mux.request(
+				'git.blame',
+				{ worktreePath, relativePath },
+				options?.signal ? { signal: options.signal } : undefined
+			)) as GitBlameResult
+		} catch (error) {
+			if (isJsonRpcMethodNotFoundError(error)) {
+				throw new Error(
+					'Git blame is unavailable on this host. Reconnect to update Orca, then try again.'
+				)
+			}
+			throw error
+		}
+	}
+
   async checkIgnoredPaths(worktreePath: string, relativePaths: string[]): Promise<string[]> {
     return (await this.mux.request('git.checkIgnored', {
       worktreePath,

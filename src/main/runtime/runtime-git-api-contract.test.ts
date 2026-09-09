@@ -4,6 +4,13 @@ import { GIT_METHODS } from './rpc/methods/git'
 import { RuntimeGitCommands } from './orca-runtime-git'
 
 const RPC_TO_RUNTIME_COMMAND = {
+	'git.blame': 'getRuntimeGitBlame',
+  'git.stashList': 'listRuntimeGitStashes',
+  'git.stashFiles': 'listRuntimeGitStashFiles',
+  'git.stashCreate': 'createRuntimeGitStash',
+  'git.stashApply': 'mutateRuntimeGitStash',
+  'git.stashPop': 'mutateRuntimeGitStash',
+  'git.stashDrop': 'mutateRuntimeGitStash',
   'git.status': 'getRuntimeGitStatus',
   'git.checkIgnored': 'checkRuntimeGitIgnoredPaths',
   'git.submoduleStatus': 'getRuntimeGitSubmoduleStatus',

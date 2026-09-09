@@ -4,10 +4,11 @@ import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { useGitignoreTemplateFlow } from '../gitignore/use-gitignore-template-flow'
 
 /** The panel chrome: toolbar, notes shelf, the scrolling file surface, bulk bar and dialog layer. */
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
-  const { model, worktreePath } = props
+  const { currentWorktreeId, model, worktreePath } = props
   const {
     activeGroupId,
     activeWorktreeId,
@@ -54,6 +55,12 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     suppressedGitHubPRState,
     visibleCreatePrHeaderAction
   } = model
+  const gitignoreTemplates = useGitignoreTemplateFlow({
+    settings: model.activeRepoSettings,
+    worktreeId: currentWorktreeId,
+    worktreePath,
+    connectionId: model.activeConnectionId ?? undefined
+  })
 
   return (
     <>
@@ -90,6 +97,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           compareBaseRef={compareBaseRef}
           headDisplay={gitIdentityDisplay}
           manualReviewUrl={manualReviewUrl}
+          onCreateGitignore={() => void gitignoreTemplates.openGitignoreTemplateDialog()}
         />
 
         {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
@@ -131,6 +139,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
       </div>
 
       <SourceControlPanelDialogs {...props} />
+      {gitignoreTemplates.dialog}
     </>
   )
 }

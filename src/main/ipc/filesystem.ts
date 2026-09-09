@@ -19,6 +19,8 @@ import { registerFilesystemGitRemoteHandlers } from './filesystem/filesystem-git
 import { registerFilesystemGitDiffHandlers } from './filesystem/filesystem-git-diff-handlers'
 import { registerFilesystemGitIndexHandlers } from './filesystem/filesystem-git-index-handlers'
 import { registerFilesystemGitUrlHandlers } from './filesystem/filesystem-git-url-handlers'
+import { registerFilesystemGitBlameHandlers } from './filesystem/filesystem-git-blame-handlers'
+import { registerFilesystemGitStashHandlers } from './filesystem/filesystem-git-stash-handlers'
 
 export function registerFilesystemHandlers(
   store: Store,
@@ -28,6 +30,8 @@ export function registerFilesystemHandlers(
     store,
     commitMessageAgentEnv,
     createSenderScopedRequestCancellations(),
+		createSenderScopedRequestCancellations(),
+    createSenderScopedRequestCancellations(),
     createSenderScopedRequestCancellations()
   )
 
@@ -36,6 +40,8 @@ export function registerFilesystemHandlers(
   registerFilesystemWriteHandlers(context)
   registerFilesystemSearchHandlers(context)
   registerFilesystemGitStatusHandlers(context)
+	registerFilesystemGitBlameHandlers(context)
+  registerFilesystemGitStashHandlers(context)
   registerFilesystemGitCommitHandlers(context)
   registerFilesystemGitCommitGenerationHandlers(context)
   registerFilesystemGitModelDiscoveryHandlers(context)

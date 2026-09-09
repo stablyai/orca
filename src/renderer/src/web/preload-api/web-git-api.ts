@@ -8,6 +8,8 @@ import {
   resolveRuntimeFilePath,
   resolveRuntimeWorktreeByPath
 } from './web-runtime-worktree-catalog'
+import { webGitBlameApi } from './web-git-blame-api'
+import { webGitStashApi } from './web-git-stash-api'
 
 export const webGitStatusAbortControllers = new Map<string, AbortController>()
 
@@ -41,6 +43,8 @@ export async function callAbortableRuntimeStatus<TResult>(
 
 export function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
+		...webGitBlameApi,
+    ...webGitStashApi,
     status: async ({
       worktreePath,
       includeIgnored,
