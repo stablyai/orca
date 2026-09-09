@@ -43,10 +43,14 @@ export function ftsTableFor(scope: SessionSearchScope): 'messages_fts' | 'conver
 
 /** The FTS half of a search: the route ladder and the SQL each rung runs. */
 export class SessionSearchRetrieval {
-  private readonly typoRepair: SessionSearchTypoRepair
+  /** Null when this index has no vocabulary to repair against; the rung is skipped. */
+  private readonly typoRepair: SessionSearchTypoRepair | null
 
-  constructor(private readonly db: SyncDatabase) {
-    this.typoRepair = new SessionSearchTypoRepair(db)
+  constructor(
+    private readonly db: SyncDatabase,
+    canRepairTypos = true
+  ) {
+    this.typoRepair = canRepairTypos ? new SessionSearchTypoRepair(db) : null
   }
 
   /**
@@ -100,16 +104,23 @@ export class SessionSearchRetrieval {
   }
 
   private repair(plan: SessionSearchQueryPlan): SessionSearchQueryPlan | null {
+    if (!this.typoRepair) {
+      return null
+    }
+    const typoRepair = this.typoRepair
     let changed = false
     const body = plan.body.map((term) => {
-      const fix = this.typoRepair.correct(term)
+      const fix = typoRepair.correct(term)
       if (fix && fix !== term.toLowerCase()) {
         changed = true
         return fix
       }
       return term
     })
-    return changed ? { ...planSessionSearchQuery(body.join(' ')), literal: plan.literal } : null
+    // The repair changes spellings, not the query's character: the re-plan is
+    // told what the original decided so a corrected literal keeps every term it
+    // was typed with.
+    return changed ? planSessionSearchQuery(body.join(' '), plan.literal) : null
   }
 
   /** Phrase, then AND, for literal-looking queries; null when neither matches. */

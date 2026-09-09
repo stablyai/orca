@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SessionSearchEngine } from './session-search-engine'
 import { SESSION_SEARCH_QUERY_MAX_LENGTH } from './session-search-engine-types'
 import type { SessionSearchRequest, SessionSearchResponse } from './session-search-engine-types'
 import {
@@ -61,6 +62,20 @@ describe('the route ladder tries phrase, then AND, then repair, then OR', () => 
     expect(result.planner.route).toBe('typo+or')
     expect(result.planner.repairedTerms).toEqual(['coalesces'])
     expect(ids(result).sort()).toEqual(['1', '2'])
+  })
+
+  it('keeps every term a repaired literal was typed with', async () => {
+    const { db, engine } = await open('ss-engine-typo-literal')
+    addSyntheticSession(db, { id: 1, text: 'parseJson the data' })
+    addSyntheticSession(db, { id: 2, text: 'parseJson the data again' })
+    // `parseJsonn(the, data)` is literal because of its punctuation; the
+    // corrected spelling read on its own is prose. Re-planning without carrying
+    // the original decision across would drop `the` and report a body that was
+    // never typed.
+    // A corrected term comes back in the index's own spelling, which unicode61
+    // has folded; the terms the repair left alone keep the case they were typed.
+    const result = engine.search({ query: 'parseJsonn(the, data)' })
+    expect(result.planner.repairedTerms).toEqual(['parsejson', 'the', 'data'])
   })
 
   it('does not repair a term the index already holds', async () => {
@@ -252,6 +267,39 @@ describe('source presence comes from the files table, never a stat', () => {
     const hits = engine.search({ query: 'needle' }).hits
     expect(hits).toHaveLength(1)
     expect(hits[0]?.source).toBe('unverifiable')
+  })
+})
+
+describe('an index that predates version 2 is answered from, not thrown at', () => {
+  async function version1(): Promise<SessionSearchHarness> {
+    const opened = await open('ss-engine-v1')
+    addSyntheticSession(opened.db, { id: 1, text: 'the coalesces path is slow' })
+    addSyntheticSession(opened.db, { id: 2, text: 'coalesces again here' })
+    // A real v1 file: neither table version 2 added exists in it.
+    opened.db.exec('DROP TABLE messages_vocab; DROP TABLE search_log')
+    return opened
+  }
+
+  it('still searches, and names the feature it cannot serve', async () => {
+    const { store } = await version1()
+    const engine = new SessionSearchEngine(store, { logQueries: true })
+    const result = engine.search({ query: 'coalesces' })
+    expect(ids(result).sort()).toEqual(['1', '2'])
+    expect(result.unavailable).toEqual(['typo-repair', 'query-log'])
+  })
+
+  it('skips the repair rung rather than reaching for a vocabulary that is gone', async () => {
+    const { store } = await version1()
+    const result = new SessionSearchEngine(store).search({ query: 'coalescs' })
+    expect(result.planner.route).toBe('or')
+    expect(result.planner.repairedTerms).toBeUndefined()
+    expect(result.hits).toEqual([])
+  })
+
+  it('claims nothing unavailable on a current index', async () => {
+    const { db, engine } = await open('ss-engine-v2')
+    addSyntheticSession(db, { id: 1 })
+    expect(engine.search({ query: 'needle' }).unavailable).toEqual([])
   })
 })
 

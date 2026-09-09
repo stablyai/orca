@@ -12,6 +12,7 @@ import {
   type SessionSearchResponse,
   type SessionSearchSourcePresence
 } from './session-search-engine-types'
+import type { SessionSearchUnavailableFeature } from './session-search-index-capabilities'
 import {
   rankSessionHits,
   type MessageRow,
@@ -32,6 +33,7 @@ import {
   type Retrieved
 } from './session-search-retrieval'
 import { sessionRowFilter } from './session-search-row-filter'
+import { sessionSearchUnavailableFeatures } from './session-search-index-capabilities'
 import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'
 import { sessionSourcePresence } from './session-search-source-presence'
 import type { SessionSearchStore } from './session-search-store'
@@ -79,13 +81,16 @@ export class SessionSearchEngine {
   private readonly db: SyncDatabase
   private readonly retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
+  /** Probed once: a version-1 file has neither vocabulary nor query log. */
+  private readonly unavailable: readonly SessionSearchUnavailableFeature[]
 
   constructor(
     private readonly store: SessionSearchStore,
     private readonly options: SessionSearchEngineOptions = {}
   ) {
     this.db = store.connection
-    this.retrieval = new SessionSearchRetrieval(this.db)
+    this.unavailable = sessionSearchUnavailableFeatures(this.db)
+    this.retrieval = new SessionSearchRetrieval(this.db, !this.unavailable.includes('typo-repair'))
     this.candidateLimit = options.sessionCandidateLimit ?? SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT
   }
 
@@ -129,6 +134,7 @@ export class SessionSearchEngine {
     const hasMore = ranked.length > offset + limit
     const response: SessionSearchResponse = {
       hits,
+      unavailable: this.unavailable,
       planner: {
         route: retrieved?.route ?? 'or',
         tier: scope,
@@ -147,7 +153,7 @@ export class SessionSearchEngine {
       generation,
       durationMs: performance.now() - startedAt
     }
-    if (this.options.logQueries) {
+    if (this.options.logQueries && !this.unavailable.includes('query-log')) {
       logSessionSearchQuery(this.db, {
         query: request.query,
         route: response.planner.route,
