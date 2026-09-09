@@ -23,16 +23,29 @@ export const OFFICE_GOTO_CHANNEL = 'office:goto'
 export const OFFICE_SKILLS_LIST_CHANNEL = 'office:skillsList'
 export const OFFICE_SKILLS_INSTALL_CHANNEL = 'office:skillsInstall'
 
-export type OfficeProbeRequest = { owner: OfficeHostOwner; path?: string; refresh?: boolean }
-export type OfficeDocumentRequest = { owner: OfficeHostOwner; path: string }
+/**
+ * Every document request names the workspace root and a path inside it. The host joins and
+ * canonicalises the two and refuses anything landing outside the root, so the renderer never hands
+ * a bare absolute path to a spawn.
+ */
+export type OfficeProbeRequest = {
+  owner: OfficeHostOwner
+  workspaceRoot?: string
+  refresh?: boolean
+}
+export type OfficeDocumentRequest = {
+  owner: OfficeHostOwner
+  workspaceRoot: string
+  relativePath: string
+}
 /** `browserPageId` binds the minted grant to the page showing it, exactly as a file grant is. */
 export type OfficeSnapshotRequest = OfficeDocumentRequest & { browserPageId: string }
 export type OfficeElementRequest = OfficeDocumentRequest & { elementPath: string }
-export type OfficeSkillsListRequest = { owner: OfficeHostOwner; path?: string }
+export type OfficeSkillsListRequest = { owner: OfficeHostOwner; workspaceRoot?: string }
 export type OfficeSkillsInstallRequest = {
   owner: OfficeHostOwner
   pairs: readonly { skill: string; agent: string }[]
-  path?: string
+  workspaceRoot?: string
 }
 
 /** A preview URL for bytes main holds, plus the grant id the caller must release on tab close. */

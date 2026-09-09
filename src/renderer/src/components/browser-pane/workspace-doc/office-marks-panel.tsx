@@ -3,6 +3,8 @@ import { Eraser, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { OfficeHostOwner } from '../../../../../shared/office-host-owner'
+import type { OfficeDocumentLocation } from '@/lib/office-preview-plan'
+import { officeMarksTitle } from './office-preview-status'
 import type { OfficeMark } from '../../../../../shared/office-preview-contracts'
 
 /**
@@ -16,21 +18,21 @@ import type { OfficeMark } from '../../../../../shared/office-preview-contracts'
  */
 export function OfficeMarksPanel({
   owner,
-  filePath
+  document
 }: {
   owner: OfficeHostOwner | null
-  filePath: string
+  document: OfficeDocumentLocation | null
 }): React.JSX.Element | null {
   const [marks, setMarks] = useState<OfficeMark[]>([])
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    if (!owner) {
+    if (!owner || !document) {
       return
     }
     let disposed = false
     void window.api.office
-      .marks({ owner, path: filePath })
+      .marks({ owner, ...document })
       .then((outcome) => {
         if (!disposed) {
           // A failure here means no watch process holds the document, which is the same thing as
@@ -46,26 +48,26 @@ export function OfficeMarksPanel({
     return () => {
       disposed = true
     }
-  }, [attempt, filePath, owner])
+  }, [attempt, document, owner])
 
   const jump = useCallback(
     (elementPath: string) => {
-      if (owner) {
-        void window.api.office.goto({ owner, path: filePath, elementPath })
+      if (owner && document) {
+        void window.api.office.goto({ owner, ...document, elementPath })
       }
     },
-    [filePath, owner]
+    [document, owner]
   )
 
   const clear = useCallback(() => {
-    if (!owner) {
+    if (!owner || !document) {
       return
     }
     void window.api.office
-      .clearMarks({ owner, path: filePath })
+      .clearMarks({ owner, ...document })
       .then(() => setAttempt((count) => count + 1))
       .catch(() => setAttempt((count) => count + 1))
-  }, [filePath, owner])
+  }, [document, owner])
 
   if (marks.length === 0) {
     return null
@@ -75,11 +77,7 @@ export function OfficeMarksPanel({
     <div className="flex shrink-0 flex-col gap-1 border-b px-2 py-1.5">
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-medium text-muted-foreground">
-          {translate(
-            'auto.components.office.preview.marksTitle',
-            '{{count}} marks proposed for review',
-            { count: marks.length }
-          )}
+          {officeMarksTitle(marks.length)}
         </span>
         <div className="flex-1" />
         <Button size="sm" variant="ghost" className="h-6 gap-1 px-1.5 text-xs" onClick={clear}>

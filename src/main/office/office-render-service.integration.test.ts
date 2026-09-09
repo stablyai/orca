@@ -6,6 +6,7 @@
  * properties of the tool's output, and only the tool can establish them.
  */
 import { join } from 'node:path'
+import { officeDocumentRef } from './office-local-execution'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { OFFICE_RENDER_MAX_BYTES } from '../../shared/office-preview-contracts'
 import { probeOfficecli } from './office-probe-service'
@@ -27,7 +28,7 @@ describe('office.render against real documents', () => {
       if (!installed) {
         return
       }
-      const outcome = await renderOfficeDocument(join(FIXTURES, fixture))
+      const outcome = await renderOfficeDocument(officeDocumentRef(FIXTURES, fixture))
       expect(outcome.ok).toBe(true)
       if (!outcome.ok) {
         return
@@ -54,7 +55,7 @@ describe('office.render against real documents', () => {
     if (!installed) {
       return
     }
-    const outcome = await renderOfficeDocument(join(FIXTURES, 'sample.pptx'))
+    const outcome = await renderOfficeDocument(officeDocumentRef(FIXTURES, 'sample.pptx'))
     expect(outcome.ok && outcome.html.includes('data:image')).toBe(true)
   }, 180_000)
 
@@ -62,14 +63,14 @@ describe('office.render against real documents', () => {
     if (!installed) {
       return
     }
-    const outcome = await renderOfficeDocument(join(FIXTURES, 'sample.docx'))
+    const outcome = await renderOfficeDocument(officeDocumentRef(FIXTURES, 'sample.docx'))
     expect(outcome.ok && /<table/i.test(outcome.html)).toBe(true)
   }, 180_000)
 
   it('refuses a format it cannot render without blaming the toolchain', async () => {
     // No spawn happens at all: the extension table answers first, so a `.doc` never produces an
     // install prompt for a tool that was never the problem.
-    const outcome = await renderOfficeDocument(join(FIXTURES, 'sample.doc'))
+    const outcome = await renderOfficeDocument(officeDocumentRef(FIXTURES, 'sample.doc'))
     expect(outcome).toEqual({ ok: false, code: 'OFFICECLI_UNSUPPORTED_FORMAT' })
   })
 
@@ -77,7 +78,7 @@ describe('office.render against real documents', () => {
     if (!installed) {
       return
     }
-    const outcome = await renderOfficeDocument(join(FIXTURES, 'absent.docx'))
+    const outcome = await renderOfficeDocument(officeDocumentRef(FIXTURES, 'absent.docx'))
     expect(outcome.ok).toBe(false)
     expect(outcome.ok === false && outcome.code).toBe('OFFICECLI_FILE_NOT_FOUND')
   }, 60_000)

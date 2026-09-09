@@ -16,6 +16,8 @@ export const OFFICE_ERROR_CODES = [
   /** The binary ran and refused, or produced nothing usable. */
   'OFFICECLI_RENDER_FAILED',
   'OFFICECLI_FILE_NOT_FOUND',
+  /** The document named does not live inside the workspace it was named against. */
+  'OFFICE_DOCUMENT_OUTSIDE_WORKSPACE',
   /** Another process already watches this document; not a failure of ours. */
   'OFFICECLI_ALREADY_WATCHED',
   /** The watch server never began accepting connections inside the readiness budget. */

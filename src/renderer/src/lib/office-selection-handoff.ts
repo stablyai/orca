@@ -15,6 +15,7 @@ import { getActiveTerminalNoteTarget } from '@/lib/active-agent-note-target'
 import { useAppStore } from '@/store'
 import type { OfficeHostOwner } from '../../../shared/office-host-owner'
 import type { OfficeSelectionNode } from '../../../shared/office-preview-contracts'
+import type { OfficeDocumentLocation } from '@/lib/office-preview-plan'
 
 /** Enough elements to act on, few enough to stay readable in a composer. */
 const MAX_REFERENCED_NODES = 20
@@ -56,10 +57,12 @@ export type OfficeSelectionHandoff =
 export async function handOffOfficeSelection(params: {
   worktreeId: string
   owner: OfficeHostOwner
-  filePath: string
+  document: OfficeDocumentLocation
+  /** What the reference names, so the agent reads the path the reader knows. */
+  displayPath: string
 }): Promise<OfficeSelectionHandoff> {
   const outcome = await window.api.office
-    .selection({ owner: params.owner, path: params.filePath })
+    .selection({ owner: params.owner, ...params.document })
     .catch(() => ({ ok: false as const, code: 'OFFICE_HOST_UNREACHABLE' as const }))
   if (!outcome.ok) {
     return { status: 'failed', code: outcome.code }
@@ -67,7 +70,7 @@ export async function handOffOfficeSelection(params: {
   if (outcome.nodes.length === 0) {
     return { status: 'empty' }
   }
-  const reference = formatOfficeSelectionReference(params.filePath, outcome.nodes)
+  const reference = formatOfficeSelectionReference(params.displayPath, outcome.nodes)
   const state = useAppStore.getState()
   const target = getActiveTerminalNoteTarget(state, params.worktreeId)
   const tab = target

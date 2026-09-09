@@ -13,6 +13,7 @@ import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
 import type { OfficeHostOwner } from '../../../shared/office-host-owner'
+import type { OfficeDocumentLocation } from '@/lib/office-preview-plan'
 
 /** Coalesces the burst of events a single save produces into one re-render. */
 const REFRESH_DEBOUNCE_MS = 400
@@ -39,10 +40,12 @@ function touchesDocument(payload: FsChangedPayload, documentPath: string): boole
  */
 export function subscribeOfficeLiveRefresh(params: {
   owner: OfficeHostOwner
-  filePath: string
+  document: OfficeDocumentLocation
   worktreeId: string
   worktreePath: string | null
 }): LiveRefreshSubscription {
+  // The absolute path is what fs events report; the (root, relative) pair is what the host accepts.
+  const documentPath = `${params.document.workspaceRoot}/${params.document.relativePath}`
   let disposed = false
   let unsubscribe: (() => void) | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -55,14 +58,14 @@ export function subscribeOfficeLiveRefresh(params: {
       timer = null
       if (!disposed) {
         void window.api.office
-          .watchRefresh({ owner: params.owner, path: params.filePath })
+          .watchRefresh({ owner: params.owner, ...params.document })
           .catch(() => undefined)
       }
     }, REFRESH_DEBOUNCE_MS)
   }
 
   const onPayload = (payload: FsChangedPayload): void => {
-    if (!disposed && touchesDocument(payload, params.filePath)) {
+    if (!disposed && touchesDocument(payload, documentPath)) {
       requestRefresh()
     }
   }

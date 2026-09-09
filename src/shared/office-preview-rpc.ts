@@ -35,30 +35,37 @@ export const OFFICE_RPC_METHODS = [
 
 export type OfficeRpcMethod = (typeof OFFICE_RPC_METHODS)[number]
 
-/** Absent `path` on a probe or a skills call means "this host's default lane". */
-export type OfficeDocumentParams = { path?: string }
+/**
+ * Every document method names a workspace root and a path relative to it, never a bare absolute
+ * path — the same shape every runtime `files.*` method uses. The host joins the two, canonicalises
+ * them and proves the result still sits inside the root before anything reaches a spawn, so a
+ * `../../` in the relative half is refused on the host rather than trusted from the wire.
+ */
+export type OfficeWorkspaceDocumentParams = { workspaceRoot: string; relativePath: string }
+/** Absent root on a probe or a skills call means "this host's default lane". */
+export type OfficeDocumentParams = { workspaceRoot?: string }
 /** `refresh` drops the host's cached answer first — the Retry control after a reader installs. */
-export type OfficeProbeParams = { path?: string; refresh?: boolean }
-export type OfficeRequiredDocumentParams = { path: string }
+export type OfficeProbeParams = { workspaceRoot?: string; refresh?: boolean }
 /** An officecli data-path such as `/slide[1]/shape[@id=100000]`, taken from a mark or a selection. */
-export type OfficeElementParams = { path: string; elementPath: string }
+export type OfficeElementParams = OfficeWorkspaceDocumentParams & { elementPath: string }
 export type OfficeSkillInstallParams = {
   pairs: readonly { skill: string; agent: string }[]
-  path?: string
+  workspaceRoot?: string
 }
 
 const MAX_ELEMENT_PATH_LENGTH = 1_024
 const MAX_PATH_LENGTH = 4_096
+const MAX_RELATIVE_PATH_LENGTH = 2_048
 const MAX_SKILL_PAIRS = 200
 /** Skill and agent ids are the tool's own identifiers; anything else is not one. */
 const SKILL_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/i
 
 /**
- * Host-side validation, run before any value reaches a spawn.
+ * Host-side shape validation, run before any value reaches a spawn.
  *
- * A path is checked for shape only, never rewritten: the host canonicalises it itself, and a
- * client-supplied path that survives here is still just one argv element — nothing in this feature
- * interpolates a reader-supplied string into a shell string.
+ * Shape only — the boundary itself is enforced after canonicalisation, in
+ * `resolveOfficeDocumentTarget`, because a lexical check cannot see through a symlink. Nothing
+ * that survives here is ever interpolated into a shell string; it becomes one argv element.
  */
 export function isValidOfficeDocumentPath(value: unknown): value is string {
   return (
@@ -67,6 +74,35 @@ export function isValidOfficeDocumentPath(value: unknown): value is string {
     value.length <= MAX_PATH_LENGTH &&
     !value.includes('\0')
   )
+}
+
+/** A workspace-relative path: never absolute, never empty, and length-bounded. */
+export function isValidOfficeRelativePath(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.length <= MAX_RELATIVE_PATH_LENGTH &&
+    !value.includes('\0') &&
+    !value.startsWith('/') &&
+    !value.startsWith('\\') &&
+    !/^[a-zA-Z]:/.test(value)
+  )
+}
+
+/**
+ * Joins a workspace root and a relative path for the host to canonicalise.
+ *
+ * Deliberately lexical and permissive about `..`: refusing traversal here would be a check the
+ * host cannot trust anyway, since a symlink inside the root defeats it. The real boundary is the
+ * post-canonicalisation containment test; this only has to produce a path to canonicalise.
+ */
+export function joinOfficeRelativePath(workspaceRoot: string, relativePath: string): string | null {
+  if (!isValidOfficeDocumentPath(workspaceRoot) || !isValidOfficeRelativePath(relativePath)) {
+    return null
+  }
+  const separator = /^[a-zA-Z]:|^\\\\/.test(workspaceRoot) ? '\\' : '/'
+  const trimmedRoot = workspaceRoot.replace(/[/\\]+$/, '')
+  return `${trimmedRoot}${separator}${relativePath.replace(/^[/\\]+/, '')}`
 }
 
 /** Shape-checked only: the host passes it as one argv element and never into a shell string. */

@@ -12,7 +12,11 @@ import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { selectWorktreeHostDisplayLabel } from '@/lib/execution-host-display-label'
 import { startOfficeLivePreview } from '@/lib/office-live-preview'
-import { resolveOfficePreviewRouting, useOfficeHostOwner } from '@/lib/office-preview-plan'
+import {
+  resolveOfficePreviewRouting,
+  useOfficeDocumentLocation,
+  useOfficeHostOwner
+} from '@/lib/office-preview-plan'
 import {
   handOffOfficeSelection,
   reportOfficeSelectionHandoff
@@ -55,6 +59,9 @@ export function OfficePreviewPane({
 
   const routing = useMemo(() => resolveOfficePreviewRouting(filePath), [filePath])
   const owner = useOfficeHostOwner(worktreeId, filePath)
+  // The host resolves documents as (workspace root, path inside it) and refuses anything that
+  // canonicalises outside the root, so the renderer never hands it a bare absolute path.
+  const documentLocation = useOfficeDocumentLocation(worktreeId, filePath)
   const worktreeRoot = useAppStore((store) => store.getKnownWorktreeById(worktreeId)?.path ?? null)
   const hostLabel = useAppStore((store) => selectWorktreeHostDisplayLabel(store, worktreeId))
   const identity = useMemo(
@@ -76,7 +83,7 @@ export function OfficePreviewPane({
   const renderable = routing.status === 'renderable'
   const snapshot = useOfficeSnapshot({
     previewId,
-    filePath,
+    document: documentLocation,
     owner,
     containerRef,
     enabled: renderable,
@@ -88,11 +95,11 @@ export function OfficePreviewPane({
   // why it is unavailable rather than let the reader discover it by clicking, and the host's own
   // platform — never this machine's — is what decides which install command the notice shows.
   // The host caches the answer per lane, so this is one cheap round trip.
-  const probe = useOfficeProbe({ owner, filePath, enabled: renderable })
+  const probe = useOfficeProbe({ owner, document: documentLocation, enabled: renderable })
   const refreshState = officeRefreshState({
     renderable,
     terminallyRefused: isTerminalOfficeRefusal(failureCode),
-    addressable: owner !== null,
+    addressable: owner !== null && documentLocation !== null,
     changedOnDisk: change.changed,
     busy: snapshot.state.status === 'rendering'
   })
@@ -117,7 +124,7 @@ export function OfficePreviewPane({
   }, [change, snapshot])
 
   const handleToggleLive = useCallback(() => {
-    if (!owner || liveStarting) {
+    if (!owner || !documentLocation || liveStarting) {
       return
     }
     setLiveStarting(true)
@@ -127,7 +134,7 @@ export function OfficePreviewPane({
       workspaceId,
       worktreeId,
       owner,
-      filePath,
+      document: documentLocation,
       browserRuntimeEnvironmentId: owner.kind === 'runtime' ? owner.environmentId : null
     })
       .then((result) => {
@@ -139,7 +146,7 @@ export function OfficePreviewPane({
         }
       })
       .catch(() => setLiveStarting(false))
-  }, [filePath, liveStarting, owner, previewId, workspaceId, worktreeId])
+  }, [documentLocation, liveStarting, owner, previewId, workspaceId, worktreeId])
 
   // Re-probes with the host's cache dropped, then re-renders: a cached "not installed" surviving
   // the install the reader just ran is how a preview keeps asking for what already happened.
@@ -149,11 +156,16 @@ export function OfficePreviewPane({
   }, [probe, snapshot])
 
   const handleUseSelection = useCallback(() => {
-    if (!owner) {
+    if (!owner || !documentLocation) {
       return
     }
-    void handOffOfficeSelection({ worktreeId, owner, filePath }).then(reportOfficeSelectionHandoff)
-  }, [filePath, owner, worktreeId])
+    void handOffOfficeSelection({
+      worktreeId,
+      owner,
+      document: documentLocation,
+      displayPath: filePath
+    }).then(reportOfficeSelectionHandoff)
+  }, [documentLocation, filePath, owner, worktreeId])
 
   if (routing.status !== 'renderable') {
     return (
@@ -176,17 +188,22 @@ export function OfficePreviewPane({
           'auto.components.office.preview.liveNoHost',
           'Orca cannot tell which machine owns this document.'
         )
-      : failureCode === 'OFFICECLI_NOT_FOUND'
+      : failureCode === 'OFFICECLI_NOT_FOUND' || (probe.answered && !probe.installed)
         ? translate(
             'auto.components.office.preview.liveNoBinary',
             'officecli is not installed on the machine that owns this document.'
           )
-        : liveFailure
+        : probe.answered && !probe.supportsWatch
           ? translate(
-              'auto.components.office.preview.liveFailed',
-              'The live preview could not start. Showing the snapshot.'
+              'auto.components.office.preview.liveNoWatch',
+              'The officecli on that machine is too old to serve a live preview.'
             )
-          : null
+          : liveFailure
+            ? translate(
+                'auto.components.office.preview.liveFailed',
+                'The live preview could not start. Showing the snapshot.'
+              )
+            : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-editor-surface">
@@ -204,9 +221,9 @@ export function OfficePreviewPane({
           onUse: handleUseSelection
         }}
         onOpenExternally={openExternally}
-        onRevealInFolder={revealInFolder ?? openExternally}
+        onRevealInFolder={revealInFolder}
       />
-      <OfficeMarksPanel owner={owner} filePath={filePath} />
+      <OfficeMarksPanel owner={owner} document={documentLocation} />
       <div className="relative flex min-h-0 flex-1 overflow-hidden" ref={containerRef}>
         {snapshot.state.status === 'rendering' ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">

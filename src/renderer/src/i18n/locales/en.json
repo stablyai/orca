@@ -11858,8 +11858,6 @@
         },
         "officeSkills": {
           "installFailed": "Orca could not run the officecli skill installer on that machine.",
-          "installed": "Installed {{count}} skills.",
-          "installedPartial": "Installed {{installed}}; {{failed}} could not be installed.",
           "title": "Office document skills",
           "description": "Install officecli’s own skills so agents can author and edit Word, Excel and PowerPoint files. They are installed on the machine that owns the active workspace.",
           "noBinary": "officecli is not installed on that machine, so there are no skills to install.",
@@ -11868,7 +11866,11 @@
           "skills": "Skills",
           "agents": "Agents",
           "installing": "Installing…",
-          "install": "Install selected"
+          "install": "Install selected",
+          "installed_one": "Installed {{count}} skill.",
+          "installed_other": "Installed {{count}} skills.",
+          "installedPartial_one": "Installed {{installed}} of {{count}} skill.",
+          "installedPartial_other": "Installed {{installed}} of {{count}} skills."
         }
       },
       "right": {
@@ -16965,9 +16967,13 @@
           "useSelection": "Use selection",
           "useSelectionHint": "Put what you selected into the agent composer",
           "snapshotAriaLabel": "Office document preview",
-          "marksTitle": "{{count}} marks proposed for review",
           "clearMarks": "Clear",
-          "markStale": "stale"
+          "markStale": "stale",
+          "liveNoWatch": "The officecli on that machine is too old to serve a live preview.",
+          "outsideWorkspaceTitle": "This document is outside the workspace",
+          "outsideWorkspaceDetail": "Orca only previews documents that live inside the workspace they were opened from.",
+          "marksTitle_one": "{{count}} mark proposed for review",
+          "marksTitle_other": "{{count}} marks proposed for review"
         }
       }
     },

@@ -15,11 +15,11 @@ import {
   officeFailure,
   type OfficeAckOutcome
 } from '../../shared/office-preview-contracts'
-import { canonicalOfficeDocumentPath } from './office-document-path'
+import { resolveOfficeDocumentTarget } from './office-document-path'
 import { classifyOfficeThrown, classifySwitchStatus } from './office-error-codes'
 import { findOfficeWatchSession } from './office-watch-manager'
 import { officecliSwitchRequest } from './officecli-argv'
-import { NATIVE_OFFICECLI_LANE, type OfficecliLane } from './officecli-lane'
+import type { OfficeDocumentRef } from './office-local-execution'
 
 type SwitchResponse = { status: number; body: string }
 
@@ -57,13 +57,14 @@ function switchDetail(body: string): string | undefined {
   return match?.[1] ?? (body.trim() ? body.trim().slice(0, 400) : undefined)
 }
 
-export async function refreshOfficeWatch(
-  documentPath: string,
-  lane: OfficecliLane = NATIVE_OFFICECLI_LANE
-): Promise<OfficeAckOutcome> {
+export async function refreshOfficeWatch(ref: OfficeDocumentRef): Promise<OfficeAckOutcome> {
   try {
-    const canonicalPath = await canonicalOfficeDocumentPath(documentPath, lane)
-    const session = findOfficeWatchSession(lane, canonicalPath)
+    const canonicalPath = await resolveOfficeDocumentTarget(
+      ref.workspaceRoot,
+      ref.relativePath,
+      ref.lane
+    )
+    const session = findOfficeWatchSession(ref.lane, canonicalPath)
     if (!session) {
       // Not a failure to hide: the caller's live preview is gone or was never started, and saying
       // so is what lets the surface fall back to a snapshot instead of spinning.

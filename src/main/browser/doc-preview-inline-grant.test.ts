@@ -50,6 +50,14 @@ describe('inline document preview grants', () => {
     }
   })
 
+  it('normalizes slash variants onto the one key', async () => {
+    const grant = mint()
+    for (const path of [`/${INLINE_DOC_PREVIEW_ENTRY}`, `\\${INLINE_DOC_PREVIEW_ENTRY}`]) {
+      const outcome = await readDocPreviewFile(grant, path)
+      expect(outcome.ok).toBe(true)
+    }
+  })
+
   it('refuses to widen onto a directory, because it has none', () => {
     const grant = mint()
     expect(authorizeDocPreviewDirectory(grant.id, INLINE_DOC_PREVIEW_ENTRY)).toBe(false)

@@ -40,7 +40,18 @@ export function officeFailureTitle(code: OfficeErrorCode): string {
       )
     case 'OFFICECLI_FILE_NOT_FOUND':
       return translate('auto.components.office.preview.fileMissingTitle', 'Document not found')
-    default:
+    case 'OFFICE_DOCUMENT_OUTSIDE_WORKSPACE':
+      return translate(
+        'auto.components.office.preview.outsideWorkspaceTitle',
+        'This document is outside the workspace'
+      )
+    // Every remaining code shares one headline and explains itself on the detail line. Listed
+    // rather than defaulted so a new code cannot inherit this wording without someone choosing it.
+    case 'OFFICECLI_RENDER_FAILED':
+    case 'OFFICECLI_ALREADY_WATCHED':
+    case 'OFFICECLI_PORT_TIMEOUT':
+    case 'OFFICECLI_WATCH_FAILED':
+    case 'OFFICE_WATCH_NOT_RUNNING':
       return translate('auto.components.office.preview.renderFailedTitle', 'Preview unavailable')
   }
 }
@@ -104,7 +115,15 @@ export function officeFailureDetail(code: OfficeErrorCode, hostLabel: string | n
         'auto.components.office.preview.fileMissingDetail',
         'It may have been renamed or removed since the tab was opened.'
       )
-    default:
+    case 'OFFICE_DOCUMENT_OUTSIDE_WORKSPACE':
+      // The host refuses a document that canonicalises outside the workspace it was named
+      // against; say that plainly rather than blame the renderer or the tool.
+      return translate(
+        'auto.components.office.preview.outsideWorkspaceDetail',
+        'Orca only previews documents that live inside the workspace they were opened from.'
+      )
+    case 'OFFICECLI_RENDER_FAILED':
+    case 'OFFICECLI_WATCH_FAILED':
       return translate(
         'auto.components.office.preview.renderFailedDetail',
         'officecli could not render this document.'
@@ -129,6 +148,29 @@ export function officeUnrenderableMessage(extension: string): string {
     : translate(
         'auto.components.office.preview.unrenderableUnnamed',
         'Orca does not preview this file format.'
+      )
+}
+
+/**
+ * Marks header copy.
+ *
+ * The caller picks the plural key rather than leaving it to i18next, matching
+ * `connectedHostCountLabel`: `translate(key, fallback)` resolves the inline fallback for `en`, so
+ * a single key with `{{count}}` would render "1 marks" however the catalog is written.
+ */
+export function officeMarksTitle(count: number): string {
+  return count === 1
+    ? translate(
+        'auto.components.office.preview.marksTitle_one',
+        '{{count}} mark proposed for review',
+        {
+          count
+        }
+      )
+    : translate(
+        'auto.components.office.preview.marksTitle_other',
+        '{{count}} marks proposed for review',
+        { count }
       )
 }
 

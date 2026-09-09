@@ -73,7 +73,10 @@ describe('office host dispatch', () => {
 
   it('refuses a render answer that carries no document', async () => {
     executeOfficeMethod.mockResolvedValue({ ok: true, marks: [] })
-    const outcome = await renderOfficeOnHost({ kind: 'local' }, '/w/a.docx')
+    const outcome = await renderOfficeOnHost(
+      { kind: 'local' },
+      { workspaceRoot: '/w', relativePath: 'a.docx' }
+    )
     expect(outcome.ok).toBe(false)
     expect(outcome.ok === false && outcome.code).toBe('OFFICECLI_RENDER_FAILED')
   })

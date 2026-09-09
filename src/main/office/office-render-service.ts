@@ -18,14 +18,18 @@ import {
 } from '../../shared/office-preview-contracts'
 import { isOfficeRenderable, officeDocKind } from '../../shared/office-file-extensions'
 import { runWslProcess } from '../wsl/wsl-runner'
-import { canonicalOfficeDocumentPath, OfficeDocumentPathError } from './office-document-path'
+import {
+  OfficeDocumentOutsideWorkspaceError,
+  OfficeDocumentPathError,
+  resolveOfficeDocumentTarget
+} from './office-document-path'
 import {
   classifyOfficecliRun,
   classifyOfficeThrown,
   officecliRunSucceeded
 } from './office-error-codes'
 import { officecliRenderArgs } from './officecli-argv'
-import { NATIVE_OFFICECLI_LANE, type OfficecliLane } from './officecli-lane'
+import type { OfficeDocumentRef } from './office-local-execution'
 import { runOfficecli } from './officecli-invocation'
 
 /** Read cap with headroom: the run is refused above the transport cap, not truncated to it. */
@@ -109,19 +113,21 @@ class OfficeRenderTooLargeError extends Error {
   }
 }
 
-export async function renderOfficeDocument(
-  documentPath: string,
-  lane: OfficecliLane = NATIVE_OFFICECLI_LANE
-): Promise<OfficeRenderOutcome> {
-  const kind = officeDocKind(documentPath)
-  if (!kind || !isOfficeRenderable(documentPath)) {
+export async function renderOfficeDocument(ref: OfficeDocumentRef): Promise<OfficeRenderOutcome> {
+  const { lane } = ref
+  const kind = officeDocKind(ref.relativePath)
+  if (!kind || !isOfficeRenderable(ref.relativePath)) {
     // Answered before any spawn: a format we do not render must say so itself, never leave the
     // reader looking at an install prompt for a tool that was never the problem.
     return officeFailure('OFFICECLI_UNSUPPORTED_FORMAT')
   }
   let scratch: RenderScratch | null = null
   try {
-    const canonicalPath = await canonicalOfficeDocumentPath(documentPath, lane)
+    const canonicalPath = await resolveOfficeDocumentTarget(
+      ref.workspaceRoot,
+      ref.relativePath,
+      lane
+    )
     scratch = lane.kind === 'wsl' ? await wslScratch(lane.distro) : await nativeScratch()
     const run = await runOfficecli(officecliRenderArgs(canonicalPath, scratch.outputPath), {
       lane,
@@ -139,6 +145,9 @@ export async function renderOfficeDocument(
   } catch (error) {
     if (error instanceof OfficeRenderTooLargeError) {
       return officeFailure('OFFICE_RENDER_TOO_LARGE', error.message)
+    }
+    if (error instanceof OfficeDocumentOutsideWorkspaceError) {
+      return officeFailure('OFFICE_DOCUMENT_OUTSIDE_WORKSPACE', error.message)
     }
     if (error instanceof OfficeDocumentPathError) {
       return officeFailure('OFFICECLI_FILE_NOT_FOUND', error.message)

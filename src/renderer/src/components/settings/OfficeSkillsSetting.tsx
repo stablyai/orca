@@ -8,6 +8,10 @@ import { useOfficeHostOwner } from '@/lib/office-preview-plan'
 import { useAppStore } from '@/store'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import {
+  officeSkillsInstalledMessage,
+  officeSkillsPartialMessage
+} from './office-skills-install-copy'
+import {
   officeSkillInstallPairs,
   summarizeOfficeSkillInstall,
   toggleInSet,
@@ -57,23 +61,11 @@ export function OfficeSkillsSetting(): React.JSX.Element {
         }
         const { installed, failed } = summarizeOfficeSkillInstall(outcome.results)
         if (failed === 0) {
-          toast.success(
-            translate(
-              'auto.components.settings.officeSkills.installed',
-              'Installed {{count}} skills.',
-              { count: installed }
-            )
-          )
+          toast.success(officeSkillsInstalledMessage(installed))
           return
         }
         // Per-pair, because one agent refusing is not the whole action failing.
-        toast.message(
-          translate(
-            'auto.components.settings.officeSkills.installedPartial',
-            'Installed {{installed}}; {{failed}} could not be installed.',
-            { installed, failed }
-          )
-        )
+        toast.message(officeSkillsPartialMessage(installed, failed))
       })
       .catch(() => setInstalling(false))
   }, [installing, owner, pairs])
@@ -149,7 +141,13 @@ function SelectableRow({
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <div className="flex flex-wrap gap-1.5">
         {values.map((value) => (
-          <button key={value} type="button" onClick={() => onToggle(value)}>
+          <button
+            key={value}
+            type="button"
+            // Selection is otherwise signalled only by the Badge variant, which is colour alone.
+            aria-pressed={selected.has(value)}
+            onClick={() => onToggle(value)}
+          >
             <Badge variant={selected.has(value) ? 'default' : 'outline'}>{value}</Badge>
           </button>
         ))}

@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import type { OfficeDocKind } from '../../../../../shared/office-file-extensions'
 import type { OfficeHostOwner } from '../../../../../shared/office-host-owner'
+import type { OfficeDocumentLocation } from '@/lib/office-preview-plan'
 import type { OfficeErrorCode } from '../../../../../shared/office-preview-contracts'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
 
@@ -26,14 +27,14 @@ export type OfficeSnapshot = {
 
 export function useOfficeSnapshot({
   previewId,
-  filePath,
+  document,
   owner,
   containerRef,
   enabled,
   onRendered
 }: {
   previewId: string
-  filePath: string
+  document: OfficeDocumentLocation | null
   owner: OfficeHostOwner | null
   containerRef: React.RefObject<HTMLDivElement | null>
   /** False while the live preview owns the pane, so the snapshot is not rendered behind it. */
@@ -50,7 +51,7 @@ export function useOfficeSnapshot({
     if (!enabled) {
       return
     }
-    if (!owner) {
+    if (!owner || !document) {
       // An unresolved owner cannot pick a host, and rendering here would use the wrong machine's
       // officecli and fonts. See docs/reference/ssh-execution-boundary.md.
       setState({ status: 'failed', code: 'OFFICE_HOST_UNREACHABLE' })
@@ -62,7 +63,7 @@ export function useOfficeSnapshot({
     setState({ status: 'rendering' })
 
     void window.api.office
-      .openSnapshot({ owner, path: filePath, browserPageId: previewId })
+      .openSnapshot({ owner, ...document, browserPageId: previewId })
       .then((result) => {
         if (disposed) {
           if (result.ok) {
@@ -126,7 +127,7 @@ export function useOfficeSnapshot({
         void window.api.office.releaseSnapshot(grantId)
       }
     }
-  }, [attempt, containerRef, enabled, filePath, owner, ownerKey, previewId])
+  }, [attempt, containerRef, document, enabled, owner, ownerKey, previewId])
 
   const rerender = useCallback(() => setAttempt((count) => count + 1), [])
   return { state, rerender }

@@ -52,9 +52,14 @@ export function useOfficeDocumentChange({
   // events in the gap, which is the defect `useEditorExternalWatch` diffs its targets to avoid.
   const ownerKey = owner ? JSON.stringify(owner) : null
 
-  useEffect(() => {
+  // Adjusted during render, not in an effect: an effect would paint one frame carrying the
+  // previous document's "changed" flag, which is the refresh control claiming a document that just
+  // opened is already stale. This is React's documented reset-on-prop-change shape.
+  const [trackedFilePath, setTrackedFilePath] = useState(filePath)
+  if (trackedFilePath !== filePath) {
+    setTrackedFilePath(filePath)
     setChanged(false)
-  }, [filePath])
+  }
 
   useEffect(() => {
     if (!owner || !worktreePath) {

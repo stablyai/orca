@@ -38,7 +38,7 @@ import { useClientHostedGuestActivationFocus } from './host-guest/use-client-hos
 import { useBrowserPageZoomFeedback } from './host-guest/use-browser-page-zoom-feedback'
 import { BrowserLoadFailureOverlay } from './navigate/browser-load-failure-overlay'
 import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/workspace-doc-page-conversion'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
 import { resolveActiveBrowserLoadFailure } from './navigate/browser-load-failure-for-url'
 import { consumeBrowserPageDeferredNavigation } from './navigate/browser-page-deferred-navigation'

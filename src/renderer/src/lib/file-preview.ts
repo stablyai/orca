@@ -17,8 +17,6 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { OfficeDocKind } from '../../../shared/office-file-extensions'
 import { resolveOfficePreviewRouting } from '@/lib/office-preview-plan'
 
-export { convertBrowserPageToWorkspaceDoc } from '@/lib/workspace-doc-page-conversion'
-
 export type PreviewableLanguage = 'html'
 /** Still the answer for flows that need a real `file://` URL (e.g. dropping a file on a browser pane). */
 export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =

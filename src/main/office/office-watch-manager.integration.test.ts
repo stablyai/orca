@@ -10,6 +10,7 @@ import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { officeDocumentRef } from './office-local-execution'
 import { probeOfficecli } from './office-probe-service'
 import { refreshOfficeWatch } from './office-watch-refresh'
 import { startOfficeWatch, stopAllOfficeWatches, stopOfficeWatch } from './office-watch-manager'
@@ -18,7 +19,7 @@ const FIXTURE = join(__dirname, '__fixtures__', 'sample.pptx')
 
 let installed = false
 let directory = ''
-let document = ''
+let document: ReturnType<typeof officeDocumentRef>
 
 function portAnswers(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -38,8 +39,8 @@ beforeAll(async () => {
   const probe = await probeOfficecli()
   installed = probe.ok && probe.installed && probe.supportsWatch
   directory = await mkdtemp(join(tmpdir(), 'orca-office-watch-'))
-  document = join(directory, 'deck.pptx')
-  await copyFile(FIXTURE, document)
+  document = officeDocumentRef(directory, 'deck.pptx')
+  await copyFile(FIXTURE, join(directory, 'deck.pptx'))
 }, 60_000)
 
 afterAll(async () => {
@@ -48,8 +49,11 @@ afterAll(async () => {
 })
 
 describe('office watch lifecycle', () => {
-  it('starts, serves, refreshes and stops without leaving a listener', async () => {
+  it('starts, serves, refreshes and stops without leaving a listener', async (ctx) => {
+    // Skipped, not silently passed: a green tick that never exercised the watch lifecycle reads
+    // exactly like one that did.
     if (!installed) {
+      ctx.skip()
       return
     }
     const started = await startOfficeWatch(document)
@@ -76,7 +80,7 @@ describe('office watch lifecycle', () => {
   }, 120_000)
 
   it('refuses a format it cannot watch before spawning anything', async () => {
-    await expect(startOfficeWatch(join(directory, 'notes.doc'))).resolves.toEqual({
+    await expect(startOfficeWatch(officeDocumentRef(directory, 'notes.doc'))).resolves.toEqual({
       ok: false,
       code: 'OFFICECLI_UNSUPPORTED_FORMAT'
     })

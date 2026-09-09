@@ -80,9 +80,9 @@ function isOfficeDocKind(value: unknown): value is OfficeDocKind {
  */
 export async function renderOfficeOnHost(
   owner: OfficeHostOwner,
-  path: string
+  document: { workspaceRoot: string; relativePath: string }
 ): Promise<OfficeRenderOutcome> {
-  const outcome = await dispatchOfficeRequest(owner, OFFICE_RENDER_METHOD, { path })
+  const outcome = await dispatchOfficeRequest(owner, OFFICE_RENDER_METHOD, document)
   if (!outcome.ok) {
     return outcome
   }

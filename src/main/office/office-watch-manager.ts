@@ -20,9 +20,10 @@ import {
 } from '../../shared/office-preview-contracts'
 import { isOfficeRenderable } from '../../shared/office-file-extensions'
 import {
-  canonicalOfficeDocumentPath,
+  OfficeDocumentOutsideWorkspaceError,
   OfficeDocumentPathError,
-  officeSessionKey
+  officeSessionKey,
+  resolveOfficeDocumentTarget
 } from './office-document-path'
 import {
   classifyOfficecliRun,
@@ -31,7 +32,8 @@ import {
 } from './office-error-codes'
 import { allocateLoopbackPort, waitForWatchPort } from './office-watch-port'
 import { officecliWatchStartArgs, officecliWatchStopArgs } from './officecli-argv'
-import { NATIVE_OFFICECLI_LANE, officecliLaneKey, type OfficecliLane } from './officecli-lane'
+import type { OfficeDocumentRef } from './office-local-execution'
+import { officecliLaneKey, type OfficecliLane } from './officecli-lane'
 import { runOfficecli, spawnOfficecli } from './officecli-invocation'
 
 /** The allocate→bind window is genuinely racy; three attempts is the documented budget. */
@@ -135,17 +137,18 @@ async function startOnPort(
   return officeFailure('OFFICECLI_PORT_TIMEOUT', stderr.trim() || undefined)
 }
 
-export async function startOfficeWatch(
-  documentPath: string,
-  lane: OfficecliLane = NATIVE_OFFICECLI_LANE
-): Promise<OfficeWatchOutcome> {
-  if (!isOfficeRenderable(documentPath)) {
+export async function startOfficeWatch(ref: OfficeDocumentRef): Promise<OfficeWatchOutcome> {
+  const { lane } = ref
+  if (!isOfficeRenderable(ref.relativePath)) {
     return officeFailure('OFFICECLI_UNSUPPORTED_FORMAT')
   }
   let canonicalPath: string
   try {
-    canonicalPath = await canonicalOfficeDocumentPath(documentPath, lane)
+    canonicalPath = await resolveOfficeDocumentTarget(ref.workspaceRoot, ref.relativePath, lane)
   } catch (error) {
+    if (error instanceof OfficeDocumentOutsideWorkspaceError) {
+      return officeFailure('OFFICE_DOCUMENT_OUTSIDE_WORKSPACE', error.message)
+    }
     return error instanceof OfficeDocumentPathError
       ? officeFailure('OFFICECLI_FILE_NOT_FOUND', error.message)
       : classifyOfficeThrown(error, 'watch')
@@ -185,27 +188,15 @@ async function terminateChild(child: ChildProcessHandle): Promise<void> {
 }
 
 /**
- * Stop a session. `unwatch` first because it is the tool's own cooperative shutdown and also
- * clears its registry entry; the process-tree kill is the authority, because we own the child and
- * a cooperative stop that silently does nothing is exactly what leaks a port.
+ * Stop one already-registered session. `unwatch` first because it is the tool's own cooperative
+ * shutdown and also clears its registry entry; the process-tree kill is the authority, because we
+ * own the child and a cooperative stop that silently does nothing is exactly what leaks a port.
  */
-export async function stopOfficeWatch(
-  documentPath: string,
-  lane: OfficecliLane = NATIVE_OFFICECLI_LANE
-): Promise<OfficeAckOutcome> {
-  let canonicalPath: string
+async function stopWatchSession(session: WatchSession): Promise<void> {
+  sessions.delete(session.key)
   try {
-    canonicalPath = await canonicalOfficeDocumentPath(documentPath, lane)
-  } catch {
-    // A document that no longer resolves cannot be canonicalised, but its session still has to go.
-    canonicalPath = documentPath
-  }
-  const key = officeWatchSessionKeyFor(lane, canonicalPath)
-  const session = sessions.get(key)
-  sessions.delete(key)
-  try {
-    await runOfficecli(officecliWatchStopArgs(session?.documentPath ?? canonicalPath), {
-      lane,
+    await runOfficecli(officecliWatchStopArgs(session.documentPath), {
+      lane: session.lane,
       timeoutMs: STOP_TIMEOUT_MS,
       maxOutputBytes: 16 * 1024
     })
@@ -213,8 +204,36 @@ export async function stopOfficeWatch(
     // Nothing to report: the kill below is what the caller is promised, and a host with no binary
     // left has no watch server either.
   }
-  if (session?.child) {
+  if (session.child) {
     await terminateChild(session.child)
+  }
+}
+
+export async function stopOfficeWatch(ref: OfficeDocumentRef): Promise<OfficeAckOutcome> {
+  const { lane } = ref
+  let canonicalPath: string
+  try {
+    canonicalPath = await resolveOfficeDocumentTarget(ref.workspaceRoot, ref.relativePath, lane)
+  } catch {
+    // A document that no longer resolves cannot be canonicalised, but its session still has to go,
+    // so fall back to the lexical join purely as a registry key.
+    canonicalPath = `${ref.workspaceRoot}/${ref.relativePath}`
+  }
+  const session = sessions.get(officeWatchSessionKeyFor(lane, canonicalPath))
+  if (session) {
+    await stopWatchSession(session)
+    return { ok: true }
+  }
+  // No session of ours, but the host may still hold one from a previous run of this client, and
+  // `unwatch` is the only way to reach it.
+  try {
+    await runOfficecli(officecliWatchStopArgs(canonicalPath), {
+      lane,
+      timeoutMs: STOP_TIMEOUT_MS,
+      maxOutputBytes: 16 * 1024
+    })
+  } catch {
+    // Same reasoning as above.
   }
   return { ok: true }
 }
@@ -225,14 +244,7 @@ export async function stopAllOfficeWatches(lane?: OfficecliLane): Promise<void> 
   const doomed = [...sessions.values()].filter(
     (session) => laneKey === null || officecliLaneKey(session.lane) === laneKey
   )
-  await Promise.all(
-    doomed.map(async (session) => {
-      sessions.delete(session.key)
-      if (session.child) {
-        await terminateChild(session.child)
-      }
-    })
-  )
+  await Promise.all(doomed.map((session) => stopWatchSession(session)))
 }
 
 /** Sweep: stop every session whose document is no longer named by a live surface. */
@@ -240,6 +252,6 @@ export async function retainOfficeWatches(liveKeys: ReadonlySet<string>): Promis
   await Promise.all(
     [...sessions.values()]
       .filter((session) => !liveKeys.has(session.key))
-      .map((session) => stopOfficeWatch(session.documentPath, session.lane))
+      .map((session) => stopWatchSession(session))
   )
 }

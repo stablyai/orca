@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { subscribeOfficeLiveRefresh } from '@/lib/office-live-refresh'
+import type { OfficeDocumentLocation } from '@/lib/office-preview-plan'
 import { officeHostOwnerKey, type OfficeHostOwner } from '../../../shared/office-host-owner'
 import type { OfficeErrorCode } from '../../../shared/office-preview-contracts'
 
@@ -24,16 +25,22 @@ type LiveSession = {
   worktreeId: string
   /** Browser workspace row the live page lives in; when it goes, so does the watch. */
   workspaceId: string
+  /**
+   * Page the live URL was converted into. A conversion always mints a fresh page id, so this id
+   * disappearing is the signal that the reader left the live page — including by going Back to the
+   * document, which leaves the workspace row intact and would otherwise strand the watch process.
+   */
+  livePageId: string
   owner: OfficeHostOwner
-  filePath: string
+  document: OfficeDocumentLocation
   /** Pushes external edits into the running server; the pane that started it is already gone. */
   refresh: { dispose: () => void }
 }
 
 const sessionsByKey = new Map<string, LiveSession>()
 
-function sessionKey(owner: OfficeHostOwner, filePath: string): string {
-  return `${officeHostOwnerKey(owner)} ${filePath}`
+function sessionKey(owner: OfficeHostOwner, document: OfficeDocumentLocation): string {
+  return JSON.stringify([officeHostOwnerKey(owner), document.workspaceRoot, document.relativePath])
 }
 
 export type OfficeLiveStart =
@@ -51,13 +58,13 @@ export async function startOfficeLivePreview(params: {
   workspaceId: string
   worktreeId: string
   owner: OfficeHostOwner
-  filePath: string
+  document: OfficeDocumentLocation
   /** Set for a paired workspace, so the converted page's guest runs on the runtime host. */
   browserRuntimeEnvironmentId: string | null
 }): Promise<OfficeLiveStart> {
   const outcome = await window.api.office.watchStart({
     owner: params.owner,
-    path: params.filePath
+    ...params.document
   })
   if (!outcome.ok) {
     return {
@@ -74,17 +81,25 @@ export async function startOfficeLivePreview(params: {
   })
   if (!converted) {
     // Nothing to show it in, so nothing should be running for it either.
-    await window.api.office.watchStop({ owner: params.owner, path: params.filePath })
+    await window.api.office.watchStop({ owner: params.owner, ...params.document })
     return { ok: false, code: 'OFFICECLI_WATCH_FAILED' }
   }
-  sessionsByKey.set(sessionKey(params.owner, params.filePath), {
+  const livePageId = findLivePageId(params.workspaceId, url)
+  if (!livePageId) {
+    // The conversion reported success but no page carries the URL, so nothing would ever sweep
+    // this watch. Stop it now rather than leak a process with no surface.
+    await window.api.office.watchStop({ owner: params.owner, ...params.document })
+    return { ok: false, code: 'OFFICECLI_WATCH_FAILED' }
+  }
+  sessionsByKey.set(sessionKey(params.owner, params.document), {
     worktreeId: params.worktreeId,
     workspaceId: params.workspaceId,
+    livePageId,
     owner: params.owner,
-    filePath: params.filePath,
+    document: params.document,
     refresh: subscribeOfficeLiveRefresh({
       owner: params.owner,
-      filePath: params.filePath,
+      document: params.document,
       worktreeId: params.worktreeId,
       worktreePath: useAppStore.getState().getKnownWorktreeById(params.worktreeId)?.path ?? null
     })
@@ -94,21 +109,21 @@ export async function startOfficeLivePreview(params: {
 
 export async function stopOfficeLivePreview(
   owner: OfficeHostOwner,
-  filePath: string
+  document: OfficeDocumentLocation
 ): Promise<void> {
-  const key = sessionKey(owner, filePath)
+  const key = sessionKey(owner, document)
   sessionsByKey.get(key)?.refresh.dispose()
   sessionsByKey.delete(key)
-  await window.api.office.watchStop({ owner, path: filePath }).catch(() => undefined)
+  await window.api.office.watchStop({ owner, ...document }).catch(() => undefined)
 }
 
 /** Pushes a re-render through the running watch server, which tells connected pages to reload. */
 export async function refreshOfficeLivePreview(
   owner: OfficeHostOwner,
-  filePath: string
+  document: OfficeDocumentLocation
 ): Promise<boolean> {
   const outcome = await window.api.office
-    .watchRefresh({ owner, path: filePath })
+    .watchRefresh({ owner, ...document })
     .catch(() => ({ ok: false as const, code: 'OFFICE_HOST_UNREACHABLE' as const }))
   if (!outcome.ok) {
     toast.error(
@@ -121,12 +136,22 @@ export async function refreshOfficeLivePreview(
   return outcome.ok
 }
 
+/** The page a converted live URL landed on, so the sweep can notice when the reader leaves it. */
+function findLivePageId(workspaceId: string, url: string): string | null {
+  const pages = useAppStore.getState().browserPagesByWorkspace[workspaceId] ?? []
+  return pages.find((page) => page.url === url)?.id ?? null
+}
+
 /**
- * Stops every live session whose browser workspace no longer exists.
+ * Stops every live session whose page is gone.
  *
- * A watch process outlives its page by design — it is detached — so closing a tab has to be
- * noticed by something. This is the `closed-editor-tab-*` sweep shape: driven off the store rather
- * than off a component's unmount, because the component is gone by the time it matters.
+ * A watch process outlives its page by design — it is detached — so something has to notice. The
+ * signal is the live page's own id: a conversion always mints a fresh page, so going Back to the
+ * document retires the live id even though the browser workspace row survives. Keying on the row
+ * alone would leave the watch running with nothing showing it until the whole tab closed.
+ *
+ * Driven off the store rather than a component's unmount, in the `closed-editor-tab-*` sweep
+ * shape, because the component is gone by the time it matters.
  */
 export function sweepClosedOfficeLivePreviews(): void {
   if (sessionsByKey.size === 0) {
@@ -135,10 +160,11 @@ export function sweepClosedOfficeLivePreviews(): void {
   const state = useAppStore.getState()
   const closed: [string, LiveSession][] = []
   for (const entry of sessionsByKey) {
-    const stillOpen = (state.browserTabsByWorktree[entry[1].worktreeId] ?? []).some(
-      (tab) => tab.id === entry[1].workspaceId
+    const session = entry[1]
+    const stillLive = (state.browserPagesByWorkspace[session.workspaceId] ?? []).some(
+      (page) => page.id === session.livePageId
     )
-    if (!stillOpen) {
+    if (!stillLive) {
       closed.push(entry)
     }
   }
@@ -146,7 +172,7 @@ export function sweepClosedOfficeLivePreviews(): void {
     session.refresh.dispose()
     sessionsByKey.delete(key)
     void window.api.office
-      .watchStop({ owner: session.owner, path: session.filePath })
+      .watchStop({ owner: session.owner, ...session.document })
       .catch(() => undefined)
   }
 }
