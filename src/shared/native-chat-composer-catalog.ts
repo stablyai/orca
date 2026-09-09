@@ -59,22 +59,36 @@ export function mobileComposerSlashEntries(
   catalog: NativeChatComposerCatalog,
   discovered?: readonly SlashCommandSuggestion[]
 ): readonly SlashCommandSuggestion[] {
-  const commands = catalog.agentCommands
-  const reportedSkills = (catalog.sessionSkillNames ?? [])
-    .filter((name) => !commands.some((command) => command.name === name))
-    .map((name) => ({ name }))
-  const known = new Set([...commands, ...reportedSkills].map((entry) => entry.name))
   // Discovery can list one skill through several roots; keep one row per name,
   // preferring the root that carried a description.
-  const byName = new Map<string, SlashCommandSuggestion>()
+  const discoveredByName = new Map<string, SlashCommandSuggestion>()
   for (const entry of discovered ?? []) {
-    if (known.has(entry.name)) {
-      continue
-    }
-    const existing = byName.get(entry.name)
+    const existing = discoveredByName.get(entry.name)
     if (!existing || (!existing.description && entry.description)) {
-      byName.set(entry.name, entry)
+      discoveredByName.set(entry.name, entry)
     }
   }
-  return [...commands, ...reportedSkills, ...byName.values()]
+  // Desktop parity: the report is the authority on which names exist, but the
+  // disk scan stays the source of description — a reported skill keeps its
+  // discovered description when one is on disk.
+  const reportedSkillNames = new Set(
+    (catalog.sessionSkillNames ?? []).filter(
+      (name) => !catalog.agentCommands.some((command) => command.name === name)
+    )
+  )
+  const reportedSkills = [...reportedSkillNames].map(
+    (name) => discoveredByName.get(name) ?? { name }
+  )
+  // Desktop parity: an unclassified reported command that names a skill joins
+  // the skill row (the skill carries the tag and description), not the
+  // command list.
+  const skillNames = new Set([...reportedSkillNames, ...discoveredByName.keys()])
+  const resolvedCommands = catalog.agentCommands.filter(
+    (command) => !command.kindUnspecified || !skillNames.has(command.name)
+  )
+  const commandNames = new Set(resolvedCommands.map((command) => command.name))
+  const discoveredSkills = [...discoveredByName.values()].filter(
+    (entry) => !reportedSkillNames.has(entry.name) && !commandNames.has(entry.name)
+  )
+  return [...resolvedCommands, ...reportedSkills, ...discoveredSkills]
 }
