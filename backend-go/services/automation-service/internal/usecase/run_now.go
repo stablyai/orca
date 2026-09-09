@@ -26,19 +26,72 @@ type RunNowInput struct {
 // RunNow is THE core interactor of this service — see
 // specs/backend-go/services/automation-service.md §2/§6. It is the only
 // code path (scheduler ticks and direct RunNow calls both funnel through
-// it) that dispatches a step, and it does so by calling out to
-// workflow-service.ExecuteAdHocStep over real gRPC (WorkflowStepExecutor),
-// never by executing anything locally. This closes TS Gap 3: TS's
+// it) that dispatches a run, and it does so by delegating to
+// ExecuteAutomationChain (TASK-BE-AUTO-004's rewire — see that type's own
+// doc comment, updated alongside this change), which in turn calls
+// workflow-service.ExecuteAdHocStep over real gRPC (WorkflowStepExecutor)
+// per action, never executing anything locally. This closes TS Gap 3: TS's
 // automation.runNow had no working dispatcher and every triggered run
 // resolved skipped_unavailable.
+//
+// Before this rewire, RunNow.Execute called ExecuteAdHocStep directly and
+// returned a Go error whenever that call itself failed (transport-level),
+// distinct from a run recorded Failed with no Go error (a business-level
+// step failure workflow-service reported cleanly). Delegating to
+// ExecuteAutomationChain collapses that distinction: EVERY outcome —
+// transport failure, business failure, or success — now resolves to
+// (run, nil), with the failure (if any) visible in the run's own
+// ActionResults[].Error, never a returned Go error, UNLESS something fails
+// before or after dispatch itself (creating the run, or persisting its
+// final status). This is a deliberate consequence of adopting the
+// multi-action chain model, not an accidental regression: a chain runs N
+// actions, and "the whole gRPC call errors" doesn't make sense once one
+// failed action among several shouldn't necessarily fail the others (see
+// AutomationAction.ContinueOnFailure) — the run's own status/action-results
+// carry the failure signal instead, which is still fully visible (never
+// "silently swallowed" the way TS's skipped_unavailable was — a Failed run
+// with a populated Error field is the opposite of silent). See
+// run_now_test.go's TestRunNow_WorkflowServiceFailurePropagatesAndRunRecordedFailed
+// for the regression test this rewire updated to match.
 type RunNow struct {
 	automations AutomationRepository
 	runs        AutomationRunRepository
-	executor    WorkflowStepExecutor
+	chain       *ExecuteAutomationChain
 }
 
-func NewRunNow(automations AutomationRepository, runs AutomationRunRepository, executor WorkflowStepExecutor) *RunNow {
-	return &RunNow{automations: automations, runs: runs, executor: executor}
+// RunNowOption configures a RunNow dependency optional at construction —
+// today only PullRequestCreator (see WithPullRequestCreator). A variadic
+// option, not a positional parameter, so this rewire's required 3 base
+// arguments (automations, runs, executor) stay UNCHANGED for every existing
+// call site (cmd/server/main.go, every test in this package and the
+// scheduler package) — none needed to change to compile.
+type RunNowOption func(*runNowOptions)
+
+type runNowOptions struct {
+	pullRequests PullRequestCreator
+}
+
+// WithPullRequestCreator wires create_pr action dispatch into RunNow's
+// internally-built ExecuteAutomationChain. Every existing test call site
+// omits this (nil PullRequestCreator — RunNow's own regression tests never
+// exercise CREATE_PR; see ExecuteAutomationChain.dispatchCreatePR's own
+// nil-check, which fails that one action type clearly rather than
+// panicking). cmd/server/main.go passes this for real once
+// scm-integration-service is dialed.
+func WithPullRequestCreator(pullRequests PullRequestCreator) RunNowOption {
+	return func(o *runNowOptions) { o.pullRequests = pullRequests }
+}
+
+func NewRunNow(automations AutomationRepository, runs AutomationRunRepository, executor WorkflowStepExecutor, opts ...RunNowOption) *RunNow {
+	var o runNowOptions
+	for _, opt := range opts {
+		opt(&o)
+	}
+	return &RunNow{
+		automations: automations,
+		runs:        runs,
+		chain:       NewExecuteAutomationChain(automations, runs, executor, o.pullRequests),
+	}
 }
 
 func (uc *RunNow) Execute(ctx context.Context, in RunNowInput) (domain.AutomationRun, error) {
@@ -106,42 +159,20 @@ func (uc *RunNow) Execute(ctx context.Context, in RunNowInput) (domain.Automatio
 		return domain.AutomationRun{}, apperrors.New(apperrors.KindInternal, "AUTOMATION_RUN_UPDATE_FAILED", "failed to persist run status", err)
 	}
 
-	// THE cross-service call this whole service exists for: delegate step
-	// execution to workflow-service, never execute it here.
-	result, execErr := uc.executor.ExecuteAdHocStep(ctx, ExecuteAdHocStepInput{
-		TenantID:       tenantID,
-		StepType:       stepType,
-		StepConfigJSON: automation.StepConfigJSON,
-		RequestID:      in.RequestID,
-	})
-	if execErr != nil {
-		// Fail closed, per automation-service.md §8 — availability of
-		// CRUD/list stays independent of workflow-service, but a run that
-		// couldn't be dispatched is recorded Failed, never silently
-		// swallowed the way TS's skipped_unavailable was.
-		if failed, ferr := running.MarkFailed(time.Now().UTC(), execErr.Error()); ferr == nil {
-			_ = uc.runs.UpdateStatus(ctx, failed) // best-effort; the transport error below is still returned either way
-		}
-		return domain.AutomationRun{}, apperrors.New(apperrors.KindInternal, "AUTOMATION_WORKFLOW_UNAVAILABLE", "workflow-service call failed", execErr)
-	}
-
-	if result.Status == "failed" {
-		failed, err := running.MarkFailed(time.Now().UTC(), result.OutputJSON)
-		if err != nil {
-			return domain.AutomationRun{}, apperrors.New(apperrors.KindInternal, "AUTOMATION_RUN_TRANSITION_FAILED", "failed to transition run to failed", err)
-		}
-		if err := uc.runs.UpdateStatus(ctx, failed); err != nil {
-			return domain.AutomationRun{}, apperrors.New(apperrors.KindInternal, "AUTOMATION_RUN_UPDATE_FAILED", "failed to persist run status", err)
-		}
-		return failed, nil
-	}
-
-	succeeded, err := running.MarkSucceeded(time.Now().UTC(), result.OutputJSON)
+	// THE cross-service call this whole service exists for: delegate the
+	// run's entire action chain (resolveActions handles the legacy
+	// StepType/StepConfigJSON automations transparently — see its own doc
+	// comment) to ExecuteAutomationChain, which dispatches each action to
+	// workflow-service.ExecuteAdHocStep in turn, persists ActionResults,
+	// acquires/releases the concurrency-guard lock, prunes run history, and
+	// resolves the run to its terminal Succeeded/Failed status — never
+	// executing anything locally itself.
+	final, err := uc.chain.Execute(ctx, tenantID, automation, running)
 	if err != nil {
-		return domain.AutomationRun{}, apperrors.New(apperrors.KindInternal, "AUTOMATION_RUN_TRANSITION_FAILED", "failed to transition run to succeeded", err)
+		// Execute only returns a Go error for a failure to PERSIST the run's
+		// own state transition (see its doc comment) — a dispatched action
+		// failing is captured in the run's ActionResults instead, not here.
+		return domain.AutomationRun{}, apperrors.New(apperrors.KindInternal, "AUTOMATION_RUN_UPDATE_FAILED", "failed to finalize run status", err)
 	}
-	if err := uc.runs.UpdateStatus(ctx, succeeded); err != nil {
-		return domain.AutomationRun{}, apperrors.New(apperrors.KindInternal, "AUTOMATION_RUN_UPDATE_FAILED", "failed to persist run status", err)
-	}
-	return succeeded, nil
+	return final, nil
 }

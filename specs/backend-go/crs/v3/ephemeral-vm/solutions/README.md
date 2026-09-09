@@ -14,6 +14,16 @@
 | [BE-SOL-EVM-003](./BE-SOL-EVM-003-environment-devserver-resolution.md) | CR-EVM-004 | `infra-fleet-service`, `api-gateway` | 🔲 Designed — chưa implement |
 | [BE-SOL-EVM-004](./BE-SOL-EVM-004-ssh-connection-type-backend.md) | CR-EVM-005 (phần backend-go) | `infra-fleet-service` | 🔲 Designed — chưa implement |
 
+> **Cập nhật 2026-09-09 — BE-SOL-EVM-001..004 đã ✅ Done.** CR-EVM-001..005
+> đã xác nhận code xong (`80ffe57cd`/`591de6951`) — xem
+> [docs/crs/v3/ephemeral-vm/README.md](../../../../../../docs/crs/v3/ephemeral-vm/README.md).
+> 1 solution mới dưới đây (005) là cho CR-EVM-008 — nhóm audit mới.
+
+| [BE-SOL-EVM-005](./BE-SOL-EVM-005-ssh-target-port-forwards.md) | CR-EVM-008 (phần backend-go, Hướng B) | `infra-fleet-service` | 🔲 Designed — chưa implement |
+
+CR-EVM-006/007/009/010 (frontend, hoặc frontend+agent) không có solution
+backend-go. CR-EVM-011 chưa xác nhận scope.
+
 ## Phát hiện quan trọng khi đối chiếu TDD với mã nguồn thật
 
 `infra-fleet-service.md` §7's "connectionId resolution + relay dispatch
@@ -48,6 +58,12 @@ BE-SOL-EVM-003 → phụ thuộc CỨNG BE-SOL-EVM-002 (cần provision pairing
 BE-SOL-EVM-004 → độc lập kỹ thuật, chỉ có ý nghĩa sau khi
                  SOL-AG-EVM-003 (agent outbound SSH client) tồn tại —
                  làm sau, không chặn 001-003
+
+── nhóm 005 (CR-EVM-008, sau khi 001-004 đã Done) ────────────────────────
+
+BE-SOL-EVM-005 → phụ thuộc kỹ thuật vào BE-SOL-EVM-004 (đã Done, dùng
+                 chung `EPHEMERAL_VM_SSH_MODE` cả 2 hướng) — đồng bộ
+                 CỨNG với SOL-AG-EVM-004 (Hướng A)
 ```
 
 ## Nguyên tắc bảo mật xuyên suốt (kế thừa từ nhóm CR-STORAGE)

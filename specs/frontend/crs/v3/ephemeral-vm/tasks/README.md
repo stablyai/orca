@@ -8,12 +8,30 @@
 | [FE-TASK-EVM-002](./FE-TASK-EVM-002-subscribe-runtime-stream-channel-client.md) — `subscribeRuntimeStreamChannel` | FE-SOL-EVM-002 | [TASK-BE-EVM-005](../../../../backend-go/crs/v3/ephemeral-vm/tasks/TASK-BE-EVM-005-wscompat-provision-channel.md) (DONE) | ✅ DONE |
 | [FE-TASK-EVM-003](./FE-TASK-EVM-003-runtime-ephemeral-vm-client-provision-wiring.md) — route `provision`/`cancelProvision` | FE-SOL-EVM-002 | 002 (DONE), [TASK-BE-EVM-005](../../../../backend-go/crs/v3/ephemeral-vm/tasks/TASK-BE-EVM-005-wscompat-provision-channel.md) (DONE) | ✅ DONE |
 
+## Track 2 — CR-EVM-006..010 (sau khi 001-003 Done)
+
+| Task | Solution | Depends on | Status |
+|---|---|---|---|
+| [FE-TASK-EVM-004](./FE-TASK-EVM-004-wire-doctor-recipe-row.md) — gọi doctor trước "Use in workspace" | FE-SOL-EVM-003 | Không | ✅ DONE |
+| [FE-TASK-EVM-005](./FE-TASK-EVM-005-wire-doctor-before-provision.md) — gọi lại doctor trước `provision()` | FE-SOL-EVM-003 | 004 | ✅ DONE |
+| [FE-TASK-EVM-006](./FE-TASK-EVM-006-gate-runtimes-section-flag.md) — gate `EphemeralVmRuntimesSection` | FE-SOL-EVM-004 | Không | ✅ DONE |
+| [FE-TASK-EVM-007](./FE-TASK-EVM-007-worktree-mount-decision.md) — khảo sát mount/copy-out (không phải task code) | FE-SOL-EVM-005 | Không | ⛔ BLOCKED |
+| [FE-TASK-EVM-008](./FE-TASK-EVM-008-auto-suspend-on-task-completion.md) — auto-suspend sau task | FE-SOL-EVM-006 | [FE-TASK-AUTO-007](../../../../frontend/crs/v4/automation/tasks/FE-TASK-AUTO-007-agent-session-signal-investigation.md) | 🔲 TODO — chờ khảo sát |
+
 ## Thứ tự thực thi
 
 ```
 FE-TASK-EVM-001 → độc lập hoàn toàn, làm sớm
 FE-TASK-EVM-002 → phụ thuộc backend-go's TASK-BE-EVM-005 (đã ship — DONE)
 FE-TASK-EVM-003 → phụ thuộc 002
+
+── Track 2 ──
+FE-TASK-EVM-004 → độc lập, làm bất cứ lúc nào
+FE-TASK-EVM-005 → phụ thuộc 004
+FE-TASK-EVM-006 → độc lập, ưu tiên cao (rẻ)
+FE-TASK-EVM-007 → BLOCKED, chỉ khảo sát
+FE-TASK-EVM-008 → BLOCKED cho tới khi FE-TASK-AUTO-007 (nhóm Automations,
+                   cùng câu hỏi tín hiệu) có kết luận
 ```
 
 Cả 3 task frontend của nhóm CR ephemeral-vm này đều ✅ DONE. Integration

@@ -995,7 +995,10 @@ export function RuntimeEnvironmentsPane({
         </div>
       </div>
 
-      <EphemeralVmRuntimesSection />
+      {/* Why: window.api.ephemeralVm is truthy even when the backend doesn't
+          actually serve it (web/paired preload's fallback Proxy) — must gate
+          on the Settings flag, not RPC availability. See CR-EVM-007. */}
+      {settings.experimentalEphemeralVms === true && <EphemeralVmRuntimesSection />}
 
       <div data-settings-section="default-runtime">
         <Button

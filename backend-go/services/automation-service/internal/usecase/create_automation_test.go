@@ -154,3 +154,52 @@ func TestCreateAutomation_RequiresTenantContext(t *testing.T) {
 		t.Fatal("expected an error when no tenant is in context")
 	}
 }
+
+// CR-AUTO-002/TASK-BE-AUTO-005
+func TestCreateAutomation_ActionsOnly_NoLegacyStepConfigRequired(t *testing.T) {
+	repo := newFakeAutomationRepository()
+	uc := NewCreateAutomation(repo)
+	ctx := withTenant(context.Background(), "tenant-1")
+
+	got, err := uc.Execute(ctx, CreateAutomationInput{
+		Name:  "review-and-pr",
+		RRule: "FREQ=DAILY;INTERVAL=1",
+		// StepType/StepConfigJSON deliberately left zero — actions-only.
+		Actions: []domain.AutomationAction{
+			{ID: "a1", Type: domain.AutomationActionTypeRunAgent, ConfigJSON: `{"prompt":"review"}`},
+			{ID: "a2", Type: domain.AutomationActionTypeCreatePR, ConfigJSON: `{"title":"weekly review"}`, ContinueOnFailure: true},
+		},
+		MaxRunHistory:     50,
+		RunTimeoutSeconds: 3600,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error creating an actions-only automation: %v", err)
+	}
+	if len(got.Actions) != 2 {
+		t.Fatalf("expected 2 actions, got %+v", got.Actions)
+	}
+	if got.MaxRunHistory != 50 || got.RunTimeoutSeconds != 3600 {
+		t.Errorf("MaxRunHistory/RunTimeoutSeconds not persisted: %+v", got)
+	}
+
+	stored, err := repo.Get(ctx, "tenant-1", got.ID)
+	if err != nil {
+		t.Fatalf("unexpected error fetching stored automation: %v", err)
+	}
+	if len(stored.Actions) != 2 || stored.Actions[1].Type != domain.AutomationActionTypeCreatePR || !stored.Actions[1].ContinueOnFailure {
+		t.Fatalf("actions not round-tripped through the repository: %+v", stored.Actions)
+	}
+}
+
+func TestCreateAutomation_NoActionsAndNoStepConfig_StillRejected(t *testing.T) {
+	repo := newFakeAutomationRepository()
+	uc := NewCreateAutomation(repo)
+	ctx := withTenant(context.Background(), "tenant-1")
+
+	_, err := uc.Execute(ctx, CreateAutomationInput{
+		Name: "nothing-to-do", RRule: "FREQ=DAILY;INTERVAL=1",
+	})
+	if err == nil {
+		t.Fatal("expected an error: an automation with neither Actions nor StepConfigJSON has nothing to dispatch")
+	}
+}

@@ -22,11 +22,16 @@ const (
 	StepTypeNotification StepType = "notification"
 	StepTypeWebhook      StepType = "webhook"
 	StepTypeCondition    StepType = "condition"
+	// StepTypeCommitPush — CR-AUTO-003/TASK-BE-AUTO-005. See
+	// workflow-service's domain.StepTypeCommitPush (this const is the same
+	// duplication-not-import convention this whole block's doc comment
+	// already explains).
+	StepTypeCommitPush StepType = "commit_push"
 )
 
 func (s StepType) Valid() bool {
 	switch s {
-	case StepTypeAgent, StepTypeShell, StepTypeNotification, StepTypeWebhook, StepTypeCondition:
+	case StepTypeAgent, StepTypeShell, StepTypeNotification, StepTypeWebhook, StepTypeCondition, StepTypeCommitPush:
 		return true
 	default:
 		return false
@@ -84,6 +89,60 @@ type Automation struct {
 	NextRunAt time.Time
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	// Actions — CR-AUTO-002/TASK-BE-AUTO-003. Ordered action chain, set
+	// directly by the usecase layer after NewAutomation returns (mirrors
+	// how internal/adapter/scheduler sets NextRunAt post-construction —
+	// same established pattern, not a new one). Empty means "legacy
+	// automation, resolve StepType/StepConfigJSON instead" — see
+	// usecase.resolveActions (TASK-BE-AUTO-004).
+	Actions []AutomationAction
+	// MaxRunHistory — CR-AUTO-007/TASK-BE-AUTO-010. 0 = default (100),
+	// enforced by the usecase layer, not here.
+	MaxRunHistory int32
+	// RunTimeoutSeconds — CR-AUTO-007/TASK-BE-AUTO-010. 0 = default (7200).
+	RunTimeoutSeconds int32
+	// RunningRunID/RunningSince — CR-AUTO-007/TASK-BE-AUTO-011's concurrency
+	// guard. Empty/zero means "not currently running". Set/cleared only by
+	// the postgres repository's atomic acquire/release (never constructed
+	// directly — see AutomationRepository.AcquireRunLock/ReleaseRunLock).
+	RunningRunID string
+	RunningSince time.Time
+}
+
+// AutomationActionType mirrors workflow-service's StepType enum pattern —
+// a plain string type, not imported from the generated proto, so domain/
+// stays free of the automationv1 dependency (internal/adapter/grpc is the
+// only place that translates between the two).
+type AutomationActionType string
+
+const (
+	AutomationActionTypeUnspecified      AutomationActionType = ""
+	AutomationActionTypeCreateWorktree   AutomationActionType = "create_worktree"
+	AutomationActionTypeRunAgent         AutomationActionType = "run_agent"
+	AutomationActionTypeCommitPush       AutomationActionType = "commit_push"
+	AutomationActionTypeCreatePR         AutomationActionType = "create_pr"
+	AutomationActionTypeSendNotification AutomationActionType = "send_notification"
+	AutomationActionTypeRunScript        AutomationActionType = "run_script"
+)
+
+// AutomationAction — CR-AUTO-002. One step in an automation's action chain.
+// ConfigJSON is opaque, type-specific — see automation.proto's
+// AutomationAction.config_json doc comment; this layer never decodes it
+// field-by-field, matching StepConfigJSON's existing convention.
+type AutomationAction struct {
+	ID                string
+	Type              AutomationActionType
+	ConfigJSON        string
+	ContinueOnFailure bool
+}
+
+// ActionResult — CR-AUTO-002. Per-action outcome within one AutomationRun,
+// recorded in dispatch order.
+type ActionResult struct {
+	ActionID   string
+	Status     string // running|completed|failed|skipped
+	OutputJSON string
+	Error      string
 }
 
 // NewAutomation constructs an Automation, enforcing the invariants a

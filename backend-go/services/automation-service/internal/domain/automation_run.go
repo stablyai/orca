@@ -83,6 +83,11 @@ type AutomationRun struct {
 	CreatedAt      time.Time
 	StartedAt      time.Time
 	CompletedAt    time.Time
+	// ActionResults — CR-AUTO-002/TASK-BE-AUTO-003. Per-action outcome, set
+	// directly by the usecase layer as ExecuteAutomationChain dispatches
+	// each action (TASK-BE-AUTO-004) — mirrors Automation.Actions'
+	// post-construction-assignment convention.
+	ActionResults []ActionResult
 }
 
 // NewPendingRun constructs a freshly-created AutomationRun in the Pending

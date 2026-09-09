@@ -15,10 +15,46 @@ import (
 // specs/backend-go/standards/testing-strategy.md's unit-test section.
 type fakeAutomationRepository struct {
 	byID map[string]domain.Automation
+	// lockRunID/lockSince back AcquireRunLock/ReleaseRunLock — kept
+	// separate from byID (rather than mutating Automation.RunningRunID
+	// in-place) so lock state is exercisable without callers first
+	// Create()-ing the automation, matching how execute_automation_chain_test.go
+	// builds automations via mustNewAutomation() without registering them.
+	lockRunID map[string]string
+	lockSince map[string]time.Time
 }
 
 func newFakeAutomationRepository() *fakeAutomationRepository {
-	return &fakeAutomationRepository{byID: map[string]domain.Automation{}}
+	return &fakeAutomationRepository{
+		byID:      map[string]domain.Automation{},
+		lockRunID: map[string]string{},
+		lockSince: map[string]time.Time{},
+	}
+}
+
+// AcquireRunLock mirrors postgres.AutomationRepository.AcquireRunLock's
+// semantics: succeeds if unlocked, or if the existing lock is older than
+// ttl (self-healing after a simulated crash).
+func (f *fakeAutomationRepository) AcquireRunLock(ctx context.Context, tenantID, automationID, runID string, ttl time.Duration) (bool, error) {
+	if held, ok := f.lockRunID[automationID]; ok && held != "" {
+		if time.Since(f.lockSince[automationID]) < ttl {
+			return false, nil
+		}
+	}
+	f.lockRunID[automationID] = runID
+	f.lockSince[automationID] = time.Now()
+	return true, nil
+}
+
+// ReleaseRunLock only clears the lock if runID still holds it — mirrors
+// postgres.AutomationRepository.ReleaseRunLock's "don't release someone
+// else's lock" guard.
+func (f *fakeAutomationRepository) ReleaseRunLock(ctx context.Context, tenantID, automationID, runID string) error {
+	if f.lockRunID[automationID] == runID {
+		delete(f.lockRunID, automationID)
+		delete(f.lockSince, automationID)
+	}
+	return nil
 }
 
 func (f *fakeAutomationRepository) Create(ctx context.Context, a domain.Automation) error {
@@ -60,8 +96,17 @@ func (f *fakeAutomationRepository) Delete(ctx context.Context, tenantID, id stri
 
 // fakeAutomationRunRepository is an in-memory AutomationRunRepository.
 type fakeAutomationRunRepository struct {
-	byID    map[string]domain.AutomationRun
-	created int
+	byID        map[string]domain.AutomationRun
+	created     int
+	prunedCalls []prunedRunsCall
+}
+
+// prunedRunsCall records one PruneRuns invocation — asserted by
+// TestExecuteAutomationChain_PrunesRunsAfterCompletion.
+type prunedRunsCall struct {
+	TenantID     string
+	AutomationID string
+	MaxRuns      int32
 }
 
 func newFakeAutomationRunRepository() *fakeAutomationRunRepository {
@@ -96,6 +141,11 @@ func (f *fakeAutomationRunRepository) ListByAutomation(ctx context.Context, tena
 		}
 	}
 	return out, "", nil
+}
+
+func (f *fakeAutomationRunRepository) PruneRuns(ctx context.Context, tenantID, automationID string, maxRuns int32) error {
+	f.prunedCalls = append(f.prunedCalls, prunedRunsCall{TenantID: tenantID, AutomationID: automationID, MaxRuns: maxRuns})
+	return nil
 }
 
 // fakeWorkflowStepExecutor is a fake WorkflowStepExecutor — RunNow's tests
@@ -166,8 +216,19 @@ func TestRunNow_CallsWorkflowStepExecutorWithStepConfig(t *testing.T) {
 	if call.TenantID != "tenant-1" {
 		t.Errorf("expected tenant_id=tenant-1, got %v", call.TenantID)
 	}
-	if call.RequestID != "req-1" {
-		t.Errorf("expected request_id=req-1, got %v", call.RequestID)
+	// Why: TASK-BE-AUTO-004's rewire delegates dispatch to
+	// ExecuteAutomationChain, which scopes workflow-service's own
+	// idempotency key per (run, action) — run.ID+":"+action.ID, NOT
+	// RunNowInput.RequestID verbatim (dispatchViaWorkflow's own doc
+	// comment explains why: a multi-action chain needs a distinct key per
+	// action, not one key reused for every action in the run). This does
+	// NOT weaken RunNow's own idempotency guarantee — a retried call with
+	// the same RunNowInput.RequestID still short-circuits via
+	// FindByRequestID before ever reaching dispatch (see
+	// TestRunNow_IdempotentRetrySameRequestIDDoesNotDuplicateOrRecall).
+	wantRequestID := run.ID + ":auto-1:legacy"
+	if call.RequestID != wantRequestID {
+		t.Errorf("expected request_id=%q (run.ID + legacy action ID), got %v", wantRequestID, call.RequestID)
 	}
 }
 
@@ -289,6 +350,21 @@ func TestRunNow_DifferentRequestIDsCreateDistinctRuns(t *testing.T) {
 	}
 }
 
+// TestRunNow_WorkflowServiceFailurePropagatesAndRunRecordedFailed —
+// TASK-BE-AUTO-004's rewire changed HOW a workflow-service transport
+// failure propagates, deliberately: before the rewire, RunNow.Execute
+// returned a Go error directly from the failed ExecuteAdHocStep call
+// (distinct from a business-level "failed" status result, which returned
+// (run, nil)). After the rewire, EVERY dispatch outcome — transport
+// failure, business failure, or success — resolves through
+// ExecuteAutomationChain to (run, nil); the failure surfaces in the run's
+// own ActionResults[].Error/Status, not as a returned Go error, UNLESS
+// something fails persisting the run's OWN state (a different failure
+// class this test doesn't exercise). This is NOT "silently swallowed" the
+// way TS's skipped_unavailable was — the run is recorded Failed with a
+// non-empty error message, fully visible via ListRuns — it just surfaces
+// through the run record instead of the RunNow gRPC call's own status
+// code. See RunNow's doc comment for the full reasoning.
 func TestRunNow_WorkflowServiceFailurePropagatesAndRunRecordedFailed(t *testing.T) {
 	automations := newFakeAutomationRepository()
 	runs := newFakeAutomationRunRepository()
@@ -298,9 +374,15 @@ func TestRunNow_WorkflowServiceFailurePropagatesAndRunRecordedFailed(t *testing.
 	seedAutomation(t, automations, "tenant-1", "auto-1", `{"step_type":"agent"}`)
 	ctx := withTenant(context.Background(), "tenant-1")
 
-	_, err := uc.Execute(ctx, RunNowInput{AutomationID: "auto-1", RequestID: "req-1"})
-	if err == nil {
-		t.Fatal("expected RunNow to fail closed when workflow-service is unreachable")
+	run, err := uc.Execute(ctx, RunNowInput{AutomationID: "auto-1", RequestID: "req-1"})
+	if err != nil {
+		t.Fatalf("unexpected error — a dispatch failure is recorded on the run, not returned as a RunNow error: %v", err)
+	}
+	if run.Status != domain.RunStatusFailed {
+		t.Errorf("expected run status Failed, got %v", run.Status)
+	}
+	if len(run.ActionResults) != 1 || run.ActionResults[0].Error == "" {
+		t.Errorf("expected a non-empty error on the action result — the failure must remain visible, not silently swallowed, got %+v", run.ActionResults)
 	}
 
 	// The run row must still exist, recorded Failed — never silently
@@ -317,6 +399,67 @@ func TestRunNow_WorkflowServiceFailurePropagatesAndRunRecordedFailed(t *testing.
 	}
 	if !found {
 		t.Fatal("expected a run row to exist even though the workflow-service call failed")
+	}
+}
+
+// TestRunNow_WithPullRequestCreator_DispatchesCreatePrAction — TASK-BE-AUTO-004's
+// rewire also wired RunNowOption/WithPullRequestCreator so cmd/server/main.go
+// could pass a real PullRequestCreator into RunNow's internally-built
+// ExecuteAutomationChain (previously always nil, meaning create_pr actions
+// dispatched via RunNow always failed with "no PullRequestCreator
+// configured" — see ExecuteAutomationChain.dispatchCreatePR). This test
+// confirms the option actually reaches the chain.
+func TestRunNow_WithPullRequestCreator_DispatchesCreatePrAction(t *testing.T) {
+	automations := newFakeAutomationRepository()
+	runs := newFakeAutomationRunRepository()
+	executor := &fakeWorkflowStepExecutor{}
+	prs := &fakePullRequestCreator{output: CreatePullRequestOutput{URL: "https://example.com/pr/1", Number: 1}}
+	uc := NewRunNow(automations, runs, executor, WithPullRequestCreator(prs))
+
+	automation := seedAutomation(t, automations, "tenant-1", "auto-1", `{}`)
+	automation.Actions = []domain.AutomationAction{
+		{ID: "a1", Type: domain.AutomationActionTypeCreatePR, ConfigJSON: `{"provider":"github","repo":"acme/widgets","title":"Weekly cleanup","headBranch":"automation/cleanup","baseBranch":"main"}`},
+	}
+	automations.byID[automation.ID] = automation
+
+	ctx := withTenant(context.Background(), "tenant-1")
+	run, err := uc.Execute(ctx, RunNowInput{AutomationID: "auto-1", RequestID: "req-1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if run.Status != domain.RunStatusSucceeded {
+		t.Fatalf("expected run to succeed, got status=%v: %+v", run.Status, run.ActionResults)
+	}
+	if len(prs.calls) != 1 || prs.calls[0].Repo != "acme/widgets" {
+		t.Errorf("expected PullRequestCreator to be called with the action's config, got %+v", prs.calls)
+	}
+	if len(executor.calls) != 0 {
+		t.Errorf("create_pr must dispatch via PullRequestCreator, not WorkflowStepExecutor, got %d calls", len(executor.calls))
+	}
+}
+
+// TestRunNow_WithoutPullRequestCreator_CreatePrActionFailsClearly confirms
+// the pre-existing (unchanged) behavior when the option is omitted — every
+// existing RunNow caller/test that doesn't pass WithPullRequestCreator.
+func TestRunNow_WithoutPullRequestCreator_CreatePrActionFailsClearly(t *testing.T) {
+	automations := newFakeAutomationRepository()
+	runs := newFakeAutomationRunRepository()
+	executor := &fakeWorkflowStepExecutor{}
+	uc := NewRunNow(automations, runs, executor)
+
+	automation := seedAutomation(t, automations, "tenant-1", "auto-1", `{}`)
+	automation.Actions = []domain.AutomationAction{
+		{ID: "a1", Type: domain.AutomationActionTypeCreatePR, ConfigJSON: `{"provider":"github","repo":"acme/widgets","title":"x","headBranch":"h","baseBranch":"main"}`},
+	}
+	automations.byID[automation.ID] = automation
+
+	ctx := withTenant(context.Background(), "tenant-1")
+	run, err := uc.Execute(ctx, RunNowInput{AutomationID: "auto-1", RequestID: "req-1"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if run.Status != domain.RunStatusFailed {
+		t.Fatalf("expected run to fail clearly (no PullRequestCreator configured), got status=%v", run.Status)
 	}
 }
 

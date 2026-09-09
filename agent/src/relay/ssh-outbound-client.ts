@@ -17,6 +17,7 @@ import { spawn } from 'node:child_process'
 import { Duplex } from 'node:stream'
 import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import * as net from 'node:net'
 
 // Why a narrower type than the full EphemeralVmRecipeSshTargetSchema (which
 // requires `label` and carries display-only fields like `configHost`/
@@ -50,6 +51,10 @@ export type SshDialTarget = {
   knownHostKeyFingerprint?: string
   jumpHost?: string
   proxyCommand?: string
+  // portForwards — CR-EVM-008/TASK-AG-EVM-011. Mirrors backend-go's
+  // toWirePortForwards (devserveragent/methods.go) 1:1; label is display-
+  // only and intentionally dropped there too, so it's never sent here.
+  portForwards?: { localPort: number; remoteHost: string; remotePort: number }[]
 }
 
 // Why: credential material (SOL-AG-EVM-003 quyết định 1 — RPC param, agent
@@ -251,6 +256,53 @@ function buildConnectConfig(
   }
 }
 
+// setupPortForwards — CR-EVM-008/TASK-AG-EVM-011. Mirrors
+// dialViaJumpHost's use of forwardOut above (same primitive: open a
+// direct-tcpip channel over an already-live SSH connection), just wired to
+// a local net.Server accepting connections instead of the jump-host's
+// single fixed channel. Mirrors backend-go's sshconn.Connection.SetupPortForwards
+// (Hướng B) — same design, different language.
+//
+// Awaits each server's actual listen result (not just synchronous
+// net.createServer, which never throws for e.g. EADDRINUSE — that surfaces
+// async via the 'error' event) so a forward that can't bind fails the
+// whole dial loudly, matching Hướng B's all-or-nothing framing, instead of
+// leaving a half-set-up session the caller has no way to detect failed.
+async function setupPortForwards(
+  client: Ssh2Client,
+  forwards: SshDialTarget['portForwards']
+): Promise<net.Server[]> {
+  const servers: net.Server[] = []
+  try {
+    for (const { localPort, remoteHost, remotePort } of forwards ?? []) {
+      const server = net.createServer((localSocket) => {
+        client.forwardOut('127.0.0.1', localPort, remoteHost, remotePort, (err, channel) => {
+          if (err) {
+            localSocket.destroy(err)
+            return
+          }
+          localSocket.pipe(channel)
+          channel.pipe(localSocket)
+        })
+      })
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject)
+        server.listen(localPort, '127.0.0.1', () => {
+          server.off('error', reject)
+          resolve()
+        })
+      })
+      servers.push(server)
+    }
+  } catch (err) {
+    for (const server of servers) {
+      server.close()
+    }
+    throw err
+  }
+  return servers
+}
+
 export async function dialOutboundSshTarget(
   target: SshDialTarget,
   credential: OutboundSshCredential
@@ -265,6 +317,7 @@ export async function dialOutboundSshTarget(
   // Set by buildConnectConfig's hostVerifier callback once ssh2 actually
   // calls it during the handshake — empty until then.
   let hostKeyFingerprint = ''
+  let forwardServers: net.Server[] = []
 
   try {
     const privateKeyPEM = await resolvePrivateKey(target, credential)
@@ -289,7 +342,11 @@ export async function dialOutboundSshTarget(
       hostKeyFingerprint = fingerprint
     })
     await connectSsh2Client(client, config)
+    forwardServers = await setupPortForwards(client, target.portForwards)
   } catch (err) {
+    for (const server of forwardServers) {
+      server.close()
+    }
     jumpClient?.end()
     client?.end()
     // Why NOT scrub target.identityFilePath here: the task's security note
@@ -306,6 +363,9 @@ export async function dialOutboundSshTarget(
     client: readyClient,
     hostKeyFingerprint,
     close: (): void => {
+      for (const server of forwardServers) {
+        server.close()
+      }
       readyClient.end()
       jumpClient?.end()
     }

@@ -20,12 +20,21 @@ const (
 	StepTypeNotification StepType = "notification"
 	StepTypeWebhook      StepType = "webhook"
 	StepTypeCondition    StepType = "condition"
+	// StepTypeCommitPush — CR-AUTO-003/TASK-BE-AUTO-005. Not part of the
+	// original five (see this const block's original comment) — added so
+	// automation-service's ExecuteAutomationChain (CR-AUTO-002) has a
+	// dedicated step type for the commit_push action, rather than reusing
+	// StepTypeShell to shell out raw git commands (which AGENTS.md's "Git
+	// Binary Compatibility" section rules out — needs
+	// GitCapabilityCache-style version handling, not a bare `git commit`
+	// string).
+	StepTypeCommitPush StepType = "commit_push"
 )
 
-// Valid reports whether t is one of the five known step types.
+// Valid reports whether t is one of the known step types.
 func (t StepType) Valid() bool {
 	switch t {
-	case StepTypeAgent, StepTypeShell, StepTypeNotification, StepTypeWebhook, StepTypeCondition:
+	case StepTypeAgent, StepTypeShell, StepTypeNotification, StepTypeWebhook, StepTypeCondition, StepTypeCommitPush:
 		return true
 	default:
 		return false
@@ -84,6 +93,20 @@ type NotificationStepConfig struct {
 	ConnectionID string `json:"connectionId"`
 	Channel      string `json:"channel"`
 	Message      string `json:"message"`
+}
+
+// CommitPushStepConfig is the CommitPush step type's config shape —
+// CR-AUTO-003/TASK-BE-AUTO-005. ConnectionID: see AgentStepConfig's doc
+// comment (same new-field rationale) — relays to agent's git.commit then
+// (if Push) git.push on the same connection.
+type CommitPushStepConfig struct {
+	ConnectionID string `json:"connectionId"`
+	Message      string `json:"message"`
+	// Push defaults to true when the config_json key is absent — see
+	// GitCommitPushExecutor.Execute's doc comment for why this can't be a
+	// bare `bool` (Go's zero value for bool is false, which would silently
+	// invert the "push by default" convention CR-AUTO-003 specifies).
+	Push *bool `json:"push,omitempty"`
 }
 
 // StepExecutor is the domain-level strategy interface each step type

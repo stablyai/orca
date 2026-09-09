@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	gatewaygrpc "github.com/stablyai/orca-go/services/api-gateway/internal/adapter/grpc"
 
@@ -21,10 +22,123 @@ import (
 func mountAutomationRoutes(r chi.Router, client automationv1.AutomationServiceClient) {
 	r.Route("/v1/automations", func(sub chi.Router) {
 		sub.Post("/", handleCreateAutomation(client))
+		sub.Get("/", handleListAutomations(client))
+		sub.Patch("/{id}", handleUpdateAutomation(client))
+		sub.Delete("/{id}", handleDeleteAutomation(client))
 		sub.Post("/{id}/run", handleRunNow(client))
 		sub.Get("/{id}/runs", handleListRuns(client))
 		sub.Post("/{id}/trigger", handleHandleExternalTrigger(client))
 	})
+}
+
+// handleListAutomations mirrors handleCreateAutomation's identity handling
+// (tenant_id comes from the validated Identity, never a query param) — see
+// TASK-BE-AUTO-012.
+func handleListAutomations(client automationv1.AutomationServiceClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		identity, _ := identityFromContext(r.Context())
+		q := r.URL.Query()
+
+		var pageSize int32
+		if v := q.Get("page_size"); v != "" {
+			n, err := strconv.ParseInt(v, 10, 32)
+			if err != nil {
+				writeJSONError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "page_size must be an integer")
+				return
+			}
+			pageSize = int32(n)
+		}
+
+		ctx := gatewaygrpc.AttachIdentity(r.Context(), identity)
+		resp, err := client.ListAutomations(ctx, &automationv1.ListAutomationsRequest{
+			TenantId:  identity.TenantID,
+			PageToken: q.Get("page_token"),
+			PageSize:  pageSize,
+		})
+		if err != nil {
+			writeGRPCError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+// updateAutomationRequestBody uses pointer fields (like
+// UpdateAutomationRequest's proto3 wrapper types) so an absent JSON key
+// means "no change" — distinct from an explicit `null`/empty string, which
+// updateStringField below still treats as "clear this field" by design
+// (matches UpdateAutomationRequest's own field doc comment: partial edit,
+// not full-replace).
+type updateAutomationRequestBody struct {
+	Name           *string `json:"name"`
+	RRule          *string `json:"rrule"`
+	StepConfigJSON *string `json:"step_config_json"`
+	StepType       *string `json:"step_type"`
+	Enabled        *bool   `json:"enabled"`
+	Dtstart        *string `json:"dtstart"`
+	Timezone       *string `json:"timezone"`
+}
+
+func updateStringField(v *string) *wrapperspb.StringValue {
+	if v == nil {
+		return nil
+	}
+	return wrapperspb.String(*v)
+}
+
+func handleUpdateAutomation(client automationv1.AutomationServiceClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		identity, _ := identityFromContext(r.Context())
+		automationID := chi.URLParam(r, "id")
+
+		var body updateAutomationRequestBody
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "INVALID_ARGUMENT", "invalid JSON body: "+err.Error())
+			return
+		}
+
+		req := &automationv1.UpdateAutomationRequest{
+			Id:             automationID,
+			TenantId:       identity.TenantID,
+			Name:           updateStringField(body.Name),
+			Rrule:          updateStringField(body.RRule),
+			StepConfigJson: updateStringField(body.StepConfigJSON),
+			Dtstart:        updateStringField(body.Dtstart),
+			Timezone:       updateStringField(body.Timezone),
+		}
+		if body.StepType != nil {
+			req.StepType = parseStepType(*body.StepType)
+		}
+		if body.Enabled != nil {
+			req.Enabled = wrapperspb.Bool(*body.Enabled)
+		}
+
+		ctx := gatewaygrpc.AttachIdentity(r.Context(), identity)
+		resp, err := client.UpdateAutomation(ctx, req)
+		if err != nil {
+			writeGRPCError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, resp.GetAutomation())
+	}
+}
+
+func handleDeleteAutomation(client automationv1.AutomationServiceClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		identity, _ := identityFromContext(r.Context())
+		automationID := chi.URLParam(r, "id")
+
+		ctx := gatewaygrpc.AttachIdentity(r.Context(), identity)
+		_, err := client.DeleteAutomation(ctx, &automationv1.DeleteAutomationRequest{
+			Id:       automationID,
+			TenantId: identity.TenantID,
+		})
+		if err != nil {
+			writeGRPCError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }
 
 // createAutomationRequestBody is the REST request shape for POST

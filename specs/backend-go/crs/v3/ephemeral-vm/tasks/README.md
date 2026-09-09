@@ -32,8 +32,8 @@
 | [TASK-BE-EVM-009](./TASK-BE-EVM-009-ssh-design-decisions.md) — chốt 3 quyết định kiến trúc (không phải task code) | SOL-AG-EVM-003 (thiết kế) | ✅ DONE |
 | [TASK-BE-EVM-012](./TASK-BE-EVM-012-ssh-mode-config-and-provisioner-interface.md) — config `EPHEMERAL_VM_SSH_MODE` + `EphemeralVmSshProvisioner` interface + gỡ guard | Không | ✅ DONE |
 | [TASK-BE-EVM-013](./TASK-BE-EVM-013-backend-relay-deploy-provisioner.md) — **Hướng B**: `backendrelaysshprovisioner` (tái dùng `sshconn`/`sshrelay`) | 012 | ✅ DONE |
-| [TASK-BE-EVM-014](./TASK-BE-EVM-014-agent-outbound-ssh-provisioner-backend.md) — **Hướng A**: hidden-target table, Vault, RPC tới agent | 012 | 🟡 PARTIAL — lõi chạy thật, test pass; 2 gap kiến trúc còn mở (xem task's "Kết quả thực tế") |
-| [TASK-BE-EVM-015](./TASK-BE-EVM-015-git-gateway-hidden-target-routing.md) — **Hướng A**: `hiddenTargetID` routing trong `git-gateway-service` | 014 | 🟡 PARTIAL — cơ chế routing chạy thật + test pass; populate `HiddenTargetID` thật cần 2 thay đổi proto ngoài phạm vi (xem task's "Kết quả thực tế") |
+| [TASK-BE-EVM-014](./TASK-BE-EVM-014-agent-outbound-ssh-provisioner-backend.md) — **Hướng A**: hidden-target table, Vault, RPC tới agent | 012 | ✅ DONE — đính chính 2026-09-09, 2 gap đã đóng bởi TASK-BE-EVM-016 từ 2026-09-08, chỉ status label bị lỡ cập nhật |
+| [TASK-BE-EVM-015](./TASK-BE-EVM-015-git-gateway-hidden-target-routing.md) — **Hướng A**: `hiddenTargetID` routing trong `git-gateway-service` | 014 | 🟡 PARTIAL — đính chính 2026-09-09: gap #1 (worktree-scope) đã đóng bởi TASK-BE-EVM-018; gap #2 (repo-scope, `project-service`) khả năng là mismatch phạm vi kiến trúc thật (worktree chưa tồn tại tại call site đó), không phải thiếu code — cần quyết định sản phẩm, xem task's "Đính chính" |
 
 ## Track 6 — Fix 4 gap thật (BE-SOL-EVM-004 §6a-6d)
 
@@ -51,6 +51,14 @@
 | [TASK-BE-EVM-010](./TASK-BE-EVM-010-runtime-response-shape-mismatch.md) — `toEphemeralVmRuntimeView` lệch field với frontend's `EphemeralVmRuntimeRecord` | Không | ✅ DONE |
 | [TASK-BE-EVM-011](./TASK-BE-EVM-011-provision-devserver-linkage-decision.md) — quyết định kiến trúc nối `Provision`'s sự kiện với `dev_servers` row thật | 006 (BLOCKED) | ✅ DONE |
 
+## Track 7 — Port forwards (BE-SOL-EVM-005, CR-EVM-008, sau khi Track 1-6 Done)
+
+| Task | Depends on | Status |
+|---|---|---|
+| [TASK-BE-EVM-020](./TASK-BE-EVM-020-port-forwards-proto.md) — proto `PortForward` + `port_forwards` field | Không (song song TASK-AG-EVM-011) | ✅ DONE |
+| [TASK-BE-EVM-021](./TASK-BE-EVM-021-wire-port-forwards-decode.md) — bỏ "deliberately omitted", wire thật | 020 | ✅ DONE |
+| [TASK-BE-EVM-022](./TASK-BE-EVM-022-port-forwards-hourng-b.md) — Hướng B (`ephemeralsshconn`) | 021 | ✅ DONE |
+
 ## Thứ tự thực thi
 
 ```
@@ -59,6 +67,7 @@ Track 2: 002 → 003 → 004 → 005                        (tuyến tính)
 Track 3:                004 → 011 → 006 → 007 → 008    (004 dùng chung với Track 2; 006 BLOCKED cho tới khi 011 chốt xong)
 Track 4: 009 (đã chốt) → 012 → 013 (Hướng B) song song 014 → 015 (Hướng A)
 Track 5: 010                                          (độc lập, không block track nào)
+Track 7: 020 → 021 → 022                              (020 đồng bộ CỨNG với TASK-AG-EVM-011)
 ```
 
 Track 4 giờ 2 hướng chạy song song sau 012: Hướng B (013) không phụ

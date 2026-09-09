@@ -119,4 +119,22 @@ type EphemeralVmSshTarget struct {
 	// semantics) — mutually exclusive with JumpHost in practice, though
 	// this type does not enforce that (the recipe schema doesn't either).
 	ProxyCommand string
+	// PortForwards — CR-EVM-008/TASK-BE-EVM-021. Local-port forwards the
+	// recipe declared for this target, forwarded verbatim from the wire
+	// (EphemeralVmRecipeSshTarget.PortForwards) through to whichever
+	// EphemeralVmSshProvisioner dials this target — Hướng A
+	// (AgentOutboundSshProvisioner, TASK-AG-EVM-011) sets these up in the
+	// agent's outbound SSH client; Hướng B
+	// (backendrelaysshprovisioner/ephemeralsshconn, TASK-BE-EVM-022) sets
+	// them up in backend-go's own SSH connection.
+	PortForwards []EphemeralVmSshPortForward
+}
+
+// EphemeralVmSshPortForward mirrors usecase.PortForward /
+// frontend/src/shared/ssh-types.ts's SavedPortForward field-for-field.
+type EphemeralVmSshPortForward struct {
+	LocalPort  int
+	RemoteHost string
+	RemotePort int
+	Label      string
 }

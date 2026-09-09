@@ -26,11 +26,20 @@ agent/ không cần đổi gì — 3 task này vẫn nên hoàn thành để con
 | [TASK-AG-EVM-009](./TASK-AG-EVM-009-vm-read-credential-file-handler.md) — Gap 1: handler `vm.readCredentialFile` (cho Hướng B) | 008 | ✅ DONE |
 | [TASK-AG-EVM-010](./TASK-AG-EVM-010-tofu-host-key-hourng-a.md) — Gap 4: TOFU host-key (Hướng A) | 008 | ✅ DONE |
 
+## Track 4 — Port forwards + mount decision (CR-EVM-006..011, sau khi 001-010 Done)
+
+| Task | Solution | Depends on | Status |
+|---|---|---|---|
+| [TASK-AG-EVM-011](./TASK-AG-EVM-011-ssh-target-port-forwards.md) — `portForwards` cho `ssh-outbound-client.ts` | SOL-AG-EVM-004 | Không (song song TASK-BE-EVM-020) | ✅ DONE |
+| [TASK-AG-EVM-012](./TASK-AG-EVM-012-worktree-mount-decision.md) — khảo sát mount/copy-out (không phải task code) | SOL-AG-EVM-005 | Không | ⛔ BLOCKED |
+
 ## Thứ tự thực thi
 
 ```
 001 → 002 → 003 → 004
 005 → 006 → 007   (độc lập với 001-004, có thể chạy song song)
+011 → độc lập, đồng bộ CỨNG với TASK-BE-EVM-020 (backend-go)
+012 → BLOCKED, không code cho tới khi CR-EVM-009 chốt quyết định sản phẩm
 ```
 
 Tuyến tính trong từng nhóm — 001/002/003 sửa cùng 1 file

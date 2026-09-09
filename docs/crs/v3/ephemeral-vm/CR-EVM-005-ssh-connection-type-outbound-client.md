@@ -8,10 +8,25 @@
 | **Priority** | P3 |
 | **Phiên bản** | v1.0 |
 | **Ngày tạo** | 2026-09-08 |
-| **Trạng thái** | 🔲 Proposed — thiết kế sketch, chưa committed |
+| **Trạng thái** | ✅ Done — triển khai đầy đủ (rộng hơn sketch ban đầu), xem "Cập nhật 2026-09-09" |
 | **Tác giả** | Kế thừa `docs/backlog/BACKLOG-001-ephemeralvm-ssh-outbound-client.md`, xác nhận lại bằng mã nguồn hiện tại |
 | **Tác động HLD** | Agent transport layer (WebSocket modes hiện có), Infra-Fleet domain |
 | **Tác động Features** | Ephemeral VM workspace với recipe trả `{type: 'ssh', target}` — hiện bị chặn vĩnh viễn |
+
+---
+
+> **Cập nhật 2026-09-09 — ✅ Đã triển khai, đi xa hơn sketch ban đầu.**
+> Commit `80ffe57cd` + follow-up `591de6951` triển khai **cả 2** hướng
+> (không chỉ Hướng A mà CR này phác thảo): agent outbound client
+> (`agent/src/relay/ssh-outbound-client.ts`,
+> `ssh-outbound-filesystem-provider.ts`, `ssh-outbound-git-provider.ts`,
+> `agent-rpc-dispatch-hidden-target.ts`) **và** Hướng B ở backend-go
+> (`backendrelaysshprovisioner/provisioner.go`,
+> `ephemeralsshconn/connector.go`), chọn qua config
+> `EPHEMERAL_VM_SSH_MODE`, mặc định Hướng B. Follow-up cũng thêm TOFU
+> host-key verification (`0016_ephemeral_vm_ssh_target_host_key.up.sql`)
+> — 1 gap bảo mật mà cả CR gốc lẫn design spec đều chưa đóng. Không còn
+> hành động nào cần làm cho CR này.
 
 ---
 

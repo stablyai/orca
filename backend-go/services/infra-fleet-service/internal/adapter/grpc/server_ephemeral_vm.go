@@ -108,6 +108,24 @@ func toProtoVmProvisionEvent(e usecase.VmProvisionEvent) *infrafleetv1.VmProvisi
 	return out
 }
 
+// toProtoPortForwards mirrors toUsecasePortForwards (devserveragent/client.go)
+// in the opposite direction — CR-EVM-008/TASK-BE-EVM-021.
+func toProtoPortForwards(forwards []usecase.PortForward) []*infrafleetv1.PortForward {
+	if len(forwards) == 0 {
+		return nil
+	}
+	out := make([]*infrafleetv1.PortForward, len(forwards))
+	for i, f := range forwards {
+		out[i] = &infrafleetv1.PortForward{
+			LocalPort:  f.LocalPort,
+			RemoteHost: f.RemoteHost,
+			RemotePort: f.RemotePort,
+			Label:      f.Label,
+		}
+	}
+	return out
+}
+
 func toProtoVmProvisionResult(r usecase.VmProvisionResult) *infrafleetv1.VmProvisionResult {
 	out := &infrafleetv1.VmProvisionResult{Type: r.Type, PairingCode: r.PairingCode, ProjectRoot: r.ProjectRoot}
 	if r.SshTarget != nil {
@@ -116,6 +134,7 @@ func toProtoVmProvisionResult(r usecase.VmProvisionResult) *infrafleetv1.VmProvi
 			IdentityFile: r.SshTarget.IdentityFile, IdentityAgent: r.SshTarget.IdentityAgent,
 			IdentitiesOnly: r.SshTarget.IdentitiesOnly, ProxyCommand: r.SshTarget.ProxyCommand,
 			JumpHost: r.SshTarget.JumpHost, RelayGracePeriodSeconds: r.SshTarget.RelayGracePeriodSeconds,
+			PortForwards: toProtoPortForwards(r.SshTarget.PortForwards),
 		}
 	}
 	return out

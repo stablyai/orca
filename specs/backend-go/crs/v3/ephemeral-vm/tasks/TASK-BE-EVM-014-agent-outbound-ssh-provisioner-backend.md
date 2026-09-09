@@ -3,7 +3,7 @@
 **Solution:** [BE-SOL-EVM-004](../solutions/BE-SOL-EVM-004-ssh-connection-type-backend.md) §2-3 | **CR:** CR-EVM-005
 **Service:** `infra-fleet-service`
 **Depends on:** [TASK-BE-EVM-012](./TASK-BE-EVM-012-ssh-mode-config-and-provisioner-interface.md) (interface)
-**Status:** 🟡 PARTIAL — lõi (Vault resolve → RPC agent, audit table, test) chạy thật; 2 gap kiến trúc còn mở, xem "Kết quả thực tế"
+**Status:** ✅ DONE (đính chính 2026-09-09) — 2 gap kiến trúc dưới đây đã được [TASK-BE-EVM-016](./TASK-BE-EVM-016-fix-identity-file-passthrough-hourng-a.md) đóng hoàn toàn (2026-09-08); status label ở đây chỉ chưa được cập nhật theo, không phải gap code còn tồn tại — xác nhận lại bằng cách đọc trực tiếp `agent_outbound_ssh_provisioner.go` thật + `go build`/`go test` (2026-09-09)
 
 ---
 
@@ -164,3 +164,39 @@ tôi đã viết — merge sạch, không trùng khai báo, build/test lại xá
 privateKeyPem, identityAgentSocket, jumpHost, proxyCommand}}`, kỳ vọng trả
 `{hiddenTargetId}` (agent không trả cũng không lỗi — code fallback dùng
 `runtimeId` làm `hiddenTargetId` theo quy ước BE-SOL-EVM-004 §4).
+
+---
+
+## ✅ Đính chính status (2026-09-09)
+
+Cả 2 gap ở trên **đã được đóng hoàn toàn** bởi
+[TASK-BE-EVM-016](./TASK-BE-EVM-016-fix-identity-file-passthrough-hourng-a.md)
+(2026-09-08 — chạy ngay sau task này, cùng phiên làm việc): gap 1 đóng
+bằng cách đổi chữ ký `EphemeralVmSshProvisioner.Provision` để nhận thẳng
+`sourceDevServer domain.DevServer` (không cần lookup port riêng); gap 2
+đóng bằng cách thêm `ProjectRoot` vào `domain.EphemeralVmSshTarget` rồi
+gọi `domain.NewConnection(..., sourceDevServer.ID, target.ProjectRoot,
+...)` để tạo 1 row `infra.connections` thật, không còn quy ước
+`connectionID = runtimeID`. TASK-BE-EVM-016's "Kết quả thực tế" tự ghi rõ:
+"Không có gap nào để lại — cả 2 gap của TASK-BE-EVM-014 đã đóng bởi task
+này."
+
+**Vấn đề duy nhất còn lại là bookkeeping**: TASK-BE-EVM-016 hoàn thành
+nhưng status label của CHÍNH task này (TASK-BE-EVM-014) chưa bao giờ được
+cập nhật lại từ PARTIAL → DONE — README (`specs/backend-go/crs/v3/ephemeral-vm/tasks/README.md`)
+cũng vẫn ghi PARTIAL dù code đã sạch gap từ lâu.
+
+**Xác nhận lại thật (2026-09-09, không tin lời doc, đọc code thật)**:
+```
+cd backend-go/services/infra-fleet-service
+grep -n "func.*Provision\b" internal/usecase/agent_outbound_ssh_provisioner.go
+  # func (p *AgentOutboundSshProvisioner) Provision(ctx, tenantID, runtimeID string,
+  #   sourceDevServer domain.DevServer, target domain.EphemeralVmSshTarget) (string, error)
+  # — xác nhận sourceDevServer đã là tham số thật, không phải resolver port
+grep -n "ProjectRoot\|sourceDevServer" internal/usecase/agent_outbound_ssh_provisioner.go
+  # dòng 101: domain.NewConnection(uuid.NewString(), tenantID, sourceDevServer.ID,
+  #   target.ProjectRoot, "") — xác nhận connectionID không còn là quy ước runtimeID
+
+go build ./...                                          # OK
+go test ./internal/usecase/... -run 'AgentOutboundSsh|EphemeralVm'   # PASS
+```

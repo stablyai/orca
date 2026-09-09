@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/stablyai/orca-go/common/tenant"
 	"github.com/stablyai/orca-go/services/automation-service/internal/domain"
 	"github.com/stablyai/orca-go/services/automation-service/internal/usecase"
 
@@ -66,6 +67,14 @@ func (f *fakeAutomationRepository) Update(ctx context.Context, tenantID string, 
 func (f *fakeAutomationRepository) Delete(ctx context.Context, tenantID, id string) error {
 	f.deleteCalls = append(f.deleteCalls, struct{ tenantID, id string }{tenantID, id})
 	delete(f.byID, id)
+	return nil
+}
+
+func (f *fakeAutomationRepository) AcquireRunLock(ctx context.Context, tenantID, automationID, runID string, ttl time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (f *fakeAutomationRepository) ReleaseRunLock(ctx context.Context, tenantID, automationID, runID string) error {
 	return nil
 }
 
@@ -255,5 +264,74 @@ func TestServer_DeleteAutomation_CallsRepositoryWithTenantAndID(t *testing.T) {
 	}
 	if _, ok := repo.byID["auto-1"]; ok {
 		t.Error("expected the automation to be removed")
+	}
+}
+
+// CR-AUTO-002/TASK-BE-AUTO-005
+
+func TestServer_CreateAutomation_ActionsRoundTripThroughProto(t *testing.T) {
+	repo := newFakeAutomationRepository()
+	s := New(usecase.NewCreateAutomation(repo), nil, nil, nil, nil, nil, nil)
+	ctx := tenant.WithTenantID(context.Background(), "tenant-1")
+
+	resp, err := s.CreateAutomation(ctx, &automationv1.CreateAutomationRequest{
+		Name:  "review-and-pr",
+		Rrule: "FREQ=DAILY;INTERVAL=1",
+		Actions: []*automationv1.AutomationAction{
+			{Id: "a1", Type: automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_RUN_AGENT, ConfigJson: `{"prompt":"review"}`},
+			{Id: "a2", Type: automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_CREATE_PR, ConfigJson: `{"title":"x"}`, ContinueOnFailure: true},
+		},
+		MaxRunHistory: 50,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := resp.GetAutomation()
+	if len(got.GetActions()) != 2 {
+		t.Fatalf("expected 2 actions in the response, got %+v", got.GetActions())
+	}
+	if got.GetActions()[1].GetType() != automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_CREATE_PR || !got.GetActions()[1].GetContinueOnFailure() {
+		t.Errorf("action[1] not round-tripped correctly: %+v", got.GetActions()[1])
+	}
+	if got.GetMaxRunHistory() != 50 {
+		t.Errorf("MaxRunHistory = %d, want 50", got.GetMaxRunHistory())
+	}
+}
+
+func TestServer_UpdateAutomation_NilActionsSet_LeavesChainUnchanged(t *testing.T) {
+	repo := newFakeAutomationRepository()
+	automation := seedGRPCAutomation(t, repo, "tenant-1", "auto-1")
+	automation.Actions = []domain.AutomationAction{{ID: "a1", Type: domain.AutomationActionTypeRunAgent, ConfigJSON: `{}`}}
+	_ = repo.Update(context.Background(), "tenant-1", automation)
+
+	s := newServerForListUpdateDelete(repo)
+	resp, err := s.UpdateAutomation(context.Background(), &automationv1.UpdateAutomationRequest{
+		Id: "auto-1", TenantId: "tenant-1",
+		// ActionsSet deliberately not set.
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.GetAutomation().GetActions()) != 1 {
+		t.Fatalf("expected the existing action to survive, got %+v", resp.GetAutomation().GetActions())
+	}
+}
+
+func TestServer_UpdateAutomation_EmptyActionsSet_ClearsChain(t *testing.T) {
+	repo := newFakeAutomationRepository()
+	automation := seedGRPCAutomation(t, repo, "tenant-1", "auto-1")
+	automation.Actions = []domain.AutomationAction{{ID: "a1", Type: domain.AutomationActionTypeRunAgent, ConfigJSON: `{}`}}
+	_ = repo.Update(context.Background(), "tenant-1", automation)
+
+	s := newServerForListUpdateDelete(repo)
+	resp, err := s.UpdateAutomation(context.Background(), &automationv1.UpdateAutomationRequest{
+		Id: "auto-1", TenantId: "tenant-1",
+		ActionsSet: &automationv1.AutomationActionList{Actions: nil}, // present, explicitly empty
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.GetAutomation().GetActions()) != 0 {
+		t.Fatalf("expected an explicitly-present, empty ActionsSet to clear the chain, got %+v", resp.GetAutomation().GetActions())
 	}
 }

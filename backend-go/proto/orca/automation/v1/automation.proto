@@ -41,20 +41,70 @@ message Automation {
   // StepType enum rather than defining a duplicate one, since automation's
   // step_type must already match what ExecuteAdHocStepRequest.step_type
   // expects on dispatch.
+  //
+  // DEPRECATED as of CR-AUTO-002/TASK-BE-AUTO-002: kept, NOT removed, for
+  // automation rows created before `actions` existed — usecase layer reads
+  // an empty `actions` as "resolve this single legacy step instead" (see
+  // resolveActions in internal/usecase). New automations should populate
+  // `actions`, not this field.
   orca.workflow.v1.StepType step_type = 6;
   bool enabled = 7;
   string dtstart = 8; // RFC3339; empty = defaults to created_at at creation time
   string timezone = 9; // IANA tz name (e.g. "Asia/Ho_Chi_Minh"); empty = UTC
+  // actions — CR-AUTO-002/TASK-BE-AUTO-002. Ordered action chain, replacing
+  // the single step_type/step_config_json model. Empty means "legacy
+  // automation, resolve step_type/step_config_json instead" — see
+  // resolveActions.
+  repeated AutomationAction actions = 10;
+  // max_run_history — CR-AUTO-007/TASK-BE-AUTO-010. 0 = default (100).
+  int32 max_run_history = 11;
+  // run_timeout_seconds — CR-AUTO-007/TASK-BE-AUTO-010. 0 = default (7200,
+  // i.e. 2 hours).
+  int32 run_timeout_seconds = 12;
+}
+
+enum AutomationActionType {
+  AUTOMATION_ACTION_TYPE_UNSPECIFIED = 0;
+  AUTOMATION_ACTION_TYPE_CREATE_WORKTREE = 1;
+  AUTOMATION_ACTION_TYPE_RUN_AGENT = 2;
+  AUTOMATION_ACTION_TYPE_COMMIT_PUSH = 3;
+  AUTOMATION_ACTION_TYPE_CREATE_PR = 4;
+  AUTOMATION_ACTION_TYPE_SEND_NOTIFICATION = 5;
+  AUTOMATION_ACTION_TYPE_RUN_SCRIPT = 6;
+}
+
+// AutomationAction — CR-AUTO-002. One step in an automation's action chain.
+// config_json is opaque, type-specific (mirrors step_config_json's existing
+// opaque-JSON-blob convention, not decoded field-by-field at this layer).
+message AutomationAction {
+  string id = 1;
+  AutomationActionType type = 2;
+  string config_json = 3;
+  // continue_on_failure — false (default) stops the chain on this action's
+  // failure; true lets the chain continue to the next action regardless.
+  bool continue_on_failure = 4;
+}
+
+// ActionResult — CR-AUTO-002. Per-action outcome within one AutomationRun,
+// recorded in dispatch order.
+message ActionResult {
+  string action_id = 1;
+  string status = 2; // running|completed|failed|skipped
+  string output_json = 3;
+  string error = 4;
 }
 
 message CreateAutomationRequest {
   string tenant_id = 1;
   string name = 2;
   string rrule = 3;
-  string step_config_json = 4;
-  orca.workflow.v1.StepType step_type = 5;
+  string step_config_json = 4; // legacy 1-step path; ignored if actions is non-empty
+  orca.workflow.v1.StepType step_type = 5; // legacy 1-step path; ignored if actions is non-empty
   string dtstart = 6; // optional; empty = defaults to now at creation time
   string timezone = 7; // optional; empty = UTC
+  repeated AutomationAction actions = 8; // CR-AUTO-002; preferred over step_type/step_config_json
+  int32 max_run_history = 9; // CR-AUTO-007; 0 = default (100)
+  int32 run_timeout_seconds = 10; // CR-AUTO-007; 0 = default (7200)
 }
 
 message CreateAutomationResponse {
@@ -70,6 +120,11 @@ message AutomationRun {
   string id = 1;
   string automation_id = 2;
   string status = 3; // running|completed|failed
+  // action_results — CR-AUTO-002/TASK-BE-AUTO-002. Empty for runs recorded
+  // before this field existed, or for a legacy 1-step automation's run
+  // (still recorded as a single-element action_results as of
+  // TASK-BE-AUTO-004's resolveActions, not left empty).
+  repeated ActionResult action_results = 4;
 }
 
 message RunNowResponse {
@@ -122,6 +177,21 @@ message UpdateAutomationRequest {
   google.protobuf.BoolValue enabled = 7;
   google.protobuf.StringValue dtstart = 8;
   google.protobuf.StringValue timezone = 9;
+  // actions_set — CR-AUTO-002. Wrapper-message-shaped "was actions provided
+  // at all" flag: an update that doesn't mention actions must not silently
+  // clear an existing chain to empty (proto3 can't distinguish "empty
+  // repeated field" from "field not set" the way scalar wrapper types can).
+  AutomationActionList actions_set = 10;
+  google.protobuf.Int32Value max_run_history = 11; // CR-AUTO-007
+  google.protobuf.Int32Value run_timeout_seconds = 12; // CR-AUTO-007
+}
+
+// AutomationActionList — CR-AUTO-002. Exists only so UpdateAutomationRequest
+// can wrap `repeated AutomationAction` in an optional (presence-checkable)
+// field the way google.protobuf.*Value wraps scalars — proto3 has no
+// wrapper type for repeated fields.
+message AutomationActionList {
+  repeated AutomationAction actions = 1;
 }
 message UpdateAutomationResponse {
   Automation automation = 1;

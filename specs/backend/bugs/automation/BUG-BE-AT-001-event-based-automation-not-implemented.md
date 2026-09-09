@@ -1,8 +1,17 @@
 # BUG-BE-AT-001: `AutomationService` không implement event-based triggers — không có `EventBus`, `AutomationEventHandler`, GitHub Webhook
 
-**Status:** ✅ FIXED — 2026-08-01  
-**Task:** TASK-AT-002  
-**Note:** AutomationEventBridge.ts created  
+**Status:** 🔴 REOPENED — 2026-09-09 (status trước đó sai)
+**Task:** TASK-AT-002 (không đóng được vấn đề), xem [CR-AUTO-005](../../../../docs/crs/v4/automations/CR-AUTO-005-real-event-triggers.md)/[FE-TASK-AUTO-005](../../../../frontend/crs/v4/automation/tasks/FE-TASK-AUTO-005-remove-automation-event-bridge.md)
+**Note:** `AutomationEventBridge.ts` (được tạo cho TASK-AT-002) hoá ra là
+dead code — không composition root nào từng khởi tạo nó
+(`grep "new AutomationEventBridge"` chỉ khớp doc-comment của chính nó),
+và nếu chạy sẽ throw (`automationService.dispatchAutomation` không tồn
+tại trên `AutomationService`). Đã xoá file này (2026-09-09,
+[FE-TASK-AUTO-005](../../../../frontend/crs/v4/automation/tasks/FE-TASK-AUTO-005-remove-automation-event-bridge.md)).
+Event-based trigger **vẫn chưa được implement thật** — xem
+[CR-AUTO-005](../../../../docs/crs/v4/automations/CR-AUTO-005-real-event-triggers.md)
+cho kế hoạch thật (dựa trên `backend-go`'s `HandleExternalTrigger`, không
+phải EventBus kiểu này).
 
 ## Mức độ: 🟡 MEDIUM
 

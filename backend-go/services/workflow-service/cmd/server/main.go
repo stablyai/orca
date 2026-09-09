@@ -97,6 +97,8 @@ func run() error {
 	registry.Register(domain.StepTypeAgent, infrafleetclient.NewAgentExecutor(infraFleetClient))
 	registry.Register(domain.StepTypeShell, infrafleetclient.NewShellExecutor(infraFleetClient))
 	registry.Register(domain.StepTypeNotification, infrafleetclient.NewNotificationExecutor(infraFleetClient))
+	// CR-AUTO-003/TASK-BE-AUTO-005
+	registry.Register(domain.StepTypeCommitPush, infrafleetclient.NewGitCommitPushExecutor(infraFleetClient))
 
 	createTemplateUC := usecase.NewCreateTemplate(repo)
 	executeUC := usecase.NewExecute(repo, repo, repo, registry)
@@ -123,7 +125,7 @@ func run() error {
 		return fmt.Errorf("recovering in-flight workflow executions: %w", err)
 	}
 
-	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger))
+	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger), grpcmw.StatsHandler())
 	workflowv1.RegisterWorkflowServiceServer(grpcServer, workflowgrpc.New(
 		createTemplateUC, executeUC, getExecutionUC, pauseExecutionUC, resumeExecutionUC, executeAdHocStepUC, hasActiveExecutionsUC,
 		cancelExecutionUC, listTemplatesUC, resolveTemplateUC, updateTemplateUC,

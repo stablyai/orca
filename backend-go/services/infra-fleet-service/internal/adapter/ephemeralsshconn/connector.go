@@ -162,7 +162,30 @@ func (c *Connector) Connect(ctx context.Context, _ domain.SshTarget) (*sshconn.C
 	if err != nil {
 		return nil, err
 	}
-	return sshconn.WrapClient(client), nil
+	conn := sshconn.WrapClient(client)
+	// CR-EVM-008/TASK-BE-EVM-022: recipe-declared local port forwards.
+	// Failure here fails the whole Connect — the recipe explicitly asked
+	// for these ports, silently dropping them would be a worse surprise
+	// than failing loudly (matches this Connect's existing all-or-nothing
+	// convention for auth/dial failures).
+	if len(c.target.PortForwards) > 0 {
+		if err := conn.SetupPortForwards(toSshconnPortForwards(c.target.PortForwards)); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("ephemeralsshconn: setting up port forwards: %w", err)
+		}
+	}
+	return conn, nil
+}
+
+// toSshconnPortForwards mirrors toDomainPortForwards (usecase/ephemeral_vm_relay.go) —
+// sshconn.PortForward intentionally drops Label (display-only, not needed
+// to actually forward).
+func toSshconnPortForwards(forwards []domain.EphemeralVmSshPortForward) []sshconn.PortForward {
+	out := make([]sshconn.PortForward, len(forwards))
+	for i, f := range forwards {
+		out[i] = sshconn.PortForward{LocalPort: f.LocalPort, RemoteHost: f.RemoteHost, RemotePort: f.RemotePort}
+	}
+	return out
 }
 
 // authMethod prefers IdentityAgentSocket (never routed through Vault) over

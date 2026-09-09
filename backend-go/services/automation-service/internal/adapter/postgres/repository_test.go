@@ -9,6 +9,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -253,6 +254,204 @@ func TestAutomationRunRepository_ListByAutomation_EmptyAutomationIDListsAllTenan
 	}
 	if len(scoped) != 1 || scoped[0].ID != run1.ID {
 		t.Fatalf("expected only run 1 scoped to automation 1, got %+v", scoped)
+	}
+}
+
+// TestAutomationRunRepository_PruneRuns_KeepsOnlyMostRecentN covers
+// TASK-BE-AUTO-010's retention behavior: given more runs than maxRuns,
+// PruneRuns deletes everything but the maxRuns most recent by created_at.
+func TestAutomationRunRepository_PruneRuns_KeepsOnlyMostRecentN(t *testing.T) {
+	automations, runs := setupRepositories(t)
+	ctx := context.Background()
+	base := time.Now().UTC().Truncate(time.Second)
+	tenantID := "11111111-1111-1111-1111-111111111111"
+
+	a, _ := domain.NewAutomation("00000000-0000-0000-0000-0000000000c1", tenantID, "retained-job", "FREQ=DAILY;INTERVAL=1", domain.StepTypeAgent, `{}`, base, "UTC", true, base)
+	if err := automations.Create(ctx, a); err != nil {
+		t.Fatalf("create automation: %v", err)
+	}
+
+	// 5 runs, oldest to newest by created_at — request-00 is oldest,
+	// request-04 is newest.
+	runIDs := []string{
+		"00000000-0000-0000-0000-000000000301",
+		"00000000-0000-0000-0000-000000000302",
+		"00000000-0000-0000-0000-000000000303",
+		"00000000-0000-0000-0000-000000000304",
+		"00000000-0000-0000-0000-000000000305",
+	}
+	for i, id := range runIDs {
+		createdAt := base.Add(time.Duration(i) * time.Second)
+		run, err := domain.NewPendingRun(id, a.ID, tenantID, fmt.Sprintf("req-%d", i), domain.StepTypeAgent, domain.RunTriggerManual, a.StepConfigJSON, createdAt)
+		if err != nil {
+			t.Fatalf("building run %d: %v", i, err)
+		}
+		if err := runs.Create(ctx, run); err != nil {
+			t.Fatalf("create run %d: %v", i, err)
+		}
+	}
+
+	if err := runs.PruneRuns(ctx, tenantID, a.ID, 2); err != nil {
+		t.Fatalf("prune runs: %v", err)
+	}
+
+	remaining, _, err := runs.ListByAutomation(ctx, tenantID, a.ID, "", 50)
+	if err != nil {
+		t.Fatalf("list remaining runs: %v", err)
+	}
+	if len(remaining) != 2 {
+		t.Fatalf("expected 2 remaining runs after prune, got %d: %+v", len(remaining), remaining)
+	}
+	remainingIDs := map[string]bool{}
+	for _, r := range remaining {
+		remainingIDs[r.ID] = true
+	}
+	// The 2 newest by created_at are runIDs[3] and runIDs[4].
+	if !remainingIDs[runIDs[3]] || !remainingIDs[runIDs[4]] {
+		t.Errorf("expected the 2 newest runs to survive prune, got %+v", remaining)
+	}
+}
+
+// TestAutomationRunRepository_PruneRuns_ZeroOrNegativeIsNoop covers the
+// port's documented "maxRuns <= 0 is a no-op" contract — callers resolve
+// the "0 = default 100" policy themselves before calling PruneRuns.
+func TestAutomationRunRepository_PruneRuns_ZeroOrNegativeIsNoop(t *testing.T) {
+	automations, runs := setupRepositories(t)
+	ctx := context.Background()
+	base := time.Now().UTC().Truncate(time.Second)
+	tenantID := "11111111-1111-1111-1111-111111111111"
+
+	a, _ := domain.NewAutomation("00000000-0000-0000-0000-0000000000c2", tenantID, "untouched-job", "FREQ=DAILY;INTERVAL=1", domain.StepTypeAgent, `{}`, base, "UTC", true, base)
+	if err := automations.Create(ctx, a); err != nil {
+		t.Fatalf("create automation: %v", err)
+	}
+	run, _ := domain.NewPendingRun("00000000-0000-0000-0000-000000000401", a.ID, tenantID, "req-0", domain.StepTypeAgent, domain.RunTriggerManual, a.StepConfigJSON, base)
+	if err := runs.Create(ctx, run); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	if err := runs.PruneRuns(ctx, tenantID, a.ID, 0); err != nil {
+		t.Fatalf("prune runs (maxRuns=0): %v", err)
+	}
+	remaining, _, err := runs.ListByAutomation(ctx, tenantID, a.ID, "", 50)
+	if err != nil {
+		t.Fatalf("list remaining runs: %v", err)
+	}
+	if len(remaining) != 1 {
+		t.Fatalf("expected PruneRuns(maxRuns=0) to be a no-op, got %d remaining", len(remaining))
+	}
+}
+
+// TestAutomationRepository_AcquireRunLock_OnlyOneCallerWinsWhenUnlocked
+// covers TASK-BE-AUTO-011's core guarantee against real Postgres: the
+// conditional UPDATE either claims an unlocked row or, for a second racing
+// caller, sees the first caller's just-written running_run_id and loses.
+func TestAutomationRepository_AcquireRunLock_OnlyOneCallerWinsWhenUnlocked(t *testing.T) {
+	automations, _ := setupRepositories(t)
+	ctx := context.Background()
+	base := time.Now().UTC().Truncate(time.Second)
+	tenantID := "11111111-1111-1111-1111-111111111111"
+
+	a, _ := domain.NewAutomation("00000000-0000-0000-0000-0000000000d3", tenantID, "locked-job", "FREQ=DAILY;INTERVAL=1", domain.StepTypeAgent, `{}`, base, "UTC", true, base)
+	if err := automations.Create(ctx, a); err != nil {
+		t.Fatalf("create automation: %v", err)
+	}
+
+	first, err := automations.AcquireRunLock(ctx, tenantID, a.ID, "00000000-0000-0000-0000-000000000501", time.Hour)
+	if err != nil {
+		t.Fatalf("acquire (first): %v", err)
+	}
+	if !first {
+		t.Fatal("expected the first caller to acquire the lock on an unlocked automation")
+	}
+
+	second, err := automations.AcquireRunLock(ctx, tenantID, a.ID, "00000000-0000-0000-0000-000000000502", time.Hour)
+	if err != nil {
+		t.Fatalf("acquire (second): %v", err)
+	}
+	if second {
+		t.Fatal("expected the second caller to lose the race while the first still holds a fresh lock")
+	}
+
+	got, err := automations.Get(ctx, tenantID, a.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.RunningRunID != "00000000-0000-0000-0000-000000000501" {
+		t.Errorf("RunningRunID = %q, want %q", got.RunningRunID, "00000000-0000-0000-0000-000000000501")
+	}
+}
+
+// TestAutomationRepository_AcquireRunLock_StaleLockPastTTLSelfHeals covers
+// the self-healing path: a lock older than ttl is reclaimable without any
+// separate reaper process.
+func TestAutomationRepository_AcquireRunLock_StaleLockPastTTLSelfHeals(t *testing.T) {
+	automations, _ := setupRepositories(t)
+	ctx := context.Background()
+	base := time.Now().UTC().Truncate(time.Second)
+	tenantID := "11111111-1111-1111-1111-111111111111"
+
+	a, _ := domain.NewAutomation("00000000-0000-0000-0000-0000000000d4", tenantID, "stale-lock-job", "FREQ=DAILY;INTERVAL=1", domain.StepTypeAgent, `{}`, base, "UTC", true, base)
+	if err := automations.Create(ctx, a); err != nil {
+		t.Fatalf("create automation: %v", err)
+	}
+
+	// Acquire with a 1-second TTL, then wait it out — faster than backdating
+	// running_since via a second UPDATE, and exercises the real
+	// `now() - make_interval(secs => $4)` comparison end to end.
+	acquired, err := automations.AcquireRunLock(ctx, tenantID, a.ID, "00000000-0000-0000-0000-000000000503", time.Second)
+	if err != nil || !acquired {
+		t.Fatalf("acquire (crashed-run): acquired=%v err=%v", acquired, err)
+	}
+	time.Sleep(1200 * time.Millisecond)
+
+	acquired, err = automations.AcquireRunLock(ctx, tenantID, a.ID, "00000000-0000-0000-0000-000000000504", time.Second)
+	if err != nil {
+		t.Fatalf("acquire (healed-run): %v", err)
+	}
+	if !acquired {
+		t.Fatal("expected a lock older than its TTL to be reclaimable")
+	}
+}
+
+// TestAutomationRepository_ReleaseRunLock_OnlyReleasesOwnLock covers the
+// "don't release someone else's lock" guard.
+func TestAutomationRepository_ReleaseRunLock_OnlyReleasesOwnLock(t *testing.T) {
+	automations, _ := setupRepositories(t)
+	ctx := context.Background()
+	base := time.Now().UTC().Truncate(time.Second)
+	tenantID := "11111111-1111-1111-1111-111111111111"
+
+	a, _ := domain.NewAutomation("00000000-0000-0000-0000-0000000000d5", tenantID, "release-job", "FREQ=DAILY;INTERVAL=1", domain.StepTypeAgent, `{}`, base, "UTC", true, base)
+	if err := automations.Create(ctx, a); err != nil {
+		t.Fatalf("create automation: %v", err)
+	}
+	if _, err := automations.AcquireRunLock(ctx, tenantID, a.ID, "00000000-0000-0000-0000-000000000505", time.Hour); err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	// A stale caller trying to release a lock it no longer (or never) held
+	// must be a no-op.
+	if err := automations.ReleaseRunLock(ctx, tenantID, a.ID, "00000000-0000-0000-0000-000000000506"); err != nil {
+		t.Fatalf("release (impostor): %v", err)
+	}
+	got, err := automations.Get(ctx, tenantID, a.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.RunningRunID != "00000000-0000-0000-0000-000000000505" {
+		t.Fatalf("expected impostor's release to be a no-op, RunningRunID = %q, want %q", got.RunningRunID, "00000000-0000-0000-0000-000000000505")
+	}
+
+	if err := automations.ReleaseRunLock(ctx, tenantID, a.ID, "00000000-0000-0000-0000-000000000505"); err != nil {
+		t.Fatalf("release (owner): %v", err)
+	}
+	got, err = automations.Get(ctx, tenantID, a.ID)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.RunningRunID != "" {
+		t.Errorf("expected RunningRunID cleared after the real owner released, got %q", got.RunningRunID)
 	}
 }
 

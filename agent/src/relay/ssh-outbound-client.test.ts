@@ -5,6 +5,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { createHash } from 'node:crypto'
+import * as net from 'node:net'
+import { PassThrough } from 'node:stream'
 import type { EphemeralVmRecipeSshTarget } from '../shared/ephemeral-vm-recipes'
 
 // ── mock ssh2.Client ────────────────────────────────────────────────────────
@@ -457,5 +459,128 @@ describe('security regression-guard: privateKeyPEM never appears in a thrown err
     expect(thrown).not.toBeNull()
     expect(thrown!.message).not.toContain(fileSecret)
     expect(thrown!.message).toContain('[REDACTED]')
+  })
+})
+
+// CR-EVM-008/TASK-AG-EVM-011
+describe('dialOutboundSshTarget — portForwards', () => {
+  function freePort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const probe = net.createServer()
+      probe.listen(0, '127.0.0.1', () => {
+        const address = probe.address()
+        probe.close(() => {
+          if (address && typeof address === 'object') {
+            resolve(address.port)
+          } else {
+            reject(new Error('could not determine a free port'))
+          }
+        })
+      })
+    })
+  }
+
+  it('opens a local listener and calls forwardOut with the declared remote destination on connect', async () => {
+    const localPort = await freePort()
+    const { dialOutboundSshTarget } = await import('./ssh-outbound-client')
+    resolveNextClientReady()
+
+    const session = await dialOutboundSshTarget(
+      { ...BASE_TARGET, portForwards: [{ localPort, remoteHost: '127.0.0.1', remotePort: 3000 }] },
+      { privateKeyPEM: 'k' }
+    )
+    createdClients[0].nextForwardOutChannel = new PassThrough()
+    try {
+      const client = createdClients[0]
+      const localSocket = net.createConnection({ host: '127.0.0.1', port: localPort })
+      await new Promise<void>((resolve, reject) => {
+        localSocket.once('connect', () => resolve())
+        localSocket.once('error', reject)
+      })
+      await vi.waitFor(() => {
+        if (client.forwardOutCalls.length === 0) {
+          throw new Error('forwardOut not called yet')
+        }
+      })
+      expect(client.forwardOutCalls).toEqual([
+        { srcIP: '127.0.0.1', srcPort: localPort, dstIP: '127.0.0.1', dstPort: 3000 }
+      ])
+      localSocket.destroy()
+    } finally {
+      session.close()
+    }
+  })
+
+  it('pipes data both ways between the local connection and the forwardOut channel', async () => {
+    const localPort = await freePort()
+    const echoChannel = new PassThrough()
+    const { dialOutboundSshTarget } = await import('./ssh-outbound-client')
+    resolveNextClientReady()
+
+    const session = await dialOutboundSshTarget(
+      { ...BASE_TARGET, portForwards: [{ localPort, remoteHost: '127.0.0.1', remotePort: 3000 }] },
+      { privateKeyPEM: 'k' }
+    )
+    createdClients[0].nextForwardOutChannel = echoChannel
+    try {
+      const localSocket = net.createConnection({ host: '127.0.0.1', port: localPort })
+      await new Promise<void>((resolve, reject) => {
+        localSocket.once('connect', () => resolve())
+        localSocket.once('error', reject)
+      })
+
+      const received = new Promise<string>((resolve) => {
+        localSocket.once('data', (chunk: Buffer) => resolve(chunk.toString()))
+      })
+      localSocket.write('hello through the tunnel')
+
+      await expect(received).resolves.toBe('hello through the tunnel')
+      localSocket.destroy()
+    } finally {
+      session.close()
+    }
+  })
+
+  it('close() stops the local listener — a later connection attempt fails', async () => {
+    const localPort = await freePort()
+    const { dialOutboundSshTarget } = await import('./ssh-outbound-client')
+    resolveNextClientReady()
+
+    const session = await dialOutboundSshTarget(
+      { ...BASE_TARGET, portForwards: [{ localPort, remoteHost: '127.0.0.1', remotePort: 3000 }] },
+      { privateKeyPEM: 'k' }
+    )
+    session.close()
+
+    const socket = net.createConnection({ host: '127.0.0.1', port: localPort })
+    await expect(
+      new Promise<void>((resolve, reject) => {
+        socket.once('connect', () => resolve())
+        socket.once('error', reject)
+      })
+    ).rejects.toThrow()
+  })
+
+  it('rejects the whole dial when a declared local port is already in use', async () => {
+    const localPort = await freePort()
+    const blocker = net.createServer()
+    await new Promise<void>((resolve) => blocker.listen(localPort, '127.0.0.1', resolve))
+    try {
+      const { dialOutboundSshTarget } = await import('./ssh-outbound-client')
+      resolveNextClientReady()
+
+      await expect(
+        dialOutboundSshTarget(
+          {
+            ...BASE_TARGET,
+            portForwards: [{ localPort, remoteHost: '127.0.0.1', remotePort: 3000 }]
+          },
+          { privateKeyPEM: 'k' }
+        )
+      ).rejects.toThrow()
+      expect(createdClients[0].ended).toBe(true)
+    } finally {
+      blocker.close()
+    }
   })
 })

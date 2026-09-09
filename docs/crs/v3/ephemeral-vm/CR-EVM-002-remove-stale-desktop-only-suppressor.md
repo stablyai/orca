@@ -8,10 +8,19 @@
 | **Priority** | P1 |
 | **Phiên bản** | v1.0 |
 | **Ngày tạo** | 2026-09-08 |
-| **Trạng thái** | 🔲 Proposed — chưa triển khai |
+| **Trạng thái** | ✅ Done — triển khai đầy đủ, xem "Cập nhật 2026-09-09" |
 | **Tác giả** | Audit trực tiếp mã nguồn theo yêu cầu "ephemeralVm phải đảm bảo hoạt động ở frontend, backend-go và agent" |
 | **Tác động HLD** | Frontend runtime-RPC layer |
 | **Tác động Features** | Mọi UI dùng `ephemeralVm.*` khi target là remote/backend-go environment |
+
+---
+
+> **Cập nhật 2026-09-09 — ✅ Đã triển khai.** Commit `80ffe57cd` gỡ
+> `'ephemeralVm'` khỏi `DESKTOP_ONLY_NAMESPACES`
+> (`frontend/src/renderer/src/runtime/desktop-only-rpc-error-suppressor.ts:70-71`
+> nay chỉ còn comment lịch sử: "'ephemeralVm' removed 2026-09-08
+> (CR-EVM-002 / FE-SOL-EVM-001 §1's ... direction (b))"). Không còn hành
+> động nào cần làm cho CR này.
 
 ---
 

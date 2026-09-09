@@ -279,6 +279,15 @@ message VmProvisionResult {
 //    which is explicitly out of scope here (§5: the "ssh" branch is
 //    pass-through only, never dialed — see BE-SOL-EVM-004/CR-EVM-005).
 //    Add it to this message when that task wires a real dial.
+// PortForward mirrors frontend's SavedPortForward (frontend/src/shared/ssh-types.ts)
+// field-for-field — see CR-EVM-008/TASK-BE-EVM-020.
+message PortForward {
+  int32 local_port = 1;
+  string remote_host = 2;
+  int32 remote_port = 3;
+  string label = 4;
+}
+
 message EphemeralVmRecipeSshTarget {
   string label = 1;
   string host = 2;
@@ -290,6 +299,11 @@ message EphemeralVmRecipeSshTarget {
   string proxy_command = 8;
   string jump_host = 9;
   int32 relay_grace_period_seconds = 10;
+  // port_forwards — CR-EVM-008/TASK-BE-EVM-020. Previously decoded and
+  // deliberately dropped at ports.go/devserveragent/client.go (no proto
+  // field existed to carry it through) — now wired end to end, see
+  // TASK-BE-EVM-021/022 and agent's TASK-AG-EVM-011 (Hướng A).
+  repeated PortForward port_forwards = 11;
 }
 
 message DevServer {

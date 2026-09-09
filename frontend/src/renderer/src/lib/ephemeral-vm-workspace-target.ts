@@ -11,7 +11,10 @@ import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../shared/protocol-
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
-import { cleanupRuntimeEphemeralVmWorkspace } from '@/runtime/runtime-ephemeral-vm-client'
+import {
+  cleanupRuntimeEphemeralVmWorkspace,
+  doctorRuntimeEphemeralVmRecipe
+} from '@/runtime/runtime-ephemeral-vm-client'
 
 export type PrepareEphemeralVmWorkspaceTargetArgs = {
   repoId: string
@@ -42,6 +45,32 @@ export type PrepareEphemeralVmWorkspaceTargetResult =
 export async function prepareEphemeralVmWorkspaceTarget(
   args: PrepareEphemeralVmWorkspaceTargetArgs
 ): Promise<PrepareEphemeralVmWorkspaceTargetResult> {
+  // CR-EVM-006/FE-TASK-EVM-005: defense-in-depth re-check — the recipe may
+  // have changed between the composer's initial doctor call
+  // (EphemeralVmsPane's openWorkspaceComposerForRecipe) and this actual
+  // provision call. Only 'fail' checks block here — 'warn' checks were
+  // already surfaced/confirmed at the earlier step.
+  const doctorResult = await doctorRuntimeEphemeralVmRecipe(useAppStore.getState().settings, {
+    repoId: args.repoId,
+    recipeId: args.recipeId
+  })
+  if (!doctorResult.ok) {
+    const failMessages = doctorResult.checks
+      .filter((check) => check.status === 'fail')
+      .map((check) => check.message)
+      .join(' ')
+    return {
+      ok: false,
+      error:
+        failMessages ||
+        translate(
+          'auto.lib.ephemeralVmWorkspaceTarget.doctorFailed',
+          'This recipe has a problem that must be fixed before creating a workspace.'
+        ),
+      stderr: ''
+    }
+  }
+
   const provisioned = await window.api.ephemeralVm.provision({
     repoId: args.repoId,
     recipeId: args.recipeId,

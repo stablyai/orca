@@ -13,6 +13,20 @@
 | [SOL-AG-EVM-002](./SOL-AG-EVM-002-vm-provision-streaming-handler.md) | CR-EVM-003 (phần agent) | 🔲 Designed — chưa implement |
 | [SOL-AG-EVM-003](./SOL-AG-EVM-003-outbound-ssh-client.md) | CR-EVM-005 (phần agent) | 🔲 Designed — sketch, chưa committed |
 
+> **Cập nhật 2026-09-09 — SOL-AG-EVM-001..003 đã ✅ Done.** CR-EVM-001..005
+> (mà 3 solution trên tương ứng) được xác nhận đã code xong trong
+> `80ffe57cd`/`591de6951` — xem
+> [docs/crs/v3/ephemeral-vm/README.md](../../../../../../docs/crs/v3/ephemeral-vm/README.md)'s
+> "Cập nhật 2026-09-09". 2 solution mới dưới đây (004, 005) là cho
+> CR-EVM-006..011 — nhóm audit mới, chưa triển khai.
+
+| [SOL-AG-EVM-004](./SOL-AG-EVM-004-ssh-target-port-forwards.md) | CR-EVM-008 (phần agent, Hướng A) | 🔲 Designed — chưa implement |
+| [SOL-AG-EVM-005](./SOL-AG-EVM-005-worktree-mount-decision-memo.md) | CR-EVM-009 (phần agent, decision memo) | 🔲 Blocked — chờ quyết định sản phẩm |
+
+CR-EVM-006/007 (frontend-only), CR-EVM-010 (frontend, xem
+`AgentDetector` — Electron main, không phải Dev Server Agent), CR-EVM-011
+(chưa xác nhận scope) không có solution ở đây.
+
 ## Cảnh báo TDD lỗi thời — đã xác nhận, không giả định
 
 `specs/agent/tdd/v5/03-connection-modes.md`/`04-handshake-session.md` mô
@@ -41,4 +55,12 @@ SOL-AG-EVM-002 → dùng chung agent-ephemeral-vm-handler.ts với 001 — nên
 SOL-AG-EVM-003 → độc lập kỹ thuật (subsystem SSH2 hoàn toàn mới), nhưng
                  chỉ có ý nghĩa sau khi SOL-AG-EVM-002's provision flow
                  tồn tại để route vào nhánh {type:'ssh', target} — làm sau
+
+── nhóm 004-005 (CR-EVM-006..011, sau khi 001-003 đã Done) ──────────────
+
+SOL-AG-EVM-004 → phụ thuộc kỹ thuật vào SOL-AG-EVM-003 (đã Done, dùng
+                 chung `ssh-outbound-client.ts`) — đồng bộ CỨNG với
+                 BE-SOL-EVM-005 (field `portForwards` phải khớp 2 phía)
+SOL-AG-EVM-005 → BLOCKED — không code cho tới khi CR-EVM-009's quyết
+                 định sản phẩm chốt
 ```

@@ -22,6 +22,15 @@ type UpdateAutomationInput struct {
 	Enabled        *bool
 	Dtstart        *time.Time
 	Timezone       *string
+	// Actions — CR-AUTO-002/TASK-BE-AUTO-005. nil = not being changed
+	// (same field-mask convention as every other pointer field here); a
+	// non-nil, possibly-empty slice DOES replace the chain (an explicit
+	// "clear all actions" is a valid edit, distinct from "field not sent"
+	// — see automation.proto's AutomationActionList doc comment for why
+	// this needed its own wrapper message).
+	Actions           *[]domain.AutomationAction
+	MaxRunHistory     *int32 // CR-AUTO-007
+	RunTimeoutSeconds *int32 // CR-AUTO-007
 }
 
 // UpdateAutomation persists a partial edit of an existing Automation.
@@ -68,12 +77,29 @@ func (uc *UpdateAutomation) Execute(ctx context.Context, in UpdateAutomationInpu
 	if in.Timezone != nil {
 		next.Timezone = *in.Timezone
 	}
+	if in.Actions != nil {
+		next.Actions = *in.Actions
+	}
+	if in.MaxRunHistory != nil {
+		next.MaxRunHistory = *in.MaxRunHistory
+	}
+	if in.RunTimeoutSeconds != nil {
+		next.RunTimeoutSeconds = *in.RunTimeoutSeconds
+	}
 	// domain.Automation has no standalone Validate method — reuse
 	// NewAutomation's invariant checks (non-empty name/rrule/step config,
 	// rrule parses as RFC 5545) by rebuilding from the merged fields. A
 	// syntactically valid-at-create rule doesn't stay valid-by-construction
 	// after an in-place field edit, so this re-validates on every update.
-	rebuilt, err := domain.NewAutomation(next.ID, next.TenantID, next.Name, next.RRule, next.StepType, next.StepConfigJSON, next.DTStart, next.Timezone, next.Enabled, next.CreatedAt)
+	// CR-AUTO-002: same "{}" placeholder as CreateAutomation.Execute when
+	// Actions covers what StepConfigJSON would otherwise be required for —
+	// see that usecase's doc comment for why NewAutomation itself isn't
+	// relaxed instead.
+	stepConfigForValidation := next.StepConfigJSON
+	if stepConfigForValidation == "" && len(next.Actions) > 0 {
+		stepConfigForValidation = "{}"
+	}
+	rebuilt, err := domain.NewAutomation(next.ID, next.TenantID, next.Name, next.RRule, next.StepType, stepConfigForValidation, next.DTStart, next.Timezone, next.Enabled, next.CreatedAt)
 	if err != nil {
 		return domain.Automation{}, apperrors.New(apperrors.KindInvalidArgument, "AUTOMATION_INVALID", err.Error(), err)
 	}

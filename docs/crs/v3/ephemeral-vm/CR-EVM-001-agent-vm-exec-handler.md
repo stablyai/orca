@@ -8,12 +8,21 @@
 | **Priority** | **P0** |
 | **Phiên bản** | v1.0 |
 | **Ngày tạo** | 2026-09-08 |
-| **Trạng thái** | 🔲 Proposed — chưa triển khai |
+| **Trạng thái** | ✅ Done — triển khai đầy đủ, xem "Cập nhật 2026-09-09" |
 | **Tác giả** | Audit trực tiếp mã nguồn theo yêu cầu "ephemeralVm phải đảm bảo hoạt động ở frontend, backend-go và agent" |
 | **Tác động HLD** | Infra-Fleet domain, Dev Server Agent RPC catalog |
 | **Tác động Features** | Ephemeral VM workspace lifecycle (suspend/resume/cleanup có command thật) |
 
 ---
+
+> **Cập nhật 2026-09-09 — ✅ Đã triển khai.** Audit lại mã nguồn xác nhận
+> CR này đã được code trong commit `80ffe57cd`
+> ("feat(ephemeral-vm): implement CR-EVM-001..005 end-to-end") cùng ngày
+> CR được viết. `agent/src/relay/agent-rpc-dispatch-vm.ts:25-35` có
+> `case 'vm.exec':` gọi `handleVmExec`/`validateVmExecParams` từ
+> `agent-ephemeral-vm-handler.ts` (307 dòng) đúng như thiết kế dưới đây;
+> có test `agent-rpc-dispatch-vm.test.ts`. Không còn hành động nào cần
+> làm cho CR này — giữ lại nội dung bên dưới làm tài liệu thiết kế.
 
 ## Bối cảnh & Vấn đề gốc
 

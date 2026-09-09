@@ -701,19 +701,31 @@ type vmProvisionRecipeResult struct {
 }
 
 // vmProvisionSshTargetWire mirrors EphemeralVmRecipeSshTargetSchema's wire
-// fields consumed here (configHost/portForwards deliberately omitted, same
-// cross-check as infrafleet.proto's EphemeralVmRecipeSshTarget message).
+// fields consumed here (configHost deliberately omitted — display-only,
+// never consumed here). portForwards was ALSO deliberately omitted until
+// CR-EVM-008/TASK-BE-EVM-021 — same cross-check as infrafleet.proto's
+// EphemeralVmRecipeSshTarget message.
 type vmProvisionSshTargetWire struct {
-	Label                   string `json:"label"`
-	Host                    string `json:"host"`
-	Port                    int32  `json:"port"`
-	Username                string `json:"username"`
-	IdentityFile            string `json:"identityFile"`
-	IdentityAgent           string `json:"identityAgent"`
-	IdentitiesOnly          bool   `json:"identitiesOnly"`
-	ProxyCommand            string `json:"proxyCommand"`
-	JumpHost                string `json:"jumpHost"`
-	RelayGracePeriodSeconds int32  `json:"relayGracePeriodSeconds"`
+	Label                   string                       `json:"label"`
+	Host                    string                       `json:"host"`
+	Port                    int32                        `json:"port"`
+	Username                string                       `json:"username"`
+	IdentityFile            string                       `json:"identityFile"`
+	IdentityAgent           string                       `json:"identityAgent"`
+	IdentitiesOnly          bool                         `json:"identitiesOnly"`
+	ProxyCommand            string                       `json:"proxyCommand"`
+	JumpHost                string                       `json:"jumpHost"`
+	RelayGracePeriodSeconds int32                        `json:"relayGracePeriodSeconds"`
+	PortForwards            []vmProvisionPortForwardWire `json:"portForwards"`
+}
+
+// vmProvisionPortForwardWire mirrors frontend/src/shared/ssh-types.ts's
+// SavedPortForward field-for-field.
+type vmProvisionPortForwardWire struct {
+	LocalPort  int32  `json:"localPort"`
+	RemoteHost string `json:"remoteHost"`
+	RemotePort int32  `json:"remotePort"`
+	Label      string `json:"label"`
 }
 
 // decodeVmProvisionFrame demuxes one vm.provision response frame's `result`
@@ -805,10 +817,28 @@ func normalizeVmProvisionResult(raw json.RawMessage) (usecase.VmProvisionResult,
 			IdentityFile: wire.IdentityFile, IdentityAgent: wire.IdentityAgent,
 			IdentitiesOnly: wire.IdentitiesOnly, ProxyCommand: wire.ProxyCommand,
 			JumpHost: wire.JumpHost, RelayGracePeriodSeconds: wire.RelayGracePeriodSeconds,
+			PortForwards: toUsecasePortForwards(wire.PortForwards),
 		}
 		return usecase.VmProvisionResult{Type: "ssh", ProjectRoot: r.Connection.ProjectRoot, SshTarget: &target}, nil
 	}
 	return usecase.VmProvisionResult{Type: "orca-server", PairingCode: r.Connection.PairingCode, ProjectRoot: r.Connection.ProjectRoot}, nil
+}
+
+// toUsecasePortForwards maps the wire shape 1:1 — CR-EVM-008/TASK-BE-EVM-021.
+func toUsecasePortForwards(wire []vmProvisionPortForwardWire) []usecase.PortForward {
+	if len(wire) == 0 {
+		return nil
+	}
+	out := make([]usecase.PortForward, len(wire))
+	for i, w := range wire {
+		out[i] = usecase.PortForward{
+			LocalPort:  w.LocalPort,
+			RemoteHost: w.RemoteHost,
+			RemotePort: w.RemotePort,
+			Label:      w.Label,
+		}
+	}
+	return out
 }
 
 // Close tears down every open session — call on service shutdown.

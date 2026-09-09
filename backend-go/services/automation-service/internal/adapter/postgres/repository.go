@@ -8,6 +8,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -18,6 +19,73 @@ import (
 	"github.com/stablyai/orca-go/services/automation-service/internal/domain"
 	"github.com/stablyai/orca-go/services/automation-service/internal/usecase"
 )
+
+// ── actions_json / action_results_json (de)serialization — CR-AUTO-002/TASK-BE-AUTO-003 ──
+
+// actionRow/actionResultRow are the JSONB wire shapes actions_json/
+// action_results_json store — snake_case to match automation.proto's
+// AutomationAction/ActionResult field names 1:1, so a future sqlc/direct
+// JSON-column read from another tool sees the same shape the proto layer
+// does.
+type actionRow struct {
+	ID                string `json:"id"`
+	Type              string `json:"type"`
+	ConfigJSON        string `json:"config_json"`
+	ContinueOnFailure bool   `json:"continue_on_failure"`
+}
+
+type actionResultRow struct {
+	ActionID   string `json:"action_id"`
+	Status     string `json:"status"`
+	OutputJSON string `json:"output_json"`
+	Error      string `json:"error"`
+}
+
+func marshalActions(actions []domain.AutomationAction) ([]byte, error) {
+	rows := make([]actionRow, len(actions))
+	for i, a := range actions {
+		rows[i] = actionRow{ID: a.ID, Type: string(a.Type), ConfigJSON: a.ConfigJSON, ContinueOnFailure: a.ContinueOnFailure}
+	}
+	return json.Marshal(rows)
+}
+
+func unmarshalActions(raw []byte) ([]domain.AutomationAction, error) {
+	var rows []actionRow
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	out := make([]domain.AutomationAction, len(rows))
+	for i, r := range rows {
+		out[i] = domain.AutomationAction{ID: r.ID, Type: domain.AutomationActionType(r.Type), ConfigJSON: r.ConfigJSON, ContinueOnFailure: r.ContinueOnFailure}
+	}
+	return out, nil
+}
+
+func marshalActionResults(results []domain.ActionResult) ([]byte, error) {
+	rows := make([]actionResultRow, len(results))
+	for i, r := range results {
+		rows[i] = actionResultRow{ActionID: r.ActionID, Status: r.Status, OutputJSON: r.OutputJSON, Error: r.Error}
+	}
+	return json.Marshal(rows)
+}
+
+func unmarshalActionResults(raw []byte) ([]domain.ActionResult, error) {
+	var rows []actionResultRow
+	if err := json.Unmarshal(raw, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	out := make([]domain.ActionResult, len(rows))
+	for i, r := range rows {
+		out[i] = domain.ActionResult{ActionID: r.ActionID, Status: r.Status, OutputJSON: r.OutputJSON, Error: r.Error}
+	}
+	return out, nil
+}
 
 // AutomationRepository implements usecase.AutomationRepository against
 // Postgres via pgx — hand-written SQL (see architecture/04-tech-stack.md:
@@ -33,11 +101,17 @@ func NewAutomationRepository(pool *pgxpool.Pool) *AutomationRepository {
 }
 
 func (r *AutomationRepository) Create(ctx context.Context, a domain.Automation) error {
-	_, err := r.pool.Exec(ctx, `
+	actionsJSON, err := marshalActions(a.Actions)
+	if err != nil {
+		return fmt.Errorf("postgres: marshal actions: %w", err)
+	}
+	_, err = r.pool.Exec(ctx, `
 		INSERT INTO automation.automations (
-			id, tenant_id, name, rrule, dtstart, step_type, step_config_json, enabled, timezone, next_run_at, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
-	`, a.ID, a.TenantID, a.Name, a.RRule, a.DTStart, string(a.StepType), a.StepConfigJSON, a.Enabled, a.Timezone, nullableTime(a.NextRunAt), a.CreatedAt, a.UpdatedAt)
+			id, tenant_id, name, rrule, dtstart, step_type, step_config_json, enabled, timezone, next_run_at, created_at, updated_at,
+			actions_json, max_run_history, run_timeout_seconds
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+	`, a.ID, a.TenantID, a.Name, a.RRule, a.DTStart, string(a.StepType), a.StepConfigJSON, a.Enabled, a.Timezone, nullableTime(a.NextRunAt), a.CreatedAt, a.UpdatedAt,
+		actionsJSON, a.MaxRunHistory, a.RunTimeoutSeconds)
 	if err != nil {
 		return fmt.Errorf("postgres: insert automation: %w", err)
 	}
@@ -46,7 +120,8 @@ func (r *AutomationRepository) Create(ctx context.Context, a domain.Automation) 
 
 func (r *AutomationRepository) Get(ctx context.Context, tenantID, id string) (domain.Automation, error) {
 	row := r.pool.QueryRow(ctx, `
-		SELECT id, tenant_id, name, rrule, dtstart, step_type, step_config_json, enabled, timezone, next_run_at, created_at, updated_at
+		SELECT id, tenant_id, name, rrule, dtstart, step_type, step_config_json, enabled, timezone, next_run_at, created_at, updated_at,
+		       actions_json, max_run_history, run_timeout_seconds, running_run_id, running_since
 		FROM automation.automations
 		WHERE tenant_id = $1 AND id = $2
 	`, tenantID, id)
@@ -67,7 +142,8 @@ func (r *AutomationRepository) List(ctx context.Context, tenantID, pageToken str
 		pageSize = 50
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, tenant_id, name, rrule, dtstart, step_type, step_config_json, enabled, timezone, next_run_at, created_at, updated_at
+		SELECT id, tenant_id, name, rrule, dtstart, step_type, step_config_json, enabled, timezone, next_run_at, created_at, updated_at,
+		       actions_json, max_run_history, run_timeout_seconds, running_run_id, running_since
 		FROM automation.automations
 		WHERE tenant_id = $1 AND ($2 = '' OR id > $2::uuid)
 		ORDER BY id
@@ -101,12 +177,18 @@ func (r *AutomationRepository) List(ctx context.Context, tenantID, pageToken str
 // row before calling this) — scheduling fields (next_run_at) are
 // deliberately left untouched by this statement.
 func (r *AutomationRepository) Update(ctx context.Context, tenantID string, a domain.Automation) error {
+	actionsJSON, err := marshalActions(a.Actions)
+	if err != nil {
+		return fmt.Errorf("postgres: marshal actions: %w", err)
+	}
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE automation.automations
 		SET name = $3, rrule = $4, step_type = $5, step_config_json = $6,
-		    enabled = $7, timezone = $8, dtstart = $9, updated_at = now()
+		    enabled = $7, timezone = $8, dtstart = $9, updated_at = now(),
+		    actions_json = $10, max_run_history = $11, run_timeout_seconds = $12
 		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, a.ID, a.Name, a.RRule, string(a.StepType), a.StepConfigJSON, a.Enabled, a.Timezone, a.DTStart)
+	`, tenantID, a.ID, a.Name, a.RRule, string(a.StepType), a.StepConfigJSON, a.Enabled, a.Timezone, a.DTStart,
+		actionsJSON, a.MaxRunHistory, a.RunTimeoutSeconds)
 	if err != nil {
 		return fmt.Errorf("postgres: update automation: %w", err)
 	}
@@ -130,6 +212,40 @@ func (r *AutomationRepository) Delete(ctx context.Context, tenantID, id string) 
 	return nil
 }
 
+// AcquireRunLock implements usecase.AutomationRepository.AcquireRunLock — a
+// single conditional UPDATE (no separate SELECT+UPDATE) so the check and
+// claim are atomic under concurrent callers: two racing acquires for the
+// same automation can't both see "unlocked" and both succeed, since
+// Postgres serializes concurrent UPDATEs to the same row.
+func (r *AutomationRepository) AcquireRunLock(ctx context.Context, tenantID, automationID, runID string, ttl time.Duration) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE automation.automations
+		SET running_run_id = $1, running_since = now()
+		WHERE tenant_id = $2 AND id = $3
+		  AND (running_run_id IS NULL OR running_since < now() - make_interval(secs => $4))
+	`, runID, tenantID, automationID, ttl.Seconds())
+	if err != nil {
+		return false, fmt.Errorf("postgres: acquire run lock: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// ReleaseRunLock implements usecase.AutomationRepository.ReleaseRunLock —
+// the `running_run_id = $3` guard means a lock already reclaimed by a newer
+// run (past its TTL) is left alone, not clobbered by a late release from
+// the run that used to hold it.
+func (r *AutomationRepository) ReleaseRunLock(ctx context.Context, tenantID, automationID, runID string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE automation.automations
+		SET running_run_id = NULL, running_since = NULL
+		WHERE tenant_id = $1 AND id = $2 AND running_run_id = $3
+	`, tenantID, automationID, runID)
+	if err != nil {
+		return fmt.Errorf("postgres: release run lock: %w", err)
+	}
+	return nil
+}
+
 // ClaimDue implements usecase.DueAutomationClaimer — see that port's doc
 // comment for why the returned batch's transaction stays open across
 // dispatch. The query intentionally has no tenant filter: the scheduler
@@ -144,7 +260,8 @@ func (r *AutomationRepository) ClaimDue(ctx context.Context, now time.Time, limi
 	}
 
 	rows, err := tx.Query(ctx, `
-		SELECT id, tenant_id, name, rrule, dtstart, step_type, step_config_json, enabled, timezone, next_run_at, created_at, updated_at
+		SELECT id, tenant_id, name, rrule, dtstart, step_type, step_config_json, enabled, timezone, next_run_at, created_at, updated_at,
+		       actions_json, max_run_history, run_timeout_seconds, running_run_id, running_since
 		FROM automation.automations
 		WHERE enabled = true AND next_run_at IS NOT NULL AND next_run_at <= $1
 		ORDER BY next_run_at
@@ -216,15 +333,30 @@ func scanAutomation(row rowScanner) (domain.Automation, error) {
 	var a domain.Automation
 	var stepType string
 	var nextRunAt *time.Time
+	var actionsJSON []byte
+	var runningRunID *string
+	var runningSince *time.Time
 	if err := row.Scan(
 		&a.ID, &a.TenantID, &a.Name, &a.RRule, &a.DTStart, &stepType, &a.StepConfigJSON,
 		&a.Enabled, &a.Timezone, &nextRunAt, &a.CreatedAt, &a.UpdatedAt,
+		&actionsJSON, &a.MaxRunHistory, &a.RunTimeoutSeconds, &runningRunID, &runningSince,
 	); err != nil {
 		return domain.Automation{}, err
 	}
 	a.StepType = domain.StepType(stepType)
 	if nextRunAt != nil {
 		a.NextRunAt = *nextRunAt
+	}
+	actions, err := unmarshalActions(actionsJSON)
+	if err != nil {
+		return domain.Automation{}, fmt.Errorf("postgres: unmarshal actions_json: %w", err)
+	}
+	a.Actions = actions
+	if runningRunID != nil {
+		a.RunningRunID = *runningRunID
+	}
+	if runningSince != nil {
+		a.RunningSince = *runningSince
 	}
 	return a, nil
 }
@@ -239,14 +371,19 @@ func NewAutomationRunRepository(pool *pgxpool.Pool) *AutomationRunRepository {
 }
 
 func (r *AutomationRunRepository) Create(ctx context.Context, run domain.AutomationRun) error {
-	_, err := r.pool.Exec(ctx, `
+	actionResultsJSON, err := marshalActionResults(run.ActionResults)
+	if err != nil {
+		return fmt.Errorf("postgres: marshal action_results: %w", err)
+	}
+	_, err = r.pool.Exec(ctx, `
 		INSERT INTO automation.automation_runs (
 			id, automation_id, tenant_id, request_id, status, step_type, trigger, step_config_json,
-			output_json, error_message, created_at, started_at, completed_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+			output_json, error_message, created_at, started_at, completed_at, action_results_json
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 	`,
 		run.ID, run.AutomationID, run.TenantID, run.RequestID, string(run.Status), string(run.StepType), string(run.Trigger), run.StepConfigJSON,
 		nullableString(run.OutputJSON), nullableString(run.ErrorMessage), run.CreatedAt, nullableTime(run.StartedAt), nullableTime(run.CompletedAt),
+		actionResultsJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("postgres: insert automation run: %w", err)
@@ -257,7 +394,7 @@ func (r *AutomationRunRepository) Create(ctx context.Context, run domain.Automat
 func (r *AutomationRunRepository) FindByRequestID(ctx context.Context, tenantID, automationID, requestID string) (domain.AutomationRun, bool, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, automation_id, tenant_id, request_id, status, step_type, trigger, step_config_json,
-		       output_json, error_message, created_at, started_at, completed_at
+		       output_json, error_message, created_at, started_at, completed_at, action_results_json
 		FROM automation.automation_runs
 		WHERE tenant_id = $1 AND automation_id = $2 AND request_id = $3
 	`, tenantID, automationID, requestID)
@@ -273,12 +410,16 @@ func (r *AutomationRunRepository) FindByRequestID(ctx context.Context, tenantID,
 }
 
 func (r *AutomationRunRepository) UpdateStatus(ctx context.Context, run domain.AutomationRun) error {
+	actionResultsJSON, err := marshalActionResults(run.ActionResults)
+	if err != nil {
+		return fmt.Errorf("postgres: marshal action_results: %w", err)
+	}
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE automation.automation_runs
-		SET status = $1, output_json = $2, error_message = $3, started_at = $4, completed_at = $5
+		SET status = $1, output_json = $2, error_message = $3, started_at = $4, completed_at = $5, action_results_json = $8
 		WHERE id = $6 AND tenant_id = $7
 	`, string(run.Status), nullableString(run.OutputJSON), nullableString(run.ErrorMessage),
-		nullableTime(run.StartedAt), nullableTime(run.CompletedAt), run.ID, run.TenantID)
+		nullableTime(run.StartedAt), nullableTime(run.CompletedAt), run.ID, run.TenantID, actionResultsJSON)
 	if err != nil {
 		return fmt.Errorf("postgres: update automation run status: %w", err)
 	}
@@ -298,7 +439,7 @@ func (r *AutomationRunRepository) ListByAutomation(ctx context.Context, tenantID
 	// applied to both optional filters here.
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, automation_id, tenant_id, request_id, status, step_type, trigger, step_config_json,
-		       output_json, error_message, created_at, started_at, completed_at
+		       output_json, error_message, created_at, started_at, completed_at, action_results_json
 		FROM automation.automation_runs
 		WHERE tenant_id = $1
 		  AND ($2 = '' OR automation_id = $2::uuid)
@@ -330,6 +471,29 @@ func (r *AutomationRunRepository) ListByAutomation(ctx context.Context, tenantID
 	return out, next, nil
 }
 
+// PruneRuns implements usecase.AutomationRunRepository.PruneRuns — deletes
+// automationID's runs beyond the maxRuns most recent by created_at in one
+// statement (subquery-based "keep newest N" rather than a separate
+// count+offset round trip).
+func (r *AutomationRunRepository) PruneRuns(ctx context.Context, tenantID, automationID string, maxRuns int32) error {
+	if maxRuns <= 0 {
+		return nil
+	}
+	_, err := r.pool.Exec(ctx, `
+		DELETE FROM automation.automation_runs
+		WHERE tenant_id = $1 AND automation_id = $2 AND id NOT IN (
+			SELECT id FROM automation.automation_runs
+			WHERE tenant_id = $1 AND automation_id = $2
+			ORDER BY created_at DESC
+			LIMIT $3
+		)
+	`, tenantID, automationID, maxRuns)
+	if err != nil {
+		return fmt.Errorf("postgres: prune automation runs: %w", err)
+	}
+	return nil
+}
+
 // rowScanner abstracts over pgx.Row and pgx.Rows, which share the same
 // Scan signature — lets scanRun serve both FindByRequestID and
 // ListByAutomation without duplicating the column list.
@@ -342,9 +506,10 @@ func scanRun(row rowScanner) (domain.AutomationRun, error) {
 	var status, stepType, trigger string
 	var outputJSON, errorMessage *string
 	var startedAt, completedAt *time.Time
+	var actionResultsJSON []byte
 	if err := row.Scan(
 		&run.ID, &run.AutomationID, &run.TenantID, &run.RequestID, &status, &stepType, &trigger, &run.StepConfigJSON,
-		&outputJSON, &errorMessage, &run.CreatedAt, &startedAt, &completedAt,
+		&outputJSON, &errorMessage, &run.CreatedAt, &startedAt, &completedAt, &actionResultsJSON,
 	); err != nil {
 		return domain.AutomationRun{}, err
 	}
@@ -363,6 +528,11 @@ func scanRun(row rowScanner) (domain.AutomationRun, error) {
 	if completedAt != nil {
 		run.CompletedAt = *completedAt
 	}
+	actionResults, err := unmarshalActionResults(actionResultsJSON)
+	if err != nil {
+		return domain.AutomationRun{}, fmt.Errorf("postgres: unmarshal action_results_json: %w", err)
+	}
+	run.ActionResults = actionResults
 	return run, nil
 }
 

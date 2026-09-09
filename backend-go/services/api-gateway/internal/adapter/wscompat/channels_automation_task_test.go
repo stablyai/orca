@@ -77,6 +77,50 @@ func TestAutomationCreateChannel_Success(t *testing.T) {
 	}
 }
 
+// TestAutomationCreateChannel_ForwardsActions is FE-TASK-AUTO-002's
+// discovered gap: automation.create's decode struct never had an actions
+// field until this task, even though CreateAutomationRequest.Actions has
+// existed since TASK-BE-AUTO-002 — a frontend action-chain create silently
+// arrived at automation-service with an empty chain.
+func TestAutomationCreateChannel_ForwardsActions(t *testing.T) {
+	var gotReq *automationv1.CreateAutomationRequest
+	fake := &fakeAutomationServiceClient{
+		createAutomationFunc: func(ctx context.Context, in *automationv1.CreateAutomationRequest) (*automationv1.CreateAutomationResponse, error) {
+			gotReq = in
+			return &automationv1.CreateAutomationResponse{Automation: &automationv1.Automation{Id: "a1"}}, nil
+		},
+	}
+	r := NewRegistry()
+	registerAutomationCRUDChannels(r, fake)
+
+	_, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "automation.create",
+		argsJSON(t, map[string]any{
+			"name":  "nightly-build",
+			"rrule": "FREQ=DAILY",
+			"actions": []map[string]any{
+				{"id": "a1", "type": "run_agent", "configJson": `{"prompt":"go"}`},
+				{"id": "a2", "type": "commit_push", "configJson": `{}`, "continueOnFailure": true},
+			},
+			"maxRunHistory":     int32(50),
+			"runTimeoutSeconds": int32(600),
+		}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(gotReq.Actions) != 2 {
+		t.Fatalf("expected 2 actions forwarded, got %d: %+v", len(gotReq.Actions), gotReq.Actions)
+	}
+	if gotReq.Actions[0].Id != "a1" || gotReq.Actions[0].Type != automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_RUN_AGENT {
+		t.Errorf("unexpected action[0]: %+v", gotReq.Actions[0])
+	}
+	if gotReq.Actions[1].Type != automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_COMMIT_PUSH || !gotReq.Actions[1].ContinueOnFailure {
+		t.Errorf("unexpected action[1]: %+v", gotReq.Actions[1])
+	}
+	if gotReq.MaxRunHistory != 50 || gotReq.RunTimeoutSeconds != 600 {
+		t.Errorf("expected MaxRunHistory=50/RunTimeoutSeconds=600, got %d/%d", gotReq.MaxRunHistory, gotReq.RunTimeoutSeconds)
+	}
+}
+
 func TestAutomationListChannel_Success(t *testing.T) {
 	fake := &fakeAutomationServiceClient{
 		listAutomationsFunc: func(ctx context.Context, in *automationv1.ListAutomationsRequest) (*automationv1.ListAutomationsResponse, error) {
@@ -160,6 +204,89 @@ func TestAutomationUpdateChannel_LeavesUnsetFieldsAsNilWrapperValues(t *testing.
 	}
 	if gotReq.GetEnabled() == nil || !gotReq.GetEnabled().GetValue() {
 		t.Errorf("expected Enabled=true wrapper value, got %v", gotReq.GetEnabled())
+	}
+}
+
+// TestAutomationUpdateChannel_OmittedActions_LeavesActionsSetNil covers the
+// same tri-state distinction UpdateAutomation's usecase layer already
+// tests for, now at the wscompat wire boundary: an update that never
+// mentions "actions" must leave ActionsSet nil (preserve the existing
+// chain), not accidentally clear it.
+func TestAutomationUpdateChannel_OmittedActions_LeavesActionsSetNil(t *testing.T) {
+	var gotReq *automationv1.UpdateAutomationRequest
+	fake := &fakeAutomationServiceClient{
+		updateAutomationFunc: func(ctx context.Context, in *automationv1.UpdateAutomationRequest) (*automationv1.UpdateAutomationResponse, error) {
+			gotReq = in
+			return &automationv1.UpdateAutomationResponse{Automation: &automationv1.Automation{Id: in.GetId()}}, nil
+		},
+	}
+	r := NewRegistry()
+	registerAutomationCRUDChannels(r, fake)
+
+	if _, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "automation.update",
+		argsJSON(t, map[string]any{"id": "a1", "enabled": true})); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotReq.GetActionsSet() != nil {
+		t.Errorf("expected ActionsSet to remain nil when \"actions\" is omitted, got %+v", gotReq.GetActionsSet())
+	}
+}
+
+// TestAutomationUpdateChannel_EmptyActions_ClearsTheChain covers the other
+// half of the tri-state: an explicit "actions":[] must produce a non-nil
+// ActionsSet with an empty Actions list — UpdateAutomation's usecase reads
+// that as "clear the chain," distinct from omitting the field entirely.
+func TestAutomationUpdateChannel_EmptyActions_ClearsTheChain(t *testing.T) {
+	var gotReq *automationv1.UpdateAutomationRequest
+	fake := &fakeAutomationServiceClient{
+		updateAutomationFunc: func(ctx context.Context, in *automationv1.UpdateAutomationRequest) (*automationv1.UpdateAutomationResponse, error) {
+			gotReq = in
+			return &automationv1.UpdateAutomationResponse{Automation: &automationv1.Automation{Id: in.GetId()}}, nil
+		},
+	}
+	r := NewRegistry()
+	registerAutomationCRUDChannels(r, fake)
+
+	if _, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "automation.update",
+		argsJSON(t, map[string]any{"id": "a1", "actions": []map[string]any{}})); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotReq.GetActionsSet() == nil {
+		t.Fatal("expected a non-nil ActionsSet for an explicit empty actions array")
+	}
+	if len(gotReq.GetActionsSet().GetActions()) != 0 {
+		t.Errorf("expected an empty Actions list, got %+v", gotReq.GetActionsSet().GetActions())
+	}
+}
+
+// TestAutomationUpdateChannel_PopulatedActions_ReplacesTheChain covers the
+// third state: a non-empty actions array replaces the chain wholesale.
+func TestAutomationUpdateChannel_PopulatedActions_ReplacesTheChain(t *testing.T) {
+	var gotReq *automationv1.UpdateAutomationRequest
+	fake := &fakeAutomationServiceClient{
+		updateAutomationFunc: func(ctx context.Context, in *automationv1.UpdateAutomationRequest) (*automationv1.UpdateAutomationResponse, error) {
+			gotReq = in
+			return &automationv1.UpdateAutomationResponse{Automation: &automationv1.Automation{Id: in.GetId()}}, nil
+		},
+	}
+	r := NewRegistry()
+	registerAutomationCRUDChannels(r, fake)
+
+	if _, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1"}, "automation.update",
+		argsJSON(t, map[string]any{
+			"id":                "a1",
+			"actions":           []map[string]any{{"id": "a1", "type": "send_notification", "configJson": `{}`}},
+			"maxRunHistory":     int32(25),
+			"runTimeoutSeconds": int32(120),
+		})); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	actions := gotReq.GetActionsSet().GetActions()
+	if len(actions) != 1 || actions[0].Type != automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_SEND_NOTIFICATION {
+		t.Errorf("unexpected replaced actions: %+v", actions)
+	}
+	if gotReq.GetMaxRunHistory().GetValue() != 25 || gotReq.GetRunTimeoutSeconds().GetValue() != 120 {
+		t.Errorf("expected MaxRunHistory=25/RunTimeoutSeconds=120 wrapper values, got %v/%v", gotReq.GetMaxRunHistory(), gotReq.GetRunTimeoutSeconds())
 	}
 }
 

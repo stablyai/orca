@@ -494,8 +494,11 @@ type EphemeralVmSshTargetRepository interface {
 
 // EphemeralVmRecipeSshTarget mirrors frontend/src/shared/ephemeral-vm-recipes.ts's
 // EphemeralVmRecipeSshTargetSchema field-for-field (BE-SOL-EVM-002 §6's
-// cross-check — configHost/portForwards deliberately omitted, see
-// infrafleet.proto's EphemeralVmRecipeSshTarget message doc comment).
+// cross-check — configHost deliberately omitted, display-only field never
+// consumed here). PortForwards was ALSO deliberately omitted until
+// CR-EVM-008/TASK-BE-EVM-021 — see infrafleet.proto's
+// EphemeralVmRecipeSshTarget message doc comment for the field it now maps
+// to.
 type EphemeralVmRecipeSshTarget struct {
 	Label                   string
 	Host                    string
@@ -507,6 +510,16 @@ type EphemeralVmRecipeSshTarget struct {
 	ProxyCommand            string
 	JumpHost                string
 	RelayGracePeriodSeconds int32
+	PortForwards            []PortForward
+}
+
+// PortForward mirrors frontend/src/shared/ssh-types.ts's SavedPortForward
+// field-for-field — see infrafleet.proto's PortForward message.
+type PortForward struct {
+	LocalPort  int32
+	RemoteHost string
+	RemotePort int32
+	Label      string
 }
 
 // ScreencastParams carries browser.screencastStart's request fields —

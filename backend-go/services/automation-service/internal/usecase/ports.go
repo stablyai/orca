@@ -30,6 +30,20 @@ type AutomationRepository interface {
 	// (automation_runs.automation_id has ON DELETE CASCADE per
 	// migrations/0001_init.up.sql — no separate run-cleanup step needed).
 	Delete(ctx context.Context, tenantID, id string) error
+	// AcquireRunLock claims automationID's running-run slot for runID —
+	// CR-AUTO-007/TASK-BE-AUTO-011's concurrency guard, preventing a manual
+	// RunNow from overlapping a scheduled run of the same automation (or
+	// vice versa). Succeeds (true, nil) when no run currently holds the
+	// slot, or the holder's lock is older than ttl (a crashed run that
+	// never released — self-healing, no separate reaper process needed).
+	// Returns (false, nil) — NOT an error — when another run already holds
+	// a fresh lock; that is an expected "busy" outcome the caller turns
+	// into a clear AppError, not a transport/persistence failure.
+	AcquireRunLock(ctx context.Context, tenantID, automationID, runID string, ttl time.Duration) (bool, error)
+	// ReleaseRunLock clears automationID's running-run slot, but ONLY if
+	// runID still holds it — a caller whose lock already expired and was
+	// reclaimed by a newer run must not release that newer run's lock.
+	ReleaseRunLock(ctx context.Context, tenantID, automationID, runID string) error
 }
 
 // AutomationRunRepository is the persistence port for run bookkeeping.
@@ -52,6 +66,13 @@ type AutomationRunRepository interface {
 	// Automation page's initial load has no automation selected yet); an
 	// empty pageToken means "first page" — both are valid, not error inputs.
 	ListByAutomation(ctx context.Context, tenantID, automationID, pageToken string, pageSize int32) ([]domain.AutomationRun, string, error)
+	// PruneRuns deletes automationID's oldest runs beyond the maxRuns most
+	// recent (by created_at) — CR-AUTO-007/TASK-BE-AUTO-010's run-history
+	// retention, called after each chain execution finishes. maxRuns <= 0 is
+	// a no-op: callers (execute_automation_chain.go) resolve
+	// Automation.MaxRunHistory's "0 = default 100" policy themselves before
+	// calling, so this port never guesses a default on its own.
+	PruneRuns(ctx context.Context, tenantID, automationID string, maxRuns int32) error
 }
 
 // ExecuteAdHocStepInput mirrors workflow-service's ExecuteAdHocStepRequest
@@ -119,4 +140,35 @@ type ClaimedBatch interface {
 // the exact gap (TS Gap 3) this redesign closes.
 type WorkflowStepExecutor interface {
 	ExecuteAdHocStep(ctx context.Context, in ExecuteAdHocStepInput) (ExecuteAdHocStepOutput, error)
+}
+
+// CreatePullRequestInput mirrors scmintegration.v1.CreatePullRequestRequest's
+// fields this port needs — CR-AUTO-003/TASK-BE-AUTO-006. Provider/Repo/
+// HeadBranch/BaseBranch come from the automation_action's own config_json
+// (see execute_automation_chain.go's createPrActionConfig): automation-service's
+// domain model has no repo/workspace-binding concept of its own (unlike the
+// TS side's projectId/workspaceId), so the action's config is the only
+// place this information can come from today.
+type CreatePullRequestInput struct {
+	TenantID   string
+	Provider   string // "github"|"gitlab"|"bitbucket"|"azure_devops"|"gitea" — see toProtoScmProvider
+	Repo       string
+	Title      string
+	Body       string
+	HeadBranch string
+	BaseBranch string
+	RequestID  string
+}
+
+// CreatePullRequestOutput mirrors scmintegration.v1.PullRequest's fields
+// worth surfacing back into an ActionResult.
+type CreatePullRequestOutput struct {
+	URL    string
+	Number int32
+}
+
+// PullRequestCreator is the port ExecuteAutomationChain's CREATE_PR case
+// dispatches through — CR-AUTO-003/TASK-BE-AUTO-006.
+type PullRequestCreator interface {
+	CreatePullRequest(ctx context.Context, in CreatePullRequestInput) (CreatePullRequestOutput, error)
 }

@@ -48,6 +48,14 @@ func (f *fakeAutomationRepository) Delete(ctx context.Context, tenantID, id stri
 	return nil
 }
 
+func (f *fakeAutomationRepository) AcquireRunLock(ctx context.Context, tenantID, automationID, runID string, ttl time.Duration) (bool, error) {
+	return true, nil
+}
+
+func (f *fakeAutomationRepository) ReleaseRunLock(ctx context.Context, tenantID, automationID, runID string) error {
+	return nil
+}
+
 type fakeAutomationRunRepository struct {
 	byID map[string]domain.AutomationRun
 }
@@ -73,6 +81,10 @@ func (f *fakeAutomationRunRepository) UpdateStatus(ctx context.Context, run doma
 
 func (f *fakeAutomationRunRepository) ListByAutomation(ctx context.Context, tenantID, automationID, pageToken string, pageSize int32) ([]domain.AutomationRun, string, error) {
 	return nil, "", nil
+}
+
+func (f *fakeAutomationRunRepository) PruneRuns(ctx context.Context, tenantID, automationID string, maxRuns int32) error {
+	return nil
 }
 
 type fakeWorkflowStepExecutor struct {

@@ -57,6 +57,49 @@ func parseStepType(v string) workflowv1.StepType {
 	return workflowv1.StepType_STEP_TYPE_UNSPECIFIED
 }
 
+// parseAutomationActionType mirrors parseStepType's convention for
+// automationv1.AutomationActionType — used by automation.create/
+// automation.update's actions[] decode below (CR-AUTO-002/TASK-BE-AUTO-002
+// added the proto field; this wscompat bridge never got the matching wire
+// support until FE-TASK-AUTO-002's investigation found the gap).
+func parseAutomationActionType(v string) automationv1.AutomationActionType {
+	name := strings.ToUpper(v)
+	if !strings.HasPrefix(name, "AUTOMATION_ACTION_TYPE_") {
+		name = "AUTOMATION_ACTION_TYPE_" + name
+	}
+	if n, ok := automationv1.AutomationActionType_value[name]; ok {
+		return automationv1.AutomationActionType(n)
+	}
+	return automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_UNSPECIFIED
+}
+
+// automationActionArg is the wire shape automation.create/automation.update
+// decode each actions[] entry into — field names mirror
+// automationv1.AutomationAction's camelCase JSON names (id/type/configJson/
+// continueOnFailure) so the frontend's AutomationAction type
+// (frontend/src/shared/automations-types.ts) needs no field renaming to
+// send one of these directly.
+type automationActionArg struct {
+	ID                string `json:"id"`
+	Type              string `json:"type"`
+	ConfigJSON        string `json:"configJson"`
+	ContinueOnFailure bool   `json:"continueOnFailure"`
+}
+
+func toProtoAutomationActions(in []automationActionArg) []*automationv1.AutomationAction {
+	if in == nil {
+		return nil
+	}
+	out := make([]*automationv1.AutomationAction, len(in))
+	for i, a := range in {
+		out[i] = &automationv1.AutomationAction{
+			Id: a.ID, Type: parseAutomationActionType(a.Type),
+			ConfigJson: a.ConfigJSON, ContinueOnFailure: a.ContinueOnFailure,
+		}
+	}
+	return out
+}
+
 // parseEdgeType mirrors parseStepType's convention for taskv1.EdgeType —
 // see task.addEdge below.
 func parseEdgeType(v string) taskv1.EdgeType {
@@ -118,6 +161,14 @@ func registerAutomationCRUDChannels(r *Registry, client automationv1.AutomationS
 			StepType       string `json:"stepType"`
 			Dtstart        string `json:"dtstart"`
 			Timezone       string `json:"timezone"`
+			// Actions/MaxRunHistory/RunTimeoutSeconds — CR-AUTO-002/007. Actions
+			// takes precedence over StepConfigJSON/StepType server-side
+			// (CreateAutomation's own doc) — a caller building a 1-action
+			// chain (FE-AUTO-SOL-002 §3's "map thành actions:[{...}]" plan)
+			// need not also send legacy step fields.
+			Actions           []automationActionArg `json:"actions"`
+			MaxRunHistory     int32                 `json:"maxRunHistory"`
+			RunTimeoutSeconds int32                 `json:"runTimeoutSeconds"`
 		}
 		in, err := decodeArg[createArgs](args, 0)
 		if err != nil {
@@ -130,6 +181,8 @@ func registerAutomationCRUDChannels(r *Registry, client automationv1.AutomationS
 			TenantId: id.TenantID, Name: in.Name, Rrule: in.RRule,
 			StepConfigJson: in.StepConfigJSON, StepType: parseStepType(in.StepType),
 			Dtstart: in.Dtstart, Timezone: in.Timezone,
+			Actions:       toProtoAutomationActions(in.Actions),
+			MaxRunHistory: in.MaxRunHistory, RunTimeoutSeconds: in.RunTimeoutSeconds,
 		})
 		if err != nil {
 			return nil, err
@@ -193,6 +246,18 @@ func registerAutomationCRUDChannels(r *Registry, client automationv1.AutomationS
 			Enabled        *bool   `json:"enabled"`
 			Dtstart        *string `json:"dtstart"`
 			Timezone       *string `json:"timezone"`
+			// Actions is a pointer-to-slice, not a plain slice — mirrors
+			// UpdateAutomationRequest.ActionsSet's own nil-vs-empty
+			// distinction (CR-AUTO-007's field-mask-shaped design): an
+			// omitted "actions" key decodes to nil (leave the chain
+			// untouched), while an explicit "actions":[] decodes to a
+			// non-nil pointer to an empty slice (clear the chain) — the
+			// same tri-state UpdateAutomation's usecase layer already
+			// implements and tests for (nil preserved / non-nil-empty
+			// clears / non-nil-populated replaces).
+			Actions           *[]automationActionArg `json:"actions"`
+			MaxRunHistory     *int32                 `json:"maxRunHistory"`
+			RunTimeoutSeconds *int32                 `json:"runTimeoutSeconds"`
 		}
 		in, err := decodeArg[updateArgs](args, 0)
 		if err != nil {
@@ -219,6 +284,15 @@ func registerAutomationCRUDChannels(r *Registry, client automationv1.AutomationS
 		}
 		if in.Timezone != nil {
 			req.Timezone = wrapperspb.String(*in.Timezone)
+		}
+		if in.Actions != nil {
+			req.ActionsSet = &automationv1.AutomationActionList{Actions: toProtoAutomationActions(*in.Actions)}
+		}
+		if in.MaxRunHistory != nil {
+			req.MaxRunHistory = wrapperspb.Int32(*in.MaxRunHistory)
+		}
+		if in.RunTimeoutSeconds != nil {
+			req.RunTimeoutSeconds = wrapperspb.Int32(*in.RunTimeoutSeconds)
 		}
 		resp, err := client.UpdateAutomation(ctx, req)
 		if err != nil {

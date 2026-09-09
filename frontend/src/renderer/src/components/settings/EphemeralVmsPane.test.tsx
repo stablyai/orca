@@ -146,4 +146,69 @@ describe('EphemeralVmsPane', () => {
       telemetrySource: 'settings'
     })
   })
+
+  // CR-EVM-006/FE-TASK-EVM-004
+  it('blocks opening the composer when the recipe doctor reports a fail check', async () => {
+    window.api.ephemeralVm.doctor = vi.fn().mockResolvedValue({
+      recipeId: 'cloud-sandbox',
+      repoPath: '/repo',
+      ok: false,
+      checks: [{ id: 'repo.path', status: 'fail', message: 'Repo path does not exist' }]
+    })
+    const container = await renderPane()
+    await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
+    const useButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Use in workspace'
+    )
+
+    await act(async () => {
+      useButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(storeMocks.openModal).not.toHaveBeenCalled()
+    // Dialog (Radix) renders via a portal into document.body, not `container`.
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Repo path does not exist'))
+    // Blocking dialog has no "Continue anyway" action.
+    expect(
+      [...document.body.querySelectorAll('button')].some((b) => b.textContent === 'Continue anyway')
+    ).toBe(false)
+  })
+
+  // CR-EVM-006/FE-TASK-EVM-004
+  it('opens the composer after "Continue anyway" when the recipe doctor reports only a warn check', async () => {
+    window.api.ephemeralVm.doctor = vi.fn().mockResolvedValue({
+      recipeId: 'cloud-sandbox',
+      repoPath: '/repo',
+      ok: true,
+      checks: [{ id: 'recipe.version', status: 'warn', message: 'Package version mismatch' }]
+    })
+    const container = await renderPane()
+    await vi.waitFor(() => expect(container.textContent).toContain('Cloud Sandbox'))
+    const useButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Use in workspace'
+    )
+
+    await act(async () => {
+      useButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(storeMocks.openModal).not.toHaveBeenCalled()
+    let continueButton: Element | undefined
+    await vi.waitFor(() => {
+      continueButton = [...document.body.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Continue anyway'
+      )
+      expect(continueButton).toBeDefined()
+    })
+
+    await act(async () => {
+      continueButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(storeMocks.openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      initialRepoId: 'repo-1',
+      initialEphemeralVmRecipeId: 'cloud-sandbox',
+      telemetrySource: 'settings'
+    })
+  })
 })

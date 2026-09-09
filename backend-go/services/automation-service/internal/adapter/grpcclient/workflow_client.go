@@ -71,6 +71,8 @@ func toProtoStepType(s domain.StepType) workflowv1.StepType {
 		return workflowv1.StepType_STEP_TYPE_WEBHOOK
 	case domain.StepTypeCondition:
 		return workflowv1.StepType_STEP_TYPE_CONDITION
+	case domain.StepTypeCommitPush:
+		return workflowv1.StepType_STEP_TYPE_COMMIT_PUSH
 	default:
 		return workflowv1.StepType_STEP_TYPE_UNSPECIFIED
 	}

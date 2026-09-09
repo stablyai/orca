@@ -3,7 +3,7 @@
 **Solution:** [BE-SOL-EVM-004](../solutions/BE-SOL-EVM-004-ssh-connection-type-backend.md) §4, "Quyết định đã chốt" mục 3 | **CR:** CR-EVM-005
 **Service:** `git-gateway-service`, `infra-fleet-service`
 **Depends on:** [TASK-BE-EVM-014](./TASK-BE-EVM-014-agent-outbound-ssh-provisioner-backend.md)
-**Status:** 🟡 PARTIAL — cơ chế routing chạy thật, test pass; 2 gap phụ thuộc proto ngoài phạm vi (xem "Kết quả thực tế") — chỉ cần thiết cho Hướng A (Hướng B không cần, xem BE-SOL-EVM-004 §5c)
+**Status:** 🟡 PARTIAL (đính chính 2026-09-09) — gap #1 (`ResolvedConnection.HiddenTargetID`) đã đóng thật bởi [TASK-BE-EVM-018](./TASK-BE-EVM-018-populate-hidden-target-id.md); gap #2 (`domain.RepoInfo.HiddenTargetID` ở repo-scope) VẪN mở, nhưng lý do đã rõ hơn — không còn là "proto bị khoá", mà là câu hỏi kiến trúc thật chưa có lời giải, xem "Đính chính 2026-09-09" bên dưới
 
 ---
 
@@ -131,9 +131,84 @@ Không sửa `infra-fleet-service` cho task này.
    — race với TASK-BE-EVM-014's gap #1 cùng loại) — chưa có câu trả lời,
    để lại cho follow-up task.
 
-**Kết luận:** cơ chế routing (context threading + `relay()`'s
+**Kết luận (2026-09-08):** cơ chế routing (context threading + `relay()`'s
 "ViaHiddenTarget" dispatch) đã implement ĐẦY ĐỦ và test thật xác nhận hoạt
 động đúng khi `HiddenTargetID` có giá trị — nhưng KHÔNG CÓ ĐƯỜNG THẬT nào
 trong hệ thống populate giá trị đó hôm nay (2 gap proto ở trên). Đây là
 tình trạng "cơ chế đã sẵn sàng, chờ nguồn dữ liệu" — giống hệt tinh thần
 TASK-BE-EVM-014's gap #1 (devServer resolver) và gap #2 (connectionID thật).
+
+---
+
+## ✅/⛔ Đính chính (2026-09-09) — gap #1 đóng thật, gap #2 làm rõ lý do thật
+
+**Gap #1 — ĐÃ ĐÓNG.** [TASK-BE-EVM-018](./TASK-BE-EVM-018-populate-hidden-target-id.md)
+(2026-09-08, ngay sau task này) thêm `hidden_target_id` vào
+`infrafleetv1.ResolveConnectionResponse` — không phải "ngoài phạm vi
+khoá" như lo ngại ban đầu; audit lại nguyên trạng file NGAY TRƯỚC khi
+sửa (task đó tự ghi) xác nhận file proto lúc đó đã sạch, không còn dirty
+như mô tả gốc ở đây. Đã xác nhận lại thật (2026-09-09, không tin lời
+doc):
+```
+grep -n "HiddenTargetId" backend-go/proto/gen/go/orca/infrafleet/v1/infrafleet.pb.go
+  # có field thật, dòng 1487 + getter GetHiddenTargetId()
+grep -n "HiddenTargetID" backend-go/services/git-gateway-service/internal/adapter/grpcclient/resolver.go
+  # dòng 95: HiddenTargetID: resp.GetHiddenTargetId() — map thật, không còn bỏ trống
+cd backend-go/services/git-gateway-service && go build ./... && go vet ./...   # OK
+```
+→ `dispatchExecutor` (worktree-keyed, 33 call site) giờ NHẬN được
+`conn.HiddenTargetID` non-empty từ `ResolveConnection` thật — nhưng vẫn
+CHỦ Ý không thread vào ctx (quyết định đã chốt từ task này, giữ nguyên,
+xem "Đã implement" mục 5 ở trên) vì `dispatchExecutorForRepo` đã cover
+đúng use case cần hidden-target routing hôm nay.
+
+**Gap #2 — VẪN MỞ, nhưng không còn là "proto ngoài phạm vi" — là câu hỏi
+kiến trúc thật, đã audit sâu hơn (2026-09-09):**
+
+TASK-BE-EVM-018 CŨNG đã thêm `hidden_target_id` vào `project.proto`'s
+`GetRepoResponse` (field `= 3`, xác nhận thật:
+`grep -n hidden_target_id backend-go/proto/orca/project/v1/project.proto`
+→ có), và `git-gateway-service`'s `ProjectClient.GetRepo` đã map field đó
+vào `domain.RepoInfo.HiddenTargetID` — vậy phần "field/wiring" của gap #2
+coi như đã sẵn sàng ở phía client. **Nhưng phía nguồn thật —
+`project-service`'s `GetRepo` handler (`internal/adapter/grpc/server.go:415`)
+— KHÔNG populate giá trị này**, xác nhận đọc trực tiếp:
+```go
+func (s *Server) GetRepo(ctx context.Context, req *projectv1.GetRepoRequest) (*projectv1.GetRepoResponse, error) {
+	result, err := s.getRepo.Execute(ctx, usecase.GetRepoInput{RepoID: req.GetRepoId()})
+	// ...
+	return &projectv1.GetRepoResponse{Repo: toProtoRepo(result.Repo), DevServerId: result.DevServerID}, nil
+	// ^ không có HiddenTargetId nào được set
+}
+```
+
+**Lý do thật KHÔNG chỉ là "thiếu code nối" — là 1 mismatch phạm vi kiến
+trúc thật, audit `GetRepo`'s usecase xác nhận:** `DevServerID` (field
+tương tự, đã hoạt động) lấy trực tiếp từ `domain.Repo.DevServerID` — một
+field lưu SẴN trên chính repo record, KHÔNG qua service khác. Nhưng
+`HiddenTargetID` (theo TASK-BE-EVM-018's logic ở `infra-fleet-service`,
+đã audit) được resolve theo **`WorktreeID`/`WorkspaceID`** (1 workspace/
+worktree cụ thể có ephemeral VM runtime hay không), KHÔNG theo `RepoID`.
+Một repo có thể có NHIỀU worktree, mỗi worktree có thể (hoặc không) được
+backed bởi 1 ephemeral VM runtime khác nhau — "hidden target của repo X"
+không phải 1 khái niệm well-defined ở repo-scope, chỉ well-defined ở
+worktree-scope (đúng thứ `dispatchExecutor`'s `ConnectionResolver` path —
+đã đóng ở gap #1 — vốn dùng). `dispatchExecutorForRepo`'s use case
+(`CreateWorktree`/`DetectWorktrees`/`PrefetchCreateBase`/`ResolvePrBase`/
+`ResolveMrBase`) chạy TRƯỚC KHI worktree tồn tại — tại thời điểm đó,
+thực sự CHƯA CÓ ephemeral VM runtime nào để trỏ tới (runtime chỉ được
+provision SAU khi 1 workspace được tạo).
+
+**Kết luận thật (không đoán liều):** khả năng cao gap #2 không phải "code
+thiếu" mà là **field không áp dụng được ở đúng call site nó được thêm
+vào** — `project-service`'s `GetRepo` (repo-scope) có thể sẽ MÃI MÃI trả
+`hidden_target_id = ""` một cách chính xác, vì tại thời điểm gọi
+`dispatchExecutorForRepo`, không có worktree cụ thể nào để hỏi "ephemeral
+VM runtime nào backing nó". Đây là câu hỏi sản phẩm/kiến trúc thật (có
+cần route `CreateWorktree` ban đầu qua hidden target không, hay hidden
+target chỉ áp dụng SAU khi worktree+runtime đã tồn tại?) — **không tự
+đoán và viết join logic sai** (rủi ro cao hơn để trống: 1 join sai có
+thể route nhầm sang runtime của worktree khác cùng repo). Để nguyên
+`hidden_target_id = ""` ở `project-service`'s `GetRepo` — hành vi AN
+TOÀN hiện tại (fallback về `local`/`DevServerID`-only routing, không lỗi
+sai lệch) — cho tới khi có quyết định sản phẩm rõ ràng.

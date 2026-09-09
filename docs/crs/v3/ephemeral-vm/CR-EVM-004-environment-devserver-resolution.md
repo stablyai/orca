@@ -8,10 +8,20 @@
 | **Priority** | P2 |
 | **Phiên bản** | v1.0 |
 | **Ngày tạo** | 2026-09-08 |
-| **Trạng thái** | 🔲 Proposed — chưa triển khai, phụ thuộc cứng [CR-EVM-003](./CR-EVM-003-provision-streaming-rpc.md) |
+| **Trạng thái** | ✅ Done — triển khai đầy đủ, xem "Cập nhật 2026-09-09" |
 | **Tác giả** | Kế thừa thiết kế đã có ở `docs/backlog/BACKLOG-002-environment-devserver-resolution.md`, xác nhận lại bằng mã nguồn hiện tại |
 | **Tác động HLD** | Infra-Fleet domain (`ResolveConnection`), Terminal RPC surface |
 | **Tác động Features** | `terminal.create`, `files.browseServerDir` cho workspace backed thuần bởi ephemeral VM (chưa gắn compute cụ thể) |
+
+---
+
+> **Cập nhật 2026-09-09 — ✅ Đã triển khai** (đi kèm nhánh follow-up
+> `591de6951`). `SetEnvironmentID` có 2 call site thật:
+> `adapter/agentwsserver/token_endpoint.go:270` (path pairing
+> orca-server) và `backendrelaysshprovisioner/provisioner.go:194` (path
+> SSH backend-relay-deploy). `files.browseServerDir` channel tồn tại
+> thật (`wscompat/channels_files.go:46`). Không còn hành động nào cần
+> làm cho CR này.
 
 ---
 

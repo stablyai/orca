@@ -89,6 +89,39 @@ real generated types today.
   connection-state readiness check), graceful shutdown (drains gRPC, then
   waits for the ticker's in-flight tick to finish).
 
+## Quan hệ với automation TS (Electron/Node) — không phải 3 bản triplicate
+
+An earlier audit (2026-09-09, before `docs/crs/v4/automations/CR-AUTO-001`
+was corrected) concluded this service had "no real users" because the
+renderer never called it. That conclusion was wrong — re-read directly
+against `frontend/src/renderer/src/components/automations/automation-host-client.ts`
+and `runtime-rpc-client.ts` before repeating it. The real architecture is
+two independent axes, not three duplicate implementations:
+
+1. **Deployment target** (mutually exclusive, picked at build/run time):
+   Electron desktop uses `desktop/src/main/automations/service.ts`; Node
+   "server mode" uses `backend/src/main/automations/` (Postgres via
+   `pg-automation-store.ts`). Both sit behind `window.api.automations.*`
+   when the renderer's target is `{kind: 'local'}` — which TS backend
+   answers depends only on which build the renderer is talking to.
+2. **Pairing** (orthogonal to axis 1): whenever the renderer has an
+   `activeRuntimeEnvironmentId` set (paired to a remote dev
+   server/runtime environment), `automation-host-client.ts` routes
+   `automation.list`/`.create`/`.update`/`.delete`/`.runs`/`.runNow`
+   through `callRuntimeRpc` → `window.api.runtimeEnvironments.call` →
+   this service's gRPC server via `api-gateway`'s wscompat
+   `channels_automation_task.go` — **this service is the only backend on
+   that path**, regardless of which TS deployment target axis 1 picked.
+
+`workflow-service`'s dispatch (`internal/adapter/infrafleetclient/relay_client.go`)
+confirms this service isn't structurally limited to "local" targets the
+way the Electron scheduler is (`desktop/src/main/automations/run-target-resolution.ts:41-50`
+explicitly blocks remote dispatch there) — `relay()` forwards to whatever
+`connectionID` the step config names, with no target-kind branching. This
+service's scheduler is Postgres-backed and process-lifetime-independent,
+which is why it's the natural home for automation that must run whether
+or not any particular Electron/Node process is up.
+
 ## Running locally
 
 ```sh
@@ -173,10 +206,29 @@ silently matching the doc's aspirational shape:
   minted). `payload_json` is accepted on the wire but not interpreted or
   persisted (the proto comment documents it as opaque pass-through) — no
   per-source payload mapping is implemented. §9's webhook
-  authentication (shared secret/signature) is also NOT implemented — this
-  RPC currently trusts the same caller-context tenant boundary every other
-  RPC here does, which is weaker than the "untrusted caller boundary"
-  §9 calls for; flagged, not silently dropped.
+  authentication (shared secret/signature) is also NOT implemented — that
+  remains true for any future public webhook caller (see
+  `BE-AUTO-SOL-007`, separate CR).
+  **Auth status (TASK-BE-AUTO-008, 2026-09-09)**: a service-local
+  interceptor (`internal/adapter/grpc/interceptors`) now gates this one RPC
+  — a request with no tenant identity is rejected with `PermissionDenied`
+  before the usecase layer runs, instead of only failing later inside
+  `RunNow`. This does NOT add a distinct "service-to-service caller
+  identity" check: TASK-BE-AUTO-008's own investigation found no reusable
+  mTLS/service-identity pattern anywhere in `backend-go` (the one
+  candidate, `credential-broker-service`'s `x-orca-service-id` header, is
+  itself documented as non-production and unset by every caller in the
+  codebase), and `api-gateway`'s `POST /automations/{id}/trigger` route
+  (TASK-BE-AUTO-012) already reaches this RPC with the same
+  identity-validated, tenant-scoped access every other automation RPC
+  requires — cross-tenant triggering was already impossible before this
+  task, same posture as `RunNow`/`ListAutomations`/etc. CR-AUTO-005's
+  original internal callers (agent-completion signal, PR-merged) still
+  don't exist in the codebase; when one is built it should define its own
+  real caller-identity requirement rather than reuse a guessed-in-advance
+  one. See
+  `specs/backend-go/crs/v4/automations/tasks/TASK-BE-AUTO-008-external-trigger-auth.md`'s
+  "Kết quả thực tế" for the full investigation.
 - **No `project-service` call.** §7/§9 describe `RunNow` re-resolving the
   owning user's current project access via `project-service` before every
   dispatch. `project-service`'s generated client isn't wired into this
@@ -185,9 +237,18 @@ silently matching the doc's aspirational shape:
   uses) rather than re-checking authorization per dispatch. Flagged, not
   silently dropped: revisit once `project-service`'s gRPC surface is stable
   enough to depend on.
-- **No `UpdateAutomation`/`DeleteAutomation`/`GetAutomation`/
-  `ListAutomations` RPCs.** Still absent from the generated proto — out of
-  scope for this pass same as before.
+- **`UpdateAutomation`/`DeleteAutomation`/`ListAutomations` RPCs exist and
+  are implemented** (`internal/adapter/grpc/server.go`, added in commit
+  `3df9da8b1`, 2026-08-25) — a previous revision of this README claimed
+  they were absent from the generated proto; that was stale (the README
+  was last touched at `0e7092d18`, 2026-08-18, before those RPCs landed).
+  As of 2026-09-09 (TASK-BE-AUTO-012) all three also have REST routes in
+  `api-gateway`'s `automation_routes.go` (`GET /v1/automations/`,
+  `PATCH /v1/automations/{id}`, `DELETE /v1/automations/{id}`), matching
+  the 4 routes that already existed. **`GetAutomation` (single-automation
+  fetch by id) remains genuinely absent** — no proto RPC, no REST route;
+  `ListAutomations` is the only fetch path today. Add it if/when a real
+  caller needs fetch-by-id instead of list+filter — not added speculatively.
 - **`apperrors.Kind` has no `Unavailable` value.** §8 asks for `RunNow` to
   "fail closed with `UNAVAILABLE`" when `workflow-service` is unreachable.
   `common/apperrors` (which this service must not modify) only defines

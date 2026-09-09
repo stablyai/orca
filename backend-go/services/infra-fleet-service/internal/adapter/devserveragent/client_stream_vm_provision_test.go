@@ -137,6 +137,10 @@ func TestStreamVmProvision_EmitsResultEventOnStreamEnd(t *testing.T) {
 							"label": "vm-1", "host": "10.0.0.9", "port": 22, "username": "dev",
 							"identityFile": "/home/dev/.ssh/id_ed25519", "identitiesOnly": true,
 							"relayGracePeriodSeconds": 60,
+							// CR-EVM-008/TASK-BE-EVM-021
+							"portForwards": []map[string]any{
+								{"localPort": 8080, "remoteHost": "127.0.0.1", "remotePort": 3000, "label": "dev server"},
+							},
 						},
 					},
 				},
@@ -167,6 +171,15 @@ func TestStreamVmProvision_EmitsResultEventOnStreamEnd(t *testing.T) {
 			r.SshTarget.IdentityFile != "/home/dev/.ssh/id_ed25519" || !r.SshTarget.IdentitiesOnly ||
 			r.SshTarget.RelayGracePeriodSeconds != 60 {
 			t.Errorf("unexpected SshTarget: %+v", r.SshTarget)
+		}
+		// CR-EVM-008/TASK-BE-EVM-021: portForwards must round-trip, not be
+		// dropped like it deliberately was before this task.
+		if len(r.SshTarget.PortForwards) != 1 {
+			t.Fatalf("expected 1 port forward, got %+v", r.SshTarget.PortForwards)
+		}
+		fw := r.SshTarget.PortForwards[0]
+		if fw.LocalPort != 8080 || fw.RemoteHost != "127.0.0.1" || fw.RemotePort != 3000 || fw.Label != "dev server" {
+			t.Errorf("unexpected port forward: %+v", fw)
 		}
 	})
 }

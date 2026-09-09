@@ -35,6 +35,9 @@ import {
 } from '@/runtime/runtime-cli-client'
 
 import { uiWriteClipboardText } from '@/runtime/runtime-ui-client'
+import { doctorRuntimeEphemeralVmRecipe } from '@/runtime/runtime-ephemeral-vm-client'
+import type { EphemeralVmRecipeDoctorCheck } from '../../../../shared/ephemeral-vm-recipes'
+import { EphemeralVmRecipeDoctorDialog } from './EphemeralVmRecipeDoctorDialog'
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
 >[number]
@@ -46,6 +49,7 @@ const AGENT_PROMPT =
 
 export function EphemeralVmsPane(): React.JSX.Element {
   const openModal = useAppStore((state) => state.openModal)
+  const settings = useAppStore((state) => state.settings)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   // Why: this panel's setup terminal has no project/repo behind it, so it
   // has no natural dev-server binding to inherit — see
@@ -128,13 +132,54 @@ export function EphemeralVmsPane(): React.JSX.Element {
     void refresh()
   }, [refresh])
 
-  const openWorkspaceComposerForRecipe = (repoId: string, recipeId: string): void => {
-    openModal('new-workspace-composer', {
-      initialRepoId: repoId,
-      initialEphemeralVmRecipeId: recipeId,
-      telemetrySource: 'settings'
-    })
-  }
+  const [doctorDialog, setDoctorDialog] = useState<{
+    repoId: string
+    recipeId: string
+    checks: EphemeralVmRecipeDoctorCheck[]
+    blocking: boolean
+  } | null>(null)
+
+  const openComposer = useCallback(
+    (repoId: string, recipeId: string): void => {
+      openModal('new-workspace-composer', {
+        initialRepoId: repoId,
+        initialEphemeralVmRecipeId: recipeId,
+        telemetrySource: 'settings'
+      })
+    },
+    [openModal]
+  )
+
+  // CR-EVM-006: validate the recipe before handing the user off to the
+  // composer — doctorRuntimeEphemeralVmRecipe already exists and is wired
+  // to a real backend-go channel, it was just never called from here.
+  const openWorkspaceComposerForRecipe = useCallback(
+    async (repoId: string, recipeId: string): Promise<void> => {
+      try {
+        const result = await doctorRuntimeEphemeralVmRecipe(settings, { repoId, recipeId })
+        if (!result.ok) {
+          setDoctorDialog({ repoId, recipeId, checks: result.checks, blocking: true })
+          return
+        }
+        if (result.checks.some((check) => check.status === 'warn')) {
+          setDoctorDialog({ repoId, recipeId, checks: result.checks, blocking: false })
+          return
+        }
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.EphemeralVmsPane.doctorError',
+                'Could not check this recipe for conflicts.'
+              )
+        )
+        return
+      }
+      openComposer(repoId, recipeId)
+    },
+    [settings, openComposer]
+  )
 
   const copyPrompt = async (): Promise<void> => {
     try {
@@ -305,6 +350,24 @@ export function EphemeralVmsPane(): React.JSX.Element {
           )}
         </div>
       </div>
+
+      {doctorDialog ? (
+        <EphemeralVmRecipeDoctorDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setDoctorDialog(null)
+            }
+          }}
+          onContinue={() => {
+            const { repoId, recipeId } = doctorDialog
+            setDoctorDialog(null)
+            openComposer(repoId, recipeId)
+          }}
+          checks={doctorDialog.checks}
+          blocking={doctorDialog.blocking}
+        />
+      ) : null}
     </div>
   )
 }

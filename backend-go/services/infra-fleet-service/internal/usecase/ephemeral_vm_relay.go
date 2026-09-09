@@ -345,7 +345,27 @@ func buildEphemeralVmSshTarget(sshTarget *EphemeralVmRecipeSshTarget, projectRoo
 		IdentityAgentSocket: sshTarget.IdentityAgent,
 		JumpHost:            sshTarget.JumpHost,
 		ProxyCommand:        sshTarget.ProxyCommand,
+		PortForwards:        toDomainPortForwards(sshTarget.PortForwards),
 	}
+}
+
+// toDomainPortForwards mirrors toUsecasePortForwards/toProtoPortForwards
+// (adapter/devserveragent/client.go, adapter/grpc/server_ephemeral_vm.go) —
+// CR-EVM-008/TASK-BE-EVM-021.
+func toDomainPortForwards(forwards []PortForward) []domain.EphemeralVmSshPortForward {
+	if len(forwards) == 0 {
+		return nil
+	}
+	out := make([]domain.EphemeralVmSshPortForward, len(forwards))
+	for i, f := range forwards {
+		out[i] = domain.EphemeralVmSshPortForward{
+			LocalPort:  int(f.LocalPort),
+			RemoteHost: f.RemoteHost,
+			RemotePort: int(f.RemotePort),
+			Label:      f.Label,
+		}
+	}
+	return out
 }
 
 // CancelProvision relays vm.cancelProvision to the agent, telling it to

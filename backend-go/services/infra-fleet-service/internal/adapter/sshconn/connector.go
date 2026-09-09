@@ -31,6 +31,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strconv"
@@ -198,6 +199,10 @@ func (c *Connector) Connect(ctx context.Context, target domain.SshTarget) (*Conn
 // Connection wraps a live, authenticated SSH connection to one target.
 type Connection struct {
 	client *ssh.Client
+	// forwardListeners — CR-EVM-008/TASK-BE-EVM-022. Closed by Close()
+	// alongside client, so a forward never outlives the connection it
+	// tunnels through.
+	forwardListeners []net.Listener
 }
 
 // WrapClient builds a Connection from an already-dialed *ssh.Client —
@@ -243,7 +248,82 @@ func (conn *Connection) RunCommand(ctx context.Context, cmd string) (stdout, std
 
 // Close closes the underlying SSH connection.
 func (conn *Connection) Close() error {
+	for _, l := range conn.forwardListeners {
+		_ = l.Close()
+	}
 	return conn.client.Close()
+}
+
+// PortForward is a local TCP port to accept connections on and forward, via
+// this SSH connection's direct-tcpip channel, to remoteHost:remotePort —
+// CR-EVM-008/TASK-BE-EVM-022. Mirrors agent's ssh-outbound-client.ts
+// setupPortForwards (Hướng A), same primitive (ssh2's forwardOut there,
+// golang.org/x/crypto/ssh's (*Client).Dial here — the Go client has no
+// forwardOut equivalent; Dial("tcp", remoteAddr) opens the same
+// direct-tcpip channel type).
+type PortForward struct {
+	LocalPort  int
+	RemoteHost string
+	RemotePort int
+}
+
+// SetupPortForwards starts one local net.Listener per forward, each
+// accepting connections and proxying them through this SSH connection to
+// remoteHost:remotePort. Returns as soon as every listener is bound —
+// individual accept/proxy errors (a bad connection attempt, a remote dial
+// failure for one accepted conn) are logged-and-continue, not fatal to the
+// listener itself, matching agent's setupPortForwards behavior. All
+// listeners are closed automatically by Connection.Close(); callers do not
+// need to track them separately.
+func (conn *Connection) SetupPortForwards(forwards []PortForward) error {
+	for _, fw := range forwards {
+		listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(fw.LocalPort)))
+		if err != nil {
+			// Why not partial-rollback the listeners already opened in this
+			// call: Close() (called by the caller on this same Connection on
+			// any Provision failure path) already tears down
+			// conn.forwardListeners in full — a partial set here is not a
+			// leak, just listeners that get closed slightly earlier than
+			// they otherwise would.
+			return fmt.Errorf("sshconn: listening on local port %d for forward to %s:%d: %w", fw.LocalPort, fw.RemoteHost, fw.RemotePort, err)
+		}
+		conn.forwardListeners = append(conn.forwardListeners, listener)
+		go conn.acceptPortForwardConns(listener, fw)
+	}
+	return nil
+}
+
+func (conn *Connection) acceptPortForwardConns(listener net.Listener, fw PortForward) {
+	for {
+		local, err := listener.Accept()
+		if err != nil {
+			// listener.Close() (via Connection.Close()) is what ends this
+			// loop in normal operation — any Accept error here means the
+			// listener is gone, nothing left to serve.
+			return
+		}
+		go conn.proxyPortForwardConn(local, fw)
+	}
+}
+
+func (conn *Connection) proxyPortForwardConn(local net.Conn, fw PortForward) {
+	remote, err := conn.client.Dial("tcp", net.JoinHostPort(fw.RemoteHost, strconv.Itoa(fw.RemotePort)))
+	if err != nil {
+		_ = local.Close()
+		return
+	}
+	done := make(chan struct{}, 2)
+	go func() {
+		_, _ = io.Copy(remote, local)
+		done <- struct{}{}
+	}()
+	go func() {
+		_, _ = io.Copy(local, remote)
+		done <- struct{}{}
+	}()
+	<-done
+	_ = local.Close()
+	_ = remote.Close()
 }
 
 // NewSession opens a fresh SSH session over this connection — the

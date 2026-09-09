@@ -249,6 +249,12 @@ func (c *Client) DialHiddenSshTarget(ctx context.Context, devServer domain.DevSe
 			"jumpHost":                target.JumpHost,
 			"proxyCommand":            target.ProxyCommand,
 			"knownHostKeyFingerprint": target.KnownHostKeyFingerprint,
+			// CR-EVM-008/TASK-AG-EVM-011: was missing entirely — Hướng A's
+			// outbound dial params never carried portForwards at all
+			// (found while wiring this task, not part of the original
+			// gap list). Wire shape matches agent's SshDialTarget.portForwards
+			// (ssh-outbound-client.ts).
+			"portForwards": toWirePortForwards(target.PortForwards),
 		},
 	}
 
@@ -267,6 +273,23 @@ func (c *Client) DialHiddenSshTarget(ctx context.Context, devServer domain.DevSe
 	}
 	hostKeyFingerprint, _ = result["hostKeyFingerprint"].(string)
 	return hiddenTargetID, hostKeyFingerprint, nil
+}
+
+// toWirePortForwards maps domain.EphemeralVmSshPortForward to the JSON
+// shape agent's SshDialTarget.portForwards expects — CR-EVM-008/TASK-AG-EVM-011.
+func toWirePortForwards(forwards []domain.EphemeralVmSshPortForward) []map[string]any {
+	if len(forwards) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, len(forwards))
+	for i, f := range forwards {
+		out[i] = map[string]any{
+			"localPort":  f.LocalPort,
+			"remoteHost": f.RemoteHost,
+			"remotePort": f.RemotePort,
+		}
+	}
+	return out
 }
 
 // ReadCredentialFile calls vm.readCredentialFile (BE-SOL-EVM-004 §6a,

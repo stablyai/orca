@@ -54,12 +54,15 @@ func New(
 
 func (s *Server) CreateAutomation(ctx context.Context, req *automationv1.CreateAutomationRequest) (*automationv1.CreateAutomationResponse, error) {
 	automation, err := s.createAutomation.Execute(ctx, usecase.CreateAutomationInput{
-		Name:           req.GetName(),
-		RRule:          req.GetRrule(),
-		StepType:       fromProtoStepType(req.GetStepType()),
-		StepConfigJSON: req.GetStepConfigJson(),
-		DTStart:        req.GetDtstart(),
-		Timezone:       req.GetTimezone(),
+		Name:              req.GetName(),
+		RRule:             req.GetRrule(),
+		StepType:          fromProtoStepType(req.GetStepType()),
+		StepConfigJSON:    req.GetStepConfigJson(),
+		DTStart:           req.GetDtstart(),
+		Timezone:          req.GetTimezone(),
+		Actions:           toDomainActions(req.GetActions()),
+		MaxRunHistory:     req.GetMaxRunHistory(),
+		RunTimeoutSeconds: req.GetRunTimeoutSeconds(),
 	})
 	if err != nil {
 		return nil, apperrors.ToGRPCStatus(err)
@@ -161,6 +164,18 @@ func (s *Server) UpdateAutomation(ctx context.Context, req *automationv1.UpdateA
 		v := req.GetTimezone().GetValue()
 		in.Timezone = &v
 	}
+	if req.GetActionsSet() != nil {
+		v := toDomainActions(req.GetActionsSet().GetActions())
+		in.Actions = &v
+	}
+	if req.GetMaxRunHistory() != nil {
+		v := req.GetMaxRunHistory().GetValue()
+		in.MaxRunHistory = &v
+	}
+	if req.GetRunTimeoutSeconds() != nil {
+		v := req.GetRunTimeoutSeconds().GetValue()
+		in.RunTimeoutSeconds = &v
+	}
 	automation, err := s.updateAutomation.Execute(ctx, in)
 	if err != nil {
 		return nil, apperrors.ToGRPCStatus(err)
@@ -177,24 +192,117 @@ func (s *Server) DeleteAutomation(ctx context.Context, req *automationv1.DeleteA
 
 func toProtoAutomation(a domain.Automation) *automationv1.Automation {
 	return &automationv1.Automation{
-		Id:             a.ID,
-		TenantId:       a.TenantID,
-		Name:           a.Name,
-		Rrule:          a.RRule,
-		StepConfigJson: a.StepConfigJSON,
-		StepType:       toProtoStepType(a.StepType),
-		Enabled:        a.Enabled,
-		Dtstart:        a.DTStart.Format(time.RFC3339),
-		Timezone:       a.Timezone,
+		Id:                a.ID,
+		TenantId:          a.TenantID,
+		Name:              a.Name,
+		Rrule:             a.RRule,
+		StepConfigJson:    a.StepConfigJSON,
+		StepType:          toProtoStepType(a.StepType),
+		Enabled:           a.Enabled,
+		Dtstart:           a.DTStart.Format(time.RFC3339),
+		Timezone:          a.Timezone,
+		Actions:           toProtoActions(a.Actions),
+		MaxRunHistory:     a.MaxRunHistory,
+		RunTimeoutSeconds: a.RunTimeoutSeconds,
 	}
 }
 
 func toProtoRun(r domain.AutomationRun) *automationv1.AutomationRun {
 	return &automationv1.AutomationRun{
-		Id:           r.ID,
-		AutomationId: r.AutomationID,
-		Status:       string(r.Status),
+		Id:            r.ID,
+		AutomationId:  r.AutomationID,
+		Status:        string(r.Status),
+		ActionResults: toProtoActionResults(r.ActionResults),
 	}
+}
+
+// toDomainActions/toProtoActions — CR-AUTO-002/TASK-BE-AUTO-005. Mirrors
+// this same file's toProtoStepType/fromProtoStepType translation pattern,
+// one level down (AutomationAction instead of the bare StepType enum).
+func toDomainActionType(t automationv1.AutomationActionType) domain.AutomationActionType {
+	switch t {
+	case automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_CREATE_WORKTREE:
+		return domain.AutomationActionTypeCreateWorktree
+	case automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_RUN_AGENT:
+		return domain.AutomationActionTypeRunAgent
+	case automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_COMMIT_PUSH:
+		return domain.AutomationActionTypeCommitPush
+	case automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_CREATE_PR:
+		return domain.AutomationActionTypeCreatePR
+	case automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_SEND_NOTIFICATION:
+		return domain.AutomationActionTypeSendNotification
+	case automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_RUN_SCRIPT:
+		return domain.AutomationActionTypeRunScript
+	default:
+		return domain.AutomationActionTypeUnspecified
+	}
+}
+
+func toProtoActionType(t domain.AutomationActionType) automationv1.AutomationActionType {
+	switch t {
+	case domain.AutomationActionTypeCreateWorktree:
+		return automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_CREATE_WORKTREE
+	case domain.AutomationActionTypeRunAgent:
+		return automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_RUN_AGENT
+	case domain.AutomationActionTypeCommitPush:
+		return automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_COMMIT_PUSH
+	case domain.AutomationActionTypeCreatePR:
+		return automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_CREATE_PR
+	case domain.AutomationActionTypeSendNotification:
+		return automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_SEND_NOTIFICATION
+	case domain.AutomationActionTypeRunScript:
+		return automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_RUN_SCRIPT
+	default:
+		return automationv1.AutomationActionType_AUTOMATION_ACTION_TYPE_UNSPECIFIED
+	}
+}
+
+func toDomainActions(actions []*automationv1.AutomationAction) []domain.AutomationAction {
+	if len(actions) == 0 {
+		return nil
+	}
+	out := make([]domain.AutomationAction, len(actions))
+	for i, a := range actions {
+		out[i] = domain.AutomationAction{
+			ID:                a.GetId(),
+			Type:              toDomainActionType(a.GetType()),
+			ConfigJSON:        a.GetConfigJson(),
+			ContinueOnFailure: a.GetContinueOnFailure(),
+		}
+	}
+	return out
+}
+
+func toProtoActions(actions []domain.AutomationAction) []*automationv1.AutomationAction {
+	if len(actions) == 0 {
+		return nil
+	}
+	out := make([]*automationv1.AutomationAction, len(actions))
+	for i, a := range actions {
+		out[i] = &automationv1.AutomationAction{
+			Id:                a.ID,
+			Type:              toProtoActionType(a.Type),
+			ConfigJson:        a.ConfigJSON,
+			ContinueOnFailure: a.ContinueOnFailure,
+		}
+	}
+	return out
+}
+
+func toProtoActionResults(results []domain.ActionResult) []*automationv1.ActionResult {
+	if len(results) == 0 {
+		return nil
+	}
+	out := make([]*automationv1.ActionResult, len(results))
+	for i, r := range results {
+		out[i] = &automationv1.ActionResult{
+			ActionId:   r.ActionID,
+			Status:     r.Status,
+			OutputJson: r.OutputJSON,
+			Error:      r.Error,
+		}
+	}
+	return out
 }
 
 // toProtoStepType/fromProtoStepType translate between domain.StepType and
@@ -215,6 +323,8 @@ func toProtoStepType(s domain.StepType) workflowv1.StepType {
 		return workflowv1.StepType_STEP_TYPE_WEBHOOK
 	case domain.StepTypeCondition:
 		return workflowv1.StepType_STEP_TYPE_CONDITION
+	case domain.StepTypeCommitPush:
+		return workflowv1.StepType_STEP_TYPE_COMMIT_PUSH
 	default:
 		return workflowv1.StepType_STEP_TYPE_UNSPECIFIED
 	}
@@ -232,6 +342,8 @@ func fromProtoStepType(s workflowv1.StepType) domain.StepType {
 		return domain.StepTypeWebhook
 	case workflowv1.StepType_STEP_TYPE_CONDITION:
 		return domain.StepTypeCondition
+	case workflowv1.StepType_STEP_TYPE_COMMIT_PUSH:
+		return domain.StepTypeCommitPush
 	default:
 		return domain.StepTypeUnspecified
 	}

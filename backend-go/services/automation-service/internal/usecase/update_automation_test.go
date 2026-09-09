@@ -131,3 +131,66 @@ func TestUpdateAutomation_UpdatesStepTypeAndDtstart(t *testing.T) {
 		t.Errorf("expected dtstart=%v, got %v", dtstart, updated.DTStart)
 	}
 }
+
+// CR-AUTO-002/TASK-BE-AUTO-005
+
+func TestUpdateAutomation_NilActions_LeavesExistingChainUnchanged(t *testing.T) {
+	repo := newFakeAutomationRepository()
+	automation := seedAutomation(t, repo, "tenant-1", "auto-1", `{}`)
+	automation.Actions = []domain.AutomationAction{{ID: "a1", Type: domain.AutomationActionTypeRunAgent, ConfigJSON: `{}`}}
+	_ = repo.Update(context.Background(), "tenant-1", automation)
+
+	uc := NewUpdateAutomation(repo)
+	enabled := false
+	updated, err := uc.Execute(context.Background(), UpdateAutomationInput{
+		TenantID: "tenant-1", ID: "auto-1", Enabled: &enabled, // Actions field left nil
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(updated.Actions) != 1 || updated.Actions[0].ID != "a1" {
+		t.Fatalf("expected the existing action chain to survive an update that doesn't mention Actions, got %+v", updated.Actions)
+	}
+}
+
+func TestUpdateAutomation_NonNilEmptyActions_ClearsTheChain(t *testing.T) {
+	repo := newFakeAutomationRepository()
+	automation := seedAutomation(t, repo, "tenant-1", "auto-1", `{}`)
+	automation.Actions = []domain.AutomationAction{{ID: "a1", Type: domain.AutomationActionTypeRunAgent, ConfigJSON: `{}`}}
+	_ = repo.Update(context.Background(), "tenant-1", automation)
+
+	uc := NewUpdateAutomation(repo)
+	empty := []domain.AutomationAction{}
+	updated, err := uc.Execute(context.Background(), UpdateAutomationInput{
+		TenantID: "tenant-1", ID: "auto-1", Actions: &empty,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(updated.Actions) != 0 {
+		t.Fatalf("expected an explicit empty Actions slice to clear the chain, got %+v", updated.Actions)
+	}
+}
+
+func TestUpdateAutomation_ReplacesActionsWhenProvided(t *testing.T) {
+	repo := newFakeAutomationRepository()
+	seedAutomation(t, repo, "tenant-1", "auto-1", `{}`)
+
+	uc := NewUpdateAutomation(repo)
+	newActions := []domain.AutomationAction{
+		{ID: "b1", Type: domain.AutomationActionTypeRunScript, ConfigJSON: `{"script":"true"}`},
+	}
+	maxHistory := int32(25)
+	updated, err := uc.Execute(context.Background(), UpdateAutomationInput{
+		TenantID: "tenant-1", ID: "auto-1", Actions: &newActions, MaxRunHistory: &maxHistory,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(updated.Actions) != 1 || updated.Actions[0].ID != "b1" {
+		t.Fatalf("expected the new action chain to replace the old one, got %+v", updated.Actions)
+	}
+	if updated.MaxRunHistory != 25 {
+		t.Errorf("MaxRunHistory = %d, want 25", updated.MaxRunHistory)
+	}
+}

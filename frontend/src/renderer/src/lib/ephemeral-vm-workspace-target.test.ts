@@ -19,12 +19,19 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
       api: {
         ephemeralVm: {
           provision: vi.fn(),
-          cleanup: vi.fn()
+          cleanup: vi.fn(),
+          doctor: vi.fn()
         }
       }
     } as never
     vi.clearAllMocks()
     vi.mocked(assertRuntimeEnvironmentCapability).mockResolvedValue(undefined)
+    vi.mocked(window.api.ephemeralVm.doctor).mockResolvedValue({
+      recipeId: 'recipe-1',
+      repoPath: '/repo',
+      ok: true,
+      checks: []
+    })
   })
 
   it('provisions a recipe and imports the returned project root on the runtime host', async () => {
@@ -100,6 +107,35 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
       warnings: []
     })
     expect(window.api.ephemeralVm.cleanup).not.toHaveBeenCalled()
+  })
+
+  // CR-EVM-006/FE-TASK-EVM-005
+  it('does not provision when the doctor re-check reports a fail', async () => {
+    vi.mocked(window.api.ephemeralVm.doctor).mockResolvedValue({
+      recipeId: 'cloud-sandbox',
+      repoPath: '/repo',
+      ok: false,
+      checks: [{ id: 'repo.path', status: 'fail', message: 'Repo path does not exist' }]
+    })
+    const setupExistingFolder = vi.fn<PrepareEphemeralVmWorkspaceTargetArgs['setupExistingFolder']>(
+      async () => null
+    )
+
+    const result = await prepareEphemeralVmWorkspaceTarget({
+      repoId: 'repo-1',
+      recipeId: 'cloud-sandbox',
+      projectId: 'project-1',
+      workspaceName: 'Fix Login Race',
+      setupExistingFolder
+    })
+
+    expect(window.api.ephemeralVm.provision).not.toHaveBeenCalled()
+    expect(setupExistingFolder).not.toHaveBeenCalled()
+    expect(result).toEqual({
+      ok: false,
+      error: 'Repo path does not exist',
+      stderr: ''
+    })
   })
 
   it('imports an ssh recipe result through the runtime-owned ssh host', async () => {

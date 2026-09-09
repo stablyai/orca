@@ -8,10 +8,21 @@
 | **Priority** | **P0** |
 | **Phiên bản** | v1.0 |
 | **Ngày tạo** | 2026-09-08 |
-| **Trạng thái** | 🔲 Proposed — chưa triển khai |
+| **Trạng thái** | ✅ Done — triển khai đầy đủ, xem "Cập nhật 2026-09-09" |
 | **Tác giả** | Audit trực tiếp mã nguồn — supersede kết luận "out of scope, cần defineStreamingMethod" của `specs/backend/api/ephemeral-vm-server-mode-design.md` (2026-08-16) |
 | **Tác động HLD** | Infra-Fleet domain, `api-gateway`'s wscompat streaming surface, Dev Server Agent RPC catalog |
 | **Tác động Features** | Ephemeral VM workspace creation (`create`) — hiện là **method duy nhất thật sự dựng VM**, hoàn toàn thiếu ở mọi target không phải desktop-local |
+
+---
+
+> **Cập nhật 2026-09-09 — ✅ Đã triển khai.** Commit `80ffe57cd` thêm
+> `r.RegisterStreamChannel("ephemeralVm.provision", ...)`
+> (`backend-go/.../wscompat/channels_ephemeral_vm.go:323`, gọi
+> `infra.StreamVmProvision` ở dòng 361) đúng thiết kế
+> `StreamChannelHandler` bên dưới. Agent có `case 'vm.provision':`
+> (`agent-rpc-dispatch-vm.ts:45-56`) stream qua `stream.chunk`/`stream.end`,
+> và `case 'vm.cancelProvision':` (dòng 59). Không còn hành động nào cần
+> làm cho CR này.
 
 ---
 
