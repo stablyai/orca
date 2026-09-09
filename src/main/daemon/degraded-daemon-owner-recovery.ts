@@ -27,34 +27,6 @@ export class DegradedDaemonOwnerRecovery {
 
   discoverRoutes = async (): Promise<void> => await this.attachResolver.discoverRoutes()
 
-  async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
-    alive: string[]
-    killed: string[]
-  }> {
-    const alive: string[] = []
-    const killed: string[] = []
-    const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
-    for (const adapter of this.daemonAdapters) {
-      const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      for (const id of result.alive) {
-        alive.push(id)
-        const providers = aliveProviders.get(id) ?? new Set<DaemonPtyAdapter>()
-        providers.add(adapter)
-        aliveProviders.set(id, providers)
-      }
-      killed.push(...result.killed)
-    }
-    for (const id of new Set([...alive, ...killed])) {
-      const providers = aliveProviders.get(id)
-      if (providers?.size === 1) {
-        this.recordRoute(id, providers.values().next().value!)
-      } else {
-        this.forgetRoute(id)
-      }
-    }
-    return { alive, killed }
-  }
-
   recordRoute(sessionId: string, provider: IPtyProvider): void {
     this.attachResolver.recordRoute(sessionId, provider)
     if (this.daemonAdapters.includes(provider as DaemonPtyAdapter)) {

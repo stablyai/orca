@@ -1,3 +1,5 @@
+import { DaemonRouterSessionCustody } from './daemon-router-session-custody'
+import { CLEAN_DISCONNECT_PROTOCOL_VERSION } from './types'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
@@ -9,12 +11,14 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
-import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DaemonPtyRouter implements IPtyProvider {
+  private readonly custody: DaemonRouterSessionCustody
+  private readonly retirements = new Map<DaemonPtyAdapter, Promise<void>>()
+  private disposed = false
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
@@ -25,10 +29,17 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.current = opts.current
     this.legacy = opts.legacy
     this.ownerResolver = new DaemonSessionOwnerResolver(this.allAdapters(), this.sessionAdapters)
+    this.custody = new DaemonRouterSessionCustody(this.current, this.ownerResolver, (id) =>
+      this.adapterFor(id)
+    )
     this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(
       this.allAdapters(),
-      (id) => {
-        this.ownerResolver.forgetRoute(id)
+      (id, adapter, incarnationId) => {
+        if (!this.custody.releasingIds.has(id)) {
+          void this.ownerResolver.authority
+            .exited(id, adapter, incarnationId)
+            .then(() => this.retireLegacyAdapter(adapter))
+        }
       },
       (adapter) => this.ownerResolver.invalidateProvider(adapter)
     )
@@ -36,18 +47,31 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async discoverLegacySessions(): Promise<void> {
     await this.ownerResolver.discoverRoutes()
+    await Promise.all(this.legacy.map((adapter) => this.retireLegacyAdapter(adapter)))
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    return opts.sessionId
+      ? this.custody.run(opts.sessionId, (observation) => this.spawnWithCustody(opts, observation))
+      : this.spawnWithCustody(opts)
+  }
+
+  private async spawnWithCustody(
+    opts: PtySpawnOptions,
+    observation = this.ownerResolver.authority.capture()
+  ): Promise<PtySpawnResult> {
     if (opts.attachOnly && opts.sessionId) {
-      return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+      return await this.ownerResolver.spawnAttachOnly(
+        { ...opts, sessionId: opts.sessionId },
+        observation
+      )
     }
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
     const target = adapter ?? this.current
     const result = await target.spawn(opts)
     // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
     if (!result.exitedBeforeSpawnReply) {
-      this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
+      await this.ownerResolver.publishSpawnResult(result, target, observation)
     }
     return result
   }
@@ -75,7 +99,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   async attach(id: string): ReturnType<IPtyProvider['attach']> {
-    return await this.adapterFor(id).attach(id)
+    return this.custody.run(id, () => this.adapterFor(id).attach(id))
   }
 
   hasPty(id: string): boolean {
@@ -118,17 +142,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    const adapter = this.adapterFor(id)
-    const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)
-    await adapter.shutdown(id, opts)
-    if (!opts.keepHistory || migrateHistory) {
-      if (migrateHistory) {
-        adapter.ackColdRestore(id)
-      }
-      if (this.sessionAdapters.get(id) === adapter) {
-        this.ownerResolver.forgetRoute(id, adapter)
-      }
-    }
+    const adapter = await this.custody.shutdown(id, opts)
+    await this.retireLegacyAdapter(adapter)
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
@@ -246,41 +261,9 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.adapterFor(sessionId).clearTombstone(sessionId)
   }
 
-  async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
-    alive: string[]
-    killed: string[]
-  }> {
-    const alive: string[] = []
-    const killed: string[] = []
-    const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
-    for (const adapter of this.allAdapters()) {
-      const result = await adapter.reconcileOnStartup(validWorktreeIds)
-      // Why: daemon startup can reconcile many restored sessions; spreading
-      // those arrays into push can exceed JavaScript's argument limit.
-      for (const id of result.alive) {
-        alive.push(id)
-      }
-      for (const id of result.killed) {
-        killed.push(id)
-      }
-      for (const id of result.alive) {
-        const providers = aliveProviders.get(id) ?? new Set<DaemonPtyAdapter>()
-        providers.add(adapter)
-        aliveProviders.set(id, providers)
-      }
-    }
-    for (const id of new Set([...alive, ...killed])) {
-      const providers = aliveProviders.get(id)
-      if (providers?.size === 1) {
-        this.ownerResolver.recordRoute(id, providers.values().next().value!)
-      } else {
-        this.ownerResolver.forgetRoute(id)
-      }
-    }
-    return { alive, killed }
-  }
-
   dispose(): void {
+    this.disposed = true
+    this.ownerResolver.authority.dispose()
     this.subscriptions.dispose()
     for (const adapter of this.allAdapters()) {
       adapter.dispose()
@@ -295,20 +278,18 @@ export class DaemonPtyRouter implements IPtyProvider {
   // Without this, each restart leaked a router instance pinned by the legacy
   // adapters' listener arrays (one pair per adapter per restart).
   disposeRouterOnly(): void {
+    this.disposed = true
+    this.ownerResolver.authority.dispose()
     this.subscriptions.dispose()
   }
 
   async disconnectOnly(): Promise<void> {
+    this.disposed = true
+    this.ownerResolver.authority.dispose()
     this.subscriptions.dispose()
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }
 
-  // Why: the Manage Sessions panel iterates all adapters to list sessions
-  // across every protocol version, and the restart handler needs to preserve
-  // surviving legacy adapters across the current-adapter swap. On this branch
-  // (pre-#1323) the legacy list is set once at construction and never mutated,
-  // so returning the internal array by reference is safe for the intended
-  // read-only use.
   getCurrentAdapter(): DaemonPtyAdapter {
     return this.current
   }
@@ -332,8 +313,33 @@ export class DaemonPtyRouter implements IPtyProvider {
     if (!adapter) {
       throw new Error('terminal_gone')
     }
-    this.sessionAdapters.set(sessionId, adapter)
     return adapter
+  }
+
+  private retireLegacyAdapter(adapter: DaemonPtyAdapter): Promise<void> {
+    const pending = this.retirements.get(adapter)
+    if (pending) {
+      return pending
+    }
+    if (
+      this.disposed ||
+      adapter.protocolVersion < CLEAN_DISCONNECT_PROTOCOL_VERSION ||
+      !this.legacy.includes(adapter) ||
+      this.custody.releasing.has(adapter) ||
+      [...this.sessionAdapters.values()].includes(adapter)
+    ) {
+      return Promise.resolve()
+    }
+    const retirement = (async () => {
+      if (await adapter.retireIfIdle(this.current)) {
+        this.ownerResolver.removeProvider(adapter)
+        this.subscriptions.removeAdapter(adapter)
+        this.legacy = this.legacy.filter((candidate) => candidate !== adapter)
+        await adapter.disconnectOnly()
+      }
+    })().finally(() => this.retirements.delete(adapter))
+    this.retirements.set(adapter, retirement)
+    return retirement
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

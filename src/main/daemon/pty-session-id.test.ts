@@ -21,7 +21,7 @@ describe('mintPtySessionId', () => {
 
   it('preserves path-shaped worktreeIds verbatim in the prefix', () => {
     // Why: real worktreeIds are `${repo.id}::${absolutePath}` and contain
-    // slashes. The mint must not rewrite or sanitize them — reconcileOnStartup
+    // slashes. The mint must not rewrite or sanitize them — session inventory
     // splits on `@@` to recover the worktreeId.
     const id = mintPtySessionId('repo-123::/Users/me/work/wt-1')
     expect(id).toMatch(/^repo-123::\/Users\/me\/work\/wt-1@@[0-9a-f]{8}$/)

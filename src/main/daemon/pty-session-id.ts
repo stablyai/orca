@@ -10,8 +10,7 @@ export { parsePtySessionId } from '../../shared/pty-session-id-format'
 
 /**
  * Session IDs use the format `${worktreeId}@@${shortUuid}` so that
- * DaemonPtyAdapter.reconcileOnStartup (see daemon-pty-adapter.ts) can
- * derive the owning worktree by splitting on the @@ separator.
+ * session inventory can derive the owning worktree from the @@ separator.
  *
  * Both pty.ts (host-daemon spawn path) and DaemonPtyAdapter.doSpawn
  * (fallback when opts.sessionId is absent) must use this helper — a

@@ -1,8 +1,8 @@
-import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
+import { DaemonPtyIdleRetirement } from './daemon-pty-idle-retirement'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
 import type { IPtyProvider } from '../providers/types'
 
-export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+export class DaemonPtyAdapter extends DaemonPtyIdleRetirement implements IPtyProvider {
   protected setupEventRouting(): void {
     if (this.removeEventListener) {
       return

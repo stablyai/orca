@@ -560,7 +560,7 @@ describe('DaemonSessionOwnerResolver', () => {
     let resolver!: DaemonSessionOwnerResolver<IPtyProvider>
     let owner!: IPtyProvider
     owner = provider(
-      async () => [],
+      async () => [{ id: 'session', incarnationId: 'inc' } as PtyProcessInfo],
       async () => {
         resolver.invalidateProvider(owner)
         return { id: 'session', incarnationId: 'inc', isReattach: true }
@@ -569,7 +569,12 @@ describe('DaemonSessionOwnerResolver', () => {
     routes.set('session', owner)
     resolver = new DaemonSessionOwnerResolver([owner], routes)
 
-    await resolver.spawnAttachOnly({ sessionId: 'session', attachOnly: true, cols: 80, rows: 24 })
+    await resolver.runWithCustody('session', (admission) =>
+      resolver.spawnAttachOnly(
+        { sessionId: 'session', attachOnly: true, cols: 80, rows: 24 },
+        admission
+      )
+    )
 
     expect(routes.get('session')).toBe(owner)
   })

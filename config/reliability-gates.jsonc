@@ -10995,12 +10995,12 @@
         "evidence": "One unresolved attempt performs one concurrent listProcesses call per eligible provider, concurrent pane attempts coalesce onto that inventory, and no polling, sleep, timer, subprocess, listener, or retry loop is added. Confirmed absence is not cached; repeated explicit attempts remain bounded to one fanout each. Reattaching the newly recorded fresh route adds no inventory or daemon spawn."
       },
       "promotionCriteria": [
-        "Wire reconcileOnStartup or mark the production wiring gap explicitly.",
-        "Cover priorWorktreeIds so renamed worktrees are not falsely reaped."
+        "Keep startup recovery on production discovery and attach paths; the unused reconcileOnStartup API was removed.",
+        "Any future startup orphan cleanup must cover priorWorktreeIds before it can reap sessions."
       ],
       "knownGaps": [
-        "Production startup reconcile wiring remains unproven.",
-        "Prior-worktree aliases and renamed-worktree startup reconcile are not covered by the current executable corpus.",
+        "The unused startup orphan-reconciliation API was removed; no startup orphan reaper is shipped.",
+        "Prior-worktree aliases and renamed-worktree orphan cleanup remain outside this gate.",
         "Real daemon restart behavior is still covered only by lower-level synthetic exit and provider-contract tests.",
         "No live Linux, Windows, WSL, SSH, headed/headless paired-runtime, folder-workspace, or mixed-version packaged-upgrade journey was run for stale-owner recovery."
       ],

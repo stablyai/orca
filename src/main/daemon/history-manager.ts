@@ -1,4 +1,4 @@
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
@@ -48,6 +48,18 @@ export class HistoryManager {
     this.checkpointMaxBytes = opts?.checkpointMaxBytes ?? TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
     // Why: a quit between tombstone and reclaim leaves the tree on disk; nothing else rescans the queue.
     schedulePendingSessionTreeRemovals(this.basePath)
+  }
+
+  sharesStorageWith = (other: HistoryManager): boolean =>
+    resolve(this.basePath) === resolve(other.basePath)
+
+  canReleaseOwnership(): boolean {
+    return (
+      this.writers.size === 0 &&
+      this.disabledSessions.size === 0 &&
+      this.recoveryFreezes.size === 0 &&
+      this.mutations.isIdle()
+    )
   }
 
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
@@ -260,7 +272,7 @@ export class HistoryManager {
     }
   }
 
-  async closeSession(sessionId: string, exitCode: number): Promise<void> {
+  async closeSession(sessionId: string, exitCode: number | null): Promise<void> {
     const writer = this.writers.get(sessionId)
     if (!writer) {
       return
@@ -304,23 +316,13 @@ export class HistoryManager {
   }
 
   readMeta(sessionId: string): SessionMeta | null {
-    const dir = join(this.basePath, getHistorySessionDirName(sessionId))
-    return readTerminalHistoryMetaFromDir(dir)
+    return readTerminalHistoryMetaFromDir(join(this.basePath, getHistorySessionDirName(sessionId)))
   }
 
   async dispose(): Promise<void> {
     // Why: mark open sessions cleanly ended so they don't trigger false cold-restores next launch.
-    for (const [sessionId, writer] of this.writers) {
-      try {
-        updateTerminalHistoryMeta(writer.dir, {
-          endedAt: new Date().toISOString(),
-          exitCode: null
-        })
-      } catch {
-        this.disabledSessions.add(sessionId)
-      }
-    }
-    this.writers.clear()
+    const ids = [...this.writers.keys()]
+    await Promise.all(ids.map((id) => this.closeSession(id, null)))
   }
 
   // Why: history is best-effort; callers fire-and-forget so a throw would be an unhandled rejection — disable instead.

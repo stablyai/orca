@@ -1,6 +1,10 @@
 export class TerminalHistoryMutationTracker {
   private pending = new Map<string, Set<Promise<unknown>>>()
 
+  isIdle(): boolean {
+    return this.pending.size === 0
+  }
+
   track<T>(sessionId: string, operation: Promise<T>): Promise<T> {
     const mutations = this.pending.get(sessionId) ?? new Set<Promise<unknown>>()
     mutations.add(operation)

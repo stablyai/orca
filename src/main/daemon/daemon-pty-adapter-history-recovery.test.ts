@@ -1,4 +1,4 @@
-/* History recovery / quarantine / reconcile regressions for DaemonPtyAdapter. */
+/* History recovery / quarantine regressions for DaemonPtyAdapter. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -628,78 +628,6 @@ describe('DaemonPtyAdapter history recovery', () => {
     expect(adopted.agentSessionEnsure?.disposition).toBe('adopted')
     expect(historyAdapter.getHistoryManager()!.hasWriter(canonicalId)).toBe(false)
     expect(statSync(checkpointPath).size).toBe(checkpointBytes)
-  })
-
-  it('does not register protected recovery during startup reconciliation', async () => {
-    const worktreeId = 'repo-a::/wt/protected'
-    const { id: sessionId } = await adapter.spawn({ cols: 80, rows: 24, worktreeId })
-    const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
-    mkdirSync(sessionDir, { recursive: true })
-    writeFileSync(
-      join(sessionDir, 'meta.json'),
-      JSON.stringify({
-        cwd: '/projects/protected',
-        cols: 80,
-        rows: 24,
-        startedAt: '2026-07-25T10:00:00Z',
-        endedAt: null,
-        exitCode: null
-      })
-    )
-    createSparseFile(join(sessionDir, 'checkpoint.json'), TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES + 1)
-    await leaveFailedQuarantineProtection(historyDir, sessionId)
-    historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-
-    const reconciled = await historyAdapter.reconcileOnStartup(new Set([worktreeId]))
-
-    expect(reconciled.alive).toEqual([sessionId])
-    expect(historyAdapter.getHistoryManager()!.hasWriter(sessionId)).toBe(false)
-  })
-
-  it('re-anchors ordinary restorable history during startup reconciliation', async () => {
-    const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
-    const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
-    adapterClass.CHECKPOINT_INTERVAL_MS = 100
-    try {
-      const worktreeId = 'repo-a::/wt/reconciled-history'
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const { id: sessionId } = await historyAdapter.spawn({
-        cols: 80,
-        rows: 24,
-        worktreeId
-      })
-      lastSubprocess._simulateData('before adapter restart\r\n')
-      await historyAdapter.disconnectOnly()
-
-      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
-      const manager = historyAdapter.getHistoryManager()!
-      const checkpointSpy = vi.spyOn(manager, 'checkpoint')
-      const reconciled = await historyAdapter.reconcileOnStartup(new Set([worktreeId]))
-      const internals = historyAdapter as unknown as {
-        sessionsNeedingFullCheckpoint: Set<string>
-      }
-
-      expect(reconciled.alive).toEqual([sessionId])
-      expect(manager.hasWriter(sessionId)).toBe(true)
-      expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
-
-      // Why both: the spy fires inside takeSnapshotAndCheckpoint; the set clears only after that await returns.
-      await waitFor(
-        () =>
-          checkpointSpy.mock.calls.some(([id]) => id === sessionId) &&
-          !internals.sessionsNeedingFullCheckpoint.has(sessionId)
-      )
-
-      const checkpoint = JSON.parse(
-        readFileSync(
-          join(historyDir, getHistorySessionDirName(sessionId), 'checkpoint.json'),
-          'utf8'
-        )
-      )
-      expect(checkpoint.snapshotAnsi).toContain('before adapter restart')
-    } finally {
-      adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
-    }
   })
 
   it('serializes explicit shutdown behind an in-progress history-aware spawn', async () => {

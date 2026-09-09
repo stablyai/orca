@@ -1,3 +1,4 @@
+import { serializeSessionOperation } from './session-operation-serialization'
 import { existsSync } from 'node:fs'
 import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
@@ -95,25 +96,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     if (!this.historyManager) {
       return await operation()
     }
-    const previous = this.historySpawnLocks.get(sessionId) ?? Promise.resolve()
-    let release!: () => void
-    const current = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const tail = previous.then(
-      () => current,
-      () => current
-    )
-    this.historySpawnLocks.set(sessionId, tail)
-    await previous.catch(() => {})
-    try {
-      return await operation()
-    } finally {
-      release()
-      if (this.historySpawnLocks.get(sessionId) === tail) {
-        this.historySpawnLocks.delete(sessionId)
-      }
-    }
+    return serializeSessionOperation(this.historySpawnLocks, sessionId, operation)
   }
 
   protected async replaceUnhealthyMacResolverDaemonBeforeNewPty(): Promise<void> {

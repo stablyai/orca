@@ -284,13 +284,6 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     )
   }
 
-  async reconcileOnStartup(validWorktreeIds: Set<string>): Promise<{
-    alive: string[]
-    killed: string[]
-  }> {
-    return await this.ownerRecovery.reconcileOnStartup(validWorktreeIds)
-  }
-
   dispose(): void {
     this.disposeProviderOnly()
     for (const adapter of this.allDaemonAdapters()) {

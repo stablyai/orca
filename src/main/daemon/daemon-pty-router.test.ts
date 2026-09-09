@@ -1,184 +1,19 @@
+import { createAdapter } from './daemon-pty-router-test-adapter'
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { settledWriteStub, stubWriteSettlement } from '../providers/settled-pty-write-stub'
-import type { PtyBackgroundStreamEvent, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import { stubWriteSettlement } from '../providers/settled-pty-write-stub'
+import type { PtySpawnResult } from '../providers/types'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
-  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
 } from './types'
 import {
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
-  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
   STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
 } from './daemon-protocol-version'
-
-type AdapterMock = DaemonPtyAdapter & {
-  emitData: (id: string, data: string, sequenceChars?: number) => void
-  emitBackground: (event: PtyBackgroundStreamEvent) => void
-  emitExit: (id: string, code: number, incarnationId?: string) => void
-  emitIdentityChange: () => void
-  triggerWriteUnavailable: (id: string) => void
-}
-
-const LARGE_RECONCILE_SESSION_COUNT = 150_000
-
-function buildSessionIds(prefix: string, count: number): string[] {
-  const ids: string[] = []
-  for (let index = 0; index < count; index += 1) {
-    ids.push(`${prefix}-${index}`)
-  }
-  return ids
-}
-
-function createAdapter(
-  label: string,
-  sessions: string[] = [],
-  reconcileResult?: { alive: string[]; killed: string[] },
-  protocolVersion = GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
-): AdapterMock {
-  const writes: { id: string; data: string }[] = []
-  const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
-    []
-  const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
-  const writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
-  const exitListeners: ((payload: { id: string; code: number; incarnationId?: string }) => void)[] =
-    []
-  const identityChangeListeners: (() => void)[] = []
-  return {
-    protocolVersion,
-    supportsGitCredentialGuardHost: () =>
-      protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
-    supportsAgentSessionClaims: () =>
-      protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-    supportsAgentSessionCreateOperations: () =>
-      protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
-    providesAgentSessionOwnerListings: () =>
-      protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-    canProvideAuthoritativeBufferSnapshot: () =>
-      protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
-    spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
-      const id = opts.sessionId ?? `${label}-new`
-      sessions.push(id)
-      return { id }
-    }),
-    listProcesses: vi.fn(async () =>
-      sessions.map((id) => ({
-        id,
-        cwd: '',
-        title: label
-      }))
-    ),
-    hasPty: vi.fn((id: string) => sessions.includes(id)),
-    probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
-    write: vi.fn((id: string, data: string) => {
-      writes.push({ id, data })
-    }),
-    writeWithSettlement: vi.fn(settledWriteStub()),
-    resize: vi.fn(),
-    setPtyBackgrounded: vi.fn(),
-    getBufferSnapshot: vi.fn(async () => null),
-    shutdown: vi.fn(async (id: string) => {
-      const idx = sessions.indexOf(id)
-      if (idx !== -1) {
-        sessions.splice(idx, 1)
-      }
-    }),
-    attach: vi.fn(async () => {}),
-    sendSignal: vi.fn(async () => {}),
-    getCwd: vi.fn(async () => ''),
-    getInitialCwd: vi.fn(async () => ''),
-    clearBuffer: vi.fn(async () => {}),
-    acknowledgeDataEvent: vi.fn(),
-    hasChildProcesses: vi.fn(async () => false),
-    getForegroundProcess: vi.fn(async () => null),
-    inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
-    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
-    serialize: vi.fn(async () => '{}'),
-    revive: vi.fn(async () => {}),
-    getDefaultShell: vi.fn(async () => '/bin/zsh'),
-    getProfiles: vi.fn(async () => []),
-    onData: vi.fn(
-      (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
-        dataListeners.push(callback)
-        return () => {
-          const idx = dataListeners.indexOf(callback)
-          if (idx !== -1) {
-            dataListeners.splice(idx, 1)
-          }
-        }
-      }
-    ),
-    onBackgroundStreamEvent: vi.fn((callback: (payload: PtyBackgroundStreamEvent) => void) => {
-      backgroundListeners.push(callback)
-      return () => {
-        const idx = backgroundListeners.indexOf(callback)
-        if (idx !== -1) {
-          backgroundListeners.splice(idx, 1)
-        }
-      }
-    }),
-    onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
-      writeUnavailableListeners.push(callback)
-      return () => {
-        const idx = writeUnavailableListeners.indexOf(callback)
-        if (idx !== -1) {
-          writeUnavailableListeners.splice(idx, 1)
-        }
-      }
-    }),
-    onExit: vi.fn(
-      (callback: (payload: { id: string; code: number; incarnationId?: string }) => void) => {
-        exitListeners.push(callback)
-        return () => {
-          const idx = exitListeners.indexOf(callback)
-          if (idx !== -1) {
-            exitListeners.splice(idx, 1)
-          }
-        }
-      }
-    ),
-    onDaemonIdentityChanged: vi.fn((callback: () => void) => {
-      identityChangeListeners.push(callback)
-      return () => {
-        const idx = identityChangeListeners.indexOf(callback)
-        if (idx !== -1) {
-          identityChangeListeners.splice(idx, 1)
-        }
-      }
-    }),
-    ackColdRestore: vi.fn(),
-    clearTombstone: vi.fn(),
-    reconcileOnStartup: vi.fn(async () => reconcileResult ?? { alive: sessions, killed: [] }),
-    dispose: vi.fn(),
-    disconnectOnly: vi.fn(async () => {}),
-    emitData: (id: string, data: string, sequenceChars?: number) => {
-      for (const listener of dataListeners) {
-        listener({ id, data, ...(sequenceChars === undefined ? {} : { sequenceChars }) })
-      }
-    },
-    emitBackground: (event: PtyBackgroundStreamEvent) => {
-      for (const listener of backgroundListeners) {
-        listener(event)
-      }
-    },
-    emitExit: (id: string, code: number, incarnationId?: string) => {
-      for (const listener of exitListeners) {
-        listener({ id, code, ...(incarnationId ? { incarnationId } : {}) })
-      }
-    },
-    emitIdentityChange: () => identityChangeListeners.forEach((listener) => listener()),
-    triggerWriteUnavailable: (id: string) => {
-      for (const listener of writeUnavailableListeners) {
-        listener({ id })
-      }
-    },
-    _writes: writes
-  } as unknown as AdapterMock
-}
 
 it('forwards dead-endpoint write-unavailable signals from every routed adapter', () => {
   // Why revert-sensitive: main subscribes on the ROUTED provider, so if the router
@@ -251,13 +86,11 @@ describe('DaemonPtyRouter', () => {
     const current = createAdapter(
       'current',
       [],
-      undefined,
       AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
     )
     const legacy = createAdapter(
       'legacy',
       [],
-      undefined,
       AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION - 1
     )
     const mixed = new DaemonPtyRouter({ current, legacy: [legacy] })
@@ -270,16 +103,10 @@ describe('DaemonPtyRouter', () => {
   })
 
   it('only treats owner listings as authoritative for a mapped daemon route', async () => {
-    const current = createAdapter(
-      'current',
-      [],
-      undefined,
-      AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
-    )
+    const current = createAdapter('current', [], AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION)
     const legacy = createAdapter(
       'legacy',
       ['legacy-session'],
-      undefined,
       AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
     )
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
@@ -303,6 +130,7 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [] })
 
     const spawning = router.spawn({ cols: 80, rows: 24, sessionId: 'raced-session' })
+    await vi.waitFor(() => expect(finishSpawn).toBeDefined())
     finishSpawn?.({
       id: 'raced-session',
       incarnationId: 'raced-incarnation',
@@ -328,6 +156,7 @@ describe('DaemonPtyRouter', () => {
     const router = new DaemonPtyRouter({ current, legacy: [] })
 
     const spawning = router.spawn({ cols: 80, rows: 24, sessionId: 'reused-session' })
+    await vi.waitFor(() => expect(finishSpawn).toBeDefined())
     current.emitExit('reused-session', 0, 'incarnation-old')
     finishSpawn?.({ id: 'reused-session', incarnationId: 'incarnation-current' })
     await spawning
@@ -355,6 +184,7 @@ describe('DaemonPtyRouter', () => {
       sessionId: 'requested-session',
       agentSessionEnsure: {} as never
     })
+    await vi.waitFor(() => expect(finishSpawn).toBeDefined())
     finishSpawn?.({
       id: 'canonical-session',
       incarnationId: 'canonical-incarnation',
@@ -372,11 +202,10 @@ describe('DaemonPtyRouter', () => {
   })
 
   it('reports snapshot capability for the adapter that owns each session', async () => {
-    const current = createAdapter('current', ['current-session'], undefined, PROTOCOL_VERSION)
+    const current = createAdapter('current', ['current-session'], PROTOCOL_VERSION)
     const legacy = createAdapter(
       'legacy',
       ['legacy-session'],
-      undefined,
       STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     )
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
@@ -387,8 +216,8 @@ describe('DaemonPtyRouter', () => {
   })
 
   it('reports guard-host support for the adapter that owns the session', async () => {
-    const current = createAdapter('current', [], undefined, 22)
-    const legacy = createAdapter('legacy', ['legacy-session'], undefined, 21)
+    const current = createAdapter('current', [], 22)
+    const legacy = createAdapter('legacy', ['legacy-session'], 21)
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
     await router.discoverLegacySessions()
 
@@ -413,22 +242,16 @@ describe('DaemonPtyRouter', () => {
   })
 
   it('preserves older session owners and routes new sessions to v35', async () => {
-    const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
-    const legacyV30 = createAdapter(
-      'v30',
-      ['v30-session'],
-      undefined,
-      HISTORY_SEED_TRANSFER_PROTOCOL_VERSION
-    )
+    const current = createAdapter('current', [], PROTOCOL_VERSION)
+    const legacyV30 = createAdapter('v30', ['v30-session'], HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
     const legacyV31 = createAdapter(
       'v31',
       ['v31-session'],
-      undefined,
       STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     )
-    const legacyV32 = createAdapter('v32', ['v32-session'], undefined, 32)
-    const legacyV33 = createAdapter('v33', ['v33-session'], undefined, 33)
-    const legacyV34 = createAdapter('v34', ['v34-session'], undefined, 34)
+    const legacyV32 = createAdapter('v32', ['v32-session'], 32)
+    const legacyV33 = createAdapter('v33', ['v33-session'], 33)
+    const legacyV34 = createAdapter('v34', ['v34-session'], 34)
     const router = new DaemonPtyRouter({
       current,
       legacy: [legacyV30, legacyV31, legacyV32, legacyV33, legacyV34]
@@ -690,11 +513,10 @@ describe('DaemonPtyRouter', () => {
   })
 
   it('hands a checkpointed pre-v30 session to the current daemon on wake', async () => {
-    const current = createAdapter('current', [], undefined, HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
+    const current = createAdapter('current', [], HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
     const legacy = createAdapter(
       'legacy',
       ['legacy-session'],
-      undefined,
       HISTORY_SEED_TRANSFER_PROTOCOL_VERSION - 1
     )
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
@@ -714,11 +536,10 @@ describe('DaemonPtyRouter', () => {
   })
 
   it('keeps the legacy route when checkpointed shutdown fails', async () => {
-    const current = createAdapter('current', [], undefined, HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
+    const current = createAdapter('current', [], HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
     const legacy = createAdapter(
       'legacy',
       ['legacy-session'],
-      undefined,
       HISTORY_SEED_TRANSFER_PROTOCOL_VERSION - 1
     )
     vi.mocked(legacy.shutdown).mockRejectedValueOnce(new Error('checkpoint failed'))
@@ -771,45 +592,6 @@ describe('DaemonPtyRouter', () => {
     expect(current.write).toHaveBeenCalledWith(sessionId, 'misrouted\n')
     expect(legacy.write).not.toHaveBeenCalled()
     warn.mockRestore()
-  })
-
-  it('merges startup reconciliation and updates route mappings', async () => {
-    const current = createAdapter('current', [], {
-      alive: ['current-alive'],
-      killed: ['current-killed']
-    })
-    const legacy = createAdapter('legacy', [], {
-      alive: ['legacy-alive'],
-      killed: ['legacy-killed']
-    })
-    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
-
-    const result = await router.reconcileOnStartup(new Set(['wt']))
-    router.write('legacy-alive', 'old\n')
-    router.write('current-alive', 'new\n')
-
-    expect(result).toEqual({
-      alive: ['current-alive', 'legacy-alive'],
-      killed: ['current-killed', 'legacy-killed']
-    })
-    expect(legacy.write).toHaveBeenCalledWith('legacy-alive', 'old\n')
-    expect(current.write).toHaveBeenCalledWith('current-alive', 'new\n')
-  })
-
-  it('merges large startup reconciliation results', async () => {
-    const alive = buildSessionIds('alive', LARGE_RECONCILE_SESSION_COUNT)
-    const killed = buildSessionIds('killed', LARGE_RECONCILE_SESSION_COUNT)
-    const current = createAdapter('current', [], { alive, killed })
-    const router = new DaemonPtyRouter({ current, legacy: [] })
-
-    const result = await router.reconcileOnStartup(new Set(['wt']))
-
-    expect(result.alive).toHaveLength(LARGE_RECONCILE_SESSION_COUNT)
-    expect(result.killed).toHaveLength(LARGE_RECONCILE_SESSION_COUNT)
-    expect(result.alive.at(-1)).toBe(`alive-${LARGE_RECONCILE_SESSION_COUNT - 1}`)
-    expect(result.killed.at(-1)).toBe(`killed-${LARGE_RECONCILE_SESSION_COUNT - 1}`)
-    router.write('alive-0', 'restored\n')
-    expect(current.write).toHaveBeenCalledWith('alive-0', 'restored\n')
   })
 
   it('disposes current and legacy adapters', () => {
