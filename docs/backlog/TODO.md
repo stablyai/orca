@@ -127,6 +127,32 @@ multi-host, sửa ~7 test block, ảnh hưởng 5+ UI surface).
   hiện trong lúc điều tra bug Setup Script — là UX gap thật nhưng tách
   biệt với bug BaseRefDefault/CheckHooks (đã fix ở Phase 11).
 
+## 5. Frontend gaps theo Feature ↔ Business Logic Mapping
+
+**Trạng thái**: chỉ mới đối chiếu tài liệu (`feature-business-logic-mapping.md`,
+mục 4-5), **chưa verify lại với code** — khác với các mục BACKLOG-XXX (đã
+grep/trace tận gốc). Danh sách dưới đây phản ánh coverage tự báo cáo trong
+tài liệu, không phải kết luận kỹ thuật đã xác nhận. Cần một lượt kiểm tra
+GitNexus/CodeGraph trước khi biến bất kỳ mục nào thành BACKLOG-XXX thật.
+
+**Feature có coverage nghiệp vụ chưa đầy đủ** (mục 4 của tài liệu):
+- F27 Fleet Health Monitoring — thiếu BL-FLEET-04 (Onboarding Wizard)
+- F08 Annotate AI Diffs — thiếu BL-CR-04, BL-CR-05 (3/5 nghiệp vụ Code Review)
+- F23 Multi-User Auth — chỉ 2/5 BL-AUTH-*
+- F25 Admin Panel — chỉ 2/5 BL-AUTH-*
+- F28 Dev Server Onboarding — chỉ 1/4 Fleet Management, phần còn lại mới ở mức "Supports"
+- F24 Per-User Sandbox — chỉ 1 nghiệp vụ implement (isolation)
+- F11 Notifications — thuần supporting, chưa có implement chính
+- F15 Computer Use — "emerging", 0 nghiệp vụ implement chính thức
+- F26 Multi-Database — infrastructure thuần, không map BL cụ thể
+
+**5 gap được tài liệu đánh dấu rõ** (mục 5 — "Cần spec mở rộng"):
+- BL-WT-04 So sánh Worktrees (F01, F08) — cần UI spec cho compare view
+- BL-AG-04 Switch Account (F04) — cần UI spec cho account switcher
+- BL-MB-02 Push Notification offline (F03) — cần spec offline buffering
+- BL-AT-03 Event Trigger (F14, F09) — cần spec event bus
+- BL-AUTH-02 Session renewal (F22, F23) — chưa chốt TTL auto-renew vs explicit renew
+
 ---
 
 *File này được cập nhật thủ công khi có yêu cầu rà soát — không tự động
