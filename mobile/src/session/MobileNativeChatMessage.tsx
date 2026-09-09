@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import { ArrowUp, Copy } from 'lucide-react-native'
+import { ArrowUp, CornerLeftUp, Copy } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
@@ -63,14 +63,17 @@ function Prose({
   return null
 }
 
-/** Subtle top-right controls for an agent message: copy its prose, or scroll so
- *  this message's top aligns to the top of the viewport. */
+/** Subtle top-right controls for an agent message: copy its prose, scroll so
+ *  this message's top aligns to the top of the viewport, or jump back to the
+ *  prompt this message is answering. */
 function AgentControls({
   onCopy,
-  onScrollToTop
+  onScrollToTop,
+  onScrollToPrompt
 }: {
   onCopy: () => void
   onScrollToTop?: () => void
+  onScrollToPrompt?: () => void
 }): React.JSX.Element {
   return (
     <View style={styles.controls}>
@@ -92,6 +95,16 @@ function AgentControls({
           <ArrowUp size={14} color={colors.textMuted} strokeWidth={2} />
         </Pressable>
       ) : null}
+      {onScrollToPrompt ? (
+        <Pressable
+          style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
+          onPress={onScrollToPrompt}
+          hitSlop={8}
+          accessibilityLabel="Scroll to the prompt this answers"
+        >
+          <CornerLeftUp size={14} color={colors.textMuted} strokeWidth={2} />
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -102,6 +115,7 @@ function MobileNativeChatMessageImpl({
   fontScale = 1,
   messageIndex,
   onScrollToMessage,
+  onScrollToPrompt,
   onOpenFile,
   turnStatus,
   turnExpanded,
@@ -118,6 +132,8 @@ function MobileNativeChatMessageImpl({
   messageIndex?: number
   /** Ask the list to align this message's top to the top of the viewport. */
   onScrollToMessage?: (index: number) => void
+  /** Ask the list to jump to the prompt this message is answering. */
+  onScrollToPrompt?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
   /** This turn's status row, rendered under a user message (desktop parity). */
   turnStatus?: NativeChatTurnStatus | null
@@ -178,14 +194,20 @@ function MobileNativeChatMessageImpl({
     copyTimer.current = setTimeout(() => setCopied(false), 700)
   }
 
-  // Copy + scroll-to-top, shown inline with the first tool call (or after the
-  // prose when there are no tools).
+  // Copy + scroll-to-top + jump-to-prompt, shown inline with the first tool call
+  // (or after the prose when there are no tools). The jump is hidden on the very
+  // first row, where nothing can precede it.
   const controls = isAgent ? (
     <AgentControls
       onCopy={handleCopy}
       onScrollToTop={
         onScrollToMessage && messageIndex !== undefined
           ? () => onScrollToMessage(messageIndex)
+          : undefined
+      }
+      onScrollToPrompt={
+        onScrollToPrompt && messageIndex !== undefined && messageIndex > 0
+          ? () => onScrollToPrompt(messageIndex)
           : undefined
       }
     />

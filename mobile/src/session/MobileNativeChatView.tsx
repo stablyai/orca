@@ -30,6 +30,7 @@ import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
+import { useMobileNativeChatScrollTargets } from './use-mobile-native-chat-scroll-targets'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
@@ -252,9 +253,8 @@ export function MobileNativeChatView({
   )
 
   // Align a single message's top to the top of the viewport.
-  const onScrollToMessage = useCallback((index: number) => {
-    listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
-  }, [])
+  const { onScrollToMessage, onScrollToPrompt, onScrollToIndexFailed } =
+    useMobileNativeChatScrollTargets(listRef, data)
 
   // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
   // owns them; the bridge lane keeps its three-dot indicator.
@@ -273,13 +273,22 @@ export function MobileNativeChatView({
         fontScale={fontScale}
         messageIndex={index}
         onScrollToMessage={onScrollToMessage}
+        onScrollToPrompt={onScrollToPrompt}
         onOpenFile={onOpenFile}
         structuredActivityUi={structuredActivityUi}
         onToggleTurn={turns.onToggleTurn}
         {...turns.resolveRow(index, item)}
       />
     ),
-    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile, structuredActivityUi, turns]
+    [
+      toolsExpanded,
+      fontScale,
+      onScrollToMessage,
+      onScrollToPrompt,
+      onOpenFile,
+      structuredActivityUi,
+      turns
+    ]
   )
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
@@ -325,19 +334,7 @@ export function MobileNativeChatView({
               }}
               // scrollToIndex can fail before an off-screen row is measured —
               // fall back to an estimated offset, then retry once it's laid out.
-              onScrollToIndexFailed={(info) => {
-                listRef.current?.scrollToOffset({
-                  offset: info.averageItemLength * info.index,
-                  animated: true
-                })
-                setTimeout(() => {
-                  listRef.current?.scrollToIndex({
-                    index: info.index,
-                    viewPosition: 0,
-                    animated: true
-                  })
-                }, 120)
-              }}
+              onScrollToIndexFailed={onScrollToIndexFailed}
               ListHeaderComponent={
                 hasMore ? (
                   <Pressable
