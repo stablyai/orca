@@ -152,6 +152,7 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
       handles?: readonly string[]
       requireFreshPtyLiveness?: boolean
       includeVisualLayouts?: boolean
+      ptyId?: string
     } = {}
   ): Promise<RuntimeTerminalListResult> {
     return this.terminalList.list(worktreeSelector, limit, opts)

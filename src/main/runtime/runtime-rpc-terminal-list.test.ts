@@ -48,6 +48,13 @@ describe('OrcaRuntimeRpcServer', () => {
           title: 'Claude',
           activeLeafId: 'pane:1',
           layout: null
+        },
+        {
+          tabId: 'tab-2',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Codex',
+          activeLeafId: 'pane:2',
+          layout: null
         }
       ],
       leaves: [
@@ -57,10 +64,18 @@ describe('OrcaRuntimeRpcServer', () => {
           leafId: 'pane:1',
           paneRuntimeId: 1,
           ptyId: 'pty-1'
+        },
+        {
+          tabId: 'tab-2',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:2',
+          paneRuntimeId: 2,
+          ptyId: 'pty-2'
         }
       ]
     })
     runtime.onPtyData('pty-1', 'hello\n', 123)
+    runtime.onPtyData('pty-2', 'world\n', 124)
 
     await server.start()
 
@@ -77,7 +92,85 @@ describe('OrcaRuntimeRpcServer', () => {
       id: 'req_list',
       ok: true,
       result: {
-        terminals: [expect.objectContaining({ ptyId: 'pty-1' })]
+        terminals: [
+          expect.objectContaining({ ptyId: 'pty-1' }),
+          expect.objectContaining({ ptyId: 'pty-2' })
+        ]
+      }
+    })
+
+    const maxLengthPtyResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+      id: 'req_list_max_length_pty',
+      authToken: metadata!.authToken,
+      method: 'terminal.list',
+      params: {
+        ptyId: 'p'.repeat(512)
+      }
+    })
+    expect(maxLengthPtyResponse).toMatchObject({
+      id: 'req_list_max_length_pty',
+      ok: true,
+      result: {
+        terminals: [],
+        totalCount: 0,
+        truncated: false
+      }
+    })
+
+    const missingPtyResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+      id: 'req_list_missing_pty',
+      authToken: metadata!.authToken,
+      method: 'terminal.list',
+      params: {
+        worktree: 'id:repo-1::/tmp/worktree-a',
+        ptyId: 'pty-missing'
+      }
+    })
+    expect(missingPtyResponse).toMatchObject({
+      id: 'req_list_missing_pty',
+      ok: true,
+      result: {
+        terminals: [],
+        totalCount: 0,
+        truncated: false
+      }
+    })
+
+    const targetedPtyResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+      id: 'req_list_targeted_pty',
+      authToken: metadata!.authToken,
+      method: 'terminal.list',
+      params: {
+        worktree: 'id:repo-1::/tmp/worktree-a',
+        limit: 1,
+        ptyId: 'pty-2'
+      }
+    })
+    expect(targetedPtyResponse).toMatchObject({
+      id: 'req_list_targeted_pty',
+      ok: true,
+      result: {
+        terminals: [expect.objectContaining({ ptyId: 'pty-2' })],
+        totalCount: 1,
+        truncated: false
+      }
+    })
+
+    const unavailableLivenessResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+      id: 'req_list_fresh_pty',
+      authToken: metadata!.authToken,
+      method: 'terminal.list',
+      params: {
+        ptyId: 'pty-1',
+        requireFreshPtyLiveness: true
+      }
+    })
+    expect(unavailableLivenessResponse).toMatchObject({
+      id: 'req_list_fresh_pty',
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: 'terminal_liveness_unavailable'
       }
     })
 

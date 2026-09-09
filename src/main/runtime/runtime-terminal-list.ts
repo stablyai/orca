@@ -58,6 +58,7 @@ export class RuntimeTerminalList {
       handles?: readonly string[]
       requireFreshPtyLiveness?: boolean
       includeVisualLayouts?: boolean
+      ptyId?: string
     }
   ): Promise<RuntimeTerminalListResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
@@ -145,9 +146,16 @@ export class RuntimeTerminalList {
       terminals.push(this.deps.buildPtySummary(pty, worktreesById))
     }
     const requestedHandles = opts.handles ? new Set(opts.handles) : null
-    const matching = requestedHandles
-      ? terminals.filter((terminal) => requestedHandles.has(terminal.handle))
-      : terminals
+    const matching = terminals.filter((terminal) => {
+      if (requestedHandles && !requestedHandles.has(terminal.handle)) {
+        return false
+      }
+      // Why: filter before limit so pty:<id> is not lost behind an earlier page (#13219).
+      if (opts.ptyId && terminal.ptyId !== opts.ptyId) {
+        return false
+      }
+      return true
+    })
     const listed = matching.slice(0, limit)
     const snapshots = this.deps.getSnapshots()
     const visualLayouts =
