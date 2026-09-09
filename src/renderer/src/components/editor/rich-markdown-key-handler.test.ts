@@ -594,6 +594,58 @@ describe('rich markdown key handler', () => {
     }
   })
 
+  it('leaves the heading intact when Enter commits a slash-menu row', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Section/' }] }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(9)
+      const ctx = createContext(editor, false)
+      const run = vi.fn()
+      ctx.slashMenuRef.current = { query: '', from: 8, to: 9, left: 0, top: 0 }
+      ctx.filteredSlashCommandsRef.current = [{ id: 'heading-1', run } as never]
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(run).toHaveBeenCalledWith(editor)
+      expect(editor.state.doc.toJSON()).toMatchObject({
+        content: [{ type: 'heading', attrs: { level: 2 } }]
+      })
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('leaves the heading intact when Enter commits a doc-link row', () => {
+    const editor = createEditor({
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'See [[no' }] }
+      ]
+    })
+
+    try {
+      editor.commands.setTextSelection(9)
+      const ctx = createContext(editor, false)
+      const run = vi.fn()
+      ctx.docLinkMenuRef.current = { query: 'no', from: 5, to: 9, left: 0, top: 0 } as never
+      ctx.filteredDocLinkRowsRef.current = [
+        { kind: 'action', id: 'create-no', label: 'Create no', run } as never
+      ]
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(run).toHaveBeenCalledWith(editor)
+      expect(editor.state.doc.firstChild?.type.name).toBe('heading')
+    } finally {
+      editor.destroy()
+    }
+  })
+
   it('does not intercept Shift+Enter inside a heading', () => {
     const editor = createEditor({
       type: 'doc',
