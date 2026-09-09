@@ -113,6 +113,26 @@ export async function parseAgentSessionFileCached(
   )
 }
 
+/**
+ * True when this cursor already sits at the transcript's current stat, so a
+ * parse would reuse the cached fold and read no bytes at all. Another consumer
+ * that needs the file read has to drop this entry first; there is no other way
+ * to make the reader open a file the session list is done with.
+ */
+export function sessionParseCacheCoversTranscript(
+  candidate: SessionFileCandidate,
+  platform: NodeJS.Platform
+): boolean {
+  const { file } = candidate
+  const entry = getSessionParseCacheEntry(file.path)
+  return (
+    entry !== undefined &&
+    entry.platform === platform &&
+    entry.mtimeMs === file.mtimeMs &&
+    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
+  )
+}
+
 async function parseCachedInLane(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
@@ -121,12 +141,7 @@ async function parseCachedInLane(
   const { file } = candidate
   const entry = getSessionParseCacheEntry(file.path)
 
-  const transcriptUnchanged =
-    entry !== undefined &&
-    entry.platform === platform &&
-    entry.mtimeMs === file.mtimeMs &&
-    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
-  if (transcriptUnchanged) {
+  if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, platform)) {
     if (sidecarUnchanged(entry.sidecar, file.sidecar)) {
       return reuseCachedSession(candidate, entry, stats)
     }

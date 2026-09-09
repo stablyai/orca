@@ -1,4 +1,5 @@
 import type SyncDatabase from '../sqlite/sync-database'
+import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
 import type {
@@ -17,6 +18,13 @@ import { openSessionSearchDatabase } from './session-search-schema'
 // Above it the oldest record goes and the drop is counted, because a re-read set
 // that silently forgets is worse than one that says it is incomplete.
 export const STALE_PATH_LIMIT = 20_000
+
+/** One row of the index's own file table, joined to the agent that wrote it. */
+export type SessionSearchIndexedSource = {
+  path: string
+  agent: AiVaultAgent | null
+  codexHome: string | null
+}
 
 /**
  * Owns the index database. PR 2 scope: the write half only — the transcript
@@ -210,6 +218,36 @@ export class SessionSearchStore {
 
   get pendingFileCount(): number {
     return this.stale.size
+  }
+
+  /** Files the index currently holds, for a status that reports what is there. */
+  get indexedFileCount(): number {
+    try {
+      return Number((this.db.prepare('SELECT count(*) AS n FROM files').get() as { n: number }).n)
+    } catch (error) {
+      this.onError(error)
+      return 0
+    }
+  }
+
+  /**
+   * What this index believes it holds, for a scheduler that has to notice a
+   * source that vanished while nothing was running. `paths` narrows it to a
+   * lookup; omitting it walks the whole table, which only a full sweep does.
+   */
+  indexedSources(paths?: readonly string[]): SessionSearchIndexedSource[] {
+    const sql = `SELECT f.path AS path, s.agent AS agent, s.codex_home AS codexHome
+      FROM files f LEFT JOIN sessions s ON s.id = f.session_row_id`
+    try {
+      if (!paths) {
+        return this.db.prepare(sql).all() as SessionSearchIndexedSource[]
+      }
+      const one = this.db.prepare(`${sql} WHERE f.path = ?`)
+      return paths.flatMap((path) => one.all(path) as SessionSearchIndexedSource[])
+    } catch (error) {
+      this.onError(error)
+      return []
+    }
   }
 
   /**
