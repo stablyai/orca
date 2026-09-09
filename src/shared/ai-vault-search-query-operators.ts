@@ -57,8 +57,13 @@ function isBoundary(char: string | undefined): boolean {
 }
 
 /**
- * Why the closing quote must end a word: otherwise the apostrophes in
- * `it's a repo:orca thing's` open a span that swallows the operator between them.
+ * A quoted span, or null when this is not one.
+ *
+ * What keeps the apostrophes in `it's a repo:orca thing's` from opening a span
+ * that swallows the operator is the caller: this only ever runs at a token
+ * start, and the quote in `it's` is not at one. The closing quote is then just
+ * the next one, wherever it falls, so `"a b"c` reads as the panel has always
+ * read it — the span, then the rest as its own token.
  */
 function readQuoted(query: string, at: number): { value: string; end: number } | null {
   const quote = query[at]
@@ -66,9 +71,7 @@ function readQuoted(query: string, at: number): { value: string; end: number } |
     return null
   }
   const close = query.indexOf(quote, at + 1)
-  return close === -1 || !isBoundary(query[close + 1])
-    ? null
-    : { value: query.slice(at + 1, close), end: close + 1 }
+  return close === -1 ? null : { value: query.slice(at + 1, close), end: close + 1 }
 }
 
 function readBare(query: string, at: number): string {

@@ -50,22 +50,36 @@ describe('what counts as an operator', () => {
 // panel's old hand-rolled tokenizer answered differently, so the change of
 // behaviour is a decision on the record rather than a surprise.
 describe('the shapes where the panel parser used to answer differently', () => {
-  it('drops an operator with an empty quoted value instead of searching for `""`', () => {
-    // The old tokenizer kept the quotes as the value, which matched no repo at
-    // all, so `repo:""` silently emptied the list.
-    expect(splitAiVaultSearchQuery('repo:"" x').repoTerms).toEqual([])
-    expect(parseVaultQuery('repo:"" x').repoTerms).toEqual([])
+  it.each([
+    ['repo:"" x', 'repoTerms'],
+    ['path:"" x', 'pathTerms']
+  ] as const)('drops the empty operator value in %s instead of filtering on `""`', (query, key) => {
+    // The old tokenizer kept the quote characters as the value, so `repo:""`
+    // filtered on a label no session has and silently emptied the list. An
+    // operator with nothing in it is not a narrowing.
+    expect(splitAiVaultSearchQuery(query)[key]).toEqual([])
+    expect(parseVaultQuery(query)[key]).toEqual([])
   })
 
-  it('reads a quote that does not end a word as ordinary text', () => {
-    // `"foo"bar` was two tokens, `foo` and `bar`; it is one now. A closing quote
-    // has to end a word, which is what keeps the apostrophes in `it's ... thing's`
-    // from swallowing an operator between them.
-    expect(parseVaultQuery('"foo"bar').terms).toEqual(['"foo"bar'])
+  it.each(['"" empty', "'' empty"])('reads the empty quotes in %s as an empty term', (query) => {
+    // Same reason one level up: the old parser searched for the two characters
+    // and found nothing, where an empty term matches everything and leaves the
+    // rest of the query to do the work.
+    expect(parseVaultQuery(query).terms).toEqual(['', 'empty'])
   })
 
-  it('reads a bare pair of quotes as an empty term, not as the characters', () => {
-    expect(parseVaultQuery('"" empty').terms).toEqual(['', 'empty'])
+  it.each([
+    ['"foo"bar', { terms: ['foo', 'bar'], repoTerms: [], pathTerms: [] }],
+    ['"a b"c', { terms: ['a b', 'c'], repoTerms: [], pathTerms: [] }],
+    ['repo:"a"b', { terms: ['b'], repoTerms: ['a'], pathTerms: [] }],
+    ['path:"a"b', { terms: ['b'], repoTerms: [], pathTerms: ['a'] }],
+    ['repo:"a b"c d', { terms: ['c', 'd'], repoTerms: ['a b'], pathTerms: [] }]
+  ])('reads %s exactly as the panel always has', (query, expected) => {
+    // A closing quote does not have to end a word. Requiring it turned each of
+    // these into one term carrying its own quote characters, which matches
+    // nothing; the apostrophe case below is protected by the token start, not
+    // by that rule.
+    expect(parseVaultQuery(query)).toEqual(expected)
   })
 })
 
