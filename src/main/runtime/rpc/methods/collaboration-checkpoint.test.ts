@@ -39,6 +39,7 @@ describe('orchestration.collaborationCheckpoint', () => {
     }
   ): string {
     return db.insertMessage({
+      runId,
       from: input.producerTaskId,
       to: buildCollaborationTaskMailboxAddress(taskId),
       subject: input.topic,

@@ -146,10 +146,16 @@ export class RuntimeTerminalIdlePolls {
         startedForegroundPoll = true
         const foreground = await foregroundRead
         const live = this.deps.getLiveLeaf(entry.leaf)
+        const liveWaitText = buildTerminalWaitText(
+          live.tailBuffer,
+          live.tailPartialLine,
+          live.preview
+        )
         if (
           foreground &&
           !isShellProcess(foreground) &&
-          (live.lastOutputAt ? Date.now() - live.lastOutputAt : 0) >= this.deps.quiescenceMs
+          (live.lastOutputAt ? Date.now() - live.lastOutputAt : 0) >= this.deps.quiescenceMs &&
+          this.deps.canResolveTuiIdleEvidence(live.ptyId, liveWaitText, live.lastOutputAt)
         ) {
           this.stop(entry)
           this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', live))
@@ -214,7 +220,8 @@ export class RuntimeTerminalIdlePolls {
         if (
           foreground &&
           !isShellProcess(foreground) &&
-          (pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0) >= this.deps.quiescenceMs
+          (pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0) >= this.deps.quiescenceMs &&
+          this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
         ) {
           this.stop(entry)
           this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))

@@ -419,6 +419,7 @@ describe('orchestration worker-start prompt contract', () => {
   })
 
   it('refuses an 8 MiB inline spec before Task, Dispatch, or terminal effects', async () => {
+    vi.useFakeTimers()
     const harness = await createPromptContractHarness('accepted')
     const tasksBefore = harness.db.listTasks().map((task) => task.id)
     const params = harness.request.params as Record<string, unknown>

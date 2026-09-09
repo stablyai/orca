@@ -33,6 +33,7 @@ import { okFixture, queueFixtures } from '../../test-fixtures'
 
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 const originalPaneKey = process.env.ORCA_PANE_KEY
+const RETRY_REQUEST_ID = '11111111-1111-4111-8111-111111111111'
 
 const restoreEnv = (name: string, value: string | undefined): void => {
   if (value === undefined) {
@@ -175,14 +176,14 @@ describe('orchestration collaboration handlers', () => {
           '--body',
           'retry me',
           '--retry-request',
-          'mutation_9'
+          RETRY_REQUEST_ID
         ],
         '/tmp/repo'
       )
 
       expect(process.exitCode).toBe(0)
       expect(optionsFor('orchestration.collaborationPublish')).toEqual({
-        orchestrationRequestId: 'mutation_9'
+        orchestrationRequestId: RETRY_REQUEST_ID
       })
     })
 
@@ -334,7 +335,7 @@ describe('orchestration collaboration handlers', () => {
       process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
       queueFixtures(
         callMock,
-        okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+        okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
         configureFixture({ stepCount: 2 })
       )
 
@@ -391,7 +392,7 @@ describe('orchestration collaboration handlers', () => {
       process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
       queueFixtures(
         callMock,
-        okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+        okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
         configureFixture()
       )
 
@@ -402,14 +403,14 @@ describe('orchestration collaboration handlers', () => {
           '--steps',
           '[{"taskId":"t1"}]',
           '--retry-request',
-          'mutation_3'
+          RETRY_REQUEST_ID
         ],
         '/tmp/repo'
       )
 
       expect(process.exitCode).toBe(0)
       expect(optionsFor('orchestration.collaborationConfigure')).toEqual({
-        orchestrationRequestId: 'mutation_3'
+        orchestrationRequestId: RETRY_REQUEST_ID
       })
     })
 
@@ -464,7 +465,7 @@ describe('orchestration collaboration handlers', () => {
       process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
       queueFixtures(
         callMock,
-        okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+        okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
         configureFixture({ runId: 'run_9', stepCount: 1 })
       )
 
@@ -487,7 +488,7 @@ describe('orchestration collaboration handlers', () => {
       process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
       queueFixtures(
         callMock,
-        okFixture('req_show', { terminal: { handle: 'term_coord' } }),
+        okFixture('req_identity', { identity: { handle: 'term_coord', live: true } }),
         configureFixture({ stepCount: 3 })
       )
 

@@ -151,7 +151,12 @@ function agentPromptEffectAccepted(
     )
   }
   if (baseline.agent === 'codex' || current.agent === 'codex') {
-    return current.terminalWorkingSequence > baseline.terminalWorkingSequence
+    if (current.terminalWorkingSequence > baseline.terminalWorkingSequence) {
+      return true
+    }
+    if (!acceptTurnStart) {
+      return false
+    }
   }
   if (current.workingSequence > baseline.workingSequence) {
     return (

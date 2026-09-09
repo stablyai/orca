@@ -74,6 +74,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getPaneAgent: () => null,
       getFirstPartyAgentStatus: () => null,
       getLiveLeaf: (leaf) => leaf,
+      canResolveTuiIdleEvidence: () => true,
+      canResolveTuiIdlePromptPreview: () => false,
       resolve: (waiter, result) => resolved.push({ handle: waiter.handle, result })
     })
 
@@ -109,6 +111,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getPaneAgent: () => null,
       getFirstPartyAgentStatus: () => null,
       getLiveLeaf: (leaf) => leaf,
+      canResolveTuiIdleEvidence: () => true,
+      canResolveTuiIdlePromptPreview: () => false,
       resolve: () => {}
     })
 
@@ -134,6 +138,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getPaneAgent: () => null,
       getFirstPartyAgentStatus: () => null,
       getLiveLeaf: (leaf) => leaf,
+      canResolveTuiIdleEvidence: () => true,
+      canResolveTuiIdlePromptPreview: () => false,
       resolve: () => {}
     })
     const first = makeWaiter('a')
@@ -164,6 +170,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getPaneAgent: () => null,
       getFirstPartyAgentStatus: () => null,
       getLiveLeaf: (leaf) => leaf,
+      canResolveTuiIdleEvidence: () => true,
+      canResolveTuiIdlePromptPreview: () => false,
       resolve: (waiter) => resolved.push(waiter.handle)
     })
 

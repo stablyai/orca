@@ -28,6 +28,7 @@ describe('orchestration.collaborationAck', () => {
 
   function insertCollaborationMessage(id: string, task = taskId): string {
     const row = db.insertMessage({
+      runId,
       id,
       from: 'producer',
       to: buildCollaborationTaskMailboxAddress(task),
@@ -155,6 +156,7 @@ describe('orchestration.collaborationAck', () => {
   it('rejects a message without a valid collaboration payload as invalid_argument', async () => {
     setup()
     db.insertMessage({
+      runId,
       id: 'invalid-payload',
       from: 'producer',
       to: buildCollaborationTaskMailboxAddress(taskId),

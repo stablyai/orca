@@ -10,6 +10,22 @@ import { buildCollaborationTaskMailboxAddress } from './collaboration-task-mailb
 import { encodeCollaborationMessagePayload } from './collaboration-message-payload'
 import type { AdmissionPolicy } from './collaboration-admission'
 
+const testRunIds = new WeakMap<OrchestrationDb, string>()
+
+function testRunId(db: OrchestrationDb): string {
+  const existing = testRunIds.get(db)
+  if (existing) {
+    return existing
+  }
+  const runId = db.createRun({
+    objective: 'collaboration checkpoint store',
+    coordinatorHandle: 'term_coord',
+    coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  }).id
+  testRunIds.set(db, runId)
+  return runId
+}
+
 function insertCollaborationMessage(
   db: OrchestrationDb,
   taskId: string,
@@ -22,6 +38,7 @@ function insertCollaborationMessage(
   }
 ): string {
   const row = db.insertMessage({
+    runId: testRunId(db),
     id: input.id,
     from: input.producerTaskId,
     to: buildCollaborationTaskMailboxAddress(taskId),
@@ -53,6 +70,7 @@ function insertNonCollaborationMessage(
         ? JSON.stringify({ version: 1, topic: 'x' })
         : JSON.stringify({ version: 99, topic: 'x', semanticType: 'y', producerTaskId: 'z' })
   return db.insertMessage({
+    runId: testRunId(db),
     id,
     from: 'worker',
     to: buildCollaborationTaskMailboxAddress(taskId),

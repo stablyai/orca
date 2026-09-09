@@ -23,7 +23,12 @@ describe('requireLocalCollaborationDispatchAuthority', () => {
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((h) =>
       h === handle ? PROCESS_INCARNATION : null
     )
-    const task = db.createTask({ spec: 'collaboration worker' })
+    const runId = db.createRun({
+      objective: 'collaboration dispatch authority',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    }).id
+    const task = db.createTask({ spec: 'collaboration worker', runId })
     return task.id
   }
 
