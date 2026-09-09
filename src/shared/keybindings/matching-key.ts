@@ -86,8 +86,8 @@ export function letterKeyMatches(
   if (!shouldUseMacOptionLetterPhysicalFallback(parsed, input, platform)) {
     return false
   }
-  // Why: the mac-Option composed-character path has no logical key, so resolve the
-  // physical code through the active layout rather than assuming US QWERTY (#2858).
+  // Why: the mac-Option composed-character path has no logical key; the physical
+  // code resolves through the active layout so non-QWERTY layouts match by character (#2858).
   const layoutCharacter = layoutCharacterForCode?.(input.code ?? '')
   if (layoutCharacter) {
     return layoutCharacter.toUpperCase() === letter.toUpperCase()
@@ -173,8 +173,8 @@ export function keyMatches(
     if (!shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) {
       return false
     }
-    // Why: the mac-Option composed-character path has no logical key, so resolve the
-    // physical code through the active layout rather than assuming US QWERTY (#2858).
+    // Why: the mac-Option composed-character path has no logical key; the physical
+    // code resolves through the active layout so non-QWERTY layouts match by character (#2858).
     const layoutCharacter = layoutCharacterForCode?.(input.code ?? '')
     const layoutToken = layoutCharacter ? normalizeKeyToken(layoutCharacter) : null
     if (layoutToken && isPunctuationKeyToken(layoutToken)) {
