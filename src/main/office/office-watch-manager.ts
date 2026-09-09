@@ -19,6 +19,7 @@ import {
   type OfficeWatchOutcome
 } from '../../shared/office-preview-contracts'
 import { isOfficeRenderable } from '../../shared/office-file-extensions'
+import { joinOfficeRelativePath } from '../../shared/office-preview-rpc'
 import {
   OfficeDocumentOutsideWorkspaceError,
   OfficeDocumentPathError,
@@ -215,9 +216,13 @@ export async function stopOfficeWatch(ref: OfficeDocumentRef): Promise<OfficeAck
   try {
     canonicalPath = await resolveOfficeDocumentTarget(ref.workspaceRoot, ref.relativePath, lane)
   } catch {
-    // A document that no longer resolves cannot be canonicalised, but its session still has to go,
-    // so fall back to the lexical join purely as a registry key.
-    canonicalPath = `${ref.workspaceRoot}/${ref.relativePath}`
+    // A document that no longer resolves — deleted while watched, most often — still has a session
+    // that has to go. Fall back to the lane's own join rather than a hardcoded `/`: this string is
+    // both the registry lookup and the argument handed to `officecli unwatch`, and a Windows path
+    // spelled with a stray forward slash matches neither.
+    canonicalPath =
+      joinOfficeRelativePath(ref.workspaceRoot, ref.relativePath) ??
+      `${ref.workspaceRoot}/${ref.relativePath}`
   }
   const session = sessions.get(officeWatchSessionKeyFor(lane, canonicalPath))
   if (session) {

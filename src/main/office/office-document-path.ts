@@ -12,7 +12,10 @@
  */
 import { realpath } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../shared/cross-platform-path'
 import { joinOfficeRelativePath } from '../../shared/office-preview-rpc'
 import { runWslProcess } from '../wsl/wsl-runner'
 import type { OfficecliLane } from './officecli-lane'
@@ -113,10 +116,14 @@ export async function canonicalOfficeDocumentPath(
  * up on it, which is how a path-handling module ends up unreviewable.
  */
 export function officeSessionKey(hostKey: string, canonicalPath: string): string {
-  // Case-insensitive on Windows and in WSL's Windows-drive mounts; a case-varied second open is
-  // the same document and must not start a second watch.
-  return JSON.stringify([
-    hostKey,
-    process.platform === 'win32' ? canonicalPath.toLowerCase() : canonicalPath
-  ])
+  // Normalised rather than compared raw, because the two producers of this key cannot be relied on
+  // to spell one path the same way: `startOfficeWatch` keys on `realpath`, while the stop path
+  // falls back to a lexical join when the document has since been deleted. On Windows those two
+  // differ by separator alone (`C:\repo\a.docx` vs `C:\repo/a.docx`) and the lookup would miss,
+  // leaking the watch process and its port until app quit.
+  //
+  // It also has to be the *path* that decides case-folding, not this process's platform: a WSL
+  // lane on a Windows host hands us a guest path on a case-sensitive filesystem, where lowercasing
+  // would merge `/home/me/Repo` and `/home/me/repo` into one session and show the wrong document.
+  return JSON.stringify([hostKey, normalizeRuntimePathForComparison(canonicalPath)])
 }
