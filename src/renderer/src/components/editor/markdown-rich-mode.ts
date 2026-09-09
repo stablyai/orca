@@ -61,13 +61,9 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains reference-style links.'
       )
     },
-    // Why: this is a cheap pre-filter only, loose enough to admit definitions
-    // nested inside blockquotes or list items (`> [id]: url`, `- [id]: url`).
-    // `[label]: ` also opens an ordinary paragraph (e.g. `[Bug]: steps to
-    // reproduce…`). Confirming an actual reference-style link definition is
-    // delegated to `hasLinkReferenceDefinition`, which parses the CommonMark
-    // grammar via `remark-parse` instead of guessing the definition shape
-    // with regex.
+    // Why: a cheap pre-filter that admits definitions nested in blockquotes or
+    // list items; `[label]: ` also opens ordinary prose, so
+    // `hasLinkReferenceDefinition` confirms a real definition per CommonMark.
     pattern: /^[ >]*(?:[-*+]\s+|\d+[.)]\s+)?\[[^\]]+\]:/m
   },
   {
@@ -172,12 +168,9 @@ export function getMarkdownRichModeEligibility(params: {
 
 const linkReferenceDefinitionProcessor = unified().use(remarkParse).use(remarkGfm)
 
-// Why: `[label]: ` also opens an ordinary paragraph, so only an mdast
-// `definition` node — parsed per CommonMark's link reference definition
-// grammar — confirms the line is actually a reference-style link, not prose
-// that starts the same way. Definitions can nest inside container blocks
-// (blockquotes, list items), so the whole tree is walked rather than only
-// its top-level children.
+// Why: only an mdast `definition` node proves a `[label]:` line is a link
+// reference definition and not prose. Definitions can sit inside blockquotes
+// and list items, so the whole tree is walked.
 function hasLinkReferenceDefinition(content: string): boolean {
   const tree = linkReferenceDefinitionProcessor.parse(content)
   return containsDefinitionNode(tree)
