@@ -1,7 +1,6 @@
 import { mkdirSync } from 'node:fs'
 import { appendFile, rm } from 'node:fs/promises'
-import { dirname } from 'node:path'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
