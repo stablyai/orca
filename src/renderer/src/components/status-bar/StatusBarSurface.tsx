@@ -23,13 +23,12 @@ import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
-import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
-import { CodexSwitcherMenu } from './CodexSwitcherMenu'
-import { ProviderDetailsMenu, CLOSE_ALL_CONTEXT_MENUS_EVENT } from './ProviderDetailsMenu'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './ProviderDetailsMenu'
 import { ProviderLetterBadge, ProviderSegment } from './StatusBarProviderSegment'
 import { useStatusBarController } from './use-status-bar-controller'
 import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { UsageProviderDetailsRow } from './UsageProviderDetailsRow'
 
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
@@ -171,44 +170,7 @@ export function StatusBarSurface({
                   onManageAccounts={handleManageAccounts}
                   onUsageDetails={handleUsageDetails}
                   renderRow={(p, rowNode) => {
-                    // Every provider drills into its detail panel (parity with the
-                    // per-provider dropdowns on main); Claude/Codex additionally get
-                    // the account switcher + runtime toggle + Codex reset credits.
-                    if (p.provider === 'claude') {
-                      return (
-                        <ClaudeSwitcherMenu
-                          claude={p}
-                          compact={compact}
-                          iconOnly={false}
-                          asSubmenu
-                          triggerContent={rowNode}
-                        />
-                      )
-                    }
-                    if (p.provider === 'codex') {
-                      return (
-                        <CodexSwitcherMenu
-                          codex={p}
-                          compact={compact}
-                          iconOnly={false}
-                          asSubmenu
-                          triggerContent={rowNode}
-                        />
-                      )
-                    }
-                    return (
-                      <ProviderDetailsMenu
-                        provider={p}
-                        compact={compact}
-                        iconOnly={false}
-                        asSubmenu
-                        triggerContent={rowNode}
-                        ariaLabel={translate(
-                          'auto.components.status.bar.UsageRosterPanel.openDetails',
-                          'Open usage details'
-                        )}
-                      />
-                    )
+                    return <UsageProviderDetailsRow provider={p} row={rowNode} compact={compact} />
                   }}
                 />
               </DropdownMenuContent>

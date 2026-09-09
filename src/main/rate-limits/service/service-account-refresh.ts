@@ -1,4 +1,5 @@
 import { consumeCodexRateLimitResetCredit } from '../codex-fetcher'
+import { consumeGrokRateLimitResetCredit } from '../grok-reset-credit-consumer'
 import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -7,7 +8,8 @@ import {
   type ClaudeAccountSelectionTarget,
   type RateLimitRuntimeTarget,
   type RateLimitState,
-  type CodexRateLimitResetResult
+  type CodexRateLimitResetResult,
+  type GrokRateLimitResetResult
 } from './service-types'
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
@@ -117,6 +119,27 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
       if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
         await this.fetchCodexOnly({ force: true })
       }
+      throw error
+    }
+  }
+
+  async consumeGrokRateLimitResetCredit(): Promise<GrokRateLimitResetResult> {
+    await this.fetchGrokOnly({ force: true })
+    const grok = this.state.grok
+    const weekly = grok?.weekly
+    if (grok?.status !== 'ok') {
+      return { outcome: 'usageUnavailable', state: this.getState() }
+    }
+    // Why: a one-time token at 0% would be spent without changing the weekly window.
+    if (!weekly || weekly.usedPercent <= 0) {
+      return { outcome: 'nothingToReset', state: this.getState() }
+    }
+    try {
+      const outcome = await consumeGrokRateLimitResetCredit()
+      await this.fetchGrokOnly({ force: true })
+      return { outcome, state: this.getState() }
+    } catch (error) {
+      await this.fetchGrokOnly({ force: true })
       throw error
     }
   }

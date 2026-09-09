@@ -9,29 +9,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getStatus: vi.fn(),
   refreshGrokRateLimits: vi.fn(),
-  grokUsage: vi.fn<() => unknown>(() => null)
+  grokUsage: null as Record<string, unknown> | null,
+  translate: vi.fn((_key: string, fallback: string, values?: Record<string, string | number>) => {
+    let result = fallback
+    for (const [key, value] of Object.entries(values ?? {})) {
+      result = result.replace(`{{${key}}}`, String(value))
+    }
+    return result
+  })
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => React.createElement('span', { 'data-testid': 'grok-icon' })
 }))
 
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, values?: Record<string, string>) => {
-    let result = fallback
-    for (const [key, value] of Object.entries(values ?? {})) {
-      result = result.replace(`{{${key}}}`, value)
-    }
-    return result
-  }
-}))
+vi.mock('@/i18n/i18n', () => ({ translate: mocks.translate }))
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       refreshGrokRateLimits: mocks.refreshGrokRateLimits,
-      settingsSearchQuery: '',
-      rateLimits: { grok: mocks.grokUsage() }
+      rateLimits: { grok: mocks.grokUsage },
+      settingsSearchQuery: ''
     })
 }))
 
@@ -39,6 +38,7 @@ import { GrokAccountsSection } from './GrokAccountsSection'
 
 describe('GrokAccountsSection', () => {
   beforeEach(() => {
+    mocks.grokUsage = null
     mocks.getStatus.mockResolvedValue({
       signedIn: true,
       email: 'dev@example.com',
@@ -47,7 +47,6 @@ describe('GrokAccountsSection', () => {
       error: null
     })
     mocks.refreshGrokRateLimits.mockResolvedValue(undefined)
-    mocks.grokUsage.mockReturnValue(null)
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { grokAccounts: { getStatus: mocks.getStatus } }
@@ -72,14 +71,14 @@ describe('GrokAccountsSection', () => {
 
   // Why: #15740 — an unreported percentage must be stated, never shown as 0%.
   it('shows why usage is unknown instead of hiding the row', async () => {
-    mocks.grokUsage.mockReturnValue({
+    mocks.grokUsage = {
       provider: 'grok',
       session: null,
       weekly: null,
       updatedAt: Date.now(),
       error: 'Grok did not report a usage percentage for this account',
       status: 'unavailable'
-    })
+    }
 
     render(<GrokAccountsSection />)
 
@@ -87,5 +86,26 @@ describe('GrokAccountsSection', () => {
       await screen.findByText('Grok did not report a usage percentage for this account')
     ).toBeInTheDocument()
     expect(screen.queryByText('0%')).not.toBeInTheDocument()
+  })
+
+  it('uses a semantic count placeholder for available resets', async () => {
+    mocks.grokUsage = {
+      provider: 'grok',
+      session: null,
+      weekly: null,
+      rateLimitResetCredits: { availableCount: 2, nextExpiresAt: null },
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    }
+
+    render(<GrokAccountsSection />)
+
+    expect(await screen.findByText('2 resets available')).toBeInTheDocument()
+    expect(mocks.translate).toHaveBeenCalledWith(
+      'components.grokAccounts.resetCredits.availableMany',
+      '{{count}} resets available',
+      { count: 2 }
+    )
   })
 })

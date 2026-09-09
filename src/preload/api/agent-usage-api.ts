@@ -6,6 +6,7 @@ import type {
 } from '../../shared/opencode-usage-types'
 import type {
   CodexRateLimitResetResult,
+  GrokRateLimitResetResult,
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../../shared/rate-limit-types'
@@ -49,6 +50,7 @@ export type RateLimitsApi = {
   refresh: () => Promise<RateLimitState>
   refreshCodexForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
   consumeCodexResetCredit: () => Promise<CodexRateLimitResetResult>
+  consumeGrokResetCredit: () => Promise<GrokRateLimitResetResult>
   refreshClaudeForTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
   setPollingInterval: (ms: number) => Promise<void>
   fetchInactiveClaudeAccounts: () => Promise<void>

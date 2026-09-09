@@ -6,6 +6,7 @@ import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
 import { formatUpdatedAt } from './usage-formatters'
+import { formatResetCreditExpiry } from '../status-bar/reset-credit-expiry'
 
 export function GrokUsagePane(): React.JSX.Element {
   const grok = useAppStore((s) => s.rateLimits.grok)
@@ -71,6 +72,11 @@ export function GrokUsagePane(): React.JSX.Element {
       ? Math.round(grok.weekly.usedPercent)
       : null
   const isFetching = isRefreshing || grok?.status === 'fetching'
+  const resetCreditCount = grok?.rateLimitResetCredits?.availableCount ?? null
+  const resetCreditExpiry =
+    resetCreditCount !== null
+      ? formatResetCreditExpiry(grok?.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
+      : null
 
   return (
     <div
@@ -128,6 +134,17 @@ export function GrokUsagePane(): React.JSX.Element {
           value={grok?.weekly?.resetDescription ?? '—'}
           icon={<CalendarClock className="size-4" />}
         />
+        {resetCreditCount !== null ? (
+          <StatCard
+            label={translate('components.grokUsage.resetCredits.label', 'Usage-limit resets')}
+            value={
+              resetCreditExpiry
+                ? `${String(resetCreditCount)} · ${resetCreditExpiry}`
+                : String(resetCreditCount)
+            }
+            icon={<Sparkles className="size-4" />}
+          />
+        ) : null}
       </div>
 
       {grok?.usageMetadata?.authProvenance ? (

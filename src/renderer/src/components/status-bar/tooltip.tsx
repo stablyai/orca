@@ -1,8 +1,5 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
-import {
-  formatResetCountdown,
-  formatResetDuration
-} from '../../../../shared/rate-limit-reset-format'
+import { formatResetCountdown } from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
@@ -18,6 +15,7 @@ import {
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { formatResetCreditExpiry } from './reset-credit-expiry'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -48,28 +46,7 @@ export function formatTimeAgo(ts: number): string {
 // Re-export so existing tooltip consumers/tests keep their import path; the
 // implementation is shared with mobile in src/shared/rate-limit-reset-format.
 export { formatResetCountdown }
-
-export function formatResetCreditExpiry(
-  expiresAt: number | null | undefined,
-  count: number
-): string | null {
-  if (!expiresAt) {
-    return null
-  }
-  const duration = formatResetDuration(expiresAt - Date.now())
-  if (duration === 'now') {
-    return count > 1
-      ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
-      : translate('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
-  }
-  return count > 1
-    ? translate('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
-        value0: duration
-      })
-    : translate('auto.components.status.bar.tooltip.20ad66aed1', 'Expires in {{value0}}', {
-        value0: duration
-      })
-}
+export { formatResetCreditExpiry } from './reset-credit-expiry'
 
 // ---------------------------------------------------------------------------
 // Shared icon component
@@ -305,7 +282,7 @@ export function ProviderPanel({
 
   const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
   const resetCreditCount =
-    showResetCredits && p.provider === 'codex'
+    showResetCredits && (p.provider === 'codex' || p.provider === 'grok')
       ? (p.rateLimitResetCredits?.availableCount ?? null)
       : null
   const resetCreditExpiry =

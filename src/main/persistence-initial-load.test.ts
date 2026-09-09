@@ -133,6 +133,25 @@ describe('Store', () => {
     expect(store.getCodexResetCreditAttemptLedger()).toEqual(before)
   })
 
+  it('synchronously persists and reloads the main-owned Grok reset ledger', async () => {
+    const store = await createStore()
+    const ledger = {
+      version: 1 as const,
+      attempts: [
+        {
+          idempotencyKey: '33333333-3333-4333-8333-333333333333',
+          state: 'settled' as const,
+          outcome: 'reset' as const
+        }
+      ]
+    }
+
+    store.replaceGrokResetCreditAttemptLedgerAndFlush(ledger)
+
+    expect(store.getGrokResetCreditAttemptLedger()).toEqual(ledger)
+    expect((readDataFile() as PersistedState).grokResetCreditAttemptLedger).toEqual(ledger)
+  })
+
   it('preserves a corrupt Codex reset ledger as a fail-closed read error', async () => {
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),

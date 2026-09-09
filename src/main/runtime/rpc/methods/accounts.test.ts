@@ -154,6 +154,23 @@ describe('account RPC methods', () => {
     expect(consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(idempotencyKey, expectedScope)
   })
 
+  it('strictly validates and forwards a Grok reset idempotency key', async () => {
+    const idempotencyKey = '22222222-2222-4222-8222-222222222222'
+    const result = { outcome: 'reset', snapshot: { claude: null, codex: null } }
+    const consumeGrokRateLimitResetCredit = vi.fn().mockResolvedValue(result)
+    const runtime = { consumeGrokRateLimitResetCredit } as unknown as OrcaRuntimeService
+    const reset = method('accounts.consumeGrokResetCredit')
+    if (isStreamingMethod(reset)) {
+      throw new Error('accounts.consumeGrokResetCredit must be a request method')
+    }
+
+    expect(reset.params?.parse({ idempotencyKey })).toEqual({ idempotencyKey })
+    expect(() => reset.params?.parse({ idempotencyKey: 'not-a-uuid' })).toThrow()
+    expect(() => reset.params?.parse({ idempotencyKey, extra: true })).toThrow()
+    await expect(reset.handler({ idempotencyKey }, { runtime })).resolves.toBe(result)
+    expect(consumeGrokRateLimitResetCredit).toHaveBeenCalledWith(idempotencyKey)
+  })
+
   it('forwards the exact WSL target when selecting a Codex account', async () => {
     const selectCodexAccountForTarget = vi
       .fn()

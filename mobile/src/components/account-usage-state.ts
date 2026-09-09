@@ -27,6 +27,7 @@ export {
 } from './accounts-snapshot'
 
 export type ProviderKey = 'claude' | 'codex'
+export type HostUsageProviderKey = 'grok'
 
 export type UsageBarState = {
   usedPercent: number | null
@@ -39,6 +40,13 @@ export function getActiveProviderRateLimits(
   provider: ProviderKey
 ): ProviderRateLimits | null {
   return provider === 'claude' ? snapshot.rateLimits.claude : snapshot.rateLimits.codex
+}
+
+export function getHostProviderRateLimits(
+  snapshot: AccountsSnapshot,
+  provider: HostUsageProviderKey
+): ProviderRateLimits | null {
+  return snapshot.rateLimits[provider] ?? null
 }
 
 export function getInactiveProviderUsage(
