@@ -61,11 +61,12 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains reference-style links.'
       )
     },
-    // Why: a cheap pre-filter that admits definitions nested under any depth
-    // of blockquote/list container markers in any order; `[label]: ` also
-    // opens ordinary prose, so `hasLinkReferenceDefinition` confirms a real
+    // Why: a cheap, linear-time pre-filter — a single non-nested character
+    // class, so it can't backtrack. It deliberately over-admits shapes no
+    // container nesting produces (e.g. `1) [x]:`); `[label]: ` also opens
+    // ordinary prose, so `hasLinkReferenceDefinition` confirms a real
     // definition per CommonMark.
-    pattern: /^(?:[ >]*(?:[-*+]\s+|\d+[.)]\s+)?)*\[[^\]]+\]:/m
+    pattern: /^[ \t>*+\-\d.)]*\[[^\]]+\]:/m
   },
   {
     reason: 'footnotes',

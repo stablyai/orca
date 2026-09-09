@@ -221,5 +221,15 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
 
       expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
     })
+
+    it('scans a long non-matching indented line without catastrophic backtracking', () => {
+      const content = `${' '.repeat(200)}x\n`
+
+      const start = performance.now()
+      getMarkdownRichModeUnsupportedMessage(content)
+      const elapsed = performance.now() - start
+
+      expect(elapsed).toBeLessThan(50)
+    })
   })
 })
