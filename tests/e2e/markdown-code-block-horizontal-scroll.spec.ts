@@ -14,7 +14,7 @@ const WIDE_CODE_BLOCK_MARKDOWN = `# Wide code block\n\n\`\`\`ts\n${WIDE_LINE}\n\
 
 test.describe('Wide code blocks scroll horizontally', () => {
   test.beforeEach(async ({ orcaPage }) => {
-    await orcaPage.setViewportSize({ width: 900, height: 700 })
+    await orcaPage.setViewportSize({ width: 1440, height: 900 })
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
   })
@@ -47,6 +47,13 @@ test.describe('Wide code blocks scroll horizontally', () => {
         }
       })
 
+      // The wide viewport keeps the editor pane wider than WIDE_LINE's
+      // unbroken run needs to fit on one line, so pre-wrap wraps it at
+      // ordinary word boundaries with no overflow — scrollWidth only
+      // exceeds clientWidth once white-space: pre removes those wrap
+      // points, which is what pins this assertion to the fix. A narrower
+      // pane lets the browser's overflow-wrap: break-word fallback wrap
+      // the run mid-word even under pre-wrap, which would pass either way.
       expect(metrics.whiteSpace).toBe('pre')
       expect(metrics.scrollWidth).toBeGreaterThan(metrics.clientWidth)
     } finally {
