@@ -7,6 +7,7 @@ import type {
   SessionTabCloseResponse
 } from '../../shared/session-tab-close'
 import { SESSION_TAB_CLOSE_TIMEOUT_ERROR } from '../../shared/session-tab-close'
+import { registerMainWindowCloseDisposer } from './main-window-close-disposers'
 
 const SESSION_TAB_CLOSE_CONFIRMATION_MS = 5 * 60_000
 const SESSION_TAB_CLOSE_RESPONSE_GRACE_MS = 5_000
@@ -30,7 +31,7 @@ export async function requestSessionTabCloseFromRenderer(
       settled = true
       clearTimeout(timeout)
       ipcMain.removeListener('ui:sessionTabCloseResponse', onResponse)
-      mainWindow.removeListener('closed', onRendererUnavailable)
+      unregisterWindowClose()
       webContents.removeListener('destroyed', onRendererUnavailable)
       webContents.removeListener('render-process-gone', onRendererUnavailable)
       webContents.removeListener('did-start-loading', onRendererUnavailable)
@@ -54,7 +55,10 @@ export async function requestSessionTabCloseFromRenderer(
     )
     timeout.unref?.()
     ipcMain.on('ui:sessionTabCloseResponse', onResponse)
-    mainWindow.once('closed', onRendererUnavailable)
+    const unregisterWindowClose = registerMainWindowCloseDisposer(
+      mainWindow,
+      onRendererUnavailable
+    )
     webContents.once('destroyed', onRendererUnavailable)
     webContents.once('render-process-gone', onRendererUnavailable)
     webContents.once('did-start-loading', onRendererUnavailable)

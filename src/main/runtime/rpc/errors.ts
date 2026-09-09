@@ -23,6 +23,7 @@ import {
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
+import { RESOURCE_RESERVATION_CONFLICT_ERROR } from '../../../shared/resource-reservation-binding'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -137,7 +138,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   SKILL_INSTALL_RPC_ERROR_CODE,
   // Why: an owner conflict is a distinct client decision (reload the host, re-adopt,
   // stop offering the action) — flattened to runtime_error it can only be guessed at.
-  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES)
+  ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
+  // A conflicting durable reservation is a caller-ledger error, not a retryable runtime failure.
+  RESOURCE_RESERVATION_CONFLICT_ERROR
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

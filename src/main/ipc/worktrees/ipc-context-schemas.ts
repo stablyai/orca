@@ -4,6 +4,7 @@ import type {
   CliWorkspaceProvenance
 } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ResourceReservationBinding } from '../../../shared/resource-reservation-binding'
 import type { ListDetectedWorktreesArgs } from '../../../shared/detected-worktree-provider-contract'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-linked-item-schema'
 import { TaskSourceContextSchema } from '../../../shared/task-source-context-schema'
@@ -12,6 +13,7 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspa
 export type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
   cliProvenance?: CliWorkspaceProvenance
+  reservation?: ResourceReservationBinding
 }
 
 export type RemoveWorktreeArgs = {

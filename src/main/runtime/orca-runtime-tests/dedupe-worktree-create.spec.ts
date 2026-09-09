@@ -3,6 +3,15 @@ import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { store } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
+  const reservation = {
+    key: 'key-1',
+    reservationId: 'reservation-1',
+    sessionId: 'session-1',
+    resourceKind: 'worktree' as const,
+    ownershipGeneration: 1,
+    issuer: 'openloop'
+  }
+
   it('coalesces concurrent creates that share a clientMutationId', async () => {
     const runtime = new OrcaRuntimeService(store)
     let calls = 0
@@ -29,6 +38,28 @@ describe('OrcaRuntimeService.dedupeWorktreeCreate', () => {
     const retried = await runtime.dedupeWorktreeCreate('id:r', 'key-1', factory)
     expect(calls).toBe(1)
     expect(retried).toEqual(first)
+  })
+
+  it('rejects a conflicting binding while the reservation result is cached', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const factory = vi.fn(async () => ({ worktree: { id: 'wt' } }))
+    await runtime.dedupeWorktreeCreate('id:r', reservation.key, factory, reservation)
+
+    await expect(
+      runtime.dedupeWorktreeCreate('id:r', reservation.key, factory, {
+        ...reservation,
+        reservationId: 'reservation-2'
+      })
+    ).rejects.toMatchObject({ code: 'reservation_conflict' })
+    expect(factory).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps reservation keys separate from transport mutation ids', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const factory = vi.fn(async () => ({ worktree: { id: `wt-${factory.mock.calls.length}` } }))
+    await runtime.dedupeWorktreeCreate('id:r', reservation.key, factory)
+    await runtime.dedupeWorktreeCreate('id:r', reservation.key, factory, reservation)
+    expect(factory).toHaveBeenCalledTimes(2)
   })
 
   it('expires settled successes after the reconnect window', async () => {

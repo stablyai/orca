@@ -9,6 +9,7 @@ import type { WorktreeBaseStatusEvent } from '../../shared/worktree/base-ref-dri
 import { probeRuntimeWorktreeDrift } from './runtime-worktree-drift-probe'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../shared/worktree/types'
+import type { WorktreeReservationCreateReceipt } from '../../shared/worktree/reservation-create-receipt'
 import {
   persistRuntimeManagedWorktreeSortOrder,
   updateRuntimeManagedWorktreeMetadata
@@ -17,6 +18,22 @@ import { resolveRuntimeGitHubWorktreeBase } from './runtime-github-worktree-base
 import { resolveRuntimeGitLabWorktreeBase } from './runtime-gitlab-worktree-base'
 
 export class OrcaRuntimeWithCreateManagedRemoteWorktree extends OrcaRuntimeWithCreateManagedWorktree {
+  recordWorktreeReservationCreateReceipt(
+    worktreeId: string,
+    hostId: string | undefined,
+    receipt: WorktreeReservationCreateReceipt
+  ): void {
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    if (hostId && this.store.setWorktreeMetaForHost) {
+      this.store.setWorktreeMetaForHost(worktreeId, hostId, { reservationCreateReceipt: receipt })
+    } else {
+      this.store.setWorktreeMeta(worktreeId, { reservationCreateReceipt: receipt })
+    }
+    this.invalidateResolvedWorktreeCache()
+  }
+
   protected createManagedRemoteWorktree(
     repo: Repo,
     args: RuntimeRemoteWorktreeCreateArgs

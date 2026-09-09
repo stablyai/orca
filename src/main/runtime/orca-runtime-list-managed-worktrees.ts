@@ -5,6 +5,11 @@ import type { RuntimeWorktreeListResult } from '../../shared/runtime-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
+import {
+  findWorktreeReservation,
+  type WorktreeReservationLookup
+} from './worktree-reservation-replay'
+import type { ResourceReservationRequest } from '../../shared/resource-reservation-binding'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { WorktreeVisibilitySourceMatcher } from '../../shared/worktree/visibility-sources'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -27,6 +32,12 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     sourceDefaultsSupported = true
   ): Promise<RuntimeWorktreeListResult> {
     return this.managedWorktreeQueries.list(repoSelector, limit, sourceDefaultsSupported)
+  }
+
+  /** Durable reservation replay over persisted workspace metadata — no git scan, so a create
+   *  retry resolves without paying for a full worktree listing. */
+  findManagedWorktreeReservation(request: ResourceReservationRequest): WorktreeReservationLookup {
+    return findWorktreeReservation(this.store?.getAllWorktreeMeta?.() ?? {}, request)
   }
 
   listRetiredWorktreeNames(repoSelector: string) {
@@ -116,6 +127,15 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
 
   async showManagedWorktree(worktreeSelector: string) {
     return await this.resolveWorktreeSelector(worktreeSelector)
+  }
+
+  /** Resolve a reservation replay to its exact persisted host and occupant identity. */
+  async showReservedManagedWorktree(worktreeId: string, hostId: string, instanceId: string) {
+    const worktree = await this.resolveExplicitWorktreeIdScoped(worktreeId, hostId)
+    if (!worktree || worktree.instanceId !== instanceId) {
+      throw new Error('reservation_resource_missing')
+    }
+    return worktree
   }
 
   async showManagedTerminalWorkspace(worktreeSelector: string) {

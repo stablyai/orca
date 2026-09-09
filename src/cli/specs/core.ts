@@ -4,6 +4,7 @@ import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
 import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
+import { RESOURCE_RESERVATION_FLAGS } from '../resource-reservation-flags'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -90,7 +91,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--idempotency-key <key> --reservation-id <id> --reservation-session <id> --ownership-generation <n> [--reservation-issuer <name>]] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -108,7 +109,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'parent-worktree',
       'no-parent',
       'run-hooks',
-      'activate'
+      'activate',
+      ...RESOURCE_RESERVATION_FLAGS
     ],
     notes: [
       'This creates a new checkout. For a fresh agent in an existing worktree, use `orca terminal create --worktree active --command "codex"` instead.',
@@ -124,7 +126,9 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
       'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
-      'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.'
+      'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.',
+      'Pass --idempotency-key with --reservation-id, --reservation-session and --ownership-generation to bind this create to a caller ledger reservation. The key is single-use: a retry returns the same resource, and reusing it with a different binding is refused.',
+      'The exact binding is readable back through `orca worktree show --json` and `orca worktree list --json` as `reservation`.'
     ],
     examples: [
       'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
@@ -247,11 +251,20 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'create'],
     summary: 'Create a terminal session in the current worktree',
     usage:
-      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'command', 'title', 'focus'],
+      'orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--idempotency-key <key> --reservation-id <id> --reservation-session <id> --ownership-generation <n> [--reservation-issuer <name>]] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'worktree',
+      'command',
+      'title',
+      'focus',
+      ...RESOURCE_RESERVATION_FLAGS
+    ],
     notes: [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
-      'Use this, not worktree create, for a fresh agent in the current checkout.'
+      'Use this, not worktree create, for a fresh agent in the current checkout.',
+      'Pass --idempotency-key with --reservation-id, --reservation-session and --ownership-generation to bind this create to a caller ledger reservation. The key is single-use: a retry returns the same resource, and reusing it with a different binding is refused.',
+      'The exact binding is readable back through `orca terminal show --json` and `orca terminal list --json` as `reservation`.'
     ],
     examples: [
       'orca terminal create --json',

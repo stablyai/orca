@@ -3,6 +3,43 @@ import type { RpcContext } from '../core'
 import { TERMINAL_METHODS } from './terminal'
 
 describe('terminal.create RPC idempotency', () => {
+  it('accepts a reservation without requiring the reconciliation hint', async () => {
+    const terminal = { handle: 'terminal-1', worktreeId: 'worktree-1', title: null }
+    const createTerminal = vi.fn(async () => terminal)
+    const dedupeTerminalCreate = vi.fn(async () => terminal)
+    const reservation = {
+      key: 'reservation-key',
+      reservationId: 'reservation-1',
+      sessionId: 'session-1',
+      resourceKind: 'terminal' as const,
+      ownershipGeneration: 1,
+      issuer: 'openloop'
+    }
+    const method = TERMINAL_METHODS.find((candidate) => candidate.name === 'terminal.create')
+    if (!method) {
+      throw new Error('terminal.create method missing')
+    }
+
+    const result = await method.handler(
+      { worktree: 'id:worktree-1', reservation },
+      {
+        runtime: { createTerminal, dedupeTerminalCreate },
+        pairedDeviceId: 'device-a'
+      } as unknown as RpcContext,
+      vi.fn()
+    )
+
+    expect(dedupeTerminalCreate).toHaveBeenCalledWith(
+      'device-a',
+      'id:worktree-1',
+      undefined,
+      false,
+      expect.any(Function),
+      reservation
+    )
+    expect(result).toEqual({ terminal })
+  })
+
   it('scopes the mutation key to the authenticated paired device and worktree', async () => {
     const terminal = { handle: 'terminal-1', worktreeId: 'worktree-1', title: null }
     const createTerminal = vi.fn(async () => terminal)
@@ -44,7 +81,8 @@ describe('terminal.create RPC idempotency', () => {
       'id:worktree-1',
       'mutation-1',
       false,
-      expect.any(Function)
+      expect.any(Function),
+      undefined
     )
     expect(createTerminal).toHaveBeenCalledWith(
       'id:worktree-1',

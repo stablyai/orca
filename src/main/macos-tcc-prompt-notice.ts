@@ -4,6 +4,7 @@ import type { BrowserWindow } from 'electron'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getCanonicalUserDataPath } from './persistence'
 import { MacosTccPromptWatch } from './macos-tcc-prompt-watch'
+import { registerMainWindowCloseDisposer } from './window/main-window-close-disposers'
 
 /**
  * Surfaces Full Disk Access guidance only to users macOS is actually prompting
@@ -162,7 +163,7 @@ export function dismissTccPromptNotice(): void {
 
 function trackMainWindow(mainWindow: BrowserWindow): void {
   mainWindowRef = mainWindow
-  mainWindow.once('closed', () => {
+  registerMainWindowCloseDisposer(mainWindow, () => {
     if (mainWindowRef === mainWindow) {
       mainWindowRef = null
     }
