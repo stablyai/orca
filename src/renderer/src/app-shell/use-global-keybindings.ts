@@ -21,6 +21,7 @@ import {
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
 import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
+import { warmKeyboardLayoutCache } from './global-keybindings-layout-prefetch'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -82,6 +83,7 @@ export function useGlobalKeybindings(args: {
   })
 
   useEffect(() => {
+    warmKeyboardLayoutCache(shortcutPlatform)
     const doubleTapDetector = new ModifierDoubleTapDetector()
 
     const unregisterAppCommandDispatcher = registerAppCommandDispatcher((actionId) =>
