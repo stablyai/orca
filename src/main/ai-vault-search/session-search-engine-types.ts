@@ -10,6 +10,12 @@ export const SESSION_SEARCH_LIMIT_MAX = 100
 // Longer than this is not a query, and FTS5 pays for every term it plans.
 export const SESSION_SEARCH_QUERY_MAX_LENGTH = 512
 
+// Snippet match markers. Why doubled: single brackets are everywhere in code
+// transcripts (`arr[0]`, regex classes, markdown links) and would read as
+// matches; doubled ones are rare.
+export const SESSION_SEARCH_SNIPPET_MARK_OPEN = '[['
+export const SESSION_SEARCH_SNIPPET_MARK_CLOSE = ']]'
+
 /**
  * Which corpus answers the query.
  *
