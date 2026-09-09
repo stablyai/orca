@@ -39,7 +39,6 @@ import { useAppStore } from '@/store'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
-import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -99,6 +98,7 @@ import {
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AutomationDetail } from './AutomationDetail'
+import { AutomationListRow } from './AutomationListRow'
 import { HermesCronOutputView } from './HermesCronOutputView'
 import {
   AutomationEditorDialog,
@@ -2428,118 +2428,27 @@ export default function AutomationsPage(): React.JSX.Element {
                 : 'Paused'
               const scheduleLabel = formatAutomationSchedule(automation.rrule)
               return (
-                <ContextMenu key={automation.id}>
-                  <ContextMenuTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectExternalKey(null)
-                        selectAutomationId(automation.id)
-                      }}
-                      className={cn(
-                        'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
-                        selectedExternal === null && selected?.id === automation.id
-                          ? 'border-foreground/30 bg-muted/70 text-foreground shadow-sm'
-                          : 'border-transparent hover:bg-muted/50'
-                      )}
-                    >
-                      <span className="min-w-0">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <span
-                            className={cn(
-                              'size-2 rounded-full',
-                              automation.enabled ? 'bg-foreground' : 'bg-muted-foreground/40'
-                            )}
-                          />
-                          <span className="truncate font-medium">{automation.name}</span>
-                        </span>
-                        <span className="mt-1 block truncate text-xs font-medium text-foreground/80">
-                          {scheduleLabel}
-                        </span>
-                        <span className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                          {automationRepo ? (
-                            <RepoBadgeLabel
-                              name={automationRepo.displayName}
-                              color={automationRepo.badgeColor}
-                              badgeClassName="size-1.5"
-                            />
-                          ) : (
-                            <span>
-                              {translate(
-                                'auto.components.automations.AutomationsPage.13118faadf',
-                                'Unknown project'
-                              )}
-                            </span>
-                          )}
-                          <span className="shrink-0">/</span>
-                          <span className="truncate">{workspaceLabel}</span>
-                          <span className="shrink-0">·</span>
-                          <span className="truncate">{getAgentLabel(automation.agentId)}</span>
-                        </span>
-                        <span className="mt-1 block truncate text-xs text-muted-foreground">
-                          {usageText}
-                        </span>
-                      </span>
-                      <span className="flex max-w-28 flex-col items-end gap-1 text-right text-xs text-muted-foreground">
-                        <Clock className="size-3.5" />
-                        <span className="line-clamp-2">{nextRunLabel}</span>
-                      </span>
-                    </button>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent className="w-48">
-                    <ContextMenuItem
-                      disabled={!automationRunAvailability.canRunNow}
-                      onSelect={(event) => {
-                        if (!automationRunAvailability.canRunNow) {
-                          event.preventDefault()
-                          return
-                        }
-                        void runNow(automation)
-                      }}
-                    >
-                      <Play className="size-3.5" />
-                      <span className="min-w-0 truncate">
-                        {automationRunAvailability.canRunNow
-                          ? translate(
-                              'auto.components.automations.AutomationsPage.2faecab10b',
-                              'Run Now'
-                            )
-                          : automationRunAvailability.message}
-                      </span>
-                    </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => void openEditDialog(automation)}>
-                      <Pencil className="size-3.5" />
-                      {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
-                    </ContextMenuItem>
-                    <ContextMenuItem onSelect={() => void toggleAutomation(automation)}>
-                      {automation.enabled ? (
-                        <Pause className="size-3.5" />
-                      ) : (
-                        <Play className="size-3.5" />
-                      )}
-                      {automation.enabled
-                        ? translate(
-                            'auto.components.automations.AutomationsPage.b457436d6a',
-                            'Pause'
-                          )
-                        : translate(
-                            'auto.components.automations.AutomationsPage.376631ef2b',
-                            'Resume'
-                          )}
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem
-                      variant="destructive"
-                      onSelect={() => requestDeleteAutomation(automation)}
-                    >
-                      <Trash2 className="size-3.5" />
-                      {translate(
-                        'auto.components.automations.AutomationsPage.15e0bfb13b',
-                        'Delete'
-                      )}
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
+                <AutomationListRow
+                  key={automation.id}
+                  automation={automation}
+                  isSelected={selectedExternal === null && selected?.id === automation.id}
+                  automationRepo={automationRepo}
+                  workspaceLabel={workspaceLabel}
+                  agentLabel={getAgentLabel(automation.agentId)}
+                  scheduleLabel={scheduleLabel}
+                  usageText={usageText}
+                  nextRunLabel={nextRunLabel}
+                  runAvailability={automationRunAvailability}
+                  hostLabelById={hostLabelById}
+                  onSelect={() => {
+                    selectExternalKey(null)
+                    selectAutomationId(automation.id)
+                  }}
+                  onRunNow={() => void runNow(automation)}
+                  onEdit={() => void openEditDialog(automation)}
+                  onToggle={() => void toggleAutomation(automation)}
+                  onDelete={() => requestDeleteAutomation(automation)}
+                />
               )
             })}
             {externalAutomationEntries.map((entry) => {
