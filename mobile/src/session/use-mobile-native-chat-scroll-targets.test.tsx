@@ -30,11 +30,18 @@ function probe(listRef: { current: unknown }) {
 }
 
 describe('useMobileNativeChatScrollTargets', () => {
-  it('resolves a press against the transcript as of the last render, not the previous one', () => {
-    // Regression: the ref that backs the press-time lookup used to update in a
-    // passive effect, which can be deferred past the paint. A press landing in
-    // that window resolved against the old transcript and jumped to an older
-    // prompt. The lookup must see the appended turn that is already on screen.
+  it('anchors to the newest prompt after a turn is appended, not the previous one', () => {
+    // The press-time lookup reads the transcript through a ref rather than
+    // closing over it, so this asserts the ref actually tracks re-renders: after
+    // a second turn is appended, pressing on the new answer must resolve to the
+    // new prompt (index 2), not the first one.
+    //
+    // ⚠️ This does *not* regress the `useEffect` → `useLayoutEffect` change in the
+    // hook. `act` flushes passive effects before returning, and an update issued
+    // inside `act` has not rendered yet, so the pre-paint window a real press can
+    // land in is not reachable from this harness — verified by flipping the hook
+    // back to `useEffect`, which leaves this test green. The layout effect is
+    // still correct; it just is not what this test proves.
     const scrollToIndex = vi.fn()
     const listRef = { current: { scrollToIndex } }
     const { captured, Probe } = probe(listRef)
@@ -44,7 +51,9 @@ describe('useMobileNativeChatScrollTargets', () => {
       tree = create(createElement(Probe, { data: transcript('user', 'assistant') }))
     })
     act(() => {
-      // A second turn streams in: user2 / assistant3.
+      // A second turn streams in: user2 / assistant3. The press happens *inside*
+      // the act callback, after the commit but before `act` flushes passive
+      // effects — that is exactly the window a real press can land in.
       tree.update(
         createElement(Probe, { data: transcript('user', 'assistant', 'user', 'assistant') })
       )

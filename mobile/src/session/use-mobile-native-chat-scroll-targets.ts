@@ -33,7 +33,7 @@ export function useMobileNativeChatScrollTargets(
   onScrollToPrompt: (index: number) => void
   onScrollToIndexFailed: (info: ScrollToIndexFailure) => void
 } {
-  // `useLayoutEffect`, not `useEffect`: a passive effect can be deferred past the
+  // `useLayoutEffect`, not `useLayoutEffect`: a passive effect can be deferred past the
   // paint, so a press landing in that window would resolve the anchor against the
   // previous transcript and jump to an older prompt. A layout effect runs before
   // the browser can paint the new rows, so the ref is current by the time the row
