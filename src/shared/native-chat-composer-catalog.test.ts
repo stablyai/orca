@@ -105,7 +105,7 @@ describe('mobileComposerSlashEntries with discovered skills', () => {
       { name: 'deploy-check', description: 'Verify the deploy' }
     ])
     expect(entries).toEqual([
-      { name: 'to-spec' },
+      { name: 'to-spec', description: 'Discovery duplicate' },
       { name: 'deploy-check', description: 'Verify the deploy' }
     ])
   })
@@ -132,6 +132,35 @@ describe('mobileComposerSlashEntries with namespaced plugin skills', () => {
     expect(entries.map((entry) => entry.name).filter((name) => name.includes('grilling'))).toEqual([
       'grilling',
       'quiver:grilling'
+    ])
+  })
+})
+
+describe('mobileComposerSlashEntries desktop parity', () => {
+  it('keeps a discovered description on a session-reported skill', () => {
+    const catalog = nativeChatComposerCatalog('claude', {
+      sessionCommands: [{ name: 'to-spec', kind: 'skill' }]
+    })
+    const entries = mobileComposerSlashEntries(catalog, [
+      { name: 'to-spec', description: 'Turn the discussion into a spec' }
+    ])
+    expect(entries).toEqual([{ name: 'to-spec', description: 'Turn the discussion into a spec' }])
+  })
+
+  it('renders a kindUnspecified command that names a skill as the skill row', () => {
+    const catalog = nativeChatComposerCatalog('claude', {
+      sessionCommands: [
+        { name: 'clear', kind: 'command' },
+        { name: 'grill', kind: 'command', kindUnspecified: true },
+        { name: 'grill', kind: 'skill' }
+      ]
+    })
+    const entries = mobileComposerSlashEntries(catalog, [
+      { name: 'grill', description: 'Stress-test the plan' }
+    ])
+    expect(entries).toEqual([
+      { name: 'clear', description: 'Clear conversation history' },
+      { name: 'grill', description: 'Stress-test the plan' }
     ])
   })
 })
