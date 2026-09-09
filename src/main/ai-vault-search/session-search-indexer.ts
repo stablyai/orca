@@ -6,7 +6,10 @@ import {
   SessionSearchIndexingStatus,
   type SessionSearchIndexStatus
 } from './session-search-indexing-status'
-import { SessionSearchPendingFiles } from './session-search-pending-files'
+import {
+  DEFAULT_SESSION_SEARCH_PENDING_LIMIT,
+  SessionSearchPendingFiles
+} from './session-search-pending-files'
 import {
   DEFAULT_SESSION_SEARCH_BUDGET,
   SessionSearchCycleAllowance,
@@ -20,7 +23,7 @@ import {
 } from './session-search-retention-policy'
 import { removeSessionSearchDatabase } from './session-search-schema'
 import type { SessionSearchScanRoots } from './session-search-scan-roots'
-import { SessionSearchStore, STALE_PATH_LIMIT } from './session-search-store'
+import { SessionSearchStore } from './session-search-store'
 import { SessionSearchWorkLoop } from './session-search-work-loop'
 
 /** Default cycle. Long enough that a machine with thousands of transcripts is
@@ -39,7 +42,7 @@ export type SessionSearchIndexerOptions = {
   reconcileIntervalMs?: number
   recentPerAgent?: number
   budget?: SessionSearchBudget
-  /** Test seam only; production shares the store's `STALE_PATH_LIMIT`. */
+  /** Test seam only; production uses `DEFAULT_SESSION_SEARCH_PENDING_LIMIT`. */
   pendingLimit?: number
   /** Stats one cycle spends proving deletions; the rest are checked next cycle. */
   retirementChecksPerCycle?: number
@@ -90,9 +93,9 @@ export class SessionSearchIndexer {
     this.recentPerAgent = options.recentPerAgent ?? DEFAULT_SESSION_SEARCH_RECENT_PER_AGENT
     this.budget = options.budget ?? DEFAULT_SESSION_SEARCH_BUDGET
     this.allowance = new SessionSearchCycleAllowance(this.budget)
-    // One ceiling for both re-read queues, so a caller reading `droppedPending`
-    // sees a single number that means one thing.
-    this.pending = new SessionSearchPendingFiles(options.pendingLimit ?? STALE_PATH_LIMIT)
+    this.pending = new SessionSearchPendingFiles(
+      options.pendingLimit ?? DEFAULT_SESSION_SEARCH_PENDING_LIMIT
+    )
     this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
     this.pace = options.pace ?? pauseBackfill
     this.historyDays = options.historyDays
@@ -317,13 +320,24 @@ export class SessionSearchIndexer {
     return sessionSearchHistoryCutoffMs(this.historyDays, this.clock.now())
   }
 
+  /**
+   * Files still owed a read, counted by path across both queues.
+   *
+   * A union rather than a sum: one path sits in both the moment a read is
+   * declined during a pause and a caller then invalidates the same file, and
+   * summing reports one transcript as two.
+   *
+   * The drop counts are summed, because a drop is an event and not a
+   * membership; nothing retains the paths, so they cannot be deduplicated after
+   * the fact. Non-zero means the queue is knowingly incomplete, which is the
+   * only thing a caller can act on.
+   */
   private publishPending(): void {
-    // Both queues, because a caller cannot act on one of them: the store's
-    // re-read set and this indexer's roll-over queue are each bounded, and
-    // either overrunning means the same thing for coverage.
+    const store = this.store
+    const onlyQueued = this.pending.paths.filter((path) => !store?.hasStale(path)).length
     this.indexingStatus.setPending(
-      this.pending.size + (this.store?.pendingFileCount ?? 0),
-      this.pending.droppedCount + (this.store?.droppedPendingFileCount ?? 0)
+      (store?.pendingFileCount ?? 0) + onlyQueued,
+      this.pending.droppedCount + (store?.droppedPendingFileCount ?? 0)
     )
   }
 

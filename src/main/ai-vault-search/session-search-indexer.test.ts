@@ -489,6 +489,29 @@ it('reads a stale file at its current stat, not the one it was recorded with', a
   expect(indexedCursor(path)).toEqual({ mtime_ms: current.mtimeMs, size_bytes: current.size })
 })
 
+// Finding 8: a path sits in both queues the moment a read is declined during a
+// pause and a caller then invalidates the same file. Summing them reports one
+// transcript as two, and a caller has no way to tell that from two files.
+it('counts a file queued in both places once', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['queued in both places'], SESSION_ID)
+  await newIndexer().start()
+
+  indexer?.pause()
+  await appendFile(path, `${claudeLines(['declined turn'], SESSION_ID, 10).join('\n')}\n`)
+  // The store records the declined read.
+  await parseTranscript(path)
+  expect(indexer?.status().filesPending).toBe(1)
+
+  // The caller invalidates the same file: still one file owed a read.
+  indexer?.invalidate([path])
+  expect(indexer?.status().filesPending).toBe(1)
+
+  // A different file is a second one, so the count is a union and not a cap.
+  indexer?.invalidate([transcriptPath(OTHER_SESSION_ID)])
+  expect(indexer?.status().filesPending).toBe(2)
+})
+
 // Finding 7: an unmounted volume ENOENTs its whole tree at once. Retiring on
 // that evidence deletes a user's searchable history for a detached drive.
 it.skipIf(!CAN_DENY_READ)(
