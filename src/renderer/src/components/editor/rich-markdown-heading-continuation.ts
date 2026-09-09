@@ -2,9 +2,10 @@ import type { Editor } from '@tiptap/core'
 import { TextSelection } from '@tiptap/pm/state'
 
 /**
- * Why: TipTap's stock Heading node has no Enter override, so the default
- * ProseMirror keymap's splitBlock carries the heading type into the new
- * block. This handler exits heading style on Enter to match Notion/Obsidian.
+ * Why: ProseMirror's default splitBlock keeps the heading type when Enter
+ * lands inside heading text; only at the block edges does it fall back to
+ * a paragraph. This handler makes every position exit to a paragraph,
+ * matching Notion/Obsidian.
  */
 export function exitHeadingOnEnter(editor: Editor): boolean {
   const { selection, schema } = editor.state
