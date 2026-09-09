@@ -19,6 +19,11 @@ afterEach(async () => {
   harness = null
 })
 
+async function open(name: string, options = {}): Promise<SessionSearchHarness> {
+  harness = await openSessionSearchHarness(name, options)
+  return harness
+}
+
 async function withSessions(count: number, options = {}): Promise<SessionSearchHarness> {
   harness = await openSessionSearchHarness('ss-engine-paging', options)
   for (let id = 1; id <= count; id++) {
@@ -99,6 +104,28 @@ describe('a cursor is refused rather than reinterpreted', () => {
       expect.unreachable('a stale cursor must not be silently re-run')
     } catch (error) {
       expect((error as SessionSearchCursorError).rejection).toBe('stale-generation')
+    }
+  })
+
+  it('names both generations, so a caller can tell a moved index from a bad cursor', async () => {
+    // What a caller does about it differs: a moved index means quietly ask for
+    // page one again, a bad cursor means something is wrong with the caller.
+    const { engine, store } = await withSessions(25)
+    const first = engine.search({ query: 'needle', limit: 10 })
+    const minted = first.generation
+    // Any published read moves the generation, including one for a file this
+    // page never mentioned. That is the fence working, not a defect.
+    store.removeFile('/synthetic/9.jsonl')
+
+    try {
+      engine.search({ query: 'needle', limit: 10, cursor: first.page.cursor! })
+      expect.unreachable('the index moved')
+    } catch (error) {
+      const rejected = error as SessionSearchCursorError
+      expect(rejected.rejection).toBe('stale-generation')
+      expect(rejected.expectedGeneration).toBe(minted)
+      expect(rejected.actualGeneration).toBe(store.generation)
+      expect(rejected.actualGeneration).toBeGreaterThan(rejected.expectedGeneration!)
     }
   })
 
@@ -224,6 +251,36 @@ describe('the candidate limit is a tunable default, and says when it cut', () =>
     const result = engine.search({ query: 'repo:app', limit: 100 })
     expect(result.truncated.candidates).toBe(true)
     expect(result.hits).toHaveLength(4)
+  })
+
+  it('says it gave up when the operator walk stopped scanning, not that it is done', async () => {
+    // The shape that reads as a confident empty answer: the only match sits
+    // past the walk's ceiling, so the walk stops having found nothing. Zero
+    // hits and `truncated.candidates` false would tell a caller there is
+    // nothing to find, which is a different claim from "I stopped looking".
+    // The walk reads a page at a time and gives up past a ceiling of
+    // `candidateLimit` x 20, so the corpus has to be deeper than one page for
+    // the ceiling to be what ends it. The only match is the oldest session.
+    const deep = 600
+    const { db, engine } = await open('ss-engine-sparse-deep', { sessionCandidateLimit: 2 })
+    for (let id = 1; id <= deep; id++) {
+      addSyntheticSession(db, {
+        id,
+        cwd: id === deep ? '/repo/needleonly' : '/repo/app',
+        updatedAt: new Date(Date.UTC(2026, 8, 9) - id * 60_000).toISOString()
+      })
+    }
+    const result = engine.search({ query: 'repo:needleonly' })
+    expect(result.hits).toHaveLength(0)
+    expect(result.truncated.candidates).toBe(true)
+  })
+
+  it('does not claim it gave up when the walk really did read everything', async () => {
+    const { db, engine } = await open('ss-engine-sparse-shallow', { sessionCandidateLimit: 600 })
+    addSyntheticSession(db, { id: 1, cwd: '/repo/app' })
+    const result = engine.search({ query: 'repo:nothing-here' })
+    expect(result.hits).toHaveLength(0)
+    expect(result.truncated.candidates).toBe(false)
   })
 })
 

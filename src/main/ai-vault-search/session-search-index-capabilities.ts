@@ -6,15 +6,17 @@ export type SessionSearchUnavailableFeature = 'typo-repair' | 'query-log'
 /**
  * What this index can answer, probed once when an engine opens over it.
  *
- * Why probe at all: schema version 2 added `messages_vocab` and `search_log`,
- * and a mismatched file is normally dropped and rebuilt when it is opened. But
- * an engine can be handed a connection to a version-1 file that another handle
- * is still answering from, and PR 4 is what first makes that reachable. Reading
- * the tables that do exist and saying plainly which feature is missing is a
- * better answer than throwing on the first query that reaches for one.
+ * Schema version 2 added `messages_vocab` and `search_log`. Every store opens
+ * through `openSessionSearchDatabase`, which drops and rebuilds a file whose
+ * version it does not recognise, so a lone process cannot reach an engine over
+ * a version-1 index: the probe would be dead code if that were the whole story.
  *
- * Which process may open, unlink and rebuild the index is PR 3b's decision, not
- * this file's; this only keeps a reader useful while that is unsettled.
+ * It is not. Two handles can be open on one file, and the one that rebuilds
+ * unlinks it while the other keeps answering from the inode; a table can appear
+ * or vanish under a live connection. Which process may rebuild is PR 3b's
+ * decision. Until it is settled, reading the tables that are there and naming
+ * the feature that is missing beats throwing on the first query that reaches
+ * for one, and the engine re-probes rather than trusting this answer forever.
  */
 export function sessionSearchUnavailableFeatures(
   db: SyncDatabase

@@ -296,6 +296,38 @@ describe('an index that predates version 2 is answered from, not thrown at', () 
     expect(result.hits).toEqual([])
   })
 
+  it('re-probes when a table vanishes under a live engine, instead of throwing', async () => {
+    // A capability is a fact about the file, not about the engine: another
+    // handle can rebuild the index while this one is answering.
+    const { db, store } = await open('ss-engine-vocab-vanishes')
+    addSyntheticSession(db, { id: 1, text: 'coalesces here now' })
+    addSyntheticSession(db, { id: 2, text: 'coalesces again here' })
+    const engine = new SessionSearchEngine(store)
+    expect(engine.search({ query: 'coalescs' }).planner.route).toBe('typo+or')
+
+    db.exec('DROP TABLE messages_vocab')
+    const degraded = engine.search({ query: 'coalescs' })
+    expect(degraded.unavailable).toEqual(['typo-repair'])
+    expect(degraded.planner.route).toBe('or')
+    expect(degraded.hits).toEqual([])
+  })
+
+  it('picks the feature back up when the table comes back', async () => {
+    const { db, store } = await open('ss-engine-vocab-returns')
+    addSyntheticSession(db, { id: 1, text: 'coalesces here now' })
+    addSyntheticSession(db, { id: 2, text: 'coalesces again here' })
+    const engine = new SessionSearchEngine(store)
+    db.exec('DROP TABLE messages_vocab')
+    expect(engine.search({ query: 'coalescs' }).unavailable).toEqual(['typo-repair'])
+
+    db.exec("CREATE VIRTUAL TABLE messages_vocab USING fts5vocab(messages_fts, 'row')")
+    // Nothing throws on the way back up, so the recovery cannot come from the
+    // error path; it comes from the probe running per search.
+    const restored = engine.search({ query: 'coalescs' })
+    expect(restored.unavailable).toEqual([])
+    expect(restored.planner.route).toBe('typo+or')
+  })
+
   it('claims nothing unavailable on a current index', async () => {
     const { db, engine } = await open('ss-engine-v2')
     addSyntheticSession(db, { id: 1 })

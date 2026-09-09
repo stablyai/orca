@@ -101,7 +101,7 @@ export class SessionSearchRetrieval {
    * index could answer with nothing while plenty matched. The walk is bounded
    * both ways: it stops at a full candidate set, and at a ceiling on rows read.
    */
-  recent(scope: RetrievalScope): { sessions: SessionRow[]; scanned: number } {
+  recent(scope: RetrievalScope): { sessions: SessionRow[]; incomplete: boolean } {
     const { conditions, values } = scope.filter
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const page = this.db.prepare(
@@ -111,7 +111,17 @@ export class SessionSearchRetrieval {
     const ceiling = scope.candidateLimit * RECENT_SCAN_FACTOR
     const sessions: SessionRow[] = []
     let scanned = 0
-    while (sessions.length < scope.candidateLimit && scanned < ceiling) {
+    // Why the flag and not a count: both caps mean the same thing to a caller —
+    // a session it never saw may have matched — and only the loop knows which
+    // of them ended it. Reporting rows read instead let the engine infer
+    // completeness from a full candidate set alone, so giving up at the ceiling
+    // with nothing found looked exactly like a search that found nothing.
+    let incomplete = false
+    while (sessions.length < scope.candidateLimit) {
+      if (scanned >= ceiling) {
+        incomplete = true
+        break
+      }
       const rows = page.all(...values, RECENT_PAGE_ROWS, scanned) as SessionRow[]
       if (rows.length === 0) {
         break
@@ -123,7 +133,7 @@ export class SessionSearchRetrieval {
         }
       }
     }
-    return { sessions, scanned }
+    return { sessions, incomplete: incomplete || sessions.length >= scope.candidateLimit }
   }
 
   loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {

@@ -55,8 +55,11 @@ type RankedPage = {
   ranked: RankedSession[]
   /** Null when no text was searched, so there is nothing to snippet from. */
   retrieved: Retrieved | null
-  /** Sessions the SQL returned, before fork folding cut it down. */
-  candidates: number
+  /**
+   * Retrieval may have missed a session: a cap ended it, not the data. True
+   * whether the candidate limit filled or the operator walk gave up scanning.
+   */
+  incomplete: boolean
 }
 
 export type SessionSearchEngineOptions = {
@@ -78,21 +81,30 @@ export type SessionSearchEngineOptions = {
  * same ranked list. That list is rebuilt per page rather than streamed, which
  * is what makes a page repeatable: within one index generation the same request
  * ranks the same way, and a cursor from any other generation is refused.
+ *
+ * That fence is strict on purpose, and the cost is worth stating plainly: any
+ * published read moves the generation, so while a backfill is running an
+ * outstanding cursor will be refused, often within a second. Pagination is
+ * usable against a settled index and unreliable against one still filling. The
+ * rejection carries both generations, so a caller that sees `stale-generation`
+ * knows the index moved rather than that it holds a bad cursor, and can quietly
+ * re-issue page one instead of showing anyone an error.
  */
 export class SessionSearchEngine {
   private readonly db: SyncDatabase
-  private readonly retrieval: SessionSearchRetrieval
+  private retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
-  /** Probed once: a version-1 file has neither vocabulary nor query log. */
-  private readonly unavailable: readonly SessionSearchUnavailableFeature[]
+  /** Re-probed whenever a query proves it stale; see `withCapabilityRetry`. */
+  private unavailable: readonly SessionSearchUnavailableFeature[]
 
   constructor(
     private readonly store: SessionSearchStore,
     private readonly options: SessionSearchEngineOptions = {}
   ) {
     this.db = store.connection
-    this.unavailable = sessionSearchUnavailableFeatures(this.db)
-    this.retrieval = new SessionSearchRetrieval(this.db, !this.unavailable.includes('typo-repair'))
+    // Seeded as fully capable so the first probe rebuilds only if it disagrees.
+    this.unavailable = []
+    this.retrieval = new SessionSearchRetrieval(this.db, true)
     this.candidateLimit = options.sessionCandidateLimit ?? SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT
   }
 
@@ -121,11 +133,13 @@ export class SessionSearchEngine {
       ? decodeSessionSearchCursor(request.cursor, generation, pageKey)
       : 0
 
+    this.probeCapabilities()
     const plan = planSessionSearchQuery(split.text)
-    const { ranked, retrieved, candidates } =
+    const { ranked, retrieved, incomplete } = this.withCapabilityRetry(() =>
       plan.terms.length === 0
         ? this.operatorOnly(split, retrievalScope)
         : this.text(plan, retrievalScope, sort)
+    )
 
     const limit = resolveSessionSearchLimit(request.limit)
     const page = ranked.slice(offset, offset + limit)
@@ -144,9 +158,11 @@ export class SessionSearchEngine {
         cursor: hasMore ? encodeSessionSearchCursor(generation, offset + limit, pageKey) : null
       },
       truncated: {
-        // Counted before fork folding: the SQL LIMIT is what produced the cut,
-        // and a full candidate set is exactly where a session may be missing.
-        candidates: candidates >= this.candidateLimit,
+        // Decided by retrieval, which is the only layer that knows whether a cap
+        // ended it. Deriving it from the hits cannot work: an operator walk that
+        // gave up at its scan ceiling returns no hits, and so does a search that
+        // genuinely matched nothing.
+        candidates: incomplete,
         snippets: hits.filter((hit) => hit.evidence?.snippetTruncated).length
       },
       generation,
@@ -164,6 +180,46 @@ export class SessionSearchEngine {
   }
 
   /**
+   * Two indexed `sqlite_master` lookups, run per search rather than once.
+   *
+   * A capability is a fact about the file, not about this object: another handle
+   * can rebuild the index under a live connection, so a verdict cached in the
+   * constructor is wrong for the rest of the engine's life in both directions —
+   * it would keep reaching for a table that went away, and never pick one back
+   * up when it returned. Retrieval is only rebuilt when the answer changes, so
+   * the steady-state cost is the two lookups and nothing else.
+   */
+  private probeCapabilities(): void {
+    const unavailable = sessionSearchUnavailableFeatures(this.db)
+    if (unavailable.join() === this.unavailable.join()) {
+      return
+    }
+    this.unavailable = unavailable
+    this.retrieval = new SessionSearchRetrieval(this.db, !unavailable.includes('typo-repair'))
+  }
+
+  /**
+   * Runs a retrieval, and re-probes once if it turns out the index no longer
+   * has what an earlier probe found.
+   *
+   * `probeCapabilities` already runs per search, so this only covers the window
+   * between that probe and the statement that reaches for the table. Losing a
+   * table there is a thrown error rather than a wrong verdict, so it re-probes
+   * and runs the search again.
+   */
+  private withCapabilityRetry(run: () => RankedPage): RankedPage {
+    try {
+      return run()
+    } catch (error) {
+      if (!isMissingTableError(error)) {
+        throw error
+      }
+      this.probeCapabilities()
+      return run()
+    }
+  }
+
+  /**
    * Operators with no free text still name a scope, so the answer is the newest
    * sessions inside it. Ranked through the same path as a text query, because
    * forks must fold here exactly as they do there or the same sessions answer
@@ -172,14 +228,10 @@ export class SessionSearchEngine {
    */
   private operatorOnly(split: AiVaultSearchQuerySplit, scope: RetrievalScope): RankedPage {
     if (!hasAiVaultSearchQueryOperators(split)) {
-      return { ranked: [], retrieved: null, candidates: 0 }
+      return { ranked: [], retrieved: null, incomplete: false }
     }
-    const { sessions } = this.retrieval.recent(scope)
-    return {
-      ranked: rankSessionHits(sessions, new Map(), 'newest'),
-      retrieved: null,
-      candidates: sessions.length
-    }
+    const { sessions, incomplete } = this.retrieval.recent(scope)
+    return { ranked: rankSessionHits(sessions, new Map(), 'newest'), retrieved: null, incomplete }
   }
 
   private text(
@@ -193,7 +245,13 @@ export class SessionSearchEngine {
     // Operators cut here, after retrieval, so the candidate count still reports
     // what the SQL limit saw: that is what tells a caller the limit was binding.
     const sessions = this.retrieval.loadSessions([...best.keys()], scope)
-    return { ranked: rankSessionHits(sessions, best, sort), retrieved, candidates: best.size }
+    // Counted before the operator predicate and before fork folding: the SQL
+    // LIMIT is what could have hidden a session, and it saw the unfiltered set.
+    return {
+      ranked: rankSessionHits(sessions, best, sort),
+      retrieved,
+      incomplete: best.size >= this.candidateLimit
+    }
   }
 
   /** Snippets and source presence are paid for by the page, never by the list. */
@@ -235,6 +293,13 @@ export class SessionSearchEngine {
         : null
     }
   }
+}
+
+// SQLite reports a table that went away at the statement that reaches for it.
+const MISSING_TABLE = /no such table/i
+
+function isMissingTableError(error: unknown): boolean {
+  return error instanceof Error && MISSING_TABLE.test(error.message)
 }
 
 /**
