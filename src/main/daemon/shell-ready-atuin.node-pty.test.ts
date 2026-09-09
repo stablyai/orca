@@ -1,3 +1,18 @@
+/**
+ * End-to-end proof that a real Atuin, driven by a real bash-preexec, records
+ * every command exactly once under the daemon Bash wrapper.
+ *
+ * Why opt-in rather than a CI job: it needs a PTY plus two third-party binaries
+ * that no default job installs, and fetching them per run would put a network
+ * download in front of every unit-test lane. The shell contract it protects —
+ * finishing bash-preexec's pending deferred install across its 0.6.0 and 0.7.0+
+ * install-string shapes without dropping a user DEBUG trap — runs by default in
+ * shell-ready-bash-preexec-deferred-install.test.ts. Run this one against real
+ * releases when touching that install:
+ *
+ *   ORCA_TEST_BASH_PREEXEC=/path/to/bash-preexec.sh \
+ *   ORCA_TEST_ATUIN=/path/to/atuin pnpm test src/main/daemon/shell-ready-atuin.node-pty.test.ts
+ */
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -7,7 +22,6 @@ import { expect, it } from 'vitest'
 import type { IPty } from 'node-pty'
 import { getDaemonBashShellReadyRcfileContent } from './daemon-bash-shell-ready-rcfile'
 
-// Set ORCA_TEST_BASH_PREEXEC to an installed bash-preexec.sh to exercise real Atuin.
 const bashPreexec = process.env.ORCA_TEST_BASH_PREEXEC
 const bash = process.env.ORCA_TEST_BASH ?? 'bash'
 const atuin = process.env.ORCA_TEST_ATUIN ?? 'atuin'

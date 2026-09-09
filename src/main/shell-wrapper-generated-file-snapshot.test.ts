@@ -76,7 +76,7 @@ const CONTRACT_GLOBALS = new Set([
   'PS1', // Bash appends its non-printing Readline readiness marker.
   'CURSOR',
   'ZDOTDIR',
-  '__bp_trap_string', // bash-preexec's own handoff into __bp_install, which unsets it.
+  '__bp_preexec_interactive_mode', // bash-preexec declares it; we only clear it, as it does.
   'precmd_functions',
   'preexec_functions'
 ])
