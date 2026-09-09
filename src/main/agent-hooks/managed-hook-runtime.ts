@@ -66,7 +66,15 @@ function normalizeCodexHome(candidate: unknown): string | null {
   ) {
     return null
   }
-  return candidate.replace(/\/+$/, '') || '/'
+  const normalized = candidate.replace(/\/+$/, '') || '/'
+  const segments = normalized.split('/').slice(1)
+  if (
+    normalized.startsWith('//') ||
+    segments.some((segment) => segment === '' || segment === '.' || segment === '..')
+  ) {
+    return null
+  }
+  return normalized
 }
 
 function resolveLoginShell(): string {

@@ -92,8 +92,7 @@ export function isCodexMethodNotFoundError(error: unknown): boolean {
  */
 export async function runCodexAppServerSession<T>(
   invocation: CodexAppServerInvocation,
-  /** The initialize result is Codex-owned metadata. Consumers must validate
-   *  the fields they read; remote hook setup uses its authoritative codexHome. */
+  /** Codex-owned initialize metadata; callers validate the fields they consume. */
   body: (rpc: CodexAppServerRpc, initializeResult: unknown) => Promise<T>,
   spawnImpl: CodexAppServerSpawn = spawnCodexAppServerProcess
 ): Promise<T> {

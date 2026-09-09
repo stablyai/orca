@@ -159,14 +159,22 @@ describe.runIf(process.platform !== 'win32')('resolveRelayCodexHome', () => {
     )
   })
 
-  it.each([undefined, '', 'relative/home', '/valid\nsecond-line', 'C:\\Users\\me\\.codex'])(
-    'falls back when app-server reports an invalid home: %s',
-    async (codexHome) => {
-      stubCodexHomeProbe(codexHome)
+  it.each([
+    undefined,
+    '',
+    'relative/home',
+    '/valid\nsecond-line',
+    'C:\\Users\\me\\.codex',
+    '/',
+    '//server/home',
+    '/home/orca/../codex',
+    '/home/orca/./codex',
+    '/home//orca/codex'
+  ])('falls back when app-server reports an invalid home: %s', async (codexHome) => {
+    stubCodexHomeProbe(codexHome)
 
-      await expect(resolveRelayCodexHome('/home/orca')).resolves.toBe('/home/orca/.codex')
-    }
-  )
+    await expect(resolveRelayCodexHome('/home/orca')).resolves.toBe('/home/orca/.codex')
+  })
 
   it('falls back when the app-server probe fails or times out', async () => {
     runCodexAppServerSessionMock.mockRejectedValue(new Error('probe timed out'))
