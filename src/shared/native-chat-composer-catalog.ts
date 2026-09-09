@@ -73,7 +73,8 @@ export function mobileComposerSlashEntries(
   // discovered description when one is on disk.
   const reportedSkillNames = new Set(
     (catalog.sessionSkillNames ?? []).filter(
-      (name) => !catalog.agentCommands.some((command) => command.name === name)
+      (name) =>
+        !catalog.agentCommands.some((command) => command.name === name && !command.kindUnspecified)
     )
   )
   const reportedSkills = [...reportedSkillNames].map(

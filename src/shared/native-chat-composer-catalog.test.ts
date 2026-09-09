@@ -164,3 +164,19 @@ describe('mobileComposerSlashEntries desktop parity', () => {
     ])
   })
 })
+
+describe('mobileComposerSlashEntries unclassified without disk copy', () => {
+  it('keeps the reported skill when the colliding command is unclassified and discovery has nothing', () => {
+    const catalog = nativeChatComposerCatalog('claude', {
+      sessionCommands: [
+        { name: 'clear', kind: 'command' },
+        { name: 'grill', kind: 'command', kindUnspecified: true },
+        { name: 'grill', kind: 'skill' }
+      ]
+    })
+    expect(mobileComposerSlashEntries(catalog)).toEqual([
+      { name: 'clear', description: 'Clear conversation history' },
+      { name: 'grill' }
+    ])
+  })
+})
