@@ -601,6 +601,32 @@ the renderer, `runtime-worktree-status-projection.ts` in main, and
 PR 3 moves the rollup and the decay into `src/shared` and makes all three
 call it.
 
+### The three copies
+
+| Copy | Lines | Reads |
+| --- | ---: | --- |
+| `renderer/src/lib/worktree-status.ts` | 222 | the sidebar store |
+| `main/runtime/runtime-worktree-status-projection.ts` | 255 | the hook snapshot |
+| `mobile/src/worktree/agent-row-display.ts` | 118 | `worktree ps` rows |
+
+The mobile copy hand-copies the 30-minute constant rather than importing
+`AGENT_STATUS_STALE_AFTER_MS`, so the three can drift by edit as well as by
+logic. `isFreshNonDoneAgentStatus` in `shared/agent-status-freshness.ts` is
+already shared and is the model: the rollup should sit beside it.
+
+### Why this is last
+
+Only after PR 2b do all three read equivalent rows. Sharing the rollup before
+that would unify the arithmetic over inputs that still disagree, which hides
+the disagreement rather than removing it.
+
+### Watch item
+
+Mobile currently ignores `structuredHostOwned`, so an owned structured row
+decays to idle there while the desktop keeps it. That is pre-existing, not a
+regression from PR 1a, and this step is where it stops being true — the shared
+rule already handles the owned case.
+
 ## What does not change
 
 - The hook scripts, the OSC 9999 wire format, and the relay protocol.
