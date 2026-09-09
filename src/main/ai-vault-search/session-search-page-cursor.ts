@@ -10,7 +10,13 @@ export type SessionSearchCursorRejection = 'stale-generation' | 'different-query
  * newer index hands it a slice of a list it never saw.
  */
 export class SessionSearchCursorError extends Error {
-  constructor(readonly rejection: SessionSearchCursorRejection) {
+  constructor(
+    readonly rejection: SessionSearchCursorRejection,
+    /** The generation the cursor was minted in; absent when it could not be read. */
+    readonly expectedGeneration?: number,
+    /** The generation the index is at now. */
+    readonly actualGeneration?: number
+  ) {
     super(`Search cursor rejected: ${rejection}`)
     this.name = 'SessionSearchCursorError'
   }
@@ -68,11 +74,14 @@ export function decodeSessionSearchCursor(cursor: string, generation: number, ke
   // Generation first: a caller who changed the query AND waited through a
   // publish should hear about the index moving, which is the condition it
   // cannot fix by paging again.
+  // Both generations travel with the rejection so a caller can tell "the index
+  // moved under you, ask for page one" from "this cursor is not ours", and act
+  // on the first without showing anyone an error.
   if (payload.g !== generation) {
-    throw new SessionSearchCursorError('stale-generation')
+    throw new SessionSearchCursorError('stale-generation', payload.g, generation)
   }
   if (payload.k !== key) {
-    throw new SessionSearchCursorError('different-query')
+    throw new SessionSearchCursorError('different-query', payload.g, generation)
   }
   return payload.o
 }
