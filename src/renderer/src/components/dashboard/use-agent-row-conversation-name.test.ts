@@ -233,6 +233,28 @@ describe('useAgentRowConversationName', () => {
       )
     })
 
+    it('yields no name for a worker pane still on the dispatch placeholder', () => {
+      // Why: a dispatched worker pane is titled `worker-task_<id>` until its
+      // agent titles itself; the row must fall back to the task name and must
+      // not borrow the sibling pane's title from the tab snapshot.
+      storeState.current = {
+        settings: {},
+        tabsByWorktree: {
+          'wt-1': [
+            { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: '\u2733 Linear work log' }
+          ]
+        },
+        terminalLayoutsByTabId: { 'tab-1': SPLIT_LAYOUT },
+        runtimePaneTitlesByTabId: {
+          'tab-1': { 1: '\u2733 Linear work log', 2: 'worker-task_f6116b98166e' }
+        }
+      }
+      expect(useAgentRowConversationName(splitRow(LEAF_A, '\u2733 Linear work log'))).toBe(
+        'Linear work log'
+      )
+      expect(useAgentRowConversationName(splitRow(LEAF_B, '\u2733 Linear work log'))).toBeNull()
+    })
+
     it('leaves a single-leaf tab on its tab title', () => {
       storeState.current = {
         settings: {},
@@ -250,6 +272,38 @@ describe('useAgentRowConversationName', () => {
         'Redis cache'
       )
     })
+  })
+
+  it('yields no name for a single-pane worker tab on the dispatch placeholder', () => {
+    storeState.current = {
+      settings: {},
+      tabsByWorktree: {
+        'wt-1': [
+          { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: 'worker-task_f6116b98166e' }
+        ]
+      }
+    }
+    const worker = makeAgent({
+      tab: { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: 'worker-task_f6116b98166e' }
+    } as Partial<DashboardAgentRow>)
+    expect(useAgentRowConversationName(worker)).toBeNull()
+  })
+
+  it('keeps a manual rename ahead of the dispatch placeholder', () => {
+    storeState.current = {
+      settings: {},
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-1',
+            worktreeId: 'wt-1',
+            customTitle: 'Patient sync spike',
+            title: 'worker-task_f6116b98166e'
+          }
+        ]
+      }
+    }
+    expect(useAgentRowConversationName(makeAgent())).toBe('Patient sync spike')
   })
 
   it('honors the generated-titles setting for generated names', () => {

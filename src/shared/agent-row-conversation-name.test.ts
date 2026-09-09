@@ -65,6 +65,61 @@ describe('getAgentRowConversationName', () => {
     expect(getAgentRowConversationName(generated, 'claude', true, null)).toBe('Fix intake flow')
   })
 
+  it('rejects the dispatch worker placeholder so the task name can show instead', () => {
+    // Why: a worker pane carries `worker-task_<id>` until its agent titles
+    // itself; surfacing it would hide the orchestration task name.
+    expect(
+      getAgentRowConversationName(makeTab({ title: 'worker-task_f6116b98166e' }), 'claude', false)
+    ).toBeNull()
+    // A remote host mints its own ids, so the shape is matched, not a known id.
+    expect(
+      getAgentRowConversationName(makeTab({ title: 'worker-task_remote-1' }), 'codex', false)
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: '\u2733 worker-task_f6116b98166e' }),
+        'claude',
+        false
+      )
+    ).toBeNull()
+    // A real title that merely starts with the same word is still a name.
+    expect(
+      getAgentRowConversationName(makeTab({ title: 'worker-task_ retry policy' }), 'claude', false)
+    ).toBe('worker-task_ retry policy')
+    expect(
+      getAgentRowConversationName(makeTab({ title: 'worker-pool sizing' }), 'claude', false)
+    ).toBe('worker-pool sizing')
+  })
+
+  it('keeps names above the worker placeholder without crossing panes', () => {
+    const tab = makeTab({
+      customTitle: 'Patient sync spike',
+      title: 'worker-task_f6116b98166e'
+    })
+    expect(getAgentRowConversationName(tab, 'claude', false)).toBe('Patient sync spike')
+    const quick = makeTab({ quickCommandLabel: 'Run tests', title: 'worker-task_f6116b98166e' })
+    expect(getAgentRowConversationName(quick, 'claude', false)).toBe('Run tests')
+    const generated = makeTab({
+      generatedTitle: 'Fix intake flow',
+      title: 'worker-task_f6116b98166e'
+    })
+    expect(getAgentRowConversationName(generated, 'claude', true)).toBe('Fix intake flow')
+    // Split panes: a placeholder pane yields null rather than borrowing the
+    // sibling tab title, and a real sibling pane title still wins.
+    const split = makeTab({ title: 'Linear work log' })
+    expect(
+      getAgentRowConversationName(split, 'claude', false, 'worker-task_f6116b98166e')
+    ).toBeNull()
+    expect(
+      getAgentRowConversationName(
+        makeTab({ title: 'worker-task_f6116b98166e' }),
+        'claude',
+        false,
+        'Redis cache strategy'
+      )
+    ).toBe('Redis cache strategy')
+  })
+
   it('strips leading status decoration from agent-set titles', () => {
     expect(
       getAgentRowConversationName(makeTab({ title: '✳ Fix patient intake flow' }), 'claude', false)

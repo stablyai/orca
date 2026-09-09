@@ -10,6 +10,7 @@ import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
 import { isMeaningfulOpenCodeTerminalTitle } from './opencode-terminal-title'
+import { isOrchestrationWorkerTerminalTitle } from './orchestration-worker-terminal-title'
 import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 import type { TerminalTab } from './terminal-tab-types'
 
@@ -96,7 +97,11 @@ function conversationNameFromLiveTitle(
     STATUS_WITH_CONTEXT_RE.test(stripped) ||
     DEFAULT_TERMINAL_TITLE_RE.test(stripped) ||
     isClaudeManagementTitle(stripped) ||
-    isCwdLikeTitle(stripped)
+    isCwdLikeTitle(stripped) ||
+    // Why: `worker-task_…` is the dispatch placeholder a worker pane carries
+    // until its agent titles itself. Preferring it would hide the orchestration
+    // task name the row falls back to.
+    isOrchestrationWorkerTerminalTitle(stripped)
   ) {
     return null
   }

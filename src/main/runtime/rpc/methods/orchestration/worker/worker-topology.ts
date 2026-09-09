@@ -1,5 +1,6 @@
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat-session-option-defaults'
+import { buildOrchestrationWorkerTerminalTitle } from '../../../../../../shared/orchestration-worker-terminal-title'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -70,7 +71,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     // configured launcher instead of executing the raw id.
     startupAgent: args.agent,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
-    title: `worker-${args.taskId}`,
+    title: buildOrchestrationWorkerTerminalTitle(args.taskId),
     // Why: dispatching a worker is background work; it must not pull the sidebar
     // to the worker's workspace while the user is reading somewhere else.
     surfaceOwner: false

@@ -1,3 +1,4 @@
+import { buildOrchestrationWorkerTerminalTitle } from '../../../../../../shared/orchestration-worker-terminal-title'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -182,7 +183,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
               // its CLI is `cursor-agent`); resolve through the TUI agent config.
               startupAgent: agent as TuiAgent,
               ...(launch.preferences ? { launchPreferences: launch.preferences } : {}),
-              title: `worker-${params.taskId}`,
+              title: buildOrchestrationWorkerTerminalTitle(params.taskId),
               presentation: 'background'
             })
             terminalHandle = terminal.handle
