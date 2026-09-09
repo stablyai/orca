@@ -1,12 +1,16 @@
 import { z } from 'zod'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
+  coerceProjectExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
+
+const INVALID_HOST_ID_MESSAGE =
+  'Invalid host ID. Use local, ssh:<targetId>, or runtime:<environmentId> ' +
+  '(bare ids from `orca environment list` are accepted as runtime:<id>).'
 
 const ProjectProviderIdentity = z.object({
   provider: z.literal('github'),
@@ -24,11 +28,12 @@ const ProjectProviderIdentity = z.object({
 // Rows written before this normalization keep their client-minted stamp; readers still project
 // `local` back to `runtime:<their-id>`, so the client-visible model is unchanged.
 const RequestedHostId = requiredString('Missing host ID').transform((value, ctx) => {
-  const hostId = normalizeExecutionHostId(value)
+  const hostId = coerceProjectExecutionHostId(value)
   if (!hostId) {
-    ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+    ctx.addIssue({ code: 'custom', message: INVALID_HOST_ID_MESSAGE })
     return z.NEVER
   }
+  // Why: a client-minted runtime: id names this host; persist local, not the caller's spelling.
   return parseExecutionHostId(hostId)?.kind === 'runtime' ? LOCAL_EXECUTION_HOST_ID : hostId
 })
 

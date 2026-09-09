@@ -46,9 +46,16 @@ describe('project host setup self-host stamp', () => {
   })
 
   it.each(CREATING_METHODS)('$name still rejects an unparseable host', ({ name, base }) => {
-    expect(() => parseParams(name, { ...base, hostId: 'nonsense' })).toThrow()
+    expect(() => parseParams(name, { ...base, hostId: 'bogus:scheme' })).toThrow()
     expect(() => parseParams(name, { ...base, hostId: 'runtime:' })).toThrow()
   })
+
+  it.each(CREATING_METHODS)(
+    '$name coerces a bare environment id to this-host local',
+    ({ name, base }) => {
+      expect(parseParams(name, { ...base, hostId: 'nonsense' }).hostId).toBe('local')
+    }
+  )
 
   // Two clients paired with the same server now converge on one row instead of one each.
   it('collapses two different clients onto the same host id', () => {

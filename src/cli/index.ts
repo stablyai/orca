@@ -8,6 +8,7 @@ import {
   specPaths,
   validateCommandAndFlags
 } from './args'
+import { coerceProjectExecutionHostId } from '../shared/execution-host'
 import { readOrcaCliVersion } from './cli-version'
 import { dispatch } from './dispatch'
 import {
@@ -126,6 +127,17 @@ export async function main(
     // retargeting a mutation to another server is the bug this flag already had.
     // An ambient pairing code cannot be resolved to an id to compare, so the
     // explicit flag simply wins there.
+    // Why: project --host accepts bare environment-list ids as runtime:<id> (#7810).
+    // Coerce before routing so `orca project setup-* --host <id>` still picks the paired server.
+    if (parsed.commandPath[0] === 'project') {
+      const rawHost = parsed.flags.get('host')
+      if (typeof rawHost === 'string' && rawHost.length > 0) {
+        const coercedHost = coerceProjectExecutionHostId(rawHost)
+        if (coercedHost) {
+          parsed.flags.set('host', coercedHost)
+        }
+      }
+    }
     const hostEnvironmentId = ignoreRemoteSelection
       ? null
       : await resolveHostFlagEnvironmentId(parsed.flags, {
