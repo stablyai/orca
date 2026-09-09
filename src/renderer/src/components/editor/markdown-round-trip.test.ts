@@ -112,13 +112,23 @@ describe('rich markdown round trip', () => {
 
   it('preserves editable details blocks', () => {
     expect(roundTripMarkdown('<details><summary>Toggle</summary><p>Body</p></details>\n')).toBe(
-      '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      '<details>\n<summary>Toggle</summary>\n\nBody\n\n</details>'
     )
+  })
+
+  it('does not inject a styling class into a bare details block on save', () => {
+    // Why: the styling class is applied to the rendered DOM node independently,
+    // so the serializer must not rewrite a user's plain `<details>` source tag.
+    const output = roundTripMarkdown(
+      '<details open><summary>Toggle</summary><p>Body</p></details>\n'
+    )
+    expect(output.startsWith('<details open>')).toBe(true)
+    expect(output).not.toContain('orca-details')
   })
 
   it('does not double-escape entities in editable details summaries', () => {
     expect(roundTripMarkdown('<details><summary>A &amp; B</summary><p>Body</p></details>\n')).toBe(
-      '<details class="orca-details">\n<summary>A &amp; B</summary>\n\nBody\n\n</details>'
+      '<details>\n<summary>A &amp; B</summary>\n\nBody\n\n</details>'
     )
   })
 
@@ -128,7 +138,7 @@ describe('rich markdown round trip', () => {
         '<details data-orca-toggle="heading-1"><summary>Toggle</summary><p>Body</p></details>\n'
       )
     ).toBe(
-      '<details class="orca-details" data-orca-toggle="heading-1">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      '<details data-orca-toggle="heading-1">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
     )
   })
 
@@ -140,7 +150,7 @@ describe('rich markdown round trip', () => {
           `<details data-orca-toggle="${variant}"><summary>Toggle</summary><p>Body</p></details>\n`
         )
       ).toBe(
-        `<details class="orca-details" data-orca-toggle="${variant}">\n<summary>Toggle</summary>\n\nBody\n\n</details>`
+        `<details data-orca-toggle="${variant}">\n<summary>Toggle</summary>\n\nBody\n\n</details>`
       )
     }
   )
@@ -151,7 +161,7 @@ describe('rich markdown round trip', () => {
         '<details data-orca-toggle = "heading-4"><summary>Toggle</summary><p>Body</p></details>\n'
       )
     ).toBe(
-      '<details class="orca-details" data-orca-toggle="heading-4">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      '<details data-orca-toggle="heading-4">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
     )
   })
 
@@ -193,10 +203,10 @@ describe('rich markdown round trip', () => {
       )
     ).toBe(
       [
-        '<details class="orca-details">',
+        '<details>',
         '<summary>Outer</summary>',
         '',
-        '<details class="orca-details">',
+        '<details>',
         '<summary>Inner</summary>',
         '',
         'Body',
@@ -208,7 +218,10 @@ describe('rich markdown round trip', () => {
     )
   })
 
-  it('round-trips an orca-authored nested toggle unchanged', () => {
+  it('drops the legacy styling class from a previously orca-authored nested toggle on round trip', () => {
+    // Why: earlier Orca versions wrote `class="orca-details"` into the markdown
+    // source; the serializer no longer re-emits it, since the DOM class comes
+    // from the editor's node view configuration instead.
     const input = [
       '<details class="orca-details" data-orca-toggle="heading-3" open>',
       '<summary>08/26/2026</summary>',
@@ -226,16 +239,32 @@ describe('rich markdown round trip', () => {
       '</details>',
       ''
     ].join('\n')
-    expect(roundTripMarkdown(input)).toBe(input.trimEnd())
+    const expected = [
+      '<details data-orca-toggle="heading-3" open>',
+      '<summary>08/26/2026</summary>',
+      '',
+      '<details open>',
+      '<summary>goals</summary>',
+      '',
+      '- Read X post',
+      '  - Collab',
+      '',
+      '</details>',
+      '',
+      '- after inner',
+      '',
+      '</details>'
+    ].join('\n')
+    expect(roundTripMarkdown(input)).toBe(expected)
   })
 
   it('keeps nested toggle bodies editable rather than inert raw html', () => {
     const markdown = markdownAfterTextReplace(
       [
-        '<details class="orca-details" open>',
+        '<details open>',
         '<summary>Outer</summary>',
         '',
-        '<details class="orca-details" open>',
+        '<details open>',
         '<summary>Inner</summary>',
         '',
         'Body',
@@ -264,14 +293,14 @@ describe('rich markdown round trip', () => {
 
   it('inserts editable text toggles from slash commands', () => {
     expect(slashCommandMarkdown('toggle-text')).toBe(
-      '<details class="orca-details" open>\n<summary></summary>\n\n\n\n</details>'
+      '<details open>\n<summary></summary>\n\n\n\n</details>'
     )
     expect(slashCommandSelectionParent('toggle-text')).toBe('detailsSummary')
   })
 
   it('inserts editable heading toggles from slash commands', () => {
     expect(slashCommandMarkdown('toggle-h1')).toBe(
-      '<details class="orca-details" data-orca-toggle="heading-1" open>\n<summary></summary>\n\n\n\n</details>'
+      '<details data-orca-toggle="heading-1" open>\n<summary></summary>\n\n\n\n</details>'
     )
     expect(slashCommandSelectionParent('toggle-h1')).toBe('detailsSummary')
   })
@@ -283,7 +312,7 @@ describe('rich markdown round trip', () => {
     ['toggle-h5', 'heading-5']
   ] as const)('inserts editable %s toggles from slash commands', (commandId, variant) => {
     expect(slashCommandMarkdown(commandId)).toBe(
-      `<details class="orca-details" data-orca-toggle="${variant}" open>\n<summary></summary>\n\n\n\n</details>`
+      `<details data-orca-toggle="${variant}" open>\n<summary></summary>\n\n\n\n</details>`
     )
     expect(slashCommandSelectionParent(commandId)).toBe('detailsSummary')
   })

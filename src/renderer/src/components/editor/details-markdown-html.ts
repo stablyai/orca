@@ -76,8 +76,11 @@ export function detailsBodyHtmlToMarkdown(body: string): string {
     .trim()
 }
 
+// Why: the styling class is applied to the rendered DOM node independently
+// (OrcaDetails' HTMLAttributes config), so writing it into the markdown
+// source would rewrite a user's plain `<details>` on every save.
 export function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): string {
-  const attributes = ['class="orca-details"']
+  const attributes: string[] = []
 
   const variant = parseToggleHeadingVariant(attrs?.variant)
   if (variant) {

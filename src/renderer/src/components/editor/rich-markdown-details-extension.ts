@@ -281,8 +281,9 @@ const OrcaDetails = Details.extend({
     )
     const body = helpers.renderChildren(content?.content ?? [], '\n\n').trim()
     const attrs = renderDetailsAttributes(node.attrs)
+    const openingTag = attrs ? `<details ${attrs}>` : '<details>'
 
-    return `<details ${attrs}>\n<summary>${summaryText}</summary>\n\n${body}\n\n</details>`
+    return `${openingTag}\n<summary>${summaryText}</summary>\n\n${body}\n\n</details>`
   }
 })
 
