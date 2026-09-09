@@ -35,6 +35,7 @@ export type AiVaultScanOptions = {
   droidProjectsDir?: string
   clineSessionsDir?: string
   kimiSessionsDir?: string
+  musecodeSessionsDir?: string
   limit?: number
   unlimited?: boolean
   limitPerAgent?: number

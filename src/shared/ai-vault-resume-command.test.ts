@@ -152,6 +152,17 @@ describe('buildAiVaultResumeCommand', () => {
       })
     ).toBe("cd '/Users/ada/repo' && prime-agent --resume 'dddddddd-eeee-4fff-8aaa-111111111111'")
   })
+
+  it('resumes MuseCode by session id in the session cwd', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'musecode',
+        sessionId: 'eeeeeeee-ffff-4000-baaa-222222222222',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && muse resume 'eeeeeeee-ffff-4000-baaa-222222222222'")
+  })
 })
 
 describe('buildAiVaultResumeShellCommand env removal', () => {

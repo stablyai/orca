@@ -25,7 +25,8 @@ export function isolatedScanRoots(root: string) {
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     clineSessionsDir: join(root, 'cline-sessions'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    musecodeSessionsDir: join(root, 'musecode-sessions')
   }
 }
 
@@ -136,4 +137,77 @@ export function writeAntigravityScannerFixture(
       content: 'Done'
     }
   ])
+}
+
+// MuseCode sessions are date-sharded <root>/YYYY/MM/DD/<uuid>/session.jsonl
+// envelopes mixing bare records, retained_frame envelopes, and
+// omitted_live_only retention markers (verified against muse 1.0.3).
+export async function writeMusecodeScannerFixture(sessionsDir: string): Promise<string> {
+  const sessionFile = join(sessionsDir, '2026', '05', '01', 'musecode-session', 'session.jsonl')
+  const bare = (payloadType: string, payload: unknown, recordedAt: number) => ({
+    record_type: 'event',
+    payload_type: payloadType,
+    recorded_at: recordedAt,
+    payload
+  })
+  await writeJsonlFile(sessionFile, [
+    bare(
+      'runtime.session.metadata',
+      { kind: 'metadata', record: { workspace_root: '/tmp/musecode', provider_id: 'meta' } },
+      1780000000000000
+    ),
+    bare(
+      'runtime.user_intent.accepted',
+      { intent_id: 'intent-1', refill_blocks: [{ kind: 'text', text: 'Musecode vault title' }] },
+      1780000001000000
+    ),
+    // Why: every turn also emits `run :: started` carrying the same prompt —
+    // the parser must fold it once (messageCount stays 2 below).
+    bare(
+      'runtime.session',
+      { kind: 'run', run_id: 'run-1', event: { kind: 'started', prompt: 'Musecode vault title' } },
+      1780000001000007
+    ),
+    {
+      retained_frame: true,
+      frame_schema_version: 1,
+      outer_log_ordinal: 3,
+      transaction_id: 'txn-1',
+      children: [
+        {
+          child_index: 0,
+          record_json: JSON.stringify(
+            bare(
+              'runtime.session',
+              {
+                kind: 'run',
+                run_id: 'run-1',
+                event: { kind: 'assistant_message_committed', text: 'Musecode answer' }
+              },
+              1780000002000000
+            )
+          )
+        }
+      ]
+    },
+    bare(
+      'runtime.session',
+      {
+        kind: 'run',
+        run_id: 'run-1',
+        event: {
+          kind: 'model_completed',
+          model: 'muse-spark-test',
+          usage: { input_tokens: 10, output_tokens: 5 }
+        }
+      },
+      1780000003000000
+    ),
+    {
+      retained_marker: 'omitted_live_only',
+      schema_version: 1,
+      stream: { kind: 'session', id: 'musecode-session' }
+    }
+  ])
+  return sessionFile
 }

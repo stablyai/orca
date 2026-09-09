@@ -166,6 +166,68 @@ describe('agent process recognition', () => {
     })
   })
 
+  it('recognizes MuseCode by its muse binary', () => {
+    expect(recognizeAgentProcess('muse')).toEqual({
+      agent: 'musecode',
+      processName: 'muse'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/muse')).toEqual({
+      agent: 'musecode',
+      processName: 'muse'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/muse', 'muse')).toBe(true)
+    expect(isRecognizedAgentType('muse')).toBe(true)
+  })
+
+  it('recognizes MuseCode by its versioned muse-bin sibling binary', () => {
+    // Why: the `muse` launcher execs `muse-bin-<version>` (a 242MB sibling),
+    // so the live foreground process carries the versioned name — truncated
+    // to `muse-bin-1.0.3-R` in macOS comm output (verified on-device).
+    expect(recognizeAgentProcess('muse-bin-1.0.3-R2198.1')).toEqual({
+      agent: 'musecode',
+      processName: 'muse-bin-1.0.3-r2198.1'
+    })
+    expect(recognizeAgentProcess('muse-bin-1.0.3-R')).toEqual({
+      agent: 'musecode',
+      processName: 'muse-bin-1.0.3-r'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/muse-bin-1.0.3-R2198.1')).toEqual({
+      agent: 'musecode',
+      processName: 'muse-bin-1.0.3-r2198.1'
+    })
+  })
+
+  it('does not recognize MuseCode headless exec commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('muse exec "summarize this diff"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('muse exec --json "review this" > result.jsonl')
+    ).toBeNull()
+    // Why: a bare `exec` token dispatches as the subcommand even past `--`
+    // (verified: `muse -- resume` still resumes), so this errors instead of
+    // hosting a pane — never an interactive agent.
+    expect(recognizeAgentProcessFromCommandLine('muse -- exec "summarize this diff"')).toBeNull()
+    // Why: a whole-prompt `muse 'exec'` takes the exec missing-prompt error
+    // path, not a TUI, so filtering it is correct.
+    expect(recognizeAgentProcessFromCommandLine("muse 'exec'")).toBeNull()
+    // Why: `muse resume` reopens the interactive TUI, so it still hosts a live session.
+    expect(recognizeAgentProcessFromCommandLine('muse resume')).toEqual({
+      agent: 'musecode',
+      processName: 'muse'
+    })
+    // Why: `muse -- resume` still dispatches to the resume subcommand (verified
+    // against muse 1.0.3), which reopens the interactive TUI.
+    expect(recognizeAgentProcessFromCommandLine('muse -- resume')).toEqual({
+      agent: 'musecode',
+      processName: 'muse'
+    })
+    // Why: the prompt is one quoted argv, so it never equals the bare `exec`
+    // token — this is the interactive pane Orca itself launches.
+    expect(recognizeAgentProcessFromCommandLine('muse -- "exec the release notes"')).toEqual({
+      agent: 'musecode',
+      processName: 'muse'
+    })
+  })
+
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
       agent: 'mistral-vibe',

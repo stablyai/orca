@@ -7,6 +7,7 @@ import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
+import { parseMusecodeSessionContent } from './session-scanner-musecode-parser'
 import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
 import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
@@ -109,6 +110,16 @@ export function remoteSessionSources(
       hostPlatform,
       remotePrimeAgentSessionsSegments(),
       primeAgentParser
+    ),
+    jsonlSource(
+      'musecode',
+      remoteHome,
+      hostPlatform,
+      ['.local', 'share', 'muse', 'sessions'],
+      parseMusecodeSessionContent,
+      // Why: each session dir holds session.jsonl plus .log/.sqlite3 sidecars;
+      // match only the transcript (same predicate as local discovery).
+      (path) => remotePathSegments(path).at(-1) === 'session.jsonl'
     ),
     jsonlSource(
       'droid',

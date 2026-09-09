@@ -232,6 +232,17 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'aug'
+    ),
+    // Why: user skills live under XDG config home (`~/.config/muse/skills` by
+    // default); project skills are the canonical `.agents/skills` root already
+    // covered by home-agents/repo-agents, so no agent-specific repo source.
+    source(
+      'home-musecode',
+      'MuseCode home',
+      pathApi.join(home, '.config', 'muse', 'skills'),
+      'home',
+      ['agent-skills'],
+      'musecode'
     )
   ]
 

@@ -17,7 +17,12 @@ export const AGENT_HOOK_TARGETS = [
   'copilot',
   'hermes',
   'devin',
-  'kimi'
+  'kimi',
+  // Why: present so the (parked) musecode hook service and listener
+  // attribution typecheck; no installer is registered, so nothing probes
+  // beyond presence detection and no install ever runs. See
+  // src/main/musecode/hook-service.ts for the parking rationale.
+  'musecode'
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 

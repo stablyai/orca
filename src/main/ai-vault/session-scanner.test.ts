@@ -8,6 +8,7 @@ import {
   isolatedScanRoots,
   jsonLines,
   writeAntigravityScannerFixture,
+  writeMusecodeScannerFixture,
   writeOmpScannerFixture,
   writePrimeAgentScannerFixture
 } from './session-scanner-test-fixtures'
@@ -599,6 +600,7 @@ describe('scanAiVaultSessions', () => {
 
     const ompSessionFile = await writeOmpScannerFixture(roots.ompSessionsDir)
     const primeAgentSessionFile = await writePrimeAgentScannerFixture(roots.primeAgentSessionsDir)
+    await writeMusecodeScannerFixture(roots.musecodeSessionsDir)
 
     await mkdir(roots.devinTranscriptsDir, { recursive: true })
     await writeFile(

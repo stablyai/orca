@@ -29,6 +29,8 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   devin: '--permission-mode bypass',
   ante: '--yolo',
   trae: '--yolo',
+  // Why: `--yolo` is a documented interactive-TUI flag (verified: muse 1.0.3 `--help`).
+  musecode: '--yolo',
   droid: '--auto high'
 }
 

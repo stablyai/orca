@@ -122,6 +122,16 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Trae subcommand or flag — `--` stops both in its Cobra parser.
     argvPromptSeparator: '--'
   },
+  musecode: {
+    // Why: Meta's MuseCode installer ships a single `muse` binary (not `musecode`); keep id 'musecode' for stored prefs.
+    detectCmd: 'muse',
+    // Why: `muse [PROMPT]` takes the task as a positional argv, same as Claude/Codex.
+    // Verified against muse 1.0.3: no `--` separator — a bare command word dispatches
+    // even past it (`muse -- resume` still resumes), so it buys no protection; Orca
+    // quotes the prompt as one argv, leaving only a whole-prompt `resume`/`exec`/…
+    // to misdispatch.
+    promptInjectionMode: 'argv'
+  },
   opencode: {
     detectCmd: 'opencode',
     promptInjectionMode: 'flag-prompt',
