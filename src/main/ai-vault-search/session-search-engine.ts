@@ -112,8 +112,9 @@ export class SessionSearchEngine {
     }
     // Decoded before any retrieval: a cursor the engine will refuse must not
     // cost a query, and the caller has to hear about it either way.
+    const pageKey = sessionSearchPageKey(request)
     const offset = request.cursor
-      ? decodeSessionSearchCursor(request.cursor, generation, sessionSearchPageKey(request))
+      ? decodeSessionSearchCursor(request.cursor, generation, pageKey)
       : 0
 
     const plan = planSessionSearchQuery(split.text)
@@ -135,9 +136,7 @@ export class SessionSearchEngine {
       },
       page: {
         hasMore,
-        cursor: hasMore
-          ? encodeSessionSearchCursor(generation, offset + limit, sessionSearchPageKey(request))
-          : null
+        cursor: hasMore ? encodeSessionSearchCursor(generation, offset + limit, pageKey) : null
       },
       truncated: {
         // Counted before fork folding: the SQL LIMIT is what produced the cut,

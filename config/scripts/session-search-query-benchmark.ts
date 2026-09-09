@@ -142,7 +142,7 @@ function candidateSweep(
       ...timing(samples.get(limit)!),
       truncated: result.truncated.candidates,
       // Pages a caller could walk before the limit stops handing out sessions.
-      reachablePages: Math.ceil(Math.min(limit, 20 * 1000) / 20)
+      reachablePages: Math.ceil(limit / (request.limit ?? 20))
     }
   }
   return report
