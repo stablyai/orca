@@ -171,8 +171,13 @@ const linkReferenceDefinitionProcessor = unified().use(remarkParse).use(remarkGf
 
 // Why: only an mdast `definition` node proves a `[label]:` line is a link
 // reference definition and not prose. Definitions can sit inside blockquotes
-// and list items, so the whole tree is walked.
+// and list items, so the whole tree is walked. Above the same size cap as the
+// HTML round-trip check, parsing is skipped and the pre-filter match is
+// trusted as a definition, since blocking rich mode is the safe default.
 function hasLinkReferenceDefinition(content: string): boolean {
+  if (content.length > 50_000) {
+    return true
+  }
   const tree = linkReferenceDefinitionProcessor.parse(content)
   return containsDefinitionNode(tree)
 }
