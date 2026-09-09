@@ -30,6 +30,20 @@ describe('buildViewportUserAgentOverride', () => {
     expect(override.userAgentMetadata).toBeUndefined()
   })
 
+  it('strips the app and Electron tokens on WhatsApp Web, keeping the Chrome identity', () => {
+    const electronUa =
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Orca/1.4.198 Chrome/150.0.7871.224 Electron/43.4.1 Safari/537.36'
+    const override = buildViewportUserAgentOverride({
+      url: 'https://web.whatsapp.com/',
+      mobile: false,
+      baseUserAgent: electronUa
+    })
+    expect(override.userAgent).toBe(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.224 Safari/537.36'
+    )
+    expect(override.userAgentMetadata).toBeUndefined()
+  })
+
   it('splices the real Chrome major into the mobile UA and its client hints', () => {
     const override = buildViewportUserAgentOverride({
       url: 'https://example.com/',

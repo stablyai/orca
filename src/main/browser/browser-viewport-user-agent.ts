@@ -5,6 +5,7 @@
 // the exact UA mismatch this scope exists to remove.
 
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
+import { isWhatsAppWebUrl, whatsAppCompatUserAgent } from './browser-whatsapp-ua'
 
 type UserAgentBrand = { brand: string; version: string }
 
@@ -44,8 +45,13 @@ export function buildViewportUserAgentOverride(args: {
     return { userAgent: googleAuthUserAgent() }
   }
   if (!args.mobile) {
-    // Why: desktop presets republish the session's own identity unchanged.
-    return { userAgent: args.baseUserAgent }
+    // Why: desktop presets republish the session's own identity unchanged — except on WhatsApp
+    // Web, whose UA sniffing rejects the Electron/app tokens (see browser-whatsapp-ua.ts).
+    return {
+      userAgent: isWhatsAppWebUrl(args.url)
+        ? whatsAppCompatUserAgent(args.baseUserAgent)
+        : args.baseUserAgent
+    }
   }
   const chromeMajor = extractChromeMajor(args.baseUserAgent)
   // Why: userAgentMetadata must accompany the mobile UA so client hints match, or bot-detection flags the desktop-hint leak.

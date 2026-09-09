@@ -1,6 +1,7 @@
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
+import { isWhatsAppWebUrl, whatsAppCompatUserAgent } from './browser-whatsapp-ua'
 import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
 import {
   safeOrigin,
@@ -42,13 +43,16 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         ? latestPendingOverride
         : confirmedOverride
     const currentUa = currentOverride?.userAgent ?? guest.getUserAgent()
-    const nextUa = isGoogleAuthUrl(url)
-      ? firefoxUa
-      : // Only restore when the auth-host override is actually in place, so normal
-        // navigation never touches the session UA.
-        currentUa === firefoxUa
-        ? guest.session.getUserAgent()
-        : null
+    const sessionUa = guest.session.getUserAgent()
+    // Why: WhatsApp Web is the second host-scoped identity exception — its UA sniffing rejects
+    // the Electron/app tokens, so that host gets the session identity minus those tokens.
+    const whatsAppUa = whatsAppCompatUserAgent(sessionUa)
+    const hostScopedUa = isGoogleAuthUrl(url) ? firefoxUa : isWhatsAppWebUrl(url) ? whatsAppUa : null
+    // Only restore when a host-scoped override is actually in place, so normal
+    // navigation never touches the session UA.
+    const hostScopedOverrideActive =
+      currentUa === firefoxUa || (whatsAppUa !== sessionUa && currentUa === whatsAppUa)
+    const nextUa = hostScopedUa ?? (hostScopedOverrideActive ? sessionUa : null)
     let authOverrideIssuedOverCdp = false
     if (nextUa !== null && nextUa !== currentUa) {
       // Why: WebContents.setUserAgent() during a redirect makes Chromium cancel the in-flight
