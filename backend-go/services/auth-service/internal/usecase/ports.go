@@ -30,6 +30,9 @@ var (
 	// identity has never logged in here before" case
 	// LoginOrProvisionSsoUser branches on.
 	ErrSsoIdentityNotFound = errors.New("usecase: sso identity not found")
+	// ErrServiceTokenNotFound is returned when no auth.issued_service_tokens
+	// row matches a jti lookup — RevokeCliToken's "nothing to revoke" case.
+	ErrServiceTokenNotFound = errors.New("usecase: issued service token not found")
 )
 
 // UserRepository is the persistence port for users. Implemented by
@@ -97,6 +100,43 @@ type SessionRepository interface {
 	// unexpired) sessions across every tenant — backs GetAdminStats's
 	// active_sessions field.
 	CountActive(ctx context.Context, now time.Time) (int32, error)
+	// GetSessionByRefreshTokenHash looks up a session by its refresh token's
+	// hash — RefreshSession's lookup (CR-RBAC-003/TASK-BE-011). Returns an
+	// error satisfying errors.Is(err, ErrSessionNotFound) when no row has
+	// this refresh_token_hash (never populated, or never issued one).
+	GetSessionByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (domain.Session, error)
+}
+
+// ServiceTokenRepository is the persistence port for
+// auth.issued_service_tokens — the revocation-list entry IssueServiceToken
+// records for every CLI/service JWT it mints (CR-CLI-002/TASK-BE-CLI-005).
+// Unlike SessionRepository, there is no "get by jti" method returning the
+// full row for validation purposes — the JWT itself is still verified by
+// signature/exp (JWKS), this port only answers "has this jti been
+// revoked", kept as its own narrow IsRevoked query so api-gateway's
+// per-request revocation check (usecase.AuthValidator) stays a single
+// cheap lookup, not a full row fetch.
+type ServiceTokenRepository interface {
+	// RecordIssuedToken persists a new issued-token row — called once, by
+	// IssueServiceToken, right after a successful Sign.
+	RecordIssuedToken(ctx context.Context, token domain.IssuedServiceToken) error
+	// IsRevoked reports whether jti has been revoked. A jti this
+	// repository has never seen (e.g. a JWT minted before this table
+	// existed) reports false, not an error — see RevocationChecker's
+	// (api-gateway) doc comment for why an unknown jti must never fail
+	// closed here.
+	IsRevoked(ctx context.Context, jti string) (bool, error)
+	// Revoke marks jti revoked as of now. Returns an error satisfying
+	// errors.Is(err, ErrServiceTokenNotFound) if jti has no row.
+	Revoke(ctx context.Context, jti string, revokedAt time.Time) error
+	// ListServiceTokensForUser returns every issued token (revoked or not,
+	// expired or not) for userID, newest first — mirrors
+	// SessionRepository.ListForUser's "full history" shape. Named
+	// distinctly (not ListForUser) because both interfaces are implemented
+	// by the same *postgres.Repository — Go methods are per-receiver-type,
+	// not per-interface, so a same-named method with a different signature
+	// on the same type is a compile error, not overloading.
+	ListServiceTokensForUser(ctx context.Context, userID string) ([]domain.IssuedServiceToken, error)
 }
 
 // AccessPolicyRepository is the persistence port for admin-console access
@@ -136,7 +176,14 @@ type PolicyDataPublisher interface {
 // doc comment.
 type AuditRepository interface {
 	Append(ctx context.Context, entry domain.AuditEntry) error
-	Query(ctx context.Context, tenantID string, since time.Time, pageToken string, pageSize int32) ([]domain.AuditEntry, string, error)
+	// Query returns entries for tenantID at or after since, optionally
+	// narrowed by actorID/action/outcome — empty string ("" for actorID/
+	// action, domain.Outcome("") for outcome) means "no filter" on that
+	// dimension, matching this codebase's established empty-means-no-filter
+	// convention (see ListAnnotations' filePath parameter). TASK-BE-015: the
+	// call sites that predate these 3 filters (QueryAuditLog's usecase) pass
+	// all three empty, preserving their exact prior behavior.
+	Query(ctx context.Context, tenantID string, since time.Time, actorID, action string, outcome domain.Outcome, pageToken string, pageSize int32) ([]domain.AuditEntry, string, error)
 }
 
 // PasswordHasher hashes and verifies passwords. Implemented by
@@ -204,6 +251,12 @@ type VerifiedSsoIdentity struct {
 	Email         string
 	EmailVerified bool
 	Name          string
+	// Groups is the IdP's group/org/team membership at login time — only
+	// populated for providers this CR wires (OIDC/Keycloak via the `groups`
+	// claim, GitHub via org/team membership REST calls). Empty for Google
+	// (no group claim in a standard OIDC token — Directory API integration
+	// is a documented, separate backlog item, not attempted here).
+	Groups []string
 }
 
 // SsoExchanger performs one provider's half of the OAuth2/OIDC
@@ -275,6 +328,24 @@ type SsoStateCodec interface {
 // above).
 type TenantResolver interface {
 	ResolveTenantForEmail(ctx context.Context, email string) (tenantID string, err error)
+}
+
+// SsoGroupRoleMappingRepository is the persistence port for
+// auth.sso_group_role_mapping — the admin-editable (tenant_id, provider,
+// group_name) -> role table CR-RBAC-003's group->role resolution reads
+// (TASK-BE-010, a later task) and UpdateSsoGroupMapping/ListSsoGroupMapping
+// write/read here (TASK-BE-009).
+type SsoGroupRoleMappingRepository interface {
+	// Upsert inserts a new mapping row, or updates role on an existing
+	// (tenant_id, provider, group_name) row — mirrors the table's own
+	// UNIQUE constraint. Returns the resulting row (with its id, whether
+	// newly generated or the pre-existing one).
+	Upsert(ctx context.Context, m domain.SsoGroupRoleMapping) (domain.SsoGroupRoleMapping, error)
+	// ListForProvider returns every mapping row for tenantID, optionally
+	// narrowed to one provider — an empty provider means "every provider",
+	// matching this codebase's established empty-means-no-filter convention
+	// (see AuditRepository.Query's doc comment).
+	ListForProvider(ctx context.Context, tenantID string, provider domain.SsoProvider) ([]domain.SsoGroupRoleMapping, error)
 }
 
 // TokenSigner is the port IssueServiceToken/GetJWKS sign and publish JWTs

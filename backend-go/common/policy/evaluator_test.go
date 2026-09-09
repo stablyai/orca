@@ -2,7 +2,10 @@ package policy_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stablyai/orca-go/common/policy"
 )
@@ -134,5 +137,97 @@ func TestEvaluator_Warm_PopulatesCache_DecisionDoesNotRecompile(t *testing.T) {
 		"actor": map[string]any{"role": "admin", "id": "u1"},
 	}); err != nil {
 		t.Fatalf("Decision after Warm: %v", err)
+	}
+}
+
+// writeTestBundle writes a single-rule test.rego file to dir, returning dir.
+// allowedValue is the literal string input.x must equal for data.t.allow to
+// evaluate true — rewriting this file with a different allowedValue is how
+// the tests below simulate a policy edit.
+func writeTestBundle(t *testing.T, dir, allowedValue string) {
+	t.Helper()
+	content := "package t\n\nimport rego.v1\n\ndefault allow := false\n\nallow if {\n\tinput.x == \"" + allowedValue + "\"\n}\n"
+	if err := os.WriteFile(filepath.Join(dir, "test.rego"), []byte(content), 0o644); err != nil {
+		t.Fatalf("writing test bundle: %v", err)
+	}
+}
+
+// TestEvaluator_InvalidateIfBundleChanged_PicksUpEditWithinCheckPeriod is
+// TASK-BE-024's core acceptance test: a bundle file changed on disk must be
+// visible to Decision within checkPeriod, with no service restart.
+func TestEvaluator_InvalidateIfBundleChanged_PicksUpEditWithinCheckPeriod(t *testing.T) {
+	dir := t.TempDir()
+	writeTestBundle(t, dir, "a")
+
+	e := policy.NewEvaluator(dir)
+	e.SetCheckPeriod(20 * time.Millisecond)
+	ctx := context.Background()
+
+	if err := e.Warm(ctx, "data.t.allow"); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	allowed, err := e.Decision(ctx, "data.t.allow", map[string]any{"x": "a"})
+	if err != nil {
+		t.Fatalf("Decision (before edit): %v", err)
+	}
+	if !allowed {
+		t.Fatal("expected input.x==\"a\" to be allowed against the original bundle")
+	}
+
+	// Simulate a policy edit — mtime must actually move forward for
+	// fingerprintDir to notice, so give the filesystem's mtime resolution
+	// room even on coarse-grained filesystems.
+	time.Sleep(10 * time.Millisecond)
+	writeTestBundle(t, dir, "b")
+
+	// Immediately after the edit, still inside checkPeriod: the cached
+	// (pre-edit) query must still be served — this is the "at most once
+	// per checkPeriod" contract, observed through Decision's outward
+	// behavior rather than the unexported invalidateIfBundleChanged.
+	allowed, err = e.Decision(ctx, "data.t.allow", map[string]any{"x": "b"})
+	if err != nil {
+		t.Fatalf("Decision (immediately after edit): %v", err)
+	}
+	if allowed {
+		t.Fatal("expected the stale pre-edit rule to still be served inside checkPeriod")
+	}
+
+	time.Sleep(30 * time.Millisecond) // past checkPeriod
+
+	allowed, err = e.Decision(ctx, "data.t.allow", map[string]any{"x": "b"})
+	if err != nil {
+		t.Fatalf("Decision (after checkPeriod elapsed): %v", err)
+	}
+	if !allowed {
+		t.Fatal("expected the edited rule (input.x==\"b\") to be visible once checkPeriod elapsed")
+	}
+}
+
+// TestEvaluator_CheckPeriodZero_PreservesNeverInvalidateBehavior is the
+// rollback path BE-SOL-006 explicitly asked for: checkPeriod:0 must behave
+// exactly like the pre-TASK-BE-024 Evaluator — a bundle edit is never
+// picked up, no matter how much time passes.
+func TestEvaluator_CheckPeriodZero_PreservesNeverInvalidateBehavior(t *testing.T) {
+	dir := t.TempDir()
+	writeTestBundle(t, dir, "a")
+
+	e := policy.NewEvaluator(dir)
+	e.SetCheckPeriod(0)
+	ctx := context.Background()
+
+	if err := e.Warm(ctx, "data.t.allow"); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	writeTestBundle(t, dir, "b")
+	time.Sleep(30 * time.Millisecond) // well past what would be a normal checkPeriod
+
+	allowed, err := e.Decision(ctx, "data.t.allow", map[string]any{"x": "b"})
+	if err != nil {
+		t.Fatalf("Decision: %v", err)
+	}
+	if allowed {
+		t.Fatal("expected checkPeriod:0 to never invalidate — the pre-edit rule must still be served")
 	}
 }

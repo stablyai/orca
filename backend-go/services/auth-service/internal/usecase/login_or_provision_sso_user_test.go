@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -9,7 +10,11 @@ import (
 )
 
 func newLoginOrProvisionSsoUserForTest(users *fakeUserRepository, identities *fakeSsoIdentityRepository, tenants *fakeTenantResolver, now time.Time) *LoginOrProvisionSsoUser {
-	return NewLoginOrProvisionSsoUser(users, identities, newFakeSessionRepository(), &fakeAuditRepository{}, fakeHasher{}, tenants, &fakeClock{now: now}, time.Hour)
+	return newLoginOrProvisionSsoUserForTestWithMapping(users, identities, tenants, newFakeSsoGroupRoleMappingRepository(), now)
+}
+
+func newLoginOrProvisionSsoUserForTestWithMapping(users *fakeUserRepository, identities *fakeSsoIdentityRepository, tenants *fakeTenantResolver, mapping *fakeSsoGroupRoleMappingRepository, now time.Time) *LoginOrProvisionSsoUser {
+	return NewLoginOrProvisionSsoUser(users, identities, newFakeSessionRepository(), &fakeAuditRepository{}, fakeHasher{}, tenants, mapping, &fakeClock{now: now}, time.Hour)
 }
 
 func TestLoginOrProvisionSsoUser_CreatesNewUser(t *testing.T) {
@@ -187,6 +192,148 @@ func TestLoginOrProvisionSsoUser_AmbiguousTenant_FailsClosed(t *testing.T) {
 	}
 	if identities.linkCalls != 0 {
 		t.Errorf("link calls = %d, want 0", identities.linkCalls)
+	}
+}
+
+func TestLoginOrProvisionSsoUser_NewUser_GroupMapsToAdmin_ProvisionedAsAdmin(t *testing.T) {
+	users := newFakeUserRepository()
+	identities := newFakeSsoIdentityRepository()
+	tenants := &fakeTenantResolver{tenantID: "t1"}
+	mapping := newFakeSsoGroupRoleMappingRepository()
+	now := time.Now()
+
+	m, err := domain.NewSsoGroupRoleMapping("m1", "t1", domain.SsoProviderOIDC, "org:orca-admins", domain.RoleAdmin, now)
+	if err != nil {
+		t.Fatalf("building mapping: %v", err)
+	}
+	if _, err := mapping.Upsert(context.Background(), m); err != nil {
+		t.Fatalf("seeding mapping: %v", err)
+	}
+
+	uc := newLoginOrProvisionSsoUserForTestWithMapping(users, identities, tenants, mapping, now)
+	out, err := uc.Execute(context.Background(), VerifiedSsoIdentity{
+		Provider: domain.SsoProviderOIDC, Subject: "sub-new-admin", Email: "newadmin@example.com", EmailVerified: true, Name: "New Admin",
+		Groups: []string{"org:orca-admins"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.User.Role != domain.RoleAdmin {
+		t.Errorf("role = %q, want %q", out.User.Role, domain.RoleAdmin)
+	}
+}
+
+func TestLoginOrProvisionSsoUser_ReturningUserRole_GroupsNowMapToAdmin_Upgraded(t *testing.T) {
+	users := newFakeUserRepository()
+	identities := newFakeSsoIdentityRepository()
+	tenants := &fakeTenantResolver{tenantID: "t1"}
+	mapping := newFakeSsoGroupRoleMappingRepository()
+	now := time.Now()
+
+	existing, err := domain.NewUser("u1", "t1", "frank@example.com", "Frank", domain.RoleUser, true, now)
+	if err != nil {
+		t.Fatalf("building user: %v", err)
+	}
+	users.seed(existing, "hashed:whatever")
+	seeded, err := domain.NewSsoIdentity("id1", "u1", "t1", domain.SsoProviderOIDC, "sub-frank", "frank@example.com", now)
+	if err != nil {
+		t.Fatalf("building identity: %v", err)
+	}
+	identities.seed(seeded)
+
+	m, err := domain.NewSsoGroupRoleMapping("m1", "t1", domain.SsoProviderOIDC, "org:orca-admins", domain.RoleAdmin, now)
+	if err != nil {
+		t.Fatalf("building mapping: %v", err)
+	}
+	if _, err := mapping.Upsert(context.Background(), m); err != nil {
+		t.Fatalf("seeding mapping: %v", err)
+	}
+
+	uc := newLoginOrProvisionSsoUserForTestWithMapping(users, identities, tenants, mapping, now)
+	out, err := uc.Execute(context.Background(), VerifiedSsoIdentity{
+		Provider: domain.SsoProviderOIDC, Subject: "sub-frank", Email: "frank@example.com", EmailVerified: true, Name: "Frank",
+		Groups: []string{"org:orca-admins"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.User.Role != domain.RoleAdmin {
+		t.Errorf("role = %q, want %q — a returning user whose current groups map to admin must be upgraded", out.User.Role, domain.RoleAdmin)
+	}
+	stored, err := users.GetUserByID(context.Background(), "u1")
+	if err != nil || stored.Role != domain.RoleAdmin {
+		t.Errorf("expected the stored user row to be upgraded to admin, got %+v (err=%v)", stored, err)
+	}
+}
+
+// TestLoginOrProvisionSsoUser_ReturningAdminRole_GroupsNoLongerMapToAdmin_RoleUnchanged
+// is the single most important regression guard for CR-RBAC-003's
+// anti-lockout decision: a manually-granted admin who is removed from (or
+// never was in) an admin-mapped IdP group must NOT be silently downgraded
+// on their next login.
+func TestLoginOrProvisionSsoUser_ReturningAdminRole_GroupsNoLongerMapToAdmin_RoleUnchanged(t *testing.T) {
+	users := newFakeUserRepository()
+	identities := newFakeSsoIdentityRepository()
+	tenants := &fakeTenantResolver{tenantID: "t1"}
+	mapping := newFakeSsoGroupRoleMappingRepository()
+	now := time.Now()
+
+	existing, err := domain.NewUser("u1", "t1", "grace@example.com", "Grace", domain.RoleAdmin, true, now)
+	if err != nil {
+		t.Fatalf("building user: %v", err)
+	}
+	users.seed(existing, "hashed:whatever")
+	seeded, err := domain.NewSsoIdentity("id1", "u1", "t1", domain.SsoProviderOIDC, "sub-grace", "grace@example.com", now)
+	if err != nil {
+		t.Fatalf("building identity: %v", err)
+	}
+	identities.seed(seeded)
+
+	// Mapping table maps a DIFFERENT group to admin — grace's current IdP
+	// groups (below) don't include it, simulating her having been removed
+	// from orca-admins in the IdP.
+	m, err := domain.NewSsoGroupRoleMapping("m1", "t1", domain.SsoProviderOIDC, "org:orca-admins", domain.RoleAdmin, now)
+	if err != nil {
+		t.Fatalf("building mapping: %v", err)
+	}
+	if _, err := mapping.Upsert(context.Background(), m); err != nil {
+		t.Fatalf("seeding mapping: %v", err)
+	}
+
+	uc := newLoginOrProvisionSsoUserForTestWithMapping(users, identities, tenants, mapping, now)
+	out, err := uc.Execute(context.Background(), VerifiedSsoIdentity{
+		Provider: domain.SsoProviderOIDC, Subject: "sub-grace", Email: "grace@example.com", EmailVerified: true, Name: "Grace",
+		Groups: []string{"org:some-other-team"},
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if out.User.Role != domain.RoleAdmin {
+		t.Errorf("role = %q, want %q — a manually-granted admin must never be auto-downgraded", out.User.Role, domain.RoleAdmin)
+	}
+	stored, err := users.GetUserByID(context.Background(), "u1")
+	if err != nil || stored.Role != domain.RoleAdmin {
+		t.Errorf("expected the stored user row to remain admin, got %+v (err=%v)", stored, err)
+	}
+}
+
+func TestLoginOrProvisionSsoUser_MappingLookupError_FailsClosedToRoleUser(t *testing.T) {
+	users := newFakeUserRepository()
+	identities := newFakeSsoIdentityRepository()
+	tenants := &fakeTenantResolver{tenantID: "t1"}
+	mapping := newFakeSsoGroupRoleMappingRepository()
+	mapping.listErr = errors.New("boom: mapping repository unavailable")
+
+	uc := newLoginOrProvisionSsoUserForTestWithMapping(users, identities, tenants, mapping, time.Now())
+	out, err := uc.Execute(context.Background(), VerifiedSsoIdentity{
+		Provider: domain.SsoProviderOIDC, Subject: "sub-henry", Email: "henry@example.com", EmailVerified: true, Name: "Henry",
+		Groups: []string{"org:orca-admins"},
+	})
+	if err != nil {
+		t.Fatalf("a mapping lookup failure must not fail provisioning: %v", err)
+	}
+	if out.User.Role != domain.RoleUser {
+		t.Errorf("role = %q, want %q — a mapping lookup error must fail closed to user, never admin", out.User.Role, domain.RoleUser)
 	}
 }
 

@@ -19,11 +19,20 @@ import (
 )
 
 // registerTeamChannels wires all 5 team.* wscompat channels against
-// tenant-service. Not yet called from RegisterRealChannels — that
-// integration (adding tenantClient as a param, alongside channels.go's
-// other registerXChannels calls) happens in a follow-up pass.
+// tenant-service, called from channels.go's RegisterRealChannels.
+//
+// Admin-gated (CR-RBAC-001/TASK-BE-032, 2026-09-11): the only planned
+// consumer is the Admin Console's Teams tab — nothing else calls team.*
+// today (confirmed: no frontend/ preload bridge exists yet for it). A
+// stand-alone channels_admin_teams.go was drafted first, then found to
+// duplicate this file entirely (same 5 operations) and discarded in favor
+// of admin-gating these instead, rather than running two parallel channel
+// groups for identical operations.
 func registerTeamChannels(r *Registry, client tenantv1.TenantServiceClient) {
 	r.Register("team.create", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		if id.Role != "admin" {
+			return nil, errNotAdmin
+		}
 		type createArgs struct {
 			Name         string `json:"name"`
 			SettingsJSON string `json:"settingsJson"`
@@ -43,6 +52,9 @@ func registerTeamChannels(r *Registry, client tenantv1.TenantServiceClient) {
 	})
 
 	r.Register("team.list", func(ctx context.Context, id Identity, _ []json.RawMessage) (any, error) {
+		if id.Role != "admin" {
+			return nil, errNotAdmin
+		}
 		ctx = gatewaygrpc.AttachIdentity(ctx, usecase.Identity{TenantID: id.TenantID, UserID: id.UserID})
 		resp, err := client.ListTeams(ctx, &tenantv1.ListTeamsRequest{})
 		if err != nil {
@@ -52,6 +64,9 @@ func registerTeamChannels(r *Registry, client tenantv1.TenantServiceClient) {
 	})
 
 	r.Register("team.addMember", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		if id.Role != "admin" {
+			return nil, errNotAdmin
+		}
 		type addMemberArgs struct {
 			TeamID string `json:"teamId"`
 			UserID string `json:"userId"`
@@ -77,6 +92,9 @@ func registerTeamChannels(r *Registry, client tenantv1.TenantServiceClient) {
 	})
 
 	r.Register("team.removeMember", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		if id.Role != "admin" {
+			return nil, errNotAdmin
+		}
 		type removeMemberArgs struct {
 			TeamID string `json:"teamId"`
 			UserID string `json:"userId"`
@@ -95,6 +113,9 @@ func registerTeamChannels(r *Registry, client tenantv1.TenantServiceClient) {
 	})
 
 	r.Register("team.listMembers", func(ctx context.Context, id Identity, args []json.RawMessage) (any, error) {
+		if id.Role != "admin" {
+			return nil, errNotAdmin
+		}
 		type listMembersArgs struct {
 			TeamID string `json:"teamId"`
 		}

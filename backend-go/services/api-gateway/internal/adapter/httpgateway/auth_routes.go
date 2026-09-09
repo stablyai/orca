@@ -12,6 +12,17 @@ import (
 
 const sessionCookieName = "orca_session"
 
+// refreshCookieName holds the raw refresh token every session is now
+// issued at creation (TASK-BE-012/login.go's createSessionForUser) — kept
+// in its own cookie, scoped to /auth only (see setRefreshCookie), so it is
+// never sent on ordinary app requests the way orca_session is.
+const refreshCookieName = "orca_refresh"
+
+// refreshCookieTTL mirrors auth-service's usecase.DefaultRefreshTokenTTL
+// (refresh_session.go) — duplicated because api-gateway does not import
+// auth-service's internal packages; keep the two in sync if either changes.
+const refreshCookieTTL = 30 * 24 * time.Hour
+
 // authUserResponse mirrors frontend/src/renderer/src/auth/auth-types.ts's
 // AuthUser EXACTLY — GET /auth/me and POST /auth/local both return this
 // shape directly (not nested under a "user" key — an earlier version of
@@ -115,6 +126,7 @@ func mountAuthRoutes(mux chi.Router, authClient authv1.AuthServiceClient, cookie
 		}
 
 		setSessionCookie(w, resp.GetSessionToken())
+		setRefreshCookie(w, resp.GetRefreshToken())
 		writeJSON(w, http.StatusOK, toAuthUserResponse(resp.GetUser()))
 	})
 
@@ -147,7 +159,53 @@ func mountAuthRoutes(mux chi.Router, authClient authv1.AuthServiceClient, cookie
 			Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1,
 			HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode,
 		})
+		// TASK-BE-012: a session logged out this way also had a refresh
+		// token — clear it too, or /auth/refresh could silently resurrect a
+		// session the user just explicitly logged out of.
+		clearRefreshCookie(w)
 		w.WriteHeader(http.StatusOK)
+	})
+
+	// POST /auth/refresh — frontend/'s auth-api-client.ts's refreshSession()
+	// calls this with no body (credentials:'include' only), expecting the
+	// same authUserResponse shape /auth/me returns on success, or a plain
+	// 401 it treats as "not logged in" (never throws for that case). Reads
+	// orca_refresh (not orca_session — that cookie is likely expired/near-
+	// expiry, which is exactly why the caller is refreshing), rotates it via
+	// RefreshSession, and re-sets BOTH cookies with the new pair — a refresh
+	// token is single-use (TASK-BE-011's reuse-detection revokes the whole
+	// session on a replay), so the old orca_refresh value must never be
+	// presented again after this succeeds.
+	mux.Post("/auth/refresh", func(w http.ResponseWriter, r *http.Request) {
+		refreshToken := refreshCookieValue(r)
+		if refreshToken == "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		resp, err := authClient.RefreshSession(r.Context(), &authv1.RefreshSessionRequest{RefreshToken: refreshToken})
+		if err != nil {
+			// Any failure (unknown/expired/revoked/reused token) means this
+			// refresh token is now dead either way — clear both cookies so
+			// the client's next /auth/me cleanly reports "logged out"
+			// rather than retrying a refresh that will never succeed.
+			http.SetCookie(w, &http.Cookie{
+				Name: sessionCookieName, Value: "", Path: "/", MaxAge: -1,
+				HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode,
+			})
+			clearRefreshCookie(w)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		setSessionCookie(w, resp.GetSessionToken())
+		setRefreshCookie(w, resp.GetRefreshToken())
+		// RefreshSessionResponse carries no User (unlike Login/CompleteSsoLogin)
+		// — one more round trip, same as GET /auth/me's own pattern below.
+		userResp, err := authClient.ValidateSession(r.Context(), &authv1.ValidateSessionRequest{SessionToken: resp.GetSessionToken()})
+		if err != nil || !userResp.GetValid() {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		writeJSON(w, http.StatusOK, toAuthUserResponse(userResp.GetUser()))
 	})
 
 	// GET /auth/config reports which providers are actually usable: a
@@ -243,6 +301,7 @@ func handleSsoCallback(authClient authv1.AuthServiceClient) http.HandlerFunc {
 			return
 		}
 		setSessionCookie(w, resp.GetSessionToken())
+		setRefreshCookie(w, resp.GetRefreshToken())
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
 }
@@ -259,8 +318,43 @@ func setSessionCookie(w http.ResponseWriter, token string) {
 	})
 }
 
+// setRefreshCookie stores the raw refresh token TASK-BE-012 added to every
+// Login/CompleteSsoLogin/RefreshSession response. Path is deliberately
+// "/auth" (not "/", unlike orca_session) — the refresh token is only ever
+// needed by /auth/refresh and /auth/logout (to clear it), so scoping it
+// narrower keeps it off every other request's Cookie header.
+func setRefreshCookie(w http.ResponseWriter, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    token,
+		Path:     "/auth",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(refreshCookieTTL / time.Second),
+	})
+}
+
+// clearRefreshCookie expires an orca_refresh cookie — same Path as
+// setRefreshCookie (a cookie clear must match Path or the browser treats it
+// as a different cookie and leaves the original in place).
+func clearRefreshCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name: refreshCookieName, Value: "", Path: "/auth", MaxAge: -1,
+		HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode,
+	})
+}
+
 func cookieValue(r *http.Request) string {
 	c, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return ""
+	}
+	return c.Value
+}
+
+func refreshCookieValue(r *http.Request) string {
+	c, err := r.Cookie(refreshCookieName)
 	if err != nil {
 		return ""
 	}

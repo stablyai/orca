@@ -17,6 +17,11 @@ type Config struct {
 	// InfraFleetServiceAddr is ScanNested/ImportNested's/SetupExistingFolder's
 	// DevServerRelay (and CreateHostSetup's DevServerLister) dependency.
 	InfraFleetServiceAddr string
+	// AuthServiceAddr is requireProjectAccess/requireRepoAccess's audit-append
+	// dependency (TASK-BE-019/CR-RBAC-005, common/auditclient) — the only
+	// other service this one talks to purely to write audit_log rows, never
+	// to read anything back.
+	AuthServiceAddr string
 	// OPABundlePath points requireProjectAccess's OPA client
 	// (internal/adapter/opaclient, via common/policy.Evaluator) at the
 	// orca-authz Rego bundle directory. Defaults to the bundle's location
@@ -44,6 +49,7 @@ func Load() (Config, error) {
 		WorkflowServiceAddr:     commonconfig.StringEnv("WORKFLOW_SERVICE_ADDR", "workflow-service:9090"),
 		TaskServiceAddr:         commonconfig.StringEnv("TASK_SERVICE_ADDR", "task-service:9090"),
 		InfraFleetServiceAddr:   commonconfig.StringEnv("INFRA_FLEET_SERVICE_ADDR", "infra-fleet-service:9090"),
+		AuthServiceAddr:         commonconfig.StringEnv("AUTH_SERVICE_ADDR", "auth-service:9090"),
 		OPABundlePath:           commonconfig.StringEnv("OPA_BUNDLE_PATH", "/policy/orca-authz"),
 		DatabaseCredentialsFile: commonconfig.StringEnv("DATABASE_CREDENTIALS_FILE", "/vault/secrets/database-credentials"),
 	}, nil

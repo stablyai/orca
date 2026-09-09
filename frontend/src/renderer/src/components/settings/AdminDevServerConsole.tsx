@@ -3,6 +3,12 @@
 // the three admin surfaces this feature needs: approve/reject dev-server
 // agents + assign them to groups, manage group↔department grants, and
 // resolve pending access requests.
+//
+// GroupsAndGrantsTab lives in admin-dev-server-console-groups-tab.tsx
+// (AGENTS.md max-lines budget — this file exceeded 400 lines once
+// FE-TASK-012/CR-RBAC-004 added the team-grant picker alongside the
+// existing department picker). `useDevServerGroups` stays here (exported)
+// since AccessRequestsTab below also needs it — single source of truth.
 import { useCallback, useEffect, useState } from 'react'
 import { ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -23,16 +29,14 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type {
   DevServer,
   DevServerGroup,
-  DevServerAccessRequest,
-  DevServerGroupGrant
+  DevServerAccessRequest
 } from '../../../../shared/dev-server-types'
-import type { TenantDepartment } from '../../../../shared/tenant-user-profile-types'
+import { GroupsAndGrantsTab } from './admin-dev-server-console-groups-tab'
 
 function useDevServers(): {
   servers: DevServer[]
@@ -55,7 +59,7 @@ function useDevServers(): {
   return { servers, loading, reload: () => setReloadToken((n) => n + 1) }
 }
 
-function useDevServerGroups(): {
+export function useDevServerGroups(): {
   groups: DevServerGroup[]
   loading: boolean
   reload: () => void
@@ -202,155 +206,6 @@ function ApprovalsTab(): React.JSX.Element {
         ) : null}
       </TableBody>
     </Table>
-  )
-}
-
-function GroupsAndGrantsTab(): React.JSX.Element {
-  const { groups, loading, reload } = useDevServerGroups()
-  const [departments, setDepartments] = useState<TenantDepartment[]>([])
-  const [newGroupName, setNewGroupName] = useState('')
-  const [creating, setCreating] = useState(false)
-  const [grantChoice, setGrantChoice] = useState<Record<string, string>>({})
-  const [grantsByGroup, setGrantsByGroup] = useState<Record<string, DevServerGroupGrant[]>>({})
-
-  useEffect(() => {
-    window.api.tenantProfile
-      .listDepartments()
-      .then(setDepartments)
-      .catch(() => {})
-  }, [])
-
-  const loadGrants = useCallback((groupId: string) => {
-    window.api.devServerGroup
-      .listGrants(groupId)
-      .then((grants) => setGrantsByGroup((prev) => ({ ...prev, [groupId]: grants })))
-      .catch(() => toast.error('Failed to load grants'))
-  }, [])
-
-  useEffect(() => {
-    groups.forEach((group) => loadGrants(group.id))
-  }, [groups, loadGrants])
-
-  const handleCreateGroup = useCallback(() => {
-    if (!newGroupName.trim() || creating) {
-      return
-    }
-    setCreating(true)
-    window.api.devServerGroup
-      .create({ name: newGroupName.trim() })
-      .then(() => {
-        setNewGroupName('')
-        reload()
-      })
-      .catch((err) => toast.error(err instanceof Error ? err.message : String(err)))
-      .finally(() => setCreating(false))
-  }, [newGroupName, creating, reload])
-
-  const handleGrant = useCallback(
-    (groupId: string) => {
-      const departmentId = grantChoice[groupId]
-      if (!departmentId) {
-        return
-      }
-      window.api.devServerGroup
-        .grant({ devServerGroupId: groupId, granteeKind: 'department', granteeId: departmentId })
-        .then(() => loadGrants(groupId))
-        .catch((err) => toast.error(err instanceof Error ? err.message : String(err)))
-    },
-    [grantChoice, loadGrants]
-  )
-
-  const handleRevoke = useCallback(
-    (groupId: string, grantId: string) => {
-      window.api.devServerGroup
-        .revoke(grantId)
-        .then(() => loadGrants(groupId))
-        .catch((err) => toast.error(err instanceof Error ? err.message : String(err)))
-    },
-    [loadGrants]
-  )
-
-  const departmentName = useCallback(
-    (id: string) => departments.find((d) => d.id === id)?.name ?? id,
-    [departments]
-  )
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-end gap-2">
-        <Input
-          value={newGroupName}
-          onChange={(e) => setNewGroupName(e.target.value)}
-          placeholder="New group name"
-          className="max-w-xs"
-        />
-        <Button disabled={!newGroupName.trim() || creating} onClick={handleCreateGroup}>
-          Create group
-        </Button>
-      </div>
-
-      {loading && groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {groups.map((group) => (
-            <div key={group.id} className="rounded-lg border border-border p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold">{group.name}</h3>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(grantsByGroup[group.id] ?? []).map((grant) => (
-                  <Badge key={grant.id} variant="secondary" className="gap-1">
-                    {grant.granteeKind}: {departmentName(grant.granteeId)}
-                    <button
-                      type="button"
-                      className="ml-1 text-muted-foreground hover:text-foreground"
-                      onClick={() => handleRevoke(group.id, grant.id)}
-                      aria-label={`Revoke grant ${grant.id}`}
-                    >
-                      ×
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-              <div className="mt-3 flex items-end gap-2">
-                <Select
-                  value={grantChoice[group.id] ?? ''}
-                  onValueChange={(value) =>
-                    setGrantChoice((prev) => ({ ...prev, [group.id]: value }))
-                  }
-                >
-                  <SelectTrigger className="h-8 w-[220px]">
-                    <SelectValue placeholder="Grant a department access" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  size="sm"
-                  disabled={!grantChoice[group.id]}
-                  onClick={() => handleGrant(group.id)}
-                >
-                  Grant
-                </Button>
-              </div>
-            </div>
-          ))}
-          {groups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No groups yet — create one above.</p>
-          ) : null}
-        </div>
-      )}
-      {/* Why: team-based grants aren't wired up yet — tenant-service has no
-          "list teams for a user" RPC, so ListDevServersForUser's team_ids is
-          always empty server-side too (documented gap, BE-SOL-003). Only
-          department grants are exposed here until that follow-up lands. */}
-    </div>
   )
 }
 

@@ -35,6 +35,14 @@ type Config struct {
 	// consistency across Epic E's consuming services.
 	OPABundlePath string
 
+	// DisablePolicyPublish forces cmd/server/main.go to wire NoopPublisher
+	// instead of FilePublisher for PolicyDataPublisher (TASK-BE-027) — a
+	// rollback lever for a deployment where a real bundle write turns out
+	// unsafe, consistent with common/policy.Evaluator's own
+	// checkPeriod:0 rollback path (TASK-BE-024). Off (false) by default:
+	// policy changes publish for real.
+	DisablePolicyPublish bool
+
 	// Bootstrap* configure the one-time first-admin creation
 	// (internal/usecase/bootstrap.go) — no-op unless BootstrapAdminEmail is
 	// set. BootstrapAdminPassword empty => auto-generate and log once at
@@ -123,6 +131,7 @@ func Load() (Config, error) {
 		SessionTTL:              sessionTTL,
 		ServiceTokenTTL:         serviceTokenTTL,
 		OPABundlePath:           commonconfig.StringEnv("OPA_BUNDLE_PATH", "/policy/orca-authz"),
+		DisablePolicyPublish:    boolEnv("OPA_POLICY_PUBLISH_DISABLED", false),
 		BootstrapCompanyName:    os.Getenv("BOOTSTRAP_COMPANY_NAME"),
 		BootstrapAdminEmail:     os.Getenv("BOOTSTRAP_ADMIN_EMAIL"),
 		BootstrapAdminPassword:  os.Getenv("BOOTSTRAP_ADMIN_PASSWORD"),
@@ -157,6 +166,18 @@ func intEnv(key string, def int) (int, error) {
 		return 0, fmt.Errorf("config: invalid int for %s=%q: %w", key, v, err)
 	}
 	return n, nil
+}
+
+func boolEnv(key string, def bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return def
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return def
+	}
+	return b
 }
 
 func durationEnv(key string, def time.Duration) (time.Duration, error) {

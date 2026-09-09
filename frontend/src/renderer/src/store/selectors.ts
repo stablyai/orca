@@ -214,7 +214,9 @@ export function selectSshTargetsByProject(
   const allTargets = state.sshTargets ?? []
   return allTargets.reduce<Record<string, SshTarget[]>>((acc, target) => {
     const group = target.project ?? '__unassigned__'
-    if (!acc[group]) {acc[group] = []}
+    if (!acc[group]) {
+      acc[group] = []
+    }
     acc[group].push(target)
     return acc
   }, {})
@@ -242,40 +244,19 @@ export function selectFilteredSshTargets(
 ): SshTarget[] {
   const targets = state.sshTargets ?? []
   return targets.filter((t) => {
-    if (filter.project && t.project !== filter.project) {return false}
-    if (filter.team && t.team !== filter.team) {return false}
-    if (filter.environment && t.environment !== filter.environment) {return false}
+    if (filter.project && t.project !== filter.project) {
+      return false
+    }
+    if (filter.team && t.team !== filter.team) {
+      return false
+    }
+    if (filter.environment && t.environment !== filter.environment) {
+      return false
+    }
     if (filter.search) {
       const q = filter.search.toLowerCase()
       return t.label.toLowerCase().includes(q) || t.host.toLowerCase().includes(q)
     }
-    return true
-  })
-}
-
-// ── RBAC Filtering Selector (CR-006) ─────────────────────────────────────────
-
-/** Filter SSH targets according to the current authenticated user's permissions.
- *
- * - No user, or admin role → all targets visible.
- * - Developer / lead → targets without project/team are always visible;
- *   targets with a project or team are hidden unless the user belongs to that
- *   project or team respectively.
- */
-export function selectSshTargetsForCurrentUser(
-  state: Pick<AppState, 'sshTargets' | 'currentUser'>
-): SshTarget[] {
-  const user = state.currentUser
-  const all = state.sshTargets ?? []
-
-  // Admin or unauthenticated → see everything
-  if (!user || user.role === 'admin') {return all}
-
-  return all.filter((target) => {
-    // Targets assigned to a project the user doesn't belong to → hidden
-    if (target.project && !user.projects.includes(target.project)) {return false}
-    // Targets assigned to a team the user doesn't belong to → hidden
-    if (target.team && !user.teams.includes(target.team)) {return false}
     return true
   })
 }

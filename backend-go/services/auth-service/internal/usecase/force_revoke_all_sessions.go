@@ -44,7 +44,7 @@ func (uc *ForceRevokeAllSessionsForUser) Execute(ctx context.Context, userID str
 	// admin's own tenant) is the correct audit scope, since cross-tenant
 	// admin actions aren't a concept this scaffold supports (see
 	// requireAdminActor's doc comment).
-	if entry, err := domain.NewAuditEntry(uuid.NewString(), actor.TenantID, actor.ID, "session.force_revoke_all", userID, now); err == nil {
+	if entry, err := domain.NewAuditEntry(uuid.NewString(), actor.TenantID, actor.ID, "session.force_revoke_all", userID, domain.OutcomeAllowed, "", now); err == nil {
 		_ = uc.audit.Append(ctx, entry)
 	}
 	return revoked, nil

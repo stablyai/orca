@@ -29,16 +29,16 @@ type fakeTenantServiceClient struct {
 	listTeamsForUserFunc func(ctx context.Context, in *tenantv1.ListTeamsForUserRequest) (*tenantv1.ListTeamsForUserResponse, error)
 
 	// starNag.* (TASK-011/012) — see channels_star_nag_test.go.
-	dismissStarNagFunc                          func(ctx context.Context, in *tenantv1.DismissStarNagRequest) (*emptypb.Empty, error)
-	deferStarNagFunc                             func(ctx context.Context, in *tenantv1.DeferStarNagRequest) (*emptypb.Empty, error)
-	completeStarNagFunc                          func(ctx context.Context, in *tenantv1.CompleteStarNagRequest) (*emptypb.Empty, error)
-	disableStarNagFunc                           func(ctx context.Context, in *tenantv1.DisableStarNagRequest) (*emptypb.Empty, error)
-	forceShowStarNagFunc                         func(ctx context.Context, in *tenantv1.ForceShowStarNagRequest) (*emptypb.Empty, error)
-	notifyStarNagOnboardingCompletedFunc         func(ctx context.Context, in *tenantv1.NotifyStarNagOnboardingCompletedRequest) (*emptypb.Empty, error)
-	openWebStarNagFunc                           func(ctx context.Context, in *tenantv1.OpenWebStarNagRequest) (*emptypb.Empty, error)
-	starOrcaFromNagFunc                          func(ctx context.Context, in *tenantv1.StarOrcaFromNagRequest) (*tenantv1.StarOrcaFromNagResponse, error)
-	prepareStarNagAgentValueMomentFunc           func(ctx context.Context, in *tenantv1.PrepareStarNagAgentValueMomentRequest) (*tenantv1.StarNagAgentValueMomentPreparation, error)
-	showPreparedStarNagAgentValueMomentFunc      func(ctx context.Context, in *tenantv1.ShowPreparedStarNagAgentValueMomentRequest) (*emptypb.Empty, error)
+	dismissStarNagFunc                      func(ctx context.Context, in *tenantv1.DismissStarNagRequest) (*emptypb.Empty, error)
+	deferStarNagFunc                        func(ctx context.Context, in *tenantv1.DeferStarNagRequest) (*emptypb.Empty, error)
+	completeStarNagFunc                     func(ctx context.Context, in *tenantv1.CompleteStarNagRequest) (*emptypb.Empty, error)
+	disableStarNagFunc                      func(ctx context.Context, in *tenantv1.DisableStarNagRequest) (*emptypb.Empty, error)
+	forceShowStarNagFunc                    func(ctx context.Context, in *tenantv1.ForceShowStarNagRequest) (*emptypb.Empty, error)
+	notifyStarNagOnboardingCompletedFunc    func(ctx context.Context, in *tenantv1.NotifyStarNagOnboardingCompletedRequest) (*emptypb.Empty, error)
+	openWebStarNagFunc                      func(ctx context.Context, in *tenantv1.OpenWebStarNagRequest) (*emptypb.Empty, error)
+	starOrcaFromNagFunc                     func(ctx context.Context, in *tenantv1.StarOrcaFromNagRequest) (*tenantv1.StarOrcaFromNagResponse, error)
+	prepareStarNagAgentValueMomentFunc      func(ctx context.Context, in *tenantv1.PrepareStarNagAgentValueMomentRequest) (*tenantv1.StarNagAgentValueMomentPreparation, error)
+	showPreparedStarNagAgentValueMomentFunc func(ctx context.Context, in *tenantv1.ShowPreparedStarNagAgentValueMomentRequest) (*emptypb.Empty, error)
 }
 
 // GetUserProfile — CR-DS-007/CR-DS-008's devServer.listForUser/
@@ -129,7 +129,7 @@ func TestTeamCreateChannel_Success(t *testing.T) {
 	registerTeamChannels(r, fake)
 
 	args := argsJSON(t, map[string]string{"name": "Platform", "settingsJson": `{"a":1}`})
-	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1"}, "team.create", args)
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1", Role: "admin"}, "team.create", args)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -169,7 +169,7 @@ func TestTeamListChannel_Success(t *testing.T) {
 	r := NewRegistry()
 	registerTeamChannels(r, fake)
 
-	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1"}, "team.list", nil)
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1", Role: "admin"}, "team.list", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -197,7 +197,7 @@ func TestTeamListChannel_EmptyResult_ReturnsEmptyArrayNotNull(t *testing.T) {
 	r := NewRegistry()
 	registerTeamChannels(r, fake)
 
-	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1"}, "team.list", nil)
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1", Role: "admin"}, "team.list", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestTeamAddMemberChannel_Success(t *testing.T) {
 	// role is decoded (must not error) but intentionally dropped — it has
 	// nowhere to go on AddTeamMemberRequest.
 	args := argsJSON(t, map[string]any{"teamId": "team-1", "userId": "user-1", "role": "admin", "priority": 7})
-	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1"}, "team.addMember", args)
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1", Role: "admin"}, "team.addMember", args)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -252,7 +252,7 @@ func TestTeamRemoveMemberChannel_Success(t *testing.T) {
 	registerTeamChannels(r, fake)
 
 	args := argsJSON(t, map[string]string{"teamId": "team-1", "userId": "user-1"})
-	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1"}, "team.removeMember", args)
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1", Role: "admin"}, "team.removeMember", args)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -282,7 +282,7 @@ func TestTeamListMembersChannel_Success(t *testing.T) {
 	registerTeamChannels(r, fake)
 
 	args := argsJSON(t, map[string]string{"teamId": "team-1"})
-	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1"}, "team.listMembers", args)
+	result, err := r.Dispatch(context.Background(), Identity{TenantID: "tenant-1", UserID: "user-1", Role: "admin"}, "team.listMembers", args)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -293,5 +293,20 @@ func TestTeamListMembersChannel_Success(t *testing.T) {
 	}
 	if gotReq.TeamId != "team-1" {
 		t.Fatalf("expected TeamId=team-1, got %q", gotReq.TeamId)
+	}
+}
+
+// TestTeamChannels_RequireAdmin is the regression guard for TASK-BE-032's
+// admin-gating pass — all 5 team.* channels were unauthenticated-by-role
+// before it (any caller, not just admins, could create/list/modify teams).
+func TestTeamChannels_RequireAdmin(t *testing.T) {
+	r := NewRegistry()
+	registerTeamChannels(r, &fakeTenantServiceClient{})
+
+	nonAdmin := Identity{TenantID: "tenant-1", UserID: "user-1", Role: "developer"}
+	for _, method := range []string{"team.create", "team.list", "team.addMember", "team.removeMember", "team.listMembers"} {
+		if _, err := r.Dispatch(context.Background(), nonAdmin, method, nil); err != errNotAdmin {
+			t.Errorf("%s: expected errNotAdmin for a non-admin caller, got %v", method, err)
+		}
 	}
 }

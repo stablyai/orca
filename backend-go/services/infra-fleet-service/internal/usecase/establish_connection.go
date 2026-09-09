@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/stablyai/orca-go/common/apperrors"
+	"github.com/stablyai/orca-go/common/auditclient"
 	"github.com/stablyai/orca-go/common/tenant"
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/domain"
 )
@@ -14,14 +15,21 @@ import (
 // synchronously — it is the connection-establishment act, not a record of
 // one requested.
 type EstablishConnection struct {
-	sshTargets SshTargetRepository
-	devServers DevServerRepository
-	conns      ConnectionRepository
-	agent      DevServerAgentClient
+	sshTargets  SshTargetRepository
+	devServers  DevServerRepository
+	conns       ConnectionRepository
+	agent       DevServerAgentClient
+	auditClient *auditclient.Client
 }
 
-func NewEstablishConnection(sshTargets SshTargetRepository, devServers DevServerRepository, conns ConnectionRepository, agent DevServerAgentClient) *EstablishConnection {
-	return &EstablishConnection{sshTargets: sshTargets, devServers: devServers, conns: conns, agent: agent}
+// NewEstablishConnection wires the single usecase that gates an actual
+// SSH/PTY connect attempt (TASK-BE-022/CR-RBAC-005) — F32's own canonical
+// audit example is "who connected to which server", ssh.connect.
+// auditClient may be nil (e.g. existing unit tests that don't care about
+// auditing) — see Execute's audit-append comment for the nil-safe,
+// best-effort posture that matches.
+func NewEstablishConnection(sshTargets SshTargetRepository, devServers DevServerRepository, conns ConnectionRepository, agent DevServerAgentClient, auditClient *auditclient.Client) *EstablishConnection {
+	return &EstablishConnection{sshTargets: sshTargets, devServers: devServers, conns: conns, agent: agent, auditClient: auditClient}
 }
 
 type EstablishConnectionInput struct {
@@ -63,9 +71,25 @@ func (uc *EstablishConnection) Execute(ctx context.Context, in EstablishConnecti
 	// Connection is marked established. Per infra-fleet-service.md §8's
 	// deadline rule, the caller (gRPC handler) carries an explicit timeout
 	// longer than the intra-cluster default.
-	reachable, err := uc.agent.Health(ctx, devServer)
-	if err != nil || !reachable {
-		return domain.Connection{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_SSH_CONNECT_FAILED", "failed to establish SSH connection to target", err)
+	reachable, healthErr := uc.agent.Health(ctx, devServer)
+	allowed := healthErr == nil && reachable
+
+	// Audit both the allow and deny outcome (F32's "ssh.connect" canonical
+	// example, TASK-BE-022) — best-effort, never affects the decision
+	// itself: Append is non-blocking (see auditclient.Client.Append's doc
+	// comment), and a nil auditClient (not wired) is a no-op here too.
+	if uc.auditClient != nil {
+		actorID, _ := tenant.UserID(ctx)
+		ip, _ := tenant.ClientIP(ctx)
+		outcome := "denied"
+		if allowed {
+			outcome = "allowed"
+		}
+		uc.auditClient.Append(ctx, tenantID, actorID, "ssh.connect", "devserver:"+devServer.ID, outcome, ip)
+	}
+
+	if !allowed {
+		return domain.Connection{}, apperrors.New(apperrors.KindFailedPrecondition, "INFRA_SSH_CONNECT_FAILED", "failed to establish SSH connection to target", healthErr)
 	}
 
 	conn, err := domain.NewConnection(uuid.NewString(), tenantID, devServer.ID, "", "")

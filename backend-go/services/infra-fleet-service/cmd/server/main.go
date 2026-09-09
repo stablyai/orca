@@ -18,9 +18,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/stablyai/orca-go/common/auditclient"
 	"github.com/stablyai/orca-go/common/eventbus"
 	"github.com/stablyai/orca-go/common/grpcmw"
 	"github.com/stablyai/orca-go/common/health"
@@ -41,6 +44,7 @@ import (
 	infrasshrelay "github.com/stablyai/orca-go/services/infra-fleet-service/internal/adapter/sshrelay"
 	"github.com/stablyai/orca-go/services/infra-fleet-service/internal/usecase"
 
+	authv1 "github.com/stablyai/orca-go/proto/gen/go/orca/auth/v1"
 	infrafleetv1 "github.com/stablyai/orca-go/proto/gen/go/orca/infrafleet/v1"
 )
 
@@ -66,7 +70,21 @@ func run() error {
 	logger := logging.New(cfg.ServiceName, version)
 	slog.SetDefault(logger)
 
-	shutdownTracing, err := tracing.Init(ctx, cfg.ServiceName, cfg.OTLPEndpoint)
+	// NATS connect moved ahead of tracing.Init (TASK-BE-FFT-008) so pub
+	// exists in time to pass to tracing.WithTraceEventPublisher. Same
+	// non-fatal degrade posture infra-fleet-service already had: rows
+	// still write durably to the outbox even when NATS is down at startup.
+	pub, _, closeBus, err := eventbus.Connect(ctx, cfg.NATSURL)
+	if err != nil {
+		logger.WarnContext(ctx, "eventbus unavailable, dev-server-disconnected alerts will queue until a future restart", slog.Any("error", err))
+	} else {
+		defer func() { _ = closeBus() }()
+		if err := pub.EnsureStream(ctx, "TRACE", []string{"orca.*.trace.span"}); err != nil {
+			logger.WarnContext(ctx, "failed to ensure TRACE jetstream stream", slog.Any("error", err))
+		}
+	}
+
+	shutdownTracing, err := tracing.Init(ctx, cfg.ServiceName, cfg.OTLPEndpoint, tracing.WithTraceEventPublisher(pub))
 	if err != nil {
 		return fmt.Errorf("initializing tracing: %w", err)
 	}
@@ -93,6 +111,7 @@ func run() error {
 	// be the same Go value.
 	repo := infrapostgres.New(pool)
 	sshTargetStore := infrapostgres.NewSshTargetStore(pool)
+	fleetDefinitionStore := infrapostgres.NewFleetDefinitionStore(pool)
 	terminalSessionStore := infrapostgres.NewTerminalSessionStore(pool)
 	browserProfileStore := infrapostgres.NewBrowserProfileStore(pool)
 
@@ -140,11 +159,9 @@ func run() error {
 	// recovers — same limitation every other NATS-consuming service here
 	// already carries.
 	var outboxRelay *outbox.Relay
-	pub, _, closeBus, err := eventbus.Connect(ctx, cfg.NATSURL)
-	if err != nil {
-		logger.WarnContext(ctx, "eventbus unavailable, dev-server-disconnected alerts will queue until a future restart", slog.Any("error", err))
-	} else {
-		defer func() { _ = closeBus() }()
+	// pub already connected above (TASK-BE-FFT-008) — nil here iff
+	// eventbus.Connect failed, same non-fatal degrade as before.
+	if pub != nil {
 		if err := pub.EnsureStream(ctx, "INFRAFLEET", []string{"orca.infrafleet.>"}); err != nil {
 			logger.WarnContext(ctx, "failed to ensure jetstream stream", slog.Any("error", err))
 		} else {
@@ -164,6 +181,25 @@ func run() error {
 	registerDevServerUC := usecase.NewRegisterDevServer(repo)
 	resolveDirectWebSocketDevServerUC := usecase.NewResolveDirectWebSocketDevServer(repo)
 	createSshTargetUC := usecase.NewCreateSshTarget(sshTargetStore)
+	deleteSshTargetUC := usecase.NewDeleteSshTarget(sshTargetStore)
+	// bulkProvisionFleetUC (TASK-BE-FLEET-001/003, CR-FLEET-001) reuses
+	// createSshTargetUC/registerDevServerUC/deleteSshTargetUC as-is —
+	// declared right after createSshTargetUC/registerDevServerUC exist so
+	// the constructor call below type-checks; registerDevServerUC is
+	// declared 2 lines up.
+	bulkProvisionFleetUC := usecase.NewBulkProvisionFleet(createSshTargetUC, registerDevServerUC, deleteSshTargetUC)
+	// terraformRunner (TASK-BE-FLEET-006/007/008, CR-FLEET-002) calls the
+	// agent's terraform.apply RPC over the same generic Exec passthrough
+	// usecase.Relay uses — no credential injection (TASK-BE-FLEET-009,
+	// design + security review, not yet implemented).
+	terraformRunner := infradevserveragent.NewTerraformRunner(agentClient)
+	applyTerraformPlanUC := usecase.NewApplyTerraformPlan(repo, terraformRunner)
+	createFleetDefinitionUC := usecase.NewCreateFleetDefinition(fleetDefinitionStore)
+	updateFleetDefinitionUC := usecase.NewUpdateFleetDefinition(fleetDefinitionStore)
+	getFleetDefinitionUC := usecase.NewGetFleetDefinition(fleetDefinitionStore)
+	listFleetDefinitionsUC := usecase.NewListFleetDefinitions(fleetDefinitionStore)
+	exportFleetDefinitionYamlUC := usecase.NewExportFleetDefinitionYaml(fleetDefinitionStore)
+	deployFleetDefinitionUC := usecase.NewDeployFleetDefinition(fleetDefinitionStore, applyTerraformPlanUC, bulkProvisionFleetUC)
 	getFleetHealthUC := usecase.NewGetFleetHealth(repo)
 	pollFleetHealthUC := usecase.NewPollFleetHealth(repo, repo, repo, agentClient, repo, terminalSessionStore, logger)
 	scanWorkspacePortsUC := usecase.NewScanWorkspacePorts(repo, agentClient)
@@ -178,7 +214,19 @@ func run() error {
 	isDevServerConnectedUC := usecase.NewIsDevServerConnected(repo, agentClient)
 	listSshTargetsUC := usecase.NewListSshTargets(sshTargetStore)
 	getSshStateUC := usecase.NewGetSshState(sshTargetStore, repo, repo)
-	establishConnectionUC := usecase.NewEstablishConnection(sshTargetStore, repo, repo, agentClient)
+
+	// Audit-append client (TASK-BE-018/022, CR-RBAC-005) — EstablishConnection
+	// uses this to record every "ssh.connect" allow/deny outcome to
+	// auth-service's audit_log. Lazy dial (grpc.NewClient doesn't block on
+	// connect), same convention as every other outbound client above.
+	authConn, err := grpc.NewClient(cfg.AuthServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+	if err != nil {
+		return fmt.Errorf("dialing auth-service: %w", err)
+	}
+	defer func() { _ = authConn.Close() }()
+	auditClient := auditclient.New(authv1.NewAuthServiceClient(authConn))
+
+	establishConnectionUC := usecase.NewEstablishConnection(sshTargetStore, repo, repo, agentClient, auditClient)
 	killWorkspacePortUC := usecase.NewKillWorkspacePort(repo, agentClient)
 	// TeardownConnection (BE-SOL-STORAGE-003 §5, TASK-BE-STORAGE-012) — the
 	// confirmed-logout explicit-close path; repo implements both
@@ -296,11 +344,19 @@ func run() error {
 	// --- Fleet connectivity summary (CR-STORAGE-007, TASK-BE-STORAGE-006) ---
 	getFleetConnectivitySummaryUC := usecase.NewGetFleetConnectivitySummary(repo)
 
-	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger))
+	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger), grpcmw.StatsHandler())
 	infrafleetv1.RegisterInfraFleetServiceServer(grpcServer, infragrpc.New(
 		registerDevServerUC,
 		resolveConnectionUC,
 		createSshTargetUC,
+		bulkProvisionFleetUC,
+		applyTerraformPlanUC,
+		createFleetDefinitionUC,
+		updateFleetDefinitionUC,
+		getFleetDefinitionUC,
+		listFleetDefinitionsUC,
+		exportFleetDefinitionYamlUC,
+		deployFleetDefinitionUC,
 		getFleetHealthUC,
 		scanWorkspacePortsUC,
 		listDevServersUC,

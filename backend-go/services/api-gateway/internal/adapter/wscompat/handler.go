@@ -3,12 +3,15 @@ package wscompat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/stablyai/orca-go/services/api-gateway/internal/usecase"
 )
 
 // SessionValidator resolves the caller's identity from the orca_session
@@ -52,13 +55,34 @@ const wsCloseAuthRequired websocket.StatusCode = 4401
 // to the normal read/dispatch loop, writing back
 // ResultMessage/ErrorMessage per the wire format in envelope.go.
 type Handler struct {
-	Logger   *slog.Logger
-	Auth     SessionValidator
-	Registry *Registry
+	Logger     *slog.Logger
+	Auth       SessionValidator
+	BearerAuth *usecase.AuthValidator // nil-tolerant, fallback khi Auth.ValidateCookie thất bại
+	Registry   *Registry
 }
 
-func New(logger *slog.Logger, auth SessionValidator, registry *Registry) *Handler {
-	return &Handler{Logger: logger, Auth: auth, Registry: registry}
+func New(logger *slog.Logger, auth SessionValidator, bearerAuth *usecase.AuthValidator, registry *Registry) *Handler {
+	return &Handler{Logger: logger, Auth: auth, BearerAuth: bearerAuth, Registry: registry}
+}
+
+// resolveIdentity tries the cookie session validator first (unchanged
+// behavior for every existing browser client), falling back to bearer-JWT
+// verification only when BearerAuth is configured and the cookie doesn't
+// validate — mirrors wsbridge.Handler.resolveIdentity's exact fallback
+// order (see that function's doc comment for why cookie must win first: a
+// cookie-authenticated session has no bearer JWT to present).
+func (h *Handler) resolveIdentity(r *http.Request) (Identity, error) {
+	if id, err := h.Auth.ValidateCookie(r.Context(), r); err == nil {
+		return id, nil
+	}
+	if h.BearerAuth == nil {
+		return Identity{}, fmt.Errorf("wscompat: no valid session cookie present")
+	}
+	uid, err := h.BearerAuth.Validate(r)
+	if err != nil {
+		return Identity{}, err
+	}
+	return Identity{TenantID: uid.TenantID, UserID: uid.UserID}, nil
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -71,7 +95,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.CloseNow()
 
-	identity, err := h.Auth.ValidateCookie(r.Context(), r)
+	identity, err := h.resolveIdentity(r)
 	if err != nil {
 		_ = conn.Close(wsCloseAuthRequired, "Authentication required. Please log in first.")
 		return

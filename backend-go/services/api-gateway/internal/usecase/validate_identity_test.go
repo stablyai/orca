@@ -199,6 +199,115 @@ func TestAuthValidator_UnknownKidRejected(t *testing.T) {
 	}
 }
 
+// fakeRevocationChecker implements RevocationChecker with a configurable
+// per-jti revoked set, and counts calls per jti — for
+// TestAuthValidator_CachesRevocationCheckWithinTTL.
+type fakeRevocationChecker struct {
+	revoked map[string]bool
+	err     error
+	calls   map[string]int
+}
+
+func newFakeRevocationChecker() *fakeRevocationChecker {
+	return &fakeRevocationChecker{revoked: make(map[string]bool), calls: make(map[string]int)}
+}
+
+func (f *fakeRevocationChecker) IsRevoked(_ context.Context, jti string) (bool, error) {
+	f.calls[jti]++
+	if f.err != nil {
+		return false, f.err
+	}
+	return f.revoked[jti], nil
+}
+
+// tokenWithJTI is signedTestToken plus an explicit jti claim, needed for
+// the revocation-check tests below (signedTestToken itself never sets one).
+func tokenWithJTI(t *testing.T, tenantID, subject, jti string, expiry time.Time) (string, *fakeJWKSClient) {
+	t.Helper()
+	transit := newFakeTransit(t, 1)
+	signer := jwtauth.NewTransitSigner("jwt-signing", transit.sign, transit.publicKeyVersions)
+
+	claims := jwtauth.Claims{
+		Claims: jwt.Claims{
+			Issuer:   jwtauth.Issuer,
+			Subject:  subject,
+			IssuedAt: jwt.NewNumericDate(time.Now()),
+			Expiry:   jwt.NewNumericDate(expiry),
+			ID:       jti,
+		},
+		TenantID: tenantID,
+	}
+	token, err := jwtauth.Sign(context.Background(), signer, claims)
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	jwks, err := signer.PublicJWKS(context.Background())
+	if err != nil {
+		t.Fatalf("PublicJWKS: %v", err)
+	}
+	return token, &fakeJWKSClient{kid: jwks.Keys[0].KeyID, key: jwks.Keys[0].Key}
+}
+
+// TestAuthValidator_RevocationCheckerNilSkipsCheck is a regression guard:
+// a JWT unrelated to CR-CLI-002's domain revocation (Revocation left
+// unconfigured, its zero value) must validate exactly as before this
+// feature existed.
+func TestAuthValidator_RevocationCheckerNilSkipsCheck(t *testing.T) {
+	token, jwks := signedTestToken(t, "tenant-1", "user-1", time.Now().Add(time.Hour))
+	v := NewAuthValidator(jwks) // Revocation left nil
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/usage/daily", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+
+	if _, err := v.Validate(r); err != nil {
+		t.Fatalf("unexpected error with Revocation nil: %v", err)
+	}
+}
+
+func TestAuthValidator_RevokedTokenRejected(t *testing.T) {
+	token, jwks := tokenWithJTI(t, "tenant-1", "user-1", "jti-revoked", time.Now().Add(time.Hour))
+	v := NewAuthValidator(jwks)
+	checker := newFakeRevocationChecker()
+	checker.revoked["jti-revoked"] = true
+	v.Revocation = checker
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/usage/daily", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+
+	if _, err := v.Validate(r); err != ErrTokenRevoked {
+		t.Fatalf("got error %v, want ErrTokenRevoked", err)
+	}
+}
+
+// TestAuthValidator_CachesRevocationCheckWithinTTL asserts the mandatory
+// TTL cache property (CR-CLI-002/BE-CLI-SOL-002 §2C) end-to-end at the
+// layer that actually implements it — authclient.RevocationClient — not
+// here: this package (usecase) cannot import authclient without creating
+// an import cycle (authclient's session_validator.go imports wscompat,
+// which imports usecase for *usecase.AuthValidator — see wscompat.Handler's
+// BearerAuth field, TASK-BE-CLI-001). See
+// authclient.TestRevocationClient_CachesWithinTTL for the real assertion
+// against production caching code, backed by a fake
+// authv1.AuthServiceClient. What IS verified here, at this layer, is that
+// AuthValidator.Validate calls v.Revocation.IsRevoked exactly once per
+// Validate call (never more, never speculatively) — the precondition that
+// makes RevocationClient's own cache effective at all.
+func TestAuthValidator_CachesRevocationCheckWithinTTL(t *testing.T) {
+	token, jwks := tokenWithJTI(t, "tenant-1", "user-1", "jti-cached", time.Now().Add(time.Hour))
+	v := NewAuthValidator(jwks)
+	checker := newFakeRevocationChecker()
+	v.Revocation = checker
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/usage/daily", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+	if _, err := v.Validate(r); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := checker.calls["jti-cached"]; got != 1 {
+		t.Fatalf("IsRevoked called %d times for one Validate call, want exactly 1", got)
+	}
+}
+
 func TestAuthValidator_MissingClaimsRejected(t *testing.T) {
 	// A token signed with an empty subject fails claims validation the
 	// same way a forged-but-verifiable token missing tenant_id/sub would.

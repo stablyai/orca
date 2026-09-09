@@ -127,6 +127,13 @@ func (f *fakeAdminAuthServiceClient) ForceRevokeAllSessionsForUser(ctx context.C
 	return f.forceRevokeAllResp, nil
 }
 
+// ForceRevokeSession (TASK-BE-002): unused by this file's tests — stub
+// added only so this fake keeps satisfying AuthServiceClient after the
+// interface grew this method.
+func (f *fakeAdminAuthServiceClient) ForceRevokeSession(ctx context.Context, in *authv1.ForceRevokeSessionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
 func (f *fakeAdminAuthServiceClient) CreateAccessPolicy(ctx context.Context, in *authv1.CreateAccessPolicyRequest, opts ...grpc.CallOption) (*authv1.AccessPolicy, error) {
 	f.lastCreatePolicyReq = in
 	if f.err != nil {
@@ -174,6 +181,38 @@ func (f *fakeAdminAuthServiceClient) StartSsoLogin(ctx context.Context, in *auth
 }
 
 func (f *fakeAdminAuthServiceClient) CompleteSsoLogin(ctx context.Context, in *authv1.CompleteSsoLoginRequest, opts ...grpc.CallOption) (*authv1.CompleteSsoLoginResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+// AppendAuditEntry/RefreshSession/UpdateSsoGroupMapping/ListSsoGroupMapping:
+// unused pass-throughs, present only so this fake keeps satisfying
+// authv1.AuthServiceClient as the interface grows (TASK-BE-017,
+// CR-RBAC-003) — none of this file's tests exercise them.
+func (f *fakeAdminAuthServiceClient) AppendAuditEntry(ctx context.Context, in *authv1.AppendAuditEntryRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeAdminAuthServiceClient) IsServiceTokenRevoked(ctx context.Context, in *authv1.IsServiceTokenRevokedRequest, opts ...grpc.CallOption) (*authv1.IsServiceTokenRevokedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeAdminAuthServiceClient) ListCliTokens(ctx context.Context, in *authv1.ListCliTokensRequest, opts ...grpc.CallOption) (*authv1.ListCliTokensResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeAdminAuthServiceClient) RevokeCliToken(ctx context.Context, in *authv1.RevokeCliTokenRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeAdminAuthServiceClient) RefreshSession(ctx context.Context, in *authv1.RefreshSessionRequest, opts ...grpc.CallOption) (*authv1.RefreshSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeAdminAuthServiceClient) UpdateSsoGroupMapping(ctx context.Context, in *authv1.UpdateSsoGroupMappingRequest, opts ...grpc.CallOption) (*authv1.UpdateSsoGroupMappingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeAdminAuthServiceClient) ListSsoGroupMapping(ctx context.Context, in *authv1.ListSsoGroupMappingRequest, opts ...grpc.CallOption) (*authv1.ListSsoGroupMappingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not used by this test")
 }
 

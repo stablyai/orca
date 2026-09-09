@@ -46,6 +46,10 @@ type Config struct {
 	// reuses the already-shipped sshrelay/sshconn pipeline (no new agent
 	// capability required).
 	EphemeralVmSshMode string
+	// AuthServiceAddr is EstablishConnection's audit-append dependency
+	// (TASK-BE-022/CR-RBAC-005, common/auditclient) — the only other service
+	// this one talks to purely to write audit_log rows.
+	AuthServiceAddr string
 }
 
 func Load() (Config, error) {
@@ -64,5 +68,6 @@ func Load() (Config, error) {
 		DatabaseCredentialsFile: commonconfig.StringEnv("DATABASE_CREDENTIALS_FILE", "/vault/secrets/database-credentials"),
 		NATSURL:                 commonconfig.StringEnv("NATS_URL", "nats://localhost:4222"),
 		EphemeralVmSshMode:      sshMode,
+		AuthServiceAddr:         commonconfig.StringEnv("AUTH_SERVICE_ADDR", "auth-service:9090"),
 	}, nil
 }

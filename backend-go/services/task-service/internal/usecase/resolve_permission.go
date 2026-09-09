@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/stablyai/orca-go/common/apperrors"
+	"github.com/stablyai/orca-go/common/auditclient"
 	"github.com/stablyai/orca-go/common/tenant"
 	"github.com/stablyai/orca-go/services/task-service/internal/domain"
 )
@@ -37,15 +38,24 @@ type ResolvePermissionInput struct {
 // leak which ancestor/grant rows exist to a caller who isn't authorized to
 // see them.
 type ResolvePermission struct {
-	tasks    TaskRepository
-	grants   GrantRepository
-	teams    TeamScopeResolver
-	opa      OPAClient
-	maxDepth int
+	tasks       TaskRepository
+	grants      GrantRepository
+	teams       TeamScopeResolver
+	opa         OPAClient
+	maxDepth    int
+	auditClient *auditclient.Client
 }
 
-func NewResolvePermission(tasks TaskRepository, grants GrantRepository, teams TeamScopeResolver, opa OPAClient) *ResolvePermission {
-	return &ResolvePermission{tasks: tasks, grants: grants, teams: teams, opa: opa, maxDepth: domain.DefaultMaxAncestorDepth}
+// NewResolvePermission wires the single usecase call site that reaches
+// OPAClient.Decision in this service (TASK-BE-020/CR-RBAC-005) — unlike
+// project-service's ~28 requireProjectAccess/requireRepoAccess call sites,
+// this is the only caller, so constructor injection (this package's
+// established convention for opa/teams/etc.) is the natural fit; no
+// package-level wiring point needed. auditClient may be nil (e.g. most
+// existing unit tests never pass one) — see Execute's audit-append comment
+// for the nil-safe, best-effort posture that matches.
+func NewResolvePermission(tasks TaskRepository, grants GrantRepository, teams TeamScopeResolver, opa OPAClient, auditClient *auditclient.Client) *ResolvePermission {
+	return &ResolvePermission{tasks: tasks, grants: grants, teams: teams, opa: opa, maxDepth: domain.DefaultMaxAncestorDepth, auditClient: auditClient}
 }
 
 func (uc *ResolvePermission) Execute(ctx context.Context, in ResolvePermissionInput) (domain.GrantLevel, error) {
@@ -84,8 +94,25 @@ func (uc *ResolvePermission) Execute(ctx context.Context, in ResolvePermissionIn
 	// allow/deny" — a broken policy evaluation must never fall back to
 	// trusting the resolved level alone).
 	allowed, err := uc.opa.Decision(ctx, level, in.Action, tenantID)
-	if err != nil || !allowed {
+	if err != nil {
 		return domain.GrantLevelUnspecified, errNoGrant(err)
+	}
+
+	// Audit both the allow and deny outcome (F32/TASK-BE-020) — best-effort,
+	// never affects the decision itself: Append is non-blocking (see
+	// auditclient.Client.Append's doc comment), and a nil auditClient
+	// (not wired) is a no-op here too.
+	if uc.auditClient != nil {
+		ip, _ := tenant.ClientIP(ctx)
+		outcome := "denied"
+		if allowed {
+			outcome = "allowed"
+		}
+		uc.auditClient.Append(ctx, tenantID, in.UserID, in.Action, "task:"+in.TaskID, outcome, ip)
+	}
+
+	if !allowed {
+		return domain.GrantLevelUnspecified, errNoGrant(nil)
 	}
 	return level, nil
 }

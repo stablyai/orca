@@ -24,6 +24,7 @@ import {
 import { toast } from 'sonner'
 import type { AdminUser, AdminUserRole } from '../../../../shared/admin-user-types'
 import { useDepartments } from './admin-org-console-shared'
+import { UserSessionsPanel } from './admin-org-console-sessions-tab'
 
 export function CreateUserForm(props: {
   fixedTenantId?: string
@@ -126,6 +127,9 @@ export function UsersTab(): React.JSX.Element {
   const [reloadToken, setReloadToken] = useState(0)
   const { departments } = useDepartments()
   const [departmentChoice, setDepartmentChoice] = useState<Record<string, string>>({})
+  // FE-TASK-021: Sessions panel is opened per-row (backend has no
+  // cross-user "list all sessions" RPC), not a standalone tab.
+  const [sessionsPanelUserId, setSessionsPanelUserId] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -270,6 +274,10 @@ export function UsersTab(): React.JSX.Element {
               >
                 {user.isActive ? 'Deactivate' : 'Reactivate'}
               </Button>
+
+              <Button size="sm" variant="ghost" onClick={() => setSessionsPanelUserId(user.id)}>
+                View sessions
+              </Button>
             </div>
           </div>
         ))}
@@ -277,6 +285,22 @@ export function UsersTab(): React.JSX.Element {
           <p className="text-sm text-muted-foreground">No users found.</p>
         ) : null}
       </div>
+      {sessionsPanelUserId ? (
+        <UserSessionsPanel
+          userId={sessionsPanelUserId}
+          userLabel={
+            users.find((u) => u.id === sessionsPanelUserId)?.name ??
+            users.find((u) => u.id === sessionsPanelUserId)?.email ??
+            sessionsPanelUserId
+          }
+          open={sessionsPanelUserId !== null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setSessionsPanelUserId(null)
+            }
+          }}
+        />
+      ) : null}
     </div>
   )
 }

@@ -6,14 +6,9 @@ type Props = { role: OrcaUserRole }
 
 const ROLE_LABELS: Record<OrcaUserRole, string> = {
   developer: 'developer',
-  lead: 'lead',
   admin: 'admin'
 }
 
 export function UserRoleBadge({ role }: Props) {
-  return (
-    <span className={`role-badge role-badge--${role}`}>
-      {ROLE_LABELS[role]}
-    </span>
-  )
+  return <span className={`role-badge role-badge--${role}`}>{ROLE_LABELS[role]}</span>
 }

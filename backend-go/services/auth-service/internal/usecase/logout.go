@@ -42,7 +42,7 @@ func (uc *Logout) Execute(ctx context.Context, sessionToken string) error {
 		return apperrors.New(apperrors.KindInternal, "AUTH_SESSION_REVOKE_FAILED", "failed to revoke session", err)
 	}
 
-	if entry, err := domain.NewAuditEntry(uuid.NewString(), session.TenantID, session.UserID, "user.logout", session.UserID, now); err == nil {
+	if entry, err := domain.NewAuditEntry(uuid.NewString(), session.TenantID, session.UserID, "user.logout", session.UserID, domain.OutcomeAllowed, "", now); err == nil {
 		_ = uc.audit.Append(ctx, entry)
 	}
 	return nil

@@ -1,6 +1,12 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { fetchCurrentUser, loginLocal, logoutUser, fetchAuthConfig } from '../auth-api-client'
+import {
+  fetchCurrentUser,
+  loginLocal,
+  logoutUser,
+  fetchAuthConfig,
+  refreshSession
+} from '../auth-api-client'
 import { AuthError } from '../auth-types'
 
 const mockUser = {
@@ -113,15 +119,56 @@ describe('AuthApiClient', () => {
     })
   })
 
+  // ── refreshSession ────────────────────────────────────────────────────────
+
+  describe('refreshSession', () => {
+    it('returns AuthUser when the rotation succeeds (200)', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(
+        new Response(JSON.stringify(mockUser), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+      const user = await refreshSession()
+      expect(user).toMatchObject({ email: 'alice@co.com', role: 'developer' })
+      expect(fetch).toHaveBeenCalledWith(
+        '/auth/refresh',
+        expect.objectContaining({ method: 'POST', credentials: 'include' })
+      )
+    })
+
+    it('returns null when the session was revoked (403)', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 403 }))
+      const user = await refreshSession()
+      expect(user).toBeNull()
+    })
+
+    it('returns null when unauthenticated (401)', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 401 }))
+      const user = await refreshSession()
+      expect(user).toBeNull()
+    })
+
+    it('throws on server error (500)', async () => {
+      vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 500 }))
+      await expect(refreshSession()).rejects.toThrow('Server error: 500')
+    })
+
+    it('throws on network error', async () => {
+      vi.mocked(fetch).mockRejectedValueOnce(new Error('Network error'))
+      await expect(refreshSession()).rejects.toThrow('Network error')
+    })
+  })
+
   // ── fetchAuthConfig ───────────────────────────────────────────────────────
 
   describe('fetchAuthConfig', () => {
     it('returns providers list on success', async () => {
       vi.mocked(fetch).mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({ providers: ['github', 'google'], localEnabled: true }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
+        new Response(JSON.stringify({ providers: ['github', 'google'], localEnabled: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
       )
       const config = await fetchAuthConfig()
       expect(config.providers).toEqual(['github', 'google'])

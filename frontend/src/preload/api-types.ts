@@ -472,9 +472,14 @@ import type {
 import type {
   TenantUserProfile,
   TenantDepartment,
+  TenantTeam,
   TenantCompany
 } from '../shared/tenant-user-profile-types'
 import type { AdminUserRole, AdminUser } from '../shared/admin-user-types'
+import type { AdminAccessPolicy } from '../shared/admin-policy-types'
+import type { AdminSession } from '../shared/admin-session-types'
+import type { AdminAuditEntry, AdminAuditQuery } from '../shared/admin-audit-types'
+import type { AdminTeam, AdminTeamMember } from '../shared/admin-team-types'
 
 type GitLabRepoSelectorArgs = {
   repoPath: string
@@ -2189,8 +2194,14 @@ export type PreloadApi = {
       devServerId?: string
       distro?: string | null
     }) => Promise<CliInstallStatus>
-    installWsl: (args?: { devServerId?: string; distro?: string | null }) => Promise<CliInstallStatus>
-    removeWsl: (args?: { devServerId?: string; distro?: string | null }) => Promise<CliInstallStatus>
+    installWsl: (args?: {
+      devServerId?: string
+      distro?: string | null
+    }) => Promise<CliInstallStatus>
+    removeWsl: (args?: {
+      devServerId?: string
+      distro?: string | null
+    }) => Promise<CliInstallStatus>
   }
   agentHooks: {
     claudeStatus: () => Promise<AgentHookInstallStatus>
@@ -2382,6 +2393,8 @@ export type PreloadApi = {
     getUserProfile: () => Promise<TenantUserProfile>
     /** Departments in the caller's company. */
     listDepartments: () => Promise<TenantDepartment[]>
+    /** Admin-only: lists teams in the caller's tenant (mirror listDepartments). */
+    listTeams: () => Promise<TenantTeam[]>
     /** Sets (or clears) the caller's own department. */
     setUserDepartment: (params: { departmentId: string }) => Promise<TenantUserProfile>
     /** Admin-only: sets (or clears) any user's department by id. */
@@ -2437,6 +2450,59 @@ export type PreloadApi = {
     deactivateUser: (params: { userId: string }) => Promise<AdminUser>
     /** Admin-only: reactivates a previously deactivated user. */
     reactivateUser: (params: { userId: string }) => Promise<AdminUser>
+
+    // ── Policies (CR-RBAC-001, FE-TASK-017/018) — bridges admin.listPolicies
+    // /createPolicy/updatePolicy/deletePolicy (channels_admin_policies.go).
+    // Editing has no real enforcement effect until CR-RBAC-006's OPA bundle
+    // publish pipeline lands — see AdminAccessPolicy's doc comment. */
+    listPolicies: (params?: { pageToken?: string; pageSize?: number }) => Promise<{
+      policies: AdminAccessPolicy[]
+      nextPageToken: string
+    }>
+    createPolicy: (params: {
+      name: string
+      kind: string
+      documentJson: string
+    }) => Promise<AdminAccessPolicy>
+    updatePolicy: (params: {
+      policyId: string
+      documentJson: string
+      expectedVersion: number
+    }) => Promise<AdminAccessPolicy>
+    deletePolicy: (params: { policyId: string }) => Promise<{ ok: true }>
+
+    // ── Teams (CR-RBAC-001, FE-TASK-017/020) — bridges to the team.* wire
+    // channels (channels_team.go), NOT a dedicated admin.*Team* channel
+    // group (pivoted away, see admin-team-types.ts's doc comment). Namespaced
+    // under `admin` on the frontend because the only consumer is the Admin
+    // Console's Teams tab; `tenantProfile.listTeams` (FE-TASK-011) is a
+    // separate, narrower read-only bridge to the same team.list channel for
+    // the team-grant picker.
+    listTeams: () => Promise<AdminTeam[]>
+    createTeam: (params: { name: string; settingsJson?: string }) => Promise<AdminTeam>
+    addTeamMember: (params: {
+      teamId: string
+      userId: string
+      priority?: number
+    }) => Promise<{ ok: true }>
+    removeTeamMember: (params: { teamId: string; userId: string }) => Promise<{ ok: true }>
+    listTeamMembers: (params: { teamId: string }) => Promise<AdminTeamMember[]>
+
+    // ── Sessions (CR-RBAC-001, FE-TASK-017/021) — bridges
+    // admin.listSessions/forceRevokeSession/forceRevokeAllSessions
+    // (channels_admin_sessions.go). Scoped per-user only — there is no
+    // cross-user "list all sessions" RPC, see AdminSession's doc comment.
+    listSessions: (params: { userId: string }) => Promise<{ sessions: AdminSession[] }>
+    forceRevokeSession: (params: { sessionId: string }) => Promise<{ ok: true }>
+    forceRevokeAllSessions: (params: { userId: string }) => Promise<{ revokedCount: number }>
+
+    // ── Audit (CR-RBAC-001/005, FE-TASK-017/019 base fields; FE-TASK-014/015
+    // extend the filter to actorId/action/outcome) — bridges
+    // admin.queryAuditLog (channels_admin_audit.go).
+    queryAuditLog: (params?: AdminAuditQuery) => Promise<{
+      entries: AdminAuditEntry[]
+      nextPageToken: string
+    }>
   }
   developerPermissions: {
     getStatus: () => Promise<DeveloperPermissionState[]>
@@ -3409,9 +3475,7 @@ export type PreloadApi = {
           email: string
           name: string
           avatarUrl?: string
-          teams: string[]
-          projects: string[]
-          role: 'developer' | 'lead' | 'admin'
+          role: 'developer' | 'admin' // was: 'developer' | 'lead' | 'admin'
         }
         error?: string
       }) => void

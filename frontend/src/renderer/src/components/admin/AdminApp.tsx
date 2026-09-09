@@ -1,5 +1,15 @@
 // TASK-FE-014: AdminApp — root component of the Admin SPA.
 // Uses prop-driven state routing (no react-router-dom). Pages are loaded lazily.
+//
+// CR-RBAC-001/FE-TASK-023 (2026-09-11): trimmed down to Fleet/AI Providers/
+// Profile only — Users/Policies/Sessions/Audit Log/Teams/the Dashboard
+// landing page (all backed by admin-api-client.ts / callRuntimeRpc('team.*'),
+// legacy transports this CR retires) were deleted, fully replaced by
+// Settings' AdminOrgConsole. Fleet/AI Providers/Profile stay: FE-TASK-024
+// confirmed they are distinct features with no equivalent (and no other
+// mount point) anywhere else in the app — see AdminLayout.tsx's doc comment
+// for the full reasoning. `/fleet` is now the default route (there is no
+// more "/" dashboard to land on).
 import { useState, Suspense, lazy } from 'react'
 import { AdminLayout, type AdminRoute } from './AdminLayout'
 import { useAuthUser } from '../../hooks/useAuthSession'
@@ -7,13 +17,6 @@ import { useLogout } from '../../hooks/useLogout'
 import { Tabs, TabsList, TabsTrigger } from '../ui/tabs'
 
 // Lazy-load each page to keep the initial bundle small
-const AdminDashboard = lazy(() => import('./AdminDashboard').then((m) => ({ default: m.AdminDashboard })))
-const UsersPage      = lazy(() => import('./UsersPage').then((m) => ({ default: m.UsersPage })))
-const UserForm       = lazy(() => import('./UserForm').then((m) => ({ default: m.UserForm })))
-const PoliciesPage   = lazy(() => import('./PoliciesPage').then((m) => ({ default: m.PoliciesPage })))
-const PolicyForm     = lazy(() => import('./PolicyForm').then((m) => ({ default: m.PolicyForm })))
-const SessionsPage   = lazy(() => import('./SessionsPage').then((m) => ({ default: m.SessionsPage })))
-const AuditPage      = lazy(() => import('./AuditPage').then((m) => ({ default: m.AuditPage })))
 const CompanyProfileAdmin = lazy(() =>
   import('../profile/CompanyProfileAdmin').then((m) => ({ default: m.CompanyProfileAdmin }))
 )
@@ -26,7 +29,6 @@ const ProviderList = lazy(() =>
 const FleetDashboard = lazy(() =>
   import('./fleet/fleet-dashboard').then((m) => ({ default: m.FleetDashboard }))
 )
-const TeamAdmin = lazy(() => import('./TeamAdmin').then((m) => ({ default: m.TeamAdmin })))
 
 // TASK-FE-014: /profile hosts both company-wide and per-department profile
 // admin — DeptProfileAdmin was never mounted anywhere, so it's exposed here
@@ -46,37 +48,18 @@ function ProfileAdminPage() {
   )
 }
 
-function PageContent({
-  route,
-  onNavigate
-}: {
-  route: AdminRoute
-  onNavigate: (r: AdminRoute) => void
-}) {
-  if (route === '/')         {return <AdminDashboard />}
-  if (route === '/users')    {return <UsersPage onNavigate={onNavigate} />}
-  if (route === '/users/new') {return <UserForm mode="create" onDone={() => onNavigate('/users')} />}
-  if (route.startsWith('/users/') && route.endsWith('/edit')) {
-    const id = route.split('/')[2]
-    return <UserForm mode="edit" userId={id} onDone={() => onNavigate('/users')} />
+function PageContent({ route }: { route: AdminRoute }) {
+  if (route === '/profile') {
+    return <ProfileAdminPage />
   }
-  if (route === '/policies') {return <PoliciesPage onNavigate={onNavigate} />}
-  if (route === '/policies/new') {return <PolicyForm mode="create" onDone={() => onNavigate('/policies')} />}
-  if (route.startsWith('/policies/') && route.endsWith('/edit')) {
-    const id = route.split('/')[2]
-    return <PolicyForm mode="edit" policyId={id} onDone={() => onNavigate('/policies')} />
+  if (route === '/ai-providers') {
+    return <ProviderList />
   }
-  if (route === '/sessions')      {return <SessionsPage />}
-  if (route === '/audit')          {return <AuditPage />}
-  if (route === '/profile')        {return <ProfileAdminPage />}
-  if (route === '/ai-providers')   {return <ProviderList />}
-  if (route === '/teams')          {return <TeamAdmin />}
-  if (route === '/fleet')          {return <FleetDashboard />}
-  return <AdminDashboard />
+  return <FleetDashboard />
 }
 
 export function AdminApp() {
-  const [currentRoute, setCurrentRoute] = useState<AdminRoute>('/')
+  const [currentRoute, setCurrentRoute] = useState<AdminRoute>('/fleet')
   const user = useAuthUser()
   const logout = useLogout()
 
@@ -96,8 +79,14 @@ export function AdminApp() {
       userEmail={user.email}
       onLogout={logout}
     >
-      <Suspense fallback={<div className="admin-page-loading" aria-label="Loading page…">Loading…</div>}>
-        <PageContent route={currentRoute} onNavigate={(r) => setCurrentRoute(r as AdminRoute)} />
+      <Suspense
+        fallback={
+          <div className="admin-page-loading" aria-label="Loading page…">
+            Loading…
+          </div>
+        }
+      >
+        <PageContent route={currentRoute} />
       </Suspense>
     </AdminLayout>
   )

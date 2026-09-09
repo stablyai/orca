@@ -23,9 +23,11 @@ import (
 	"syscall"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 
+	"github.com/stablyai/orca-go/common/eventbus"
 	"github.com/stablyai/orca-go/common/health"
 	"github.com/stablyai/orca-go/common/logging"
 	"github.com/stablyai/orca-go/common/tracing"
@@ -79,11 +81,51 @@ func run() error {
 	logger := logging.New(cfg.ServiceName, version)
 	slog.SetDefault(logger)
 
-	shutdownTracing, err := tracing.Init(ctx, cfg.ServiceName, cfg.OTLPEndpoint)
+	// api-gateway's first NATS connection (TASK-BE-FFT-008) — used to
+	// publish CR-FFT-002 TraceEvent spans onto the TRACE stream, and (from
+	// TASK-BE-FFT-011) to subscribe to it for TracePanel's SSE bridge.
+	// Deliberately NON-fatal on connect failure: trace data is
+	// diagnostic/best-effort (CR-FFT-002's own doc comment), and
+	// api-gateway is the single external HTTP/WS entry point — it must
+	// never refuse to start (blocking ALL user traffic) just because an
+	// optional tracing sink is unreachable, the same degrade posture every
+	// other NATS-consuming service in this scaffold already uses.
+	pub, cons, closeBus, err := eventbus.Connect(ctx, cfg.NATSURL)
+	if err != nil {
+		logger.WarnContext(ctx, "eventbus unavailable, trace events will not be published", slog.Any("error", err))
+	} else {
+		defer func() { _ = closeBus() }()
+		if err := pub.EnsureStream(ctx, "TRACE", []string{"orca.*.trace.span"}); err != nil {
+			logger.WarnContext(ctx, "failed to ensure TRACE jetstream stream", slog.Any("error", err))
+		}
+	}
+
+	shutdownTracing, err := tracing.Init(ctx, cfg.ServiceName, cfg.OTLPEndpoint, tracing.WithTraceEventPublisher(pub))
 	if err != nil {
 		return fmt.Errorf("initializing tracing: %w", err)
 	}
 	defer func() { _ = shutdownTracing(context.Background()) }()
+
+	// traceBroadcast fans TRACE stream events out to this replica's own
+	// locally-connected /api/trace-stream SSE clients (TASK-BE-FFT-009/010).
+	// Always constructed, even if NATS is unreachable — httpgateway.NewRouter
+	// falls back to one too, but constructing it here lets the
+	// SubscribeEphemeral goroutine below feed it real events whenever cons
+	// is non-nil.
+	traceBroadcast := httpgateway.NewTraceBroadcast()
+	if cons != nil {
+		go func() {
+			// SubscribeEphemeral blocks until ctx is cancelled — run in its
+			// own goroutine so it doesn't delay server startup. Best-effort:
+			// an error here (e.g. TRACE stream missing) degrades to "no live
+			// trace events" rather than crashing api-gateway — trace data is
+			// diagnostic, not a startup-critical dependency (CR-FFT-002's
+			// outbox rationale).
+			if err := cons.SubscribeEphemeral(ctx, "TRACE", "orca.*.trace.span", traceEventHandler(traceBroadcast)); err != nil {
+				logger.ErrorContext(ctx, "trace event subscription ended", slog.Any("error", err))
+			}
+		}()
+	}
 
 	// The two downstream services this scaffold really dials — see
 	// README.md "what's really wired". grpc.NewClient doesn't block or
@@ -207,6 +249,11 @@ func run() error {
 	// JWT signatures for real, instead of trusting unverified claims.
 	jwksClient := authclient.NewJWKSClient(authClient)
 	authValidator := usecase.NewAuthValidator(jwksClient)
+	// Revocation set after construction (nil-tolerant field, not a
+	// constructor param — see AuthValidator.Revocation's doc comment):
+	// every bearer-JWT verify now also checks auth-service's real
+	// IsServiceTokenRevoked RPC, short-TTL cached (CR-CLI-002/TASK-BE-CLI-005).
+	authValidator.Revocation = authclient.NewRevocationClient(authClient)
 	rateLimiter := usecase.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
 	registry := domain.NewDefaultServiceRegistry()
 
@@ -238,10 +285,12 @@ func run() error {
 	// wscompat: the legacy channel-based RPC transport the deployed
 	// frontend/ actually speaks over /ws (see internal/adapter/wscompat's
 	// package doc and docs/execution-plan.md's frontend-compatibility-layer
-	// section). Session auth happens once at WS-upgrade time via
-	// authclient.SessionValidator (a REAL auth-service.ValidateSession
-	// call, not usecase.AuthValidator's JWT verification path — the
-	// browser's orca_session cookie holds a raw session token, never a JWT).
+	// section). Session auth: cookie first via authclient.SessionValidator (a
+	// REAL auth-service.ValidateSession call — the browser's orca_session
+	// cookie holds a raw session token, never a JWT), falling back to
+	// authValidator's bearer-JWT verification (CR-CLI-001/BE-CLI-SOL-001) for
+	// non-browser callers (Orca CLI over ORCA_SERVER_URL) that present
+	// Authorization: Bearer <jwt> instead of a cookie.
 	wsCompatRegistry := wscompat.NewRegistry()
 	wscompat.RegisterRealChannels(
 		wsCompatRegistry, annotationClient, taskClient, gitClient, automationClient, infraFleetClient,
@@ -259,7 +308,7 @@ func run() error {
 	// RegisterPushChannels above, so this addition doesn't collide with
 	// other parallel edits to RegisterRealChannels's own signature.
 	wscompat.RegisterClientStateChannels(wsCompatRegistry, tenantClient)
-	wsCompatHandler := wscompat.New(logger, sessionValidator, wsCompatRegistry)
+	wsCompatHandler := wscompat.New(logger, sessionValidator, authValidator, wsCompatRegistry)
 
 	// agentProxyHandler raw-proxies the Dev Server Agent's /agent (WS) and
 	// /api/agent-token (HTTP) traffic straight to infra-fleet-service — see
@@ -303,6 +352,7 @@ func run() error {
 		WSHandler:           wsHandler.ServeHTTP,
 		WSCompatHandler:     wsCompatHandler.ServeHTTP,
 		AgentProxyHandler:   agentProxyHandler,
+		TraceBroadcast:      traceBroadcast,
 	})
 
 	healthSrv := health.New()
@@ -322,9 +372,14 @@ func run() error {
 	healthSrv.Register("scm-integration-service", grpcConnHealthCheck(scmConn))
 	healthSrv.Register("workflow-service", grpcConnHealthCheck(workflowConn))
 
+	// otelhttp gives every /api/* request its trace's root span — health
+	// checks below stay unwrapped so they never depend on OTel exporter
+	// health (TASK-BE-FFT-004).
+	publicHandler := otelhttp.NewHandler(router, "api-gateway")
+
 	publicServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.PublicPort),
-		Handler: router,
+		Handler: publicHandler,
 	}
 	healthServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.HTTPPort),
@@ -364,6 +419,21 @@ func run() error {
 	_ = healthServer.Shutdown(shutdownCtx)
 
 	return nil
+}
+
+// traceEventHandler returns the eventbus.Handler passed to
+// cons.SubscribeEphemeral (TASK-BE-FFT-011): each TRACE-stream event's
+// already-JSON-encoded F40 TraceEvent Payload (TASK-BE-FFT-007) is
+// forwarded straight into broadcast for /api/trace-stream's SSE clients.
+// Extracted out of run() so this glue is unit-testable without a real NATS
+// connection — run() itself dials 15+ live gRPC services and blocks on a
+// shutdown signal, so (matching every other service's main.go in this
+// codebase) it has no direct test.
+func traceEventHandler(broadcast *httpgateway.TraceBroadcast) eventbus.Handler {
+	return func(_ context.Context, event eventbus.Event) error {
+		broadcast.Publish(event.Payload)
+		return nil
+	}
 }
 
 // grpcConnHealthCheck reports readiness from the ClientConn's connectivity

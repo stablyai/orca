@@ -2,8 +2,10 @@ package httpgateway
 
 import (
 	"context"
+	"net"
 	"net/http"
 
+	"github.com/stablyai/orca-go/common/tenant"
 	"github.com/stablyai/orca-go/services/api-gateway/internal/adapter/wscompat"
 	"github.com/stablyai/orca-go/services/api-gateway/internal/usecase"
 )
@@ -50,14 +52,25 @@ func identityFromContext(ctx context.Context) (usecase.Identity, bool) {
 func authMiddleware(v *usecase.AuthValidator, cookieValidator CookieSessionValidator) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Resolve the real client IP once, at the edge (TASK-BE-023 /
+			// CR-RBAC-005), and stash it on ctx via tenant.WithClientIP so
+			// every downstream gatewaygrpc.AttachIdentity call for this
+			// request picks it up automatically (see that function's doc
+			// comment) — no per-route-handler change needed. Deliberately
+			// r.RemoteAddr only, not X-Forwarded-For/X-Real-IP: this
+			// codebase has no trusted-proxy allowlist today, and a
+			// client-supplied header would let a caller forge the IP that
+			// ends up on its own audit trail.
+			ctx := tenant.WithClientIP(r.Context(), clientIPFromRemoteAddr(r.RemoteAddr))
+
 			if cookieValidator != nil {
-				if id, err := cookieValidator.ValidateCookie(r.Context(), r); err == nil {
+				if id, err := cookieValidator.ValidateCookie(ctx, r); err == nil {
 					// Role included — same bug class found live in
 					// wscompat.Registry.Dispatch (CR-DS-006 Phase 2): this
 					// literal silently dropped id.Role, which would have
 					// broken any REST route gated the same way
 					// devServer.approve/etc. are over the WS channel path.
-					next.ServeHTTP(w, r.WithContext(withIdentity(r.Context(), usecase.Identity{TenantID: id.TenantID, UserID: id.UserID, Role: id.Role})))
+					next.ServeHTTP(w, r.WithContext(withIdentity(ctx, usecase.Identity{TenantID: id.TenantID, UserID: id.UserID, Role: id.Role})))
 					return
 				}
 			}
@@ -66,9 +79,21 @@ func authMiddleware(v *usecase.AuthValidator, cookieValidator CookieSessionValid
 				writeJSONError(w, http.StatusUnauthorized, "UNAUTHENTICATED", err.Error())
 				return
 			}
-			next.ServeHTTP(w, r.WithContext(withIdentity(r.Context(), identity)))
+			next.ServeHTTP(w, r.WithContext(withIdentity(ctx, identity)))
 		})
 	}
+}
+
+// clientIPFromRemoteAddr strips the port off http.Request.RemoteAddr
+// ("host:port", per net/http's doc comment on that field) — falls back to
+// the raw value verbatim if it isn't in host:port form (e.g. a test harness
+// setting a bare IP), rather than discarding a usable value.
+func clientIPFromRemoteAddr(remoteAddr string) string {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		return remoteAddr
+	}
+	return host
 }
 
 // rateLimitMiddleware runs after authMiddleware so it can key on the

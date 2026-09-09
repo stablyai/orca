@@ -126,7 +126,7 @@ func (b *Bootstrap) EnsureAdmin(ctx context.Context, cfg BootstrapConfig, logger
 		return "", fmt.Errorf("bootstrap: creating admin user: %w", err)
 	}
 
-	if entry, err := domain.NewAuditEntry(uuid.NewString(), created.TenantID, created.ID, "user.bootstrap_created", created.ID, now); err == nil {
+	if entry, err := domain.NewAuditEntry(uuid.NewString(), created.TenantID, created.ID, "user.bootstrap_created", created.ID, domain.OutcomeAllowed, "", now); err == nil {
 		_ = b.audit.Append(ctx, entry)
 	}
 

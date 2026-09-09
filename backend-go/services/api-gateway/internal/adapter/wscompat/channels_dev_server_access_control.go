@@ -293,6 +293,10 @@ func registerDevServerAccessControlChannels(r *Registry, client infrafleetv1.Inf
 		defer teamsCancel()
 		teamsResp, err := tenantClient.ListTeamsForUser(teamsRpcCtx, &tenantv1.ListTeamsForUserRequest{UserId: id.UserID})
 		if err != nil {
+			// Deliberate fail-closed choice (TASK-BE-013), not an oversight:
+			// degrading to department-only visibility on a tenant-service
+			// outage would silently under-provision team-granted dev
+			// servers — the exact BUG-013 failure mode under a new trigger.
 			return nil, err
 		}
 

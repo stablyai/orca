@@ -1103,13 +1103,12 @@ export function useIpcEvents(): void {
         case 'worktreeHistoryNavigate':
           // Why: mirror the button-visibility rule — only meaningful in the
           // terminal (worktree) view, same guard as the native listener.
-          if (store.activeView !== 'terminal') {
-            return
-          }
-          if (payload.direction === 'back') {
-            store.goBackWorktree()
-          } else {
-            store.goForwardWorktree()
+          if (store.activeView === 'terminal') {
+            if (payload.direction === 'back') {
+              store.goBackWorktree()
+            } else {
+              store.goForwardWorktree()
+            }
           }
       }
     }
@@ -2952,8 +2951,6 @@ export function useIpcEvents(): void {
               email: event.user.email,
               name: event.user.name,
               avatarUrl: event.user.avatarUrl,
-              teams: event.user.teams,
-              projects: event.user.projects,
               role: event.user.role
             })
             store.setAuthStatus('authenticated')

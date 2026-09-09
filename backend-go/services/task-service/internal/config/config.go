@@ -24,6 +24,10 @@ type Config struct {
 	// AIProviderServiceAddr is where AIDecompose's AIProviderContextResolver
 	// dials ai-provider-service's ResolveProvider RPC.
 	AIProviderServiceAddr string
+	// AuthServiceAddr is ResolvePermission's audit-append dependency
+	// (TASK-BE-020/CR-RBAC-005, common/auditclient) — the only other service
+	// this one talks to purely to write audit_log rows.
+	AuthServiceAddr string
 }
 
 func Load() (Config, error) {
@@ -36,5 +40,6 @@ func Load() (Config, error) {
 		OPABundlePath:         commonconfig.StringEnv("OPA_BUNDLE_PATH", "/policy/orca-authz"),
 		InfraFleetServiceAddr: commonconfig.StringEnv("INFRA_FLEET_SERVICE_ADDR", "infra-fleet-service:9090"),
 		AIProviderServiceAddr: commonconfig.StringEnv("AI_PROVIDER_SERVICE_ADDR", "ai-provider-service:9090"),
+		AuthServiceAddr:       commonconfig.StringEnv("AUTH_SERVICE_ADDR", "auth-service:9090"),
 	}, nil
 }

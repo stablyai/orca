@@ -25,7 +25,7 @@ import { ConnectionStatusBanner } from './ConnectionStatusBanner'
 import { useConnectionStatus, useConnectionRetry } from './ConnectionStatusProvider'
 import { WebSocketRpcClient } from '../../../platform/adapters/web/rpc-client'
 import type { IRpcClient } from '../../../platform/rpc-client-interface'
-import { fetchCurrentUser, fetchAuthConfig } from '../auth/auth-api-client'
+import { fetchCurrentUser, fetchAuthConfig, refreshSession } from '../auth/auth-api-client'
 import type { AuthUser, SsoProvider } from '../auth/auth-types'
 import { useLogout } from '../hooks/useLogout'
 import { initBrowserTrace } from '../../../shared/trace/browser'
@@ -236,9 +236,7 @@ function WebRoot({
       email: sessionUser.email,
       name: sessionUser.name,
       avatarUrl: sessionUser.avatarUrl,
-      role: sessionUser.role,
-      teams: [],
-      projects: []
+      role: sessionUser.role
     })
     store.setAuthStatus('authenticated')
   }, [sessionUser])
@@ -296,6 +294,12 @@ function WebRoot({
   )
 }
 
+// CR-RBAC-003: session Orca tự issue có TTL cố định phía server (xem
+// backend-go's domain.Session) — refresh định kỳ ở khoảng thời gian ngắn hơn
+// hẳn TTL đó (ví dụ 15 phút nếu TTL là 24h) để không bao giờ chạm hạn khi tab
+// vẫn mở, mà không cần backend trả expiresAt (giữ AuthUser shape không đổi).
+const SESSION_REFRESH_INTERVAL_MS = 15 * 60 * 1000
+
 function WebRootBoundary({ client }: WebRootProps): React.JSX.Element {
   useTranslation()
   // CR-LOGIN-001 (TASK-FE-007): resolve auth session before first render so
@@ -314,6 +318,27 @@ function WebRootBoundary({ client }: WebRootProps): React.JSX.Element {
       setAuthResolved(true)
     })
   }, [])
+
+  useEffect(() => {
+    if (sessionUser === null) {
+      return
+    }
+    const timer = setInterval(() => {
+      refreshSession()
+        .then((refreshed) => {
+          if (refreshed === null) {
+            // Session đã bị revoke — không silently issue token mới (đúng
+            // tiêu chí chấp nhận CR-003). Đăng xuất mềm: reload để
+            // WebRootBoundary tự phát hiện lại qua fetchCurrentUser().
+            window.location.href = '/'
+          }
+        })
+        .catch(() => {
+          // Lỗi mạng thoáng qua — không logout, thử lại ở lần interval kế tiếp.
+        })
+    }, SESSION_REFRESH_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [sessionUser])
 
   if (!authResolved) {
     // Minimal blank splash while auth check is in flight

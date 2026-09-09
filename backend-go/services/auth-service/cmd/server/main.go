@@ -124,23 +124,39 @@ func run() error {
 	updateUserRoleUC := usecase.NewUpdateUserRole(repo, repo, clock, opaClient)
 	revokeSessionUC := usecase.NewRevokeSession(repo, repo, repo, clock, opaClient)
 	queryAuditLogUC := usecase.NewQueryAuditLog(repo, repo, opaClient)
-	issueServiceTokenUC := usecase.NewIssueServiceToken(repo, tokenSigner, clock, cfg.ServiceTokenTTL)
+	appendAuditEntryUC := usecase.NewAppendAuditEntry(repo, clock)
+	issueServiceTokenUC := usecase.NewIssueServiceToken(repo, repo, repo, tokenSigner, clock, cfg.ServiceTokenTTL)
 	getJWKSUC := usecase.NewGetJWKS(tokenSigner)
+	isServiceTokenRevokedUC := usecase.NewIsServiceTokenRevoked(repo)
+	listCliTokensUC := usecase.NewListCliTokens(repo)
+	revokeCliTokenUC := usecase.NewRevokeCliToken(repo, repo, repo, clock)
 
 	deactivateUserUC := usecase.NewDeactivateUser(repo, repo, clock, opaClient)
 	reactivateUserUC := usecase.NewReactivateUser(repo, repo, clock, opaClient)
 	listSessionsForUserUC := usecase.NewListSessionsForUser(repo, repo, opaClient)
 	forceRevokeAllSessionsForUserUC := usecase.NewForceRevokeAllSessionsForUser(repo, repo, repo, clock, opaClient)
+	forceRevokeSessionUC := usecase.NewForceRevokeSession(repo, repo, repo, clock, opaClient)
 
-	// policyPublisher is a logging-only stub — no real OPA bundle-registry
-	// integration exists in this codebase yet. See
-	// internal/adapter/policypublisher's package doc comment.
-	policyPublisher := authpolicypublisher.New(logger)
-	createAccessPolicyUC := usecase.NewCreateAccessPolicy(repo, repo, clock, opaClient)
+	// policyPublisher writes a changed AccessPolicy's document_json into the
+	// shared OPA bundle path (TASK-BE-027/CR-RBAC-006) so
+	// create/update/delete take effect without a process restart, paired
+	// with opaEvaluator's own self-invalidation (TASK-BE-024). Set
+	// OPA_POLICY_PUBLISH_DISABLED=true to fall back to the old logging-only
+	// NoopPublisher stub as a rollback lever, mirroring
+	// common/policy.Evaluator's checkPeriod:0 rollback path — see
+	// config.Config.DisablePolicyPublish's doc comment.
+	var policyPublisher usecase.PolicyDataPublisher
+	if cfg.DisablePolicyPublish {
+		logger.WarnContext(ctx, "auth-service: OPA_POLICY_PUBLISH_DISABLED=true — policy changes will be persisted but NOT published to the OPA bundle")
+		policyPublisher = authpolicypublisher.New(logger)
+	} else {
+		policyPublisher = authpolicypublisher.NewFilePublisher(cfg.OPABundlePath, opaEvaluator)
+	}
+	createAccessPolicyUC := usecase.NewCreateAccessPolicy(repo, repo, policyPublisher, clock, opaClient)
 	getAccessPolicyUC := usecase.NewGetAccessPolicy(repo, repo, opaClient)
 	listAccessPoliciesUC := usecase.NewListAccessPolicies(repo, repo, opaClient)
 	updateAccessPolicyUC := usecase.NewUpdateAccessPolicy(repo, repo, policyPublisher, clock, opaClient)
-	deleteAccessPolicyUC := usecase.NewDeleteAccessPolicy(repo, repo, opaClient)
+	deleteAccessPolicyUC := usecase.NewDeleteAccessPolicy(repo, repo, policyPublisher, clock, opaClient)
 	getAdminStatsUC := usecase.NewGetAdminStats(repo, repo, repo, clock, opaClient)
 	listTenantMemberDirectoryUC := usecase.NewListTenantMemberDirectory(repo)
 
@@ -237,19 +253,28 @@ func run() error {
 	// which itself only runs after SsoExchangerRegistry.Resolve succeeds
 	// for a request's provider, which requires len(ssoExchangers) > 0,
 	// which is exactly the condition tenantResolver was dialed under above.
-	loginOrProvisionSsoUserUC := usecase.NewLoginOrProvisionSsoUser(repo, repo, repo, repo, hasher, tenantResolver, clock, cfg.SessionTTL)
+	loginOrProvisionSsoUserUC := usecase.NewLoginOrProvisionSsoUser(repo, repo, repo, repo, hasher, tenantResolver, repo, clock, cfg.SessionTTL)
 	completeSsoLoginUC := usecase.NewCompleteSsoLogin(ssoRegistry, ssoStates, loginOrProvisionSsoUserUC)
 
-	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger))
+	// --- CR-RBAC-003 (SSO group->role mapping, session refresh) ---
+	refreshSessionUC := usecase.NewRefreshSession(repo, clock, cfg.SessionTTL, usecase.DefaultRefreshTokenTTL)
+	updateSsoGroupMappingUC := usecase.NewUpdateSsoGroupMapping(repo, repo, clock, opaClient)
+	listSsoGroupMappingUC := usecase.NewListSsoGroupMapping(repo, repo, opaClient)
+
+	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger), grpcmw.StatsHandler())
 	authv1.RegisterAuthServiceServer(grpcServer, authgrpc.New(
 		loginUC, logoutUC, validateSessionUC,
 		createUserUC, listUsersUC, updateUserRoleUC, revokeSessionUC, queryAuditLogUC,
+		appendAuditEntryUC,
 		issueServiceTokenUC, getJWKSUC,
+		isServiceTokenRevokedUC, listCliTokensUC, revokeCliTokenUC,
 		deactivateUserUC, reactivateUserUC, listSessionsForUserUC, forceRevokeAllSessionsForUserUC,
+		forceRevokeSessionUC,
 		createAccessPolicyUC, getAccessPolicyUC, listAccessPoliciesUC, updateAccessPolicyUC, deleteAccessPolicyUC,
 		getAdminStatsUC,
 		listTenantMemberDirectoryUC,
 		startSsoLoginUC, completeSsoLoginUC,
+		refreshSessionUC, updateSsoGroupMappingUC, listSsoGroupMappingUC,
 	))
 	reflection.Register(grpcServer) // convenient for grpcurl during local dev; keep enabled behind the mesh, not the public internet
 
