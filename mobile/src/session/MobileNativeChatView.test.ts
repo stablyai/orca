@@ -44,6 +44,14 @@ vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQu
 vi.mock('./MobileAgentWorkingIndicator', () => ({
   MobileAgentWorkingIndicator: 'WorkingIndicator'
 }))
+// Stub the scroll/turn-jump overlays; the turn-jump sheet pulls reanimated via
+// BottomDrawer, which these banner tests don't need.
+vi.mock('./MobileNativeChatScrollControls', () => ({
+  MobileNativeChatScrollControls: 'ScrollControls'
+}))
+vi.mock('./MobileNativeChatTurnJumpSheet', () => ({
+  MobileNativeChatTurnJumpSheet: 'TurnJumpSheet'
+}))
 
 // Stand-in composer: exposes the view's `handleSend` through a pressable, which is
 // the only composer behaviour these banner tests exercise.

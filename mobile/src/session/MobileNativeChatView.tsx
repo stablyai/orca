@@ -10,16 +10,19 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
+import { ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import {
   buildMobileNativeChatTransientData,
+  deriveMobileNativeChatOutline,
   mobileNativeChatEmptyState,
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
+import { MobileNativeChatScrollControls } from './MobileNativeChatScrollControls'
+import { MobileNativeChatTurnJumpSheet } from './MobileNativeChatTurnJumpSheet'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -177,6 +180,7 @@ export function MobileNativeChatView({
   // never sits under the home indicator / nav bar (mirrors the terminal dock).
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const [atBottom, setAtBottom] = useState(true)
+  const [outlineOpen, setOutlineOpen] = useState(false)
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   useEffect(
@@ -202,6 +206,10 @@ export function MobileNativeChatView({
       }),
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
+
+  // One outline entry per user turn, for the turn-jump sheet. Same source and
+  // deps as `data`, so a tapped entry's index addresses the live list.
+  const outline = useMemo(() => deriveMobileNativeChatOutline(data), [data])
 
   // Follow the tail as the conversation grows and keep the newest message above
   // the keyboard when it opens — but only when already pinned to the bottom, so
@@ -372,17 +380,12 @@ export function MobileNativeChatView({
               }
             />
           </GestureDetector>
-          {/* Jump-to-latest control. The scroll-to-top affordance now lives
-              per-message (the up-arrow in each agent message's controls). */}
-          {!atBottom ? (
-            <Pressable
-              accessibilityLabel="Scroll to latest"
-              style={[styles.fab, styles.fabBottom]}
-              onPress={() => listRef.current?.scrollToEnd({ animated: true })}
-            >
-              <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
+          <MobileNativeChatScrollControls
+            atBottom={atBottom}
+            canJumpToTurn={outline.length >= 2}
+            onScrollToLatest={() => listRef.current?.scrollToEnd({ animated: true })}
+            onOpenOutline={() => setOutlineOpen(true)}
+          />
         </GestureHandlerRootView>
       )}
       <MobileNativeChatPromptCard
@@ -466,6 +469,12 @@ export function MobileNativeChatView({
         }
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}
+      />
+      <MobileNativeChatTurnJumpSheet
+        visible={outlineOpen}
+        onClose={() => setOutlineOpen(false)}
+        items={outline}
+        onJump={onScrollToMessage}
       />
     </View>
   )

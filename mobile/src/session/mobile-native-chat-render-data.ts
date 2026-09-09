@@ -10,6 +10,7 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
 } from './mobile-native-chat-image-transcript-markers'
+import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
@@ -190,4 +191,73 @@ export function buildMobileNativeChatTransientData({
   }
   data.push(...trailingPending)
   return { folded: renderedFolded, streaming, data }
+}
+
+/** One navigable turn in the conversation outline: a user prompt and, when the
+ *  agent has replied, a snippet of that turn's final assistant text. `index` is
+ *  the position in the assembled `data` list, which is exactly what
+ *  `FlatList.scrollToIndex` addresses (the "Load earlier" header is separate). */
+export type MobileNativeChatOutlineItem = {
+  index: number
+  title: string
+  subtitle?: string
+}
+
+const OUTLINE_TITLE_MAX_LENGTH = 80
+const OUTLINE_SUBTITLE_MAX_LENGTH = 120
+
+function compactOutlineLine(text: string, maxLength: number): string {
+  // First non-blank line only: a long paste's later lines add noise, not a label.
+  const firstLine = text.split('\n').find((line) => line.trim().length > 0) ?? ''
+  const compact = firstLine.replace(/\s+/g, ' ').trim()
+  if (compact.length <= maxLength) {
+    return compact
+  }
+  return `${compact.slice(0, maxLength - 1).trimEnd()}…`
+}
+
+/** The trailing assistant prose of the turn a user row opens: scan forward to the
+ *  next user row, keeping the last non-empty assistant text (mirrors t3's
+ *  `resolveFinalAssistantTextForTurn`). */
+function resolveOutlineTurnReply(data: NativeChatMessage[], userIndex: number): string {
+  let reply = ''
+  for (let index = userIndex + 1; index < data.length; index += 1) {
+    const message = data[index]
+    if (message.role === 'user') {
+      break
+    }
+    if (message.role === 'assistant') {
+      const text = nativeChatMessageText(message.blocks)
+      if (text) {
+        reply = text
+      }
+    }
+  }
+  return reply
+}
+
+/** Build the turn-jump outline: one entry per user turn in `data`, so tapping an
+ *  entry scrolls the list straight to that prompt. Pure — the view memoizes it. */
+export function deriveMobileNativeChatOutline(
+  data: NativeChatMessage[]
+): MobileNativeChatOutlineItem[] {
+  const items: MobileNativeChatOutlineItem[] = []
+  for (let index = 0; index < data.length; index += 1) {
+    const message = data[index]
+    if (message.role !== 'user') {
+      continue
+    }
+    const prose = compactOutlineLine(nativeChatMessageText(message.blocks), OUTLINE_TITLE_MAX_LENGTH)
+    // An image-only send has no prose; still list it so the turn stays reachable.
+    const title = prose || (message.blocks.some(isImageRefBlock) ? 'Image' : '')
+    if (!title) {
+      continue
+    }
+    const subtitle = compactOutlineLine(
+      resolveOutlineTurnReply(data, index),
+      OUTLINE_SUBTITLE_MAX_LENGTH
+    )
+    items.push(subtitle ? { index, title, subtitle } : { index, title })
+  }
+  return items
 }
