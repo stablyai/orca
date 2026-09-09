@@ -109,4 +109,15 @@ describe('mobileComposerSlashEntries with discovered skills', () => {
       { name: 'deploy-check', description: 'Verify the deploy' }
     ])
   })
+
+  it('collapses a skill the discovery lists through several roots, keeping the described row', () => {
+    const catalog = nativeChatComposerCatalog('claude')
+    const entries = mobileComposerSlashEntries(catalog, [
+      { name: 'to-spec' },
+      { name: 'to-spec', description: 'Turn the discussion into a spec' }
+    ])
+    expect(entries.filter((entry) => entry.name === 'to-spec')).toEqual([
+      { name: 'to-spec', description: 'Turn the discussion into a spec' }
+    ])
+  })
 })
