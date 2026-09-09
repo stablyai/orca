@@ -24,7 +24,7 @@ import {
 } from './session-search-retention-policy'
 import { removeSessionSearchDatabase } from './session-search-schema'
 import type { SessionSearchScanRoots } from './session-search-scan-roots'
-import { SessionSearchStore } from './session-search-store'
+import { SessionSearchStore, STALE_PATH_LIMIT } from './session-search-store'
 
 /** Default cycle. Long enough that a machine with thousands of transcripts is
  * not re-statting continuously, short enough that a live conversation shows up
@@ -42,6 +42,7 @@ export type SessionSearchIndexerOptions = {
   reconcileIntervalMs?: number
   recentPerAgent?: number
   budget?: SessionSearchBudget
+  /** Test seam only; production shares the store's `STALE_PATH_LIMIT`. */
   pendingLimit?: number
   /** Stats one cycle spends proving deletions; the rest are checked next cycle. */
   retirementChecksPerCycle?: number
@@ -93,7 +94,9 @@ export class SessionSearchIndexer {
     this.recentPerAgent = options.recentPerAgent ?? DEFAULT_SESSION_SEARCH_RECENT_PER_AGENT
     this.budget = options.budget ?? DEFAULT_SESSION_SEARCH_BUDGET
     this.allowance = new SessionSearchCycleAllowance(this.budget)
-    this.pending = new SessionSearchPendingFiles(options.pendingLimit)
+    // One ceiling for both re-read queues, so a caller reading `droppedPending`
+    // sees a single number that means one thing.
+    this.pending = new SessionSearchPendingFiles(options.pendingLimit ?? STALE_PATH_LIMIT)
     this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
     this.pace = options.pace ?? pauseBackfill
     this.historyDays = options.historyDays

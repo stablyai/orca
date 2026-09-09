@@ -8,18 +8,25 @@ export type SessionSearchPendingFile = {
   forced: boolean
 }
 
-// Why bounded: pausing stops the drain but not the callers, and an hour of
-// `invalidate()` plus rolled-over reconcile work would otherwise be an
-// unbounded queue in the scanner process. Oldest goes first, because the newest
-// entry is the one a user is most likely waiting on.
-export const DEFAULT_SESSION_SEARCH_PENDING_LIMIT = 2_000
-
-/** The re-read queue: insertion ordered, deduplicated by path, capped. */
+/**
+ * Scheduled re-reads: insertion ordered, deduplicated by path, capped.
+ *
+ * Why bounded: pausing stops the drain but not the callers, so an hour of
+ * `invalidate()` plus rolled-over reconcile work would grow without limit in
+ * the scanner process. Oldest goes first, because the newest entry is the one a
+ * user is most likely waiting on.
+ *
+ * Separate from the store's stale set, and deliberately not merged into it. The
+ * store records that the index has a hole in a file; this records that work was
+ * scheduled and is not done yet. Feeding budget leftovers through `markStale`
+ * would turn every deferred append into a whole re-read. The two share one
+ * ceiling, set by the indexer, which is the only thing that owns both.
+ */
 export class SessionSearchPendingFiles {
   private readonly entries = new Map<string, SessionSearchPendingFile>()
   private dropped = 0
 
-  constructor(private readonly limit: number = DEFAULT_SESSION_SEARCH_PENDING_LIMIT) {}
+  constructor(private readonly limit: number) {}
 
   add(entry: SessionSearchPendingFile): void {
     const existing = this.entries.get(entry.path)
