@@ -33,6 +33,7 @@ import {
 import { officeFailure, type OfficeMethodResult } from '../../shared/office-preview-contracts'
 import {
   isValidOfficeDocumentPath,
+  isValidOfficeRelativePath,
   parseOfficeSkillInstallPairs,
   isValidOfficeElementPath,
   OFFICE_CLEAR_MARKS_METHOD,
@@ -64,9 +65,18 @@ function ownerOf(request: unknown): OfficeHostOwner | null {
   return isValidOfficeHostOwner(owner) ? owner : null
 }
 
-function documentPathOf(request: unknown): string | null {
-  const path = (request as { path?: unknown } | null)?.path
-  return isValidOfficeDocumentPath(path) ? path : null
+function workspaceRootOf(request: unknown): string | null {
+  const root = (request as { workspaceRoot?: unknown } | null)?.workspaceRoot
+  return isValidOfficeDocumentPath(root) ? root : null
+}
+
+/** Both halves or nothing: the host will not accept a document it cannot bind to a workspace. */
+function documentOf(request: unknown): { workspaceRoot: string; relativePath: string } | null {
+  const workspaceRoot = workspaceRootOf(request)
+  const relativePath = (request as { relativePath?: unknown } | null)?.relativePath
+  return workspaceRoot && isValidOfficeRelativePath(relativePath)
+    ? { workspaceRoot, relativePath }
+    : null
 }
 
 /** Every handler answers a typed failure rather than throwing: the caller is a preview surface,
@@ -81,8 +91,8 @@ function handleDocumentMethod(channel: string, method: OfficeRpcMethod): void {
       throw new Error('Untrusted Office preview request')
     }
     const owner = ownerOf(request)
-    const path = documentPathOf(request)
-    return owner && path ? dispatchOfficeRequest(owner, method, { path }) : refused()
+    const document = documentOf(request)
+    return owner && document ? dispatchOfficeRequest(owner, method, document) : refused()
   })
 }
 
@@ -95,9 +105,9 @@ export function registerOfficePreviewHandlers(): void {
     if (!owner) {
       return refused()
     }
-    const path = documentPathOf(request)
+    const workspaceRoot = workspaceRootOf(request)
     return dispatchOfficeRequest(owner, OFFICE_PROBE_METHOD, {
-      ...(path ? { path } : {}),
+      ...(workspaceRoot ? { workspaceRoot } : {}),
       ...(request?.refresh === true ? { refresh: true } : {})
     })
   })
@@ -109,9 +119,9 @@ export function registerOfficePreviewHandlers(): void {
         throw new Error('Untrusted Office preview request')
       }
       const owner = ownerOf(request)
-      const path = documentPathOf(request)
+      const document = documentOf(request)
       const browserPageId = request?.browserPageId
-      if (!owner || !path || typeof browserPageId !== 'string' || !browserPageId.trim()) {
+      if (!owner || !document || typeof browserPageId !== 'string' || !browserPageId.trim()) {
         return { ok: false, code: 'OFFICECLI_FILE_NOT_FOUND' }
       }
       // Same disjointness rule the file-backed mint holds: a page already hosting a browsing guest
@@ -119,7 +129,7 @@ export function registerOfficePreviewHandlers(): void {
       if (browserManager.getGuestWebContentsId(browserPageId) !== null) {
         return { ok: false, code: 'OFFICECLI_RENDER_FAILED', detail: 'Page is a browsing page' }
       }
-      const rendered = await renderOfficeOnHost(owner, path)
+      const rendered = await renderOfficeOnHost(owner, document)
       if (!rendered.ok) {
         return {
           ok: false,
@@ -159,13 +169,13 @@ export function registerOfficePreviewHandlers(): void {
       throw new Error('Untrusted Office preview request')
     }
     const owner = ownerOf(request)
-    const path = documentPathOf(request)
-    if (!owner || !path) {
+    const document = documentOf(request)
+    if (!owner || !document) {
       return refused()
     }
-    const outcome = await dispatchOfficeRequest(owner, OFFICE_WATCH_START_METHOD, { path })
+    const outcome = await dispatchOfficeRequest(owner, OFFICE_WATCH_START_METHOD, document)
     if (outcome.ok) {
-      rememberOfficeWatch(owner, path)
+      rememberOfficeWatch(owner, document)
     }
     return outcome
   })
@@ -175,14 +185,14 @@ export function registerOfficePreviewHandlers(): void {
       throw new Error('Untrusted Office preview request')
     }
     const owner = ownerOf(request)
-    const path = documentPathOf(request)
-    if (!owner || !path) {
+    const document = documentOf(request)
+    if (!owner || !document) {
       return refused()
     }
     // Forgotten before the call, not after: a stop that fails must not leave a record this client
     // would retry forever against a host that no longer has the session.
-    forgetOfficeWatch(owner, path)
-    return dispatchOfficeRequest(owner, OFFICE_WATCH_STOP_METHOD, { path })
+    forgetOfficeWatch(owner, document)
+    return dispatchOfficeRequest(owner, OFFICE_WATCH_STOP_METHOD, document)
   })
 
   handleDocumentMethod(OFFICE_WATCH_REFRESH_CHANNEL, OFFICE_WATCH_REFRESH_METHOD)
@@ -195,10 +205,10 @@ export function registerOfficePreviewHandlers(): void {
       throw new Error('Untrusted Office preview request')
     }
     const owner = ownerOf(request)
-    const path = documentPathOf(request)
-    return owner && path && isValidOfficeElementPath(request?.elementPath)
+    const document = documentOf(request)
+    return owner && document && isValidOfficeElementPath(request?.elementPath)
       ? dispatchOfficeRequest(owner, OFFICE_GOTO_METHOD, {
-          path,
+          ...document,
           elementPath: request.elementPath
         })
       : refused()
@@ -212,8 +222,12 @@ export function registerOfficePreviewHandlers(): void {
     if (!owner) {
       return refused()
     }
-    const path = documentPathOf(request)
-    return dispatchOfficeRequest(owner, OFFICE_SKILLS_LIST_METHOD, path ? { path } : {})
+    const workspaceRoot = workspaceRootOf(request)
+    return dispatchOfficeRequest(
+      owner,
+      OFFICE_SKILLS_LIST_METHOD,
+      workspaceRoot ? { workspaceRoot } : {}
+    )
   })
 
   ipcMain.handle(
@@ -227,10 +241,10 @@ export function registerOfficePreviewHandlers(): void {
       if (!owner || !pairs) {
         return refused()
       }
-      const path = documentPathOf(request)
+      const workspaceRoot = workspaceRootOf(request)
       return dispatchOfficeRequest(owner, OFFICE_SKILLS_INSTALL_METHOD, {
         pairs,
-        ...(path ? { path } : {})
+        ...(workspaceRoot ? { workspaceRoot } : {})
       })
     }
   )

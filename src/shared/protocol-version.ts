@@ -99,8 +99,6 @@ export const BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY = 'network.browserTunnel.
 // reader gets a broken preview instead of "update the paired machine". The SSH relay needs no
 // equivalent: it is bundle-hash-locked to its client, so the two are always the same build.
 export const OFFICE_PREVIEW_RUNTIME_CAPABILITY = 'office.preview.v1' as const
-export const OFFICE_PREVIEW_UPDATE_REQUIRED_MESSAGE =
-  'Office document previews require a newer Orca on the paired machine. Update it and try again.'
 export const BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY =
   'network.browserTunnel.executionHosts.v1' as const
 // Why: hosts without this strip terminal.send's inputKind (zod object drops

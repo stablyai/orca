@@ -6,7 +6,11 @@
  *
  * "Local" here means *this process's own machine*, which on Windows may still mean a WSL guest:
  * a worktree under `\\wsl$\<distro>\…` is owned by the distro, and its `officecli`, fonts and
- * paths are the guest's. The lane is derived from the document path, not assumed.
+ * paths are the guest's. The lane is derived from the workspace root, not assumed.
+ *
+ * Every document is named as (workspace root, path relative to it). The host joins and
+ * canonicalises the two and refuses anything that lands outside the root — so this layer never
+ * receives a bare absolute path it would have to trust.
  */
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type {
@@ -32,81 +36,91 @@ import { installOfficeSkills, listOfficeSkills } from './office-skills-service'
 import { refreshOfficeWatch } from './office-watch-refresh'
 import { startOfficeWatch, stopOfficeWatch } from './office-watch-manager'
 
-/** The document path as the lane's own filesystem spells it, plus the lane. */
-export type OfficeLaneTarget = { lane: OfficecliLane; documentPath: string }
+/** A document named the way the host will resolve it, on the lane that owns it. */
+export type OfficeDocumentRef = {
+  lane: OfficecliLane
+  /** Workspace root as the lane's own filesystem spells it. */
+  workspaceRoot: string
+  relativePath: string
+}
 
-export function resolveOfficeLaneTarget(documentPath: string): OfficeLaneTarget {
-  const wsl = parseWslUncPath(documentPath)
+/** A WSL worktree is owned by the distro: the guest's binary, fonts and POSIX paths, not ours. */
+export function resolveOfficeLane(workspaceRoot: string): {
+  lane: OfficecliLane
+  laneRoot: string
+} {
+  const wsl = parseWslUncPath(workspaceRoot)
   return wsl
-    ? { lane: { kind: 'wsl', distro: wsl.distro }, documentPath: wsl.linuxPath }
-    : { lane: NATIVE_OFFICECLI_LANE, documentPath }
+    ? { lane: { kind: 'wsl', distro: wsl.distro }, laneRoot: wsl.linuxPath }
+    : { lane: NATIVE_OFFICECLI_LANE, laneRoot: workspaceRoot }
+}
+
+export function officeDocumentRef(workspaceRoot: string, relativePath: string): OfficeDocumentRef {
+  const { lane, laneRoot } = resolveOfficeLane(workspaceRoot)
+  return { lane, workspaceRoot: laneRoot, relativePath }
 }
 
 /**
- * A probe is per-lane, but the caller names a document rather than a lane: on Windows the answer
+ * A probe is per-lane, but the caller names a workspace rather than a lane: on Windows the answer
  * for a WSL worktree and for a drive-letter one are genuinely different installs.
  */
-export function probeOfficeForDocument(documentPath?: string): Promise<OfficeProbeOutcome> {
-  return probeOfficecli(documentPath ? resolveOfficeLaneTarget(documentPath).lane : undefined)
+export function probeOfficeForWorkspace(workspaceRoot?: string): Promise<OfficeProbeOutcome> {
+  return probeOfficecli(workspaceRoot ? resolveOfficeLane(workspaceRoot).lane : undefined)
 }
 
-export function invalidateOfficeProbeForDocument(documentPath?: string): void {
-  invalidateOfficeProbe(documentPath ? resolveOfficeLaneTarget(documentPath).lane : undefined)
+export function invalidateOfficeProbeForWorkspace(workspaceRoot?: string): void {
+  invalidateOfficeProbe(workspaceRoot ? resolveOfficeLane(workspaceRoot).lane : undefined)
 }
 
-export function renderOfficeLocally(documentPath: string): Promise<OfficeRenderOutcome> {
-  const target = resolveOfficeLaneTarget(documentPath)
-  return renderOfficeDocument(target.documentPath, target.lane)
+export function renderOfficeLocally(ref: OfficeDocumentRef): Promise<OfficeRenderOutcome> {
+  return renderOfficeDocument(ref)
 }
 
-export function startOfficeWatchLocally(documentPath: string): Promise<OfficeWatchOutcome> {
-  const target = resolveOfficeLaneTarget(documentPath)
-  return startOfficeWatch(target.documentPath, target.lane)
+export function startOfficeWatchLocally(ref: OfficeDocumentRef): Promise<OfficeWatchOutcome> {
+  return startOfficeWatch(ref)
 }
 
-export function refreshOfficeWatchLocally(documentPath: string): Promise<OfficeAckOutcome> {
-  const target = resolveOfficeLaneTarget(documentPath)
-  return refreshOfficeWatch(target.documentPath, target.lane)
+export function refreshOfficeWatchLocally(ref: OfficeDocumentRef): Promise<OfficeAckOutcome> {
+  return refreshOfficeWatch(ref)
 }
 
-export function stopOfficeWatchLocally(documentPath: string): Promise<OfficeAckOutcome> {
-  const target = resolveOfficeLaneTarget(documentPath)
-  return stopOfficeWatch(target.documentPath, target.lane)
+export function stopOfficeWatchLocally(ref: OfficeDocumentRef): Promise<OfficeAckOutcome> {
+  return stopOfficeWatch(ref)
 }
 
-export function readOfficeSelectionLocally(documentPath: string): Promise<OfficeSelectionOutcome> {
-  const target = resolveOfficeLaneTarget(documentPath)
-  return readOfficeSelection(target.documentPath, target.lane)
+export function readOfficeSelectionLocally(
+  ref: OfficeDocumentRef
+): Promise<OfficeSelectionOutcome> {
+  return readOfficeSelection(ref)
 }
 
-export function readOfficeMarksLocally(documentPath: string): Promise<OfficeMarksOutcome> {
-  const target = resolveOfficeLaneTarget(documentPath)
-  return readOfficeMarks(target.documentPath, target.lane)
+export function readOfficeMarksLocally(ref: OfficeDocumentRef): Promise<OfficeMarksOutcome> {
+  return readOfficeMarks(ref)
 }
 
-export function clearOfficeMarksLocally(documentPath: string): Promise<OfficeMarksOutcome> {
-  const target = resolveOfficeLaneTarget(documentPath)
-  return clearOfficeMarks(target.documentPath, target.lane)
+export function clearOfficeMarksLocally(ref: OfficeDocumentRef): Promise<OfficeMarksOutcome> {
+  return clearOfficeMarks(ref)
 }
 
 export function gotoOfficeElementLocally(
-  documentPath: string,
+  ref: OfficeDocumentRef,
   elementPath: string
 ): Promise<OfficeAckOutcome> {
-  const target = resolveOfficeLaneTarget(documentPath)
-  return gotoOfficeElement(target.documentPath, elementPath, target.lane)
+  return gotoOfficeElement(ref, elementPath)
 }
 
-export function listOfficeSkillsLocally(documentPath?: string): Promise<OfficeSkillCatalogOutcome> {
-  return listOfficeSkills(documentPath ? resolveOfficeLaneTarget(documentPath).lane : undefined)
+export function listOfficeSkillsLocally(
+  workspaceRoot?: string
+): Promise<OfficeSkillCatalogOutcome> {
+  return listOfficeSkills(workspaceRoot ? resolveOfficeLane(workspaceRoot).lane : undefined)
 }
 
 export function installOfficeSkillsLocally(
   pairs: readonly { skill: string; agent: string }[],
-  documentPath?: string
+  workspaceRoot?: string
 ): Promise<OfficeSkillInstallOutcome> {
   return installOfficeSkills(
     pairs,
-    documentPath ? resolveOfficeLaneTarget(documentPath).lane : undefined
+    workspaceRoot ? resolveOfficeLane(workspaceRoot).lane : undefined
   )
 }

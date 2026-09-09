@@ -2,11 +2,12 @@
  * Office preview on a paired runtime host.
  *
  * Unlike the SSH relay — bundle-hash-locked to its client — a paired host and its client update
- * independently, so this surface is negotiated through `office.preview.v1`, which the host
- * advertises in `RUNTIME_CAPABILITIES`. The gate lives on the calling client, not here: what a
- * client has to survive is an OLDER host, which has no methods to gate with. It reads the
- * advertised capability up front and maps a `method_not_found` from one that slipped through to
- * "update the paired machine" — never to a preview that silently does nothing.
+ * independently. The host advertises `office.preview.v1` in `RUNTIME_CAPABILITIES` so a client can
+ * see the surface exists, but nothing here gates on it: what a client has to survive is an OLDER
+ * host, and an old host has no methods to gate with. The protection that actually runs is on the
+ * calling side, where `office-host-dispatch` maps `method_not_found` to "update the paired
+ * machine" — the same shape `doc-preview-file-reader` uses for scoped reads, and never a preview
+ * that silently does nothing.
  *
  * The host-side work is `executeOfficeMethod`, identical to the local and SSH implementations:
  * `officecli` runs on the machine that owns the document, with that machine's fonts and locale.
@@ -29,20 +30,35 @@ import {
 import { executeOfficeMethod } from '../../../office/office-method-executor'
 import { defineMethod, type RpcMethod } from '../core'
 
-const DocumentPath = z.string().min(1).max(4096)
+const WorkspaceRoot = z.string().min(1).max(4096)
+/**
+ * Never absolute: the host joins this onto the workspace root and refuses anything that
+ * canonicalises outside it, matching every neighbouring `files.*` method.
+ */
+const RelativePath = z
+  .string()
+  .min(1)
+  .max(2048)
+  .refine(
+    (value) => !value.startsWith('/') && !value.startsWith('\\') && !/^[a-zA-Z]:/.test(value),
+    {
+      message: 'relativePath must be relative to the workspace root'
+    }
+  )
+const WorkspaceDocument = { workspaceRoot: WorkspaceRoot, relativePath: RelativePath }
 const SkillId = z
   .string()
   .min(1)
   .max(64)
   .regex(/^[a-z0-9][a-z0-9-]*$/i)
 
-const OptionalDocumentParams = z.object({ path: DocumentPath.optional() }).strict()
+const OptionalDocumentParams = z.object({ workspaceRoot: WorkspaceRoot.optional() }).strict()
 const ProbeParams = z
-  .object({ path: DocumentPath.optional(), refresh: z.boolean().optional() })
+  .object({ workspaceRoot: WorkspaceRoot.optional(), refresh: z.boolean().optional() })
   .strict()
-const RequiredDocumentParams = z.object({ path: DocumentPath }).strict()
+const RequiredDocumentParams = z.object(WorkspaceDocument).strict()
 const ElementParams = z
-  .object({ path: DocumentPath, elementPath: z.string().min(1).max(1024).startsWith('/') })
+  .object({ ...WorkspaceDocument, elementPath: z.string().min(1).max(1024).startsWith('/') })
   .strict()
 const SkillInstallParams = z
   .object({
@@ -50,7 +66,7 @@ const SkillInstallParams = z
       .array(z.object({ skill: SkillId, agent: SkillId }).strict())
       .min(1)
       .max(200),
-    path: DocumentPath.optional()
+    workspaceRoot: WorkspaceRoot.optional()
   })
   .strict()
 

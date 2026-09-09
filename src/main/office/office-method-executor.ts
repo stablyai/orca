@@ -7,6 +7,7 @@
 import { officeFailure, type OfficeMethodResult } from '../../shared/office-preview-contracts'
 import {
   isValidOfficeDocumentPath,
+  isValidOfficeRelativePath,
   parseOfficeSkillInstallPairs,
   isValidOfficeElementPath,
   OFFICE_CLEAR_MARKS_METHOD,
@@ -26,31 +27,56 @@ import {
   clearOfficeMarksLocally,
   gotoOfficeElementLocally,
   installOfficeSkillsLocally,
-  invalidateOfficeProbeForDocument,
+  invalidateOfficeProbeForWorkspace,
+  officeDocumentRef,
   listOfficeSkillsLocally,
-  probeOfficeForDocument,
+  probeOfficeForWorkspace,
   readOfficeMarksLocally,
   readOfficeSelectionLocally,
   refreshOfficeWatchLocally,
   renderOfficeLocally,
   startOfficeWatchLocally,
-  stopOfficeWatchLocally
+  stopOfficeWatchLocally,
+  type OfficeDocumentRef
 } from './office-local-execution'
 
-function optionalPath(params: unknown): string | undefined {
-  const candidate = (params as { path?: unknown } | null)?.path
+function optionalWorkspaceRoot(params: unknown): string | undefined {
+  const candidate = (params as { workspaceRoot?: unknown } | null)?.workspaceRoot
   return isValidOfficeDocumentPath(candidate) ? candidate : undefined
 }
 
-function requiredPath(params: unknown): string | null {
-  return optionalPath(params) ?? null
+/** The (root, relative) pair every document method names, or null when either half is unusable. */
+function documentRef(params: unknown): OfficeDocumentRef | null {
+  const root = optionalWorkspaceRoot(params)
+  const relativePath = (params as { relativePath?: unknown } | null)?.relativePath
+  return root && isValidOfficeRelativePath(relativePath)
+    ? officeDocumentRef(root, relativePath)
+    : null
+}
+
+/** Resolves the (root, relative) pair a document method needs, or the typed refusal to answer. */
+async function withDocument(
+  params: unknown,
+  run: (ref: OfficeDocumentRef) => Promise<OfficeMethodResult>
+): Promise<OfficeMethodResult> {
+  const ref = documentRef(params)
+  return ref
+    ? run(ref)
+    : officeFailure(
+        'OFFICECLI_FILE_NOT_FOUND',
+        'A workspace root and a path inside it are both required'
+      )
 }
 
 /**
  * Runs one office method on this machine.
  *
- * An invalid path is `OFFICECLI_FILE_NOT_FOUND` rather than a thrown protocol error: the caller is
- * a preview surface, and a typed failure it can render beats an exception it has to guess at.
+ * One exhaustive switch with no `default`, so adding a method to `OFFICE_RPC_METHODS` without
+ * handling it here is a compile error rather than a refusal discovered at runtime.
+ *
+ * A document that cannot be bound to a workspace is `OFFICECLI_FILE_NOT_FOUND` rather than a
+ * thrown protocol error: the caller is a preview surface, and a typed failure it can render beats
+ * an exception it has to guess at.
  */
 export async function executeOfficeMethod(
   method: OfficeRpcMethod,
@@ -58,51 +84,41 @@ export async function executeOfficeMethod(
 ): Promise<OfficeMethodResult> {
   switch (method) {
     case OFFICE_PROBE_METHOD: {
-      const path = optionalPath(params)
+      const workspaceRoot = optionalWorkspaceRoot(params)
       if ((params as { refresh?: unknown } | null)?.refresh === true) {
         // Why the host and not the client caches this: a cached "not installed" surviving the
         // install the reader just ran is how a preview keeps asking for what already happened.
-        invalidateOfficeProbeForDocument(path)
+        invalidateOfficeProbeForWorkspace(workspaceRoot)
       }
-      return probeOfficeForDocument(path)
+      return probeOfficeForWorkspace(workspaceRoot)
     }
     case OFFICE_SKILLS_LIST_METHOD:
-      return listOfficeSkillsLocally(optionalPath(params))
+      return listOfficeSkillsLocally(optionalWorkspaceRoot(params))
     case OFFICE_SKILLS_INSTALL_METHOD: {
       const pairs = parseOfficeSkillInstallPairs((params as { pairs?: unknown } | null)?.pairs)
       return pairs
-        ? installOfficeSkillsLocally(pairs, optionalPath(params))
+        ? installOfficeSkillsLocally(pairs, optionalWorkspaceRoot(params))
         : officeFailure('OFFICECLI_RENDER_FAILED', 'No valid skill/agent pairs were requested')
     }
-    default:
-      break
-  }
-  const path = requiredPath(params)
-  if (!path) {
-    return officeFailure('OFFICECLI_FILE_NOT_FOUND', 'No document path was supplied')
-  }
-  switch (method) {
     case OFFICE_RENDER_METHOD:
-      return renderOfficeLocally(path)
+      return withDocument(params, renderOfficeLocally)
     case OFFICE_WATCH_START_METHOD:
-      return startOfficeWatchLocally(path)
+      return withDocument(params, startOfficeWatchLocally)
     case OFFICE_WATCH_REFRESH_METHOD:
-      return refreshOfficeWatchLocally(path)
+      return withDocument(params, refreshOfficeWatchLocally)
     case OFFICE_WATCH_STOP_METHOD:
-      return stopOfficeWatchLocally(path)
+      return withDocument(params, stopOfficeWatchLocally)
     case OFFICE_SELECTION_METHOD:
-      return readOfficeSelectionLocally(path)
+      return withDocument(params, readOfficeSelectionLocally)
     case OFFICE_MARKS_METHOD:
-      return readOfficeMarksLocally(path)
+      return withDocument(params, readOfficeMarksLocally)
     case OFFICE_CLEAR_MARKS_METHOD:
-      return clearOfficeMarksLocally(path)
+      return withDocument(params, clearOfficeMarksLocally)
     case OFFICE_GOTO_METHOD: {
       const elementPath = (params as { elementPath?: unknown } | null)?.elementPath
       return isValidOfficeElementPath(elementPath)
-        ? gotoOfficeElementLocally(path, elementPath)
+        ? withDocument(params, (ref) => gotoOfficeElementLocally(ref, elementPath))
         : officeFailure('OFFICECLI_RENDER_FAILED', 'No element path was supplied')
     }
-    default:
-      return officeFailure('OFFICECLI_RENDER_FAILED', `Unknown office method ${String(method)}`)
   }
 }

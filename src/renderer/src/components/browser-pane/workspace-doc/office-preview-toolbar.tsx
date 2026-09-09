@@ -36,7 +36,9 @@ export function OfficePreviewToolbar({
   liveDisabledReason: string | null
   selection: { enabled: boolean; reason: string | null; onUse: () => void } | null
   onOpenExternally: () => void
-  onRevealInFolder: () => void
+  /** Null on a remote host: that path has no folder this OS can open, and a button that quietly
+   *  did something else would be labelled a lie. */
+  onRevealInFolder: (() => void) | null
 }): React.JSX.Element {
   return (
     <div className="flex h-9 shrink-0 items-center gap-1 border-b px-2">
@@ -116,15 +118,17 @@ export function OfficePreviewToolbar({
           </TooltipContent>
         </Tooltip>
       ) : null}
-      <Button
-        size="icon"
-        variant="ghost"
-        className="size-7"
-        onClick={onRevealInFolder}
-        aria-label={translate('auto.components.office.preview.reveal', 'Reveal in folder')}
-      >
-        <FolderOpen className="size-3.5 text-muted-foreground" />
-      </Button>
+      {onRevealInFolder ? (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-7"
+          onClick={onRevealInFolder}
+          aria-label={translate('auto.components.office.preview.reveal', 'Reveal in folder')}
+        >
+          <FolderOpen className="size-3.5 text-muted-foreground" />
+        </Button>
+      ) : null}
       <Button
         size="icon"
         variant="ghost"

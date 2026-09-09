@@ -19,16 +19,14 @@ function lanePlatform(lane: OfficecliLane): OfficeHostPlatform {
   if (lane.kind === 'wsl') {
     return 'linux'
   }
-  switch (process.platform) {
-    case 'darwin':
-      return 'darwin'
-    case 'win32':
-      return 'win32'
-    case 'linux':
-      return 'linux'
-    default:
-      return 'unknown'
+  // A lookup rather than a switch: `NodeJS.Platform` has a dozen members we deliberately do not
+  // distinguish, and an exhaustive switch over them would be noise for no reader.
+  const platforms: Partial<Record<NodeJS.Platform, OfficeHostPlatform>> = {
+    darwin: 'darwin',
+    win32: 'win32',
+    linux: 'linux'
   }
+  return platforms[process.platform] ?? 'unknown'
 }
 
 const ABSENT = (lane: OfficecliLane): OfficeProbeResult => ({
@@ -70,7 +68,10 @@ async function probeUncached(lane: OfficecliLane): Promise<OfficeProbeResult> {
     return {
       installed: true,
       version: parseVersion(version.stdout),
-      supportsWatch: /^\s{2}watch\s/m.test(help.stdout),
+      // Any indentation, not exactly two spaces: a help layout that re-indents its command table
+      // would otherwise silently report a binary that cannot watch, and the live toggle would go
+      // dark with no way to tell that from an old build.
+      supportsWatch: /^[ \t]+watch\b/m.test(help.stdout),
       platform: lanePlatform(lane),
       resolvedPath: resolved.path
     }

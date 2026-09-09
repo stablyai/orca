@@ -14,7 +14,7 @@ import {
   type OfficeSelectionOutcome
 } from '../../shared/office-preview-contracts'
 import { officeKindSupportsSelection, officeDocKind } from '../../shared/office-file-extensions'
-import { canonicalOfficeDocumentPath } from './office-document-path'
+import { resolveOfficeDocumentTarget } from './office-document-path'
 import {
   classifyOfficecliRun,
   classifyOfficeThrown,
@@ -26,7 +26,7 @@ import {
   officecliSelectionArgs,
   officecliUnmarkAllArgs
 } from './officecli-argv'
-import { NATIVE_OFFICECLI_LANE, type OfficecliLane } from './officecli-lane'
+import type { OfficeDocumentRef } from './office-local-execution'
 import { runOfficecli } from './officecli-invocation'
 
 const INSPECT_TIMEOUT_MS = 30_000
@@ -88,20 +88,21 @@ function readMarks(stdout: string): OfficeMark[] {
   return parsed
 }
 
-export async function readOfficeSelection(
-  documentPath: string,
-  lane: OfficecliLane = NATIVE_OFFICECLI_LANE
-): Promise<OfficeSelectionOutcome> {
-  const kind = officeDocKind(documentPath)
+export async function readOfficeSelection(ref: OfficeDocumentRef): Promise<OfficeSelectionOutcome> {
+  const kind = officeDocKind(ref.relativePath)
   if (!kind || !officeKindSupportsSelection(kind)) {
     // Stated, not discovered: `.xlsx` emits no addressable element paths, so the control says so
     // rather than silently answering with nothing.
     return officeFailure('OFFICECLI_UNSUPPORTED_FORMAT')
   }
   try {
-    const canonicalPath = await canonicalOfficeDocumentPath(documentPath, lane)
+    const canonicalPath = await resolveOfficeDocumentTarget(
+      ref.workspaceRoot,
+      ref.relativePath,
+      ref.lane
+    )
     const run = await runOfficecli(officecliSelectionArgs(canonicalPath), {
-      lane,
+      lane: ref.lane,
       timeoutMs: INSPECT_TIMEOUT_MS,
       maxOutputBytes: 4 * 1024 * 1024
     })
@@ -113,14 +114,15 @@ export async function readOfficeSelection(
   }
 }
 
-export async function readOfficeMarks(
-  documentPath: string,
-  lane: OfficecliLane = NATIVE_OFFICECLI_LANE
-): Promise<OfficeMarksOutcome> {
+export async function readOfficeMarks(ref: OfficeDocumentRef): Promise<OfficeMarksOutcome> {
   try {
-    const canonicalPath = await canonicalOfficeDocumentPath(documentPath, lane)
+    const canonicalPath = await resolveOfficeDocumentTarget(
+      ref.workspaceRoot,
+      ref.relativePath,
+      ref.lane
+    )
     const run = await runOfficecli(officecliMarksArgs(canonicalPath), {
-      lane,
+      lane: ref.lane,
       timeoutMs: INSPECT_TIMEOUT_MS,
       maxOutputBytes: 4 * 1024 * 1024
     })
@@ -134,14 +136,15 @@ export async function readOfficeMarks(
   }
 }
 
-export async function clearOfficeMarks(
-  documentPath: string,
-  lane: OfficecliLane = NATIVE_OFFICECLI_LANE
-): Promise<OfficeMarksOutcome> {
+export async function clearOfficeMarks(ref: OfficeDocumentRef): Promise<OfficeMarksOutcome> {
   try {
-    const canonicalPath = await canonicalOfficeDocumentPath(documentPath, lane)
+    const canonicalPath = await resolveOfficeDocumentTarget(
+      ref.workspaceRoot,
+      ref.relativePath,
+      ref.lane
+    )
     const run = await runOfficecli(officecliUnmarkAllArgs(canonicalPath), {
-      lane,
+      lane: ref.lane,
       timeoutMs: INSPECT_TIMEOUT_MS,
       maxOutputBytes: 64 * 1024
     })
@@ -159,14 +162,17 @@ export async function clearOfficeMarks(
  * makes marks readable at all — a watch process holding this document.
  */
 export async function gotoOfficeElement(
-  documentPath: string,
-  elementPath: string,
-  lane: OfficecliLane = NATIVE_OFFICECLI_LANE
+  ref: OfficeDocumentRef,
+  elementPath: string
 ): Promise<OfficeAckOutcome> {
   try {
-    const canonicalPath = await canonicalOfficeDocumentPath(documentPath, lane)
+    const canonicalPath = await resolveOfficeDocumentTarget(
+      ref.workspaceRoot,
+      ref.relativePath,
+      ref.lane
+    )
     const run = await runOfficecli(officecliGotoArgs(canonicalPath, elementPath), {
-      lane,
+      lane: ref.lane,
       timeoutMs: INSPECT_TIMEOUT_MS,
       maxOutputBytes: 64 * 1024
     })

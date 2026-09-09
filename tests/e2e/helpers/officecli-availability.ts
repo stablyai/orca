@@ -18,9 +18,13 @@ export async function hasOfficecliInstalled(): Promise<boolean> {
     await run('officecli', ['--version'], { timeout: 10_000 })
     return true
   } catch {
-    // A stripped PATH under Playwright is common; the documented user-bin location is not.
+    // A stripped PATH under Playwright is common; the documented user-bin location is not. Run it
+    // rather than stat it: an execute bit only proves a file is there, and a stale or broken
+    // binary would make the render test run and fail instead of skip.
     try {
-      await access(join(homedir(), '.local', 'bin', 'officecli'), constants.X_OK)
+      const fallback = join(homedir(), '.local', 'bin', 'officecli')
+      await access(fallback, constants.X_OK)
+      await run(fallback, ['--version'], { timeout: 10_000 })
       return true
     } catch {
       return false

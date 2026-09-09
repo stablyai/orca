@@ -15,22 +15,37 @@ describe('office surface parity', () => {
     const onRequest = vi.fn()
     new OfficeHandler({ onRequest })
     const registered = onRequest.mock.calls.map((call) => call[0] as string)
-    expect(new Set(registered)).toEqual(new Set(OFFICE_RPC_METHODS))
+    // Sorted arrays rather than sets: a set hides a method registered twice, which is a real way
+    // to break a dispatcher.
+    expect([...registered].sort()).toEqual([...OFFICE_RPC_METHODS].sort())
   })
 
   it('registers every method on a paired runtime', () => {
     const registered = createOfficeMethods().map((method) => method.name)
-    expect(new Set(registered)).toEqual(new Set(OFFICE_RPC_METHODS))
+    expect([...registered].sort()).toEqual([...OFFICE_RPC_METHODS].sort())
   })
 
   it('validates params on the runtime, where a mixed-version client can send anything', () => {
     const byName = new Map(createOfficeMethods().map((method) => [method.name, method]))
     const render = byName.get('office.render')
-    expect(render?.params?.safeParse({ path: '/w/a.docx' }).success).toBe(true)
-    // A required path really is required, and an unknown key is a schema error rather than a
-    // silently dropped field.
+    expect(render?.params?.safeParse({ workspaceRoot: '/w', relativePath: 'a.docx' }).success).toBe(
+      true
+    )
+    // Both halves are required, and an unknown key is a schema error rather than a silently
+    // dropped field.
     expect(render?.params?.safeParse({}).success).toBe(false)
-    expect(render?.params?.safeParse({ path: '/w/a.docx', extra: 1 }).success).toBe(false)
+    expect(render?.params?.safeParse({ workspaceRoot: '/w' }).success).toBe(false)
+    expect(
+      render?.params?.safeParse({ workspaceRoot: '/w', relativePath: 'a.docx', extra: 1 }).success
+    ).toBe(false)
+
+    // The half that carries the boundary: an absolute path in `relativePath` would escape the
+    // workspace the caller named, so the schema refuses it before the host ever canonicalises.
+    for (const absolute of ['/etc/passwd', 'C:\\Windows\\x.docx', '\\\\host\\share\\x.docx']) {
+      expect(
+        render?.params?.safeParse({ workspaceRoot: '/w', relativePath: absolute }).success
+      ).toBe(false)
+    }
 
     const probe = byName.get('office.probe')
     expect(probe?.params?.safeParse({}).success).toBe(true)
