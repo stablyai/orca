@@ -9,7 +9,7 @@ vi.mock('../../../skills/skill-discovery-target', () => ({
   resolveSkillDiscoveryTarget: vi.fn((target) => ({ kind: 'native-host', cwd: target?.cwd })),
   discoverSkillsOnTarget: vi.fn(async () => ({ skills: [], sources: [], scannedAt: 1 }))
 }))
-import { SKILL_METHODS } from './skills'
+import { resolveDiscoveryTarget, SKILL_METHODS } from './skills'
 import {
   discoverSkillsOnTarget,
   resolveSkillDiscoveryTarget
@@ -345,5 +345,34 @@ describe('skill management RPC', () => {
 
     expect(previewSharedSkillInstallRequest).toHaveBeenCalledOnce()
     expect(removeSharedSkillInstallRequest).toHaveBeenCalledOnce()
+  })
+})
+
+describe('resolveDiscoveryTarget cwd backfill', () => {
+  const runtime = {
+    resolveProjectRuntimeForWorktree: vi.fn(() => undefined)
+  } as unknown as Parameters<typeof resolveDiscoveryTarget>[1]
+
+  it('recovers the cwd a worktree id already carries for a caller that sent none', () => {
+    const target = resolveDiscoveryTarget({ worktreeId: 'repo-1::/repo/worktree' }, runtime)
+    expect(target).toMatchObject({ kind: 'native-host', cwd: '/repo/worktree' })
+  })
+
+  it('strips a folder workspace suffix so plugin settings resolve against the real folder', () => {
+    const target = resolveDiscoveryTarget(
+      { worktreeId: 'repo-1::/repo/folder::workspace:11111111-2222-3333-4444-555555555555' },
+      runtime
+    )
+    expect(target).toMatchObject({ kind: 'native-host', cwd: '/repo/folder' })
+  })
+
+  it('keeps an explicit cwd and stays undefined without one', () => {
+    expect(
+      resolveDiscoveryTarget({ cwd: '/explicit', worktreeId: 'repo-1::/repo/worktree' }, runtime)
+    ).toMatchObject({ kind: 'native-host', cwd: '/explicit' })
+    expect(resolveDiscoveryTarget({}, runtime)).toMatchObject({
+      kind: 'native-host',
+      cwd: undefined
+    })
   })
 })
