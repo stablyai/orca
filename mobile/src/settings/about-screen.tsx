@@ -97,7 +97,7 @@ export default function AboutScreen({
 
       <Text style={styles.versionText}>{versionLabel}</Text>
       {error && (
-        <Text accessibilityRole="alert" style={styles.versionText}>
+        <Text accessibilityRole="alert" style={styles.errorText}>
           {error}
         </Text>
       )}
@@ -182,5 +182,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: typography.metaSize,
     color: colors.textMuted
+  },
+  errorText: {
+    marginTop: spacing.sm,
+    textAlign: 'center',
+    fontSize: typography.metaSize,
+    color: colors.statusRed
   }
 })

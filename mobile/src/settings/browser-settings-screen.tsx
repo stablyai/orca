@@ -45,7 +45,6 @@ export default function BrowserSettingsScreen({
   const insets = useSafeAreaInsets()
   const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [busy, setBusy] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -54,12 +53,11 @@ export default function BrowserSettingsScreen({
       (mode) => {
         if (active) {
           setLinkMode(mode)
-          setBusy(false)
         }
       },
       () => {
         if (active) {
-          setError('Could not load browser preferences. Go back and try again.')
+          setError('Could not load browser preferences. Try again.')
         }
       }
     )
@@ -69,14 +67,12 @@ export default function BrowserSettingsScreen({
   }, [loadLinkMode])
 
   const selectLinkMode = useCallback((mode: MobileTerminalLinkOpenMode) => {
-    setBusy(true)
     setError(null)
-    void saveTerminalLinkOpenMode(mode)
-      .then(
-        () => setLinkMode(mode),
-        () => setError('Could not save browser preferences. Try again.')
-      )
-      .finally(() => setBusy(false))
+    // Optimistic, as base was: the row shows the tapped mode before the write lands.
+    setLinkMode(mode)
+    void saveTerminalLinkOpenMode(mode).catch(() =>
+      setError('Could not save browser preferences. Try again.')
+    )
   }, [])
 
   return (
@@ -113,7 +109,6 @@ export default function BrowserSettingsScreen({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Open terminal links"
-            disabled={!available || busy}
             style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
             onPress={() => setPickerOpen(true)}
           >

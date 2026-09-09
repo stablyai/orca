@@ -85,9 +85,7 @@ export default function NativeConnectionLogRoute() {
   return (
     <ConnectionDiagnosticsScreen
       device={device}
-      hostId={selected?.id ?? null}
-      hostName={selected?.name ?? null}
-      endpoint={selected?.endpoint ?? null}
+      host={selected}
       state={state}
       reconnectAttempts={reconnectAttempts}
       activePath={activePath}

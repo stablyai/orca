@@ -23,8 +23,6 @@ export default function NotificationsScreen({
 }) {
   const insets = useSafeAreaInsets()
   const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [loaded, setLoaded] = useState(false)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
 
@@ -35,7 +33,6 @@ export default function NotificationsScreen({
     ])
     setPushEnabled(enabled.enabled)
     setPermissionState(permission)
-    setLoaded(true)
     setError(null)
   }, [operations])
 
@@ -59,10 +56,6 @@ export default function NotificationsScreen({
   }, [refreshSettings])
 
   const togglePush = async (value: boolean) => {
-    if (busy) {
-      return
-    }
-    setBusy(true)
     setError(null)
     try {
       const permission = await operations.permission(value)
@@ -71,8 +64,6 @@ export default function NotificationsScreen({
       setPushEnabled(saved.enabled)
     } catch {
       setError('Could not save notification settings. Try again.')
-    } finally {
-      setBusy(false)
     }
   }
 
@@ -108,7 +99,7 @@ export default function NotificationsScreen({
             value={switchEnabled}
             testID="notification-enabled"
             accessibilityLabel="Agent notifications"
-            disabled={!loaded || busy || notificationsBlocked}
+            disabled={notificationsBlocked}
             onValueChange={(v) => void togglePush(v)}
             trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
             thumbColor={colors.textPrimary}

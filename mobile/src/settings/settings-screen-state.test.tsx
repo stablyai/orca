@@ -109,7 +109,8 @@ describe('shared settings screen state', () => {
     expect(renderer.root.findByProps({ testID: 'notification-enabled' }).props.value).toBe(false)
     expect(operations.openSettings).not.toHaveBeenCalled()
   })
-  it('keeps notification controls disabled when preference loading fails', async () => {
+  it('keeps the notification switch live while the read is pending and after it fails', async () => {
+    let rejectPreference: (error: Error) => void = () => {}
     const operations = {
       permission: vi.fn().mockResolvedValue({
         granted: true,
@@ -117,13 +118,26 @@ describe('shared settings screen state', () => {
         canAskAgain: true,
         authorizationReflectsUserChoice: true
       }),
-      preference: vi.fn().mockRejectedValue(new Error('storage failed')),
+      preference: vi.fn().mockImplementation(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectPreference = reject
+          })
+      ),
       openSettings: vi.fn()
     }
     await act(async () => {
       renderer = create(createElement(NotificationsScreen, { operations, onBack: vi.fn() }))
     })
-    expect(renderer.root.findByProps({ testID: 'notification-enabled' }).props.disabled).toBe(true)
+    const switchProps = () => renderer.root.findByProps({ testID: 'notification-enabled' }).props
+    // Base gates only on a denied OS permission, so the control is live from first paint.
+    expect(switchProps().disabled).toBe(false)
+
+    await act(async () => {
+      rejectPreference(new Error('storage failed'))
+      await Promise.resolve()
+    })
+    expect(switchProps().disabled).toBe(false)
     expect(JSON.stringify(renderer.toJSON())).toContain('Could not load notification settings')
   })
 })

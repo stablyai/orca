@@ -11,6 +11,7 @@ import type { DiagnosticsSubmissionState } from './connection-diagnostics-screen
 
 export function ConnectionDiagnosticsView({
   hostPicker,
+  hasHost,
   hostName,
   state,
   reconnectAttempts,
@@ -23,7 +24,8 @@ export function ConnectionDiagnosticsView({
   onBack
 }: {
   hostPicker?: ReactNode
-  hostName: string | null
+  hasHost: boolean
+  hostName: string
   state: ConnectionState
   reconnectAttempts: number
   copied: boolean
@@ -50,7 +52,7 @@ export function ConnectionDiagnosticsView({
       </View>
 
       {hostPicker}
-      {hostName ? (
+      {hasHost ? (
         <>
           <View style={styles.statusRow}>
             <Text style={styles.statusText}>

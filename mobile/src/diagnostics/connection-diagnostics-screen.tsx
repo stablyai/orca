@@ -18,9 +18,7 @@ import type {
 
 export function ConnectionDiagnosticsScreen({
   device,
-  hostId,
-  hostName,
-  endpoint,
+  host,
   state,
   reconnectAttempts,
   activePath,
@@ -31,9 +29,8 @@ export function ConnectionDiagnosticsScreen({
   hostPicker
 }: {
   device: DiagnosticsDeviceOperations | null
-  hostId: string | null
-  hostName: string | null
-  endpoint: string | null
+  /** Null only when no host is paired; an empty name or endpoint is still a host. */
+  host: { id: string; name: string; endpoint: string } | null
   state: ConnectionState
   reconnectAttempts: number
   activePath?: MobileConnectionDiagnosticPath
@@ -46,9 +43,12 @@ export function ConnectionDiagnosticsScreen({
   const [copiedHostId, setCopiedHostId] = useState<string | null>(null)
   const [submissionStates, setSubmissionStates] = useState<DiagnosticsSubmissionStates>({})
 
-  const diagnosisArgs = endpoint ? { endpoint, state, activePath, pendingPath, entries } : null
+  const diagnosisArgs = host
+    ? { endpoint: host.endpoint, state, activePath, pendingPath, entries }
+    : null
   const diagnosis = diagnosisArgs ? diagnoseConnection(diagnosisArgs) : null
   const incidentId = diagnosisArgs ? getReportableConnectionIncidentId(diagnosisArgs) : null
+  const hostId = host?.id ?? null
   const submissionKey = hostId && incidentId ? `${hostId}:${incidentId}` : null
   const submissionState = getDiagnosticsSubmissionState(submissionStates, submissionKey)
   const copied = copiedHostId !== null && copiedHostId === hostId
@@ -86,7 +86,8 @@ export function ConnectionDiagnosticsScreen({
 
   return (
     <ConnectionDiagnosticsView
-      hostName={hostName}
+      hasHost={host !== null}
+      hostName={host?.name ?? ''}
       state={state}
       reconnectAttempts={reconnectAttempts}
       entries={entries}

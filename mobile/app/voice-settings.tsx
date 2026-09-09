@@ -20,11 +20,6 @@ export default function NativeVoiceSettingsRoute() {
     [client]
   )
   return (
-    <VoiceSettingsScreen
-      key={clients.find((entry) => entry.client === client)?.hostId ?? 'disconnected'}
-      operations={operations}
-      focused={focused}
-      onBack={() => router.back()}
-    />
+    <VoiceSettingsScreen operations={operations} focused={focused} onBack={() => router.back()} />
   )
 }
