@@ -11,6 +11,11 @@ export type {
 } from './runtime-git-command-target'
 
 export class RuntimeGitCommands {
+	readonly getRuntimeGitBlame: RuntimeGitStatusCommands['getRuntimeGitBlame']
+  readonly listRuntimeGitStashes: RuntimeGitStatusCommands['listRuntimeGitStashes']
+  readonly listRuntimeGitStashFiles: RuntimeGitStatusCommands['listRuntimeGitStashFiles']
+  readonly createRuntimeGitStash: RuntimeGitStatusCommands['createRuntimeGitStash']
+  readonly mutateRuntimeGitStash: RuntimeGitStatusCommands['mutateRuntimeGitStash']
   readonly getRuntimeGitStatus: RuntimeGitStatusCommands['getRuntimeGitStatus']
   readonly getRuntimeGitSubmoduleStatus: RuntimeGitStatusCommands['getRuntimeGitSubmoduleStatus']
   readonly checkRuntimeGitIgnoredPaths: RuntimeGitStatusCommands['checkRuntimeGitIgnoredPaths']
@@ -58,6 +63,11 @@ export class RuntimeGitCommands {
     this.getRuntimeGitSubmoduleStatus = status.getRuntimeGitSubmoduleStatus.bind(status)
     this.checkRuntimeGitIgnoredPaths = status.checkRuntimeGitIgnoredPaths.bind(status)
     this.getRuntimeGitHistory = status.getRuntimeGitHistory.bind(status)
+		this.getRuntimeGitBlame = status.getRuntimeGitBlame.bind(status)
+    this.listRuntimeGitStashes = status.listRuntimeGitStashes.bind(status)
+    this.listRuntimeGitStashFiles = status.listRuntimeGitStashFiles.bind(status)
+    this.createRuntimeGitStash = status.createRuntimeGitStash.bind(status)
+    this.mutateRuntimeGitStash = status.mutateRuntimeGitStash.bind(status)
     this.getRuntimeGitConflictOperation = status.getRuntimeGitConflictOperation.bind(status)
     this.checkoutRuntimeGitBranch = status.checkoutRuntimeGitBranch.bind(status)
     this.listRuntimeGitLocalBranches = status.listRuntimeGitLocalBranches.bind(status)

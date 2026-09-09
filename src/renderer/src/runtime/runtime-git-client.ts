@@ -43,6 +43,14 @@ import {
   stageRuntimeGitPath as stageRuntimeGitPathImplementation,
   unstageRuntimeGitPath as unstageRuntimeGitPathImplementation
 } from './runtime-git-working-tree-client'
+export {
+  applyRuntimeGitStash,
+  createRuntimeGitStash,
+  dropRuntimeGitStash,
+  listRuntimeGitStashes,
+  listRuntimeGitStashFiles,
+  popRuntimeGitStash
+} from './runtime-git-stash-client'
 
 export type {
   RuntimeGenerateCommitMessageOverrides,

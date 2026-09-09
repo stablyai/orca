@@ -21,6 +21,8 @@ import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { useMonacoGitBlame } from './use-monaco-git-blame'
+import { GitBlameDetailsPopover } from './GitBlameDetailsPopover'
 
 type MonacoEditorProps = {
   fileId: string
@@ -43,6 +45,7 @@ type MonacoEditorProps = {
   readOnly?: boolean
   liveTail?: boolean
   autoHeight?: boolean
+	dirty?: boolean
 }
 
 export default function MonacoEditor({
@@ -64,7 +67,8 @@ export default function MonacoEditor({
   conflictDecorationsEnabled = false,
   readOnly = false,
   liveTail = false,
-  autoHeight = false
+	autoHeight = false,
+	dirty = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
@@ -137,6 +141,15 @@ export default function MonacoEditor({
     worktreeId,
     markdownAnnotationsEnabled
   })
+	const blame = useMonacoGitBlame({
+		editor: mountedEditor,
+		fileId,
+		filePath,
+		worktreeId,
+		relativePath,
+		dirty,
+		contentRevision: content
+	})
 
   // Why useLayoutEffect: cleanup runs before @monaco-editor/react disposes the editor, so getScrollTop() still reads valid state on unmount.
   useLayoutEffect(() => {
@@ -225,6 +238,18 @@ export default function MonacoEditor({
         selectionAnnotationTarget={annotations.selectionAnnotationTarget}
         setSelectionAnnotationTarget={annotations.setSelectionAnnotationTarget}
         onSubmitMarkdownComment={annotations.handleSubmitMarkdownComment}
+      />
+			{blame.status ? (
+				<div className="absolute right-2 top-2 z-10 rounded bg-muted px-2 py-1 text-xs text-muted-foreground">
+					{blame.status}
+				</div>
+			) : null}
+      <GitBlameDetailsPopover
+        request={blame.detailsRequest}
+        onClose={blame.closeDetails}
+        onCopyHash={blame.copyHash}
+        onOpenRemoteCommit={blame.openRemoteCommit}
+        onOpenCommitDiff={blame.openCommitDiff}
       />
       <Editor
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}

@@ -3029,3 +3029,16 @@ html.native-shell .app-layout {
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
+/* Caret-line blame stays secondary to editable source text. */
+.monaco-git-blame-annotation {
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-style: normal;
+  opacity: 0.7;
+  pointer-events: auto;
+}
+
+.monaco-git-blame-annotation:hover {
+  color: var(--foreground);
+  opacity: 0.9;
+}

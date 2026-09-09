@@ -1,6 +1,11 @@
 import type { RuntimeGitCommands } from './orca-runtime-git'
 
 type RuntimeGitCommandName =
+	| 'getRuntimeGitBlame'
+  | 'listRuntimeGitStashes'
+  | 'listRuntimeGitStashFiles'
+  | 'createRuntimeGitStash'
+  | 'mutateRuntimeGitStash'
   | 'getRuntimeGitStatus'
   | 'getRuntimeGitSubmoduleStatus'
   | 'checkRuntimeGitIgnoredPaths'
@@ -44,6 +49,11 @@ export function installRuntimeGitCommandSurface(
   commands: RuntimeGitCommands
 ): void {
   Object.assign(target, {
+		getRuntimeGitBlame: commands.getRuntimeGitBlame.bind(commands),
+    listRuntimeGitStashes: commands.listRuntimeGitStashes.bind(commands),
+    listRuntimeGitStashFiles: commands.listRuntimeGitStashFiles.bind(commands),
+    createRuntimeGitStash: commands.createRuntimeGitStash.bind(commands),
+    mutateRuntimeGitStash: commands.mutateRuntimeGitStash.bind(commands),
     getRuntimeGitStatus: commands.getRuntimeGitStatus.bind(commands),
     getRuntimeGitSubmoduleStatus: commands.getRuntimeGitSubmoduleStatus.bind(commands),
     checkRuntimeGitIgnoredPaths: commands.checkRuntimeGitIgnoredPaths.bind(commands),

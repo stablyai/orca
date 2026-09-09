@@ -82,6 +82,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     worktrees: createWorktreesApi(),
     fs: createFileApi(),
     git: createGitApi(),
+    gitignoreTemplates: {
+      list: () => callRuntimeResult('gitignoreTemplates.list'),
+      get: (name) => callRuntimeResult('gitignoreTemplates.get', { name })
+    },
     browser: createBrowserApi(),
     emulator: createEmulatorApi(),
     gh: createGitHubApi(),

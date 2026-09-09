@@ -187,6 +187,7 @@ export function EditorEditFileSurface({
       worktreeId={activeFile.worktreeId}
       markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
       conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
+			dirty={activeFile.isDirty}
       revealLine={
         matchesPendingEditorReveal(pendingEditorReveal, activeFile)
           ? pendingEditorReveal.line

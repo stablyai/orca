@@ -1,5 +1,14 @@
 import { useMemo } from 'react'
-import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
+import {
+	ArrowDown,
+	ArrowUp,
+	Columns2,
+	Eye,
+	FileText,
+	ListTree,
+	Rows2,
+	GitCommitHorizontal
+} from 'lucide-react'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import type { OpenFile } from '@/store/slices/editor'
@@ -20,6 +29,7 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { markdownArtifactSourceKey } from './markdown-artifact-upload'
+import { useGitBlamePreference } from './git-blame-preference'
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -106,6 +116,7 @@ export function EditorPanelHeader({
   const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
+	const [gitBlameEnabled, setGitBlameEnabled] = useGitBlamePreference(activeFile.worktreeId)
 
   return (
     <div className="editor-header">
@@ -281,6 +292,26 @@ export function EditorPanelHeader({
           }
         />
       )}
+			{!isDiffSurface && activeFile.mode === 'edit' && (
+				<TooltipProvider delayDuration={300}>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								className={`p-1 rounded hover:bg-accent transition-colors flex-shrink-0 ${gitBlameEnabled ? 'bg-accent text-foreground' : 'text-muted-foreground'}`}
+								onClick={() => setGitBlameEnabled(!gitBlameEnabled)}
+								aria-label="Toggle inline Git blame"
+								aria-pressed={gitBlameEnabled}
+							>
+								<GitCommitHorizontal size={14} />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom" sideOffset={4}>
+							Inline Git blame
+						</TooltipContent>
+					</Tooltip>
+				</TooltipProvider>
+			)}
       {canShowMarkdownTableOfContents && (
         <TooltipProvider delayDuration={300}>
           <Tooltip>

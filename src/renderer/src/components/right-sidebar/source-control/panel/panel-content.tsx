@@ -8,6 +8,7 @@ import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { GitStashesPanel } from '../stash/git-stashes-panel'
 
 /** The scrolling surface: status, commit affordances, the file sections and the history dock. */
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
@@ -206,6 +207,16 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           diffCommentCountByPath={diffCommentCountByPath}
         />
       )}
+
+      <GitStashesPanel
+        key={currentWorktreeId}
+        worktreeId={currentWorktreeId}
+        worktreePath={worktreePath}
+        settings={model.activeRepoSettings}
+        collapsed={collapsedSections.has('stashes')}
+        onToggle={() => toggleSection('stashes')}
+        onRefreshStatus={refreshActiveGitStatus}
+      />
 
       {isGitHistoryVisible && (
         // Why: the graph is reference context, so keep it docked at the bottom as the pane scrolls.
