@@ -195,13 +195,38 @@ for the mobile projection. PR 1b will stamp `terminalHandle` on OSC-ingested
 rows from the runtime event's `ptyId`, and rewrite the three readers over the
 hook server's snapshot:
 
-- `worktree ps` reads `getStatusSnapshot()` directly;
-- `getFreshExplicit` already consults hook rows; it drops the retained input;
-- `getFreshForMobile` matches on pane key, then on `terminalHandle`.
+### The five call sites
 
-One behavior change will follow and is intended: a row the user dismisses on
-the desktop disappears from `worktree ps` and the phone at the same time,
-instead of lingering until the pty exits.
+`RuntimeAgentRowStore` is constructed once
+(`orca-runtime-fit-override-listeners.ts:131`) and reached from five places:
+
+| Call site | Today | After |
+| --- | --- | --- |
+| `orca-runtime-create-terminal-side-effect-command-code-detector.ts:179` `retain()` | second write of the OSC payload already sent to the hook server | deleted; the hook ingest keeps the only copy, now stamped with `terminalHandle` from the event's `ptyId` |
+| `...command-code-detector.ts:190` `clearPty()` | drops rows on pty exit | deleted; pane teardown already clears the hook row |
+| `orca-runtime-get-worktree-ps.ts:110` `values()` | feeds `retainedSnapshots` | deleted; the reader keeps only `hookSnapshots` |
+| `orca-runtime-serialize-agent-prompt-submission.ts:184` `getFreshExplicit()` | retained row first | reads the hook snapshot |
+| `orca-runtime-prune-mobile-session-tab-group-layout.ts:133` `getFreshForMobile()` | pane key, then pty id | pane key, then `terminalHandle` |
+
+Then `runtime-agent-row-store.ts` is deleted, and
+`collectRuntimeWorktreePtyAgentSources` loses its `retainedSnapshots`
+parameter and the retained-versus-hook reconciliation with it — the reason
+that reconciliation exists is that two stores could disagree about one pane.
+
+### Why `terminalHandle` has to land first
+
+The retained store's only real extra is the pty id. Two of the five readers
+use it, so the hook row has to carry the same fact before the store can go.
+Stamping it on ingest is a smaller change than teaching the readers a second
+lookup, and it puts the pty binding on the row that already owns the pane.
+
+### The intended behavior change
+
+A row the user dismisses on the desktop disappears from `worktree ps` and the
+phone at the same time, instead of lingering until the pty exits. That is the
+point: one store means one dismissal. It is the only user-visible change in
+this step, and the characterization tests for `worktree ps` should show
+nothing else moving.
 
 ## PR 2: the renderer subscribes
 
