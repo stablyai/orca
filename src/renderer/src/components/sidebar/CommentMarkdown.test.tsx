@@ -253,6 +253,32 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('Problem to solve')
   })
 
+  it('honors a document ordered list that starts past 1', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'3. Third\n4. Fourth'} />
+    )
+
+    expect(markup).toContain('<ol start="3"')
+  })
+
+  it('honors a compact ordered list that starts past 1', () => {
+    const markup = renderToStaticMarkup(<CommentMarkdown content={'3. Third\n4. Fourth'} />)
+
+    expect(markup).toContain('<ol start="3"')
+  })
+
+  it('numbers a document ordered list sequentially from repeated markers, per CommonMark', () => {
+    // CommonMark takes the list's start from the first item's typed number and
+    // increments from there, ignoring the numbers typed on later items.
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown variant="document" content={'1. First\n1. Second\n1. Third'} />
+    )
+
+    expect(markup).not.toContain('<ol start=')
+    expect(markup.indexOf('First')).toBeLessThan(markup.indexOf('Second'))
+    expect(markup.indexOf('Second')).toBeLessThan(markup.indexOf('Third'))
+  })
+
   it('contains long PR body markdown inside its available width', () => {
     const markup = renderToStaticMarkup(
       <CommentMarkdown

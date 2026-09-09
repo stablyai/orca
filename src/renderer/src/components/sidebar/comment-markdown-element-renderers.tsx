@@ -107,7 +107,11 @@ export function createCompactCommentMarkdownComponents(
     ),
     // Compact lists
     ul: ({ children }) => <ul className="my-0.5 ml-3 list-disc space-y-0">{children}</ul>,
-    ol: ({ children }) => <ol className="my-0.5 ml-3 list-decimal space-y-0">{children}</ol>,
+    ol: ({ children, start }) => (
+      <ol start={start} className="my-0.5 ml-3 list-decimal space-y-0">
+        {children}
+      </ol>
+    ),
     // Why: GFM task list checkboxes are non-functional in a read-only comment
     // card (clicking them would just open the edit modal via the parent's
     // onClick). Rendering them disabled avoids a misleading interactive
@@ -265,7 +269,11 @@ export function createDocumentCommentMarkdownComponents(
         </pre>
       ),
     ul: ({ children }) => <ul className="my-2 ml-5 list-disc space-y-1">{children}</ul>,
-    ol: ({ children }) => <ol className="my-2 ml-5 list-decimal space-y-1">{children}</ol>,
+    ol: ({ children, start }) => (
+      <ol start={start} className="my-2 ml-5 list-decimal space-y-1">
+        {children}
+      </ol>
+    ),
     li: ({ children }) => (
       <li className="leading-relaxed [&>input]:pointer-events-none">{children}</li>
     ),
