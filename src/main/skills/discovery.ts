@@ -166,6 +166,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
         providers: [...root.providers],
         sourceKind,
         sourceLabel: sourceLabelForSkill(root, sourceKind),
+        ...(root.plugin ? { plugin: root.plugin } : {}),
         rootPath: root.path,
         directoryPath,
         skillFilePath,

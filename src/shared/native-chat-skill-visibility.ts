@@ -10,15 +10,22 @@ const CLAUDE_PLUGIN_LABEL_PREFIX = 'Claude plugin '
 
 /** The token the composer inserts for a discovered skill. Plugin skills are
  *  namespaced (`quiver:catchup`) the way the agent itself addresses them, so
- *  a plugin skill and a same-named home skill stay distinct rows. */
+ *  a plugin skill and a same-named home skill stay distinct rows. Prefers the
+ *  structured plugin field; the label parse stays as the older-host fallback. */
 export function discoveredSkillTokenName(skill: DiscoveredSkill): string {
-  if (skill.sourceKind === 'plugin' && skill.sourceLabel.startsWith(CLAUDE_PLUGIN_LABEL_PREFIX)) {
-    const plugin = skill.sourceLabel.slice(CLAUDE_PLUGIN_LABEL_PREFIX.length)
+  if (skill.sourceKind === 'plugin') {
+    const plugin = skill.plugin ?? parsePluginLabel(skill.sourceLabel)
     if (plugin) {
       return `${plugin}:${skill.name}`
     }
   }
   return skill.name
+}
+
+function parsePluginLabel(sourceLabel: string): string {
+  return sourceLabel.startsWith(CLAUDE_PLUGIN_LABEL_PREFIX)
+    ? sourceLabel.slice(CLAUDE_PLUGIN_LABEL_PREFIX.length)
+    : ''
 }
 
 export function isNativeChatSkillForAgent(
