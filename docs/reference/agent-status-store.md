@@ -261,7 +261,54 @@ also retain a numeric key only when the runtime supplies the matching tab, PTY,
 and terminal handle. HTTP and relay ingress still require a stable key or a
 registered alias, and numeric rows are never persisted.
 
-## PR 2: the renderer subscribes
+## PR 2a: converge the two derivations before the filter comes off
+
+PR 1a left main and the renderer each deriving a structured row from the same
+host summary. That is safe only while the filter keeps them apart. Two
+concrete divergences have to close before PR 2b removes it, or one session
+renders twice and its elapsed clock jumps.
+
+### The pane key
+
+Main keys on `structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)`
+(`server-ingest-structured.ts`). The renderer keys on
+`structuredAgentSessionPaneKey(tab.id, tab.entityId)`
+(`StructuredAgentSessionStatusBridge.tsx:63`).
+
+`tab.id` is normally that same derived id, but `web-session-tabs-sync/terminal-surfaces.ts:103`
+assigns `${baseId}:history-${++suffix}` when a mirrored session collides with
+an occupied id. For that session the two keys differ, so removing the filter
+yields two rows for one chat. The suffix path is the mirrored/web-session
+lane, which is exactly the lane `worktree ps` and mobile read.
+
+Fix: derive the status pane key from the session id on both sides rather than
+from the surface's local tab id. The tab id is a surface identity and may be
+disambiguated; the session id is the durable one, and main already uses it.
+
+### `stateStartedAt`
+
+Main preserves `previous.stateStartedAt` when the state is unchanged
+(`server-status-application.ts` `attachStatusTiming`). The renderer's
+`projectStatus` resets it to `summary.updatedAt`. Today the difference is
+invisible because the renderer writes the row it reads; once main writes it,
+the value changes under two live consumers:
+
+- `NativeChatResolvedView.tsx:113` reads it as `hookWorkingEpoch`, which
+  clears Stop-suppression on a new working epoch;
+- `NativeChatWorkingStatus` renders elapsed time from a `startedAt` prop fed
+  by the same field.
+
+So this is not an internal mismatch — it is a visible change to the chat's
+"Working for Ns" and to when Stop re-arms. Fix: one shared rule, main's,
+with the renderer's reset behavior either adopted deliberately or dropped.
+
+### Scope
+
+No filter is removed here and no writer is retired. This step only makes the
+two derivations agree, so PR 2b is a switch flip that can be reverted on its
+own if a surface regresses.
+
+## PR 2b: the renderer subscribes
 
 With structured rows arriving over `agentStatus:set`, the renderer's
 `StructuredAgentSessionStatusBridge` no longer needs to write status; its
