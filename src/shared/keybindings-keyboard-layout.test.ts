@@ -481,8 +481,7 @@ describe('keybindings', () => {
     })
 
     it('does not fall back to the physical letter when the layout maps that key to punctuation', () => {
-      // Dvorak KeyZ types ';': already covered for the letter branch, asserted here as the
-      // symmetric partner of the bracket case above.
+      // Dvorak KeyZ types ';', so a letter binding must not resolve through the physical code.
       expect(
         keybindingMatchesAction(
           'editor.toggleWordWrap',
