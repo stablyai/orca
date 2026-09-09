@@ -2,6 +2,7 @@ import { useEffect, useCallback } from 'react'
 import { useAppStore } from '../store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../runtime/runtime-rpc-client'
 import { Tracers } from '../../../shared/trace/tracers'
+import { toast } from 'sonner'
 import type { WorkflowExecution } from '@shared/workflow-types'
 
 // How often to re-poll `workflow.getExecution` while an execution is running.
@@ -74,5 +75,40 @@ export function useWorkflowExecution(executionId: string) {
     }
   }, [executionId])
 
-  return { execution, stepStatuses, streamingOutput, cancelExecution }
+  const pauseExecution = useCallback(async () => {
+    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    try {
+      await callRuntimeRpc(target, 'workflow.pause', { executionId })
+      // Optimistic update required — the polling effect above only runs while
+      // status==='running', so it won't pick up 'paused' until the next tick
+      // (up to EXECUTION_POLL_INTERVAL_MS late) unless we set it here.
+      useAppStore.getState().updateExecutionStatus(executionId, 'paused')
+    } catch (err) {
+      toast.error('Failed to pause workflow')
+      throw err
+    }
+  }, [executionId])
+
+  const resumeExecution = useCallback(async () => {
+    const target = getActiveRuntimeTarget(useAppStore.getState().settings)
+    try {
+      await callRuntimeRpc(target, 'workflow.resume', { executionId })
+      // Optimistic update required — polling only (re)starts when status is
+      // 'running' (see the effect's guard above); without this the poll never
+      // resumes after a pause, since nothing else would flip status back.
+      useAppStore.getState().updateExecutionStatus(executionId, 'running')
+    } catch (err) {
+      toast.error('Failed to resume workflow')
+      throw err
+    }
+  }, [executionId])
+
+  return {
+    execution,
+    stepStatuses,
+    streamingOutput,
+    cancelExecution,
+    pauseExecution,
+    resumeExecution
+  }
 }

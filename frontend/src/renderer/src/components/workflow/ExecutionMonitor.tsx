@@ -4,8 +4,14 @@ import { Button } from '../ui/button'
 import type { WorkflowStep, StepStatus } from '@shared/workflow-types'
 
 export function ExecutionMonitor({ executionId }: { executionId: string }) {
-  const { execution, stepStatuses, streamingOutput, cancelExecution } =
-    useWorkflowExecution(executionId)
+  const {
+    execution,
+    stepStatuses,
+    streamingOutput,
+    cancelExecution,
+    pauseExecution,
+    resumeExecution
+  } = useWorkflowExecution(executionId)
 
   if (!execution) {
     return <div className="p-4 text-sm text-muted-foreground">Loading execution...</div>
@@ -36,6 +42,16 @@ export function ExecutionMonitor({ executionId }: { executionId: string }) {
             </button>
           )}
           <StepStatusBadge status={execution.status} />
+          {execution.status === 'running' && (
+            <Button size="sm" variant="outline" onClick={pauseExecution} data-testid="pause-btn">
+              Pause
+            </Button>
+          )}
+          {execution.status === 'paused' && (
+            <Button size="sm" variant="outline" onClick={resumeExecution} data-testid="resume-btn">
+              Resume
+            </Button>
+          )}
           {execution.status === 'running' && (
             <Button size="sm" variant="outline" onClick={cancelExecution} data-testid="cancel-btn">
               Cancel

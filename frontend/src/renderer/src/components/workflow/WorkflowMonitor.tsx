@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ExecutionMonitor } from './ExecutionMonitor'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { useAppStore } from '../../store'
+import { Button } from '../ui/button'
 import type { WorkflowExecution, WorkflowExecutionStatus } from '@shared/workflow-types'
 
 // Why not StepStatusBadge: it only maps StepStatus (pending/running/completed/failed/skipped),
@@ -14,12 +15,21 @@ import type { WorkflowExecution, WorkflowExecutionStatus } from '@shared/workflo
 const STATUS_LABEL: Record<WorkflowExecutionStatus, string> = {
   pending: 'Pending',
   running: 'Running',
+  paused: 'Paused',
   completed: 'Completed',
   failed: 'Failed',
   cancelled: 'Cancelled'
 }
 
-export function WorkflowMonitor({ projectId }: { projectId: string }) {
+export function WorkflowMonitor({
+  projectId,
+  onNewWorkflow,
+  onOpenLibrary
+}: {
+  projectId: string
+  onNewWorkflow: () => void
+  onOpenLibrary?: () => void
+}) {
   const executions = useAppStore((s) => s.executions)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -62,6 +72,21 @@ export function WorkflowMonitor({ projectId }: { projectId: string }) {
 
   return (
     <div className="workflow-monitor p-4 space-y-2" data-testid="workflow-monitor">
+      <div className="flex justify-end gap-2">
+        {onOpenLibrary && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onOpenLibrary}
+            data-testid="open-library-btn"
+          >
+            Browse Library
+          </Button>
+        )}
+        <Button size="sm" onClick={onNewWorkflow} data-testid="new-workflow-btn">
+          + New Workflow
+        </Button>
+      </div>
       {isLoading ? (
         <div className="text-xs text-muted-foreground" data-testid="workflow-loading">
           Loading executions&hellip;

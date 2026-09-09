@@ -24,6 +24,13 @@ describe('StepStatusBadge', () => {
     expect(screen.getByText('Cancelled')).toBeInTheDocument()
   })
 
+  // FE-TASK-003: 'paused' is another WorkflowExecutionStatus value not in StepStatus —
+  // same crash class as the 'cancelled' regression above.
+  it("renders 'paused' (WorkflowExecutionStatus, not in StepStatus) without crashing", () => {
+    expect(() => render(<StepStatusBadge status="paused" />)).not.toThrow()
+    expect(screen.getByText('Paused')).toBeInTheDocument()
+  })
+
   it('renders the expected label for each status', () => {
     const cases: [Parameters<typeof StepStatusBadge>[0]['status'], string][] = [
       ['pending', 'Pending'],
@@ -31,7 +38,8 @@ describe('StepStatusBadge', () => {
       ['completed', 'Completed'],
       ['failed', 'Failed'],
       ['skipped', 'Skipped'],
-      ['cancelled', 'Cancelled']
+      ['cancelled', 'Cancelled'],
+      ['paused', 'Paused']
     ]
     for (const [status, label] of cases) {
       const { unmount } = render(<StepStatusBadge status={status} />)
