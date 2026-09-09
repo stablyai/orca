@@ -2,6 +2,7 @@
 // live agent state, so `session.tabs` must project the hook row's status fields — not
 // just its identity — while still refusing rows that only prove an agent once existed.
 import { describe, expect, it, vi } from 'vitest'
+import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { OrcaRuntimeService } from './orca-runtime'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
@@ -58,11 +59,17 @@ function hookRow(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpc
 }
 
 async function createRuntimeWithHookRows(
-  rows: AgentStatusIpcPayload[]
+  rows: AgentStatusIpcPayload[],
+  /** Pass a store to exercise the OSC producer; otherwise the rows stand in for it. */
+  statusWiring?: ReturnType<typeof makeAgentStatusStoreWiring>
 ): Promise<OrcaRuntimeService> {
+  const readRows = statusWiring
+    ? (): AgentStatusIpcPayload[] => [...rows, ...statusWiring.deps.getAgentStatusSnapshot()]
+    : (): AgentStatusIpcPayload[] => rows
   const runtime = new OrcaRuntimeService(null, undefined, {
-    getAgentStatusSnapshot: () => rows,
-    getAgentProviderSessionRowsForPane: () => rows
+    ...(statusWiring ? { onTerminalAgentStatus: statusWiring.deps.onTerminalAgentStatus } : {}),
+    getAgentStatusSnapshot: readRows,
+    getAgentProviderSessionRowsForPane: readRows
   })
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
@@ -224,8 +231,18 @@ describe('headless hook agent-status projection (#11761)', () => {
   })
 
   // #7970: a retained OSC 9999 row is the pane's own report and keeps precedence.
-  it('prefers a retained OSC 9999 row over the hook row', async () => {
-    const runtime = await createRuntimeWithHookRows([hookRow()])
+  it('projects the OSC turn that replaced the hook row in the store', async () => {
+    // One store: an OSC turn is a write, not a competing copy, so the pane projects whatever
+    // the store holds now rather than a reader-side preference between two rows.
+    const statusWiring = makeAgentStatusStoreWiring()
+    statusWiring.statusStore.ingestTerminalStatus({
+      paneKey: PANE_KEY,
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      connectionId: null,
+      payload: { state: 'waiting', prompt: 'Tabs or spaces?', agentType: 'claude' }
+    })
+    const runtime = await createRuntimeWithHookRows([], statusWiring)
     runtime.onPtyData(
       PTY_ID,
       '\x1b]9999;{"state":"working","prompt":"fix the tests","agentType":"claude"}\x07',

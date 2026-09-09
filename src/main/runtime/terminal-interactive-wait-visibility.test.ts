@@ -1,6 +1,7 @@
 // A worker parked on an interactive prompt must be distinguishable from one that is thinking
 // or inside a long tool call (STA-4513, STA-3714).
 import { readFileSync } from 'node:fs'
+import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -49,7 +50,9 @@ async function createPane(options: {
   foregroundProbeHangs?: boolean
   onForegroundProbe?: () => void
 }): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
-  const runtime = new OrcaRuntimeService(null)
+  // Wired like a real host: the OSC parse writes into the agent-status store and every
+  // explicit-status read comes back out of it. Unwired, no OSC 9999 status reaches a reader.
+  const runtime = new OrcaRuntimeService(null, undefined, makeAgentStatusStoreWiring().deps)
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }

@@ -9,7 +9,8 @@ type KnownStatus = {
 
 /** Reports whether a hook status event changed anything the `session.tabs`
  *  projection publishes, so a repeated same-state ping costs no snapshot rebuild.
- *  Mirrors `retainAgentRowSnapshot`'s change set plus hook restore provenance. */
+ *  This is the whole change set: the runtime's own retained-row comparator (whose boolean
+ *  return drove the same republish) was deleted in favour of it. */
 export function createHookStatusSessionTabsInvalidator(): {
   (event: AgentHookEventPayload): boolean
   forgetPane: (paneKey: string) => void

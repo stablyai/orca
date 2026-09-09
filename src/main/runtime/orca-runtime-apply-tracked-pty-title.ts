@@ -174,7 +174,6 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       leaf.tailWaitState = undefined
     }
     this.primeWaitBlockedBaselineFromSeededTail(ptyId)
-    this.clearAgentRowSnapshotsForPty(ptyId)
   }
 
   protected setTerminalSideEffectConsumerAvailable(available: boolean): void {

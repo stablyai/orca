@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { selectFreshAgentRowForMobileTab } from './runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from './orca-runtime-schedule-mobile-session-tabs-changed'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type {
@@ -130,7 +131,12 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     pty: RuntimePtyWorktreeRecord | null,
     tab: RuntimeMobileSessionTerminalTab
   ): RuntimeAgentRowSnapshot | null {
-    return this.agentRows.getFreshForMobile(paneKey, pty, tab)
+    const handlePty = pty ?? (tab.ptyId ? (this.ptysById.get(tab.ptyId) ?? null) : null)
+    return selectFreshAgentRowForMobileTab({
+      paneKey,
+      terminalHandle: handlePty ? this.issuePtyHandle(handlePty) : null,
+      hookRows: this.getAgentStatusSnapshotFn?.() ?? []
+    })
   }
 
   protected findPtyForMobileTerminalTab(
