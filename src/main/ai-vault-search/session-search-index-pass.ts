@@ -48,8 +48,14 @@ export async function runSessionSearchIndexPass(
   let sincePace = 0
   for (const [index, candidate] of candidates.entries()) {
     throwIfAiVaultScanCancelled(options.signal)
+    // Ask the store whether it wants this candidate at all before reading its
+    // cursor: a closed or paused store answers no, and every read after that
+    // would be against a handle it has already given up.
+    if (!wantsCandidate(store, candidate)) {
+      continue
+    }
     const forced = mustReadWhole(store, candidate, options.forced)
-    if (!indexable(store, candidate, forced)) {
+    if (!forced && indexIsCurrent(store, candidate)) {
       continue
     }
     const bytes = forced ? (candidate.file.sizeBytes ?? 0) : unreadBytes(store, candidate)
@@ -85,23 +91,14 @@ export async function runSessionSearchIndexPass(
   return { stats, deferred }
 }
 
-function indexable(
-  store: SessionSearchStore,
-  candidate: SessionFileCandidate,
-  forced: boolean
-): boolean {
-  if (!store.acceptsCandidate(candidate)) {
-    return false
-  }
+function wantsCandidate(store: SessionSearchStore, candidate: SessionFileCandidate): boolean {
   // A parser that decodes where the message channel cannot reach it can never
   // extend the index, so reading it here would be pure cost.
-  if (!parserPublishesMessages(candidate)) {
-    return false
-  }
-  if (forced) {
-    return true
-  }
-  return !isSessionSearchFileCurrent(
+  return store.acceptsCandidate(candidate) && parserPublishesMessages(candidate)
+}
+
+function indexIsCurrent(store: SessionSearchStore, candidate: SessionFileCandidate): boolean {
+  return isSessionSearchFileCurrent(
     store.indexedFile(candidate.file.path, fileIdentity(candidate.file)),
     candidate.file
   )

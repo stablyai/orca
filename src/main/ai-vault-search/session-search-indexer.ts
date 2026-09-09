@@ -169,6 +169,9 @@ export class SessionSearchIndexer {
 
   /** Marks paths whose stored cursor is not to be trusted; the next cycle re-reads them whole. */
   invalidate(paths: readonly string[]): void {
+    if (this.closed) {
+      return
+    }
     for (const path of paths) {
       this.pending.add({ path, candidate: null, forced: true })
     }
