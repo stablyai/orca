@@ -17,12 +17,12 @@ export const gitApi = {
 	cancelBlame: (args: { requestToken: string }): Promise<void> =>
 		ipcRenderer.invoke('git:cancelBlame', args),
   stashList: (args: { worktreePath: string; connectionId?: string; requestToken?: string }): Promise<GitStashSummary[]> => ipcRenderer.invoke('git:stashList', args),
-  stashFiles: (args: { worktreePath: string; ref: string; connectionId?: string; requestToken?: string }): Promise<GitStashFile[]> => ipcRenderer.invoke('git:stashFiles', args),
+  stashFiles: (args: { worktreePath: string; ref: string; expectedCommitId: string; connectionId?: string; requestToken?: string }): Promise<GitStashFile[]> => ipcRenderer.invoke('git:stashFiles', args),
   stashCancel: (args: { requestToken: string }): Promise<void> => ipcRenderer.invoke('git:stashCancel', args),
   stashCreate: (args: { worktreePath: string; connectionId?: string } & GitStashCreateOptions): Promise<void> => ipcRenderer.invoke('git:stashCreate', args),
-  stashApply: (args: { worktreePath: string; ref: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashApply', args),
-  stashPop: (args: { worktreePath: string; ref: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashPop', args),
-  stashDrop: (args: { worktreePath: string; ref: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashDrop', args),
+  stashApply: (args: { worktreePath: string; ref: string; expectedCommitId: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashApply', args),
+  stashPop: (args: { worktreePath: string; ref: string; expectedCommitId: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashPop', args),
+  stashDrop: (args: { worktreePath: string; ref: string; expectedCommitId: string; connectionId?: string }): Promise<void> => ipcRenderer.invoke('git:stashDrop', args),
   status: (args: {
     worktreePath: string
     connectionId?: string

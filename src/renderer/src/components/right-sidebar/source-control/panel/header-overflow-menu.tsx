@@ -96,7 +96,7 @@ export function SourceControlHeaderOverflowMenu({
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCreateGitignore} disabled={!onCreateGitignore}>
           <FilePlus2 className="size-3.5" />
-          Create .gitignore from template…
+          {translate('gitignore.templates.menuAction', 'Create .gitignore from template…')}
         </DropdownMenuItem>
         {diffCommentCount > 0 ? (
           <>

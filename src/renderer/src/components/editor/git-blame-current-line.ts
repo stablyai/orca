@@ -1,4 +1,5 @@
 import type { GitBlameRange } from '../../../../shared/git-blame'
+import { translate } from '../../i18n/i18n'
 
 export function findGitBlameRangeForLine(
   ranges: GitBlameRange[],
@@ -11,7 +12,7 @@ export function findGitBlameRangeForLine(
 
 export function formatGitBlameInlineLabel(range: GitBlameRange): string {
   if (!range.commitId) {
-    return 'Uncommitted'
+    return translate('editor.gitBlame.uncommitted', 'Uncommitted')
   }
   const date = new Intl.DateTimeFormat(undefined, {
     year: 'numeric',

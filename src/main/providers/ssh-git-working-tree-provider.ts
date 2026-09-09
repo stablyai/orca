@@ -8,7 +8,7 @@ import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { SshGitNoninteractiveProvider } from './ssh-git-noninteractive-provider'
 import type { GitBlameResult } from '../../shared/git-blame'
 import { isJsonRpcMethodNotFoundError } from './ssh-git-relay-errors'
-import type { GitStashCreateOptions, GitStashFile, GitStashSummary } from '../../shared/git-stash'
+import type { GitStashCreateOptions, GitStashFile, GitStashMutationTarget, GitStashSummary } from '../../shared/git-stash'
 
 export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
 	private async stashRequest<T>(method: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
@@ -16,7 +16,7 @@ export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
 			return (await this.mux.request(method, params, signal ? { signal } : undefined)) as T
 		} catch (error) {
 			if (isJsonRpcMethodNotFoundError(error)) {
-				throw new Error('Git stashes are unavailable on this host. Reconnect to update Orca, then try again.')
+				throw new Error('git_stash_unavailable')
 			}
 			throw error
 		}
@@ -26,24 +26,24 @@ export class SshGitWorkingTreeProvider extends SshGitNoninteractiveProvider {
 		return this.stashRequest('git.stashList', { worktreePath }, options?.signal)
 	}
 
-	listStashFiles(worktreePath: string, ref: string, options?: { signal?: AbortSignal }): Promise<GitStashFile[]> {
-		return this.stashRequest('git.stashFiles', { worktreePath, ref }, options?.signal)
+	listStashFiles(worktreePath: string, target: GitStashMutationTarget, options?: { signal?: AbortSignal }): Promise<GitStashFile[]> {
+		return this.stashRequest('git.stashFiles', { worktreePath, ...target }, options?.signal)
 	}
 
 	createStash(worktreePath: string, options: GitStashCreateOptions): Promise<void> {
 		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashCreate', { worktreePath, ...options }))
 	}
 
-	applyStash(worktreePath: string, ref: string): Promise<void> {
-		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashApply', { worktreePath, ref }))
+	applyStash(worktreePath: string, target: GitStashMutationTarget): Promise<void> {
+		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashApply', { worktreePath, ...target }))
 	}
 
-	popStash(worktreePath: string, ref: string): Promise<void> {
-		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashPop', { worktreePath, ref }))
+	popStash(worktreePath: string, target: GitStashMutationTarget): Promise<void> {
+		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashPop', { worktreePath, ...target }))
 	}
 
-	dropStash(worktreePath: string, ref: string): Promise<void> {
-		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashDrop', { worktreePath, ref }))
+	dropStash(worktreePath: string, target: GitStashMutationTarget): Promise<void> {
+		return this.runWithGitReadInvalidation(() => this.stashRequest('git.stashDrop', { worktreePath, ...target }))
 	}
 
 	async getBlame(

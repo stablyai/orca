@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { translate } from '@/i18n/i18n'
 
 type GitignoreTemplateDialogProps = {
   open: boolean
@@ -61,7 +62,11 @@ export function GitignoreTemplateDialog({
       })
       .catch((reason: unknown) => {
         if (!cancelled) {
-          setError(reason instanceof Error ? reason.message : 'Could not load templates.')
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : translate('gitignore.templates.errors.loadCatalog', 'Could not load templates.')
+          )
         }
       })
       .finally(() => {
@@ -93,7 +98,11 @@ export function GitignoreTemplateDialog({
     try {
       setSelected(await getTemplate(name))
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not load the template.')
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : translate('gitignore.templates.errors.loadTemplate', 'Could not load the template.')
+      )
     } finally {
       setLoading(false)
     }
@@ -109,7 +118,11 @@ export function GitignoreTemplateDialog({
       await onConfirm(preview, mode)
       onOpenChange(false)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not save .gitignore.')
+      setError(
+        reason instanceof Error
+          ? reason.message
+          : translate('gitignore.templates.errors.save', 'Could not save .gitignore.')
+      )
     } finally {
       setSaving(false)
     }
@@ -119,11 +132,21 @@ export function GitignoreTemplateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{mode === 'create' ? 'Create .gitignore' : 'Append to .gitignore'}</DialogTitle>
+          <DialogTitle>
+            {mode === 'create'
+              ? translate('gitignore.templates.createTitle', 'Create .gitignore')
+              : translate('gitignore.templates.appendTitle', 'Append to .gitignore')}
+          </DialogTitle>
           <DialogDescription>
             {mode === 'create'
-              ? 'Choose a template from github/gitignore and review it before creating the file.'
-              : 'The existing file will not be overwritten. Review the combined content before appending.'}
+              ? translate(
+                  'gitignore.templates.createDescription',
+                  'Choose a template from github/gitignore and review it before creating the file.'
+                )
+              : translate(
+                  'gitignore.templates.appendDescription',
+                  'The existing file will not be overwritten. Review the combined content before appending.'
+                )}
           </DialogDescription>
         </DialogHeader>
 
@@ -132,8 +155,11 @@ export function GitignoreTemplateDialog({
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search templates"
-              aria-label="Search gitignore templates"
+              placeholder={translate('gitignore.templates.searchPlaceholder', 'Search templates')}
+              aria-label={translate(
+                'gitignore.templates.searchLabel',
+                'Search gitignore templates'
+              )}
               className="rounded-b-none border-0 border-b shadow-none"
             />
             <ScrollArea className="h-80">
@@ -150,7 +176,9 @@ export function GitignoreTemplateDialog({
                   </button>
                 ))}
                 {!loading && filteredTemplates.length === 0 && (
-                  <p className="px-2 py-6 text-center text-xs text-muted-foreground">No templates found</p>
+                  <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+                    {translate('gitignore.templates.empty', 'No templates found')}
+                  </p>
                 )}
               </div>
             </ScrollArea>
@@ -158,12 +186,23 @@ export function GitignoreTemplateDialog({
 
           <div className="min-w-0 rounded-md border border-border bg-muted/20">
             <div className="flex h-9 items-center border-b border-border px-3 text-xs text-muted-foreground">
-              {selected?.template.filename ?? 'Template preview'}
-              {(catalog?.stale || selected?.stale) && <span className="ml-auto">Offline cache</span>}
+              {selected?.template.filename ??
+                translate('gitignore.templates.previewTitle', 'Template preview')}
+              {(catalog?.stale || selected?.stale) && (
+                <span className="ml-auto">
+                  {translate('gitignore.templates.offlineCache', 'Offline cache')}
+                </span>
+              )}
             </div>
             <ScrollArea className="h-80">
               <pre className="min-h-80 whitespace-pre-wrap break-words p-3 font-mono text-xs leading-relaxed">
-                {loading && !selected ? 'Loading...' : preview || 'Select a template to preview it.'}
+                {loading && !selected
+                  ? translate('gitignore.templates.loading', 'Loading...')
+                  : preview ||
+                    translate(
+                      'gitignore.templates.selectPreview',
+                      'Select a template to preview it.'
+                    )}
               </pre>
             </ScrollArea>
           </div>
@@ -178,11 +217,13 @@ export function GitignoreTemplateDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancel
+            {translate('common.cancel', 'Cancel')}
           </Button>
           <Button type="button" onClick={() => void confirm()} disabled={!selected || loading || saving}>
             {saving && <Loader2 className="animate-spin" />}
-            {mode === 'create' ? 'Create file' : 'Append changes'}
+            {mode === 'create'
+              ? translate('gitignore.templates.createAction', 'Create file')
+              : translate('gitignore.templates.appendAction', 'Append changes')}
           </Button>
         </DialogFooter>
       </DialogContent>

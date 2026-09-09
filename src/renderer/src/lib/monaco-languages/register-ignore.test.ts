@@ -67,4 +67,9 @@ describe('registerIgnoreLanguage', () => {
     registerIgnoreLanguage(monaco as never)
     expect(monaco.languages.register).not.toHaveBeenCalled()
   })
+
+  it('has no tokenizer rule that can match an empty string', () => {
+    const rules = ignoreMonarchLanguage.tokenizer?.root as [RegExp, string][]
+    expect(rules.every(([pattern]) => pattern.exec('') === null)).toBe(true)
+  })
 })

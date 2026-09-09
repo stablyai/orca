@@ -1,6 +1,6 @@
-import { app } from 'electron'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { getAppEnvironment } from '../../../../shared/app-environment'
 import { GitignoreTemplateFileCache } from '../../../gitignore/gitignore-template-file-cache'
 import { GitHubGitignoreTemplateService } from '../../../gitignore/github-gitignore-template-service'
 import { getMainHttpClient } from '../../../network/http-client'
@@ -12,7 +12,11 @@ function getService(): GitHubGitignoreTemplateService {
   service ??= new GitHubGitignoreTemplateService({
     fetch: (url, init) => getMainHttpClient().fetch(url, init),
     cache: new GitignoreTemplateFileCache(
-      join(app.getPath('userData'), 'gitignore-templates', 'github-gitignore.json')
+      join(
+        getAppEnvironment().getPath('userData'),
+        'gitignore-templates',
+        'github-gitignore.json'
+      )
     )
   })
   return service

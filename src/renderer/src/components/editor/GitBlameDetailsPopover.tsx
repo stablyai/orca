@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Copy, ExternalLink, GitCompareArrows } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
+import { translate } from '@/i18n/i18n'
 import type { GitBlameDetailsRequest } from './use-monaco-git-blame'
 
 export function GitBlameDetailsPopover({
@@ -50,17 +51,19 @@ export function GitBlameDetailsPopover({
             </div>
             <div className="mt-0.5 font-mono text-[11px] tabular-nums text-muted-foreground">
               {new Date(range.authoredAt * 1000).toLocaleString()}
-              {range.commitId ? ` · ${range.commitId}` : ' · Uncommitted line'}
+              {range.commitId
+                ? ` · ${range.commitId}`
+                : ` · ${translate('editor.gitBlame.uncommittedLine', 'Uncommitted line')}`}
             </div>
           </div>
           <div className="flex flex-wrap gap-1 p-1.5">
             <Button size="xs" variant="ghost" disabled={!committed} onClick={onOpenCommitDiff}>
               <GitCompareArrows />
-              Open diff
+              {translate('editor.gitBlame.openDiff', 'Open diff')}
             </Button>
             <Button size="xs" variant="ghost" disabled={!committed} onClick={onCopyHash}>
               <Copy />
-              Copy hash
+              {translate('editor.gitBlame.copyHash', 'Copy hash')}
             </Button>
             <Button
               size="xs"
@@ -69,7 +72,7 @@ export function GitBlameDetailsPopover({
               onClick={onOpenRemoteCommit}
             >
               <ExternalLink />
-              Open remote
+              {translate('editor.gitBlame.openRemote', 'Open remote')}
             </Button>
           </div>
         </PopoverContent>

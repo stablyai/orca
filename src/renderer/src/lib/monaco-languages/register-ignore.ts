@@ -1,4 +1,5 @@
 import type * as Monaco from 'monaco-editor'
+import { translate } from '@/i18n/i18n'
 
 type MonacoModule = typeof Monaco
 
@@ -21,25 +22,57 @@ export const ignoreMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/\*\*/, 'regexp'],
       [/[?*]/, 'regexp'],
       [/\[[^\]]*\]/, 'regexp'],
-      [/(^|\/)\/?(?=\S)/, 'delimiter'],
-      [/\/$/, 'delimiter']
+      [/\/+/, 'delimiter']
     ]
   }
 }
 
-const COMMON_PATTERNS = [
-  { label: 'node_modules/', detail: 'Node.js dependencies' },
-  { label: '.env', detail: 'Local environment variables' },
-  { label: '.env.*', detail: 'Environment-specific variables' },
-  { label: '!.env.example', detail: 'Keep the example environment file' },
-  { label: 'dist/', detail: 'Build output' },
-  { label: 'build/', detail: 'Build output' },
-  { label: 'coverage/', detail: 'Test coverage output' },
-  { label: '.DS_Store', detail: 'macOS Finder metadata' },
-  { label: '*.log', detail: 'Log files' },
-  { label: '.idea/', detail: 'JetBrains project settings' },
-  { label: '.vscode/', detail: 'VS Code workspace settings' }
-] as const
+function getCommonPatterns(): { pattern: string; detail: string }[] {
+  const buildOutput = translate('gitignore.completions.buildOutput', 'Build output')
+  return [
+    {
+      pattern: 'node_modules/',
+      detail: translate('gitignore.completions.dependencies', 'Node.js dependencies')
+    },
+    {
+      pattern: '.env',
+      detail: translate('gitignore.completions.localEnvironment', 'Local environment variables')
+    },
+    {
+      pattern: '.env.*',
+      detail: translate(
+        'gitignore.completions.environmentSpecific',
+        'Environment-specific variables'
+      )
+    },
+    {
+      pattern: '!.env.example',
+      detail: translate(
+        'gitignore.completions.keepEnvironmentExample',
+        'Keep the example environment file'
+      )
+    },
+    { pattern: 'dist/', detail: buildOutput },
+    { pattern: 'build/', detail: buildOutput },
+    {
+      pattern: 'coverage/',
+      detail: translate('gitignore.completions.coverageOutput', 'Test coverage output')
+    },
+    {
+      pattern: '.DS_Store',
+      detail: translate('gitignore.completions.finderMetadata', 'macOS Finder metadata')
+    },
+    { pattern: '*.log', detail: translate('gitignore.completions.logFiles', 'Log files') },
+    {
+      pattern: '.idea/',
+      detail: translate('gitignore.completions.jetbrainsSettings', 'JetBrains project settings')
+    },
+    {
+      pattern: '.vscode/',
+      detail: translate('gitignore.completions.vscodeSettings', 'VS Code workspace settings')
+    }
+  ]
+}
 
 export function createIgnoreCompletionItems(
   monaco: MonacoModule,
@@ -48,10 +81,10 @@ export function createIgnoreCompletionItems(
 ): Monaco.languages.CompletionItem[] {
   const word = model.getWordUntilPosition(position)
   const range = new monaco.Range(position.lineNumber, word.startColumn, position.lineNumber, word.endColumn)
-  return COMMON_PATTERNS.map(({ label, detail }) => ({
-    label,
+  return getCommonPatterns().map(({ pattern, detail }) => ({
+    label: pattern,
     detail,
-    insertText: label,
+    insertText: pattern,
     kind: monaco.languages.CompletionItemKind.Value,
     range
   }))

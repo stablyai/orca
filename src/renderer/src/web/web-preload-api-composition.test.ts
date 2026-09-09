@@ -40,6 +40,7 @@ describe('web preload API composition', () => {
       'worktrees',
       'fs',
       'git',
+      'gitignoreTemplates',
       'browser',
       'emulator',
       'gh',

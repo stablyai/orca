@@ -5,7 +5,7 @@ import {
   GitBranchCompare,
 	GitBlame,
   GitStashCreate,
-  GitStashRef,
+  GitStashMutation,
   GitBulkPaths,
   GitCheckIgnored,
   GitCheckout,
@@ -38,8 +38,8 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'git.stashFiles',
-    params: GitStashRef,
-    handler: async (params, { runtime, signal }) => runtime.listRuntimeGitStashFiles(params.worktree, params.ref, signal)
+    params: GitStashMutation,
+    handler: async (params, { runtime, signal }) => runtime.listRuntimeGitStashFiles(params.worktree, params, signal)
   }),
   defineMethod({
     name: 'git.stashCreate',
@@ -48,8 +48,8 @@ export const GIT_METHODS: RpcMethod[] = [
   }),
   ...(['apply', 'pop', 'drop'] as const).map((action) => defineMethod({
     name: `git.stash${action[0].toUpperCase()}${action.slice(1)}`,
-    params: GitStashRef,
-    handler: async (params, { runtime }) => runtime.mutateRuntimeGitStash(params.worktree, action, params.ref)
+    params: GitStashMutation,
+    handler: async (params, { runtime }) => runtime.mutateRuntimeGitStash(params.worktree, action, params)
   })),
   defineMethod({
     name: 'git.status',

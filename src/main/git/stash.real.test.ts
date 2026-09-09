@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { listStashes, listStashFiles } from './stash'
+import { applyStash, listStashes, listStashFiles, popStash } from './stash'
 import { getCommitCompare } from './source-control/commit-compare'
 import { getCommitDiff } from './source-control/commit-diff'
 
@@ -37,7 +37,10 @@ describe('stash files with real Git', () => {
     git(repoPath, ['stash', 'push', '--include-untracked', '--message', 'mixed'])
 
     const [stash] = await listStashes(repoPath)
-    const files = await listStashFiles(repoPath, stash.ref)
+    const files = await listStashFiles(repoPath, {
+      ref: stash.ref,
+      expectedCommitId: stash.commitId
+    })
     const tracked = files.find((file) => file.path === 'tracked.txt')
     const untracked = files.find((file) => file.path === 'untracked.txt')
 
@@ -64,7 +67,10 @@ describe('stash files with real Git', () => {
     git(repoPath, ['stash', 'push', '--message', 'tracked'])
 
     const [stash] = await listStashes(repoPath)
-    const files = await listStashFiles(repoPath, stash.ref)
+    const files = await listStashFiles(repoPath, {
+      ref: stash.ref,
+      expectedCommitId: stash.commitId
+    })
     expect(files).toEqual([
       { status: 'M', path: 'tracked.txt', commitId: stash.commitId }
     ])
@@ -80,5 +86,37 @@ describe('stash files with real Git', () => {
       originalContent: 'before\n',
       modifiedContent: 'after\n'
     })
+  })
+
+  it('refuses a stash ref that was reindexed after the UI snapshot', async () => {
+    const repoPath = await createRepo()
+    await writeFile(join(repoPath, 'tracked.txt'), 'first\n')
+    git(repoPath, ['stash', 'push', '--message', 'first'])
+    await writeFile(join(repoPath, 'tracked.txt'), 'second\n')
+    git(repoPath, ['stash', 'push', '--message', 'second'])
+    const [selected] = await listStashes(repoPath)
+
+    git(repoPath, ['stash', 'drop', 'stash@{0}'])
+
+    await expect(
+      applyStash(repoPath, { ref: 'stash@{0}', expectedCommitId: selected.commitId })
+    ).rejects.toThrow('stash_revision_changed')
+    expect(await listStashes(repoPath)).toHaveLength(1)
+    expect(git(repoPath, ['status', '--porcelain'])).toBe('')
+  })
+
+  it('pops the pinned commit and removes its matching stash ref', async () => {
+    const repoPath = await createRepo()
+    await writeFile(join(repoPath, 'tracked.txt'), 'after\n')
+    git(repoPath, ['stash', 'push', '--message', 'pinned pop'])
+    const [selected] = await listStashes(repoPath)
+
+    await popStash(repoPath, {
+      ref: selected.ref,
+      expectedCommitId: selected.commitId
+    })
+
+    expect(await listStashes(repoPath)).toEqual([])
+    expect(git(repoPath, ['diff', '--', 'tracked.txt'])).toContain('+after')
   })
 })

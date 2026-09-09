@@ -5,6 +5,7 @@ import { getSshGitProvider, SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE } from '../../p
 import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { runCancellableStashRead } from './filesystem-cancellable-stash-read'
 
 type StashTarget = { worktreePath: string; connectionId?: string }
 
@@ -22,28 +23,22 @@ export function registerFilesystemGitStashHandlers(context: FilesystemHandlerCon
   }
 
   ipcMain.handle('git:stashList', async (event, args: StashTarget & { requestToken?: string }): Promise<GitStashSummary[]> => {
-    const controller = context.gitStashCancellations.begin(event, args.requestToken)
-    try {
+    return runCancellableStashRead(context.gitStashCancellations, event, args.requestToken, async (signal) => {
       if (args.connectionId) {
-        return provider(args.connectionId).listStashes(args.worktreePath, { signal: controller?.signal })
+        return provider(args.connectionId).listStashes(args.worktreePath, { signal })
       }
       const target = await localTarget(args.worktreePath)
-      return listStashes(target.path, { ...target.options, signal: controller?.signal })
-    } finally {
-      context.gitStashCancellations.finish(event, args.requestToken, controller)
-    }
+      return listStashes(target.path, { ...target.options, signal })
+    })
   })
-  ipcMain.handle('git:stashFiles', async (event, args: StashTarget & { ref: string; requestToken?: string }): Promise<GitStashFile[]> => {
-    const controller = context.gitStashCancellations.begin(event, args.requestToken)
-    try {
+  ipcMain.handle('git:stashFiles', async (event, args: StashTarget & { ref: string; expectedCommitId: string; requestToken?: string }): Promise<GitStashFile[]> => {
+    return runCancellableStashRead(context.gitStashCancellations, event, args.requestToken, async (signal) => {
       if (args.connectionId) {
-        return provider(args.connectionId).listStashFiles(args.worktreePath, args.ref, { signal: controller?.signal })
+        return provider(args.connectionId).listStashFiles(args.worktreePath, args, { signal })
       }
       const target = await localTarget(args.worktreePath)
-      return listStashFiles(target.path, args.ref, { ...target.options, signal: controller?.signal })
-    } finally {
-      context.gitStashCancellations.finish(event, args.requestToken, controller)
-    }
+      return listStashFiles(target.path, args, { ...target.options, signal })
+    })
   })
   ipcMain.handle('git:stashCancel', (event, args: { requestToken: string }) => context.gitStashCancellations.cancel(event, args.requestToken))
   ipcMain.handle('git:stashCreate', async (_event, args: StashTarget & GitStashCreateOptions) => {
@@ -58,12 +53,12 @@ export function registerFilesystemGitStashHandlers(context: FilesystemHandlerCon
     ['git:stashPop', 'popStash', popStash],
     ['git:stashDrop', 'dropStash', dropStash]
   ] as const) {
-    ipcMain.handle(channel, async (_event, args: StashTarget & { ref: string }) => {
+    ipcMain.handle(channel, async (_event, args: StashTarget & { ref: string; expectedCommitId: string }) => {
       if (args.connectionId) {
-        return provider(args.connectionId)[method](args.worktreePath, args.ref)
+        return provider(args.connectionId)[method](args.worktreePath, args)
       }
       const target = await localTarget(args.worktreePath)
-      return local(target.path, args.ref, target.options)
+      return local(target.path, args, target.options)
     })
   }
 }

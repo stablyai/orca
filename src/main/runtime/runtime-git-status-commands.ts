@@ -7,7 +7,12 @@ import type {
 import type { RuntimeGitCheckoutResult, RuntimeGitLocalBranches } from '../../shared/runtime-types'
 import type { GitBlameResult } from '../../shared/git-blame'
 import { getBlame as getGitBlame } from '../git/blame'
-import type { GitStashCreateOptions, GitStashFile, GitStashSummary } from '../../shared/git-stash'
+import type {
+  GitStashCreateOptions,
+  GitStashFile,
+  GitStashMutationTarget,
+  GitStashSummary
+} from '../../shared/git-stash'
 import { applyStash, createStash, dropStash, listStashes, listStashFiles, popStash } from '../git/stash'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { checkoutBranch, listLocalBranches } from '../git/checkout'
@@ -159,12 +164,12 @@ export class RuntimeGitStatusCommands {
       : listStashes(target.worktree.path, { ...localGitOptionsForTarget(target), signal, admissionTier: 'interactive' })
   }
 
-  async listRuntimeGitStashFiles(worktreeSelector: string, ref: string, signal?: AbortSignal): Promise<GitStashFile[]> {
+  async listRuntimeGitStashFiles(worktreeSelector: string, stashTarget: GitStashMutationTarget, signal?: AbortSignal): Promise<GitStashFile[]> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
     return provider
-      ? provider.listStashFiles(target.worktree.path, ref, { signal })
-      : listStashFiles(target.worktree.path, ref, { ...localGitOptionsForTarget(target), signal, admissionTier: 'interactive' })
+      ? provider.listStashFiles(target.worktree.path, stashTarget, { signal })
+      : listStashFiles(target.worktree.path, stashTarget, { ...localGitOptionsForTarget(target), signal, admissionTier: 'interactive' })
   }
 
   async createRuntimeGitStash(worktreeSelector: string, options: GitStashCreateOptions): Promise<void> {
@@ -176,19 +181,19 @@ export class RuntimeGitStatusCommands {
     return createStash(target.worktree.path, options, localGitOptionsForTarget(target))
   }
 
-  async mutateRuntimeGitStash(worktreeSelector: string, action: 'apply' | 'pop' | 'drop', ref: string): Promise<void> {
+  async mutateRuntimeGitStash(worktreeSelector: string, action: 'apply' | 'pop' | 'drop', stashTarget: GitStashMutationTarget): Promise<void> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
     if (provider) {
       if (action === 'apply') {
-        return provider.applyStash(target.worktree.path, ref)
+        return provider.applyStash(target.worktree.path, stashTarget)
       }
       if (action === 'pop') {
-        return provider.popStash(target.worktree.path, ref)
+        return provider.popStash(target.worktree.path, stashTarget)
       }
-      return provider.dropStash(target.worktree.path, ref)
+      return provider.dropStash(target.worktree.path, stashTarget)
     }
     const operation = action === 'apply' ? applyStash : action === 'pop' ? popStash : dropStash
-    return operation(target.worktree.path, ref, localGitOptionsForTarget(target))
+    return operation(target.worktree.path, stashTarget, localGitOptionsForTarget(target))
   }
 }

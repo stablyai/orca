@@ -104,6 +104,23 @@
     "richMarkdown": {
       "tooLarge": "File is larger than the {{limit}} rich editing limit. Showing source mode instead.",
       "openAnyway": "Open anyway"
+    },
+    "gitBlame": {
+      "toggle": "Toggle inline Git blame",
+      "label": "Inline Git blame",
+      "uncommittedLine": "Uncommitted line",
+      "openDiff": "Open diff",
+      "copyHash": "Copy hash",
+      "openRemote": "Open remote",
+      "uncommitted": "Uncommitted",
+      "status": {
+        "unavailableOlderHost": "Git blame is unavailable on this host. Reconnect to update Orca, then try again.",
+        "unavailable": "Blame unavailable",
+        "saveToRefresh": "Save to refresh blame",
+        "unavailableWorkspace": "Blame unavailable for this workspace",
+        "loading": "Loading blame..."
+      },
+      "clickForCommitActions": "Click for commit actions."
     }
   },
   "githubChecks": {
@@ -17113,6 +17130,43 @@
         "copySessionIdSuccess": "Session ID copied",
         "copySessionIdError": "Unable to copy session ID"
       }
+    },
+    "sourceControl": {
+      "stashes": {
+        "loadFailed": "Failed to load stashes",
+        "filesLoadFailed": "Failed to load stash files",
+        "diffOpenFailed": "Failed to open stash diff",
+        "filePreviewUnavailable": "This stash file cannot be previewed",
+        "operationFailed": "Stash operation failed",
+        "title": "Stashes",
+        "create": "Create stash",
+        "refresh": "Refresh stashes",
+        "empty": "No stashes",
+        "actionsFor": "Actions for {{ref}}",
+        "applied": "Stash applied",
+        "apply": "Apply",
+        "popMenu": "Pop...",
+        "dropMenu": "Drop...",
+        "loadingFiles": "Loading files...",
+        "createTitle": "Create stash",
+        "createDescription": "Save the current working tree changes for later.",
+        "message": "Message",
+        "optionalMessage": "Optional message",
+        "includeUntracked": "Include untracked files",
+        "keepIndex": "Keep staged changes",
+        "created": "Stash created",
+        "dropTitle": "Drop stash?",
+        "popTitle": "Pop stash?",
+        "dropDescription": "This permanently removes the selected stash.",
+        "popDescription": "A successful pop applies the changes and removes the stash. If conflicts occur, Git keeps it.",
+        "dropped": "Stash dropped",
+        "popped": "Stash popped",
+        "drop": "Drop",
+        "pop": "Pop",
+        "revisionChanged": "This stash changed. Refresh stashes and try again.",
+        "invalidRevision": "Invalid stash revision",
+        "hostUnavailable": "Git stashes are unavailable on this host. Reconnect to update Orca, then try again."
+      }
     }
   },
   "dashboardPopout": {
@@ -17333,5 +17387,47 @@
       "action": "Try Agents",
       "hiddenToast": "Agents tab hidden. Re-enable it in Settings → Experimental."
     }
+  },
+  "gitignore": {
+    "templates": {
+      "errors": {
+        "loadCatalog": "Could not load templates.",
+        "loadTemplate": "Could not load the template.",
+        "save": "Could not save .gitignore.",
+        "createdDuringPreview": ".gitignore was created while the preview was open. Review it before appending.",
+        "removedDuringPreview": ".gitignore was removed while the preview was open. Reopen the template picker.",
+        "changedDuringPreview": ".gitignore changed while the preview was open. Review the latest file and try again.",
+        "hostUnavailable": "Gitignore templates are unavailable on this host. Reconnect to update Orca, then try again."
+      },
+      "createTitle": "Create .gitignore",
+      "appendTitle": "Append to .gitignore",
+      "createDescription": "Choose a template from github/gitignore and review it before creating the file.",
+      "appendDescription": "The existing file will not be overwritten. Review the combined content before appending.",
+      "searchPlaceholder": "Search templates",
+      "searchLabel": "Search gitignore templates",
+      "empty": "No templates found",
+      "previewTitle": "Template preview",
+      "offlineCache": "Offline cache",
+      "loading": "Loading...",
+      "selectPreview": "Select a template to preview it.",
+      "createAction": "Create file",
+      "appendAction": "Append changes",
+      "menuAction": "Create .gitignore from template…"
+    },
+    "completions": {
+      "buildOutput": "Build output",
+      "dependencies": "Node.js dependencies",
+      "localEnvironment": "Local environment variables",
+      "environmentSpecific": "Environment-specific variables",
+      "keepEnvironmentExample": "Keep the example environment file",
+      "coverageOutput": "Test coverage output",
+      "finderMetadata": "macOS Finder metadata",
+      "logFiles": "Log files",
+      "jetbrainsSettings": "JetBrains project settings",
+      "vscodeSettings": "VS Code workspace settings"
+    }
+  },
+  "common": {
+    "cancel": "Cancel"
   }
 }

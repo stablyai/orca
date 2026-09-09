@@ -7,8 +7,9 @@ function createCache(initial: GitignoreTemplateCache = { templates: {} }) {
   let value = structuredClone(initial)
   return {
     read: vi.fn(async () => structuredClone(value)),
-    write: vi.fn(async (next: GitignoreTemplateCache) => {
-      value = structuredClone(next)
+    update: vi.fn(async (mutate: (cache: GitignoreTemplateCache) => GitignoreTemplateCache) => {
+      value = structuredClone(mutate(structuredClone(value)))
+      return structuredClone(value)
     })
   }
 }
@@ -62,6 +63,26 @@ describe('GitHubGitignoreTemplateService', () => {
     })
 
     expect(await service.get('Go')).toMatchObject({ content: 'bin/\n', stale: true })
+  })
+
+  it('preserves concurrent template fetches from separate service instances', async () => {
+    const cache = createCache()
+    const fetch = vi.fn(async (url: string | URL | Request) =>
+      new Response(String(url).includes('Node.gitignore') ? 'node_modules/\n' : 'target/\n', {
+        status: 200
+      })
+    )
+    const first = new GitHubGitignoreTemplateService({ fetch, cache, now: () => 10 })
+    const second = new GitHubGitignoreTemplateService({ fetch, cache, now: () => 10 })
+
+    await Promise.all([first.get('Node'), second.get('Rust')])
+
+    expect(await cache.read()).toMatchObject({
+      templates: {
+        Node: { content: 'node_modules/\n' },
+        Rust: { content: 'target/\n' }
+      }
+    })
   })
 
   it('reports rate limits without a cache', async () => {

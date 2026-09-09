@@ -26,6 +26,7 @@ const {
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
   registerFilesystemHandlersMock,
+  registerGitignoreTemplateHandlersMock,
   registerRuntimeHandlersMock,
   registerRuntimeEnvironmentHandlersMock,
   registerEphemeralVmHandlersMock,
@@ -92,6 +93,7 @@ const {
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
   registerFilesystemHandlersMock: vi.fn(),
+  registerGitignoreTemplateHandlersMock: vi.fn(),
   registerRuntimeHandlersMock: vi.fn(),
   registerRuntimeEnvironmentHandlersMock: vi.fn(),
   registerEphemeralVmHandlersMock: vi.fn(),
@@ -285,6 +287,10 @@ vi.mock('../filesystem', () => ({
   registerFilesystemHandlers: registerFilesystemHandlersMock
 }))
 
+vi.mock('../gitignore-templates', () => ({
+  registerGitignoreTemplateHandlers: registerGitignoreTemplateHandlersMock
+}))
+
 vi.mock('../filesystem-watcher', () => ({
   registerFilesystemWatcherHandlers: registerFilesystemWatcherHandlersMock
 }))
@@ -418,6 +424,7 @@ describe('registerCoreHandlers', () => {
     registerUIHandlersMock.mockReset()
     setTrustedUIRendererWebContentsIdMock.mockReset()
     registerFilesystemHandlersMock.mockReset()
+    registerGitignoreTemplateHandlersMock.mockReset()
     registerRuntimeHandlersMock.mockReset()
     registerRuntimeEnvironmentHandlersMock.mockReset()
     registerEphemeralVmHandlersMock.mockReset()
@@ -548,6 +555,7 @@ describe('registerCoreHandlers', () => {
     expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
     expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerGitignoreTemplateHandlersMock).toHaveBeenCalledOnce()
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
     expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store, undefined)

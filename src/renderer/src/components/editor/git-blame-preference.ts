@@ -7,13 +7,28 @@ function key(worktreeId: string): string {
 }
 
 export function readGitBlamePreference(worktreeId: string): boolean {
-	return localStorage.getItem(key(worktreeId)) !== 'false'
+	try {
+		return globalThis.localStorage?.getItem(key(worktreeId)) !== 'false'
+	} catch {
+		return true
+	}
+}
+
+export function writeGitBlamePreference(worktreeId: string, enabled: boolean): void {
+	try {
+		globalThis.localStorage?.setItem(key(worktreeId), String(enabled))
+	} catch {
+		// Storage can be denied without disabling blame for the current session.
+	}
 }
 
 export function useGitBlamePreference(worktreeId: string): [boolean, (enabled: boolean) => void] {
 	const [enabled, setEnabledState] = useState(() => readGitBlamePreference(worktreeId))
 	useEffect(() => {
 		setEnabledState(readGitBlamePreference(worktreeId))
+		if (typeof window === 'undefined') {
+			return
+		}
 		const listener = (event: Event): void => {
 			const detail = (event as CustomEvent<{ worktreeId: string; enabled: boolean }>).detail
 			if (detail.worktreeId === worktreeId) {
@@ -24,8 +39,11 @@ export function useGitBlamePreference(worktreeId: string): [boolean, (enabled: b
 		return () => window.removeEventListener(EVENT, listener)
 	}, [worktreeId])
 	const setEnabled = (next: boolean): void => {
-		localStorage.setItem(key(worktreeId), String(next))
-		window.dispatchEvent(new CustomEvent(EVENT, { detail: { worktreeId, enabled: next } }))
+		setEnabledState(next)
+		writeGitBlamePreference(worktreeId, next)
+		if (typeof window !== 'undefined') {
+			window.dispatchEvent(new CustomEvent(EVENT, { detail: { worktreeId, enabled: next } }))
+		}
 	}
 	return [enabled, setEnabled]
 }

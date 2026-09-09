@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { GitBlameRange } from '../../../../shared/git-blame'
 import { findGitBlameRangeForLine, formatGitBlameInlineLabel } from './git-blame-current-line'
+import { RuntimeRpcCallError } from '../../runtime/runtime-rpc-client'
+import { getGitBlameErrorMessage } from './git-blame-errors'
 
 const range: GitBlameRange = {
   startLine: 4,
@@ -23,5 +25,17 @@ describe('current-line Git blame', () => {
     expect(formatGitBlameInlineLabel(range)).toContain('Rafa Alguthami')
     expect(formatGitBlameInlineLabel(range)).toContain('Add schema')
     expect(formatGitBlameInlineLabel({ ...range, commitId: null })).toBe('Uncommitted')
+  })
+
+  it('explains that an older paired runtime needs to reconnect', () => {
+    const error = new RuntimeRpcCallError({
+      id: 'blame-request',
+      ok: false,
+      error: { code: 'method_not_found', message: 'Unknown method: git.blame' }
+    })
+
+    expect(getGitBlameErrorMessage(error)).toBe(
+      'Git blame is unavailable on this host. Reconnect to update Orca, then try again.'
+    )
   })
 })

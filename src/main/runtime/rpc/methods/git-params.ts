@@ -49,8 +49,16 @@ export const GitBlame = WorktreeSelector.extend({
 	relativePath: z.string().min(1, 'Missing relative path')
 })
 
+const FullGitObjectId = z
+  .string()
+  .regex(/^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/, 'Expected a full git object id')
+
 export const GitStashRef = WorktreeSelector.extend({
   ref: z.string().regex(/^stash@\{\d+\}$/, 'Invalid stash reference')
+})
+
+export const GitStashMutation = GitStashRef.extend({
+  expectedCommitId: FullGitObjectId
 })
 
 export const GitStashCreate = WorktreeSelector.extend({
@@ -76,10 +84,6 @@ export const GitBranchCompare = WorktreeSelector.extend({
         .refine((value) => !value.startsWith('-'), 'Base ref must not start with -')
     )
 })
-
-const FullGitObjectId = z
-  .string()
-  .regex(/^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/, 'Expected a full git object id')
 
 export const GitCommitCompare = WorktreeSelector.extend({
   commitId: z

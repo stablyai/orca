@@ -27,12 +27,12 @@ export type GitInspectionApi = {
 	}) => Promise<GitBlameResult>
 	cancelBlame: (args: { requestToken: string }) => Promise<void>
   stashList: (args: { worktreePath: string; connectionId?: string; requestToken?: string }) => Promise<GitStashSummary[]>
-  stashFiles: (args: { worktreePath: string; ref: string; connectionId?: string; requestToken?: string }) => Promise<GitStashFile[]>
+  stashFiles: (args: { worktreePath: string; ref: string; expectedCommitId: string; connectionId?: string; requestToken?: string }) => Promise<GitStashFile[]>
   stashCancel: (args: { requestToken: string }) => Promise<void>
   stashCreate: (args: { worktreePath: string; connectionId?: string } & GitStashCreateOptions) => Promise<void>
-  stashApply: (args: { worktreePath: string; ref: string; connectionId?: string }) => Promise<void>
-  stashPop: (args: { worktreePath: string; ref: string; connectionId?: string }) => Promise<void>
-  stashDrop: (args: { worktreePath: string; ref: string; connectionId?: string }) => Promise<void>
+  stashApply: (args: { worktreePath: string; ref: string; expectedCommitId: string; connectionId?: string }) => Promise<void>
+  stashPop: (args: { worktreePath: string; ref: string; expectedCommitId: string; connectionId?: string }) => Promise<void>
+  stashDrop: (args: { worktreePath: string; ref: string; expectedCommitId: string; connectionId?: string }) => Promise<void>
   status: (args: {
     worktreePath: string
     connectionId?: string

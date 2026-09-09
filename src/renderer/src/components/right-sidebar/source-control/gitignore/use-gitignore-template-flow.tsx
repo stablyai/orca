@@ -14,6 +14,7 @@ import {
 } from '@/runtime/runtime-gitignore-template-client'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { GitignoreTemplateDialog } from './gitignore-template-dialog'
+import { translate } from '@/i18n/i18n'
 
 type GitignoreTemplateFlowOptions = RuntimeFileOperationArgs & {
   worktreeId: string
@@ -89,11 +90,21 @@ export function useGitignoreTemplateFlow(options: GitignoreTemplateFlowOptions):
       const exists = await runtimePathExists(operationContext, filePath)
       if (mode === 'create' && exists) {
         revealFile()
-        throw new Error('.gitignore was created while the preview was open. Review it before appending.')
+        throw new Error(
+          translate(
+            'gitignore.templates.errors.createdDuringPreview',
+            '.gitignore was created while the preview was open. Review it before appending.'
+          )
+        )
       }
       if (mode === 'append') {
         if (!exists) {
-          throw new Error('.gitignore was removed while the preview was open. Reopen the template picker.')
+          throw new Error(
+            translate(
+              'gitignore.templates.errors.removedDuringPreview',
+              '.gitignore was removed while the preview was open. Reopen the template picker.'
+            )
+          )
         }
         const latest = await readRuntimeFileContent({
           settings: options.settings,
@@ -104,7 +115,12 @@ export function useGitignoreTemplateFlow(options: GitignoreTemplateFlowOptions):
         })
         if (latest.content !== existingContent) {
           revealFile()
-          throw new Error('.gitignore changed while the preview was open. Review the latest file and try again.')
+          throw new Error(
+            translate(
+              'gitignore.templates.errors.changedDuringPreview',
+              '.gitignore changed while the preview was open. Review the latest file and try again.'
+            )
+          )
         }
       }
       if (mode === 'create') {

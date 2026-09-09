@@ -1,5 +1,3 @@
-export const GIT_STASH_RUNTIME_CAPABILITY = 'git.stash.v1' as const
-
 export type GitStashSummary = {
   ref: string
   commitId: string
@@ -20,6 +18,15 @@ export type GitStashCreateOptions = {
   message?: string
   includeUntracked?: boolean
   keepIndex?: boolean
+}
+
+export type GitStashMutationTarget = {
+  ref: string
+  expectedCommitId: string
+}
+
+export function isFullGitObjectId(value: unknown): value is string {
+  return typeof value === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(value)
 }
 
 export function parseGitStashList(output: string): GitStashSummary[] {

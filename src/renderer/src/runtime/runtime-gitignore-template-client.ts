@@ -12,9 +12,13 @@ import {
   callRuntimeRpc,
   getActiveRuntimeTarget
 } from './runtime-rpc-client'
+import { translate } from '@/i18n/i18n'
 
-const UPDATE_MESSAGE =
-  'Gitignore templates are unavailable on this host. Reconnect to update Orca, then try again.'
+const updateMessage = (): string =>
+  translate(
+    'gitignore.templates.errors.hostUnavailable',
+    'Gitignore templates are unavailable on this host. Reconnect to update Orca, then try again.'
+  )
 
 async function callTemplateRuntime<T>(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
@@ -31,7 +35,7 @@ async function callTemplateRuntime<T>(
   await assertRuntimeEnvironmentCapability(
     target.environmentId,
     GITIGNORE_TEMPLATES_RUNTIME_CAPABILITY as RuntimeCapability,
-    UPDATE_MESSAGE
+    updateMessage()
   )
   return callRuntimeRpc<T>(target, method, params, { timeoutMs: 15_000 })
 }

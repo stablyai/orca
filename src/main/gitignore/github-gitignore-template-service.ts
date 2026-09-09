@@ -12,7 +12,9 @@ const TEMPLATE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9+._-]{0,99}$/
 
 type TemplateCacheStore = {
   read(): Promise<GitignoreTemplateCache | null>
-  write(cache: GitignoreTemplateCache): Promise<void>
+  update(
+    mutate: (cache: GitignoreTemplateCache) => GitignoreTemplateCache
+  ): Promise<GitignoreTemplateCache>
 }
 
 type GitHubTemplateServiceOptions = {
@@ -97,8 +99,10 @@ export class GitHubGitignoreTemplateService {
         throw responseError(response)
       }
       const templates = parseCatalog(await response.json())
-      cache.catalog = { fetchedAt: this.now(), templates }
-      await this.options.cache.write(cache)
+      await this.options.cache.update((latest) => ({
+        ...latest,
+        catalog: { fetchedAt: this.now(), templates }
+      }))
       return { templates, stale: false }
     } catch (error) {
       if (signal?.aborted) {
@@ -131,8 +135,13 @@ export class GitHubGitignoreTemplateService {
         throw responseError(response)
       }
       const content = await response.text()
-      cache.templates[normalized] = { fetchedAt: this.now(), content }
-      await this.options.cache.write(cache)
+      await this.options.cache.update((latest) => ({
+        ...latest,
+        templates: {
+          ...latest.templates,
+          [normalized]: { fetchedAt: this.now(), content }
+        }
+      }))
       return { template, content, stale: false }
     } catch (error) {
       if (signal?.aborted) {

@@ -7,8 +7,11 @@ import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { getRuntimeGitBlame } from '@/runtime/runtime-git-status-client'
 import { getRuntimeGitRemoteCommitUrl } from '@/runtime/runtime-git-working-tree-client'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import type { GitBlameRange } from '../../../../shared/git-blame'
 import { findGitBlameRangeForLine, formatGitBlameInlineLabel } from './git-blame-current-line'
+import { buildGitBlameHoverMarkdown } from './git-blame-hover'
+import { getGitBlameErrorMessage } from './git-blame-errors'
 import { useGitBlamePreference } from './git-blame-preference'
 
 export type GitBlameDetailsRequest = {
@@ -63,14 +66,19 @@ export function useMonacoGitBlame(args: {
       return
     }
     if (dirty) {
-      setStatus('Save to refresh blame')
+      setStatus(translate('editor.gitBlame.status.saveToRefresh', 'Save to refresh blame'))
       return
     }
     const state = useAppStore.getState()
     const worktreePath =
       state.getKnownWorktreeById(worktreeId)?.path ?? inferWorktreePath(filePath, relativePath)
     if (!worktreePath) {
-      setStatus('Blame unavailable for this workspace')
+      setStatus(
+        translate(
+          'editor.gitBlame.status.unavailableWorkspace',
+          'Blame unavailable for this workspace'
+        )
+      )
       return
     }
     const currentGeneration = ++generation.current
@@ -84,7 +92,7 @@ export function useMonacoGitBlame(args: {
     }
     runtimeContextRef.current = runtimeContext
     worktreePathRef.current = worktreePath
-    setStatus('Loading blame…')
+    setStatus(translate('editor.gitBlame.status.loading', 'Loading blame...'))
     void getRuntimeGitBlame(runtimeContext, relativePath, controller.signal)
       .then((result) => {
         if (generation.current !== currentGeneration) {
@@ -97,7 +105,7 @@ export function useMonacoGitBlame(args: {
         if (generation.current !== currentGeneration) {
           return
         }
-        setStatus(error instanceof Error ? error.message : 'Blame unavailable')
+        setStatus(getGitBlameErrorMessage(error))
       })
     return () => {
       generation.current += 1
@@ -144,7 +152,7 @@ export function useMonacoGitBlame(args: {
               content: `  ${formatGitBlameInlineLabel(range)}`,
               inlineClassName: 'monaco-git-blame-annotation'
             },
-            hoverMessage: blameHover(range)
+            hoverMessage: buildGitBlameHoverMarkdown(range)
           }
         }
       ])
@@ -223,15 +231,6 @@ export function useMonacoGitBlame(args: {
     copyHash,
     openRemoteCommit,
     openCommitDiff
-  }
-}
-
-function blameHover(range: GitBlameRange): { value: string } {
-  if (!range.commitId) {
-    return { value: 'Uncommitted line' }
-  }
-  return {
-    value: `**${range.author}** <${range.authorEmail}>  \n${new Date(range.authoredAt * 1000).toLocaleString()}  \n\`${range.commitId}\`  \n${range.summary}  \n\nClick for commit actions.`
   }
 }
 

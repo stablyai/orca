@@ -1,5 +1,3 @@
-export const GITIGNORE_TEMPLATES_CAPABILITY = 'gitignore.templates.v1'
-
 export type GitignoreTemplateMetadata = {
   name: string
   filename: string

@@ -1,5 +1,5 @@
-import type { GitStashCreateOptions, GitStashFile, GitStashSummary } from '../../shared/git-stash'
-import { isGitStashRef, parseGitStashFiles, parseGitStashList } from '../../shared/git-stash'
+import type { GitStashCreateOptions, GitStashFile, GitStashMutationTarget, GitStashSummary } from '../../shared/git-stash'
+import { isFullGitObjectId, isGitStashRef, parseGitStashFiles, parseGitStashList } from '../../shared/git-stash'
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
@@ -42,10 +42,13 @@ export async function createStash(
 
 export async function listStashFiles(
   worktreePath: string,
-  ref: string,
+  target: GitStashMutationTarget,
   options: GitRuntimeOptions & { signal?: AbortSignal } = {}
 ): Promise<GitStashFile[]> {
-  const stashRef = requireStashRef(ref)
+  const stashRef = requireStashRef(target.ref)
+  if (!isFullGitObjectId(target.expectedCommitId)) {
+    throw new Error('invalid_stash_revision')
+  }
   const runtimeOptions = {
     ...gitOptionsForWorktree(worktreePath, options),
     signal: options.signal
@@ -57,6 +60,9 @@ export async function listStashFiles(
   const [stashCommit = '', trackedParent = '', , untrackedCommit] = revisionLine
     .trim()
     .split(/\s+/)
+  if (stashCommit.toLowerCase() !== target.expectedCommitId.toLowerCase()) {
+    throw new Error('stash_revision_changed')
+  }
   const { stdout: trackedOutput } = await gitExecFileAsync(
     ['diff', '--name-status', '-z', trackedParent, stashCommit, '--'],
     runtimeOptions
@@ -90,14 +96,44 @@ export async function listStashFiles(
   ].slice(0, 2000)
 }
 
-export async function applyStash(worktreePath: string, ref: string, options: GitRuntimeOptions = {}): Promise<void> {
-  await gitExecFileAsync(['stash', 'apply', requireStashRef(ref)], gitOptionsForWorktree(worktreePath, options))
+async function verifyStashTarget(
+  worktreePath: string,
+  target: GitStashMutationTarget,
+  options: GitRuntimeOptions
+): Promise<string> {
+  const ref = requireStashRef(target.ref)
+  if (!isFullGitObjectId(target.expectedCommitId)) {
+    throw new Error('invalid_stash_revision')
+  }
+  const { stdout } = await gitExecFileAsync(
+    ['rev-parse', '--verify', `${ref}^{commit}`, '--'],
+    gitOptionsForWorktree(worktreePath, options)
+  )
+  if (stdout.trim().toLowerCase() !== target.expectedCommitId.toLowerCase()) {
+    throw new Error('stash_revision_changed')
+  }
+  return ref
 }
 
-export async function popStash(worktreePath: string, ref: string, options: GitRuntimeOptions = {}): Promise<void> {
-  await gitExecFileAsync(['stash', 'pop', requireStashRef(ref)], gitOptionsForWorktree(worktreePath, options))
+export async function applyStash(worktreePath: string, target: GitStashMutationTarget, options: GitRuntimeOptions = {}): Promise<void> {
+  await verifyStashTarget(worktreePath, target, options)
+  await gitExecFileAsync(
+    ['stash', 'apply', target.expectedCommitId],
+    gitOptionsForWorktree(worktreePath, options)
+  )
 }
 
-export async function dropStash(worktreePath: string, ref: string, options: GitRuntimeOptions = {}): Promise<void> {
-  await gitExecFileAsync(['stash', 'drop', requireStashRef(ref)], gitOptionsForWorktree(worktreePath, options))
+export async function popStash(worktreePath: string, target: GitStashMutationTarget, options: GitRuntimeOptions = {}): Promise<void> {
+  await verifyStashTarget(worktreePath, target, options)
+  await gitExecFileAsync(
+    ['stash', 'apply', target.expectedCommitId],
+    gitOptionsForWorktree(worktreePath, options)
+  )
+  const ref = await verifyStashTarget(worktreePath, target, options)
+  await gitExecFileAsync(['stash', 'drop', ref], gitOptionsForWorktree(worktreePath, options))
+}
+
+export async function dropStash(worktreePath: string, target: GitStashMutationTarget, options: GitRuntimeOptions = {}): Promise<void> {
+  const ref = await verifyStashTarget(worktreePath, target, options)
+  await gitExecFileAsync(['stash', 'drop', ref], gitOptionsForWorktree(worktreePath, options))
 }

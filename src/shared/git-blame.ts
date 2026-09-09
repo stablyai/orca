@@ -1,5 +1,3 @@
-export const GIT_BLAME_RUNTIME_CAPABILITY = 'git.blame.v1' as const
-
 export type GitBlameRange = {
 	startLine: number
 	endLine: number

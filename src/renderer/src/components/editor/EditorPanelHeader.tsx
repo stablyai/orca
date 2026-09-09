@@ -117,6 +117,10 @@ export function EditorPanelHeader({
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
 	const [gitBlameEnabled, setGitBlameEnabled] = useGitBlamePreference(activeFile.worktreeId)
+	const gitBlameToggleLabel = translate(
+		'editor.gitBlame.toggle',
+		'Toggle inline Git blame'
+	)
 
   return (
     <div className="editor-header">
@@ -300,14 +304,14 @@ export function EditorPanelHeader({
 								type="button"
 								className={`p-1 rounded hover:bg-accent transition-colors flex-shrink-0 ${gitBlameEnabled ? 'bg-accent text-foreground' : 'text-muted-foreground'}`}
 								onClick={() => setGitBlameEnabled(!gitBlameEnabled)}
-								aria-label="Toggle inline Git blame"
+								aria-label={gitBlameToggleLabel}
 								aria-pressed={gitBlameEnabled}
 							>
 								<GitCommitHorizontal size={14} />
 							</button>
 						</TooltipTrigger>
 						<TooltipContent side="bottom" sideOffset={4}>
-							Inline Git blame
+							{translate('editor.gitBlame.label', 'Inline Git blame')}
 						</TooltipContent>
 					</Tooltip>
 				</TooltipProvider>
