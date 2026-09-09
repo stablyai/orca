@@ -3,6 +3,16 @@ import type { PrivateKeyFile } from './ssh-auth-resolution'
 
 const passphraseKeyPaths = new WeakMap<ConnectConfig, string>()
 
+// Bounds an `AuthenticationMethods a,b,c` ladder so a host that keeps replying
+// "partial success" cannot keep the client prompting forever.
+const MAX_PARTIAL_SUCCESS_STAGES = 4
+
+function authMethodName(attempt: AuthenticationType | AnyAuthMethod): AuthenticationType {
+  const type = typeof attempt === 'string' ? attempt : attempt.type
+  // Agent identities are signed as publickey; a server's method list never names 'agent'.
+  return type === 'agent' ? 'publickey' : type
+}
+
 function buildAuthQueue(
   config: ConnectConfig,
   keys: PrivateKeyFile[]
@@ -35,21 +45,34 @@ export function configurePrivateKeyAuthentication(
   passphraseKeyPath?: string
 ): void {
   const firstKey = keys[0]
-  if (!firstKey) {
-    return
-  }
-  config.privateKey = firstKey.contents
-  if (passphraseKeyPath) {
-    passphraseKeyPaths.set(config, passphraseKeyPath)
-  }
-  if (keys.length === 1) {
-    return
+  if (firstKey) {
+    config.privateKey = firstKey.contents
+    if (passphraseKeyPath) {
+      passphraseKeyPaths.set(config, passphraseKeyPath)
+    }
   }
 
+  // Why this replaces ssh2's own handler for every target, not just multi-key ones: ssh2 walks one
+  // flat method list exactly once, so keyboard-interactive can only ever be offered a single time.
+  // An MFA host running `AuthenticationMethods keyboard-interactive,keyboard-interactive` (or any
+  // ladder whose last stage is a second challenge) partial-succeeds the first stage and then finds
+  // the list exhausted — reported to the user as "All configured authentication methods failed".
   let queue: (AuthenticationType | AnyAuthMethod)[] = []
-  config.authHandler = (authsLeft, _partialSuccess, next) => {
+  let partialSuccessStagesLeft = MAX_PARTIAL_SUCCESS_STAGES
+  config.authHandler = (authsLeft, partialSuccess, next) => {
     if (authsLeft == null) {
       queue = buildAuthQueue(config, keys)
+      partialSuccessStagesLeft = MAX_PARTIAL_SUCCESS_STAGES
+    } else if (partialSuccess && partialSuccessStagesLeft > 0) {
+      // A stage was accepted and the host now demands another method. Restart from a fresh queue
+      // narrowed to what it still offers: re-offering keys it has stopped accepting is what
+      // exhausts MaxAuthTries before the challenge is ever shown.
+      partialSuccessStagesLeft -= 1
+      const offered = Array.isArray(authsLeft) ? authsLeft : []
+      queue = buildAuthQueue(config, keys).filter((attempt) => {
+        const method = authMethodName(attempt)
+        return method !== 'none' && offered.includes(method)
+      })
     }
     const attempt = queue.shift()
     next((attempt ?? false) as Parameters<NextAuthHandler>[0])

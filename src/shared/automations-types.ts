@@ -170,6 +170,12 @@ export type AutomationRun = {
   lastOccurrenceAt?: number
 }
 
+/** A bounded history response; older hosts may continue returning `runs` only. */
+export type AutomationRunsPage = {
+  runs: AutomationRun[]
+  nextCursor: string | null
+}
+
 export type AutomationCreateInput = {
   /** Optional idempotency key; repeated creates return the original record. */
   creationKey?: string

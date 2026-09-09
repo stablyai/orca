@@ -3,6 +3,7 @@ import type * as ReactModule from 'react'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),
+  cancelStructuredAgentLaunch: vi.fn(),
   closeBrowserTab: vi.fn(),
   closeFile: vi.fn(),
   closeStructuredAgentSession: vi.fn(),
@@ -23,12 +24,16 @@ const store = vi.hoisted(() => ({
   reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 })),
   setActiveWorktree: mocks.setActiveWorktree,
   tabsByWorktree: {},
-  unifiedTabsByWorktree: {}
+  unifiedTabsByWorktree: {} as Record<string, unknown[]>
 }))
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
-  return { ...actual, useCallback: <T>(callback: T) => callback }
+  return {
+    ...actual,
+    useCallback: <T>(callback: T) => callback,
+    useMemo: <T>(factory: () => T) => factory()
+  }
 })
 
 vi.mock('../../store', () => ({
@@ -71,6 +76,10 @@ vi.mock('@/runtime/structured-agent-session-close', () => ({
   closeStructuredAgentSession: mocks.closeStructuredAgentSession
 }))
 
+vi.mock('@/lib/structured-agent-session-launch', () => ({
+  cancelStructuredAgentLaunch: mocks.cancelStructuredAgentLaunch
+}))
+
 vi.mock('@/runtime/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (worktreeId: string) => `id:${worktreeId}`
 }))
@@ -100,6 +109,7 @@ const AGENT_TAB = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  store.unifiedTabsByWorktree = { 'wt-1': [AGENT_TAB] }
   mocks.closeStructuredAgentSession.mockResolvedValue('closed')
   mocks.callRuntimeRpc.mockResolvedValue({ ok: true })
 })
@@ -124,6 +134,7 @@ describe('structured agent-session close ordering', () => {
     closeItem(AGENT_TAB.id)
 
     await vi.waitFor(() => expect(order).toEqual(['agent-close', 'tab-close', 'local-remove']))
+    expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
   })
 
   it('keeps the tab available when owner disposal fails, so close can be retried', async () => {
@@ -138,5 +149,17 @@ describe('structured agent-session close ordering', () => {
 
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(mocks.closeUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('cancels reconciling launches before a bulk close', async () => {
+    const { closeMany } = useTabGroupTabCloseCommands({
+      worktreeId: 'wt-1',
+      groupTabs: [AGENT_TAB]
+    })
+
+    closeMany([AGENT_TAB.id])
+
+    expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
+    await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id))
   })
 })

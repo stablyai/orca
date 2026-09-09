@@ -588,7 +588,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('refuses SSH hosts instead of setting the project up on the local machine', async () => {
+  it('never sets an SSH-hosted project up on the local machine', async () => {
     // Why: both inputs must be paths the pre-guard code would have accepted. An unwritable
     // destination fails at mkdir and a non-repo path fails at isGitRepo, which would leave the
     // side-effect assertions below unable to observe the local clone/probe they exist to catch.
@@ -639,11 +639,14 @@ describe('OrcaRuntimeService', () => {
       // first so a regression reports the corruption rather than stopping at the first throw.
       expect(spawnSpy).not.toHaveBeenCalled()
       expect(repos).toHaveLength(0)
+      // Cloning onto an SSH host has no implementation here, so it still refuses outright.
       expect(cloneError).toMatchObject({
-        message: expect.stringMatching(/SSH hosts are not supported/)
+        message: expect.stringMatching(/Cloning onto an SSH host is not supported/)
       })
+      // Registering an existing remote path does have one, so this now fails on the host's own
+      // terms — the SSH connection is not registered — rather than on a categorical refusal.
       expect(existingFolderError).toMatchObject({
-        message: expect.stringMatching(/SSH hosts are not supported/)
+        message: expect.stringMatching(/SSH connection "openclaw" not found or not connected/)
       })
     } finally {
       spawnSpy.mockRestore()

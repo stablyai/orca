@@ -13,8 +13,6 @@ export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
 export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
-  // Why: id of the tab whose inline title editor should open; shortcut (tab.rename) sets it, the tab clears it on consume.
-  renamingTabId: string | null
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
@@ -101,7 +99,6 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setUnifiedTabColor: (tabId: string, color: string | null) => void
-  setRenamingTabId: (tabId: string | null) => void
   pinTab: (tabId: string) => void
   unpinTab: (tabId: string) => void
   closeOtherTabs: (tabId: string) => string[]
@@ -152,6 +149,8 @@ export type TabsSlice = {
     renderableTabCount: number
     activeRenderableTabId: string | null
   }
+  /** Reconciles many workspaces through one store write instead of one per workspace. */
+  reconcileWorktreeTabModels: (worktreeIds: readonly string[]) => void
   hydrateTabsSession: (
     session: WorkspaceSessionState,
     options?: WorkspaceSessionHydrationOptions

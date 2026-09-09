@@ -5,6 +5,7 @@ import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
   deleteHoveredWorkspaceImmediately,
   resolveHoveredWorkspaceDeleteTarget
@@ -73,6 +74,24 @@ export function getKeybindingContext(target: EventTarget | null): KeybindingCont
   return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
     ? 'terminal'
     : 'app'
+}
+
+/**
+ * The tab id the inline rename editor listens on, which differs per tab kind: a terminal tab is
+ * addressed by its backing terminal id (`activeTabId`), a structured chat tab by its unified tab
+ * id. `activeTabId` is terminal-only state and never moves for a structured tab, so reading it
+ * there targets whichever terminal was last active. Mirrors TabGroupPanel's tab-strip resolution.
+ */
+function resolveRenameTargetTabId(activeWorktreeId: string | null): string | null {
+  const store = useAppStore.getState()
+  if (store.activeTabType === 'terminal') {
+    return store.activeTabId
+  }
+  if (store.activeTabType !== 'agent-session' || !activeWorktreeId) {
+    return null
+  }
+  const activeTab = store.getActiveTab(activeWorktreeId)
+  return activeTab?.contentType === 'agent-session' ? activeTab.id : null
 }
 
 /**
@@ -172,16 +191,16 @@ export function createAppCommandHandlers(
     [
       'tab.rename',
       () => {
-        const store = useAppStore.getState()
-        if (
-          !workspaceChromeActive ||
-          floatingWorkspaceFocused ||
-          store.activeTabType !== 'terminal' ||
-          !store.activeTabId
-        ) {
+        if (!workspaceChromeActive || floatingWorkspaceFocused) {
           return false
         }
-        return claim('tab.rename', () => store.setRenamingTabId(store.activeTabId!))
+        // Why: a structured chat tab is renamed through the same inline editor, so gating on
+        // 'terminal' alone left the shortcut a silent no-op there.
+        const tabId = resolveRenameTargetTabId(activeWorktreeId)
+        if (!tabId) {
+          return false
+        }
+        return claim('tab.rename', () => requestTerminalTabRename(tabId))
       }
     ],
     [

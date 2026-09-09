@@ -18,6 +18,7 @@ import {
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
+import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 
 const LIVENESS_REQUEST_ID_PREFIX = 'mobile-liveness-'
 
@@ -226,17 +227,22 @@ export class DirectRpcClient implements RpcClient {
   }
 
   private handleAuthenticated(session: RpcClientSocketSession): void {
-    console.log('[net] e2ee_authenticated — connected', { streamCount: this.streams.size() })
     this.livenessSession = session
     this.liveness.start(session)
-    this.authenticationGeneration++
-    this.reconnect.authenticated()
-    this.authenticationRetry.accepted()
-    this.connectionState.publish('connected')
-    this.connectionLog.emit('success', 'Authenticated', 'Channel ready for RPC', {
-      code: 'direct-connected'
+    const generation = ++this.authenticationGeneration
+    negotiateMobileRuntimeCapabilities({
+      sendRequest: (method, params) =>
+        this.requests.sendAuthenticatedRequest(method, params, 5_000),
+      current: () => this.socketSession === session && this.authenticationGeneration === generation,
+      onReady: () => {
+        this.reconnect.authenticated()
+        this.authenticationRetry.accepted()
+        this.connectionState.publish('connected')
+        this.connectionLog.connected()
+        this.streams.replayAfterAuthentication()
+      },
+      onFailure: () => this.socketClose.forceClose(session)
     })
-    this.streams.replayAfterAuthentication()
   }
 
   private handleRpcResponse(response: RpcResponse): void {

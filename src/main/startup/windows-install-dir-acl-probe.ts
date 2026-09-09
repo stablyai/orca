@@ -211,13 +211,16 @@ export function resetWindowsInstallDirAclProbeForTest(): void {
  * Fire-and-forget; returns before any spawn. win32 only — no spawn and no fs I/O
  * anywhere else. Called from openMainWindow, which runs after initObservability,
  * so the durable record also emits a span into the diagnostics bundle.
+ *
+ * Returns whether THIS call dispatched the probe: openMainWindow re-runs on every
+ * reopen, and only a dispatch will ever produce an `onDone`.
  */
-export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOptions = {}): void {
+export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOptions = {}): boolean {
   if ((options.platform ?? process.platform) !== 'win32' || options.isServeMode === true) {
-    return
+    return false
   }
   if (probeStarted) {
-    return
+    return false
   }
   probeStarted = true
   // Why the try: this runs inline in openMainWindow, so anything thrown here
@@ -229,4 +232,5 @@ export function probeWindowsInstallDirAcl(options: WindowsInstallDirAclProbeOpti
   } catch {
     // Nothing left to report to that would not throw again.
   }
+  return true
 }

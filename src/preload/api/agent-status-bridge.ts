@@ -1,5 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type {
+  AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -65,6 +66,12 @@ export const agentStatusApi = {
   /** Drop the cached hook status for a paneKey on both sides (memory + on-disk) so a relaunch can't resurrect a dismissed row. */
   drop: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:drop', paneKey)
+  },
+  dropPersisted: (identity: AgentStatusCacheIdentity): void => {
+    ipcRenderer.send('agentStatus:dropPersisted', identity)
+  },
+  dropPersistedBatch: (identities: readonly AgentStatusCacheIdentity[]): void => {
+    ipcRenderer.send('agentStatus:dropPersistedBatch', identities)
   },
   reconcileEndedProcess: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)

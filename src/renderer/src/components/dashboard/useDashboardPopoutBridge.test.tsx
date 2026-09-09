@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
   offRevealAgent: vi.fn(),
   offAckAgent: vi.fn(),
   offPopoutOpenChanged: vi.fn(),
-  offSnapshotRequested: vi.fn()
+  offSnapshotRequested: vi.fn(),
+  activateTabAndFocusPane: vi.fn(),
+  activateAndRevealWorkspace: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -35,7 +37,11 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
-  activateTabAndFocusPane: vi.fn()
+  activateTabAndFocusPane: mocks.activateTabAndFocusPane
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
 vi.mock('./build-dashboard-snapshot', () => ({
@@ -159,7 +165,8 @@ describe('useDashboardPopoutBridge', () => {
     expect(mocks.buildDashboardSnapshot).toHaveBeenCalledTimes(1)
   })
 
-  it('reveals the agent on its exact execution host', async () => {
+  it('reveals the agent on its exact execution host through the full activation', async () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
     await act(async () => root.render(<Harness enabled />))
 
     await act(async () =>
@@ -172,7 +179,53 @@ describe('useDashboardPopoutBridge', () => {
       })
     )
 
-    expect(mocks.setActiveWorktree).toHaveBeenCalledWith('shared-worktree', 'runtime:env-1')
+    // Bare setActiveWorktree skips the terminal view switch, initial-terminal seeding and
+    // sleeping-session resume, so a parked pane is never revived (#16731).
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('shared-worktree', {
+      executionHostId: 'runtime:env-1'
+    })
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tab-1', 'leaf-1', {
+      flashFocusedPane: true
+    })
+  })
+
+  it('activates a parked SSH workspace before reaching for its pane', async () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
+    await act(async () => root.render(<Harness enabled />))
+
+    await act(async () =>
+      mocks.onRevealAgent.mock.calls[0][0]({
+        repoId: 'repo-1',
+        worktreeId: 'remote-worktree',
+        executionHostId: 'ssh:devbox',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      })
+    )
+
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('remote-worktree', {
+      executionHostId: 'ssh:devbox'
+    })
+    expect(mocks.activateAndRevealWorkspace.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.activateTabAndFocusPane.mock.invocationCallOrder[0] as number
+    )
+  })
+
+  it('skips pane focus when the revealed workspace is gone', async () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue(false)
+    await act(async () => root.render(<Harness enabled />))
+
+    await act(async () =>
+      mocks.onRevealAgent.mock.calls[0][0]({
+        repoId: 'repo-1',
+        worktreeId: 'deleted-worktree',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      })
+    )
+
+    expect(mocks.activateTabAndFocusPane).not.toHaveBeenCalled()
   })
 
   it('ignores unrelated store writes while retaining every snapshot input', () => {

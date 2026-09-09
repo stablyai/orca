@@ -1,3 +1,4 @@
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import {
   useCallback,
   useEffect,
@@ -46,7 +47,9 @@ export function useNativeChatPickerState(args: {
   draft: string
   caret: number
   agentCommands: readonly SlashCommandSuggestion[]
-  textareaRef: RefObject<HTMLTextAreaElement | null>
+  /** Skill names the running session reports; undefined keeps the host disk scan. */
+  sessionSkillNames?: readonly string[]
+  textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
@@ -58,6 +61,7 @@ export function useNativeChatPickerState(args: {
     draft,
     caret,
     agentCommands,
+    sessionSkillNames,
     textareaRef,
     setDraft,
     setCaret,
@@ -86,9 +90,19 @@ export function useNativeChatPickerState(args: {
         discovery.skills,
         profile,
         discovery,
-        dismissed?.context === dismissalContext ? dismissed.triggerKey : null
+        dismissed?.context === dismissalContext ? dismissed.triggerKey : null,
+        sessionSkillNames
       ),
-    [agentCommands, caret, dismissalContext, dismissed, discovery, draft, profile]
+    [
+      agentCommands,
+      caret,
+      dismissalContext,
+      dismissed,
+      discovery,
+      draft,
+      profile,
+      sessionSkillNames
+    ]
   )
 
   useEffect(() => {
@@ -117,6 +131,10 @@ export function useNativeChatPickerState(args: {
         return
       }
       const result = applyPickerSuggestion(draft, caret, item, autocomplete.prefix)
+      if (item.kind === 'skill' && textareaRef.current?.insertSkill) {
+        const from = result.caret - result.insertedToken.length - 1
+        textareaRef.current.insertSkill(from, caret, result.insertedToken)
+      }
       setDraft(result.draft)
       setCaret(result.caret)
       setActiveSuggestion(0)
@@ -152,7 +170,9 @@ export function useNativeChatPickerState(args: {
         agentCommands,
         discovery.skills,
         profile,
-        discovery
+        discovery,
+        null,
+        sessionSkillNames
       )
       if (
         (next.mode !== 'slash' && next.mode !== 'skill') ||
@@ -161,7 +181,7 @@ export function useNativeChatPickerState(args: {
         setDismissed(null)
       }
     },
-    [agentCommands, dismissalContext, dismissed, discovery, draft, profile]
+    [agentCommands, dismissalContext, dismissed, discovery, draft, profile, sessionSkillNames]
   )
 
   const classifySend = useCallback(

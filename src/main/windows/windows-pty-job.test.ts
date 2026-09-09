@@ -1,5 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IPty } from 'node-pty'
+
+const { recordSelfInitiatedTreeKillMock } = vi.hoisted(() => ({
+  recordSelfInitiatedTreeKillMock: vi.fn()
+}))
+vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
+  recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
+}))
+
 import {
   __setConptyJobNativeForTests,
   assignHostProcessToKillOnCloseJob,
@@ -9,6 +17,10 @@ import {
 } from './windows-pty-job'
 
 const ptyWithHandle = (id: unknown, pid = 4242): IPty => ({ _pty: id, pid }) as unknown as IPty
+
+beforeEach(() => {
+  recordSelfInitiatedTreeKillMock.mockReset()
+})
 
 afterEach(() => {
   __setConptyJobNativeForTests()
@@ -150,5 +162,45 @@ describe('assignHostProcessToKillOnCloseJob', () => {
 
     __setConptyJobNativeForTests(() => null)
     expect(assignHostProcessToKillOnCloseJob()).toBe(false)
+  })
+})
+
+describe('PTY Job Object teardown breadcrumbs', () => {
+  function withNative(terminateJob: () => boolean): void {
+    __setConptyJobNativeForTests(() => ({
+      terminateJob,
+      listJobProcessIds: vi.fn(),
+      assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
+    }))
+  }
+
+  it('records the shell pid whose job it terminated', () => {
+    withNative(() => true)
+
+    expect(terminatePtyJob(ptyWithHandle(7, 4242))).toBe('terminated')
+    expect(recordSelfInitiatedTreeKillMock).toHaveBeenCalledWith({
+      pid: 4242,
+      site: 'windows-pty-job-teardown',
+      scope: 'win-pty-job'
+    })
+  })
+
+  it('records nothing when the native side refused', () => {
+    withNative(() => false)
+
+    expect(terminatePtyJob(ptyWithHandle(7))).toBe('unavailable')
+    expect(recordSelfInitiatedTreeKillMock).not.toHaveBeenCalled()
+  })
+
+  it('never downgrades a real termination to unavailable because diagnostics failed', () => {
+    // `unavailable` escalates callers to the pid-addressed taskkill this
+    // instrumentation exists to constrain, so the breadcrumb must sit outside
+    // the native call's catch.
+    withNative(() => true)
+    recordSelfInitiatedTreeKillMock.mockImplementation(() => {
+      throw new Error('breadcrumb store exploded')
+    })
+
+    expect(() => terminatePtyJob(ptyWithHandle(7))).toThrow('breadcrumb store exploded')
   })
 })

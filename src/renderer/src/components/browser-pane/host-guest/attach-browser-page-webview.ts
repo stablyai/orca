@@ -57,7 +57,9 @@ export type AttachBrowserPageWebviewArgs = {
   setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   setAddressBarValue: Dispatch<SetStateAction<string>>
-  addBrowserHistoryEntryRef: MutableRefObject<(url: string, title: string) => void>
+  addBrowserHistoryEntryRef: MutableRefObject<
+    (url: string, title: string, faviconUrl?: string | null) => void
+  >
   annotationViewportBridgeTokenRef: MutableRefObject<string>
   initialBrowserUrlRef: MutableRefObject<string>
   validateVisibleGuestRegistrationRef: MutableRefObject<() => void>

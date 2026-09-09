@@ -72,6 +72,8 @@ export type HostReadableTranscriptPathDeps = {
   platform?: NodeJS.Platform
   pathExists?: (path: string) => Promise<boolean>
   signal?: AbortSignal
+  /** Exact distro attested by the provider session. Omitting it preserves native-chat discovery. */
+  wslDistro?: string
   /** Each installed WSL distro's `$HOME` as a Windows UNC path. */
   listWslHomeDirs?: () => Promise<string[]>
   wslSnapshot?: WslTranscriptResolutionSnapshot
@@ -176,6 +178,28 @@ export async function toHostReadableTranscriptPath(
   const pathExists =
     deps.pathExists ?? ((candidate: string) => pathExistsAsync(candidate, deps.signal))
   const platform = deps.platform ?? process.platform
+  const exactWslDistro = deps.wslDistro?.trim()
+  if (platform === 'win32' && exactWslDistro) {
+    const parsedUnc = parseWslUncPath(path)
+    if (parsedUnc && parsedUnc.distro !== exactWslDistro) {
+      return null
+    }
+    const candidate = needsWslHostTranslation(path, platform)
+      ? toWindowsWslPath(path, exactWslDistro)
+      : path
+    // Keep the running-distro guard for attested paths as well. An exact
+    // provider claim does not imply that the guest share is still available.
+    if (
+      isWslUncPath(candidate) &&
+      (deps.wslSnapshot
+        ? filterPathsToWslDistros([candidate], deps.wslSnapshot.runningDistros)
+        : await filterPathsToRunningWslDistrosAsync([candidate])
+      ).length === 0
+    ) {
+      return null
+    }
+    return (await pathExists(candidate)) ? candidate : null
+  }
   // Why: classify BEFORE probing — Win32 resolves a bare `/home/…` against the
   // current drive (`C:\home\…`), so a probe first could bind chat to a local
   // look-alike file instead of the real WSL transcript.

@@ -17,6 +17,7 @@ import {
 } from '../browser-page-records'
 import { getBrowserSessionProfileHostId } from './browser-host-state'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 
 export function createBrowserTabActions(
   set: BrowserSliceSet,
@@ -48,6 +49,9 @@ export function createBrowserTabActions(
         browserPageId,
         options?.docLocation
       )
+      if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
+        admitBrowserPageMount(page.id)
+      }
       // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
       const sessionProfileId =
         options?.sessionProfileId !== undefined

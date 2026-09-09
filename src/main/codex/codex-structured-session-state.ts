@@ -41,6 +41,8 @@ export type CodexStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<CodexStructuredLaunch>
+  /** Host capability seam; production uses the native Windows process table. */
+  isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
@@ -63,6 +65,9 @@ export type CodexSession = {
   acquisitionGeneration: string
   threadId: string
   historyPath: string | null
+  historyMode?: 'legacy' | 'paginated'
+  activeTurnIds?: Set<string>
+  dispatchPending?: boolean
   prompts: CodexAcquisitionWindow['prompts']
   options: Map<string, string>
   reportedOptions: { model?: string; effort?: string }

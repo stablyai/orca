@@ -11,11 +11,17 @@ import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
+import { ActivityThreadCollapseContext } from '@/components/activity/activity-thread-collapse-context'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
+import { useWorkspaceRevealBodyRedirect } from './use-workspace-reveal-body-redirect'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+
+// Why lazy: the Agents list pulls the whole activity pipeline (virtualizer, markdown
+// previews, thread derivation); users on the workspace view should not load or render any of it.
+const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
@@ -48,6 +54,38 @@ function Sidebar({
   const repos = useAppStore((s) => s.repos)
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
+  const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
+  const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
+  const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
+  const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
+  const agentReadFilter = useAppStore((s) => s.agentsReadFilter)
+  const setAgentReadFilter = useAppStore((s) => s.setAgentsReadFilter)
+  const agentGroupBy = useAppStore((s) => s.agentsGroupBy)
+  const setAgentGroupBy = useAppStore((s) => s.setAgentsGroupBy)
+  const [agentQuery, setAgentQuery] = React.useState('')
+  const [agentOptionsTarget, setAgentOptionsTarget] = React.useState<HTMLDivElement | null>(null)
+  const agentsScrollTopRef = React.useRef(0)
+  // Held here so collapsed groups (and the layout the saved scrollTop assumes)
+  // survive the Agents list unmounting on sidebar body switches.
+  const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
+    ReadonlySet<string>
+  >(() => new Set())
+  const agentsCollapseState = useMemo(
+    () => ({
+      collapsedGroupKeys: agentsCollapsedGroupKeys,
+      onToggleGroupCollapse: (groupKey: string) =>
+        setAgentsCollapsedGroupKeys((prev) => {
+          const next = new Set(prev)
+          if (next.has(groupKey)) {
+            next.delete(groupKey)
+          } else {
+            next.add(groupKey)
+          }
+          return next
+        })
+    }),
+    [agentsCollapsedGroupKeys]
+  )
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
@@ -92,6 +130,12 @@ function Sidebar({
     }
   }, [closeWorkspaceBoard, sidebarOpen, workspaceBoardRenderedOpen])
 
+  useEffect(() => {
+    if (!showAgentDashboard && agentDashboardDrawerOpen) {
+      setAgentDashboardDrawerOpen(false)
+    }
+  }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, showAgentDashboard])
+
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
     width: sidebarWidth,
@@ -101,6 +145,8 @@ function Sidebar({
     setWidth: setSidebarWidth,
     onDraftWidthChange: setLiveSidebarWidth
   })
+
+  useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
 
   return (
     <TooltipProvider delayDuration={400}>
@@ -115,16 +161,35 @@ function Sidebar({
           <>
             {/* Fixed controls */}
             <SidebarNav />
-            <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
-
-            <WorktreeList
-              scrollOffsetRef={worktreeScrollOffsetRef}
-              scrollAnchorRef={worktreeScrollAnchorRef}
-              workspaceBoardOpen={workspaceBoardOpen}
-              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+            <SidebarHeader
+              onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
+              activityOptionsTarget={setAgentOptionsTarget}
             />
+            {sidebarBody === 'agents' ? (
+              <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
+                <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
+                  <SidebarAgentsList
+                    readFilter={agentReadFilter}
+                    setReadFilter={setAgentReadFilter}
+                    groupBy={agentGroupBy}
+                    setGroupBy={setAgentGroupBy}
+                    query={agentQuery}
+                    setQuery={setAgentQuery}
+                    optionsTarget={agentOptionsTarget}
+                    scrollTopRef={agentsScrollTopRef}
+                  />
+                </ActivityThreadCollapseContext.Provider>
+              </React.Suspense>
+            ) : (
+              <WorktreeList
+                scrollOffsetRef={worktreeScrollOffsetRef}
+                scrollAnchorRef={worktreeScrollAnchorRef}
+                workspaceBoardOpen={workspaceBoardOpen}
+                onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+              />
+            )}
 
             <div className="relative shrink-0">
               <SetupScriptPromptCard />
@@ -195,7 +260,7 @@ function Sidebar({
           onMenuOpenChange={setWorkspaceBoardMenuOpen}
         />
       ) : null}
-      {settings?.experimentalAgentDashboardPopout === true ? (
+      {showAgentDashboard ? (
         <React.Suspense fallback={null}>
           <AgentDashboardSidebarHost
             sidebarOpen={sidebarOpen}

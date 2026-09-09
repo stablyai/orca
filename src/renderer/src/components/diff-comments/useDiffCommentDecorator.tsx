@@ -88,11 +88,21 @@ export function useDiffCommentDecorator({
     scrollToZoneFrameRef.current = null
   }, [])
 
-  const commentableLineSet = useMemo(
-    () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
+  // Key on the values, not the array identity: review surfaces re-fetch PR/MR file data on every
+  // refresh and hand us a fresh-but-equal number[], which would otherwise churn every consumer.
+  // Memoized on the array identity: the join walks every commentable line of the patch (thousands
+  // on a large file) and every mounted diff row runs this hook on every render.
+  const commentableLineKey = useMemo(
+    () => commentableLineNumbers?.join(','),
     [commentableLineNumbers]
   )
+  const commentableLineSet = useMemo(
+    () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [commentableLineKey]
+  )
 
+  // Rebuild the add-button overlay and shortcut independently of comment zones.
   useEffect(() => {
     if (!editor) {
       return
@@ -103,7 +113,6 @@ export function useDiffCommentDecorator({
       return
     }
 
-    const zones = zonesRef.current
     const disposeAddButtonOverlay = installDiffCommentAddButtonOverlay({
       editor,
       editorDomNode,
@@ -126,12 +135,34 @@ export function useDiffCommentDecorator({
     return () => {
       disposeAddReviewNoteShortcut?.()
       disposeAddButtonOverlay()
+    }
+  }, [addButtonLabel, commentableLineSet, editor, enableAddReviewNoteShortcut, monacoModelIdentity])
+
+  // Deps must stay a subset of the zone-creating effect's, or a teardown here is never followed by a rebuild.
+  useEffect(() => {
+    if (!editor) {
+      return
+    }
+
+    const zones = zonesRef.current
+
+    return () => {
       // Editor swapped/torn down: unmount roots and clear tracking so the next mount starts known-empty.
       // Defer unmount via queueMicrotask: a sync unmount during React's commit triggers React 19's "unmount while rendering" warning; clear zones synchronously.
       const rootsToUnmount = Array.from(zones.values(), (z) => {
         z.disposeMouseDownStopper()
         return z.root
       })
+      // Drop the zones from Monaco too: clearing our map alone would strand them as untracked blank gaps
+      // in a still-live editor. No-op when the model already swapped (Monaco dropped them) or the editor is disposed.
+      if (zones.size > 0) {
+        const zoneIds = Array.from(zones.values(), (z) => z.zoneId)
+        editor.changeViewZones((accessor) => {
+          for (const zoneId of zoneIds) {
+            accessor.removeZone(zoneId)
+          }
+        })
+      }
       zones.clear()
       if (rootsToUnmount.length > 0) {
         queueMicrotask(() => {
@@ -145,14 +176,7 @@ export function useDiffCommentDecorator({
       pendingScrollRef.current = null
       scrollToZoneRef.current = null
     }
-  }, [
-    addButtonLabel,
-    cancelScrollToZoneFrame,
-    commentableLineSet,
-    editor,
-    enableAddReviewNoteShortcut,
-    monacoModelIdentity
-  ])
+  }, [cancelScrollToZoneFrame, editor, monacoModelIdentity])
 
   useEffect(() => {
     if (!editor) {

@@ -51,6 +51,16 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   restoredUnconfirmed?: boolean
 } & WithAgentStatusObservation
 
+/** Identity used by UI-only cleanup to evict exactly the status it cleared.
+ *  Deliberately minimal — receivedAt + stateStartedAt pin the exact event instance
+ *  (the same baseline the interrupt-inference guard uses). Renderer-enriched fields
+ *  (connectionId, worktreeId) diverge from main's cache and must not participate. */
+export type AgentStatusCacheIdentity = {
+  paneKey: string
+  receivedAt: number
+  stateStartedAt: number
+}
+
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
 export type AgentStatusClearIpcPayload =
   | { paneKey: string }

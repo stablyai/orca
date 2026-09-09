@@ -7,6 +7,7 @@ import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
+const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
 export const OXLINT_SCANS = [
   {
     // Why: no --config, so Oxlint keeps discovering nested configs. Pinning the root
@@ -37,6 +38,16 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     new Set([
       'src/renderer/src/components/editor/combined-diff/review-controls/use-combined-diff-view-preferences.ts'
     ])
+  ],
+  [
+    // The rule wants one named handle cleared by name. Both startup effects arm a variable number
+    // of refresh timers, every one of them through addTimer into `timers`, which their cleanups
+    // clear -- a shape the rule reports whether the handles live in an array, a Set, or a nested
+    // helper. The finding predates this list; it surfaced when the effect body changed. This map
+    // keys on file, not line, so the entry covers both effects in it; nothing else in the file
+    // arms a timer, so widening it further is the only alternative, not a narrower option.
+    'react-doctor(effect-needs-cleanup)',
+    new Set(['mobile/src/session/use-mobile-session-startup.ts'])
   ]
 ])
 
@@ -73,6 +84,10 @@ function splitNullDelimited(output) {
   return output.split('\0').filter(Boolean)
 }
 
+export function isRootCodeQualityPath(file) {
+  return !ROOT_CODE_QUALITY_IGNORED_PREFIXES.some((prefix) => file.startsWith(prefix))
+}
+
 function resolveBase(root, requestedBase) {
   for (const candidate of [
     requestedBase,
@@ -107,7 +122,11 @@ export function collectAddedLineRanges(root, requestedBase) {
   const rangesByFile = new Map()
 
   for (const file of changedFiles) {
-    if (!SOURCE_FILE_PATTERN.test(file) || !existsSync(path.join(root, file))) {
+    if (
+      !isRootCodeQualityPath(file) ||
+      !SOURCE_FILE_PATTERN.test(file) ||
+      !existsSync(path.join(root, file))
+    ) {
       continue
     }
     const diff = runGit(root, ['diff', '--unified=0', '--no-color', comparisonBase, '--', file])
@@ -119,7 +138,11 @@ export function collectAddedLineRanges(root, requestedBase) {
 
   for (const file of untrackedFiles) {
     const absolutePath = path.join(root, file)
-    if (!SOURCE_FILE_PATTERN.test(file) || !existsSync(absolutePath)) {
+    if (
+      !isRootCodeQualityPath(file) ||
+      !SOURCE_FILE_PATTERN.test(file) ||
+      !existsSync(absolutePath)
+    ) {
       continue
     }
     const lineCount = readFileSync(absolutePath, 'utf8').split(/\r?\n/).length

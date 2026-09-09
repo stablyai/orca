@@ -60,8 +60,8 @@ export class RuntimeTerminalWaiterRegistry {
     if (waiter.timeout) {
       clearTimeout(waiter.timeout)
     }
-    if (waiter.pollInterval) {
-      clearInterval(waiter.pollInterval)
+    if (waiter.cancelIdlePoll) {
+      waiter.cancelIdlePoll()
     }
     if (waiter.abortCleanup) {
       waiter.abortCleanup()

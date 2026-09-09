@@ -1,5 +1,8 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { randomUUID } from 'node:crypto'
+import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -95,6 +98,25 @@ export class OrcaRuntimeWithRuntimeId {
   protected tabs = new Map<string, RuntimeSyncedTab>()
 
   protected mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+
+  /** Single host writer for mobile session snapshots; versions are total-order stamps. */
+  protected storeMobileSessionSnapshot(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
+      snapshot = replaceConversationInSnapshot(snapshot, replacement)
+    }
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
+    const snapshotVersion = existing
+      ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
+      : snapshot.snapshotVersion
+    const stamped =
+      snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
+    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    return stamped
+  }
 
   protected structuredAgentSessionTabRestorePromise: Promise<void> | null = null
 

@@ -113,10 +113,6 @@ export function createAgentStatusProviderSessionActions(
               ? { connectionId: existingRecord.connectionId }
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
-          ...(existingRecordMatchesProviderSession &&
-          existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-            ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' }
-            : {}),
           ...(preservesCompletedRecoveryRecord && existingRecord.interrupted !== undefined
             ? { interrupted: existingRecord.interrupted }
             : {}),
@@ -134,6 +130,7 @@ export function createAgentStatusProviderSessionActions(
         if (nextRetained !== s.retainedAgentsByPaneKey) {
           delete nextRetained[paneKey]
         }
+        const retiredPaneKeys = new Set([paneKey])
         // Why: on identity mismatch the sleeping record drops its launch config, so clear the stale
         // registry entry too, else a later return to the old identity reuses stale args/env.
         let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
@@ -159,12 +156,11 @@ export function createAgentStatusProviderSessionActions(
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
           acknowledgedAgentsByPaneKey: removePaneKeys(
             s.acknowledgedAgentsByPaneKey,
-            new Set([paneKey])
+            retiredPaneKeys
           ),
-          unreadAgentCompletionPanes: removePaneKeys(
-            s.unreadAgentCompletionPanes,
-            new Set([paneKey])
-          ),
+          // Why the cleared-at/manual-unread maps stay: the pane survives this transition, so a
+          // repeat heartbeat would resurrect cleared history. They are swept on pane retirement.
+          unreadAgentCompletionPanes: removePaneKeys(s.unreadAgentCompletionPanes, retiredPaneKeys),
           agentStatusEpoch: removedLiveStatus ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: removedLiveStatus ? s.sortEpoch + 1 : s.sortEpoch
         }

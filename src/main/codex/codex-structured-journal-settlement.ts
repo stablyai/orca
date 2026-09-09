@@ -243,14 +243,12 @@ function appendLifecycleMutations(
       for (const mutation of chunk) {
         if (mutation.kind === 'item') {
           if (sink.tryAppendItem) {
-            admission = sink.tryAppendItem(mutation.identity, mutation.body, [], {
-              lifecycle: true
-            })
+            admission = sink.tryAppendItem(mutation.identity, mutation.body, { lifecycle: true })
             if (!admission.accepted) {
               return admission
             }
           } else {
-            sink.appendItem(mutation.identity, mutation.body, [], { lifecycle: true })
+            sink.appendItem(mutation.identity, mutation.body, { lifecycle: true })
           }
         } else {
           if (sink.tryAppendTombstone) {

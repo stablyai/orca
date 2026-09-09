@@ -4,6 +4,21 @@ export type SecurePathHardeningCacheBounds = {
   maxTotalKeyBytes: number
 }
 
+export const SECURE_PATH_HARDENING_CACHE_MAX_ENTRIES = 1024
+export const SECURE_PATH_HARDENING_CACHE_KEY_MAX_BYTES = 64 * 1024
+export const SECURE_PATH_HARDENING_CACHE_KEYS_MAX_BYTES = 512 * 1024
+
+/**
+ * The bounds every hardening cache uses unless a caller overrides them. They live here rather
+ * than with one consumer so a cache can default itself instead of depending on some other module
+ * being imported first.
+ */
+export const DEFAULT_HARDENING_CACHE_BOUNDS: SecurePathHardeningCacheBounds = {
+  maxEntries: SECURE_PATH_HARDENING_CACHE_MAX_ENTRIES,
+  maxKeyBytes: SECURE_PATH_HARDENING_CACHE_KEY_MAX_BYTES,
+  maxTotalKeyBytes: SECURE_PATH_HARDENING_CACHE_KEYS_MAX_BYTES
+}
+
 type RetainedSecurePath<T> = {
   value: T
   keyBytes: number

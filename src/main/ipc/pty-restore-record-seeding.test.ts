@@ -12,6 +12,9 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { RuntimeResolvedWorktreeCache } from '../runtime/runtime-resolved-worktree-cache'
+import type { ResolvedWorktree } from '../runtime/runtime-worktree-path-identity'
+import { getWorktreeScanMutationRevision } from '../local-worktree-scan-generation'
 import {
   registerPtyHandlers,
   clearProviderPtyState,
@@ -359,15 +362,22 @@ describe('registerPtyHandlers', () => {
     } as never)
     // Why: selector resolution shells out to git for real repos; prime the
     // resolved-worktree cache so this headless fixture resolves offline.
+    //
+    // Why through getSnapshot and not a hand-written `resolved` entry: the cache decides freshness
+    // from fields it stamps itself, so a literal that mirrors them is a second copy of that
+    // contract and goes stale the moment a field is added. Let the cache stamp its own entry.
     const worktreeResolutionInternals = runtime as unknown as {
-      buildResolvedWorktreeFromId(id: string): unknown
-      resolvedWorktrees: object
+      buildResolvedWorktreeFromId(id: string): ResolvedWorktree
+      resolvedWorktrees: RuntimeResolvedWorktreeCache
     }
-    Reflect.set(worktreeResolutionInternals.resolvedWorktrees, 'resolved', {
-      worktrees: [worktreeResolutionInternals.buildResolvedWorktreeFromId(worktreeId)],
-      platformByRepoId: new Map([[repo.id, process.platform]]),
-      expiresAt: Date.now() + 60_000
-    })
+    await worktreeResolutionInternals.resolvedWorktrees.getSnapshot(
+      async () => ({
+        worktrees: [worktreeResolutionInternals.buildResolvedWorktreeFromId(worktreeId)],
+        platformByRepoId: new Map([[repo.id, process.platform]])
+      }),
+      60_000,
+      getWorktreeScanMutationRevision()
+    )
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({
         id: ptyId,
