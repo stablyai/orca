@@ -38,15 +38,27 @@ afterEach(() => {
   act(() => renderer?.unmount())
 })
 describe('shared settings screen state', () => {
-  it('retains confirmed Voice values and surfaces a rejected save', async () => {
+  it('flips the Voice switch before the desktop replies and surfaces a rejected save', async () => {
+    const loaded = {
+      enabled: true,
+      dictationMode: 'toggle',
+      selectedModelId: '',
+      models: []
+    }
+    let rejectConfigure: (error: Error) => void = () => {}
     const operations = {
-      load: vi.fn().mockResolvedValue({
-        enabled: true,
-        dictationMode: 'toggle',
-        selectedModelId: '',
-        models: []
-      }),
-      configure: vi.fn().mockRejectedValue(new Error('Desktop unavailable')),
+      // Why: the reconcile read stays pending so the optimistic value and the
+      // rejection message are both observable, as they are on a slow desktop.
+      load: vi
+        .fn()
+        .mockResolvedValueOnce(loaded)
+        .mockImplementation(() => new Promise(() => {})),
+      configure: vi.fn().mockImplementation(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectConfigure = reject
+          })
+      ),
       download: vi.fn(),
       delete: vi.fn()
     } as VoiceSettingsOperations
@@ -55,13 +67,24 @@ describe('shared settings screen state', () => {
         createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
       )
     })
-    expect(renderer.root.findByProps({ testID: 'voice-enabled' }).props.value).toBe(true)
+    const switchProps = () => renderer.root.findByProps({ testID: 'voice-enabled' }).props
+    expect(switchProps().value).toBe(true)
+    expect(switchProps().disabled).toBeUndefined()
+
     await act(async () => {
-      await renderer.root.findByProps({ testID: 'voice-enabled' }).props.onValueChange(false)
+      switchProps().onValueChange(false)
     })
-    expect(renderer.root.findByProps({ testID: 'voice-enabled' }).props.value).toBe(true)
-    expect(JSON.stringify(renderer.toJSON())).toContain('Desktop unavailable')
+    // The switch moves on tap, before the desktop has answered.
+    expect(switchProps().value).toBe(false)
+    expect(switchProps().disabled).toBeUndefined()
     expect(operations.configure).toHaveBeenCalledOnce()
+
+    await act(async () => {
+      rejectConfigure(new Error('Desktop unavailable'))
+      await Promise.resolve()
+    })
+    expect(JSON.stringify(renderer.toJSON())).toContain('Desktop unavailable')
+    expect(operations.load).toHaveBeenCalledTimes(2)
   })
   it('does not enable notifications after denied OS permission', async () => {
     const denied = {

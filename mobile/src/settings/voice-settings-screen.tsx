@@ -37,7 +37,6 @@ export default function VoiceSettingsScreen({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
-  const [saving, setSaving] = useState(false)
   const requestEpoch = useRef(0)
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
@@ -71,21 +70,30 @@ export default function VoiceSettingsScreen({
 
   const configure = useCallback(
     async (params: Parameters<VoiceSettingsOperations['configure']>[0]) => {
-      if (!operations || saving || busyAction) {
+      if (!operations) {
         return
       }
       requestEpoch.current += 1
-      setSaving(true)
       setError(null)
+      // Optimistic flip so the control responds instantly; reconcile below.
+      const { enabled, dictationMode } = params
+      setSetup((prev) =>
+        prev
+          ? {
+              ...prev,
+              ...(enabled === undefined ? {} : { enabled }),
+              ...(dictationMode === undefined ? {} : { dictationMode })
+            }
+          : prev
+      )
       try {
         setSetup(await operations.configure(params))
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not update voice settings')
-      } finally {
-        setSaving(false)
+        setError(err instanceof Error ? err.message : 'Could not update')
+        void refreshSetup()
       }
     },
-    [operations, saving, busyAction]
+    [operations, refreshSetup]
   )
 
   const handleUseModel = useCallback(
@@ -199,7 +207,6 @@ export default function VoiceSettingsScreen({
                 testID="voice-enabled"
                 accessibilityLabel="Enable Voice Dictation"
                 value={enabled}
-                disabled={saving || busyAction !== null}
                 onValueChange={(enabled) => void configure({ enabled })}
                 trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
                 thumbColor={colors.textPrimary}
@@ -227,7 +234,6 @@ export default function VoiceSettingsScreen({
                       accessibilityRole="radio"
                       aria-checked={active}
                       testID={`voice-mode-${mode.value}`}
-                      disabled={saving || busyAction !== null}
                       onPress={() => void configure({ dictationMode: mode.value })}
                       style={[styles.segment, active && styles.segmentActive]}
                     >
@@ -249,7 +255,7 @@ export default function VoiceSettingsScreen({
                 !enabled && styles.disabled,
                 pressed && styles.rowPressed
               ]}
-              disabled={!enabled || saving || busyAction !== null}
+              disabled={!enabled}
               testID="voice-model-picker"
               onPress={() => setModelDrawerOpen(true)}
             >
@@ -272,7 +278,7 @@ export default function VoiceSettingsScreen({
         {setup ? (
           <VoiceModelList
             setup={setup}
-            disabled={saving || busyAction !== null}
+            disabled={false}
             busyAction={busyAction}
             onUseModel={(m) => void handleUseModel(m)}
             onDownload={(m) => void handleDownload(m)}
