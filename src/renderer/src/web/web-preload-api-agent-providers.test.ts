@@ -27,7 +27,9 @@ describe('web native chat preload API', () => {
     }
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
-        call(): Promise<RuntimeRpcResponse<unknown>> {
+        call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          expect(method).toBe('nativeChat.readSession')
+          expect(params).toMatchObject({ capabilities: { systemNotices: true } })
           return Promise.resolve({
             id: 'read-1',
             ok: true,
@@ -130,7 +132,9 @@ describe('web native chat preload API', () => {
     )
     await Promise.resolve()
 
-    expect(subscribeParams).toMatchObject({ capabilities: { transcriptPending: 1 } })
+    expect(subscribeParams).toMatchObject({
+      capabilities: { transcriptPending: 1, systemNotices: true }
+    })
 
     // The host's unflushed-transcript frame, then the flush that follows it.
     deliver({ type: 'snapshot', messages: [], hasMore: false, pending: true })

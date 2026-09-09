@@ -14,6 +14,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { imageSourcePathFromText } from '../../shared/native-chat-image-transcript-markers'
+import { classifyClaudeTranscriptRecord } from './claude-transcript-record-admission'
 import { claudeContentBlocks } from './transcript-record-blocks'
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 
@@ -78,12 +79,22 @@ export function decodeClaudeTranscriptLine(
   if (!record) {
     return null
   }
-  const role = record.type
-  if (role !== 'user' && role !== 'assistant') {
+  const admission = classifyClaudeTranscriptRecord(record)
+  if (admission.kind === 'ignored') {
     return null
   }
   const timestamp = parseTimestamp(record.timestamp)
   const recordMessageId = extractString(record.uuid) ?? fallbackId
+  if (admission.kind !== 'message') {
+    return {
+      id: recordMessageId,
+      role: admission.kind === 'queued-prompt' ? 'user' : 'system',
+      blocks: admission.blocks,
+      timestamp,
+      source: 'transcript'
+    }
+  }
+  const role = admission.role
   if (claudeInterruptedMessageId(record)) {
     // Why: keep Claude's injected boilerplate out of the user-bubble path while
     // preserving the interruption as a quiet, replayable conversation status.

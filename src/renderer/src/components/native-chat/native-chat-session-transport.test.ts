@@ -76,7 +76,13 @@ describe('getNativeChatSessionTransport — selection', () => {
     expect(runtimeEnvironmentsCall).toHaveBeenCalledWith({
       selector: ENV,
       method: 'nativeChat.readSession',
-      params: { agent: 'claude', sessionId: 'sess-1', limit: 40, transcriptPath: '/t/path' },
+      params: {
+        agent: 'claude',
+        sessionId: 'sess-1',
+        limit: 40,
+        transcriptPath: '/t/path',
+        capabilities: { systemNotices: true }
+      },
       timeoutMs: 15_000
     })
     expect(nativeChatReadSession).not.toHaveBeenCalled()
@@ -183,7 +189,9 @@ describe('runtime subscribe', () => {
 
     expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
       expect.objectContaining({
-        params: expect.objectContaining({ capabilities: { transcriptPending: 1 } })
+        params: expect.objectContaining({
+          capabilities: { transcriptPending: 1, systemNotices: true }
+        })
       }),
       expect.any(Object)
     )
@@ -386,6 +394,9 @@ describe('runtime subscribe', () => {
       drop() // runtime restart / socket dropped mid-stream
       await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
       expect(subscribeCount()).toBe(2)
+      for (const [request] of runtimeEnvironmentsSubscribe.mock.calls) {
+        expect(request).toMatchObject({ params: { capabilities: { systemNotices: true } } })
+      }
 
       stop()
       drop() // a late close after teardown must not reconnect

@@ -73,7 +73,14 @@ export function NativeChatNoticeRow({
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 whitespace-pre-wrap break-words">{block.text}</p>
+        <div className="min-w-0 break-words">
+          <CommentMarkdown
+            content={block.text}
+            className="text-sm"
+            onLinkClick={onLinkClick}
+            allowFileUriLinks={allowFileUriLinks}
+          />
+        </div>
       </div>
       {block.providerFrame ? (
         <ProviderFrameRow

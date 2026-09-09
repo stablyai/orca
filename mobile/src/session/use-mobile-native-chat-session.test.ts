@@ -158,6 +158,7 @@ describe('useMobileNativeChatSession', () => {
 
       expect(sendRequest).toHaveBeenCalledTimes(requestsAtCap + 1)
       expect(sendRequest).toHaveBeenLastCalledWith('nativeChat.readSession', {
+        capabilities: { systemNotices: true },
         agent: 'claude',
         sessionId: 'session',
         limit: 60,
@@ -237,6 +238,7 @@ describe('useMobileNativeChatSession', () => {
     expect(state?.hasMore).toBe(true)
     act(() => state?.loadEarlier())
     expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
+      capabilities: { systemNotices: true },
       agent: 'claude',
       sessionId: 'session',
       limit: 100
@@ -297,6 +299,7 @@ describe('useMobileNativeChatSession', () => {
     act(() => state?.loadEarlier())
 
     expect(sendRequest).toHaveBeenCalledWith('nativeChat.readSession', {
+      capabilities: { systemNotices: true },
       agent: 'claude',
       sessionId: 'session',
       limit: 100
@@ -418,6 +421,7 @@ describe('useMobileNativeChatSession', () => {
     })
 
     expect(sendRequest).toHaveBeenLastCalledWith('nativeChat.readSession', {
+      capabilities: { systemNotices: true },
       agent: 'claude',
       sessionId: 'session',
       limit: 100
@@ -647,7 +651,7 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
 
     expect(subscribe).toHaveBeenCalledWith(
       'nativeChat.subscribe',
-      expect.objectContaining({ capabilities: { transcriptPending: 1 } }),
+      expect.objectContaining({ capabilities: { transcriptPending: 1, systemNotices: true } }),
       expect.any(Function)
     )
     expect(renders.at(-1)).toMatchObject({

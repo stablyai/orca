@@ -154,7 +154,7 @@ export function useMobileNativeChatSession(args: {
         sessionId,
         limit: limitRef.current,
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId),
-        capabilities: { transcriptPending: 1 },
+        capabilities: { transcriptPending: 1, systemNotices: true },
         ...(transcriptPath ? { transcriptPath } : {})
       },
       (raw) => {
@@ -240,6 +240,7 @@ export function useMobileNativeChatSession(args: {
     void (async () => {
       try {
         const response = await client.sendRequest('nativeChat.readSession', {
+          capabilities: { systemNotices: true },
           agent,
           sessionId,
           limit: beforeOffset === null ? nextLimit : pageLimit,

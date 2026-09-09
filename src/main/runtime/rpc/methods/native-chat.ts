@@ -47,7 +47,12 @@ const NativeChatSession = z.object({
   // A pending snapshot is not authoritative transcript history. Only clients
   // that advertise this semantic may receive one; legacy clients treat it as a
   // settled empty read and can overwrite retention / unblock launch drafts.
-  capabilities: z.object({ transcriptPending: z.literal(1).optional() }).optional(),
+  capabilities: z
+    .object({
+      transcriptPending: z.literal(1).optional(),
+      systemNotices: z.boolean().optional()
+    })
+    .optional(),
   beforeOffset: z.number().int().nonnegative().optional()
 })
 
@@ -75,11 +80,28 @@ function sanitizeMessage(
   }
 }
 
+// Legacy peers render toned system text as agent prose; retain it only in host evidence.
+function publishableMessages(
+  messages: readonly NativeChatMessage[],
+  systemNotices: boolean
+): readonly NativeChatMessage[] {
+  return systemNotices
+    ? messages
+    : messages.filter(
+        (message) =>
+          message.role !== 'system' ||
+          !message.blocks.some((block) => block.type === 'text' && block.tone !== undefined)
+      )
+}
+
 function sanitizeAppendForClient(
   messages: readonly NativeChatMessage[],
-  clientKind: RpcContext['clientKind']
+  clientKind: RpcContext['clientKind'],
+  systemNotices: boolean
 ): NativeChatMessage[] {
-  return messages.map((message) => sanitizeMessage(message, clientKind))
+  return publishableMessages(messages, systemNotices).map((message) =>
+    sanitizeMessage(message, clientKind)
+  )
 }
 
 /** Window a transcript to its most recent `limit` messages so a long session
@@ -100,10 +122,11 @@ function windowTranscript(
 function windowForClient(
   messages: readonly NativeChatMessage[],
   clientKind: RpcContext['clientKind'],
-  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+  limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW,
+  systemNotices = false
 ): NativeChatMessage[] {
   const windowed = windowTranscript(messages, limit)
-  return windowed.map((message) => sanitizeMessage(message, clientKind))
+  return sanitizeAppendForClient(windowed, clientKind, systemNotices)
 }
 
 export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
@@ -124,7 +147,12 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       )
       return 'messages' in result
         ? {
-            messages: windowForClient(result.messages, clientKind, limit),
+            messages: windowForClient(
+              result.messages,
+              clientKind,
+              limit,
+              params.capabilities?.systemNotices === true
+            ),
             hasMore: result.hasMore,
             beforeOffset: result.beforeOffset,
             ...(result.lifecycle ? { lifecycle: result.lifecycle } : {})
@@ -187,7 +215,12 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           // instead of stranding the view at 'loading' when the read keeps throwing.
           emit({
             type: 'snapshot',
-            messages: windowForClient(messages, clientKind, limit),
+            messages: windowForClient(
+              messages,
+              clientKind,
+              limit,
+              params.capabilities?.systemNotices === true
+            ),
             hasMore,
             beforeOffset,
             ...(error ? { error } : {}),
@@ -209,7 +242,12 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           }
           emit({
             type: 'replacement',
-            messages: windowForClient(messages, clientKind, limit),
+            messages: windowForClient(
+              messages,
+              clientKind,
+              limit,
+              params.capabilities?.systemNotices === true
+            ),
             hasMore,
             beforeOffset,
             ...(lifecycle ? { lifecycle } : {})
@@ -221,7 +259,11 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
           }
           emit({
             type: 'appended',
-            messages: sanitizeAppendForClient(messages, clientKind),
+            messages: sanitizeAppendForClient(
+              messages,
+              clientKind,
+              params.capabilities?.systemNotices === true
+            ),
             ...(lifecycle ? { lifecycle } : {})
           })
         }

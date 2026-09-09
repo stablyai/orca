@@ -7,6 +7,7 @@ import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activ
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
@@ -190,6 +191,14 @@ function MobileNativeChatMessageImpl({
       }
     />
   ) : null
+
+  const notice =
+    message.role === 'system'
+      ? message.blocks.find((block) => isTextBlock(block) && block.tone !== undefined)
+      : undefined
+  if (notice && isTextBlock(notice)) {
+    return <MobileNativeChatNoticeRow block={notice} fontScale={fontScale} />
+  }
 
   return (
     <>
