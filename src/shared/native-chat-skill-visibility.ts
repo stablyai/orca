@@ -6,6 +6,21 @@ import type { AgentType } from './agent-status-types'
 import { getNativeChatAgentProfile } from './native-chat-agent-profiles'
 import type { DiscoveredSkill, SkillDiscoveryResult } from './skills'
 
+const CLAUDE_PLUGIN_LABEL_PREFIX = 'Claude plugin '
+
+/** The token the composer inserts for a discovered skill. Plugin skills are
+ *  namespaced (`quiver:catchup`) the way the agent itself addresses them, so
+ *  a plugin skill and a same-named home skill stay distinct rows. */
+export function discoveredSkillTokenName(skill: DiscoveredSkill): string {
+  if (skill.sourceKind === 'plugin' && skill.sourceLabel.startsWith(CLAUDE_PLUGIN_LABEL_PREFIX)) {
+    const plugin = skill.sourceLabel.slice(CLAUDE_PLUGIN_LABEL_PREFIX.length)
+    if (plugin) {
+      return `${plugin}:${skill.name}`
+    }
+  }
+  return skill.name
+}
+
 export function isNativeChatSkillForAgent(
   agent: AgentType,
   skill: DiscoveredSkill,

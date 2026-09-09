@@ -121,3 +121,17 @@ describe('mobileComposerSlashEntries with discovered skills', () => {
     ])
   })
 })
+
+describe('mobileComposerSlashEntries with namespaced plugin skills', () => {
+  it('keeps a plugin skill distinct from a same-named home skill', () => {
+    const catalog = nativeChatComposerCatalog('claude')
+    const entries = mobileComposerSlashEntries(catalog, [
+      { name: 'grilling', description: 'Home copy' },
+      { name: 'quiver:grilling', description: 'Plugin copy' }
+    ])
+    expect(entries.map((entry) => entry.name).filter((name) => name.includes('grilling'))).toEqual([
+      'grilling',
+      'quiver:grilling'
+    ])
+  })
+})
