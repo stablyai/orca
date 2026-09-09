@@ -3,6 +3,18 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
   {
+    id: 'browser.forward',
+    title: 'Go Forward in Browser',
+    group: 'Browser',
+    scope: 'browser',
+    searchKeywords: ['shortcut', 'browser', 'history', 'forward', 'next'],
+    defaultBindings: {
+      darwin: ['Mod+BracketRight'],
+      linux: ['Alt+ArrowRight'],
+      win32: ['Alt+ArrowRight']
+    }
+  },
+  {
     id: 'browser.reload',
     title: 'Reload Browser Page',
     group: 'Browser',
@@ -280,13 +292,5 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     scope: 'terminal',
     searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
     defaultBindings: platformBindings(['Mod+Shift+Enter'])
-  },
-  {
-    id: 'terminal.setTitle',
-    title: 'Set Title…',
-    group: 'Terminal Panes',
-    scope: 'terminal',
-    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
-    defaultBindings: platformBindings([])
   }
 ]

@@ -215,6 +215,35 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps the activity view toggle unassigned until users customize it', () => {
+    const binding = {
+      key: 'b',
+      code: 'KeyB',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('sidebar.activity.toggle', platform)).toEqual([])
+    }
+    expect(keybindingMatchesAction('sidebar.activity.toggle', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('sidebar.activity.toggle', binding, 'linux', {
+        'sidebar.activity.toggle': ['Mod+Alt+B']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('sidebar.activity.toggle')
+    expect(definition?.title).toBe('Toggle Activity View')
+    expect(definition?.group).toBe('Global')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['bell', 'notification', 'attention', 'waiting', 'unread'])
+    )
+  })
+
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId

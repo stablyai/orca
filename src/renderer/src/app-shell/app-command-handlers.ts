@@ -179,6 +179,24 @@ export function createAppCommandHandlers(
         })
     ],
     [
+      'sidebar.activity.toggle',
+      () => {
+        if (activeView === 'settings') {
+          return false
+        }
+        return claim('sidebar.activity.toggle', () => {
+          const store = useAppStore.getState()
+          const nextShowingActivity = store.sidebarBody !== 'agents'
+          store.setSidebarBody(nextShowingActivity ? 'agents' : 'workspaces')
+          // Why: mirror sidebar.sleepingWorkspaces.toggle — reveal only when opening,
+          // never force the sidebar closed while turning the activity view off.
+          if (nextShowingActivity) {
+            store.setSidebarOpen(true)
+          }
+        })
+      }
+    ],
+    [
       'floatingWorkspace.maximize',
       () => {
         if (floatingTerminalOpen || !floatingTerminalEnabled) {
