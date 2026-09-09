@@ -143,7 +143,10 @@ export function RichMarkdownCodeBlock({
           <Copy size={14} />
         )}
       </button>
-      <NodeViewContent<'pre'> as="pre" />
+      {/* Tiptap's NodeViewContent defaults to white-space: pre-wrap inline,
+          which wraps at whitespace and defeats the wrapper's overflow-x
+          scroller; override it so wide lines scroll instead of wrapping. */}
+      <NodeViewContent<'pre'> as="pre" style={{ whiteSpace: 'pre' }} />
       {/* Why: mermaid diagrams render as a live SVG preview below the editable
           source so users can see the result while editing. The code block stays
           editable — the diagram is read-only output. This preview also goes
