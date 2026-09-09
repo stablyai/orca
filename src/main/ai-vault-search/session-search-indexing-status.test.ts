@@ -15,7 +15,7 @@ it('walks discovering to indexing to current, and reports degraded roots once se
   // Work in flight is the more useful thing to show; the roots are in the
   // snapshot either way.
   expect(status.snapshot().phase).toBe('indexing')
-  status.sweepCompleted()
+  status.sweepFinished(true)
   status.finishWork(123)
   expect(status.snapshot()).toMatchObject({ phase: 'degraded', lastReconcileAt: 123 })
 
@@ -29,7 +29,7 @@ it('refuses to call itself current with work queued, or before a sweep finished'
   // No sweep has ever completed, so nothing is known about the long tail.
   expect(status.snapshot().phase).toBe('indexing')
 
-  status.sweepCompleted()
+  status.sweepFinished(true)
   expect(status.snapshot().phase).toBe('current')
 
   status.setPending(3, 0)
@@ -38,9 +38,23 @@ it('refuses to call itself current with work queued, or before a sweep finished'
   expect(status.snapshot().phase).toBe('current')
 })
 
+it('does not let an aborted sweep count as a finished one', () => {
+  const status = new SessionSearchIndexingStatus()
+  status.sweepFinished(false)
+  status.finishWork(1)
+  // The outcome is the argument, so reporting an aborted sweep cannot latch it.
+  expect(status.snapshot().phase).toBe('indexing')
+
+  status.sweepFinished(true)
+  expect(status.snapshot().phase).toBe('current')
+  status.sweepFinished(false)
+  // A later abort does not un-know that a whole sweep once finished.
+  expect(status.snapshot().phase).toBe('current')
+})
+
 it('reports closed over every other phase', () => {
   const status = new SessionSearchIndexingStatus()
-  status.sweepCompleted()
+  status.sweepFinished(true)
   status.finishWork(1)
   expect(status.snapshot().phase).toBe('current')
   status.setClosed()

@@ -12,7 +12,6 @@ import type { SessionSearchIndexingStatus } from './session-search-indexing-stat
 import {
   degradedSessionSearchRoots,
   rootFileCounts,
-  underDegradedRoot,
   type SessionSearchDegradedRoot
 } from './session-search-root-health'
 import {
@@ -119,12 +118,9 @@ export async function runSessionSearchBackfill(
 
 /**
  * A sweep is the only pass that sees every root, so it is the only one that can
- * retire a source deleted while nothing was running. It is also the pass that
- * would delete a user's entire searchable history the first time an SSH mount
- * or an external drive is not there, because every path under it answers ENOENT
- * at once. A degraded root's files are therefore never retired, however loudly
- * the filesystem says they are gone
- * (docs/reference/ssh-execution-boundary.md).
+ * retire a source deleted while nothing was running. The degraded-root fence
+ * that keeps an unmounted volume from taking its history with it belongs to the
+ * retirement function itself, which the cycle calls too.
  */
 async function retireSweptAwaySources(
   args: SessionSearchBackfillArgs,
@@ -134,9 +130,10 @@ async function retireSweptAwaySources(
   const undiscovered = args.store
     .indexedSources()
     .map((source) => source.path)
-    .filter((path) => !discoveredPaths.has(path) && !underDegradedRoot(path, degradedRoots))
+    .filter((path) => !discoveredPaths.has(path))
   return retireDeletedSessionSearchSources(args.store, undiscovered, {
     signal: args.signal,
-    limit: RETIREMENT_CHECKS_PER_SWEEP
+    limit: RETIREMENT_CHECKS_PER_SWEEP,
+    degradedRoots
   })
 }

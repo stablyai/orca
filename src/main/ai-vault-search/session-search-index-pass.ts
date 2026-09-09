@@ -6,11 +6,7 @@ import {
   type SessionParseStats
 } from '../ai-vault/session-scanner-parse-cache'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import {
-  fileIdentity,
-  isSessionSearchFileCurrent,
-  type SessionSearchIndexedFile
-} from './session-search-file-cursor'
+import { fileIdentity, isSessionSearchFileCurrent } from './session-search-file-cursor'
 import type { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import type { SessionSearchStore } from './session-search-store'
 
@@ -76,7 +72,6 @@ export async function runSessionSearchIndexPass(
     // behind, and a list cursor already at this file's current stat would make
     // the parse open nothing at all — the state every transcript is in the
     // first time the index is switched on inside a running app.
-    const before = indexedRecord(store, candidate)
     try {
       await parseAgentSessionFileCached(
         candidate,
@@ -84,10 +79,12 @@ export async function runSessionSearchIndexPass(
         stats,
         forced ? 'whole' : 'any'
       )
-      // A parse that returned without throwing is not a parse the index kept:
-      // the consumer declines a read it cannot use, and counting that as
-      // indexed is how a status ends up claiming files it does not hold.
-      if (published(before, indexedRecord(store, candidate))) {
+      // Took it, not moved: the test is whether the index now covers this file
+      // at this stat, which is the same question the skip at the top asks. A
+      // cursor comparison looks equivalent and is not — a forced re-read of an
+      // unchanged file writes an identical cursor, so it would never settle and
+      // the path would be re-read whole every interval for good.
+      if (indexIsCurrent(store, candidate)) {
         options.onIndexed?.(candidate, bytes)
       }
     } catch (error) {
@@ -143,29 +140,6 @@ function mustReadWhole(
   }
   const size = candidate.file.sizeBytes
   return typeof size === 'number' && stored.byteOffset > size
-}
-
-function indexedRecord(
-  store: SessionSearchStore,
-  candidate: SessionFileCandidate
-): SessionSearchIndexedFile | null {
-  return store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
-}
-
-/** True when the index's own cursor for this file moved, which only a publish does. */
-function published(
-  before: SessionSearchIndexedFile | null,
-  after: SessionSearchIndexedFile | null
-): boolean {
-  if (!after) {
-    return false
-  }
-  return (
-    !before ||
-    before.byteOffset !== after.byteOffset ||
-    before.mtimeMs !== after.mtimeMs ||
-    before.sizeBytes !== after.sizeBytes
-  )
 }
 
 /** What this read will actually cost: the tail past the index's own cursor. */

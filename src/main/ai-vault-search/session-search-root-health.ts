@@ -28,6 +28,25 @@ export function rootFileCounts(discoveries: readonly SessionFileDiscovery[]): Ma
 }
 
 /**
+ * Carries a root's last healthy count forward across a sweep that listed it
+ * empty. Without this the alarm is single-shot: the degraded sweep's zero
+ * becomes the baseline, the next sweep compares zero against zero, and the
+ * unmounted tree is retired on the second pass instead of the first.
+ */
+export function withLastHealthyRootCounts(
+  previous: ReadonlyMap<string, number>,
+  observed: ReadonlyMap<string, number>
+): Map<string, number> {
+  const merged = new Map(previous)
+  for (const [root, count] of observed) {
+    if (count > 0) {
+      merged.set(root, count)
+    }
+  }
+  return merged
+}
+
+/**
  * Classifies the roots a sweep just walked. Only roots that yielded nothing are
  * probed: a root that returned files is readable by construction, which keeps
  * the cost at one readdir per genuinely empty tree.

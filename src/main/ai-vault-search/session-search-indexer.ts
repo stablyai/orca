@@ -21,6 +21,7 @@ import {
   sessionSearchHistoryCutoffMs,
   widensSessionSearchHistory
 } from './session-search-retention-policy'
+import { withLastHealthyRootCounts } from './session-search-root-health'
 import { removeSessionSearchDatabase } from './session-search-schema'
 import type { SessionSearchScanRoots } from './session-search-scan-roots'
 import { SessionSearchStore } from './session-search-store'
@@ -161,6 +162,7 @@ export class SessionSearchIndexer {
       removeSessionSearchDatabase(this.options.databasePath)
       this.pending.clear()
       this.previousRecent = new Set()
+      this.rootFileCounts = new Map()
       this.openStore()
       this.fullSweepDue = true
     })
@@ -273,8 +275,11 @@ export class SessionSearchIndexer {
       pace: this.pace,
       signal
     })
-    this.rootFileCounts = sweep.rootFileCounts
+    // Last healthy count, not last count: a degraded sweep's zero would
+    // otherwise become the baseline and the next sweep would retire the tree.
+    this.rootFileCounts = withLastHealthyRootCounts(this.rootFileCounts, sweep.rootFileCounts)
     this.indexingStatus.setDegradedRoots(sweep.degradedRoots)
+    this.indexingStatus.sweepFinished(sweep.completed)
     if (!sweep.completed) {
       // A sweep is due until it finishes. Clearing the flag on entry meant a
       // pause part way through abandoned the rest of the machine's transcripts
@@ -286,7 +291,6 @@ export class SessionSearchIndexer {
     // discovery and the first cycle is invisible to both otherwise. The
     // cycle's retirement cap keeps that one-off check off the critical path.
     this.previousRecent = sweep.watchPaths
-    this.indexingStatus.sweepCompleted()
     this.indexingStatus.finishWork(this.clock.now())
   }
 
@@ -301,6 +305,9 @@ export class SessionSearchIndexer {
       pending: this.pending.drain(),
       previousRecent: this.previousRecent,
       retirementChecksPerCycle: this.options.retirementChecksPerCycle,
+      // Read but not written: a recent-window discovery is not a census, so it
+      // can spot a root that went to zero without redefining what healthy was.
+      previousRootFileCounts: this.rootFileCounts,
       signal
     })
     // Work that was drained and then not read is a hole in the index, not

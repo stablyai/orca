@@ -489,6 +489,62 @@ it('reads a stale file at its current stat, not the one it was recorded with', a
   expect(indexedCursor(path)).toEqual({ mtime_ms: current.mtimeMs, size_bytes: current.size })
 })
 
+// Round 2, item 1: the sweep kept the rows and a cycle twenty seconds later
+// deleted them, because the degraded-root fence was on the sweep path only.
+it.skipIf(!CAN_DENY_READ)(
+  'keeps an unmounted root through the cycles that follow the sweep',
+  async () => {
+    await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
+    await newIndexer().start()
+    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+
+    await rm(harness.claudeProjectDir, { recursive: true, force: true })
+    await indexer?.reconcile({ full: true })
+    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+
+    await nextCycle()
+    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+    expect(indexer?.status().phase).toBe('degraded')
+  }
+)
+
+// Round 2, item 3: the alarm was single-shot. The degraded sweep's zero became
+// the baseline, so the second sweep compared zero with zero and retired.
+it.skipIf(!CAN_DENY_READ)('keeps an unmounted root across repeated sweeps', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
+  await newIndexer().start()
+
+  await rm(harness.claudeProjectDir, { recursive: true, force: true })
+  await indexer?.reconcile({ full: true })
+  await indexer?.reconcile({ full: true })
+  expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+  expect(indexer?.status().phase).toBe('degraded')
+
+  // Remounted: the root lists transcripts again and the alarm clears.
+  await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
+  await indexer?.reconcile({ full: true })
+  expect(indexer?.status().degradedRoots).toEqual([])
+  expect(sessionsMatching('removable')).toEqual([SESSION_ID])
+})
+
+// Round 2, item 2: a forced whole re-read of an unchanged file writes an
+// identical cursor. Judging by cursor movement, that never settles: the path
+// is owed forever and re-read whole on every interval.
+it('settles an invalidated file that turned out not to have changed', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['unchanged after all'], SESSION_ID)
+  await newIndexer().start()
+
+  indexer?.invalidate([path])
+  await indexer?.reconcile()
+  expect(indexer?.status()).toMatchObject({ filesPending: 0, phase: 'current' })
+
+  // And it stays settled: the next cycle has no reason to open it again.
+  const bytes = indexer?.status().bytesIndexed
+  await nextCycle()
+  expect(indexer?.status()).toMatchObject({ filesPending: 0, bytesIndexed: bytes })
+})
+
 // Finding 8: a path sits in both queues the moment a read is declined during a
 // pause and a caller then invalidates the same file. Summing them reports one
 // transcript as two, and a caller has no way to tell that from two files.

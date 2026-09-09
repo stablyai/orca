@@ -44,6 +44,8 @@ export type SessionSearchReconcileArgs = {
   previousRecent: ReadonlySet<string>
   /** Stats a cycle spends proving deletions; the rest stay watched. */
   retirementChecksPerCycle?: number
+  /** What each root listed when it was last healthy, so a tree that went empty is visible. */
+  previousRootFileCounts?: ReadonlyMap<string, number>
   signal?: AbortSignal
 }
 
@@ -85,12 +87,16 @@ export async function runSessionSearchReconcileCycle(
     // Everything drained out of a queue, so an abort can put back exactly what
     // it did not get to. A drained entry that is never read is a hole in the
     // index, and dropping it is how a file stays missing until the next sweep.
-    const owed = new Map<string, SessionSearchPendingFile>()
+    // Which queue it came from is tracked, because they are not the same size:
+    // the store holds ten times what this one does, so returning its overflow
+    // here would quietly discard the difference.
+    const owed = new Map<string, { entry: SessionSearchPendingFile; fromStore: boolean }>()
     for (const entry of args.pending) {
-      owed.set(entry.path, entry)
+      owed.set(entry.path, { entry, fromStore: false })
     }
     for (const candidate of stale) {
-      owed.set(candidate.file.path, { path: candidate.file.path, candidate, forced: true })
+      const entry = { path: candidate.file.path, candidate, forced: true }
+      owed.set(candidate.file.path, { entry, fromStore: true })
     }
 
     let completed = true
@@ -120,18 +126,22 @@ export async function runSessionSearchReconcileCycle(
       completed = false
     }
     for (const candidate of pass.deferred) {
-      owed.set(candidate.file.path, {
-        path: candidate.file.path,
-        candidate,
-        forced: forced.has(candidate.file.path)
-      })
+      const path = candidate.file.path
+      const entry = { path, candidate, forced: forced.has(path) }
+      owed.set(path, { entry, fromStore: owed.get(path)?.fromStore ?? false })
     }
     for (const path of queued.unresolved) {
       // Never silently dropped: a caller asked for this path and the index has
       // no record of it, so it stays queued and keeps being counted.
-      owed.set(path, { path, candidate: null, forced: true })
+      owed.set(path, { entry: { path, candidate: null, forced: true }, fromStore: false })
     }
 
+    // Before the retirement, not after it: the cycle deletes rows too, so it
+    // needs the same fence the sweep has or one interval undoes the sweep's care.
+    const degradedRoots = await degradedSessionSearchRoots(swept.discoveries, issues, {
+      signal,
+      previousFileCounts: args.previousRootFileCounts
+    })
     const retirement = completed
       ? await retireDeletedSessionSearchSources(
           store,
@@ -140,12 +150,23 @@ export async function runSessionSearchReconcileCycle(
           ),
           {
             signal,
-            limit: args.retirementChecksPerCycle ?? DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS
+            limit: args.retirementChecksPerCycle ?? DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS,
+            degradedRoots
           }
         )
       : { retired: [], unverifiable: [], unchecked: [] }
     for (const path of retirement.retired) {
       owed.delete(path)
+    }
+    // A record that came from the store goes back to the store, which applies
+    // its own retention rule and its own, larger bound.
+    const deferred: SessionSearchPendingFile[] = []
+    for (const { entry, fromStore } of owed.values()) {
+      if (fromStore && entry.candidate) {
+        store.markStale(entry.candidate)
+        continue
+      }
+      deferred.push(entry)
     }
 
     for (const refusal of cursorChatMetaRefusals()) {
@@ -160,8 +181,8 @@ export async function runSessionSearchReconcileCycle(
       // reach was never checked at all: both stay watched instead of being
       // retired or forgotten.
       recentPaths: new Set([...recentPaths, ...retirement.unverifiable, ...retirement.unchecked]),
-      deferred: [...owed.values()],
-      degradedRoots: await degradedSessionSearchRoots(swept.discoveries, issues, { signal }),
+      deferred,
+      degradedRoots,
       completed
     }
   })

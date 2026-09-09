@@ -1,5 +1,6 @@
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { splitOpenCodeSqliteCandidate } from '../ai-vault/session-scanner-opencode-sqlite-paths'
+import { underDegradedRoot, type SessionSearchDegradedRoot } from './session-search-root-health'
 import type { SessionSearchStore } from './session-search-store'
 
 export type SessionSearchRetirement = {
@@ -19,15 +20,27 @@ const PROVEN_GONE = new Set(['ENOENT', 'ENOTDIR'])
 
 /**
  * Retires index rows for sources that are provably gone. Callers pass the paths
- * the index holds but this sweep did not discover; everything else is either
- * still there or was never in the discovery window in the first place.
+ * the index holds but did not discover; everything else is either still there
+ * or was never in the discovery window in the first place.
+ *
+ * The degraded-root fence lives here, not at the call sites, because both the
+ * sweep and the cycle retire and either one alone would delete a user's history
+ * the first time an SSH mount or an external drive is not there: every path
+ * under it answers ENOENT at once. A file under a root this pass could not
+ * trust is `unverifiable`, whatever the filesystem says
+ * (docs/reference/ssh-execution-boundary.md).
  */
 export async function retireDeletedSessionSearchSources(
   store: SessionSearchStore,
   paths: readonly string[],
-  options: { signal?: AbortSignal; limit?: number } = {}
+  options: {
+    signal?: AbortSignal
+    limit?: number
+    degradedRoots?: readonly SessionSearchDegradedRoot[]
+  } = {}
 ): Promise<SessionSearchRetirement> {
   const { signal } = options
+  const degradedRoots = options.degradedRoots ?? []
   const retirement: SessionSearchRetirement = { retired: [], unverifiable: [], unchecked: [] }
   const limit = options.limit ?? Number.POSITIVE_INFINITY
   for (const [index, path] of paths.entries()) {
@@ -37,6 +50,10 @@ export async function retireDeletedSessionSearchSources(
     if (signal?.aborted || index >= limit) {
       retirement.unchecked.push(...paths.slice(index))
       break
+    }
+    if (underDegradedRoot(path, degradedRoots)) {
+      retirement.unverifiable.push(path)
+      continue
     }
     // A synthetic OpenCode row names the database it came from, never a file of
     // its own; statting the candidate path would report every one of them gone.

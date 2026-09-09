@@ -98,9 +98,13 @@ export class SessionSearchIndexingStatus {
     this.working = null
   }
 
-  /** One whole sweep ran to completion; until then nothing is `current`. */
-  sweepCompleted(): void {
-    this.sweptClean = true
+  /**
+   * One whole sweep finished, or did not. The outcome is the argument rather
+   * than the call site's position, so an aborted sweep cannot latch this by
+   * being reported a line too early.
+   */
+  sweepFinished(completed: boolean): void {
+    this.sweptClean ||= completed
   }
 
   /** Files the index holds, counted in the store rather than tallied per attempt. */
