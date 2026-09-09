@@ -7,7 +7,11 @@ import {
   SettingsSwitchRow
 } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
-import { clampNumber, resolvePaneStyleOptions } from '@/lib/terminal-theme'
+import {
+  clampNumber,
+  DEFAULT_TERMINAL_ACTIVE_PANE_BORDER_PICKER_HEX,
+  resolvePaneStyleOptions
+} from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
 
 type TerminalPaneAppearanceSectionProps = {
@@ -140,7 +144,11 @@ export function TerminalPaneAppearanceSection({
             )}
             description=""
             value={settings.terminalActivePaneBorderColor ?? ''}
-            fallback={document.documentElement.classList.contains('dark') ? '#60a5fa' : '#2563eb'}
+            fallback={
+              DEFAULT_TERMINAL_ACTIVE_PANE_BORDER_PICKER_HEX[
+                document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+              ]
+            }
             onChange={(value) => updateSettings({ terminalActivePaneBorderColor: value })}
           />
         </SearchableSetting>

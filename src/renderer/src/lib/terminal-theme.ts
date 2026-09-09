@@ -17,6 +17,11 @@ export const DEFAULT_TERMINAL_DIVIDER_DARK = '#3f3f46'
 const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
 /** Empty color setting = follow the theme's pane-locate accent (main.css). */
 export const DEFAULT_TERMINAL_ACTIVE_PANE_BORDER_COLOR = 'var(--terminal-pane-locate)'
+/** sRGB of --terminal-pane-locate (blue-600 / blue-400) for <input type="color">, which rejects var(). */
+export const DEFAULT_TERMINAL_ACTIVE_PANE_BORDER_PICKER_HEX = {
+  light: '#2563eb',
+  dark: '#60a5fa'
+} as const
 
 export type EffectiveTerminalAppearance = {
   mode: 'dark' | 'light'
