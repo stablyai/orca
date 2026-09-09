@@ -442,8 +442,34 @@ writers:
 | web-session mirror receipt clock                                  | keep; the decay rule needs both clocks from one machine                                                  |
 
 The Command Code done-settle window is renderer policy with no main
-equivalent. PR 2 either moves it into main's detector or leaves it, and says
+equivalent. PR 2b either moves it into main's detector or leaves it, and says
 which.
+
+### The two filters this step removes
+
+Both were added by PR 1a and are the only thing keeping main out of the
+renderer's lane. Each is pinned by a test, so removing them should turn those
+tests red first, deliberately:
+
+- `main/startup/main-window-agent-status.ts` — the `if (structuredHost) return`
+  guard above the `agentStatus:set` sends. It sits above BOTH the main window
+  and `getDashboardPopoutWindow()`, so removing it is also what first gives the
+  dashboard popout structured sessions.
+- `main/ipc/agent-hooks.ts` — the `.filter((entry) => entry.structuredHost === undefined)`
+  on `agentStatus:getSnapshot`.
+
+### What "one writer" actually means after this
+
+Not zero renderer writers. The IPC applicator becomes the single writer for
+OBSERVED status; the table above keeps four categories on purpose. Of those,
+only the launch placeholder seeds are a deferral rather than a principle —
+main holds the launch config and could seed them, and that is the next thing
+to remove after this step, not part of it.
+
+### Ordering
+
+Depends on PR 2a. Removing these filters before the two derivations converge
+renders one session twice and shifts the chat's elapsed clock.
 
 ## PR 3: one rollup, one clock
 
