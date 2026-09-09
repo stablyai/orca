@@ -43,3 +43,9 @@ describe('discoveredSkillTokenName', () => {
     expect(discoveredSkillTokenName(skill({ sourceLabel: 'Claude plugin ' }))).toBe('catchup')
   })
 })
+
+describe('discoveredSkillTokenName structured plugin field', () => {
+  it('prefers the structured plugin field over parsing the display label', () => {
+    expect(discoveredSkillTokenName(skill({ plugin: 'qv' }))).toBe('qv:catchup')
+  })
+})
