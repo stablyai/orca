@@ -36,6 +36,8 @@ export type PersistedAgentHookEventPayload = Omit<
   // Why: revision counters are in-memory and the authority id is regenerated per process, so
   // a stored observation could only rehydrate as a stale ordering claim from a dead authority.
   | 'observation'
+  // Same: a terminal handle is issued by one runtime and means nothing to the next.
+  | 'terminalHandle'
 > & {
   launchTokenHash?: string
 }

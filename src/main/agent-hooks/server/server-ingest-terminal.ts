@@ -12,6 +12,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     tabId?: string
     worktreeId?: string
     connectionId?: string | null
+    terminalHandle?: string
     payload: ParsedAgentStatusPayload
   }): void {
     const physicalPaneKey = event.paneKey.trim()
@@ -45,6 +46,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       typeof event.connectionId === 'string' && event.connectionId.trim().length > 0
         ? event.connectionId.trim()
         : null
+    const terminalHandle =
+      typeof event.terminalHandle === 'string' && event.terminalHandle.trim().length > 0
+        ? event.terminalHandle.trim()
+        : undefined
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -65,6 +70,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
       previous.worktreeId === worktreeId &&
+      // Why in the unchanged gate: the handle is a join key readers match on, so a pane that
+      // only just acquired one (or moved to another) must still refresh the row it is stamped on.
+      previous.terminalHandle === (terminalHandle ?? previous.terminalHandle) &&
       terminalStatusPayloadMatchesHook(previous.payload, event.payload, preserveActiveTurnStamp)
     ) {
       return
@@ -95,6 +103,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         worktreeId,
         connectionId,
         ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
+        ...(terminalHandle ? { terminalHandle } : {}),
         payload: event.payload
       },
       undefined,
