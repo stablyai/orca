@@ -341,4 +341,143 @@ describe('keybindings', () => {
       false
     )
   })
+
+  describe('Option-chord matching resolves the layout character on macOS (#2858 regression on the Alt path)', () => {
+    // Dvorak's ';' key sits at physical KeyZ; Option+that key composes '…' with no logical Latin key.
+    const dvorakOptionOnZPosition = {
+      key: '…',
+      code: 'KeyZ',
+      control: false,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+    // Dvorak's 'z' key sits at physical Semicolon; Option+that key composes 'Ω'.
+    const dvorakOptionOnSemicolonPosition = {
+      key: 'Ω',
+      code: 'Semicolon',
+      control: false,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+    const dvorakLayoutCharacterForCode = (code: string): string | undefined =>
+      ({ KeyZ: ';', Semicolon: 'z' })[code]
+
+    it("does not match Alt+Z for Dvorak Option on the key that types ';' (KeyZ)", () => {
+      expect(
+        keybindingMatchesAction(
+          'editor.toggleWordWrap',
+          dvorakOptionOnZPosition,
+          'darwin',
+          undefined,
+          {
+            layoutCharacterForCode: dvorakLayoutCharacterForCode
+          }
+        )
+      ).toBe(false)
+    })
+
+    it("matches Alt+Z for Dvorak Option on the key that types 'z' (Semicolon)", () => {
+      expect(
+        keybindingMatchesAction(
+          'editor.toggleWordWrap',
+          dvorakOptionOnSemicolonPosition,
+          'darwin',
+          undefined,
+          { layoutCharacterForCode: dvorakLayoutCharacterForCode }
+        )
+      ).toBe(true)
+    })
+
+    it('still matches Cmd+Alt+A (#2920) on QWERTY with a layout map present', () => {
+      const qwertyLayoutCharacterForCode = (code: string): string | undefined =>
+        code === 'KeyA' ? 'a' : undefined
+      expect(
+        keybindingMatchesAction(
+          'floatingTerminal.toggle',
+          { key: 'å', code: 'KeyA', control: false, meta: true, alt: true, shift: false },
+          'darwin',
+          undefined,
+          { layoutCharacterForCode: qwertyLayoutCharacterForCode }
+        )
+      ).toBe(true)
+    })
+
+    it('still matches Cmd+Alt+A (#2920) on QWERTY with no layout map (fallback to physical code)', () => {
+      expect(
+        keybindingMatchesAction(
+          'floatingTerminal.toggle',
+          { key: 'å', code: 'KeyA', control: false, meta: true, alt: true, shift: false },
+          'darwin'
+        )
+      ).toBe(true)
+    })
+
+    it('resolves an AZERTY Option chord by the layout character rather than the physical code', () => {
+      // AZERTY's 'a' key sits at physical KeyQ; Option+that key composes 'æ' on macOS AZERTY.
+      const azertyLayoutCharacterForCode = (code: string): string | undefined =>
+        code === 'KeyQ' ? 'a' : undefined
+      expect(
+        keybindingMatchesAction(
+          'floatingTerminal.toggle',
+          { key: 'æ', code: 'KeyQ', control: false, meta: true, alt: true, shift: false },
+          'darwin',
+          undefined,
+          { layoutCharacterForCode: azertyLayoutCharacterForCode }
+        )
+      ).toBe(true)
+    })
+
+    it('does not misfire a Latin Alt shortcut on a non-Latin layout character', () => {
+      // A Cyrillic layout's key at physical KeyZ types 'я'; no Latin letter binding should match through the layout lookup.
+      const cyrillicLayoutCharacterForCode = (code: string): string | undefined =>
+        code === 'KeyZ' ? 'я' : undefined
+      expect(
+        keybindingMatchesAction(
+          'editor.toggleWordWrap',
+          { key: '…', code: 'KeyZ', control: false, meta: false, alt: true, shift: false },
+          'darwin',
+          undefined,
+          { layoutCharacterForCode: cyrillicLayoutCharacterForCode }
+        )
+      ).toBe(false)
+    })
+
+    it('leaves a Windows/Linux Alt chord unaffected by the layout lookup', () => {
+      // Alt does not compose on Windows/Linux, so the logical key is a real letter and the layout lookup is never consulted.
+      const layoutCharacterForCode = (code: string): string | undefined =>
+        code === 'KeyZ' ? ';' : undefined
+      expect(
+        keybindingMatchesAction(
+          'editor.toggleWordWrap',
+          { key: 'z', code: 'KeyZ', control: false, meta: false, alt: true, shift: false },
+          'linux',
+          undefined,
+          { layoutCharacterForCode }
+        )
+      ).toBe(true)
+    })
+
+    it('resolves the bracket case from #4451 through the layout lookup and preserves it with no map', () => {
+      const macOptionLeftBracket = {
+        key: '“',
+        code: 'BracketLeft',
+        control: false,
+        meta: true,
+        alt: true,
+        shift: false
+      }
+      // Layout map agrees with the physical code: BracketLeft types '[' on this (QWERTY) layout.
+      expect(
+        keybindingMatchesAction('tab.previousSameType', macOptionLeftBracket, 'darwin', undefined, {
+          layoutCharacterForCode: (code) => (code === 'BracketLeft' ? '[' : undefined)
+        })
+      ).toBe(true)
+      // No layout map available: falls back to physical code, matching pre-existing behavior.
+      expect(keybindingMatchesAction('tab.previousSameType', macOptionLeftBracket, 'darwin')).toBe(
+        true
+      )
+    })
+  })
 })

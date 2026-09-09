@@ -20,6 +20,7 @@ import {
 } from '../components/right-sidebar/file-search-include-pattern'
 import { usePluginCommands } from '@/store/plugin-panels'
 import { useAppStore } from '../store'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -122,7 +123,8 @@ export function useGlobalKeybindings(args: {
       const matchShortcut = (actionId: KeybindingActionId): boolean =>
         keybindingMatchesAction(actionId, input, shortcutPlatform, keybindings, {
           context,
-          terminalShortcutPolicy
+          terminalShortcutPolicy,
+          layoutCharacterForCode: getLayoutBaseCharacterForCode
         })
       const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
         if (context !== 'terminal' || (terminalShortcutPolicy ?? 'orca-first') !== 'orca-first') {
@@ -199,7 +201,11 @@ export function useGlobalKeybindings(args: {
 
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       if (isFloatingWorkspacePanelFocused()) {
-        const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
+        const floatingMatchOptions: KeybindingMatchOptions = {
+          context,
+          terminalShortcutPolicy,
+          layoutCharacterForCode: getLayoutBaseCharacterForCode
+        }
         if (
           matchFloatingWorkspacePanelChord(
             input,

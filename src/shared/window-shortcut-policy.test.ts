@@ -621,6 +621,24 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'toggleFloatingTerminal' })
   })
 
+  it('resolves the floating terminal chord on QWERTY with a layout map present (#2920 preserved on the layout path)', () => {
+    expect(
+      resolveWindowShortcutAction(
+        {
+          code: 'KeyA',
+          key: 'å',
+          meta: true,
+          control: false,
+          alt: true,
+          shift: false
+        },
+        'darwin',
+        undefined,
+        { layoutCharacterForCode: (code) => (code === 'KeyA' ? 'a' : undefined) }
+      )
+    ).toEqual({ type: 'toggleFloatingTerminal' })
+  })
+
   it('rejects floating terminal chord variants with Shift or opposite primary modifier', () => {
     expect(
       resolveWindowShortcutAction(

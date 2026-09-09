@@ -1,6 +1,11 @@
-import type { KeybindingInput, ModifierToken, ParsedKeybinding } from './types'
+import type {
+  KeybindingInput,
+  LayoutCharacterLookup,
+  ModifierToken,
+  ParsedKeybinding
+} from './types'
 import { getKeybindingPlatform } from './definitions'
-import { hasModifier } from './parser'
+import { hasModifier, normalizeKeyToken } from './parser'
 import {
   canFallBackToPhysicalCode,
   logicalKeyTokenFromInput,
@@ -68,17 +73,26 @@ export function letterKeyMatches(
   input: KeybindingInput,
   letter: string,
   parsed: ParsedKeybinding,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  layoutCharacterForCode?: LayoutCharacterLookup
 ): boolean {
   const logicalKey = logicalKeyTokenFromInput(input)
   if (logicalKey && logicalKey.length === 1 && logicalKey >= 'A' && logicalKey <= 'Z') {
     return logicalKey === letter.toUpperCase()
   }
-  return (
-    (canFallBackToPhysicalCode(input, platform) ||
-      shouldUseMacOptionLetterPhysicalFallback(parsed, input, platform)) &&
-    input.code === `Key${letter.toUpperCase()}`
-  )
+  if (canFallBackToPhysicalCode(input, platform)) {
+    return input.code === `Key${letter.toUpperCase()}`
+  }
+  if (!shouldUseMacOptionLetterPhysicalFallback(parsed, input, platform)) {
+    return false
+  }
+  // Why: the mac-Option composed-character path has no logical key, so resolve the
+  // physical code through the active layout rather than assuming US QWERTY (#2858).
+  const layoutCharacter = layoutCharacterForCode?.(input.code ?? '')
+  if (layoutCharacter) {
+    return layoutCharacter.toUpperCase() === letter.toUpperCase()
+  }
+  return input.code === `Key${letter.toUpperCase()}`
 }
 
 export function digitKeyMatches(
@@ -127,10 +141,11 @@ export function keyMatches(
   parsedKey: string,
   input: KeybindingInput,
   parsed: ParsedKeybinding,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  layoutCharacterForCode?: LayoutCharacterLookup
 ): boolean {
   if (parsedKey.length === 1 && parsedKey >= 'A' && parsedKey <= 'Z') {
-    return letterKeyMatches(input, parsedKey, parsed, platform)
+    return letterKeyMatches(input, parsedKey, parsed, platform, layoutCharacterForCode)
   }
   if (parsedKey.length === 1 && parsedKey >= '0' && parsedKey <= '9') {
     return digitKeyMatches(input, parsedKey, platform)
@@ -152,11 +167,20 @@ export function keyMatches(
       }
       return semanticKey === parsedKey
     }
-    return (
-      (canFallBackToPhysicalCode(input, platform) ||
-        shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
-      physicalPunctuationKey(input) === parsedKey
-    )
+    if (canFallBackToPhysicalCode(input, platform)) {
+      return physicalPunctuationKey(input) === parsedKey
+    }
+    if (!shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) {
+      return false
+    }
+    // Why: the mac-Option composed-character path has no logical key, so resolve the
+    // physical code through the active layout rather than assuming US QWERTY (#2858).
+    const layoutCharacter = layoutCharacterForCode?.(input.code ?? '')
+    const layoutToken = layoutCharacter ? normalizeKeyToken(layoutCharacter) : null
+    if (layoutToken && isPunctuationKeyToken(layoutToken)) {
+      return layoutToken === parsedKey
+    }
+    return physicalPunctuationKey(input) === parsedKey
   }
 
   const logicalKey = logicalKeyTokenFromInput(input)
