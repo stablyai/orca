@@ -13,6 +13,7 @@ import {
   trimAutolinkTrailingPunctuation
 } from './markdown-inline-token-rules'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
+import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 
@@ -224,12 +225,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
             )
           }
           return (
-            <View key={index} style={styles.codeBlock}>
-              {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
-              <Text selectable style={styles.codeText}>
-                {block.text}
-              </Text>
-            </View>
+            <MobileMarkdownCodeBlock key={index} code={block.text} language={block.language} />
           )
         }
         if (block.type === 'image') {
