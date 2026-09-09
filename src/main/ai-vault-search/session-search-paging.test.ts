@@ -87,8 +87,9 @@ describe('a cursor is refused rather than reinterpreted', () => {
   it('rejects a cursor minted before the index moved', async () => {
     const { engine, store } = await withSessions(25)
     const first = engine.search({ query: 'needle', limit: 10 })
-    // Any published write or proven deletion moves the generation on.
-    store.removeFile('/synthetic/absent.jsonl')
+    // A proven deletion of a path this index really held hides a session, which
+    // is exactly the change a cursor must not be allowed to page across.
+    store.removeFile('/synthetic/1.jsonl')
 
     expect(() => engine.search({ query: 'needle', limit: 10, cursor: first.page.cursor! })).toThrow(
       SessionSearchCursorError
@@ -123,6 +124,39 @@ describe('a cursor is refused rather than reinterpreted', () => {
         filters: { sort: 'newest' }
       })
       expect.unreachable('a different sort is a different ranked list')
+    } catch (error) {
+      expect((error as SessionSearchCursorError).rejection).toBe('different-query')
+    }
+  })
+
+  // Every field the ranked list depends on has to be in the key, and a field
+  // that is in the key but never pinned is a field a refactor can drop while
+  // the suite stays green. One case each, through the engine, so the assertion
+  // is about a refused page and not about a hash.
+  it.each([
+    ['scope', { scope: 'conversation' as const }],
+    ['sort', { filters: { sort: 'newest' as const } }],
+    ['agents', { filters: { agents: ['codex' as const] } }],
+    ['scopePaths', { filters: { scopePaths: ['/repo/app'] } }],
+    ['since', { filters: { since: '2026-09-01T00:00:00.000Z' } }]
+  ])('rejects a cursor presented with a different %s', async (_field, changed) => {
+    const { engine } = await withSessions(25)
+    const request: SessionSearchRequest = {
+      query: 'needle',
+      limit: 10,
+      scope: 'all',
+      filters: { sort: 'relevance', agents: ['claude'], scopePaths: ['/'], since: undefined }
+    }
+    const first = engine.search(request)
+    expect(first.page.cursor).not.toBeNull()
+    try {
+      engine.search({
+        ...request,
+        ...changed,
+        filters: { ...request.filters, ...('filters' in changed ? changed.filters : {}) },
+        cursor: first.page.cursor!
+      })
+      expect.unreachable('a narrowing the ranked list depends on must invalidate the cursor')
     } catch (error) {
       expect((error as SessionSearchCursorError).rejection).toBe('different-query')
     }
@@ -196,8 +230,11 @@ describe('the candidate limit is a tunable default, and says when it cut', () =>
 describe('the response carries the snapshot it was built from', () => {
   it('reports the store generation on every result', async () => {
     const { engine, store } = await withSessions(3)
-    expect(engine.search({ query: 'needle' }).generation).toBe(store.generation)
-    store.removeFile('/synthetic/absent.jsonl')
-    expect(engine.search({ query: 'needle' }).generation).toBe(store.generation)
+    const before = engine.search({ query: 'needle' }).generation
+    expect(before).toBe(store.generation)
+    store.removeFile('/synthetic/1.jsonl')
+    const after = engine.search({ query: 'needle' }).generation
+    expect(after).toBe(store.generation)
+    expect(after).toBeGreaterThan(before)
   })
 })
