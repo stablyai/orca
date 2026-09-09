@@ -1,0 +1,130 @@
+import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+
+// ENGINE types, deliberately not in src/shared: nothing here is a wire type.
+// PR 5 owns the public contract and lifts what a caller may actually receive;
+// until then a field can be added, renamed or dropped without a compat story.
+
+export const SESSION_SEARCH_LIMIT_DEFAULT = 20
+export const SESSION_SEARCH_LIMIT_MAX = 100
+// Longer than this is not a query, and FTS5 pays for every term it plans.
+export const SESSION_SEARCH_QUERY_MAX_LENGTH = 512
+
+/**
+ * Which corpus answers the query.
+ *
+ * - `conversation`: user and assistant turns only, from `conversation_fts`.
+ * - `all`: those turns plus tool calls and tool output, and the identifier
+ *   shadow column, from `messages_fts`.
+ *
+ * The engine searches exactly the scope it is given. Switching corpus as the
+ * user types is a UI policy and lives in the panel (PR 7); an engine that
+ * second-guessed the scope would make a result impossible to reproduce from
+ * its own request.
+ */
+export type SessionSearchScope = 'conversation' | 'all'
+
+export type SessionSearchSort = 'relevance' | 'newest'
+
+export type SessionSearchFilters = {
+  agents?: readonly AiVaultAgent[]
+  /** Only sessions whose cwd is that path or inside it. */
+  scopePaths?: readonly string[]
+  /** ISO timestamp; only sessions updated at or after it. */
+  since?: string
+  sort?: SessionSearchSort
+}
+
+export type SessionSearchRequest = {
+  query: string
+  /** Default `all`. */
+  scope?: SessionSearchScope
+  limit?: number
+  /** From a previous response's `page.cursor`; only valid in its own generation. */
+  cursor?: string
+  filters?: SessionSearchFilters
+}
+
+export type SessionSearchRoute = 'phrase' | 'and' | 'or' | 'typo+phrase' | 'typo+and' | 'typo+or'
+
+/**
+ * How the query was executed. Diagnostics, not an answer: PR 5 decides which of
+ * these a caller ever sees (the reviewer's F5/F7 want them behind `debug`).
+ */
+export type SessionSearchPlannerReport = {
+  route: SessionSearchRoute
+  /** Query terms after typo repair, when any were changed. */
+  repairedTerms?: string[]
+  /** The corpus the route ran against; today always the requested scope. */
+  tier: SessionSearchScope
+}
+
+/**
+ * Where a source stands according to the index's own `files` table. The query
+ * path never stats a transcript, so it can report that the index has a live
+ * file record for a session or that it has none, and never that a source is
+ * gone: only a proven deletion may claim `missing`, and proving one is the
+ * indexer's job (docs/reference/ssh-execution-boundary.md).
+ */
+export type SessionSearchSourcePresence = 'present' | 'unverifiable'
+
+export type SessionSearchEvidence = {
+  role: TranscriptMessageRole
+  timestamp: string | null
+  /** FTS5 snippet with the matched terms wrapped in `[[` `]]`. */
+  snippet: string
+  /** The snippet hit the engine's per-hit ceiling and was cut. */
+  snippetTruncated?: boolean
+}
+
+export type SessionSearchHit = {
+  agent: AiVaultAgent
+  sessionId: string
+  filePath: string
+  codexHome: string | null
+  title: string
+  cwd: string | null
+  branch: string | null
+  updatedAt: string | null
+  messageCount: number
+  resumeCommand: string
+  score: number
+  /** Sessions folded into this hit (forks sharing an opening prefix); absent when unique. */
+  duplicateCount?: number
+  source: SessionSearchSourcePresence
+  /** Null when the operators alone put this session on the page, with no text match. */
+  evidence: SessionSearchEvidence | null
+}
+
+export type SessionSearchPage = {
+  /** Null when this page is the last one. */
+  cursor: string | null
+  hasMore: boolean
+}
+
+export type SessionSearchTruncation = {
+  /**
+   * Ranking saw only the first `sessionCandidateLimit` sessions, so a session
+   * past that cut cannot appear on any page of this query.
+   */
+  candidates: boolean
+  /** Hits on this page whose snippet was cut. */
+  snippets: number
+}
+
+export type SessionSearchResponse = {
+  hits: SessionSearchHit[]
+  planner: SessionSearchPlannerReport
+  page: SessionSearchPage
+  truncated: SessionSearchTruncation
+  /** The index snapshot these hits came from; a cursor is only valid within it. */
+  generation: number
+  durationMs: number
+}
+
+export function resolveSessionSearchLimit(limit: number | undefined): number {
+  // Why clamped here and not at the caller: a non-positive limit becomes
+  // `slice(0, -1)`, which silently drops the last hit of every page.
+  const requested = Number.isInteger(limit) ? (limit as number) : SESSION_SEARCH_LIMIT_DEFAULT
+  return Math.min(Math.max(1, requested), SESSION_SEARCH_LIMIT_MAX)
+}
