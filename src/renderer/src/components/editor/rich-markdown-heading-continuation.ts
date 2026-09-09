@@ -29,6 +29,15 @@ export function exitHeadingOnEnter(editor: Editor): boolean {
   const headingEnd = $from.after($from.depth)
   const offset = $from.parentOffset
 
+  // Why: an empty heading satisfies both edge branches, and the start branch
+  // would leave the caret in a heading with nothing to push down.
+  if (heading.content.size === 0) {
+    const tr = state.tr.setBlockType(headingStart + 1, headingStart + 1, paragraphType)
+    tr.setSelection(TextSelection.create(tr.doc, headingStart + 1))
+    view.dispatch(tr.scrollIntoView())
+    return true
+  }
+
   if (offset === 0) {
     const paragraph = paragraphType.create()
     const tr = state.tr.insert(headingStart, paragraph)
