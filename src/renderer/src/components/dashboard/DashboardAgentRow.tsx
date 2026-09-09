@@ -15,6 +15,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { useAgentRowDisplayFields } from './use-agent-row-display-fields'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -92,6 +93,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
+  const { showProviderIcon, showSecondaryStatus, showModel, showRelativeTime } =
+    useAgentRowDisplayFields()
   const [expanded, setExpanded] = useState(false)
   const handleToggleExpanded = useCallback(() => {
     setExpanded((prev) => !prev)
@@ -131,16 +134,18 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state, agent.entry.workingMode))
-  const model = agent.entry.model?.trim() ?? ''
+  const model = showModel ? (agent.entry.model?.trim() ?? '') : ''
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
   // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
   // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
   // Monitoring is excluded too: the lead turn is over, so its last tool line is stale.
-  const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring
+  const showsTool = showSecondaryStatus && showsAgentToolPreview(agent.state) && !isMonitoring
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
   const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
-  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  const lastAssistantMessage = showSecondaryStatus
+    ? (agent.entry.lastAssistantMessage?.trim() ?? '')
+    : ''
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
   const isLineageChild = lineage?.depth === 1
@@ -159,12 +164,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState, now)
   // Why: the elapsed gap is the whole content of an `unverifiable` row, so it rides the
   // row's own timestamp slot rather than hiding in a hover tooltip.
-  const noUpdateLabel = dotState === 'unverifiable' ? agentNoUpdateLabel(agent.entry, now) : null
+  const noUpdateLabel =
+    showRelativeTime && dotState === 'unverifiable' ? agentNoUpdateLabel(agent.entry, now) : null
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
 
-  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
-  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
+  const startedTimeAgo =
+    showRelativeTime && startedAt !== null ? formatTimeAgo(startedAt, now) : null
+  const doneTimeAgo = showRelativeTime && doneAt !== null ? formatTimeAgo(doneAt, now) : null
   const relativeTimestamp = noUpdateLabel ?? doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = noUpdateLabel ? [noUpdateLabel] : []
   if (startedTimeAgo !== null) {
@@ -247,7 +254,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           </TooltipContent>
         </Tooltip>
         {/* Why: subagent rows skip the icon — agentType holds a child name, not an iconable agent, so it would render the unknown "?" glyph. */}
-        {!hideIdentityIcon && agent.rowSource !== 'subagent' && (
+        {showProviderIcon && !hideIdentityIcon && agent.rowSource !== 'subagent' && (
           <span className="inline-flex shrink-0" title={identityTitle}>
             <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={14} />
           </span>
@@ -304,7 +311,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       />
       <DashboardAgentRowMessage
         expanded={expanded}
-        isInterrupted={isInterrupted}
+        isInterrupted={showSecondaryStatus && isInterrupted}
         lastAssistantMessage={lastAssistantMessage}
       />
     </div>

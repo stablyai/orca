@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/agents-view-thread-filters'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
+import { AGENT_ROW_DISPLAY_FIELDS } from '../../../../shared/agent-row-display-fields'
 import {
   normalizeWorktreeCardProperties,
   WORKTREE_CARD_PROPERTIES
@@ -153,6 +154,7 @@ const UiUpdateFields = z
     worktreeCardProperties: WorktreeCardProperties.optional(),
     _worktreeCardModeDefaulted: z.boolean().optional(),
     agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
+    agentRowDisplayFields: z.array(z.enum(AGENT_ROW_DISPLAY_FIELDS)).optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),

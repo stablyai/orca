@@ -2,6 +2,7 @@ import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-
 import type {
   ActivityGroupBy,
   AgentActivityDisplayMode,
+  AgentRowDisplayField,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   StatusBarItem,
@@ -87,6 +88,8 @@ export type UISlicePreferences = {
   setWorktreeCardProperties: (properties: readonly WorktreeCardProperty[]) => void
   agentActivityDisplayMode: AgentActivityDisplayMode
   setAgentActivityDisplayMode: (mode: AgentActivityDisplayMode) => void
+  agentRowDisplayFields: AgentRowDisplayField[]
+  setAgentRowDisplayFields: (fields: readonly AgentRowDisplayField[]) => void
   workspaceStatuses: WorkspaceStatusDefinition[]
   setWorkspaceStatuses: (statuses: WorkspaceStatusDefinition[]) => void
   workspaceBoardOpacity: number

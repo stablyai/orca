@@ -5506,6 +5506,23 @@
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
         },
+        "WorktreeCardDisplayMenuSection": {
+          "511f830c30": "Agent row fields"
+        },
+        "agent": {
+          "row": {
+            "display": {
+              "field": {
+                "options": {
+                  "532b553f3c": "Provider icon",
+                  "48988dc775": "Secondary status",
+                  "345859b152": "Model label",
+                  "fc775c8e7a": "Relative time"
+                }
+              }
+            }
+          }
+        },
         "WorktreeCardReviewDetailSection": {
           "copyLink": "Copy link",
           "reviewHeader": "{{value0}} #{{value1}}"

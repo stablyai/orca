@@ -4,6 +4,10 @@ import {
   DEFAULT_AGENTS_READ_FILTER
 } from '../../../../../shared/agents-view-thread-filters'
 import {
+  DEFAULT_AGENT_ROW_DISPLAY_FIELDS,
+  normalizeAgentRowDisplayFields
+} from '../../../../../shared/agent-row-display-fields'
+import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
@@ -233,6 +237,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeAgentActivityDisplayMode(mode)
       window.api.ui.set({ agentActivityDisplayMode: normalized }).catch(console.error)
       set({ agentActivityDisplayMode: normalized })
+    },
+    agentRowDisplayFields: [...DEFAULT_AGENT_ROW_DISPLAY_FIELDS],
+    setAgentRowDisplayFields: (fields) => {
+      const normalized = normalizeAgentRowDisplayFields(fields)
+      window.api.ui.set({ agentRowDisplayFields: normalized }).catch(console.error)
+      set({ agentRowDisplayFields: normalized })
     },
 
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
