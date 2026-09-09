@@ -1,5 +1,6 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
+import { isOfficeDocument } from '../../../../shared/office-file-extensions'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { detectLanguage } from '@/lib/language-detect'
 import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
@@ -195,6 +196,21 @@ export function openDetectedFilePath(
       // cannot launch a remote path, so the direct gesture must reach the same download.
       await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath)
       return
+    }
+
+    // Why before the system-default branch: an Office document has no text form the editor can
+    // fall back to, so a click on one is unambiguously a request to look at the rendered document.
+    if (isOfficeDocument(mappedFilePath)) {
+      const officePlan = getWorkspaceFilePreviewPlan(
+        useAppStore.getState(),
+        worktreeId,
+        mappedFilePath
+      )
+      if (officePlan.status === 'office-preview' || officePlan.status === 'office-unrenderable') {
+        activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
+        openFileInBrowserTab({ filePath: mappedFilePath, worktreeId })
+        return
+      }
     }
 
     // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,

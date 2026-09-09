@@ -6,6 +6,7 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
+import { OfficeSkillsSetting } from './OfficeSkillsSetting'
 import { AgentCacheTimerSection } from './AgentCacheTimerSection'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import { buildCodexSessionSourceHomeControl } from './codex-session-source-home-control'
@@ -266,6 +267,7 @@ export function AgentsPane({
           updateSettings(applyAgentPermissionMode({ mode, agentDefaultArgs, agentDefaultEnv }))
         }
       />
+      <OfficeSkillsSetting />
       <AgentDetectionCatalog
         detectedAgents={detectedAgents}
         undetectedAgents={undetectedAgents}

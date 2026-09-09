@@ -146,6 +146,11 @@ async function readRuntimeDocPreviewFile(
   }
 }
 
+/** Slash-normalized and leading-slash-free, so one document has exactly one key. */
+function normalizeInlineKey(relativePath: string): string {
+  return relativePath.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
 function notFoundOutcome(message = 'Not found'): DocPreviewReadOutcome {
   return { ok: false, status: 404, reason: 'unreadable', message }
 }
@@ -155,6 +160,15 @@ export async function readDocPreviewFile(
   grant: DocPreviewGrant,
   relativePath: string
 ): Promise<DocPreviewReadOutcome> {
+  if (grant.owner.kind === 'inline') {
+    // Answered before any path resolution: an inline grant addresses a map main already holds, and
+    // running it through the filesystem containment machinery would only invent a boundary that
+    // does not exist. A request naming anything the map does not hold is simply not found.
+    const document = grant.owner.documents.get(normalizeInlineKey(relativePath))
+    return document
+      ? { ok: true, bytes: document.bytes, contentType: document.contentType }
+      : notFoundOutcome()
+  }
   const candidatePath = resolveDocPreviewCandidatePath(grant, relativePath)
   if (!candidatePath) {
     return notFoundOutcome()

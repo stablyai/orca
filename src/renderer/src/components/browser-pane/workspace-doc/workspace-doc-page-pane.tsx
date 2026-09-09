@@ -2,7 +2,9 @@ import { useMemo } from 'react'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
+import { isOfficeDocument } from '../../../../../shared/office-file-extensions'
 import { HtmlDocPreview } from './HtmlDocPreview'
+import { OfficePreviewPane } from './office-preview-pane'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
 
 /**
@@ -41,6 +43,24 @@ export function WorkspaceDocPagePane({
 
   if (!docLocation) {
     return null
+  }
+
+  // Why a sibling surface and not a mode inside HtmlDocPreview: an Office document is rendered on
+  // the owning host before there is anything to show, and it has no address to edit and no
+  // in-document history. The two share the preview partition and the webview attach, not chrome.
+  if (isOfficeDocument(filePath)) {
+    return (
+      <div className="absolute inset-0 flex min-h-0 flex-col" hidden={!isActive}>
+        <OfficePreviewPane
+          previewId={page.id}
+          workspaceId={page.workspaceId}
+          filePath={filePath}
+          relativePath={relativePath}
+          worktreeId={worktreeId}
+          runtimeEnvironmentId={runtimeEnvironmentId}
+        />
+      </div>
+    )
   }
 
   return (
