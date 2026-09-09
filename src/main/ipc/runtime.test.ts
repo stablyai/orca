@@ -171,6 +171,41 @@ describe('registerRuntimeHandlers', () => {
     expect(result).toMatchObject({ ok: true, result: { tabs: [claudeTab] } })
   })
 
+  it('lets the same-version desktop create and list blank-terminal automations', async () => {
+    const input = {
+      name: 'Shell check',
+      prompt: 'echo ready',
+      agentId: null,
+      repo: 'repo-1',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 1
+    }
+    const automation = { id: 'automation-shell', ...input }
+    const listing = {
+      automations: [automation],
+      items: [{ automationId: automation.id, selector: { kind: 'self' } }]
+    }
+    const runtime = {
+      getRuntimeId: () => 'runtime-1',
+      createAutomation: vi.fn().mockResolvedValue(automation),
+      listAutomationsForScope: vi.fn().mockReturnValue(listing)
+    }
+    registerRuntimeHandlers(runtime as never)
+    const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')![1]
+
+    const event = runtimeCallEvent()
+    await expect(
+      handler(event, { method: 'automation.create', params: input })
+    ).resolves.toMatchObject({ ok: true, result: { automation } })
+    expect(runtime.createAutomation).toHaveBeenCalledWith(input)
+    await expect(
+      handler(event, {
+        method: 'automation.list',
+        params: { selector: { kind: 'self' } }
+      })
+    ).resolves.toMatchObject({ ok: true, result: listing })
+  })
+
   it('registers project group runtime RPC methods for local desktop callers', async () => {
     const runtime = {
       syncWindowGraph: vi.fn(),

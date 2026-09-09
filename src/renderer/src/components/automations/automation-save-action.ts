@@ -63,6 +63,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     if (
       editingAutomationId === null &&
       !isHermesSave &&
+      draft.agentId !== null &&
       !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
     ) {
       toast.error(

@@ -34,6 +34,7 @@ import {
   type RecognizedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
+import { AUTOMATION_SHELL_COMMAND_ENV } from '../../../shared/automation-shell-startup'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
@@ -168,6 +169,9 @@ export function createPtyShellLaunchPlan(
       }
       if (env.CLAUDE_CONFIG_DIR) {
         addWslEnvKeys(env, ['CLAUDE_CONFIG_DIR'])
+      }
+      if (env[AUTOMATION_SHELL_COMMAND_ENV] !== undefined) {
+        addWslEnvKeys(env, [AUTOMATION_SHELL_COMMAND_ENV])
       }
       if (env[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
         addWslEnvKeys(env, [ORCA_HERMES_STARTUP_QUERY_ENV])

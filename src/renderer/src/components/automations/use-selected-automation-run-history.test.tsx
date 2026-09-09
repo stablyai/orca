@@ -160,6 +160,42 @@ describe('useSelectedAutomationRunHistory', () => {
     })
   })
 
+  it('refreshes selected history when the host publishes a run update', async () => {
+    mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
+    const input = makeInput()
+    const rerender = await render(input)
+    const run = makeRun({ id: 'run-1', automationId: 'a-1', status: 'completed' })
+    mocks.dispatch.mockResolvedValue({ ok: true, value: [run] })
+
+    await rerender({
+      ...input,
+      selected: {
+        ...DESKTOP_ROW,
+        automation: {
+          ...DESKTOP_ROW.automation,
+          updatedAt: DESKTOP_ROW.automation.updatedAt + 1
+        }
+      }
+    })
+
+    expect(mocks.dispatch).toHaveBeenCalledTimes(2)
+    expect(settled(input).at(-1)?.runs).toEqual([run])
+  })
+
+  it('does not refetch an unchanged revision when the catalog is reprojected', async () => {
+    mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
+    const input = makeInput()
+    const rerender = await render(input)
+
+    await rerender({
+      ...input,
+      selected: { ...DESKTOP_ROW, automation: { ...DESKTOP_ROW.automation } },
+      context: { ...input.context, capturedOwners: new Map(input.context.capturedOwners) }
+    })
+
+    expect(mocks.dispatch).toHaveBeenCalledOnce()
+  })
+
   it('names the owner the history was read under', async () => {
     mocks.dispatch.mockResolvedValue({ ok: true, value: [] })
     const owner: AutomationOwnerRef = {

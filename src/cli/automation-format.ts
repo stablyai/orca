@@ -54,7 +54,7 @@ export function formatAutomationList(result: AutomationListPayload): string {
       const status = automation.enabled ? 'enabled' : 'disabled'
       const item = hosts.get(automation.id)
       const host = item ? `\nhost: ${formatListItemSelector(item)}` : ''
-      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}${host}`
+      return `${automation.id}  ${automation.name}  ${automation.agentId ?? 'blank'}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}${host}`
     })
     .join('\n\n')
 }
@@ -75,7 +75,7 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
   return [
     `id: ${automation.id}`,
     `name: ${automation.name}`,
-    `provider: ${automation.agentId}`,
+    `provider: ${automation.agentId ?? 'blank'}`,
     `enabled: ${automation.enabled}`,
     `schedule: ${formatAutomationSchedule(automation.rrule)}`,
     `rrule: ${automation.rrule}`,

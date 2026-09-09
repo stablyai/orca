@@ -10,6 +10,9 @@ import { getRegisteredSshState } from '../ssh/ssh-target-registry'
 import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import { resolveWorktreeLaunchHost } from './worktree-launch-host-repo'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { buildAutomationShellStartup } from '../../shared/automation-shell-startup'
+import { resolveStartupShell } from '../../shared/tui-agent-startup'
+import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 
 export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
   async dedupeTerminalCreate(
@@ -143,8 +146,21 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string }
+    opts: { agent: TuiAgent | null; prompt: string; title?: string }
   ): Promise<RuntimeTerminalCreate> {
+    if (opts.agent === null) {
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+      const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
+      const shell = resolveLocalWindowsAgentStartupShell({
+        platform,
+        isRemote: Boolean(workspace.connectionId),
+        terminalWindowsShell: this.store?.getSettings().terminalWindowsShell
+      })
+      return await this.createTerminal(worktreeSelector, {
+        ...buildAutomationShellStartup(opts.prompt, resolveStartupShell(platform, shell)),
+        title: opts.title
+      })
+    }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     // Why: the trust write lands in an agent's config on the machine that runs it, keyed by the
     // workspace path. `getRepo(id)` is host-blind, so reading `connectionId` off it wrote a remote

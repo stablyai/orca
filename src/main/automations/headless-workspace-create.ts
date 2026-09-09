@@ -38,9 +38,13 @@ export function buildHeadlessAutomationWorktreeCreateArgs({
     baseBranch: automation.baseBranch ?? undefined,
     setupDecision: automation.setupDecision ?? 'skip',
     activate: false,
-    createdWithAgent: automation.agentId,
-    startupAgent: automation.agentId,
-    startupPrompt: automation.prompt,
+    ...(automation.agentId !== null
+      ? {
+          createdWithAgent: automation.agentId,
+          startupAgent: automation.agentId,
+          startupPrompt: automation.prompt
+        }
+      : {}),
     telemetrySource: 'unknown',
     automationProvenance: buildAutomationWorkspaceProvenance(automation, run, repo, createdAt)
   }

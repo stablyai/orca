@@ -37,7 +37,7 @@ export const AUTOMATION_EDITOR_SEGMENTED_ITEM_CLASS =
 export type AutomationDraft = {
   name: string
   prompt: string
-  agentId: TuiAgent
+  agentId: TuiAgent | null
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string

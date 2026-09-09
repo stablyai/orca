@@ -3,7 +3,8 @@ import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../../shared/automation-o
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  AUTOMATION_SHELL_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 
 const callRuntimeRpc = vi.fn()
@@ -29,7 +30,8 @@ const ALL_CAPABILITIES = {
   capabilities: [
     AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
     AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-    AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+    AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+    AUTOMATION_SHELL_RUNTIME_CAPABILITY
   ]
 }
 
@@ -245,6 +247,32 @@ describe('capability probe dedupe', () => {
 })
 
 describe('owner-fenced mutations', () => {
+  it('checks host support before saving a blank-terminal automation', async () => {
+    const { createAutomationForDestination } = await client()
+    const input = {
+      name: 'Shell check',
+      prompt: 'echo ready',
+      agentId: null,
+      projectId: 'repo-1',
+      workspaceMode: 'new_per_run' as const,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: 1
+    }
+    getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
+    callRuntimeRpc.mockResolvedValue({ automation: { id: 'a1', ...input } })
+
+    await createAutomationForDestination(RUNTIME, input, { selector: { kind: 'self' } })
+
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledWith('env-1', expect.any(Number))
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'automation.create',
+      expect.objectContaining({ agentId: null, destination: { selector: { kind: 'self' } } }),
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 4 })
+    )
+  })
+
   it('sends the captured owner with the mutation', async () => {
     const { updateAutomationForOwner } = await client()
     getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)

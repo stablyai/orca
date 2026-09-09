@@ -95,7 +95,7 @@ export type Automation = {
   name: string
   prompt: string
   precheck: AutomationPrecheck | null
-  agentId: TuiAgent
+  agentId: TuiAgent | null
   /** Why: runContext carries the logical project + host setup identity for
    *  multi-host projects; projectId remains only as the legacy repo-id storage
    *  field for pre-host-context automations.
@@ -182,7 +182,7 @@ export type AutomationCreateInput = {
   name: string
   prompt: string
   precheck?: AutomationPrecheck | null
-  agentId: TuiAgent
+  agentId: TuiAgent | null
   runContext?: WorkspaceRunContext | null
   sourceContext?: TaskSourceContext | null
   /** @deprecated Legacy repo-id compatibility field required for older stored

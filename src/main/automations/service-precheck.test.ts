@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { AutomationService } from './service'
+import type * as PrecheckRunnerModule from './precheck-runner'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 import { createAutomationRunWriter } from './automation-run-writer'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
@@ -22,7 +23,8 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', () => ({
+vi.mock('./precheck-runner', async (importOriginal) => ({
+  ...(await importOriginal<typeof PrecheckRunnerModule>()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))
 
@@ -155,10 +157,18 @@ describe('AutomationService prechecks', () => {
 
     const result = await service.runPrecheck(automation.id, run.id)
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       command: 'test -f ready',
       exitCode: null,
-      error: 'Project path for the selected automation host has changed.'
+      timedOut: false,
+      durationMs: 0,
+      stdout: '',
+      stderr: '',
+      stdoutTruncated: false,
+      stderrTruncated: false,
+      error: 'Project path for the selected automation host has changed.',
+      startedAt: Date.now(),
+      completedAt: Date.now()
     })
     expect(runAutomationPrecheckMock).not.toHaveBeenCalled()
   })

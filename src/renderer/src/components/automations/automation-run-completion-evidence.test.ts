@@ -63,10 +63,22 @@ function retained(status: AgentStatusEntry): RetainedAgentEntry {
 }
 
 describe('automation run completion evidence (STA-3386)', () => {
+  it('does not complete a shell command from an agent started inside that command', () => {
+    expect(
+      hasAutomationRunCompletionEvidence({
+        agentId: null,
+        run: run(),
+        dispatchedAt: 1_000,
+        agentStatusByPaneKey: { [PANE]: entry() },
+        retainedAgentsByPaneKey: { [PANE]: retained(entry()) }
+      })
+    ).toBe(false)
+  })
   it('ignores live and retained session-boundary done rows', () => {
     const boundary = entry({ sessionBoundary: true })
     expect(
       hasAutomationRunCompletionEvidence({
+        agentId: 'claude',
         run: run(),
         dispatchedAt: 1_000,
         agentStatusByPaneKey: { [PANE]: boundary },
@@ -78,6 +90,7 @@ describe('automation run completion evidence (STA-3386)', () => {
   it('accepts a real done after dispatch', () => {
     expect(
       hasAutomationRunCompletionEvidence({
+        agentId: 'claude',
         run: run(),
         dispatchedAt: 1_000,
         agentStatusByPaneKey: { [PANE]: entry() },

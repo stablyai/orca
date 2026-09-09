@@ -101,7 +101,10 @@ export function createAutomation(
       input.workspaceMode,
       input.setupDecision
     ),
-    reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
+    reuseSession:
+      input.agentId !== null && input.workspaceMode === 'existing'
+        ? (input.reuseSession ?? false)
+        : false,
     timezone: input.timezone,
     rrule: input.rrule,
     dtstart: input.dtstart,
@@ -206,6 +209,7 @@ export function updateAutomation(
           : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
         : undefined,
     reuseSession:
+      (definedUpdates.agentId !== undefined ? definedUpdates.agentId : current.agentId) !== null &&
       workspaceMode === 'existing'
         ? (updates.reuseSession ?? current.reuseSession ?? false)
         : false,

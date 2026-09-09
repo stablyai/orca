@@ -4,8 +4,8 @@
  * The refetch policy is a string key rather than the objects the fetch reads:
  * the dispatch context is rebuilt on every cache reprojection, and keying an
  * effect on it re-asks the same host for the same history in a loop. What
- * actually decides the request is the row, the owner it was listed under, and
- * the host a navigation named — so those, and only those, are the key.
+ * actually decides the request is the row and its revision, the owner it was
+ * listed under, and the host a navigation named — so those are the key.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -72,6 +72,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     automationId && rowKey
       ? [
           rowKey,
+          input.selected?.automation.updatedAt,
           capturedAutomationOwnerKey(capturedAutomationOwner(input.context.capturedOwners, rowKey)),
           navigationHostId(input.navigation, automationId) ?? ''
         ].join('|')

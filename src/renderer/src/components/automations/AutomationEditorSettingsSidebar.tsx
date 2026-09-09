@@ -102,7 +102,11 @@ export function AutomationEditorSettingsSidebar({
                   agents={visibleAgents}
                   value={draft.agentId}
                   onValueChange={(agentId) =>
-                    agentId && onDraftChange((current) => ({ ...current, agentId }))
+                    onDraftChange((current) => ({
+                      ...current,
+                      agentId,
+                      reuseSession: agentId !== null && current.reuseSession
+                    }))
                   }
                   defaultAgent={settings?.defaultTuiAgent ?? null}
                   triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}

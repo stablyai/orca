@@ -120,6 +120,22 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('preserves --provider blank as an explicit null rather than an omitted update', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_owner', { automation: { id: 'auto-1', agentId: 'codex' } }),
+      okFixture('req_edit', { automation: { id: 'auto-1', agentId: null } })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['automations', 'edit', 'auto-1', '--provider', 'blank', '--json'], '/tmp/repo')
+
+    expect(callMock).toHaveBeenCalledWith('automation.update', {
+      id: 'auto-1',
+      updates: expect.objectContaining({ agentId: null })
+    })
+  })
+
   it('rejects ambiguous positional and flag automation ids before dispatch', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const priorExitCode = process.exitCode

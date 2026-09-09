@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AUTOMATION_SHELL_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 type StreamRecord = {
+  clientCapabilities: readonly string[] | undefined
   connectionId: string | undefined
   emit: (response: string) => void
   settled: boolean
@@ -39,9 +41,14 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
     dispatchStreaming(
       request: { id: string },
       emit: (response: string) => void,
-      options: { connectionId?: string; signal: AbortSignal }
+      options: {
+        clientCapabilities?: readonly string[]
+        connectionId?: string
+        signal: AbortSignal
+      }
     ): Promise<void> {
       const record: StreamRecord = {
+        clientCapabilities: options.clientCapabilities,
         connectionId: options.connectionId,
         emit,
         settled: false,
@@ -155,6 +162,14 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
     streams.length = 0
     unaryConnections.length = 0
     registerRuntimeHandlers({ cleanupSubscriptionsForConnection: vi.fn() } as never)
+  })
+
+  it('advertises shell support on same-version desktop subscriptions', () => {
+    const harness = createSender(1)
+    subscribe(harness.sender, 'sub-shell')
+
+    expect(streamFor('sub-shell').clientCapabilities).toContain(AUTOMATION_SHELL_RUNTIME_CAPABILITY)
+    harness.destroy()
   })
 
   it('aborts a live stream once its sender commits a navigation', () => {

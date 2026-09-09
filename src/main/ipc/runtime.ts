@@ -11,6 +11,7 @@ import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import {
+  AUTOMATION_SHELL_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
@@ -81,7 +82,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           connectionId: desktopSenders.connectionIdFor(event.sender),
           clientCapabilities: [
             STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-            CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+            CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+            AUTOMATION_SHELL_RUNTIME_CAPABILITY
           ]
         }
       )) as RuntimeRpcResponse<unknown>
@@ -129,7 +131,8 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
             connectionId,
             clientCapabilities: [
               STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-              CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+              CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+              AUTOMATION_SHELL_RUNTIME_CAPABILITY
             ]
           }
         )

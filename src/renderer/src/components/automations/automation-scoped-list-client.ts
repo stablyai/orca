@@ -10,6 +10,7 @@
  */
 
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { AUTOMATION_SHELL_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type {
   Automation,
   AutomationCreateInput,
@@ -218,6 +219,13 @@ async function updateFenced(
   destination?: AutomationDestination
 ): Promise<Automation> {
   await assertOwnerFencingSupported(authority)
+  if (updates.agentId === null) {
+    await assertAuthorityCapability(
+      authority,
+      AUTOMATION_SHELL_RUNTIME_CAPABILITY,
+      'Blank-terminal automations require a newer Orca server. Update the host and try again.'
+    )
+  }
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
     id,
     updates: toRuntimeAutomationUpdateInput(updates),
@@ -320,6 +328,13 @@ export async function createAutomationForDestination(
     await assertAutomationCreateIdempotencySupported(authority)
   }
   await assertOwnerFencingSupported(authority)
+  if (input.agentId === null) {
+    await assertAuthorityCapability(
+      authority,
+      AUTOMATION_SHELL_RUNTIME_CAPABILITY,
+      'Blank-terminal automations require a newer Orca server. Update the host and try again.'
+    )
+  }
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
     ...toRuntimeAutomationCreateInput(input),
     destination

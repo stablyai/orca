@@ -5,7 +5,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 export type LaunchAgentBackgroundSessionArgs = {
-  agent: TuiAgent
+  agent: TuiAgent | null
   worktreeId: string
   prompt?: string
   launchSource?: LaunchSource
@@ -19,6 +19,6 @@ export type LaunchAgentBackgroundSessionResult = {
   tabId: string
   paneKey: string
   ptyId: string
-  startupPlan: AgentStartupPlan
+  startupPlan: AgentStartupPlan | null
   terminalOwnership: AutomationTerminalOwnership | null
 }

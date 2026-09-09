@@ -50,12 +50,12 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
 
 type TestStore = Awaited<ReturnType<typeof createStore>>
 
-function createAutomation(store: TestStore): Automation {
+function createAutomation(store: TestStore, agentId: Automation['agentId'] = 'claude'): Automation {
   store.addRepo(makeRepo())
   return store.createAutomation({
     name: 'Nightly check',
     prompt: 'Check the repo',
-    agentId: 'claude',
+    agentId,
     projectId: 'r1',
     workspaceMode: 'existing',
     workspaceId: 'wt1',
@@ -118,6 +118,40 @@ describe('authority-owned automation run completion', () => {
     })
     service.stop()
   })
+
+  it.each(['renderer', 'headless', 'retained'] as const)(
+    'keeps %s shell runs out of the agent-idle completion watcher',
+    async (mode) => {
+      const store = await createStore()
+      const automation = createAutomation(store, null)
+      const observer = createObserver(async () => ({ status: 'completed' }))
+      const resolveTerminal = vi.spyOn(observer, 'resolveRunTerminal')
+      const service = new AutomationService(store, {
+        terminalObserver: observer,
+        headlessDispatcher: mode === 'headless' ? async () => ({ ...LAUNCH_TARGET }) : undefined
+      })
+
+      try {
+        let run: AutomationRun
+        if (mode === 'headless') {
+          run = await service.runNow(automation.id)
+        } else {
+          run = store.createAutomationRun(automation, Date.now(), 'manual')
+          const result = { runId: run.id, status: 'dispatched' as const, ...LAUNCH_TARGET }
+          if (mode === 'renderer') {
+            await service.markDispatchResult(result)
+          } else {
+            store.updateAutomationRun(result)
+            service.start()
+          }
+        }
+        expect(resolveTerminal).not.toHaveBeenCalled()
+        expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
+      } finally {
+        service.stop()
+      }
+    }
+  )
 
   it('leaves a headless dispatched run alone when the authority cannot observe it', async () => {
     const store = await createStore()
