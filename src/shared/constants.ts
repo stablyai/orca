@@ -11,6 +11,7 @@ import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
+import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
 import { buildDefaultSettings } from './default-global-settings'
@@ -170,12 +171,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       typeof process !== 'undefined' && process.platform === 'linux',
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
-    terminalActivePaneOpacity: 1,
-    terminalPaneOpacityTransitionMs: 140,
-    terminalDividerThicknessPx: 3,
-    terminalActivePaneBorderEnabled: false,
-    terminalActivePaneBorderColor: '',
-    // Why: Windows paste-on-right-click matches native convention; macOS/Linux keep right-click for the context menu.
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),
     voice: getDefaultVoiceSettings()
@@ -275,6 +270,13 @@ export function getDefaultUIState(): PersistedUIState {
     alwaysShowDefaultBranchWorkspace: true,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
+    agentsVisibleHostIds: null,
+    agentsFilterRepoIds: [],
+    agentsShowChildAgents: false,
+    agentsCompactMode: true,
+    agentsShowSearch: true,
+    agentsReadFilter: DEFAULT_AGENTS_READ_FILTER,
+    agentsGroupBy: DEFAULT_AGENTS_GROUP_BY,
     collapsedGroups: [],
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,
@@ -298,6 +300,8 @@ export function getDefaultUIState(): PersistedUIState {
     trustedOrcaHooks: {},
     setupScriptPromptDismissedRepoIds: [],
     acknowledgedAgentsByPaneKey: {},
+    activityClearedAtByPaneKey: {},
+    manuallyUnreadTurnsByPaneKey: {},
     setupGuideSidebarDismissed: false,
     setupGuideBrowserMilestoneMigrated: true,
     setupGuideBrowserMilestoneLegacyComplete: false,

@@ -31,7 +31,8 @@ export async function startGitCommonWatch(
   visibility: WorktreePollerWindowVisibility,
   onFullScan?: () => void,
   getStatusRefPaths: () => readonly string[] = () => [],
-  onWatchError?: (error: Error) => void
+  onWatchError?: (error: Error) => void,
+  onOverflow?: () => void
 ): Promise<WorktreeBaseSubscription> {
   if (supportsNarrowWatch(platform)) {
     const [narrowWatch, primaryWatch] = await Promise.all([
@@ -42,7 +43,8 @@ export async function startGitCommonWatch(
         platform,
         visibility,
         onFullScan,
-        onWatchError
+        onWatchError,
+        onOverflow
       ),
       startGitCommonPrimaryWatch(
         target.path,
@@ -60,6 +62,8 @@ export async function startGitCommonWatch(
       }
     }
   }
+  // Why: Electron only ships darwin/linux/win32, all covered by NARROW_WATCH_PLATFORMS
+  // above, so this branch is defensive dead code in production, not a reachable fallback.
   return startGitCommonPolling(
     target.path,
     onEvents,

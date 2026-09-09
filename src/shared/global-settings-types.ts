@@ -42,6 +42,9 @@ import type {
   WorktreeVisibilitySourcePreferences
 } from './repo-types'
 
+/** MiniMax account region used to select the quota endpoint. */
+export type MiniMaxEndpoint = 'overseas' | 'cn'
+
 export type WorktreeVisibilityDefaults = {
   /** Default for worktrees outside a recognized source. */
   external?: ExternalWorktreeVisibility
@@ -143,6 +146,10 @@ export type GlobalSettings = {
   terminalActivePaneBorderEnabled?: boolean
   terminalActivePaneBorderColor?: string
   terminalBackgroundOpacity?: number
+  /** xterm minimumContrastRatio floor for terminal panes (#10754). Undefined keeps the automatic,
+   *  background-luminance-gated floor (3 dark / 4.5 light); 1 disables contrast correction so TUIs
+   *  that rely on deliberately low contrast (Powerline seams, dimmed secondary text) render as sent. */
+  terminalMinimumContrastRatio?: number
   terminalColorOverrides?: TerminalColorOverrides
   terminalPaddingX?: number
   terminalPaddingY?: number
@@ -201,7 +208,7 @@ export type GlobalSettings = {
   openLinksInAppPreferencePrompted: boolean
   /** Opt-in: Shift+modifier click inverts openLinksInApp instead of always forcing the system browser. Off keeps the historical one-way escape hatch. */
   openLinksInAppModifierInverts?: boolean
-  /** Show terminal link actions on plain click; off restores modifier-click-only terminal links. */
+  /** Show link actions on plain click in the terminal and chat; off restores modifier-click-only terminal links. */
   terminalLinkActionPopoverEnabled?: boolean
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
@@ -274,6 +281,7 @@ export type GlobalSettings = {
   keybindings?: KeybindingOverrides
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
+  diffShowWhitespace: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
   /** Bot-marked comment-author logins (stored lowercased); escape hatch for review bots on regular accounts that defeat provider metadata/heuristics. */
   prBotAuthorOverrides: string[]
@@ -361,6 +369,8 @@ export type GlobalSettings = {
   minimaxGroupId: string
   /** Comma-separated MiniMax model names to show in the status bar usage window. */
   minimaxUsageModels: string
+  /** MiniMax account region; defaults to overseas for existing users. */
+  minimaxEndpoint: MiniMaxEndpoint
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
@@ -428,6 +438,10 @@ export type GlobalSettings = {
   experimentalActivity: boolean
   /** Experimental: pop-out Kanban dashboard for monitoring and opening agent terminals across worktrees. */
   experimentalAgentDashboardPopout?: boolean
+  /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
+  agentsSidebarIntroShown?: boolean
+  /** True when the profile previously opted into the legacy Agents view. */
+  agentsSidebarMigratedFromExperimental?: boolean
   /** How the Agent Dashboard opens: an in-window companion board or a separate pop-out window. Defaults to in-window. */
   experimentalAgentDashboardMode?: AgentDashboardMode
   /** Includes stale quiet agents as a fourth Agent Dashboard column. */

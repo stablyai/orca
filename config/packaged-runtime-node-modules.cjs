@@ -14,6 +14,7 @@ const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
 
 const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
+  '@anthropic-ai/claude-agent-sdk',
   '@electron-toolkit/utils',
   '@linear/sdk',
   '@parcel/watcher',
@@ -56,7 +57,13 @@ const ELECTRON_ARCHITECTURE_BY_ENUM = {
   4: 'universal'
 }
 const PACKAGED_NATIVE_ARCHITECTURES = new Set(['ia32', 'x64', 'arm', 'arm64'])
+const PACKAGED_MAIN_REQUIRED_FILES = [
+  'out/main/index.js',
+  'out/main/agent-hooks/managed-agent-hook-controls.js'
+]
+const PACKAGED_MAIN_SOURCE_RE = /^out\/main\/.+\.js$/
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
+const JS_SOURCE_MAP_ARTIFACT_RE = /\.(?:c|m)?js\.map$/
 const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
 const NODE_BUILTINS = new Set([
@@ -222,22 +229,39 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     return
   }
 
-  const mainFiles = ['out/main/index.js', 'out/main/agent-hooks/managed-agent-hook-controls.js']
   const entries = asar.listPackage(asarPath)
-  const missing = new Set()
-
-  for (const file of mainFiles) {
-    const entry = findAsarEntry(entries, file)
-    if (!entry) {
+  for (const file of PACKAGED_MAIN_REQUIRED_FILES) {
+    if (!findAsarEntry(entries, file)) {
       throw new Error(`Packaged main file ${file} was not found in ${asarPath}`)
+    }
+  }
+
+  const missing = new Set()
+  // Why every emitted main file rather than the entry points alone: rolldown hoists
+  // modules shared by two entries into out/main/chunks, so an entry's own bare imports
+  // move out from under a fixed file list and silently stop being checked.
+  for (const entry of entries) {
+    if (!PACKAGED_MAIN_SOURCE_RE.test(normalizeAsarEntryPath(entry))) {
+      continue
     }
 
     // Why: @electron/asar lists entries with host separators; Windows returns
     // backslashes, and extractFile expects that same host-style path.
     const internalPath = entry.replace(/^[\\/]+/, '')
     const source = asar.extractFile(asarPath, internalPath).toString('utf8')
-    for (const match of source.matchAll(/require\(["']([^"']+)["']\)/g)) {
-      const specifier = match[1]
+    // Why the lookbehind: Orca has its own registry methods named `require`, so a
+    // minified `registry.require('some-id')` must not read as a bare specifier.
+    // Why it readmits `...`: a dot that ends a spread is not member access, and
+    // the two error directions are not symmetric -- a false positive fails the
+    // release build loudly, a false negative is this guard going blind.
+    // Known limit: a specifier inside an embedded source string counts too, and
+    // ssh-relay-deploy's remote probe names node-pty that way. A remote-only
+    // dependency added to that script would fail desktop packaging here; telling
+    // the two apart needs a parser, not a wider pattern.
+    for (const match of source.matchAll(
+      /(?:(?<![.\w])|(?<=\.\.\.))(?:require|import)\s*\(\s*(["'`])([^"'`$]+)\1\s*\)/g
+    )) {
+      const specifier = match[2]
       if (!isPackagedExternalSpecifier(specifier)) {
         continue
       }
@@ -438,12 +462,22 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electron
   }
 }
 
-function prunePackagedRuntimeTypeDeclarations(resourcesDir) {
+// Why type declarations: they are compile-time only; the packaged app never resolves them.
+// Why source maps: they embed the original sources (megabytes for @linear/sdk alone) and
+// nothing in the packaged app turns on Node's source-map support, so they are never read.
+// Orca's own main-process maps live outside node_modules and ship as a separate release artifact.
+function isPrunableTypeOrSourceMapArtifact(filename) {
+  return TYPE_DECLARATION_ARTIFACT_RE.test(filename) || JS_SOURCE_MAP_ARTIFACT_RE.test(filename)
+}
+
+// Why one walk: pruneMatchingFiles only ever deletes files, so passes over the same tree
+// commute — a second recursive traversal costs seconds for no extra deletions.
+function prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir) {
   const nodeModulesDir = join(resourcesDir, 'node_modules')
   if (!existsSync(nodeModulesDir)) {
     return
   }
-  pruneMatchingFiles(nodeModulesDir, (filename) => TYPE_DECLARATION_ARTIFACT_RE.test(filename))
+  pruneMatchingFiles(nodeModulesDir, isPrunableTypeOrSourceMapArtifact)
 }
 
 function prunePackagedSherpaOnnx(resourcesDir, electronPlatformName) {
@@ -481,9 +515,10 @@ function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, ele
   const architecture = normalizeElectronArchitecture(electronArch)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
-  prunePackagedRuntimeTypeDeclarations(resourcesDir)
-  prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
+  // Why before the filename walk: zod/src is deleted wholesale, so walking it first is wasted work.
   prunePackagedZodSources(resourcesDir)
+  prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir)
+  prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
 }
 
 function pruneMatchingFiles(directory, shouldPrune) {
@@ -506,8 +541,8 @@ module.exports = {
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
   prunePackagedRuntimeNodeModules,
+  prunePackagedRuntimeTypeAndSourceMapArtifacts,
   prunePackagedSherpaOnnx,
-  prunePackagedRuntimeTypeDeclarations,
   prunePackagedZodSources,
   verifyPackagedMainRuntimeDeps
 }

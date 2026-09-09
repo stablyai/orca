@@ -2,7 +2,10 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeTerminalSummary
+} from '../../../shared/runtime-types'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from './worktree-activation-created-agent-test-state'
@@ -76,20 +79,65 @@ function structuredSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult 
   }
 }
 
-function stubInventory(args?: { structured?: boolean; livePtyId?: string }): {
+function orphanTerminalRow(
+  worktree: ReturnType<typeof makeWorktree>,
+  ptyId: string
+): RuntimeTerminalSummary {
+  return {
+    handle: 'orphan-1',
+    ptyId,
+    orphaned: true,
+    worktreeId: worktree.id,
+    worktreePath: worktree.path,
+    branch: worktree.branch ?? 'main',
+    tabId: `pty:${ptyId}`,
+    leafId: `pty:${ptyId}`,
+    title: 'Codex',
+    connected: true,
+    writable: true,
+    lastOutputAt: null,
+    preview: ''
+  }
+}
+
+function stubInventory(args?: {
+  structured?: boolean
+  livePtyId?: string
+  /** Host that could not produce a complete census for the workspace it was asked about. */
+  unverifiableCensus?: boolean
+}): {
   runtimeCall: ReturnType<typeof vi.fn>
   listSessions: ReturnType<typeof vi.fn>
 } {
   const worktree = makeWorktree()
   const runtimeCall = vi.fn(async ({ method }: { method: string }) => {
-    if (method === 'session.tabs.listAll') {
+    if (method === 'session.tabs.list') {
       return {
         ok: true,
-        result: { snapshots: args?.structured ? [structuredSnapshot(worktree.id)] : [] }
+        result: args?.structured
+          ? structuredSnapshot(worktree.id)
+          : { ...structuredSnapshot(worktree.id), tabs: [] }
       }
     }
     if (method === 'agentSession.handoffStatus') {
       return { ok: true, result: { owner: 'native' } }
+    }
+    if (method === 'terminal.list') {
+      // The host knows this PTY but binds it to no surface, so adoption may mint one.
+      return {
+        ok: true,
+        result: {
+          terminals: args?.unverifiableCensus
+            ? []
+            : args?.livePtyId
+              ? [orphanTerminalRow(worktree, args.livePtyId)]
+              : [],
+          truncated: false,
+          hostScope: args?.unverifiableCensus
+            ? { hostIds: [], omittedHostIds: ['local', 'runtime:env-9'] }
+            : { hostIds: ['local'], omittedHostIds: [] }
+        }
+      }
     }
     throw new Error(`Unexpected runtime method: ${method}`)
   })
@@ -185,20 +233,114 @@ describe('worktree agent activation seam', () => {
     expect(tabs[0]?.ptyId).toBeNull()
   })
 
+  it('re-seeds an explicitly activated workspace with a closed terminal tombstone', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState({
+      ...baseState(),
+      // An empty row is persisted after the user closes the last terminal.
+      tabsByWorktree: { [worktree.id]: [] }
+    })
+    stubInventory()
+
+    expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
+    expect(tabs).toHaveLength(1)
+    // A fresh shell, never a second surface forked onto the live agent's PTY.
+    expect(tabs[0]?.ptyId).toBeNull()
+  })
+
+  it('does not race an explicitly promised surface with a fallback terminal', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState(baseState())
+    stubInventory()
+
+    expect(activateAndRevealWorktree(worktree.id, { providesInitialSurface: true })).toEqual({
+      primaryTabId: null
+    })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
+  })
+
+  // A paired-runtime owner is always omitted from its own scoped census, and an SSH relay that
+  // never answered omits everything. Declining to mint is right; leaving the workspace with no
+  // surface at all is not — the user asked for a pane and must get one.
+  it('still seeds a usable pane when the census cannot prove who owns a live PTY', async () => {
+    const worktree = makeWorktree()
+    const livePtyId = `${worktree.id}@@live-codex`
+    useAppStore.setState(baseState())
+    stubInventory({ livePtyId, unverifiableCensus: true })
+
+    expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    const tabs = useAppStore.getState().tabsByWorktree[worktree.id] ?? []
+    expect(tabs).toHaveLength(1)
+    expect(tabs[0]?.ptyId).toBeNull()
+  })
+
   it('does not spawn before a structured chat tab hydrates', async () => {
     const worktree = makeWorktree()
     useAppStore.setState(baseState())
-    const { runtimeCall } = stubInventory({ structured: true })
+    const { runtimeCall, listSessions } = stubInventory({ structured: true })
 
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
     await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
     expect(useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).toHaveLength(0)
     expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
-    expect(runtimeCall).toHaveBeenCalledWith({ method: 'session.tabs.listAll', params: {} })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'session.tabs.list',
+      params: { worktree: `id:${worktree.id}` }
+    })
+    expect(listSessions).toHaveBeenCalledExactlyOnceWith({ connectionId: null })
     expect(runtimeCall).toHaveBeenCalledWith({
       method: 'agentSession.handoffStatus',
       params: { sessionId: 'chat-1' }
     })
+  })
+
+  // A peer owns its own PTYs, so this client can never scope an inventory at it. Scoping must not
+  // turn that into a refusal: 'blocked' would also skip the sleeping-agent resume below.
+  it('still reaches a verdict for a paired-runtime-owned workspace', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState({
+      ...baseState(),
+      worktreesByRepo: { [worktree.repoId]: [{ ...worktree, hostId: 'runtime:env-1' }] }
+    })
+    const { listSessions } = stubInventory()
+
+    expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
+    expect(listSessions).toHaveBeenCalledExactlyOnceWith()
+  })
+
+  // Loss of contact with the relay is not evidence about the host, and once the sync has stopped
+  // without an answer the bounded floor in workspace-terminal-host-authority.ts hands seeding back
+  // to this client — a detached provider must not turn that into a permanently empty workspace.
+  it('still seeds a pane when the selected SSH relay is detached', async () => {
+    const worktree = makeWorktree()
+    useAppStore.setState({
+      ...baseState(),
+      worktreesByRepo: { [worktree.repoId]: [{ ...worktree, hostId: 'ssh:box' }] },
+      remoteWorkspaceSyncStatusByTargetId: { box: { phase: 'offline' } as never }
+    })
+    const { listSessions } = stubInventory()
+    listSessions.mockImplementation(async (scope?: unknown) => {
+      if (scope) {
+        throw new Error('No PTY provider for connection "box": the SSH relay is not attached')
+      }
+      return []
+    })
+
+    expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
+    await expect(waitForWorktreeAgentActivationGateForTests(worktree.id)).resolves.toBe('empty')
+    expect(listSessions.mock.calls).toEqual([[{ connectionId: 'box' }], []])
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(1)
+    )
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]?.[0]?.ptyId).toBeNull()
   })
 })

@@ -11,8 +11,14 @@ import type { JournalReducerState } from './journal-reducer'
 import type {
   JournalDispatchRow,
   JournalItemRow,
+  JournalLifecycleBatchRow,
+  JournalLifecycleMutation,
   JournalSubmissionRow,
   JournalTombstoneRow
+} from './journal-row-schema'
+import {
+  MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
+  MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
 import type { ResolveDispatchInput } from './journal-store-contracts'
 
@@ -78,6 +84,50 @@ export function journalDispatchRowBuilder(
     })
 }
 
+export type JournalLifecycleMutationInput =
+  | { kind: 'item'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  | { kind: 'tombstone'; identity: AgentJournalItemIdentity }
+
+export function journalLifecycleBatchRowBuilder(
+  state: () => JournalReducerState,
+  settlementId: string,
+  mutations: readonly JournalLifecycleMutationInput[],
+  options: { fence: number; recovered?: true }
+): RowBuilder<JournalLifecycleBatchRow> {
+  return (seq, ts) => {
+    if (mutations.length === 0 || mutations.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
+      throw new Error('journal_lifecycle_batch_mutation_bound_exceeded')
+    }
+    const current = state()
+    const revisions = new Map<string, number>()
+    const built: JournalLifecycleMutation[] = mutations.map((mutation) => {
+      const itemId = agentJournalItemKey(mutation.identity)
+      const resolved = current.aliases.get(itemId) ?? itemId
+      const revision =
+        (revisions.get(resolved) ??
+          Math.max(
+            current.items.get(resolved)?.revision ?? 0,
+            current.tombstones.get(resolved) ?? 0
+          )) + 1
+      revisions.set(resolved, revision)
+      return mutation.kind === 'item'
+        ? { kind: 'item', itemId, revision, body: mutation.body }
+        : { kind: 'tombstone', itemId, revision }
+    })
+    const row: JournalLifecycleBatchRow = {
+      kind: 'lifecycle-batch',
+      settlementId,
+      mutations: built,
+      ...journalRowBase(current.epoch, seq, options.fence, ts),
+      ...(options.recovered ? { recovered: options.recovered } : {})
+    }
+    if (Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES) {
+      throw new Error('journal_lifecycle_batch_byte_bound_exceeded')
+    }
+    return row
+  }
+}
+
 export function journalRowBase(
   epoch: string,
   seq: number,
@@ -98,7 +148,13 @@ export function buildJournalItemRow(input: {
 }): JournalItemRow {
   const itemId = agentJournalItemKey(input.identity)
   const resolved = input.state.aliases.get(itemId) ?? itemId
-  const revision = (input.state.items.get(resolved)?.revision ?? 0) + 1
+  // A tombstoned row keeps its revision in `tombstones`, and the reducer drops
+  // any item at or below it — so a re-add has to outrank the tombstone too.
+  const revision =
+    Math.max(
+      input.state.items.get(resolved)?.revision ?? 0,
+      input.state.tombstones.get(resolved) ?? 0
+    ) + 1
   return {
     kind: 'item',
     itemId,
@@ -120,7 +176,15 @@ export function buildJournalTombstoneRow(input: {
   return {
     kind: 'tombstone',
     itemId: input.itemId,
-    revision: (input.state.items.get(resolved)?.revision ?? 0) + 1,
+    // Symmetric with the item builder: `upsertItem` clearing the tombstone on a
+    // re-add is what keeps the two maps disjoint, and that invariant lives in the
+    // reducer. Outranking both here means a repeat removal cannot be dropped as a
+    // stale revision if it ever stops holding.
+    revision:
+      Math.max(
+        input.state.items.get(resolved)?.revision ?? 0,
+        input.state.tombstones.get(resolved) ?? 0
+      ) + 1,
     ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts)
   }
 }

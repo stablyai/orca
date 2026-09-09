@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { parsePaneKey } from './stable-pane-id'
 import {
@@ -6,6 +7,7 @@ import {
   hasPersistedStructuredAgentSessionTurn,
   projectStructuredItemToNativeChat,
   projectStructuredAgentSessionStatus,
+  projectStructuredAgentSessionStatusSummary,
   structuredAgentSessionPaneKey
 } from './structured-agent-session-projection'
 
@@ -18,6 +20,65 @@ function item(
 }
 
 describe('structured agent session status projection', () => {
+  it('reuses immutable item projections and refreshes revisions and resolved prompts', () => {
+    const original = item('diff', 1, {
+      kind: 'diff',
+      path: 'a.ts',
+      patch: {
+        head: '@@\n+first',
+        digest: 'one',
+        byteLength: 10,
+        truncated: false
+      }
+    })
+    const first = projectStructuredItemToNativeChat(original)
+    expect(projectStructuredItemToNativeChat(original)).toBe(first)
+    const revised = {
+      ...original,
+      revision: 2,
+      observedAt: 2000,
+      body: {
+        kind: 'diff' as const,
+        path: 'a.ts',
+        patch: {
+          head: '@@\n+second',
+          digest: 'two',
+          byteLength: 11,
+          truncated: false
+        }
+      }
+    }
+    const second = projectStructuredItemToNativeChat(revised)
+    expect(second).not.toBe(first)
+    expect(second).toMatchObject({
+      timestamp: 2000,
+      blocks: [{ type: 'tool-call' }, { type: 'tool-result', output: '@@\n+second' }]
+    })
+    const pending = item('approval', 2, {
+      kind: 'approval',
+      title: 'Allow?',
+      detail: null,
+      options: [],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+    expect(projectStructuredItemToNativeChat(pending)).toBeNull()
+    if (pending.body.kind !== 'approval') {
+      throw new Error('fixture')
+    }
+    const resolved = {
+      ...pending,
+      revision: 2,
+      body: {
+        ...pending.body,
+        resolution: { ...pending.body.resolution, state: 'resolved' as const }
+      }
+    }
+    expect(projectStructuredItemToNativeChat(resolved)).toMatchObject({
+      id: 'approval',
+      role: 'system'
+    })
+  })
+
   it('projects running, attention, and completed lifecycle states', () => {
     const running = item('running', 1, {
       kind: 'status',
@@ -42,6 +103,190 @@ describe('structured agent session status projection', () => {
     expect(projectStructuredAgentSessionStatus([running, prompt])).toBe('attention')
     expect(activeStructuredAgentSessionTurnId([running, completed])).toBeNull()
     expect(projectStructuredAgentSessionStatus([running, completed])).toBe('idle')
+  })
+
+  it('summarizes status with the newest user prompt, and null before any persisted turn', () => {
+    const running = item('running', 3, {
+      kind: 'status',
+      text: 'Working',
+      turnLifecycle: { turnId: 'turn-1', state: 'running' }
+    })
+    const first = item('first', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'first' }]
+    })
+    const second = item('second', 2, {
+      kind: 'message',
+      role: 'user',
+      blocks: [
+        { type: 'text', text: 'second' },
+        { type: 'text', text: 'line' }
+      ]
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([running])).toEqual({
+      status: null,
+      latestPrompt: ''
+    })
+    expect(projectStructuredAgentSessionStatusSummary([first, second, running])).toEqual({
+      status: 'working',
+      latestPrompt: 'second line'
+    })
+    expect(projectStructuredAgentSessionStatusSummary([first, second])).toEqual({
+      status: 'idle',
+      latestPrompt: 'second line'
+    })
+  })
+
+  it('carries the running tool and the newest assistant prose the sidebar row shows', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'look at the sidebar' }]
+    })
+    const running = item('running', 2, {
+      kind: 'status',
+      text: 'Working',
+      turnLifecycle: { turnId: 'turn-1', state: 'running' }
+    })
+    const said = item('said', 3, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Reading the card first.' }]
+    })
+    const tool = item('tool', 4, {
+      kind: 'tool-call',
+      name: 'Read',
+      input: { file_path: '/repo/src/WorktreeCard.tsx' },
+      state: 'running'
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([ask, running, said, tool])).toEqual({
+      status: 'working',
+      latestPrompt: 'look at the sidebar',
+      toolName: 'Read',
+      toolInput: '/repo/src/WorktreeCard.tsx',
+      lastAssistantMessage: 'Reading the card first.'
+    })
+  })
+
+  it('clears the previous answer as soon as the next prompt is persisted', () => {
+    const firstAsk = item('first-ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'first task' }]
+    })
+    const previousAnswer = item('previous-answer', 2, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'The first task is done.' }]
+    })
+    const nextAsk = item('next-ask', 3, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'second task' }]
+    })
+    expect(projectStructuredAgentSessionStatusSummary([firstAsk, previousAnswer, nextAsk])).toEqual(
+      {
+        status: 'idle',
+        latestPrompt: 'second task'
+      }
+    )
+  })
+
+  it('reports no tool line once the turn settles, even with an abandoned running call', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const abandoned = item('abandoned', 2, {
+      kind: 'tool-call',
+      name: 'Bash',
+      input: { command: 'sleep 600' },
+      state: 'running'
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([ask, abandoned])).toEqual({
+      status: 'idle',
+      latestPrompt: 'go'
+    })
+  })
+
+  it('never adopts a running call from a turn older than the live one', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const abandoned = item('abandoned', 2, {
+      kind: 'tool-call',
+      name: 'Bash',
+      input: { command: 'sleep 600' },
+      state: 'running'
+    })
+    const running = item('running', 3, {
+      kind: 'status',
+      text: 'Working',
+      turnLifecycle: { turnId: 'turn-2', state: 'running' }
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([ask, abandoned, running])).toEqual({
+      status: 'working',
+      latestPrompt: 'go'
+    })
+  })
+
+  it('skips a tool-only assistant item to reach the newest prose', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const said = item('said', 2, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'Done — the card now aligns.' }]
+    })
+    const wordless = item('wordless', 3, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'Read', input: {} }]
+    })
+
+    expect(
+      projectStructuredAgentSessionStatusSummary([ask, said, wordless]).lastAssistantMessage
+    ).toBe('Done — the card now aligns.')
+  })
+
+  it('bounds the assistant preview at the shared agent-status preview cap', () => {
+    const ask = item('ask', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const rambled = item('rambled', 2, {
+      kind: 'message',
+      role: 'assistant',
+      blocks: [{ type: 'text', text: 'y'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH * 40) }]
+    })
+
+    expect(
+      projectStructuredAgentSessionStatusSummary([ask, rambled]).lastAssistantMessage
+    ).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
+  })
+
+  it('bounds the wire prompt at the shared agent-status preview cap', () => {
+    const pasted = item('pasted', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'x'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH * 40) }]
+    })
+
+    expect(projectStructuredAgentSessionStatusSummary([pasted]).latestPrompt).toHaveLength(
+      AGENT_STATUS_MAX_FIELD_LENGTH
+    )
   })
 
   it('creates a deterministic pane identity for status stores', () => {
@@ -80,5 +325,83 @@ describe('structured agent session status projection', () => {
         providerFrame: expect.objectContaining({ kind: 'notification:new/event' })
       })
     ])
+  })
+
+  it('preserves structured tool lifecycle state for the live renderer', () => {
+    const projected = projectStructuredItemToNativeChat(
+      item('running-tool', 1, {
+        kind: 'tool-call',
+        name: 'shell',
+        input: { command: 'cat package.json' },
+        state: 'running'
+      })
+    )
+
+    expect(projected?.blocks).toEqual([
+      { type: 'tool-call', name: 'shell', input: { command: 'cat package.json' }, state: 'running' }
+    ])
+  })
+})
+
+describe('notice projection for desktop and mobile consumers', () => {
+  it.each([
+    { presentation: 'compaction' },
+    { presentation: 'plan-document' },
+    { tone: 'warning' },
+    { tone: 'error' },
+    { tone: 'notice' },
+    { presentation: 'future-presentation', tone: 'future-tone' }
+  ])('preserves readable text alongside optional metadata: %j', (metadata) => {
+    const projected = projectStructuredItemToNativeChat(
+      item('notice', 1, {
+        kind: 'status',
+        text: 'A readable document or notice',
+        ...metadata
+      })
+    )
+    expect(projected).toMatchObject({
+      role: 'system',
+      blocks: [{ type: 'text', text: 'A readable document or notice', ...metadata }]
+    })
+  })
+})
+
+it('preserves optional tool annotations for desktop and mobile projection', () => {
+  const metadata = {
+    exitCode: 127,
+    durationMs: 400,
+    webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]
+  }
+  const projected = projectStructuredItemToNativeChat(
+    item('annotated', 1, {
+      kind: 'tool-call',
+      name: 'shell',
+      input: null,
+      state: 'failed',
+      ...metadata
+    })
+  )
+  expect(projected?.blocks[0]).toEqual({
+    type: 'tool-call',
+    name: 'shell',
+    input: null,
+    state: 'failed',
+    ...metadata
+  })
+})
+
+it('preserves confirmed MCP identity and the raw name through projection', () => {
+  const body = {
+    kind: 'tool-call' as const,
+    name: 'my_server/ns.tool',
+    input: null,
+    state: 'running' as const,
+    mcpIdentity: { server: 'my_server', tool: 'ns.tool' }
+  }
+  const projected = projectStructuredItemToNativeChat(item('mcp', 1, body))
+  expect(projected?.blocks[0]).toMatchObject({
+    name: body.name,
+    mcpIdentity: body.mcpIdentity,
+    type: 'tool-call'
   })
 })

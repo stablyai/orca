@@ -1,14 +1,16 @@
 import { getPtyIpc } from '../../pty-host-bindings'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty-process-inspection'
+import { clientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
 } from '../../../providers/pty-process-list-admission'
-import type { PtyListedSession } from '../../../../shared/pty-listed-session'
+import type { PtyListedSession, PtySessionListScope } from '../../../../shared/pty-listed-session'
 import { ptyOwnership } from '../provider/ownership-state'
 import {
   getProviderForPty,
+  getProvider,
   hasPtyProviderForInspection,
   registeredPtyProviders,
   sshProviders,
@@ -39,37 +41,58 @@ export function installPtyInspectIpcHandlers(deps: {
     )
   }
 
-  ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
-    const deduped = new Map<string, PtyListedSession>()
-    const admission = new PtyProcessListAdmission()
-    await visitPtyProcessListingsInBatches(
-      registeredPtyProviders(),
-      ({ provider, connectionId }) =>
-        connectionId === null ? provider.listProcesses() : provider.listProcesses().catch(() => []),
-      ({ provider, connectionId }, sessions) => {
-        for (const rawSession of sessions) {
-          const session = admission.admit(rawSession)
-          // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
-          ptyOwnership.set(session.id, connectionId)
-          deduped.set(session.id, {
-            id: session.id,
-            cwd: session.cwd,
-            title: session.title,
-            // Why: the renderer's binding map is empty during restore, so ownership is the only
-            // liveness evidence it has. Absence is authoritative only from a provider that
-            // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
-            agentOwnership:
-              (session.agentSessionOwners?.length ?? 0) > 0
-                ? 'present'
-                : provider.providesAgentSessionOwnerListings?.(session.id) === true
-                  ? 'absent'
-                  : 'unknown'
-          })
+  ipcMain.handle(
+    'pty:listSessions',
+    async (_event, scope?: PtySessionListScope): Promise<PtyListedSession[]> => {
+      if (scope !== undefined) {
+        if (
+          !scope ||
+          (scope.connectionId !== null &&
+            (typeof scope.connectionId !== 'string' || !scope.connectionId.trim()))
+        ) {
+          throw new Error('invalid_pty_session_list_scope')
+        }
+        // Select the daemon only after startup has handed off ownership.
+        if (scope.connectionId === null) {
+          await getLocalPtyProviderStartupPromise()
         }
       }
-    )
-    return Array.from(deduped.values())
-  })
+      const deduped = new Map<string, PtyListedSession>()
+      const admission = new PtyProcessListAdmission()
+      await visitPtyProcessListingsInBatches(
+        scope === undefined
+          ? registeredPtyProviders()
+          : [{ provider: getProvider(scope.connectionId), connectionId: scope.connectionId }],
+        ({ provider, connectionId }) =>
+          connectionId === null || scope !== undefined
+            ? provider.listProcesses()
+            : provider.listProcesses().catch(() => []),
+        ({ provider, connectionId }, sessions) => {
+          for (const rawSession of sessions) {
+            const session = admission.admit(rawSession)
+            // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
+            ptyOwnership.set(session.id, connectionId)
+            deduped.set(session.id, {
+              id: session.id,
+              cwd: session.cwd,
+              title: session.title,
+              ...(session.worktreeId !== undefined ? { worktreeId: session.worktreeId } : {}),
+              // Why: the renderer's binding map is empty during restore, so ownership is the only
+              // liveness evidence it has. Absence is authoritative only from a provider that
+              // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
+              agentOwnership:
+                (session.agentSessionOwners?.length ?? 0) > 0
+                  ? 'present'
+                  : provider.providesAgentSessionOwnerListings?.(session.id) === true
+                    ? 'absent'
+                    : 'unknown'
+            })
+          }
+        }
+      )
+      return Array.from(deduped.values())
+    }
+  )
 
   ipcMain.handle(
     'pty:getAuthoritativeBufferSnapshotCapabilities',
@@ -167,20 +190,40 @@ export function installPtyInspectIpcHandlers(deps: {
     }
   )
 
-  ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) => {
-    // Why: same routing hazard as pty:hasPty — an unroutable id must read as unavailable, not as a local-provider answer or a raised IPC error.
-    if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true as const }
+  ipcMain.handle(
+    'pty:inspectProcess',
+    async (
+      _event,
+      args: {
+        id: string
+        expectedIncarnationId?: string
+        scanChildProcesses?: boolean
+        steadyState?: boolean
+      }
+    ) => {
+      // Why: same routing hazard as pty:hasPty — an unroutable id must read as client-only unverifiable, not as a local-provider answer or a raised IPC error.
+      if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+        return clientOnlyUnverifiableInspection('terminal_gone')
+      }
+      // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, so
+      // nothing it reports about one is an observation; the post-swap owner must
+      // answer completion-sensitive inspection.
+      await awaitSwapWindow(args.id)
+      if (!hasPtyProviderForInspection(args.id)) {
+        return clientOnlyUnverifiableInspection('terminal_gone')
+      }
+      const options = {
+        ...(args.expectedIncarnationId
+          ? { expectedIncarnationId: args.expectedIncarnationId }
+          : {}),
+        ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
+        ...(args.steadyState === true ? { steadyState: true } : {})
+      }
+      return Object.keys(options).length > 0
+        ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)
+        : inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
     }
-    // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, so
-    // nothing it reports about one is an observation; the post-swap owner must
-    // answer completion-sensitive inspection.
-    await awaitSwapWindow(args.id)
-    if (!hasPtyProviderForInspection(args.id)) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true as const }
-    }
-    return inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
-  })
+  )
 
   ipcMain.handle(
     'pty:confirmForegroundProcess',

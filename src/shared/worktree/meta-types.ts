@@ -28,6 +28,8 @@ export type WorktreeMeta = {
   /** See Worktree.creatorProvenance. */
   creatorProvenance?: WorkspaceCreatorProvenance
   displayName: string
+  /** True when a user-authored label must survive branch changes. */
+  displayNameIsPinned?: boolean
   comment: string
   linkedIssue: number | null
   linkedPR: number | null

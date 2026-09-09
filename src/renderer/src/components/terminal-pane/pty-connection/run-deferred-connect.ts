@@ -12,7 +12,6 @@ import { bindPrepaintParkedSshSnapshot } from './ssh-snapshot-prepaint'
 import { bindForegroundOutputRefresh } from './foreground-output-refresh'
 import { bindRegisterPaneSerializer } from './pane-serializer-register'
 import { bindHandleReattachResult } from './reattach-result-handler'
-import { bindAttachRetainedLegacyPty } from './retained-legacy-pty-attach'
 import { runDeferredSessionAttach } from './deferred-session-attach'
 
 import { bindSerializeHiddenOutputSnapshot } from './hidden-output-snapshot-serialize'
@@ -23,8 +22,41 @@ import { bindHiddenOutputSeqAndSkip } from './hidden-output-seq-and-skip'
 import { bindHiddenRestoreStateAndSshProbe } from './hidden-restore-state-and-ssh-probe'
 
 export function installRunDeferredConnect(session: ConnectPanePtySession): void {
+  const cwdPromise = session.deps.cwdPromise
+  let cwdPromiseSettled = cwdPromise === undefined
+  let cwdPromiseWaitStarted = false
+
   session.runDeferredConnect = (): void => {
     if (session.connectStarted) {
+      return
+    }
+    if (!cwdPromiseSettled) {
+      session.cancelScheduledConnectFrame()
+      if (session.connectFallbackTimer !== null) {
+        clearTimeout(session.connectFallbackTimer)
+        session.connectFallbackTimer = null
+      }
+      if (!cwdPromiseWaitStarted) {
+        cwdPromiseWaitStarted = true
+        void cwdPromise?.then(
+          (cwd: string) => {
+            if (session.disposed) {
+              return
+            }
+            session.deps.cwd = cwd
+            session.transportOptions.cwd = cwd
+            cwdPromiseSettled = true
+            session.runDeferredConnect()
+          },
+          () => {
+            if (session.disposed) {
+              return
+            }
+            cwdPromiseSettled = true
+            session.runDeferredConnect()
+          }
+        )
+      }
       return
     }
     if (!session.startupGridSettledForConnect && session.shouldSettleStartupGridBeforeConnect()) {
@@ -121,7 +153,6 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
 
     bindPrepaintParkedSshSnapshot(session)
     bindHandleReattachResult(session)
-    bindAttachRetainedLegacyPty(session)
     runDeferredSessionAttach(session)
   }
 

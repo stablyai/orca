@@ -109,4 +109,14 @@ describe('useAutoAckViewedAgent — clock-skewed execution host', () => {
 
     expect(calls).toEqual([[PANE_KEY]])
   })
+
+  it('keeps an explicitly marked-unread visible turn unread', () => {
+    seedFutureStampedTurn(NOW - 5_000)
+    useAppStore.getState().acknowledgeAgents([PANE_KEY])
+
+    renderHook(() => useAutoAckViewedAgent(false))
+    useAppStore.getState().unacknowledgeAgents([PANE_KEY])
+
+    expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBeUndefined()
+  })
 })

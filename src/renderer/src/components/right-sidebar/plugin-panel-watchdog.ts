@@ -2,6 +2,7 @@ import {
   PANEL_WATCHDOG_PING_INTERVAL_MS,
   PANEL_WATCHDOG_PONG_TIMEOUT_MS
 } from '../../../../shared/plugins/plugin-panel-bridge'
+import { getWindowParkVisible, subscribeWindowParkVisibility } from '@/lib/window-park-visibility'
 
 /**
  * Panel responsiveness watchdog: pings the sandboxed frame on an interval
@@ -33,6 +34,7 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
   let awaitedPingId: number | null = null
   let active = false
   let generation = 0
+  let unsubscribeVisibility: (() => void) | null = null
 
   const clearDeadline = (): void => {
     if (deadlineTimer) {
@@ -44,6 +46,13 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
   const ping = (): void => {
     if (!active || awaitedPingId !== null) {
       // A ping is already outstanding; its deadline will fire first.
+      return
+    }
+    // Why: an "unresponsive" badge on a hidden panel is invisible — detect it on resume
+    // before the user can interact. getWindowParkVisible, not raw visibilityState: macOS can
+    // wedge the latter at 'hidden' with no further visibilitychange, which would park the
+    // watchdog for the rest of the session.
+    if (!getWindowParkVisible()) {
       return
     }
     awaitedPingId = nextPingId++
@@ -75,11 +84,21 @@ export function createPanelWatchdog(options: PanelWatchdogOptions): PanelWatchdo
       awaitedPingId = null
       clearDeadline()
       pingTimer = setInterval(ping, pingIntervalMs)
+      unsubscribeVisibility?.()
+      // Why: the interval is never stopped, so without this a resume waits out the remaining
+      // interval before the first ping the hidden window skipped.
+      unsubscribeVisibility = subscribeWindowParkVisibility(() => {
+        if (getWindowParkVisible()) {
+          ping()
+        }
+      })
       ping()
     },
     stop() {
       active = false
       generation += 1
+      unsubscribeVisibility?.()
+      unsubscribeVisibility = null
       if (pingTimer) {
         clearInterval(pingTimer)
         pingTimer = null

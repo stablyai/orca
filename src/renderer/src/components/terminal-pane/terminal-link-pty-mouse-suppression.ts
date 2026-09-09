@@ -3,6 +3,7 @@ import {
   isTerminalLinkActionActivation,
   isTerminalLinkDirectActivation
 } from './terminal-link-activation'
+import { isXtermMouseReport } from './terminal-pointer-input-sequences'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 const MAX_DEFERRED_PTY_INPUT_FRAMES = 64
@@ -15,13 +16,6 @@ type DeferredPtyInput = {
 export type TerminalLinkPtyMouseSuppression = IDisposable & {
   claimAction: () => boolean
   handlePtyInput: (data: string, forward: (data: string) => void) => void
-}
-
-function isXtermMouseReport(data: string): boolean {
-  return (
-    (data.startsWith('\x1b[M') && data.length === 6) ||
-    (data.startsWith('\x1b[<') && /^\d+;\d+;\d+[Mm]$/.test(data.slice(3)))
-  )
 }
 
 export function installTerminalLinkPtyMouseSuppression(

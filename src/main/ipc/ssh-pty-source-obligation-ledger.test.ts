@@ -5,6 +5,15 @@ import type {
 } from '../../shared/pty-source-credit-contract'
 import { SshPtySourceObligationLedger } from './ssh-pty-source-obligation-ledger'
 
+class CountingSpanOwnerMap extends Map<string, unknown> {
+  getCalls = 0
+
+  override get(key: string): unknown {
+    this.getCalls += 1
+    return super.get(key)
+  }
+}
+
 function identity(
   deliveryToken = 'token-1',
   overrides: Partial<PtySourceDeliveryIdentity> = {}
@@ -55,6 +64,42 @@ function commitSpan(
 }
 
 describe('SshPtySourceObligationLedger', () => {
+  it('looks up retained spans directly by ID as the ledger grows', () => {
+    const spanCount = 1_024
+    const ledger = new SshPtySourceObligationLedger()
+    const owner = identity()
+    ledger.open(owner)
+    for (let index = 0; index < spanCount; index += 1) {
+      commitSpan(ledger, owner, span(owner, `span-${index}`, index, 'x'))
+    }
+
+    const internals = ledger as unknown as {
+      spanOwners: Map<string, unknown>
+      tokens: Map<string, { spans: readonly { span: PtySourceSpan }[] }>
+    }
+    const countedSpanOwners = new CountingSpanOwnerMap(internals.spanOwners)
+    internals.spanOwners = countedSpanOwners
+    const tokenRecord = Array.from(internals.tokens.values())[0]
+    if (!tokenRecord) {
+      throw new Error('test token record missing')
+    }
+
+    let legacyVisits = 0
+    for (let index = 0; index < spanCount; index += 1) {
+      for (const candidate of tokenRecord.spans) {
+        legacyVisits += 1
+        if (candidate.span.spanId === `span-${index}`) {
+          break
+        }
+      }
+      expect(ledger.obligation(`span-${index}`, 'model').state).toBe('open')
+    }
+
+    expect(legacyVisits).toBe(524_800)
+    expect(countedSpanOwners.getCalls).toBe(spanCount)
+    expect(legacyVisits - countedSpanOwners.getCalls).toBe(523_776)
+  })
+
   it('rolls back an uncommitted admission without consuming its source coordinate', () => {
     const ledger = new SshPtySourceObligationLedger()
     const owner = identity()

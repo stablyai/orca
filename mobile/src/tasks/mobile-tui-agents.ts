@@ -1,85 +1,17 @@
 import type { TuiAgent } from '../../../src/shared/tui-agent'
+import { isTuiAgent } from '../../../src/shared/tui-agent-config'
+import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
+import {
+  TUI_AGENT_AUTO_PICK_ORDER,
+  isTuiAgentEnabled,
+  normalizeDisabledTuiAgents,
+  pickTuiAgent
+} from '../../../src/shared/tui-agent-selection'
 
-// Why: mobile tests run from the mobile package only, so runtime imports of
-// desktop shared modules can break Vitest transforms in CI. Keep this list
-// mirrored with src/shared/tui-agent-selection.ts and assert parity in tests.
-export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
-  'claude',
-  'claude-agent-teams',
-  'openclaude',
-  'codex',
-  'grok',
-  'copilot',
-  'opencode',
-  'mimo-code',
-  'ante',
-  'trae',
-  'pi',
-  'omp',
-  'prime-agent',
-  'gemini',
-  'antigravity',
-  'aider',
-  'goose',
-  'amp',
-  'kilo',
-  'kiro',
-  'crush',
-  'aug',
-  'autohand',
-  'cline',
-  'codebuff',
-  'command-code',
-  'continue',
-  'cursor',
-  'droid',
-  'kimi',
-  'mistral-vibe',
-  'qwen-code',
-  'rovo',
-  'hermes',
-  'devin',
-  'openclaw'
-] as const satisfies readonly TuiAgent[]
-
-export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
-  claude: 'Claude',
-  'claude-agent-teams': 'Claude Agent Teams',
-  openclaude: 'OpenClaude',
-  codex: 'Codex',
-  grok: 'Grok',
-  copilot: 'GitHub Copilot',
-  opencode: 'OpenCode',
-  'mimo-code': 'MiMo Code',
-  ante: 'Ante',
-  trae: 'Trae',
-  pi: 'Pi',
-  omp: 'OMP',
-  'prime-agent': 'Prime Agent',
-  gemini: 'Gemini',
-  antigravity: 'Antigravity',
-  aider: 'Aider',
-  goose: 'Goose',
-  amp: 'Amp',
-  kilo: 'Kilocode',
-  kiro: 'Kiro',
-  crush: 'Charm',
-  aug: 'Auggie',
-  autohand: 'Autohand Code',
-  cline: 'Cline',
-  codebuff: 'Codebuff',
-  'command-code': 'Command Code',
-  continue: 'Continue',
-  cursor: 'Cursor',
-  droid: 'Droid',
-  kimi: 'Kimi',
-  'mistral-vibe': 'Mistral Vibe',
-  'qwen-code': 'Qwen Code',
-  rovo: 'Rovo Dev',
-  hermes: 'Hermes',
-  devin: 'Devin',
-  openclaw: 'OpenClaw'
-}
+// Why: one agent registry. Mobile keeps its own names for the favicon domains only, because
+// desktop's live in the renderer catalog next to bundled `?url` icon imports Metro can't load.
+export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = TUI_AGENT_AUTO_PICK_ORDER
+export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = TUI_AGENT_DISPLAY_NAMES
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
   openclaude: 'openclaude.gitlawb.com',
@@ -115,33 +47,15 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   openclaw: 'openclaw.ai'
 }
 
-export function isMobileTuiAgent(value: unknown): value is TuiAgent {
-  return MOBILE_TUI_AGENT_AUTO_PICK_ORDER.includes(value as TuiAgent)
-}
+export const isMobileTuiAgent: (value: unknown) => value is TuiAgent = isTuiAgent
 
-function normalizeDisabledMobileTuiAgents(value: unknown): TuiAgent[] {
-  if (!Array.isArray(value)) {
-    return []
-  }
-  const seen = new Set<TuiAgent>()
-  for (const item of value) {
-    if (isMobileTuiAgent(item)) {
-      seen.add(item)
-    }
-  }
-  return [...seen]
+// Why: mobile passes raw persisted settings through; the shared helpers already discard non-arrays.
+function asDisabledList(disabled: unknown): Iterable<unknown> | null {
+  return Array.isArray(disabled) ? disabled : null
 }
 
 export function isMobileTuiAgentEnabled(agent: TuiAgent, disabled?: unknown): boolean {
-  return !normalizeDisabledMobileTuiAgents(disabled).includes(agent)
-}
-
-export function filterEnabledMobileTuiAgents<T extends TuiAgent>(
-  agents: Iterable<T>,
-  disabled?: unknown
-): T[] {
-  const disabledSet = new Set(normalizeDisabledMobileTuiAgents(disabled))
-  return [...agents].filter((agent) => !disabledSet.has(agent))
+  return isTuiAgentEnabled(agent, asDisabledList(disabled))
 }
 
 export function pickMobileTuiAgent(
@@ -149,18 +63,13 @@ export function pickMobileTuiAgent(
   detected: Iterable<TuiAgent>,
   disabled?: unknown
 ): TuiAgent | null {
-  if (preferred === 'blank') {
-    return null
-  }
-  const disabledSet = new Set(normalizeDisabledMobileTuiAgents(disabled))
-  const detectedSet = detected instanceof Set ? detected : new Set(detected)
-  if (preferred && detectedSet.has(preferred) && !disabledSet.has(preferred)) {
-    return preferred
-  }
-  for (const agent of MOBILE_TUI_AGENT_AUTO_PICK_ORDER) {
-    if (detectedSet.has(agent) && !disabledSet.has(agent)) {
-      return agent
-    }
-  }
-  return null
+  return pickTuiAgent(preferred, detected, asDisabledList(disabled))
+}
+
+export function filterEnabledMobileTuiAgents<T extends TuiAgent>(
+  agents: Iterable<T>,
+  disabled?: unknown
+): T[] {
+  const disabledSet = new Set(normalizeDisabledTuiAgents(disabled))
+  return [...agents].filter((agent) => !disabledSet.has(agent))
 }

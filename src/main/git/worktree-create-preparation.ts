@@ -10,8 +10,10 @@ import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
 } from './worktree'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './status'
+import { invalidateWslLinkedWorktreeGitRouting } from './wsl-linked-worktree-git-routing'
 
 function gitExecOptions(
   cwd: string,
@@ -43,17 +45,21 @@ async function performDiscardPreparedWorktree(
     timeout: options.timeout ?? WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
   }
   try {
+    // Preserve the ownership lock if removal cannot start; Git 2.25 supports locked removal.
     await gitExecFileAsync(
-      [...windowsLongPathGitArgs(repoPath), 'worktree', 'unlock', worktreePath],
+      [
+        ...windowsLongPathGitArgs(repoPath),
+        'worktree',
+        'remove',
+        '--force',
+        '--force',
+        worktreePath
+      ],
       cleanupGitOptions
     )
-  } catch {
-    // It may be unlocked already or only partially registered.
+  } finally {
+    invalidateWslLinkedWorktreeGitRouting(worktreePath)
   }
-  await gitExecFileAsync(
-    [...windowsLongPathGitArgs(repoPath), 'worktree', 'remove', '--force', worktreePath],
-    cleanupGitOptions
-  )
 }
 
 export async function prepareWorktreeCreateCheckout(
@@ -64,44 +70,48 @@ export async function prepareWorktreeCreateCheckout(
   options: GitWorktreeExecOptions = {}
 ): Promise<void> {
   try {
-    await runWithGitReadCacheInvalidation(async () => {
-      const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
-        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
-      )
-      try {
-        await gitExecFileAsync(
-          [
-            ...windowsLongPathGitArgs(repoPath),
-            'worktree',
-            'add',
-            '--detach',
-            '--no-checkout',
-            worktreePath,
-            effectiveBase
-          ],
-          { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
+    await withRepoRefMaintenancePaused('worktree-prepare', () =>
+      runWithGitReadCacheInvalidation(async () => {
+        const effectiveBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
+          hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
         )
-        // Why: reset materializes files without running user post-checkout hooks before submit.
-        await gitExecFileAsync(
-          [...windowsLongPathGitArgs(worktreePath), 'reset', '--hard', effectiveBase],
-          { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
-        )
-        await gitExecFileAsync(
-          [
-            ...windowsLongPathGitArgs(repoPath),
-            'worktree',
-            'lock',
-            '--reason',
-            lockReason,
-            worktreePath
-          ],
-          { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
-        )
-      } catch (error) {
-        await performDiscardPreparedWorktree(repoPath, worktreePath, options).catch(() => {})
-        throw error
-      }
-    })
+        try {
+          await gitExecFileAsync(
+            [
+              ...windowsLongPathGitArgs(repoPath),
+              'worktree',
+              'add',
+              '--detach',
+              '--no-checkout',
+              worktreePath,
+              effectiveBase
+            ],
+            { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          )
+          // The add just wrote the marker; drop any pre-create route before the reset routes Git.
+          invalidateWslLinkedWorktreeGitRouting(worktreePath)
+          // Why: reset materializes files without running user post-checkout hooks before submit.
+          await gitExecFileAsync(
+            [...windowsLongPathGitArgs(worktreePath), 'reset', '--hard', effectiveBase],
+            { ...gitExecOptions(worktreePath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          )
+          await gitExecFileAsync(
+            [
+              ...windowsLongPathGitArgs(repoPath),
+              'worktree',
+              'lock',
+              '--reason',
+              lockReason,
+              worktreePath
+            ],
+            { ...gitExecOptions(repoPath, options), timeout: resolveWorktreeAddTimeoutMs() }
+          )
+        } catch (error) {
+          await performDiscardPreparedWorktree(repoPath, worktreePath, options).catch(() => {})
+          throw error
+        }
+      })
+    )
   } finally {
     notifyPreparedWorktreeMutation(repoPath)
   }
@@ -185,25 +195,38 @@ export async function finalizePreparedWorktree(
   }
   try {
     return await runWithGitReadCacheInvalidation(async () => {
-      const baseContext = await resolveWorktreeAddBaseContext(
-        repoPath,
-        baseBranch,
-        refreshLocalBaseRef,
-        finalizeGitOptions
-      )
-      const [targetHeadResult, preparedHeadResult] = await Promise.all([
-        gitExecFileAsync(
-          ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
-          gitExecOptions(repoPath, finalizeGitOptions)
-        ),
+      const [targetResult, preparedResult] = await Promise.allSettled([
+        (async () => {
+          const baseContext = await resolveWorktreeAddBaseContext(
+            repoPath,
+            baseBranch,
+            refreshLocalBaseRef,
+            finalizeGitOptions
+          )
+          const targetHead =
+            baseContext.effectiveBaseOid ??
+            (
+              await gitExecFileAsync(
+                ['rev-parse', '--verify', `${baseContext.effectiveBase}^{commit}`],
+                gitExecOptions(repoPath, finalizeGitOptions)
+              )
+            ).stdout.trim()
+          return { baseContext, targetHead }
+        })(),
         gitExecFileAsync(
           ['rev-parse', '--verify', 'HEAD'],
           gitExecOptions(preparedPath, finalizeGitOptions)
         )
       ])
-      const { stdout: targetHeadOutput } = targetHeadResult
-      const targetHead = targetHeadOutput.trim()
-      const { stdout: preparedHeadOutput } = preparedHeadResult
+      // Settle both reads before failure cleanup can remove the prepared checkout.
+      if (targetResult.status === 'rejected') {
+        throw targetResult.reason
+      }
+      if (preparedResult.status === 'rejected') {
+        throw preparedResult.reason
+      }
+      const { baseContext, targetHead } = targetResult.value
+      const preparedHeadOutput = preparedResult.value.stdout
       if (preparedHeadOutput.trim() !== targetHead) {
         await gitExecFileAsync(
           [...windowsLongPathGitArgs(preparedPath), 'reset', '--hard', targetHead],
@@ -213,20 +236,26 @@ export async function finalizePreparedWorktree(
 
       let moved = false
       try {
-        await gitExecFileAsync(
-          [
-            ...windowsLongPathGitArgs(repoPath),
-            'worktree',
-            'move',
-            '-f',
-            '-f',
-            preparedPath,
-            worktreePath
-          ],
-          gitExecOptions(repoPath, finalizeGitOptions)
-        )
-        moved = true
-        // Why: `-f -f` moves the locked preparation while preserving its lock reason (Git >=2.25).
+        try {
+          // Why: `-f -f` moves the locked preparation while preserving its lock reason (Git >=2.25).
+          await gitExecFileAsync(
+            [
+              ...windowsLongPathGitArgs(repoPath),
+              'worktree',
+              'move',
+              '-f',
+              '-f',
+              preparedPath,
+              worktreePath
+            ],
+            gitExecOptions(repoPath, finalizeGitOptions)
+          )
+          moved = true
+        } finally {
+          // The move rewrites both `.git` markers, and a failure can have rewritten one.
+          invalidateWslLinkedWorktreeGitRouting(preparedPath)
+          invalidateWslLinkedWorktreeGitRouting(worktreePath)
+        }
         await gitExecFileAsync(
           [
             ...windowsLongPathGitArgs(worktreePath),

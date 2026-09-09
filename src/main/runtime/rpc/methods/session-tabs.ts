@@ -14,7 +14,9 @@ import {
 } from './session-tabs-inventory'
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
+import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
+import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
@@ -22,11 +24,12 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     name: 'session.tabs.list',
     params: WorktreeTabSelector,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
-      await restoreStructuredTabsIfSupported(runtime, clientCapabilities)
+      await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
       return projectSessionTabsForClient(
         await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
         clientKind,
-        clientCapabilities
+        clientCapabilities,
+        isStructuredNativeChatEnabled(runtime)
       )
     }
   }),
@@ -34,7 +37,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     name: 'session.tabs.listAll',
     params: null,
     handler: async (_params, context) => {
-      await restoreStructuredTabsIfSupported(context.runtime, context.clientCapabilities)
+      await restoreStructuredTabsIfSupported(context)
       return listSessionTabsInventory(context)
     }
   }),
@@ -89,7 +92,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       let unsubscribe = (): void => {}
       let closed = false
       let initialized = false
-      await restoreStructuredTabsIfSupported(runtime, clientCapabilities)
+      await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
       const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
       if (closed) {
         return
@@ -113,9 +116,17 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
+      const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
       emit({
         type: 'snapshot',
-        ...projectSessionTabsForClient(initial, clientKind, clientCapabilities)
+        ...withProofDelta(
+          projectSessionTabsForClient(
+            initial,
+            clientKind,
+            clientCapabilities,
+            isStructuredNativeChatEnabled(runtime)
+          )
+        )
       })
       initialized = true
       if (closed) {
@@ -126,7 +137,14 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         if (snapshot.worktree === subscribedWorktree) {
           emit({
             type: 'updated',
-            ...projectSessionTabsForClient(snapshot, clientKind, clientCapabilities)
+            ...withProofDelta(
+              projectSessionTabsForClient(
+                snapshot,
+                clientKind,
+                clientCapabilities,
+                isStructuredNativeChatEnabled(runtime)
+              )
+            )
           })
         }
       }, pairedDeviceId)
@@ -157,7 +175,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
     name: 'session.tabs.subscribeAll',
     params: null,
     handler: async (_params, context, emit) => {
-      await restoreStructuredTabsIfSupported(context.runtime, context.clientCapabilities)
+      await restoreStructuredTabsIfSupported(context)
       return subscribeSessionTabsInventory(context, emit)
     }
   }),

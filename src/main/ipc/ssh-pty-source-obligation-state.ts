@@ -18,6 +18,7 @@ export const CLOSED_SOURCE_TOKEN_TOMBSTONE_LIMIT = 256
 export type SpanRecord = {
   span: PtySourceSpan
   obligations: Map<SshPtySourceConsumerId, SshPtySourceObligationState>
+  owner: TokenRecord
 }
 
 export type ReservationRecord = {
@@ -57,10 +58,12 @@ export function createSourceToken(
 }
 
 export function createSourceSpanRecord(
+  owner: TokenRecord,
   span: PtySourceSpan,
   consumers: readonly SshPtySourceConsumerId[]
 ): SpanRecord {
   return {
+    owner,
     span,
     obligations: new Map(
       consumers.map((consumer) => [consumer, Object.freeze({ state: 'open' as const })])
@@ -158,7 +161,7 @@ export function cancelOpenSourceObligations(token: TokenRecord, reason: string):
 
 export function reclaimPublishedSourcePrefix(
   token: TokenRecord,
-  spanOwners: Map<string, TokenRecord>
+  spanOwners: Map<string, SpanRecord>
 ): void {
   while (token.spans[0]?.span.sourceEndSu <= token.ackPublishedEndSu) {
     const record = token.spans.shift()!
@@ -168,7 +171,7 @@ export function reclaimPublishedSourcePrefix(
 
 export function releaseSourceTokenSpans(
   token: TokenRecord,
-  spanOwners: Map<string, TokenRecord>
+  spanOwners: Map<string, SpanRecord>
 ): void {
   for (const record of token.spans) {
     spanOwners.delete(record.span.spanId)
@@ -191,7 +194,7 @@ export function releaseSourceTokenReservations(
 export function rollbackCommittedSourceSpan(
   token: TokenRecord,
   reservation: SshPtySourceAdmissionReservation,
-  spanOwners: Map<string, TokenRecord>
+  spanOwners: Map<string, SpanRecord>
 ): boolean {
   const last = token.spans.at(-1)
   if (
@@ -210,15 +213,25 @@ export function rollbackCommittedSourceSpan(
 }
 
 export function requireSourceSpan(
-  spanOwners: ReadonlyMap<string, TokenRecord>,
+  spanOwners: ReadonlyMap<string, SpanRecord>,
   spanId: string
 ): { token: TokenRecord; span: SpanRecord } {
-  const token = spanOwners.get(spanId)
-  const span = token?.spans.find((candidate) => candidate.span.spanId === spanId)
-  if (!token || !span) {
+  const span = spanOwners.get(spanId)
+  if (!span || span.span.spanId !== spanId) {
     throw new Error('Unknown or reclaimed SSH PTY source span')
   }
-  return { token, span }
+  return { token: span.owner, span }
+}
+
+export function requireSourceReservation(
+  reservations: ReadonlyMap<string, ReservationRecord>,
+  reservation: SshPtySourceAdmissionReservation
+): ReservationRecord {
+  const record = reservations.get(reservation.reservationId)
+  if (!record || record.reservation !== reservation) {
+    throw new Error('Unknown SSH PTY source admission reservation')
+  }
+  return record
 }
 
 export function closeSourceGeneration(
@@ -271,7 +284,7 @@ export function closeSourceToken(
   tokens: Map<string, TokenRecord>,
   closedSnapshots: Map<string, SshPtySourceTokenSnapshot>,
   reservations: Map<string, ReservationRecord>,
-  spanOwners: Map<string, TokenRecord>,
+  spanOwners: Map<string, SpanRecord>,
   onTokenClosed: (identity: PtySourceDeliveryIdentity) => void
 ): void {
   token.state = 'closed'

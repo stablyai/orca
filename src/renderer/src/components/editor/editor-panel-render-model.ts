@@ -13,7 +13,7 @@ import type { EditorToggleValue } from './EditorViewToggle'
 import type { FileContent } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getMarkdownRenderMode, type MarkdownRenderState } from './markdown-render-mode'
-import { getMarkdownRichModeEligibility } from './markdown-rich-mode'
+import { getCachedMarkdownRichModeEligibility } from './markdown-rich-mode-eligibility-cache'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 
@@ -24,7 +24,7 @@ type EditorPanelRenderModelParams = {
   gitStatusEntries: StoreState['gitStatusByWorktree'][string] | undefined
   gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
-  markdownRichModeSizeOverride: StoreState['markdownRichModeSizeOverride']
+  markdownRichModeSizeOverridden: boolean
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
 }
@@ -36,7 +36,7 @@ export function getEditorPanelRenderModel({
   gitStatusEntries,
   gitBranchEntries,
   markdownViewMode,
-  markdownRichModeSizeOverride,
+  markdownRichModeSizeOverridden,
   isChangesMode,
   canOpenWorkspaceFileBrowser
 }: EditorPanelRenderModelParams) {
@@ -143,9 +143,9 @@ export function getEditorPanelRenderModel({
   if (canRenderInlineMarkdown) {
     const shouldClassifyRichMode = mdViewMode === 'rich'
     const richModeEligibility = shouldClassifyRichMode
-      ? getMarkdownRichModeEligibility({
+      ? getCachedMarkdownRichModeEligibility({
           content: inlineMarkdownContent,
-          sizeOverridden: markdownRichModeSizeOverride[activeFile.id] === true
+          sizeOverridden: markdownRichModeSizeOverridden
         })
       : null
     const richModeUnsupportedMessage = richModeEligibility?.unsupportedMessage ?? null

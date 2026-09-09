@@ -2,6 +2,7 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneManagerOptions,
+  PaneSplitOptions,
   PaneStyleOptions
 } from './pane-manager-types'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
@@ -21,6 +22,7 @@ import { disposeWebgl } from './pane-webgl-renderer'
 import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
+import { releaseTerminalScrollIntentKey } from './terminal-scroll-intent-key-store'
 
 type MovedPaneSplitState = {
   pane: ManagedPaneInternal
@@ -31,7 +33,7 @@ type MovedPaneSplitState = {
 type SplitManagedPaneArgs = {
   paneId: number
   direction: 'vertical' | 'horizontal'
-  opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+  opts?: PaneSplitOptions
   sourceContainer?: HTMLElement
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
@@ -140,7 +142,7 @@ function openSplitPane(
   newPane: ManagedPaneInternal,
   cwd?: string
 ): void {
-  openTerminal(newPane)
+  openTerminal(newPane, args.managerOptions.terminalLigaturesEnabled?.())
   applyActivePaneStyles(args.root, args.panes.values(), newPane.id, args.styleOptions)
   applyDividerStyles(args.root, args.styleOptions)
   newPane.terminal.focus()
@@ -149,6 +151,7 @@ function openSplitPane(
   // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
   const spawnHints = {
     ...(cwd ? { cwd } : {}),
+    ...(args.opts?.cwdPromise ? { cwdPromise: args.opts.cwdPromise } : {}),
     ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {})
   }
   args.publishPaneCreated(newPane, Object.keys(spawnHints).length > 0 ? spawnHints : undefined)
@@ -178,6 +181,12 @@ function teardownManagedPane(
   const closedLeafId = pane.leafId
   args.releasePaneIdentity(args.paneId)
   removePaneContainer(args, pane)
+  if (reason === 'close') {
+    // Leaf ids are minted UUIDs and never reused, so a closed leaf's scroll
+    // intent is unreachable. Detach/retire hand the leaf to a new host, which
+    // must still be able to restore it.
+    releaseTerminalScrollIntentKey(closedLeafId)
+  }
   const nextActivePaneId = activateReplacementPane(args)
   applyActivePaneStyles(args.root, args.panes.values(), nextActivePaneId, args.styleOptions)
   for (const p of args.panes.values()) {

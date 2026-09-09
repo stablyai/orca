@@ -1,10 +1,15 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import type { ExactWorkerProviderSession } from '../../../shared/orchestration-worker-output'
+import {
+  isWslHookRelayConnectionId,
+  wslHookRelayConnectionId
+} from '../../../shared/wsl-hook-relay-contract'
 
 export function selectExactWorkerProviderSession(args: {
   paneKey: string
   processIncarnation: string
   connectionId: string | null | undefined
+  wslDistro?: string | null
   launchToken: string | null | undefined
   observedAfter: number
   statuses: readonly AgentStatusIpcPayload[]
@@ -13,7 +18,7 @@ export function selectExactWorkerProviderSession(args: {
     .filter(
       (entry) =>
         entry.paneKey === args.paneKey &&
-        (args.connectionId === undefined || entry.connectionId === args.connectionId) &&
+        connectionMatches(entry.connectionId, args.connectionId, args.wslDistro) &&
         (!args.launchToken || entry.launchToken === args.launchToken) &&
         entry.providerSessionOnly !== true &&
         entry.providerSession !== undefined &&
@@ -24,11 +29,43 @@ export function selectExactWorkerProviderSession(args: {
   if (!status?.providerSession || !status.agentType) {
     return null
   }
-  return {
+  const wslDistro = attestedWslDistro(status.connectionId, args.wslDistro)
+  const selected: ExactWorkerProviderSession = {
     paneKey: args.paneKey,
     processIncarnation: args.processIncarnation,
+    connectionId: status.connectionId,
+    ...(wslDistro ? { wslDistro } : {}),
     agent: status.agentType,
     providerSession: { ...status.providerSession },
     observedAt: status.receivedAt
   }
+  return selected
+}
+
+function attestedWslDistro(
+  connectionId: string | null,
+  expectedDistro: string | null | undefined
+): string | undefined {
+  const distro = expectedDistro?.trim()
+  return distro && connectionId === wslHookRelayConnectionId(distro) ? distro : undefined
+}
+
+function connectionMatches(
+  entryConnectionId: string | null,
+  expectedConnectionId: string | null | undefined,
+  wslDistro: string | null | undefined
+): boolean {
+  if (expectedConnectionId === undefined || entryConnectionId === expectedConnectionId) {
+    return true
+  }
+  // WSL hook relays stamp their distro on the event, while the host PTY stays
+  // local (connectionId null). Require the PTY's known distro to avoid mixing
+  // same-pane events from another WSL transport.
+  return (
+    expectedConnectionId === null &&
+    typeof wslDistro === 'string' &&
+    wslDistro.trim().length > 0 &&
+    isWslHookRelayConnectionId(entryConnectionId) &&
+    entryConnectionId === wslHookRelayConnectionId(wslDistro.trim())
+  )
 }

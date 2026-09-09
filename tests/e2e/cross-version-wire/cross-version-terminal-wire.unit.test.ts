@@ -1,13 +1,3 @@
-// Cross-version coverage for the remote terminal stream, paired in both skew
-// directions: current working tree against the newest published release.
-//
-// What each build publishes is read from that build, never written down here. The
-// baseline is whichever release tag is newest, so a list of "fields the old side
-// does not have yet" stops being true the moment a release ships one of them — the
-// suite then reddens on whatever pull request is in flight, with no code change
-// anywhere. Every version-dependent expectation below therefore comes from a
-// same-version reference pairing of the build that publishes the frame.
-
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { comparePublishedFieldOccurrences, publishedFieldNames } from './published-field-shape'
 import { resolveBaselineReleaseRef, selectLatestStableReleaseTag } from './release-checkout'
@@ -27,6 +17,8 @@ import {
 
 // Why: a cold CI run extracts the baseline checkout before the first journey.
 const SUITE_TIMEOUT_MS = 180_000
+// Last stable release before SnapshotStart began publishing terminal mode metadata.
+const TERMINAL_MODE_METADATA_LEGACY_REF = 'v1.4.190'
 
 /**
  * The frames one journey must produce, named rather than numbered so a diff reads
@@ -60,11 +52,18 @@ let baseline: TerminalWireBuild
 let currentReference: JourneyRecord
 /** What the baseline host publishes to a client of its own version. */
 let baselineReference: JourneyRecord
+let legacyTerminalModeMetadata: TerminalWireBuild
 
 beforeAll(async () => {
   baselineRef = resolveBaselineReleaseRef()
-  current = await loadTerminalWireBuild(WORKING_TREE)
-  baseline = await loadTerminalWireBuild(baselineRef)
+  const [workingTree, baselineRelease, legacyRelease] = await Promise.all([
+    loadTerminalWireBuild(WORKING_TREE),
+    loadTerminalWireBuild(baselineRef),
+    loadTerminalWireBuild(TERMINAL_MODE_METADATA_LEGACY_REF)
+  ])
+  current = workingTree
+  baseline = baselineRelease
+  legacyTerminalModeMetadata = legacyRelease
   currentReference = await runTerminalSkewJourney({ hostBuild: current, clientBuild: current })
   baselineReference = await runTerminalSkewJourney({ hostBuild: baseline, clientBuild: baseline })
 }, SUITE_TIMEOUT_MS)
@@ -154,7 +153,6 @@ describe('cross-version remote terminal wire', () => {
   it('current client against current server completes the journey, and is the reference for a current host', () => {
     expectJourneyActuallyRan(currentReference)
     expectWireCompatible(currentReference)
-    // Current code's own contract in both roles, so it is safe to state literally.
     expect(currentReference.snapshotStarts).toEqual([
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),
@@ -167,8 +165,6 @@ describe('cross-version remote terminal wire', () => {
     expect(baselineReference.clientRevision).toBe(baseline.revision)
     expectJourneyActuallyRan(baselineReference)
     expectWireCompatible(baselineReference)
-    // Anti-vacuous: a reference read from a pairing that published nothing would
-    // make every comparison against it trivially true.
     for (const start of baselineReference.snapshotStarts) {
       expect(publishedFieldNames(start).length).toBeGreaterThan(4)
     }
@@ -181,9 +177,6 @@ describe('cross-version remote terminal wire', () => {
       expect(record.clientRevision).toBe(baseline.revision)
       expectJourneyActuallyRan(record)
       expectWireCompatible(record)
-      // Direction: the NEW host publishes here, and the old client only reads. Skew
-      // must not change what that host puts on the wire, so the expectation is the
-      // current host's own reference — whatever fields it carries today.
       expect(record.snapshotStarts).toEqual(currentReference.snapshotStarts)
     },
     SUITE_TIMEOUT_MS
@@ -196,18 +189,12 @@ describe('cross-version remote terminal wire', () => {
       expect(record.hostRevision).toBe(baseline.revision)
       expectJourneyActuallyRan(record)
       expectWireCompatible(record)
-      // Direction: the OLD host publishes here, and the new client only reads. Which
-      // optional fields that release shipped is a property of the release, so it is
-      // read from the baseline's own pairing rather than named here.
       expect(record.snapshotStarts).toEqual(baselineReference.snapshotStarts)
     },
     SUITE_TIMEOUT_MS
   )
 
   it('adds SnapshotStart fields rather than dropping ones the old host still publishes', () => {
-    // Rule 1 is additive-only. A field the old host still publishes is one an old
-    // client may still read, so dropping it breaks that client with no opcode
-    // change for the decoder check to catch.
     expectSnapshotStartFieldsRemainPublished({
       older: baselineReference.snapshotStarts,
       newer: currentReference.snapshotStarts,
@@ -225,7 +212,6 @@ describe('cross-version remote terminal wire', () => {
     }
     expect(reveal).toHaveProperty('seq')
     delete reveal.seq
-
     expect(() =>
       expectSnapshotStartFieldsRemainPublished({
         older: currentReference.snapshotStarts,
@@ -239,9 +225,6 @@ describe('cross-version remote terminal wire', () => {
   it(
     'still fails a pairing whose peer cannot decode an opcode the other side sends',
     async () => {
-      // The regression case for the guard itself: relaxing a stale field list must
-      // not relax the real incompatibility. A short barrier only bounds a stall
-      // that is already certain — the frame either arrives at once, or never.
       const inputOpcode = Number(current.codec.TerminalStreamOpcode.Input)
       const stall = await runTerminalSkewJourney({
         hostBuild: withoutOpcodeSupport(current, 'Input'),
@@ -251,7 +234,6 @@ describe('cross-version remote terminal wire', () => {
         () => null,
         (error: unknown) => error
       )
-
       expect(stall).toBeInstanceOf(CrossVersionJourneyStall)
       const stalled = stall as CrossVersionJourneyStall
       expect(stalled.step).toBe('input-reaches-process')
@@ -260,6 +242,24 @@ describe('cross-version remote terminal wire', () => {
       expect(stalled.record.rejected).toContainEqual(
         expect.objectContaining({ direction: 'client-to-host', rawOpcode: inputOpcode })
       )
+    },
+    SUITE_TIMEOUT_MS
+  )
+
+  it(
+    'new client handles a release without terminal mode metadata',
+    async () => {
+      const record = await runTerminalSkewJourney({
+        hostBuild: legacyTerminalModeMetadata,
+        clientBuild: current
+      })
+      expect(record.hostLabel).toBe(TERMINAL_MODE_METADATA_LEGACY_REF)
+      expectJourneyActuallyRan(record)
+      expectWireCompatible(record)
+      for (const start of record.snapshotStarts) {
+        expect(start).not.toHaveProperty('terminalOwner')
+        expect(start).not.toHaveProperty('alternateScreen')
+      }
     },
     SUITE_TIMEOUT_MS
   )

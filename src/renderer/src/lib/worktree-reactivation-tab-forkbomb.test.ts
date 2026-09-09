@@ -4,8 +4,26 @@ import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent-test-state'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 
 const initialAppStoreState = useAppStore.getState()
+
+/**
+ * A `session.tabs.list` answer holding no agent-session tab. The gate asks the host for one
+ * workspace's snapshot rather than the whole `session.tabs.listAll` inventory, and refuses an answer
+ * that does not name the scope it listed — so the fake host has to report its worktree.
+ */
+function emptySessionTabsSnapshot(worktreeId: string): RuntimeMobileSessionTabsResult {
+  return {
+    worktree: worktreeId,
+    publicationEpoch: 'epoch-1',
+    snapshotVersion: 1,
+    activeGroupId: null,
+    activeTabId: null,
+    activeTabType: null,
+    tabs: []
+  }
+}
 
 function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState> {
   return {
@@ -94,7 +112,34 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     vi.stubGlobal('window', {
       api: {
         runtime: {
-          call: vi.fn(async () => ({ ok: true, result: { snapshots: [] } }))
+          call: vi.fn(async ({ method }: { method: string }) =>
+            method === 'terminal.list'
+              ? {
+                  ok: true,
+                  result: {
+                    // The host still binds the restored PTY to its original pane.
+                    terminals: [
+                      {
+                        handle: 'restored-1',
+                        ptyId: livePtyId,
+                        worktreeId: worktree.id,
+                        worktreePath: worktree.path,
+                        branch: 'main',
+                        tabId: 'packaged-restart-pane',
+                        leafId,
+                        title: 'Codex',
+                        connected: true,
+                        writable: true,
+                        lastOutputAt: null,
+                        preview: ''
+                      }
+                    ],
+                    truncated: false,
+                    hostScope: { hostIds: ['local'], omittedHostIds: [] }
+                  }
+                }
+              : { ok: true, result: emptySessionTabsSnapshot(worktree.id) }
+          )
         },
         pty: {
           listSessions: vi.fn(async () => [
@@ -122,6 +167,8 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     const restored = useAppStore.getState()
     expect(restored.tabsByWorktree[worktree.id]).toHaveLength(1)
     expect(restored.tabsByWorktree[worktree.id]?.[0]?.ptyId).toBe(livePtyId)
+    // The host's pane, not a freshly minted duplicate surface.
+    expect(restored.tabsByWorktree[worktree.id]?.[0]?.id).toBe('packaged-restart-pane')
     expect(restored.automaticAgentResumeClaimsByTabId).toEqual({})
     expect(restored.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
   })
@@ -132,7 +179,7 @@ describe('STA-1111 worktree reopen does not fork-bomb tabs', () => {
     vi.stubGlobal('window', {
       api: {
         runtime: {
-          call: vi.fn(async () => ({ ok: true, result: { snapshots: [] } }))
+          call: vi.fn(async () => ({ ok: true, result: emptySessionTabsSnapshot(worktree.id) }))
         },
         pty: { listSessions: vi.fn(async () => []) }
       }

@@ -3,6 +3,10 @@ import { spawnMock, registerPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import {
+  SSH_SESSION_EXPIRED_ERROR,
+  SshPtyProvenExitedOnRelayError
+} from '../providers/ssh-pty-errors'
+import {
   registerPtyHandlers,
   registerSshPtyProvider,
   setLocalPtyProvider,
@@ -67,7 +71,9 @@ describe('registerPtyHandlers', () => {
     const freshPtyId = `ssh:${connectionId}@@fresh-relay-pty`
     const remoteSpawn = vi.fn(async (options: { attachOnly?: boolean; command?: string }) => {
       if (options.attachOnly) {
-        throw new Error('PTY "dead-relay-pty" not found')
+        // The relay's raw wire text never reaches a pane untyped; the SSH reattach path mints the
+        // proven-exit class for the one refusal the relay backed with a pid probe.
+        throw new SshPtyProvenExitedOnRelayError(`${SSH_SESSION_EXPIRED_ERROR}: dead-relay-pty`)
       }
       return { id: freshPtyId, incarnationId: 'inc-fresh-ssh-owner' }
     })
@@ -118,6 +124,7 @@ describe('registerPtyHandlers', () => {
       flushOrThrow: vi.fn(),
       persistPtyBinding: vi.fn(),
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
       markSshRemotePtyLease: vi.fn(),
       clearSshRemotePtyKillIntent: vi.fn()
@@ -476,6 +483,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
+      supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
       markSshRemotePtyLease: vi.fn(),

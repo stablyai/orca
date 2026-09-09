@@ -11,6 +11,8 @@ import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { captureRuntimeEnvironmentCall } from './web-runtime-session-environment'
 import { throwIfE2eWebRuntimeBrowserReconciliationFails } from './web-runtime-browser-creation-e2e-fault'
+import { getSessionTabsRuntimeIdFromResponse } from './web-session-tabs-sync/publisher-identity-fences'
+import { recoverWebSessionTerminalOrphansBeforeApply } from './web-session-terminal-orphan-recovery'
 
 const pendingRuntimeWorktreeRecoveryRefreshes = new Map<string, symbol>()
 const RUNTIME_WORKTREE_RECOVERY_REFRESH_DELAYS_MS = [250, 500, 1_000, 2_000, 4_000] as const
@@ -55,6 +57,8 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     if (options.afterCurrentInFlight) {
       throwIfE2eWebRuntimeBrowserReconciliationFails()
     }
+    // Why: a joined in-flight list leaves this undefined, and recovery then fences on the adoption response instead.
+    let runtimeId: string | undefined
     const snapshot = await listSessionTabs({
       environmentId,
       worktreeId,
@@ -66,6 +70,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           },
           timeoutMs: 15_000
         })
+        runtimeId = getSessionTabsRuntimeIdFromResponse(response)
         return unwrapRuntimeRpcResult(
           response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
         )
@@ -89,15 +94,31 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
     }
+    const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
+      useAppStore.getState(),
+      snapshot,
+      environmentId,
+      {
+        expectedEnvironmentPairingRevision,
+        expectedRuntimeId: runtimeId,
+        getCurrentState: () => useAppStore.getState()
+      }
+    )
+    if (
+      !recovered ||
+      getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+    ) {
+      return
+    }
     // Why: this list is the host answering, but only the frame's own decision
     // says whether that answer is evidence — a workspace the mirror never
     // writes is discarded with nothing accepted behind it.
-    const decision = decideWebSessionTabsSnapshot(snapshot, environmentId)
+    const decision = decideWebSessionTabsSnapshot(recovered, environmentId)
     const settleMirror = applyWebSessionTabsStorePatch(
       (state) => {
         // Why: eager refreshes can resolve after the user switched worktrees; update tabs without stealing focus.
         const patch = decision.apply
-          ? applyWebSessionTabsSnapshot(state, snapshot, environmentId)
+          ? applyWebSessionTabsSnapshot(state, recovered, environmentId)
           : state
         return patch === state ? state : patch
       },
@@ -113,7 +134,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           }
         ]
       },
-      snapshot
+      recovered
     )
     settleMirror()
   } catch (error) {

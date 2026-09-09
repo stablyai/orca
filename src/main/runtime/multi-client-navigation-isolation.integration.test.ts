@@ -465,6 +465,43 @@ describe('paired runtime navigation isolation', () => {
     ).toBe('activateWorktree')
   })
 
+  it('normalizes a paired focused terminal.create before host-renderer activation', async () => {
+    const harness = await startHarness()
+    const created = { handle: 'term-b', worktreeId: CLIENT_B_WORKTREE_ID, title: null }
+    const createTerminal = vi
+      .spyOn(harness.runtime, 'createTerminal')
+      .mockImplementation(async (_worktree, options) => {
+        if (options?.presentation === 'focused') {
+          harness.hostSelections.worktreeId = CLIENT_B_WORKTREE_ID
+        }
+        return created as never
+      })
+    vi.spyOn(harness.runtime, 'dedupeTerminalCreate').mockImplementation(
+      async (_owner, worktree, _mutationId, _reconcile, run) => run(worktree, undefined)
+    )
+
+    send(harness.clientB, {
+      id: 'terminal-create-b',
+      method: 'terminal.create',
+      params: {
+        worktree: `id:${CLIENT_B_WORKTREE_ID}`,
+        presentation: 'focused'
+      }
+    })
+    await expect(harness.readerB.next('terminal-create-b')).resolves.toMatchObject({
+      ok: true,
+      result: { terminal: created }
+    })
+    expect(createTerminal).toHaveBeenCalledWith(
+      `id:${CLIENT_B_WORKTREE_ID}`,
+      expect.objectContaining({ presentation: 'background', focus: false, activate: false })
+    )
+    expect(harness.hostSelections).toEqual({
+      worktreeId: HOST_WORKTREE_ID,
+      tabId: 'host-tab'
+    })
+  })
+
   it('still reveals a host-originated create-with-activate on the host and every client', async () => {
     const harness = await startHarness()
     await subscribeBothClientEventStreams(harness)

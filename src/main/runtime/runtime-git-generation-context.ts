@@ -1,4 +1,6 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { gitExecFileAsync } from '../git/runner'
+import type { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   type ResolvedSourceControlAiGenerationParams
@@ -10,8 +12,40 @@ import type { PullRequestLinkedIssueMeta } from '../source-control/pull-request-
 import {
   localGitOptionsForTarget,
   type RuntimeGitCommandHost,
+  type RuntimeGitRoute,
   type RuntimeGitTarget
 } from './runtime-git-command-target'
+
+type PullRequestDraftGitExec = Parameters<typeof getPullRequestDraftContext>[0]
+
+/** Runs the PR draft-context probes on whichever host `route` resolved to. */
+export function pullRequestDraftGitExec(
+  target: RuntimeGitTarget,
+  route: RuntimeGitRoute
+): PullRequestDraftGitExec {
+  if (route.kind === 'ssh') {
+    const provider = route.provider
+    if (!provider) {
+      throw new Error('ssh_git_provider_unavailable')
+    }
+    return (argv, options) => {
+      const timeoutMs = options?.timeoutMs ?? options?.timeout
+      return timeoutMs === undefined
+        ? provider.exec(argv, target.worktree.path)
+        : provider.exec(argv, target.worktree.path, { timeoutMs })
+    }
+  }
+  return (argv, options) =>
+    gitExecFileAsync(argv, {
+      cwd: target.worktree.path,
+      ...localGitOptionsForTarget(target),
+      ...(options?.maxBuffer === undefined ? {} : { maxBuffer: options.maxBuffer }),
+      ...(options?.timeoutMs === undefined && options?.timeout === undefined
+        ? {}
+        : { timeout: options?.timeoutMs ?? options?.timeout }),
+      admissionTier: 'interactive'
+    })
+}
 
 export type RuntimeCommitMessageSettingsOverride = Partial<
   Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>

@@ -127,9 +127,12 @@ jobs:
           esac
           # Bare: a work-tree repo refuses to fetch over its own checked-out
           # branch. tree:0 keeps the fetch to the commit graph — no trees, no
-          # blobs — so this stays cheap next to the build it fronts.
+          # blobs — so this stays cheap next to the build it fronts. reftable
+          # because this repo has branches that differ only in casing, and the
+          # files backend cannot store both on a case-insensitive runner disk —
+          # it fails the entire fetch, not just the one ref.
           scratch="$RUNNER_TEMP/vet-requested-ref"
-          git init -q --bare "$scratch"
+          git init -q --bare --ref-format=reftable "$scratch"
           git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
           # Branch first to keep actions/checkout's old tie-break: bare
           # rev-parse would prefer the tag when a branch shares its name.
@@ -157,6 +160,9 @@ jobs:
 
       - name: Checkout the requested ref
         uses: actions/checkout@v6
+        env:
+          # Full-history checkout must also preserve case-twin branch and tag names.
+          GIT_DEFAULT_REF_FORMAT: reftable
         with:
           # Why an input at all rather than just github.ref: the whole point is to
           # build code that has not landed, and the workflow definition itself
@@ -401,27 +407,51 @@ jobs:
             echo "::warning::Could not discard draft $TAG; remove it manually."
 
       - name: Prune expired adhoc releases
+        # Only after a live publish: $TAG is then a non-draft this step must not
+        # delete, and a run that failed before publishing has nothing to retire.
+        if: steps.publish_live.outcome == 'success'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          # Protect the tag this run just shipped, so no filter mistake can delete
+          # a build minutes after the person who cut it was told it exists.
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
           set -euo pipefail
           # Why compute the cutoff in bash rather than with jq's `now`: this runs
           # once per dispatch, and a fixed epoch makes the threshold visible in the
           # log when someone asks where their build went.
           cutoff=$(( $(date -u +%s) - ADHOC_RETAIN_DAYS * 86400 ))
-          echo "Pruning adhoc releases created before $(date -u -r "$cutoff" '+%Y-%m-%dT%H:%M:%SZ')"
+          echo "Pruning adhoc releases published before $(date -u -r "$cutoff" '+%Y-%m-%dT%H:%M:%SZ')"
           # --cleanup-tag so pruning does not leave orphan tags with no release or
           # assets attached. Drafts are excluded: a stale draft is the failure
           # path's business, not the retention window's.
-          stale="$(gh release list --repo "$ADHOC_REPO" --limit 200 --json tagName,createdAt,isDraft \
-            --jq "map(select(.isDraft | not)) | map(select((.createdAt | fromdateiso8601) < $cutoff)) | .[].tagName")"
+          #
+          # Age comes from publishedAt, never createdAt. GitHub reports createdAt
+          # as the date of the *commit* a release's tag points at, and every tag
+          # here is cut from this repo's one seed commit — so all of them carry
+          # that same createdAt, and the day the window rolled past it the entire
+          # channel expired at once and a single run deleted it. A release with no
+          # publishedAt is kept rather than aged by guesswork.
+          jq_filter='map(select(.isDraft | not))'
+          if [[ -n "${TAG:-}" ]]; then
+            jq_filter+=" | map(select(.tagName != \"${TAG//\"/\\\"}\"))"
+          fi
+          jq_filter+=" | map(select((.publishedAt // \"\") != \"\"))"
+          jq_filter+=" | map(select((.publishedAt | fromdateiso8601) < $cutoff)) | .[].tagName"
+          stale="$(gh release list --repo "$ADHOC_REPO" --limit 200 --json tagName,publishedAt,isDraft \
+            --jq "$jq_filter")"
           if [[ -z "$stale" ]]; then
             echo "Nothing to prune."
             exit 0
           fi
           while read -r tag; do
             [[ -n "$tag" ]] || continue
+            # Belt-and-suspenders: the filter above should already exclude $TAG.
+            if [[ -n "${TAG:-}" && "$tag" == "$TAG" ]]; then
+              echo "::warning::Prune list still included just-published $tag after protect; skipping delete."
+              continue
+            fi
             echo "Pruning $tag"
             gh release delete "$tag" --repo "$ADHOC_REPO" --yes --cleanup-tag || \
               echo "::warning::Could not prune $tag"

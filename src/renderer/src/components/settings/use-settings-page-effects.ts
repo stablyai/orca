@@ -16,7 +16,6 @@ import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import {
   getSettingsSectionId,
-  isEditableTarget,
   SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID,
   SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS
 } from './settings-navigation-foundations'
@@ -89,8 +88,8 @@ export function useSettingsPageEffects(
       if (hasVisibleOverlay()) {
         return
       }
-      // Why: Escape in an editable control means "cancel this edit", not "close Settings" — defer to the field's own handler.
-      if (isEditableTarget(event.target)) {
+      // Why: IME composition owns Escape; ordinary controls should still close Settings.
+      if (event.isComposing) {
         return
       }
       if (activeSectionId === 'shortcuts') {
