@@ -12,7 +12,7 @@ this order, each independently shippable:
 3. shared: one worktree-status rollup and one freshness rule for every reader.
 
 The PR that carries this document is PR 1a. Sections below are grouped under
-the step that delivers them; only PR 1a has landed.
+the step that delivers them; PR 1a and PR 1b have landed.
 
 ## The problem this solves
 
@@ -27,7 +27,7 @@ separate copies of the same row inside the main process alone:
 | Main-process copy                      | Keyed by  | Owned by                                                   | Persisted           | Evicted                       |
 | -------------------------------------- | --------- | ---------------------------------------------------------- | ------------------- | ----------------------------- |
 | hook server `lastStatusByPaneKey`      | paneKey   | `src/main/agent-hooks/server.ts`                           | `last-status.json`  | tab close, pty exit, hydrate  |
-| runtime `RuntimeAgentRowStore`         | paneKey   | `src/main/runtime/runtime-agent-row-store.ts`              | no                  | pty exit only                 |
+| runtime `RuntimeAgentRowStore`         | paneKey   | `runtime-agent-row-store.ts` (deleted in PR 1b)            | no                  | pty exit only                 |
 | structured feed `published`            | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no  | never (a broadcast cache)     |
 
 The second copy is a duplicate write: the OSC status parsed in main is
@@ -151,7 +151,7 @@ sits at the file-length cap.
 The structured adapter added in #19217 is deleted, and structured rows reach
 `worktree ps` through the same snapshot as every other row. The
 retained-versus-hook reconciliation in `collectRuntimeWorktreePtyAgentSources`
-stays until PR 1b removes the store that feeds it. What this step settles is
+stayed until PR 1b removed the store that fed it. What this step settles is
 the admission gate that decides which rows a worktree listing may show:
 
 - a hook or OSC row needs its tab mirrored or a connected pty, as today, and
@@ -186,47 +186,82 @@ pane key two writers. Removing that filter is the first step of PR 2.
 
 ## PR 1b: the runtime's retained row store is deleted
 
-Not yet implemented; `RuntimeAgentRowStore` and the retained-versus-hook
-reconciliation it feeds are both still in place after PR 1a.
-
-`RuntimeAgentRowStore` keeps the same payload the hook server already holds.
-Its only extra is the pty id, used to clear rows on exit and as a fallback key
-for the mobile projection. PR 1b will stamp `terminalHandle` on OSC-ingested
-rows from the runtime event's `ptyId`, and rewrite the three readers over the
-hook server's snapshot:
+Landed. `RuntimeAgentRowStore` is gone, and with it the retained-versus-hook
+reconciliation in `collectRuntimeWorktreePtyAgentSources`. The hook server's
+store is now the only main-process copy of a PTY agent's row.
 
 ### The five call sites
 
-`RuntimeAgentRowStore` is constructed once
-(`orca-runtime-fit-override-listeners.ts:131`) and reached from five places:
-
-| Call site | Today | After |
+| Call site | Before | After |
 | --- | --- | --- |
-| `orca-runtime-create-terminal-side-effect-command-code-detector.ts:179` `retain()` | second write of the OSC payload already sent to the hook server | deleted; the hook ingest keeps the only copy, now stamped with `terminalHandle` from the event's `ptyId` |
-| `...command-code-detector.ts:190` `clearPty()` | drops rows on pty exit | deleted; pane teardown already clears the hook row |
-| `orca-runtime-get-worktree-ps.ts:110` `values()` | feeds `retainedSnapshots` | deleted; the reader keeps only `hookSnapshots` |
-| `orca-runtime-serialize-agent-prompt-submission.ts:184` `getFreshExplicit()` | retained row first | reads the hook snapshot |
-| `orca-runtime-prune-mobile-session-tab-group-layout.ts:133` `getFreshForMobile()` | pane key, then pty id | pane key, then `terminalHandle` |
+| `orca-runtime-create-terminal-side-effect-command-code-detector.ts` `retain()` | second write of the OSC payload already sent to the hook server | deleted; the event now carries the pane's `terminalHandle` and the hook ingest keeps the only copy |
+| `...command-code-detector.ts` `clearPty()` | drops rows on pty exit | deleted; pane teardown already clears the hook row |
+| `orca-runtime-get-worktree-ps.ts` `values()` | fed `retainedSnapshots` | deleted; the reader keeps only `hookSnapshots` |
+| `orca-runtime-serialize-agent-prompt-submission.ts` `getFreshExplicit()` | retained row first, hook rows second | `selectFreshExplicitAgentStatus`, hook rows only |
+| `orca-runtime-prune-mobile-session-tab-group-layout.ts` `getFreshForMobile()` | pane key, then pty id | `selectFreshAgentRowForMobileTab`: pane key, then `terminalHandle` |
 
-Then `runtime-agent-row-store.ts` is deleted, and
-`collectRuntimeWorktreePtyAgentSources` loses its `retainedSnapshots`
-parameter and the retained-versus-hook reconciliation with it — the reason
-that reconciliation exists is that two stores could disagree about one pane.
+Both readers moved into `runtime-hook-agent-row-selection.ts`, which also owns
+`RuntimeAgentRowSnapshot` now that nothing retains one.
 
-### Why `terminalHandle` has to land first
+### `terminalHandle` is the row's join back to its terminal
 
-The retained store's only real extra is the pty id. Two of the five readers
-use it, so the hook row has to carry the same fact before the store can go.
-Stamping it on ingest is a smaller change than teaching the readers a second
-lookup, and it puts the pty binding on the row that already owns the pane.
+The retained store's only real extra was the pty id, and two readers used it.
+The plan said to stamp the event's `ptyId` into `terminalHandle`; that was
+wrong. A terminal handle (`term_<uuid>`) and a pty id are different
+identifiers, and `getFreshExplicit` was already comparing hook rows against a
+real handle. What landed instead:
+
+- `AgentHookEventPayload` and the runtime's terminal-status event gained an
+  optional `terminalHandle`. The detector resolves it once per chunk through
+  `getAgentStatusTerminalHandleForPaneKey` — the same lookup the renderer-facing
+  IPC boundary already runs for every row, so the two surfaces cannot disagree
+  about which terminal a pane is.
+- `applyNormalizedStatus` carries the handle forward when an incoming event
+  resolves none. Only main's OSC parse can resolve one, so an HTTP hook post for
+  the same pane would otherwise erase it.
+- It is never persisted. A handle belongs to the runtime that issued it, and a
+  hydrated one could only rejoin a row to somebody else's terminal.
+- `toAgentStatusIpcPayload` publishes it, which also makes `getFreshExplicit`'s
+  long-dead handle comparison live: the runtime reads raw snapshot rows, and
+  before this nothing ever stamped the field on them.
+
+`worktree ps` uses it too. `ConnectedPtyEvidence` traded its flat `ptyIds` set
+for `ptyIdByTerminalHandle`, so a row still resolves the connected PTY behind
+it — which is both the working-terminal rollup's match key and the last rescue
+for a row whose pane binding was nulled by a controller incarnation change.
+
+### The change detector had to move with the store
+
+`retain()` was not only a store: its boolean return was the signal that
+republished `session.tabs` for a status-only transition, which no title change
+covers (#7970). `hook-status-session-tabs-invalidation.ts` already mirrors that
+exact change set plus hook restore provenance, so the replacement was to route
+the signal off the store rather than build a second comparator.
+`installHookStatusSessionTabsRepublish` now owns all three arms — enriched
+status, pane clear, and the status-drop tap a dismissal emits — and both hosts
+install it.
+
+### Both hosts, not just the desktop one
+
+`orcad` constructed its runtime with no `onTerminalAgentStatus`, so main's OSC
+parse never reached the store there and the retained copy was the only carrier.
+Deleting it without wiring orcad would have made a headless host list no PTY
+agents at all. `orcad-entry.ts` now binds the producer and installs the
+republish signal, alongside the snapshot and structured sink it already had.
 
 ### The intended behavior change
 
-A row the user dismisses on the desktop disappears from `worktree ps` and the
-phone at the same time, instead of lingering until the pty exits. That is the
-point: one store means one dismissal. It is the only user-visible change in
-this step, and the characterization tests for `worktree ps` should show
-nothing else moving.
+A row the user dismisses on the desktop leaves `worktree ps` and the phone at
+once, instead of lingering until the pty exits. One store means one dismissal.
+
+### The one consequence that was not intended
+
+A legacy numeric pane key (`<tabId>:<paneRuntimeId>`, minted for a
+pre-stable-id `pane:N` leaf) fails `parsePaneKey`, so `ingestTerminalStatus`
+refuses it. Such a pane already produced no hook row and therefore no sidebar
+row; the retained store was the last thing still listing it in `worktree ps`
+and on mobile. Those rows are now absent everywhere rather than present in two
+surfaces out of four.
 
 ## PR 2: the renderer subscribes
 
@@ -273,8 +308,11 @@ call it.
   `getStatusSnapshot`, `worktree ps`, and the mobile projection; assert the
   serializer never writes a row carrying `structuredHost`; assert a hydrated
   file that somehow contains one is dropped.
-- Unit: the existing `worktree ps` suites pass unchanged, which is the
-  characterization that will show PR 1b's deletion of the retained store
-  changed no listing.
+- Unit: the `worktree ps` suites written against the retained store are rewired
+  to a real `AgentHookServer` (`agent-status-store-wiring.test-fixture.ts`)
+  rather than deleted, so each still asserts the listing behavior it named. The
+  dismissal change is pinned end to end in
+  `orca-runtime-tests/worktree-ps-agent-row-dismissal.spec.ts`, which fails with
+  the retained store restored.
 - Live: the parity check from #19217 (working, done, close, reload) repeated
   against the merged store, with both surfaces read from the one row.
