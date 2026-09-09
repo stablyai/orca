@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -31,6 +32,13 @@ const (
 	// Only populated end-to-end for the cookie/session auth path today
 	// (authclient.SessionValidator) — see common/tenant.Role's doc comment.
 	MetadataRole = "x-orca-role"
+	// MetadataClientIP carries the caller's real client IP, resolved once
+	// at the api-gateway edge (httpgateway.authMiddleware) from the inbound
+	// HTTP request — added for CR-RBAC-005/TASK-BE-023 so an internal
+	// service's audit call sites can record it (common/tenant.ClientIP)
+	// without each one re-deriving it (or trusting its own gRPC peer info,
+	// which would just be api-gateway's IP, not the real client's).
+	MetadataClientIP = "x-orca-client-ip"
 )
 
 // TenantExtractionInterceptor pulls MetadataTenantID/MetadataUserID out of
@@ -59,6 +67,9 @@ func TenantExtractionInterceptor() grpc.UnaryServerInterceptor {
 			}
 			if v := md.Get(MetadataRole); len(v) > 0 && v[0] != "" {
 				ctx = tenant.WithRole(ctx, v[0])
+			}
+			if v := md.Get(MetadataClientIP); len(v) > 0 && v[0] != "" {
+				ctx = tenant.WithClientIP(ctx, v[0])
 			}
 		}
 		return handler(ctx, req)
@@ -116,4 +127,16 @@ func ChainUnary(logger *slog.Logger) grpc.ServerOption {
 		TenantExtractionInterceptor(),
 		LoggingInterceptor(logger),
 	)
+}
+
+// StatsHandler returns the OTel gRPC stats handler every gRPC-serving
+// service passes to grpc.NewServer ALONGSIDE ChainUnary (never instead of
+// it, never merged into it) — kept separate specifically so this addition
+// never touches ChainUnary's signature, which every one of the 16
+// gRPC-serving services calls identically today (impact() confirms
+// CRITICAL blast radius: 32 impacted symbols, 16 direct call sites, as of
+// TASK-BE-FFT-001). Produces a server-side span per inbound RPC — the
+// "one span per hop" half of CR-FFT-001's cross-service trace.
+func StatsHandler() grpc.ServerOption {
+	return grpc.StatsHandler(otelgrpc.NewServerHandler())
 }

@@ -141,8 +141,8 @@ func (fakeExecutor) WriteFileChunk(context.Context, string, string, int64, []byt
 
 func (fakeExecutor) CreateDir(context.Context, string, string, bool, bool) error { return nil }
 
-func (fakeExecutor) CreateFile(context.Context, string, string) error { return nil }
-func (fakeExecutor) Delete(context.Context, string, string, bool) error          { return nil }
+func (fakeExecutor) CreateFile(context.Context, string, string) error   { return nil }
+func (fakeExecutor) Delete(context.Context, string, string, bool) error { return nil }
 
 func (fakeExecutor) Stat(context.Context, string, string) (domain.FileStat, error) {
 	return domain.FileStat{Exists: true, SizeBytes: 7}, nil
@@ -379,6 +379,10 @@ func newTestServerWithResolver(resolver *fakeResolver) *Server {
 		usecase.NewDiscard(resolver, exec, exec),
 		usecase.NewBulkDiscard(resolver, exec, exec),
 		usecase.NewReadEphemeralVmRecipes(reachability, projects, exec, exec),
+		// nil FileWatchStreamer: this test only exercises server construction
+		// wiring, not WatchWorktree's own behavior (no dedicated test needs
+		// one yet — BACKLOG-003).
+		usecase.NewWatchWorktreeFiles(resolver, nil),
 	)
 }
 

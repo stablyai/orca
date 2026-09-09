@@ -25,15 +25,20 @@ const (
 	AuthService_ValidateSession_FullMethodName               = "/orca.auth.v1.AuthService/ValidateSession"
 	AuthService_IssueServiceToken_FullMethodName             = "/orca.auth.v1.AuthService/IssueServiceToken"
 	AuthService_GetJWKS_FullMethodName                       = "/orca.auth.v1.AuthService/GetJWKS"
+	AuthService_IsServiceTokenRevoked_FullMethodName         = "/orca.auth.v1.AuthService/IsServiceTokenRevoked"
+	AuthService_ListCliTokens_FullMethodName                 = "/orca.auth.v1.AuthService/ListCliTokens"
+	AuthService_RevokeCliToken_FullMethodName                = "/orca.auth.v1.AuthService/RevokeCliToken"
 	AuthService_CreateUser_FullMethodName                    = "/orca.auth.v1.AuthService/CreateUser"
 	AuthService_ListUsers_FullMethodName                     = "/orca.auth.v1.AuthService/ListUsers"
 	AuthService_UpdateUserRole_FullMethodName                = "/orca.auth.v1.AuthService/UpdateUserRole"
 	AuthService_RevokeSession_FullMethodName                 = "/orca.auth.v1.AuthService/RevokeSession"
 	AuthService_QueryAuditLog_FullMethodName                 = "/orca.auth.v1.AuthService/QueryAuditLog"
+	AuthService_AppendAuditEntry_FullMethodName              = "/orca.auth.v1.AuthService/AppendAuditEntry"
 	AuthService_DeactivateUser_FullMethodName                = "/orca.auth.v1.AuthService/DeactivateUser"
 	AuthService_ReactivateUser_FullMethodName                = "/orca.auth.v1.AuthService/ReactivateUser"
 	AuthService_ListSessionsForUser_FullMethodName           = "/orca.auth.v1.AuthService/ListSessionsForUser"
 	AuthService_ForceRevokeAllSessionsForUser_FullMethodName = "/orca.auth.v1.AuthService/ForceRevokeAllSessionsForUser"
+	AuthService_ForceRevokeSession_FullMethodName            = "/orca.auth.v1.AuthService/ForceRevokeSession"
 	AuthService_CreateAccessPolicy_FullMethodName            = "/orca.auth.v1.AuthService/CreateAccessPolicy"
 	AuthService_GetAccessPolicy_FullMethodName               = "/orca.auth.v1.AuthService/GetAccessPolicy"
 	AuthService_ListAccessPolicies_FullMethodName            = "/orca.auth.v1.AuthService/ListAccessPolicies"
@@ -43,6 +48,9 @@ const (
 	AuthService_ListTenantMemberDirectory_FullMethodName     = "/orca.auth.v1.AuthService/ListTenantMemberDirectory"
 	AuthService_StartSsoLogin_FullMethodName                 = "/orca.auth.v1.AuthService/StartSsoLogin"
 	AuthService_CompleteSsoLogin_FullMethodName              = "/orca.auth.v1.AuthService/CompleteSsoLogin"
+	AuthService_RefreshSession_FullMethodName                = "/orca.auth.v1.AuthService/RefreshSession"
+	AuthService_UpdateSsoGroupMapping_FullMethodName         = "/orca.auth.v1.AuthService/UpdateSsoGroupMapping"
+	AuthService_ListSsoGroupMapping_FullMethodName           = "/orca.auth.v1.AuthService/ListSsoGroupMapping"
 )
 
 // AuthServiceClient is the client API for AuthService service.
@@ -61,16 +69,49 @@ type AuthServiceClient interface {
 	// per-request call back, so this RPC deliberately requires no caller
 	// identity.
 	GetJWKS(ctx context.Context, in *GetJWKSRequest, opts ...grpc.CallOption) (*GetJWKSResponse, error)
+	// --- CR-CLI-002 (headless CLI credential: mint/revoke/list) ---
+	// IsServiceTokenRevoked backs api-gateway's per-request bearer-JWT
+	// revocation check (usecase.AuthValidator's RevocationChecker,
+	// TASK-BE-CLI-005) — deliberately narrow (just a jti -> bool lookup, not
+	// the full token record) so that check stays a single cheap call, cached
+	// short-term on the caller side (see authclient's RevocationClient doc
+	// comment). No caller-identity gate: any authenticated internal caller
+	// may check any jti's revocation status (this is a yes/no on a random
+	// 32-byte id, not a way to enumerate anything about the owning user).
+	IsServiceTokenRevoked(ctx context.Context, in *IsServiceTokenRevokedRequest, opts ...grpc.CallOption) (*IsServiceTokenRevokedResponse, error)
+	// ListCliTokens/RevokeCliToken are self-service only (TASK-BE-CLI-006) —
+	// user_id always comes from the caller's own resolved identity at
+	// api-gateway (never a request field a client controls), and the
+	// usecase itself re-verifies the caller against tenant.UserID(ctx)
+	// before touching another user's tokens (see
+	// usecase.RevokeCliTokenInput's doc comment) — same self-mint-only
+	// posture as IssueServiceToken (CR-CLI-002, decision 2026-09-09).
+	ListCliTokens(ctx context.Context, in *ListCliTokensRequest, opts ...grpc.CallOption) (*ListCliTokensResponse, error)
+	RevokeCliToken(ctx context.Context, in *RevokeCliTokenRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	// Admin console
 	CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error)
 	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*ListUsersResponse, error)
 	UpdateUserRole(ctx context.Context, in *UpdateUserRoleRequest, opts ...grpc.CallOption) (*UpdateUserRoleResponse, error)
 	RevokeSession(ctx context.Context, in *RevokeSessionRequest, opts ...grpc.CallOption) (*RevokeSessionResponse, error)
 	QueryAuditLog(ctx context.Context, in *QueryAuditLogRequest, opts ...grpc.CallOption) (*QueryAuditLogResponse, error)
+	// AppendAuditEntry lets project-service/task-service/annotation-service/
+	// infra-fleet-service append an entry to this service's own audit_log
+	// from their own OPA-gated decisions (TASK-BE-017/019..022) — auth.audit_log
+	// lives only in auth-service's database (bounded-context rule), so this is
+	// the one cross-service write path onto it. No per-call user authorization
+	// gate: every other service authenticates to auth-service via mTLS +
+	// NetworkPolicy (07-security-architecture.md), not caller identity.
+	AppendAuditEntry(ctx context.Context, in *AppendAuditEntryRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	DeactivateUser(ctx context.Context, in *DeactivateUserRequest, opts ...grpc.CallOption) (*DeactivateUserResponse, error)
 	ReactivateUser(ctx context.Context, in *ReactivateUserRequest, opts ...grpc.CallOption) (*ReactivateUserResponse, error)
 	ListSessionsForUser(ctx context.Context, in *ListSessionsForUserRequest, opts ...grpc.CallOption) (*ListSessionsForUserResponse, error)
 	ForceRevokeAllSessionsForUser(ctx context.Context, in *ForceRevokeAllSessionsForUserRequest, opts ...grpc.CallOption) (*ForceRevokeAllSessionsForUserResponse, error)
+	// ForceRevokeSession is the admin-console single-session kill action for
+	// the Sessions tab's per-row "kill" button — session_id is the token
+	// HASH (as ListSessionsForUser's Session.id already is), NOT the raw
+	// token RevokeSession expects. See force_revoke_session.go's doc comment
+	// for why RevokeSession cannot be reused for this (TASK-BE-002/030).
+	ForceRevokeSession(ctx context.Context, in *ForceRevokeSessionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	CreateAccessPolicy(ctx context.Context, in *CreateAccessPolicyRequest, opts ...grpc.CallOption) (*AccessPolicy, error)
 	GetAccessPolicy(ctx context.Context, in *GetAccessPolicyRequest, opts ...grpc.CallOption) (*AccessPolicy, error)
 	ListAccessPolicies(ctx context.Context, in *ListAccessPoliciesRequest, opts ...grpc.CallOption) (*ListAccessPoliciesResponse, error)
@@ -90,6 +131,19 @@ type AuthServiceClient interface {
 	// {provider} and GET /auth/callback are the only callers.
 	StartSsoLogin(ctx context.Context, in *StartSsoLoginRequest, opts ...grpc.CallOption) (*StartSsoLoginResponse, error)
 	CompleteSsoLogin(ctx context.Context, in *CompleteSsoLoginRequest, opts ...grpc.CallOption) (*CompleteSsoLoginResponse, error)
+	// --- CR-RBAC-003 (SSO group->role mapping, session refresh) ---
+	// RefreshSession rotates Orca's own opaque session token — never the
+	// upstream IdP's OAuth refresh_token (out of scope, not touched by this
+	// RPC). Rejects with PermissionDenied (not a generic error) for an
+	// unknown, revoked, or expired refresh token; presenting an
+	// already-rotated-away refresh token is treated as reuse and revokes
+	// every session for that user, not just this one request.
+	RefreshSession(ctx context.Context, in *RefreshSessionRequest, opts ...grpc.CallOption) (*RefreshSessionResponse, error)
+	// UpdateSsoGroupMapping/ListSsoGroupMapping are admin-console operations
+	// on auth.sso_group_role_mapping, gated by requireAdminActor like every
+	// other admin-console RPC on this service.
+	UpdateSsoGroupMapping(ctx context.Context, in *UpdateSsoGroupMappingRequest, opts ...grpc.CallOption) (*UpdateSsoGroupMappingResponse, error)
+	ListSsoGroupMapping(ctx context.Context, in *ListSsoGroupMappingRequest, opts ...grpc.CallOption) (*ListSsoGroupMappingResponse, error)
 }
 
 type authServiceClient struct {
@@ -150,6 +204,36 @@ func (c *authServiceClient) GetJWKS(ctx context.Context, in *GetJWKSRequest, opt
 	return out, nil
 }
 
+func (c *authServiceClient) IsServiceTokenRevoked(ctx context.Context, in *IsServiceTokenRevokedRequest, opts ...grpc.CallOption) (*IsServiceTokenRevokedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsServiceTokenRevokedResponse)
+	err := c.cc.Invoke(ctx, AuthService_IsServiceTokenRevoked_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ListCliTokens(ctx context.Context, in *ListCliTokensRequest, opts ...grpc.CallOption) (*ListCliTokensResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListCliTokensResponse)
+	err := c.cc.Invoke(ctx, AuthService_ListCliTokens_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RevokeCliToken(ctx context.Context, in *RevokeCliTokenRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, AuthService_RevokeCliToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *authServiceClient) CreateUser(ctx context.Context, in *CreateUserRequest, opts ...grpc.CallOption) (*CreateUserResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(CreateUserResponse)
@@ -200,6 +284,16 @@ func (c *authServiceClient) QueryAuditLog(ctx context.Context, in *QueryAuditLog
 	return out, nil
 }
 
+func (c *authServiceClient) AppendAuditEntry(ctx context.Context, in *AppendAuditEntryRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, AuthService_AppendAuditEntry_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *authServiceClient) DeactivateUser(ctx context.Context, in *DeactivateUserRequest, opts ...grpc.CallOption) (*DeactivateUserResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeactivateUserResponse)
@@ -234,6 +328,16 @@ func (c *authServiceClient) ForceRevokeAllSessionsForUser(ctx context.Context, i
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ForceRevokeAllSessionsForUserResponse)
 	err := c.cc.Invoke(ctx, AuthService_ForceRevokeAllSessionsForUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ForceRevokeSession(ctx context.Context, in *ForceRevokeSessionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, AuthService_ForceRevokeSession_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -330,6 +434,36 @@ func (c *authServiceClient) CompleteSsoLogin(ctx context.Context, in *CompleteSs
 	return out, nil
 }
 
+func (c *authServiceClient) RefreshSession(ctx context.Context, in *RefreshSessionRequest, opts ...grpc.CallOption) (*RefreshSessionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RefreshSessionResponse)
+	err := c.cc.Invoke(ctx, AuthService_RefreshSession_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) UpdateSsoGroupMapping(ctx context.Context, in *UpdateSsoGroupMappingRequest, opts ...grpc.CallOption) (*UpdateSsoGroupMappingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateSsoGroupMappingResponse)
+	err := c.cc.Invoke(ctx, AuthService_UpdateSsoGroupMapping_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) ListSsoGroupMapping(ctx context.Context, in *ListSsoGroupMappingRequest, opts ...grpc.CallOption) (*ListSsoGroupMappingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListSsoGroupMappingResponse)
+	err := c.cc.Invoke(ctx, AuthService_ListSsoGroupMapping_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServiceServer is the server API for AuthService service.
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
@@ -346,16 +480,49 @@ type AuthServiceServer interface {
 	// per-request call back, so this RPC deliberately requires no caller
 	// identity.
 	GetJWKS(context.Context, *GetJWKSRequest) (*GetJWKSResponse, error)
+	// --- CR-CLI-002 (headless CLI credential: mint/revoke/list) ---
+	// IsServiceTokenRevoked backs api-gateway's per-request bearer-JWT
+	// revocation check (usecase.AuthValidator's RevocationChecker,
+	// TASK-BE-CLI-005) — deliberately narrow (just a jti -> bool lookup, not
+	// the full token record) so that check stays a single cheap call, cached
+	// short-term on the caller side (see authclient's RevocationClient doc
+	// comment). No caller-identity gate: any authenticated internal caller
+	// may check any jti's revocation status (this is a yes/no on a random
+	// 32-byte id, not a way to enumerate anything about the owning user).
+	IsServiceTokenRevoked(context.Context, *IsServiceTokenRevokedRequest) (*IsServiceTokenRevokedResponse, error)
+	// ListCliTokens/RevokeCliToken are self-service only (TASK-BE-CLI-006) —
+	// user_id always comes from the caller's own resolved identity at
+	// api-gateway (never a request field a client controls), and the
+	// usecase itself re-verifies the caller against tenant.UserID(ctx)
+	// before touching another user's tokens (see
+	// usecase.RevokeCliTokenInput's doc comment) — same self-mint-only
+	// posture as IssueServiceToken (CR-CLI-002, decision 2026-09-09).
+	ListCliTokens(context.Context, *ListCliTokensRequest) (*ListCliTokensResponse, error)
+	RevokeCliToken(context.Context, *RevokeCliTokenRequest) (*emptypb.Empty, error)
 	// Admin console
 	CreateUser(context.Context, *CreateUserRequest) (*CreateUserResponse, error)
 	ListUsers(context.Context, *ListUsersRequest) (*ListUsersResponse, error)
 	UpdateUserRole(context.Context, *UpdateUserRoleRequest) (*UpdateUserRoleResponse, error)
 	RevokeSession(context.Context, *RevokeSessionRequest) (*RevokeSessionResponse, error)
 	QueryAuditLog(context.Context, *QueryAuditLogRequest) (*QueryAuditLogResponse, error)
+	// AppendAuditEntry lets project-service/task-service/annotation-service/
+	// infra-fleet-service append an entry to this service's own audit_log
+	// from their own OPA-gated decisions (TASK-BE-017/019..022) — auth.audit_log
+	// lives only in auth-service's database (bounded-context rule), so this is
+	// the one cross-service write path onto it. No per-call user authorization
+	// gate: every other service authenticates to auth-service via mTLS +
+	// NetworkPolicy (07-security-architecture.md), not caller identity.
+	AppendAuditEntry(context.Context, *AppendAuditEntryRequest) (*emptypb.Empty, error)
 	DeactivateUser(context.Context, *DeactivateUserRequest) (*DeactivateUserResponse, error)
 	ReactivateUser(context.Context, *ReactivateUserRequest) (*ReactivateUserResponse, error)
 	ListSessionsForUser(context.Context, *ListSessionsForUserRequest) (*ListSessionsForUserResponse, error)
 	ForceRevokeAllSessionsForUser(context.Context, *ForceRevokeAllSessionsForUserRequest) (*ForceRevokeAllSessionsForUserResponse, error)
+	// ForceRevokeSession is the admin-console single-session kill action for
+	// the Sessions tab's per-row "kill" button — session_id is the token
+	// HASH (as ListSessionsForUser's Session.id already is), NOT the raw
+	// token RevokeSession expects. See force_revoke_session.go's doc comment
+	// for why RevokeSession cannot be reused for this (TASK-BE-002/030).
+	ForceRevokeSession(context.Context, *ForceRevokeSessionRequest) (*emptypb.Empty, error)
 	CreateAccessPolicy(context.Context, *CreateAccessPolicyRequest) (*AccessPolicy, error)
 	GetAccessPolicy(context.Context, *GetAccessPolicyRequest) (*AccessPolicy, error)
 	ListAccessPolicies(context.Context, *ListAccessPoliciesRequest) (*ListAccessPoliciesResponse, error)
@@ -375,6 +542,19 @@ type AuthServiceServer interface {
 	// {provider} and GET /auth/callback are the only callers.
 	StartSsoLogin(context.Context, *StartSsoLoginRequest) (*StartSsoLoginResponse, error)
 	CompleteSsoLogin(context.Context, *CompleteSsoLoginRequest) (*CompleteSsoLoginResponse, error)
+	// --- CR-RBAC-003 (SSO group->role mapping, session refresh) ---
+	// RefreshSession rotates Orca's own opaque session token — never the
+	// upstream IdP's OAuth refresh_token (out of scope, not touched by this
+	// RPC). Rejects with PermissionDenied (not a generic error) for an
+	// unknown, revoked, or expired refresh token; presenting an
+	// already-rotated-away refresh token is treated as reuse and revokes
+	// every session for that user, not just this one request.
+	RefreshSession(context.Context, *RefreshSessionRequest) (*RefreshSessionResponse, error)
+	// UpdateSsoGroupMapping/ListSsoGroupMapping are admin-console operations
+	// on auth.sso_group_role_mapping, gated by requireAdminActor like every
+	// other admin-console RPC on this service.
+	UpdateSsoGroupMapping(context.Context, *UpdateSsoGroupMappingRequest) (*UpdateSsoGroupMappingResponse, error)
+	ListSsoGroupMapping(context.Context, *ListSsoGroupMappingRequest) (*ListSsoGroupMappingResponse, error)
 	mustEmbedUnimplementedAuthServiceServer()
 }
 
@@ -400,6 +580,15 @@ func (UnimplementedAuthServiceServer) IssueServiceToken(context.Context, *IssueS
 func (UnimplementedAuthServiceServer) GetJWKS(context.Context, *GetJWKSRequest) (*GetJWKSResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetJWKS not implemented")
 }
+func (UnimplementedAuthServiceServer) IsServiceTokenRevoked(context.Context, *IsServiceTokenRevokedRequest) (*IsServiceTokenRevokedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IsServiceTokenRevoked not implemented")
+}
+func (UnimplementedAuthServiceServer) ListCliTokens(context.Context, *ListCliTokensRequest) (*ListCliTokensResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListCliTokens not implemented")
+}
+func (UnimplementedAuthServiceServer) RevokeCliToken(context.Context, *RevokeCliTokenRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeCliToken not implemented")
+}
 func (UnimplementedAuthServiceServer) CreateUser(context.Context, *CreateUserRequest) (*CreateUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateUser not implemented")
 }
@@ -415,6 +604,9 @@ func (UnimplementedAuthServiceServer) RevokeSession(context.Context, *RevokeSess
 func (UnimplementedAuthServiceServer) QueryAuditLog(context.Context, *QueryAuditLogRequest) (*QueryAuditLogResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method QueryAuditLog not implemented")
 }
+func (UnimplementedAuthServiceServer) AppendAuditEntry(context.Context, *AppendAuditEntryRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method AppendAuditEntry not implemented")
+}
 func (UnimplementedAuthServiceServer) DeactivateUser(context.Context, *DeactivateUserRequest) (*DeactivateUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeactivateUser not implemented")
 }
@@ -426,6 +618,9 @@ func (UnimplementedAuthServiceServer) ListSessionsForUser(context.Context, *List
 }
 func (UnimplementedAuthServiceServer) ForceRevokeAllSessionsForUser(context.Context, *ForceRevokeAllSessionsForUserRequest) (*ForceRevokeAllSessionsForUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ForceRevokeAllSessionsForUser not implemented")
+}
+func (UnimplementedAuthServiceServer) ForceRevokeSession(context.Context, *ForceRevokeSessionRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ForceRevokeSession not implemented")
 }
 func (UnimplementedAuthServiceServer) CreateAccessPolicy(context.Context, *CreateAccessPolicyRequest) (*AccessPolicy, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateAccessPolicy not implemented")
@@ -453,6 +648,15 @@ func (UnimplementedAuthServiceServer) StartSsoLogin(context.Context, *StartSsoLo
 }
 func (UnimplementedAuthServiceServer) CompleteSsoLogin(context.Context, *CompleteSsoLoginRequest) (*CompleteSsoLoginResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CompleteSsoLogin not implemented")
+}
+func (UnimplementedAuthServiceServer) RefreshSession(context.Context, *RefreshSessionRequest) (*RefreshSessionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RefreshSession not implemented")
+}
+func (UnimplementedAuthServiceServer) UpdateSsoGroupMapping(context.Context, *UpdateSsoGroupMappingRequest) (*UpdateSsoGroupMappingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateSsoGroupMapping not implemented")
+}
+func (UnimplementedAuthServiceServer) ListSsoGroupMapping(context.Context, *ListSsoGroupMappingRequest) (*ListSsoGroupMappingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListSsoGroupMapping not implemented")
 }
 func (UnimplementedAuthServiceServer) mustEmbedUnimplementedAuthServiceServer() {}
 func (UnimplementedAuthServiceServer) testEmbeddedByValue()                     {}
@@ -565,6 +769,60 @@ func _AuthService_GetJWKS_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_IsServiceTokenRevoked_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsServiceTokenRevokedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).IsServiceTokenRevoked(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_IsServiceTokenRevoked_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).IsServiceTokenRevoked(ctx, req.(*IsServiceTokenRevokedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ListCliTokens_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListCliTokensRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ListCliTokens(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ListCliTokens_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ListCliTokens(ctx, req.(*ListCliTokensRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RevokeCliToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeCliTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RevokeCliToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RevokeCliToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RevokeCliToken(ctx, req.(*RevokeCliTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuthService_CreateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateUserRequest)
 	if err := dec(in); err != nil {
@@ -655,6 +913,24 @@ func _AuthService_QueryAuditLog_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_AppendAuditEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppendAuditEntryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).AppendAuditEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_AppendAuditEntry_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).AppendAuditEntry(ctx, req.(*AppendAuditEntryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AuthService_DeactivateUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeactivateUserRequest)
 	if err := dec(in); err != nil {
@@ -723,6 +999,24 @@ func _AuthService_ForceRevokeAllSessionsForUser_Handler(srv interface{}, ctx con
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).ForceRevokeAllSessionsForUser(ctx, req.(*ForceRevokeAllSessionsForUserRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ForceRevokeSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForceRevokeSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ForceRevokeSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ForceRevokeSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ForceRevokeSession(ctx, req.(*ForceRevokeSessionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -889,6 +1183,60 @@ func _AuthService_CompleteSsoLogin_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthService_RefreshSession_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RefreshSessionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RefreshSession(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RefreshSession_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RefreshSession(ctx, req.(*RefreshSessionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_UpdateSsoGroupMapping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSsoGroupMappingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).UpdateSsoGroupMapping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_UpdateSsoGroupMapping_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).UpdateSsoGroupMapping(ctx, req.(*UpdateSsoGroupMappingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_ListSsoGroupMapping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListSsoGroupMappingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).ListSsoGroupMapping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_ListSsoGroupMapping_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).ListSsoGroupMapping(ctx, req.(*ListSsoGroupMappingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthService_ServiceDesc is the grpc.ServiceDesc for AuthService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -917,6 +1265,18 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AuthService_GetJWKS_Handler,
 		},
 		{
+			MethodName: "IsServiceTokenRevoked",
+			Handler:    _AuthService_IsServiceTokenRevoked_Handler,
+		},
+		{
+			MethodName: "ListCliTokens",
+			Handler:    _AuthService_ListCliTokens_Handler,
+		},
+		{
+			MethodName: "RevokeCliToken",
+			Handler:    _AuthService_RevokeCliToken_Handler,
+		},
+		{
 			MethodName: "CreateUser",
 			Handler:    _AuthService_CreateUser_Handler,
 		},
@@ -937,6 +1297,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _AuthService_QueryAuditLog_Handler,
 		},
 		{
+			MethodName: "AppendAuditEntry",
+			Handler:    _AuthService_AppendAuditEntry_Handler,
+		},
+		{
 			MethodName: "DeactivateUser",
 			Handler:    _AuthService_DeactivateUser_Handler,
 		},
@@ -951,6 +1315,10 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ForceRevokeAllSessionsForUser",
 			Handler:    _AuthService_ForceRevokeAllSessionsForUser_Handler,
+		},
+		{
+			MethodName: "ForceRevokeSession",
+			Handler:    _AuthService_ForceRevokeSession_Handler,
 		},
 		{
 			MethodName: "CreateAccessPolicy",
@@ -987,6 +1355,18 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CompleteSsoLogin",
 			Handler:    _AuthService_CompleteSsoLogin_Handler,
+		},
+		{
+			MethodName: "RefreshSession",
+			Handler:    _AuthService_RefreshSession_Handler,
+		},
+		{
+			MethodName: "UpdateSsoGroupMapping",
+			Handler:    _AuthService_UpdateSsoGroupMapping_Handler,
+		},
+		{
+			MethodName: "ListSsoGroupMapping",
+			Handler:    _AuthService_ListSsoGroupMapping_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -18,11 +18,6 @@ describe('UserRoleBadge', () => {
     expect(screen.getByText('admin')).toBeInTheDocument()
   })
 
-  it('renders "lead" label for lead role', () => {
-    render(<UserRoleBadge role="lead" />)
-    expect(screen.getByText('lead')).toBeInTheDocument()
-  })
-
   it('applies base role-badge class for all roles', () => {
     const { container } = render(<UserRoleBadge role="developer" />)
     expect(container.firstChild).toHaveClass('role-badge')

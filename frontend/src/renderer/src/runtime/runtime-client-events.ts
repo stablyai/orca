@@ -48,6 +48,14 @@ function handleRuntimeClientEventResponse(
   if (isRuntimeSubscriptionReplayResponse(response)) {
     onReplayedAfterReconnect?.()
   }
+  // runtime.clientEvents.subscribe is a StreamHandler channel (registry.go) —
+  // its plain invoke ack carries no meaningful value (result: null) and is now
+  // delivered to onResponse too (isSubscriptionResponse widened for
+  // FE-TASK-EVM-002's subscribeRuntimeStreamChannel); only real push events
+  // have a message shape here.
+  if (!response.result) {
+    return
+  }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready' || message.type === 'end') {
     return

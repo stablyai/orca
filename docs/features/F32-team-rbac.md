@@ -5,8 +5,8 @@
 | **ID** | F32 |
 | **Tên** | Team-based Access Control (RBAC) |
 | **Ưu tiên** | P2 |
-| **Trạng thái** | ⚠️ Partial (Phase 1 — types + policy resolution; Phase 2 SSO pending) |
-| **CRs** | [remote-server/CR-006](../crs/v1/remote-server/CR-006-team-rbac.md) |
+| **Trạng thái** | ⚠️ Partial (backend-go: SSO OIDC/GitHub + OPA/Rego RBAC đã chạy; Admin UI/RBAC surface vẫn trên kiến trúc cũ — xem CR v4) |
+| **CRs** | [remote-server/CR-006](../crs/v1/remote-server/CR-006-team-rbac.md) (kiến trúc cũ, Phase 1) · [v4/team-rbac](../crs/v4/team-rbac/README.md) (7 CR hoàn thiện F32 trên backend-go/frontend hiện tại) |
 | **Phiên bản** | v4.1+ (Phase 1) |
 | **ADR References** | — |
 | **HLD References** | C3.1 |
@@ -15,7 +15,7 @@
 
 ## Mô tả
 
-Orca Web Server hỗ trợ **phân quyền theo role** (developer / lead / admin) để kiểm soát ai được truy cập server nào, thực hiện hành động gì. Phase 1 implement types + policy resolution; Phase 2 tích hợp SSO (OIDC/SAML).
+Orca Web Server hỗ trợ **phân quyền theo role** — global role (developer / admin) kết hợp với repo-scoped role (developer / lead / admin, xem note ở mục Roles bên dưới) — để kiểm soát ai được truy cập server nào, thực hiện hành động gì. Phase 1 implement types + policy resolution; Phase 2 tích hợp SSO (OIDC/SAML).
 
 ---
 
@@ -32,6 +32,35 @@ Trong multi-user web mode không có RBAC:
 ## Tính năng chi tiết
 
 ### Roles
+
+> **Update (TASK-BE-006/CR-RBAC-002, confirmed against the current backend-go
+> implementation):** the flat 3-tier table below (developer/lead/admin as one
+> global role) is the OLD design sketch. The real model backend-go implements
+> is **two independent axes**, not one flat enum:
+>
+> | Axis | Values | Where enforced |
+> |------|--------|-----------------|
+> | **Global role** | `user`, `admin` (`auth-service`'s `domain.Role`) — 2 values only, no global "lead" | `backend-go/policy/orca-authz/admin.rego` |
+> | **Repo-scoped role** | `developer`, `lead`, `admin` (`RepoRole`) — assigned per-repo | `backend-go/policy/orca-authz/repo.rego`, granted via `project-service`'s `update_repo_member_role.go` |
+>
+> A user's global role and their `RepoRole` on any given repo are independent:
+> a user can be global `user` but repo `admin` on one repo, or vice versa.
+> Global `admin` additionally has an override branch in `project.rego`/
+> `repo.rego` giving full access regardless of any repo-level role or
+> membership (see `callerGlobalRole`, TASK-BE-003). Kept below for history;
+> do not treat the flat table as the current contract.
+>
+> **Addendum (FE-TASK-005, CR-RBAC-002):** on the frontend, backend-go's
+> global `user` value surfaces as `'developer'` — `OrcaUserRole`
+> (`frontend/src/renderer/src/store/slices/auth.ts`) is `'developer' | 'admin'`,
+> and `AuthUser.role` mirrors it 1:1 (FE-TASK-001/003, this CR). The frontend
+> never had a global `'lead'` type to begin with; FE-TASK-001..004 only
+> removed a *display* label that no global role value ever produced. This
+> global 2-tier shape is **a deliberate simplification that pre-dates this
+> CR** — it reflects how `auth-service`/`api-gateway` already modeled global
+> roles; CR-RBAC-002 did not introduce or decide it, only propagated it
+> through the frontend's own types so they stop implying a global `'lead'`
+> that was never real.
 
 | Role | Permissions |
 |------|------------|
@@ -171,6 +200,26 @@ interface SsoConfig {
 ---
 
 ### Project-scoped Server Visibility
+
+> **Note (TASK-BE-013/BE-SOL-004, confirmed against the current backend-go
+> implementation):** the section below describes the OLD architecture's
+> design sketch (project-scoped, SQL over `orca_access_policies`). The real
+> scoping axis `infra-fleet-service` implements today is
+> **Team/Department, not Project** — `ListDevServersForUser`
+> (`infra-fleet-service/internal/usecase/list_dev_servers_for_user.go`)
+> grants visibility per dev-server-group grant matching the caller's
+> department OR team membership (resolved via `tenant-service`'s
+> `GetUserProfile`/`ListTeamsForUser`), with no project dimension involved
+> at all. Kept below for history; do not treat it as the current contract.
+>
+> **Addendum (FE-TASK-013, CR-RBAC-004):** on the frontend, this scoping axis
+> is exercised via `devServerGroup.grant({ granteeKind: 'department' | 'team',
+> granteeId, devServerGroupId })` (`AdminDevServerConsole.tsx`'s
+> `GroupsAndGrantsTab`, FE-TASK-012) — there is no `project`/`OrcaUser.projects`
+> field anywhere in this path any more (removed as dead code, FE-TASK-007/010).
+> There is **no plan to add a "Project" scoping axis** to dev-server
+> visibility — Team/Department is the chốt (finalized) architecture decision
+> of CR-RBAC-004, not an interim state pending a project dimension.
 
 ```
 Fleet → group by project:

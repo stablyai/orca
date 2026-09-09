@@ -9,11 +9,17 @@ import (
 )
 
 // withGitHubTestServers points githubTokenURL/githubUserURL/
-// githubUserEmailsURL at httptest servers for the duration of one test —
-// see github.go's doc comment on why these are package-private vars.
+// githubUserEmailsURL/githubUserOrgsURL at httptest servers for the duration
+// of one test — see github.go's doc comment on why these are
+// package-private vars.
 func withGitHubTestServers(t *testing.T, tokenURL, userURL, userEmailsURL string) {
 	t.Helper()
-	origToken, origUser, origEmails := githubTokenURL, githubUserURL, githubUserEmailsURL
+	withGitHubTestServersAndOrgs(t, tokenURL, userURL, userEmailsURL, "")
+}
+
+func withGitHubTestServersAndOrgs(t *testing.T, tokenURL, userURL, userEmailsURL, userOrgsURL string) {
+	t.Helper()
+	origToken, origUser, origEmails, origOrgs := githubTokenURL, githubUserURL, githubUserEmailsURL, githubUserOrgsURL
 	if tokenURL != "" {
 		githubTokenURL = tokenURL
 	}
@@ -23,8 +29,11 @@ func withGitHubTestServers(t *testing.T, tokenURL, userURL, userEmailsURL string
 	if userEmailsURL != "" {
 		githubUserEmailsURL = userEmailsURL
 	}
+	if userOrgsURL != "" {
+		githubUserOrgsURL = userOrgsURL
+	}
 	t.Cleanup(func() {
-		githubTokenURL, githubUserURL, githubUserEmailsURL = origToken, origUser, origEmails
+		githubTokenURL, githubUserURL, githubUserEmailsURL, githubUserOrgsURL = origToken, origUser, origEmails, origOrgs
 	})
 }
 
@@ -70,7 +79,13 @@ func TestGitHubExchangeAndVerify_ReturnsVerifiedIdentity(t *testing.T) {
 	}))
 	defer emailsServer.Close()
 
-	withGitHubTestServers(t, tokenServer.URL, userServer.URL, emailsServer.URL)
+	orgsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer orgsServer.Close()
+
+	withGitHubTestServersAndOrgs(t, tokenServer.URL, userServer.URL, emailsServer.URL, orgsServer.URL)
 
 	c := NewGitHub(nil, GitHubConfig{ClientID: "cid", ClientSecret: "csecret"})
 	identity, err := c.ExchangeAndVerify(context.Background(), "auth-code", "https://app.example.com/auth/callback", "verifier")
@@ -85,6 +100,89 @@ func TestGitHubExchangeAndVerify_ReturnsVerifiedIdentity(t *testing.T) {
 	}
 	if identity.Name != "Grace Hopper" {
 		t.Errorf("name = %q, want %q", identity.Name, "Grace Hopper")
+	}
+}
+
+func TestGitHubExchangeAndVerify_OrgMembershipPopulatesGroups(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"gho_token"}`))
+	}))
+	defer tokenServer.Close()
+
+	userServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":42,"name":"Grace Hopper","email":null}`))
+	}))
+	defer userServer.Close()
+
+	emailsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"email":"grace@example.com","primary":true,"verified":true}]`))
+	}))
+	defer emailsServer.Close()
+
+	orgsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer gho_token" {
+			t.Errorf("expected bearer auth, got %q", r.Header.Get("Authorization"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"login":"orca-org"},{"login":"another-org"}]`))
+	}))
+	defer orgsServer.Close()
+
+	withGitHubTestServersAndOrgs(t, tokenServer.URL, userServer.URL, emailsServer.URL, orgsServer.URL)
+
+	c := NewGitHub(nil, GitHubConfig{ClientID: "cid", ClientSecret: "csecret"})
+	identity, err := c.ExchangeAndVerify(context.Background(), "auth-code", "https://app.example.com/auth/callback", "verifier")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"org:orca-org", "org:another-org"}
+	if len(identity.Groups) != len(want) {
+		t.Fatalf("groups = %v, want %v", identity.Groups, want)
+	}
+	for i := range want {
+		if identity.Groups[i] != want[i] {
+			t.Errorf("groups[%d] = %q, want %q", i, identity.Groups[i], want[i])
+		}
+	}
+}
+
+func TestGitHubExchangeAndVerify_OrgMembershipFailureDegradesToEmptyGroups(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"gho_token"}`))
+	}))
+	defer tokenServer.Close()
+
+	userServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":42,"name":"Grace Hopper","email":null}`))
+	}))
+	defer userServer.Close()
+
+	emailsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[{"email":"grace@example.com","primary":true,"verified":true}]`))
+	}))
+	defer emailsServer.Close()
+
+	// Orgs endpoint returns a server error — the SSO login must still succeed.
+	orgsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer orgsServer.Close()
+
+	withGitHubTestServersAndOrgs(t, tokenServer.URL, userServer.URL, emailsServer.URL, orgsServer.URL)
+
+	c := NewGitHub(nil, GitHubConfig{ClientID: "cid", ClientSecret: "csecret"})
+	identity, err := c.ExchangeAndVerify(context.Background(), "auth-code", "https://app.example.com/auth/callback", "verifier")
+	if err != nil {
+		t.Fatalf("expected login to succeed despite org membership failure, got error: %v", err)
+	}
+	if len(identity.Groups) != 0 {
+		t.Errorf("expected empty Groups on org membership failure, got %v", identity.Groups)
 	}
 }
 

@@ -102,6 +102,16 @@ type session struct {
 	screencastMu   sync.Mutex
 	screencastSubs map[string][]chan rawScreencastNotification
 
+	// fileWatchMu/fileWatchSubs is the same demux pattern again, for
+	// fs.changed notifications (StreamFileChanges, BACKLOG-003) — keyed by
+	// the watched absolute path, exactly what fs.watch/fs.unwatch/fs.changed
+	// all key by agent-side (agent/src/relay/fs-agent-extensions.ts's
+	// AGENT_WATCH_MAP), so no separate id-assignment step exists to race the
+	// way screencastSubs's subscription_id does. Own mutex for the same
+	// never-contend-with-call() reason ptyMu/screencastMu have their own.
+	fileWatchMu   sync.Mutex
+	fileWatchSubs map[string][]chan rawFileWatchNotification
+
 	reconnectAttempt int
 
 	closeCh chan struct{}
@@ -339,6 +349,8 @@ func (s *session) routeNotification(n JSONRPCNotification) {
 		s.routePtyNotification(n)
 	case "browser.screencastReady", "browser.screencastFrame", "browser.screencastEnded", "browser.screencastError":
 		s.routeScreencastNotification(n)
+	case "fs.changed":
+		s.routeFileWatchNotification(n)
 	default:
 		return // not a notification this client demuxes, see package doc comment's "Two RPC surfaces" note
 	}
@@ -511,6 +523,108 @@ func (s *session) unsubscribeScreencast(worktreeID string, ch chan rawScreencast
 		delete(s.screencastSubs, worktreeID)
 	}
 	s.screencastMu.Unlock()
+	close(ch)
+}
+
+// rawFileWatchNotification is session.go's internal decoding of one
+// fs.changed notification — StreamFileChanges (client.go) wraps this into
+// the exported usecase.FileChangeEvent shape. Path is the watched ROOT
+// (what fs.watch was called with, and what fileWatchSubs is keyed by, not
+// the individual changed file) — see fsChangedParams's doc comment.
+type rawFileWatchNotification struct {
+	Path     string
+	Kind     string // "create" | "update" | "delete" | "rename" | "overflow"
+	Filename string // root-relative, "" when the root itself is the changed entry
+}
+
+// fsChangedParams is fs.changed's real wire shape — confirmed against
+// agent/src/relay/fs-agent-extensions.ts's handleFsWatch/
+// handleLinuxWatchEvent notify() call sites (unlike ptyNotificationParams,
+// this one IS verified, not a best-effort guess).
+type fsChangedParams struct {
+	Path      string `json:"path"`      // the watched root, same value fs.watch({path}) was called with
+	EventType string `json:"eventType"` // "rename" | "change" | "error" — Node fs.watch's own two kinds, plus the agent's synthesized "error"
+	Filename  string `json:"filename"`  // root-relative path of the changed entry, "" when unknown/root itself
+	Error     string `json:"error"`     // set only when eventType == "error"
+}
+
+// routeFileWatchNotification decodes one fs.changed notification and fans
+// it out to every subscriber registered for its watched root path — see
+// routePtyNotification's doc comment for the same non-blocking-send
+// discipline. Kind mapping mirrors the legacy Node backend's own
+// battle-tested approximation (backend/src/main/providers/
+// dev-server-filesystem-provider.ts's watchViaPush): Node's fs.watch only
+// ever reports "rename" (create/delete/rename, indistinguishable) or
+// "change" (content) — not the finer create/update/delete split
+// FileChangeEvent.kind's shape otherwise suggests — so "rename" maps to
+// "rename" and everything else maps to "update"; "error" maps to the
+// dedicated "overflow" kind (matching the legacy mapping's own choice: no
+// FsChangeEvent.kind value means "watch itself broke", "overflow" is the
+// closest existing one and every caller already treats it as "give up on
+// deltas, do a full re-read").
+func (s *session) routeFileWatchNotification(n JSONRPCNotification) {
+	var p fsChangedParams
+	if len(n.Params) > 0 {
+		_ = json.Unmarshal(n.Params, &p)
+	}
+	if p.Path == "" {
+		return
+	}
+
+	raw := rawFileWatchNotification{Path: p.Path, Filename: p.Filename}
+	switch {
+	case p.EventType == "error":
+		raw.Kind = "overflow"
+	case p.EventType == "rename":
+		raw.Kind = "rename"
+	default:
+		raw.Kind = "update"
+	}
+
+	s.fileWatchMu.Lock()
+	subs := append([]chan rawFileWatchNotification(nil), s.fileWatchSubs[p.Path]...)
+	s.fileWatchMu.Unlock()
+
+	for _, ch := range subs {
+		select {
+		case ch <- raw:
+		default: // slow/gone consumer — drop rather than block the read loop
+		}
+	}
+}
+
+// subscribeFileWatch registers a new listener for path's fs.changed
+// notifications — StreamFileChanges's implementation. MUST be called BEFORE
+// issuing the fs.watch call (same subscribe-before-call discipline
+// StreamScreencast's doc comment explains) so a fast agent notification can
+// never arrive before the subscription exists.
+func (s *session) subscribeFileWatch(path string) chan rawFileWatchNotification {
+	ch := make(chan rawFileWatchNotification, 64)
+	s.fileWatchMu.Lock()
+	if s.fileWatchSubs == nil {
+		s.fileWatchSubs = make(map[string][]chan rawFileWatchNotification)
+	}
+	s.fileWatchSubs[path] = append(s.fileWatchSubs[path], ch)
+	s.fileWatchMu.Unlock()
+	return ch
+}
+
+// unsubscribeFileWatch removes and closes ch — MUST be called exactly once
+// by whoever called subscribeFileWatch (see StreamFileChanges's returned
+// unsubscribe func).
+func (s *session) unsubscribeFileWatch(path string, ch chan rawFileWatchNotification) {
+	s.fileWatchMu.Lock()
+	subs := s.fileWatchSubs[path]
+	for i, c := range subs {
+		if c == ch {
+			s.fileWatchSubs[path] = append(subs[:i], subs[i+1:]...)
+			break
+		}
+	}
+	if len(s.fileWatchSubs[path]) == 0 {
+		delete(s.fileWatchSubs, path)
+	}
+	s.fileWatchMu.Unlock()
 	close(ch)
 }
 

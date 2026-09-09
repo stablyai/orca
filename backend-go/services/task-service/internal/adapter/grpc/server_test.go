@@ -191,7 +191,7 @@ func newTestServer(tasks *fakeTaskRepository, edges *fakeEdgeRepository) *Server
 		usecase.NewGetTask(tasks),
 		addEdgeUC,
 		usecase.NewGrant(tasks),
-		usecase.NewResolvePermission(tasks, tasks, stubTeams{}, stubOPA{}),
+		usecase.NewResolvePermission(tasks, tasks, stubTeams{}, stubOPA{}, nil),
 		usecase.NewExecuteTask(tasks, edges, stubExecutor{}, stubExecutor{}),
 		usecase.NewHasActiveExecutions(tasks),
 		usecase.NewListTasks(tasks),

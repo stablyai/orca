@@ -1,8 +1,8 @@
 # BACKLOG-013: `agentSession.listActive`'s dispatch contexts can't be keyed onto `remoteAgentSessions` (worktreeId vs. assigneeHandle) — RESOLVED (backend half)
 
 **Origin:** `specs/frontend/crs/v3/storage/tasks/FE-TASK-STORAGE-012-hydrate-dev-servers-and-agent-sessions.md` (remote-agent-sessions.ts half)
-**Priority:** Low — backend-side blocker is gone; only the frontend mapping (`mapDispatchContextsToSessions`) remains, a small, unblocked wiring task
-**Status:** Backend RESOLVED 2026-09-08 — user picked option 1 ("add a `worktree_id` field to `dispatch_contexts`")
+**Priority:** Low — blocked on the same unimplemented coordinator/dispatch stack as BACKLOG-009/017, not on frontend engineering time (see "Update session 3" below)
+**Status:** Backend RESOLVED 2026-09-08 — user picked option 1 ("add a `worktree_id` field to `dispatch_contexts`"). Frontend mapping intentionally NOT implemented — would wire dead UI to a data source with zero real producers today.
 
 ---
 
@@ -43,6 +43,29 @@
 > from) also needs to start passing `worktree_id` for existing dispatches
 > to start showing up keyed correctly; new ones will round-trip
 > automatically once that caller is updated.
+>
+> **Update 2026-09-08 (session 3): traced "whoever calls it" — nobody does.**
+> `grep -rn "dispatch-contexts"` across the entire repo (frontend/, desktop/,
+> agent/, mobile/, backend-go/) finds exactly one hit outside
+> `orchestration_routes.go` itself: nothing. `POST /v1/orchestration/dispatch-contexts`
+> has **zero real callers anywhere in this codebase** — not from frontend,
+> not from desktop, not from agent/. This is the **same root cause
+> BACKLOG-009/017 already documented**: the autonomous coordinator/dispatch
+> stack (`TASK-TASKV1-005-01..09` — `CoordinatorRun` domain/repo/usecases,
+> `WorkerDispatcher`, the tick loop that would actually call
+> `CreateDispatchContext`) is fully speced but never implemented. Concretely:
+> `agentSession.listActive` (wscompat, already wired) calls
+> `ListActiveDispatchContextsForUser`, which will always return an empty
+> list in production today, because nothing ever creates a row for it to
+> return.
+>
+> Implementing `mapDispatchContextsToSessions` right now would map a
+> permanently-empty data source — dead UI wiring, not a "small, unblocked"
+> task as this file's own priority line still claims. **Downgrading this
+> item**: it is blocked on the exact same thing BACKLOG-009/017 are (the
+> coordinator/dispatch stack's implementation pass), not on frontend
+> engineering time. Revisit once that stack ships and something actually
+> calls `CreateDispatchContext` with a real `worktree_id`.
 
 ---
 

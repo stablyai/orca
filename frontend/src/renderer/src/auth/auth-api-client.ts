@@ -2,7 +2,7 @@
 // All requests carry credentials: 'include' so the server session cookie is
 // sent automatically. No tokens are stored in localStorage.
 
-import type { AuthUser } from './auth-types';
+import type { AuthUser } from './auth-types'
 import { AuthError } from './auth-types'
 
 // ─── GET /auth/me ─────────────────────────────────────────────────────────────
@@ -14,8 +14,12 @@ import { AuthError } from './auth-types'
  */
 export async function fetchCurrentUser(): Promise<AuthUser | null> {
   const res = await fetch('/auth/me', { credentials: 'include' })
-  if (res.status === 401) {return null}
-  if (!res.ok) {throw new Error(`Server error: ${res.status}`)}
+  if (res.status === 401) {
+    return null
+  }
+  if (!res.ok) {
+    throw new Error(`Server error: ${res.status}`)
+  }
   return res.json() as Promise<AuthUser>
 }
 
@@ -35,10 +39,7 @@ export async function loginLocal(email: string, password: string): Promise<AuthU
   })
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new AuthError(
-      (body as { error?: string }).error ?? 'Login failed',
-      'invalid_credentials'
-    )
+    throw new AuthError((body as { error?: string }).error ?? 'Login failed', 'invalid_credentials')
   }
   return body as AuthUser
 }
@@ -51,6 +52,21 @@ export async function loginLocal(email: string, password: string): Promise<AuthU
  */
 export async function logoutUser(): Promise<void> {
   await fetch('/auth/logout', { method: 'POST', credentials: 'include' })
+}
+
+// ─── POST /auth/refresh ─────────────────────────────────────────────────────
+// CR-RBAC-003: rotation — server issue session mới, revoke session cũ. Trả
+// null khi session đã bị revoke/hết hạn quá hạn refresh (403) — không throw,
+// để caller quyết định logout thay vì crash UI.
+export async function refreshSession(): Promise<AuthUser | null> {
+  const res = await fetch('/auth/refresh', { method: 'POST', credentials: 'include' })
+  if (res.status === 403 || res.status === 401) {
+    return null
+  }
+  if (!res.ok) {
+    throw new Error(`Server error: ${res.status}`)
+  }
+  return res.json() as Promise<AuthUser>
 }
 
 // ─── GET /auth/config ─────────────────────────────────────────────────────────
@@ -66,7 +82,9 @@ export async function fetchAuthConfig(): Promise<{
 }> {
   try {
     const res = await fetch('/auth/config', { credentials: 'include' })
-    if (!res.ok) {return { providers: [], localEnabled: true }}
+    if (!res.ok) {
+      return { providers: [], localEnabled: true }
+    }
     return res.json()
   } catch {
     return { providers: [], localEnabled: true }

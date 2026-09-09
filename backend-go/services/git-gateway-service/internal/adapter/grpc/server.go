@@ -74,6 +74,7 @@ type Server struct {
 	searchRefs             *usecase.SearchRefs
 	checkHooks             *usecase.CheckHooks
 	readEphemeralVmRecipes *usecase.ReadEphemeralVmRecipes
+	watchWorktreeFiles     *usecase.WatchWorktreeFiles
 	readIssueCommand       *usecase.ReadIssueCommand
 	writeIssueCommand      *usecase.WriteIssueCommand
 	scanSetupScriptImports *usecase.ScanSetupScriptImports
@@ -168,6 +169,7 @@ func New(
 	discard *usecase.Discard,
 	bulkDiscard *usecase.BulkDiscard,
 	readEphemeralVmRecipes *usecase.ReadEphemeralVmRecipes,
+	watchWorktreeFiles *usecase.WatchWorktreeFiles,
 ) *Server {
 	return &Server{
 		getStatus:                   getStatus,
@@ -238,6 +240,8 @@ func New(
 		bulkDiscard:       bulkDiscard,
 
 		readEphemeralVmRecipes: readEphemeralVmRecipes,
+
+		watchWorktreeFiles: watchWorktreeFiles,
 	}
 }
 
@@ -627,6 +631,33 @@ func (s *Server) ListMarkdownDocuments(ctx context.Context, req *gitgatewayv1.Li
 		return nil, toFileGRPCStatus(err)
 	}
 	return &gitgatewayv1.ListMarkdownDocumentsResponse{Paths: paths}, nil
+}
+
+// WatchWorktree (BACKLOG-003) is server-streaming — grpc.ServerStreamingServer's
+// generated method shape takes (req, stream), ctx from stream.Context(),
+// same as infra-fleet-service's StreamVmProvision/StreamFileChanges
+// handlers one layer down.
+func (s *Server) WatchWorktree(req *gitgatewayv1.WatchWorktreeRequest, stream gitgatewayv1.GitGatewayService_WatchWorktreeServer) error {
+	events, unsubscribe, err := s.watchWorktreeFiles.Execute(stream.Context(), usecase.WatchWorktreeFilesInput{WorktreeID: req.GetWorktreeId()})
+	if err != nil {
+		return apperrors.ToGRPCStatus(err)
+	}
+	defer unsubscribe()
+	for event := range events {
+		if err := stream.Send(toProtoFileChangeEvent(event)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func toProtoFileChangeEvent(e usecase.FileChangeEvent) *gitgatewayv1.FileChangeEvent {
+	return &gitgatewayv1.FileChangeEvent{
+		Kind:            e.Kind,
+		AbsolutePath:    e.Path,
+		OldAbsolutePath: e.OldPath,
+		IsDirectory:     e.IsDirectory,
+	}
 }
 
 func (s *Server) RenameFile(ctx context.Context, req *gitgatewayv1.RenameFileRequest) (*gitgatewayv1.RenameFileResponse, error) {

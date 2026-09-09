@@ -49,9 +49,14 @@ import type {
 import type {
   TenantUserProfile,
   TenantDepartment,
-  TenantCompany
+  TenantCompany,
+  TenantTeam
 } from '../../../shared/tenant-user-profile-types'
 import type { AdminUser } from '../../../shared/admin-user-types'
+import type { AdminAccessPolicy } from '../../../shared/admin-policy-types'
+import type { AdminSession } from '../../../shared/admin-session-types'
+import type { AdminAuditEntry } from '../../../shared/admin-audit-types'
+import type { AdminTeam, AdminTeamMember } from '../../../shared/admin-team-types'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
@@ -2625,6 +2630,11 @@ function createTenantProfileApi(): NonNullable<Partial<PreloadApi>['tenantProfil
   return {
     getUserProfile: () => callRuntimeResult<TenantUserProfile>('profile.getUserProfile'),
     listDepartments: () => callRuntimeResult<TenantDepartment[]>('profile.listDepts'),
+    // FE-TASK-011's own gap, closed here: backend-go's team.list channel was
+    // already wired (channels_team.go) when that task ran, but this bridge
+    // line was missed — AdminDevServerConsole.tsx's grant picker has been
+    // calling this with an `?.()` guard since (see its own comment).
+    listTeams: () => callRuntimeResult<TenantTeam[]>('team.list'),
     setUserDepartment: ({ departmentId }) =>
       callRuntimeResult<TenantUserProfile>('profile.updateUser', {
         departmentId,
@@ -2667,7 +2677,42 @@ function createAdminApi(): NonNullable<Partial<PreloadApi>['admin']> {
       }>('admin.listUsers', params ?? {}),
     updateUserRole: (params) => callRuntimeResult<AdminUser>('admin.updateUserRole', params),
     deactivateUser: (params) => callRuntimeResult<AdminUser>('admin.deactivateUser', params),
-    reactivateUser: (params) => callRuntimeResult<AdminUser>('admin.reactivateUser', params)
+    reactivateUser: (params) => callRuntimeResult<AdminUser>('admin.reactivateUser', params),
+
+    // ── Policies (CR-RBAC-001, FE-TASK-017/018) ──
+    listPolicies: (params) =>
+      callRuntimeResult<{
+        policies: AdminAccessPolicy[]
+        nextPageToken: string
+      }>('admin.listPolicies', params ?? {}),
+    createPolicy: (params) => callRuntimeResult<AdminAccessPolicy>('admin.createPolicy', params),
+    updatePolicy: (params) => callRuntimeResult<AdminAccessPolicy>('admin.updatePolicy', params),
+    deletePolicy: (params) => callRuntimeResult<{ ok: true }>('admin.deletePolicy', params),
+
+    // ── Teams (CR-RBAC-001, FE-TASK-017/020) — bridges to team.* wire
+    // channels, not admin.*Team* (pivot documented in admin-team-types.ts).
+    listTeams: () => callRuntimeResult<AdminTeam[]>('team.list'),
+    createTeam: (params) => callRuntimeResult<AdminTeam>('team.create', params),
+    addTeamMember: (params) => callRuntimeResult<{ ok: true }>('team.addMember', params),
+    removeTeamMember: (params) => callRuntimeResult<{ ok: true }>('team.removeMember', params),
+    listTeamMembers: (params) => callRuntimeResult<AdminTeamMember[]>('team.listMembers', params),
+
+    // ── Sessions (CR-RBAC-001, FE-TASK-017/021) ──
+    listSessions: (params) =>
+      callRuntimeResult<{ sessions: AdminSession[] }>('admin.listSessions', params),
+    forceRevokeSession: (params) =>
+      callRuntimeResult<{ ok: true }>('admin.forceRevokeSession', params),
+    forceRevokeAllSessions: (params) =>
+      callRuntimeResult<{ revokedCount: number }>('admin.forceRevokeAllSessions', params),
+
+    // ── Audit (CR-RBAC-001/005, FE-TASK-017/019/015) — params forwarded
+    // as-is, including FE-TASK-014's actorId/outcome filter fields; no
+    // field filtering at this layer per FE-TASK-015.
+    queryAuditLog: (params) =>
+      callRuntimeResult<{
+        entries: AdminAuditEntry[]
+        nextPageToken: string
+      }>('admin.queryAuditLog', params ?? {})
   }
 }
 

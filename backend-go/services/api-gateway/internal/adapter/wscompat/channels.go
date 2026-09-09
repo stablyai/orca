@@ -129,7 +129,7 @@ func RegisterRealChannels(
 	registerDevServerChannels(r, infraFleetClient)
 	registerDevServerAccessControlChannels(r, infraFleetClient, tenantClient)
 	registerFleetChannels(r, infraFleetClient)
-	registerCliChannels(r, infraFleetClient)
+	registerCliInstallerChannels(r, infraFleetClient)
 	registerInfraFleetChannels(r, infraFleetClient)
 	registerCrashReportChannels(r)
 	registerRateLimitChannels(r, rateLimits)
@@ -173,6 +173,9 @@ func RegisterRealChannels(
 	registerOrcaProjectSharingChannels(r, projectClient)
 	registerWorkflowChannels(r, workflowClient)
 	registerAdminUserChannels(r, authClient, tenantClient)
+	registerAdminPolicyChannels(r, authClient)
+	registerAdminSessionChannels(r, authClient)
+	registerAdminAuditChannels(r, authClient)
 	registerAuthDirectoryChannels(r, authClient)
 }
 

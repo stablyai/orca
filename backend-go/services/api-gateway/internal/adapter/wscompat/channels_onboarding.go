@@ -404,6 +404,11 @@ func onboardingDetectAgentsAllServers(
 	defer teamsCancel()
 	teamsResp, err := tenantClient.ListTeamsForUser(teamsCtx, &tenantv1.ListTeamsForUserRequest{UserId: id.UserID})
 	if err != nil {
+		// Deliberate fail-closed choice (TASK-BE-013), not an oversight —
+		// same reasoning as devServer.listForUser's identical call
+		// (channels_dev_server_access_control.go): degrading to
+		// department-only on a tenant-service outage would silently
+		// under-provision this fan-out's dev-server set too.
 		return nil, err
 	}
 

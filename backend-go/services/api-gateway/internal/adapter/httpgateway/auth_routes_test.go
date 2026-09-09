@@ -44,6 +44,16 @@ type fakeSSOAuthServiceClient struct {
 
 	completeResp *authv1.CompleteSsoLoginResponse
 	completeErr  error
+
+	refreshResp    *authv1.RefreshSessionResponse
+	refreshErr     error
+	lastRefreshReq *authv1.RefreshSessionRequest
+
+	// validateResp/validateErr back POST /auth/refresh's follow-up
+	// ValidateSession call (RefreshSessionResponse carries no User, unlike
+	// Login/CompleteSsoLogin — see auth_routes.go's /auth/refresh handler).
+	validateResp *authv1.ValidateSessionResponse
+	validateErr  error
 }
 
 func (f *fakeSSOAuthServiceClient) Login(ctx context.Context, in *authv1.LoginRequest, opts ...grpc.CallOption) (*authv1.LoginResponse, error) {
@@ -53,6 +63,12 @@ func (f *fakeSSOAuthServiceClient) Logout(ctx context.Context, in *authv1.Logout
 	return nil, status.Error(codes.Unimplemented, "not used by this test")
 }
 func (f *fakeSSOAuthServiceClient) ValidateSession(ctx context.Context, in *authv1.ValidateSessionRequest, opts ...grpc.CallOption) (*authv1.ValidateSessionResponse, error) {
+	if f.validateErr != nil {
+		return nil, f.validateErr
+	}
+	if f.validateResp != nil {
+		return f.validateResp, nil
+	}
 	return nil, status.Error(codes.Unimplemented, "not used by this test")
 }
 func (f *fakeSSOAuthServiceClient) IssueServiceToken(ctx context.Context, in *authv1.IssueServiceTokenRequest, opts ...grpc.CallOption) (*authv1.IssueServiceTokenResponse, error) {
@@ -91,6 +107,9 @@ func (f *fakeSSOAuthServiceClient) ListSessionsForUser(ctx context.Context, in *
 func (f *fakeSSOAuthServiceClient) ForceRevokeAllSessionsForUser(ctx context.Context, in *authv1.ForceRevokeAllSessionsForUserRequest, opts ...grpc.CallOption) (*authv1.ForceRevokeAllSessionsForUserResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not used by this test")
 }
+func (f *fakeSSOAuthServiceClient) ForceRevokeSession(ctx context.Context, in *authv1.ForceRevokeSessionRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
 func (f *fakeSSOAuthServiceClient) CreateAccessPolicy(ctx context.Context, in *authv1.CreateAccessPolicyRequest, opts ...grpc.CallOption) (*authv1.AccessPolicy, error) {
 	return nil, status.Error(codes.Unimplemented, "not used by this test")
 }
@@ -123,6 +142,42 @@ func (f *fakeSSOAuthServiceClient) CompleteSsoLogin(ctx context.Context, in *aut
 		return nil, f.completeErr
 	}
 	return f.completeResp, nil
+}
+
+func (f *fakeSSOAuthServiceClient) RefreshSession(ctx context.Context, in *authv1.RefreshSessionRequest, opts ...grpc.CallOption) (*authv1.RefreshSessionResponse, error) {
+	f.lastRefreshReq = in
+	if f.refreshErr != nil {
+		return nil, f.refreshErr
+	}
+	return f.refreshResp, nil
+}
+
+// AppendAuditEntry/UpdateSsoGroupMapping/ListSsoGroupMapping: unused
+// pass-throughs, present only so this fake keeps satisfying
+// authv1.AuthServiceClient as the interface grows (TASK-BE-017,
+// CR-RBAC-003) — none of this file's tests exercise them.
+func (f *fakeSSOAuthServiceClient) AppendAuditEntry(ctx context.Context, in *authv1.AppendAuditEntryRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeSSOAuthServiceClient) IsServiceTokenRevoked(ctx context.Context, in *authv1.IsServiceTokenRevokedRequest, opts ...grpc.CallOption) (*authv1.IsServiceTokenRevokedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeSSOAuthServiceClient) ListCliTokens(ctx context.Context, in *authv1.ListCliTokensRequest, opts ...grpc.CallOption) (*authv1.ListCliTokensResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeSSOAuthServiceClient) RevokeCliToken(ctx context.Context, in *authv1.RevokeCliTokenRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeSSOAuthServiceClient) UpdateSsoGroupMapping(ctx context.Context, in *authv1.UpdateSsoGroupMappingRequest, opts ...grpc.CallOption) (*authv1.UpdateSsoGroupMappingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
+}
+
+func (f *fakeSSOAuthServiceClient) ListSsoGroupMapping(ctx context.Context, in *authv1.ListSsoGroupMappingRequest, opts ...grpc.CallOption) (*authv1.ListSsoGroupMappingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not used by this test")
 }
 
 var _ authv1.AuthServiceClient = (*fakeSSOAuthServiceClient)(nil)
@@ -313,5 +368,103 @@ func TestAuthConfig_AuthModeSso_DisablesLocal(t *testing.T) {
 	}
 	if len(body.Providers) != 1 || body.Providers[0] != "github" {
 		t.Errorf("providers = %v, want [\"github\"]", body.Providers)
+	}
+}
+
+// TASK-BE-012 — POST /auth/refresh
+
+func TestAuthRefresh_NoCookiePresent_Returns401(t *testing.T) {
+	r := chi.NewRouter()
+	mountAuthRoutes(r, &fakeSSOAuthServiceClient{}, fakeSSOCookieValidator{}, SsoRouteConfig{})
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d (no orca_refresh cookie sent)", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthRefresh_Success_RotatesBothCookiesAndReturnsUser(t *testing.T) {
+	client := &fakeSSOAuthServiceClient{
+		refreshResp: &authv1.RefreshSessionResponse{
+			SessionToken: "new-session-token",
+			RefreshToken: "new-refresh-token",
+		},
+		validateResp: &authv1.ValidateSessionResponse{
+			Valid: true,
+			User:  &authv1.User{Id: "u1", Email: "alice@example.com", Provider: "github"},
+		},
+	}
+	r := chi.NewRouter()
+	mountAuthRoutes(r, client, fakeSSOCookieValidator{}, SsoRouteConfig{})
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: "old-refresh-token"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if client.lastRefreshReq.GetRefreshToken() != "old-refresh-token" {
+		t.Errorf("RefreshSession called with refresh_token = %q, want the cookie's value", client.lastRefreshReq.GetRefreshToken())
+	}
+
+	var gotSession, gotRefresh *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		switch c.Name {
+		case sessionCookieName:
+			gotSession = c
+		case refreshCookieName:
+			gotRefresh = c
+		}
+	}
+	if gotSession == nil || gotSession.Value != "new-session-token" {
+		t.Errorf("orca_session cookie = %+v, want value %q", gotSession, "new-session-token")
+	}
+	if gotRefresh == nil || gotRefresh.Value != "new-refresh-token" {
+		t.Errorf("orca_refresh cookie = %+v, want value %q (old refresh token must be single-use)", gotRefresh, "new-refresh-token")
+	}
+	if gotRefresh != nil && gotRefresh.Path != "/auth" {
+		t.Errorf("orca_refresh cookie Path = %q, want %q (must not be sent on ordinary app requests)", gotRefresh.Path, "/auth")
+	}
+
+	var body authUserResponse
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.ID != "u1" || body.Email != "alice@example.com" {
+		t.Errorf("body = %+v, want the refreshed session's user", body)
+	}
+}
+
+func TestAuthRefresh_InvalidToken_ClearsBothCookiesAndReturns401(t *testing.T) {
+	client := &fakeSSOAuthServiceClient{
+		refreshErr: status.Error(codes.PermissionDenied, "refresh token expired"),
+	}
+	r := chi.NewRouter()
+	mountAuthRoutes(r, client, fakeSSOCookieValidator{}, SsoRouteConfig{})
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: refreshCookieName, Value: "expired-or-reused-token"})
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	var sawSessionClear, sawRefreshClear bool
+	for _, c := range w.Result().Cookies() {
+		if c.Name == sessionCookieName && c.MaxAge < 0 {
+			sawSessionClear = true
+		}
+		if c.Name == refreshCookieName && c.MaxAge < 0 {
+			sawRefreshClear = true
+		}
+	}
+	if !sawSessionClear || !sawRefreshClear {
+		t.Errorf("expected both cookies cleared on a failed refresh, sawSessionClear=%v sawRefreshClear=%v", sawSessionClear, sawRefreshClear)
 	}
 }

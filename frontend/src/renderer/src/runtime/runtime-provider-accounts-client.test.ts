@@ -293,6 +293,34 @@ describe('watchProviderAccounts', () => {
     expect(snapshots).toHaveLength(2)
   })
 
+  // Regression: accounts.subscribe is a StreamHandler channel (registry.go)
+  // — its plain invoke ack carries result:null, and is now delivered to
+  // onResponse too (isSubscriptionResponse widened for FE-TASK-EVM-002's
+  // subscribeRuntimeStreamChannel). Reading message.type on that null used
+  // to throw "Cannot read properties of null (reading 'type')" on every
+  // remote subscribe (found live on b15.openledger.vn, 2026-09-08).
+  it('ignores the plain StreamHandler ack (result:null) instead of throwing', async () => {
+    const snapshots: ProviderAccountsSnapshot[] = []
+    watchProviderAccounts(REMOTE, {
+      onSnapshot: (snapshot) => snapshots.push(snapshot),
+      onError: () => {
+        throw new Error('unexpected error')
+      }
+    })
+    await flushMicrotasks()
+
+    expect(() => {
+      subscriptionCallbacks?.onResponse({ ok: true, result: null })
+    }).not.toThrow()
+    expect(snapshots).toHaveLength(0)
+
+    subscriptionCallbacks?.onResponse({
+      ok: true,
+      result: { type: 'ready', snapshot: snapshotFixture('ready') }
+    })
+    expect(snapshots).toHaveLength(1)
+  })
+
   it('errors before subscribing when no dev server is picked for the remote target', async () => {
     localStorage.removeItem(DEV_SERVER_PREFERENCE_KEY)
     const errors: unknown[] = []
@@ -422,7 +450,9 @@ describe('provider account mutations', () => {
         : {
             id: 'call',
             ok: true,
-            result: args.method.startsWith('accounts.select') ? emptyCodexState() : emptyClaudeState()
+            result: args.method.startsWith('accounts.select')
+              ? emptyCodexState()
+              : emptyClaudeState()
           }
     )
 
@@ -479,9 +509,9 @@ describe('provider account mutations', () => {
         : { id: 'call', ok: true, result: null }
     )
 
-    await expect(
-      removeClaudeProviderAccount(REMOTE, 'server-claude-1')
-    ).rejects.toThrow('not currently connected')
+    await expect(removeClaudeProviderAccount(REMOTE, 'server-claude-1')).rejects.toThrow(
+      'not currently connected'
+    )
 
     const methods = runtimeEnvironmentCall.mock.calls.map(
       (call) => (call[0] as { method: string }).method

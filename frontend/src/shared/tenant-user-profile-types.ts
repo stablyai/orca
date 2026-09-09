@@ -27,3 +27,13 @@ export type TenantCompany = {
   name: string
   settingsJson: string
 }
+
+// FE-TASK-011 (CR-RBAC-004): mirrors tenant-service's Team message minimally
+// (id/name only — enough for the grant picker's Select + badge label; see
+// tenantProfile.listTeams below). Backed by the wscompat "team.list" channel
+// (backend-go/services/api-gateway/internal/adapter/wscompat/channels_team.go),
+// confirmed wired into RegisterRealChannels as of this task's execution.
+export type TenantTeam = {
+  id: string
+  name: string
+}

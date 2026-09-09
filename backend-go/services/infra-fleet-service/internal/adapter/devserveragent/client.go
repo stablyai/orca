@@ -464,6 +464,80 @@ func (c *Client) StreamScreencast(ctx context.Context, devServer domain.DevServe
 	return out, unsubscribe, nil
 }
 
+// StreamFileChanges calls fs.watch for path and subscribes to its
+// fs.changed notifications — see usecase.DevServerAgentClient.StreamFileChanges's
+// doc comment. Subscribes BEFORE issuing the call, same race-avoidance
+// reasoning as StreamScreencast's doc comment.
+//
+// relay-ssh is blocked below for the same reason as StreamPty (see that
+// method's doc comment, BACKLOG-019) — fs.watch runs through the identical
+// agent-session.ts/dispatcher.ts every other JSON-RPC method does
+// regardless of connection mode, so this is very likely supported in
+// practice too, but it has never been verified end-to-end against a live
+// relay-ssh dev server either. Lift this gate alongside StreamPty's, not
+// independently, once someone does that verification.
+func (c *Client) StreamFileChanges(ctx context.Context, devServer domain.DevServer, path string) (<-chan usecase.FileChangeEvent, func(), error) {
+	if devServer.Mode == domain.ConnectionModeRelaySSH {
+		return nil, nil, fmt.Errorf("%w: relay-ssh fs.watch streaming is unverified end-to-end, not architecturally unsupported — see StreamPty's doc comment (BACKLOG-019)", ErrConnectionModeNotImplemented)
+	}
+	sess, err := c.getOrCreateSession(ctx, devServer)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	raw := sess.subscribeFileWatch(path)
+
+	if _, err := sess.call(ctx, "fs.watch", map[string]any{"path": path}); err != nil {
+		sess.unsubscribeFileWatch(path, raw)
+		return nil, nil, err
+	}
+
+	out := make(chan usecase.FileChangeEvent, 64)
+	done := make(chan struct{})
+	var closeOnce sync.Once
+
+	go func() {
+		defer close(out)
+		for {
+			select {
+			case n, ok := <-raw:
+				if !ok {
+					return
+				}
+				absolutePath := n.Path
+				if n.Filename != "" {
+					absolutePath = n.Path + "/" + n.Filename
+				}
+				select {
+				case out <- usecase.FileChangeEvent{Kind: n.Kind, Path: absolutePath}:
+				case <-done:
+					return
+				case <-ctx.Done():
+					return
+				}
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	unsubscribe := func() {
+		closeOnce.Do(func() {
+			close(done)
+			sess.unsubscribeFileWatch(path, raw)
+			// Best-effort: tell the agent to stop watching (refcounted —
+			// see fs-agent-extensions.ts's AGENT_WATCH_MAP) — errors here
+			// are non-fatal, same as StreamScreencast's cleanup call.
+			stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_, _ = sess.call(stopCtx, "fs.unwatch", map[string]any{"path": path})
+		})
+	}
+	return out, unsubscribe, nil
+}
+
 // screencastStartParams builds browser.screencastStart's JSON-RPC params
 // from usecase.ScreencastParams — field names match
 // browser-screencast-handler.ts's dispatch case exactly (both sides of this

@@ -2,7 +2,14 @@ package wscompat
 
 import (
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,6 +21,11 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+
+	"github.com/stablyai/orca-go/common/jwtauth"
+	"github.com/stablyai/orca-go/services/api-gateway/internal/usecase"
+
+	"github.com/go-jose/go-jose/v4/jwt"
 )
 
 // TestNotImplementedChannelReturnsErrorFast verifies that an unregistered
@@ -90,7 +102,7 @@ func (f fakeSessionValidator) ValidateCookie(_ context.Context, _ *http.Request)
 
 func newTestHandlerServer(t *testing.T, registry *Registry) *httptest.Server {
 	t.Helper()
-	h := New(slog.Default(), fakeSessionValidator{identity: Identity{TenantID: "tenant-1", UserID: "user-1"}}, registry)
+	h := New(slog.Default(), fakeSessionValidator{identity: Identity{TenantID: "tenant-1", UserID: "user-1"}}, nil, registry)
 	ts := httptest.NewServer(http.HandlerFunc(h.ServeHTTP))
 	t.Cleanup(ts.Close)
 	return ts
@@ -584,5 +596,156 @@ func TestSessionClientDialect_StreamChannelAckAndPushBothBridge(t *testing.T) {
 	}
 	if got := string(update.Result); got != `"chunk"` {
 		t.Fatalf("update.Result = %s, want unwrapped bare value %q", got, `"chunk"`)
+	}
+}
+
+// fakeCookieSessionValidator implements SessionValidator with a
+// configurable failure, for exercising resolveIdentity's cookie-vs-bearer
+// fallback order (mirrors wsbridge's fakeCookieValidator, copied rather than
+// imported cross-package per this package's own test convention).
+type fakeCookieSessionValidator struct {
+	identity Identity
+	err      error
+	calls    int
+}
+
+func (f *fakeCookieSessionValidator) ValidateCookie(_ context.Context, _ *http.Request) (Identity, error) {
+	f.calls++
+	if f.err != nil {
+		return Identity{}, f.err
+	}
+	return f.identity, nil
+}
+
+// fakeJWKSClient / newBearerAuthValidator, same pattern as
+// wsbridge/handler_test.go's identically named helpers (copied, not
+// cross-package imported, per that file's own doc comment convention).
+type fakeJWKSClient struct {
+	kid string
+	key any
+}
+
+func (f *fakeJWKSClient) PublicKey(_ context.Context, kid string) (any, error) {
+	if kid != f.kid {
+		return nil, fmt.Errorf("fakeJWKSClient: no key for kid %q", kid)
+	}
+	return f.key, nil
+}
+
+func newBearerAuthValidator(t *testing.T) (*usecase.AuthValidator, string) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generating test RSA key: %v", err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatalf("marshaling public key: %v", err)
+	}
+	pemBlock := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})
+
+	sign := func(_ context.Context, _ string, input []byte) (string, error) {
+		digest := sha256.Sum256(input)
+		sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, digest[:])
+		if err != nil {
+			return "", err
+		}
+		return "vault:v1:" + base64.StdEncoding.EncodeToString(sig), nil
+	}
+	pubKey := func(_ context.Context, _ string) (map[int]string, int, error) {
+		return map[int]string{1: string(pemBlock)}, 1, nil
+	}
+
+	signer := jwtauth.NewTransitSigner("jwt-signing", sign, pubKey)
+	token, err := jwtauth.Sign(context.Background(), signer, jwtauth.Claims{
+		Claims: jwt.Claims{
+			Issuer:   jwtauth.Issuer,
+			Subject:  "user-bearer",
+			IssuedAt: jwt.NewNumericDate(time.Now()),
+			Expiry:   jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+		TenantID: "tenant-bearer",
+	})
+	if err != nil {
+		t.Fatalf("Sign: %v", err)
+	}
+	jwks, err := signer.PublicJWKS(context.Background())
+	if err != nil {
+		t.Fatalf("PublicJWKS: %v", err)
+	}
+
+	v := usecase.NewAuthValidator(&fakeJWKSClient{kid: jwks.Keys[0].KeyID, key: jwks.Keys[0].Key})
+	return v, token
+}
+
+func TestHandler_ResolveIdentity_PrefersCookieOverBearerJWT(t *testing.T) {
+	auth, token := newBearerAuthValidator(t)
+	cookie := &fakeCookieSessionValidator{identity: Identity{TenantID: "tenant-cookie", UserID: "user-cookie"}}
+	h := &Handler{Auth: cookie, BearerAuth: auth}
+
+	r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+
+	id, err := h.resolveIdentity(r)
+	if err != nil {
+		t.Fatalf("resolveIdentity: %v", err)
+	}
+	if id.TenantID != "tenant-cookie" || id.UserID != "user-cookie" {
+		t.Fatalf("got Identity{%q,%q}, want cookie-resolved identity", id.TenantID, id.UserID)
+	}
+	if cookie.calls != 1 {
+		t.Fatalf("cookie validator calls = %d, want 1", cookie.calls)
+	}
+}
+
+func TestHandler_ResolveIdentity_FallsBackToBearerJWTWhenCookieFails(t *testing.T) {
+	auth, token := newBearerAuthValidator(t)
+	cookie := &fakeCookieSessionValidator{err: fmt.Errorf("no session cookie present")}
+	h := &Handler{Auth: cookie, BearerAuth: auth}
+
+	r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+
+	id, err := h.resolveIdentity(r)
+	if err != nil {
+		t.Fatalf("resolveIdentity: %v", err)
+	}
+	if id.TenantID != "tenant-bearer" || id.UserID != "user-bearer" {
+		t.Fatalf("got Identity{%q,%q}, want bearer-resolved identity", id.TenantID, id.UserID)
+	}
+	if cookie.calls != 1 {
+		t.Fatalf("cookie validator calls = %d, want 1", cookie.calls)
+	}
+}
+
+// TestHandler_ResolveIdentity_BearerAuthNilFallsThroughToError differs from
+// wsbridge's equivalent test set: there, Cookie is the nil-tolerant field;
+// here BearerAuth is nil-tolerant instead (Auth is required, never nil) —
+// this covers that BearerAuth == nil case specifically, which has no
+// wsbridge analog.
+func TestHandler_ResolveIdentity_BearerAuthNilFallsThroughToError(t *testing.T) {
+	cookie := &fakeCookieSessionValidator{err: fmt.Errorf("no session cookie present")}
+	h := &Handler{Auth: cookie, BearerAuth: nil}
+
+	r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+
+	if _, err := h.resolveIdentity(r); err == nil {
+		t.Fatal("expected an error when cookie fails and BearerAuth is nil")
+	}
+	if cookie.calls != 1 {
+		t.Fatalf("cookie validator calls = %d, want 1", cookie.calls)
+	}
+}
+
+func TestHandler_ResolveIdentity_BothFail(t *testing.T) {
+	auth, _ := newBearerAuthValidator(t)
+	cookie := &fakeCookieSessionValidator{err: fmt.Errorf("no session cookie present")}
+	h := &Handler{Auth: cookie, BearerAuth: auth}
+
+	r := httptest.NewRequest(http.MethodGet, "/ws", nil)
+	// No Authorization header and no cookie present at all.
+
+	if _, err := h.resolveIdentity(r); err == nil {
+		t.Fatal("expected an error when neither cookie nor bearer JWT resolve")
 	}
 }

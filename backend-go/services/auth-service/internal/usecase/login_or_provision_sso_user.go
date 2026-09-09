@@ -16,6 +16,9 @@ import (
 // same orca_session cookie the same way.
 type LoginOrProvisionSsoUserOutput struct {
 	SessionToken string
+	// RefreshToken — see LoginOutput.RefreshToken's doc comment; SSO login
+	// gets one for the same reason local login does (TASK-BE-012).
+	RefreshToken string
 	User         domain.User
 }
 
@@ -62,8 +65,10 @@ type LoginOrProvisionSsoUserOutput struct {
 //     identity can never claim an email at all, verified or not.
 //  5. No identity row, no existing account, and the IdP DOES report the
 //     email verified -> brand-new user, the CR-DS-008 "first login, no
-//     department yet" case. Role always defaults to domain.RoleUser — SSO
-//     must never auto-admin.
+//     department yet" case. Role defaults to domain.RoleUser, upgraded to
+//     domain.RoleAdmin only if the IdP's group membership maps to admin via
+//     resolveRoleFromGroups (CR-RBAC-003) — SSO still never auto-admins on
+//     its own authority, only by an admin's explicit group-mapping config.
 type LoginOrProvisionSsoUser struct {
 	users      UserRepository
 	identities SsoIdentityRepository
@@ -71,6 +76,7 @@ type LoginOrProvisionSsoUser struct {
 	audit      AuditRepository
 	hasher     PasswordHasher
 	tenants    TenantResolver
+	mapping    SsoGroupRoleMappingRepository
 	clock      Clock
 	sessionTTL time.Duration
 }
@@ -82,6 +88,7 @@ func NewLoginOrProvisionSsoUser(
 	audit AuditRepository,
 	hasher PasswordHasher,
 	tenants TenantResolver,
+	mapping SsoGroupRoleMappingRepository,
 	clock Clock,
 	sessionTTL time.Duration,
 ) *LoginOrProvisionSsoUser {
@@ -90,7 +97,7 @@ func NewLoginOrProvisionSsoUser(
 	}
 	return &LoginOrProvisionSsoUser{
 		users: users, identities: identities, sessions: sessions, audit: audit,
-		hasher: hasher, tenants: tenants, clock: clock, sessionTTL: sessionTTL,
+		hasher: hasher, tenants: tenants, mapping: mapping, clock: clock, sessionTTL: sessionTTL,
 	}
 }
 
@@ -111,6 +118,20 @@ func (uc *LoginOrProvisionSsoUser) Execute(ctx context.Context, in VerifiedSsoId
 		}
 		if !user.IsActive {
 			return LoginOrProvisionSsoUserOutput{}, apperrors.New(apperrors.KindPermissionDenied, "AUTH_ACCOUNT_DEACTIVATED", "account is deactivated", nil)
+		}
+		// Group-implied role is re-evaluated on every returning login, not
+		// just first provisioning, so a group added to orca-admins AFTER a
+		// user's first login still upgrades them. Deliberate anti-lockout
+		// asymmetry: only ever UPGRADE (user -> admin) here. If the
+		// group-implied role is user but the stored role is admin, do
+		// nothing — an admin who removed themselves from orca-admins in the
+		// IdP keeps their manually-granted admin role until an actual admin
+		// revokes it via UpdateUserRole. This is deliberate, not an
+		// oversight.
+		if role, rerr := resolveRoleFromGroups(ctx, uc.mapping, user.TenantID, in); rerr == nil && role == domain.RoleAdmin && user.Role == domain.RoleUser {
+			if upgraded, err := uc.users.UpdateUserRole(ctx, user.ID, domain.RoleAdmin); err == nil {
+				user = upgraded
+			}
 		}
 		return uc.issueSession(ctx, user, in.Provider, "user.sso_login", func(now time.Time) {
 			_ = uc.identities.TouchLastLogin(ctx, identity.ID, now)
@@ -177,7 +198,11 @@ func (uc *LoginOrProvisionSsoUser) Execute(ctx context.Context, in VerifiedSsoId
 	}
 
 	now := uc.clock.Now()
-	newUser, err := domain.NewUser(uuid.NewString(), tenantID, in.Email, in.Name, domain.RoleUser, true, now)
+	// resolveRoleFromGroups fails closed to domain.RoleUser on a mapping
+	// lookup error — never blocks brand-new provisioning, and never fails
+	// closed to admin.
+	role, _ := resolveRoleFromGroups(ctx, uc.mapping, tenantID, in)
+	newUser, err := domain.NewUser(uuid.NewString(), tenantID, in.Email, in.Name, role, true, now)
 	if err != nil {
 		return LoginOrProvisionSsoUserOutput{}, apperrors.New(apperrors.KindInvalidArgument, "AUTH_SSO_INVALID_USER", err.Error(), err)
 	}
@@ -212,7 +237,7 @@ func (uc *LoginOrProvisionSsoUser) Execute(ctx context.Context, in VerifiedSsoId
 // entry, and run an optional side effect (e.g. touching
 // sso_identities.last_login_at) with the same "now" instant.
 func (uc *LoginOrProvisionSsoUser) issueSession(ctx context.Context, user domain.User, provider domain.SsoProvider, auditAction string, sideEffect func(now time.Time)) (LoginOrProvisionSsoUserOutput, error) {
-	rawToken, now, err := createSessionForUser(ctx, uc.sessions, uc.clock, uc.sessionTTL, user)
+	rawToken, rawRefreshToken, now, err := createSessionForUser(ctx, uc.sessions, uc.clock, uc.sessionTTL, user)
 	if err != nil {
 		return LoginOrProvisionSsoUserOutput{}, err
 	}
@@ -221,8 +246,41 @@ func (uc *LoginOrProvisionSsoUser) issueSession(ctx context.Context, user domain
 	if sideEffect != nil {
 		sideEffect(now)
 	}
-	if entry, err := domain.NewAuditEntry(uuid.NewString(), user.TenantID, user.ID, auditAction, user.ID, now); err == nil {
+	if entry, err := domain.NewAuditEntry(uuid.NewString(), user.TenantID, user.ID, auditAction, user.ID, domain.OutcomeAllowed, "", now); err == nil {
 		_ = uc.audit.Append(ctx, entry)
 	}
-	return LoginOrProvisionSsoUserOutput{SessionToken: rawToken, User: user}, nil
+	return LoginOrProvisionSsoUserOutput{SessionToken: rawToken, RefreshToken: rawRefreshToken, User: user}, nil
+}
+
+// resolveRoleFromGroups maps identity.Groups against
+// sso_group_role_mapping, returning the highest-privilege matching role
+// (admin > user), or domain.RoleUser if no group matches. Called both when
+// provisioning a brand-new user and on every returning-user login (see
+// Execute's call sites) — an existing admin's role is never *downgraded*
+// here, only ever upgraded; the anti-lockout asymmetry lives at the call
+// site, not in this function.
+func resolveRoleFromGroups(ctx context.Context, mapping SsoGroupRoleMappingRepository, tenantID string, identity VerifiedSsoIdentity) (domain.Role, error) {
+	rows, err := mapping.ListForProvider(ctx, tenantID, identity.Provider)
+	if err != nil {
+		return domain.RoleUser, err // fail closed to the least-privileged role, never fail closed to admin
+	}
+	role := domain.RoleUser
+	for _, g := range identity.Groups {
+		if r, ok := matchGroup(rows, g); ok && r == domain.RoleAdmin {
+			role = domain.RoleAdmin
+			break
+		}
+	}
+	return role, nil
+}
+
+// matchGroup reports whether group matches any row's GroupName, returning
+// that row's mapped role.
+func matchGroup(rows []domain.SsoGroupRoleMapping, group string) (domain.Role, bool) {
+	for _, r := range rows {
+		if r.GroupName == group {
+			return r.Role, true
+		}
+	}
+	return "", false
 }

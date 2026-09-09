@@ -90,6 +90,9 @@ type Server struct {
 	// summary (TASK-BE-STORAGE-006) — see usecase.GetFleetConnectivitySummary's
 	// doc comment.
 	getFleetConnectivitySummary *usecase.GetFleetConnectivitySummary
+
+	// streamFileChanges backs BACKLOG-003's file-watch streaming RPC.
+	streamFileChanges *usecase.StreamFileChanges
 }
 
 func New(
@@ -139,6 +142,7 @@ func New(
 	ephemeralVmRelay *usecase.EphemeralVmRelay,
 	getFleetConnectivitySummary *usecase.GetFleetConnectivitySummary,
 	teardownConnection *usecase.TeardownConnection,
+	streamFileChanges *usecase.StreamFileChanges,
 ) *Server {
 	return &Server{
 		registerDevServer:          registerDevServer,
@@ -190,6 +194,8 @@ func New(
 		getFleetConnectivitySummary: getFleetConnectivitySummary,
 
 		teardownConnection: teardownConnection,
+
+		streamFileChanges: streamFileChanges,
 	}
 }
 
@@ -495,6 +501,38 @@ func (s *Server) RelayByDevServer(ctx context.Context, req *infrafleetv1.RelayBy
 		return nil, apperrors.ToGRPCStatus(apperrors.New(apperrors.KindInternal, "INFRA_RELAY_ENCODE_FAILED", "failed to encode relay result", err))
 	}
 	return &infrafleetv1.RelayResponse{ResultJson: string(resultJSON)}, nil
+}
+
+// StreamFileChanges is BACKLOG-003's streaming counterpart to Relay/
+// RelayByDevServer above — same dual connection_id/dev_server_id
+// addressing, but server-streaming (grpc.ServerStreamingServer's generated
+// method shape takes (req, stream); ctx comes from stream.Context(), same
+// as StreamVmProvision, not a separate parameter).
+func (s *Server) StreamFileChanges(req *infrafleetv1.StreamFileChangesRequest, stream infrafleetv1.InfraFleetService_StreamFileChangesServer) error {
+	events, unsubscribe, err := s.streamFileChanges.Execute(stream.Context(), usecase.StreamFileChangesInput{
+		ConnectionID: req.GetConnectionId(),
+		DevServerID:  req.GetDevServerId(),
+		Path:         req.GetPath(),
+	})
+	if err != nil {
+		return apperrors.ToGRPCStatus(err)
+	}
+	defer unsubscribe()
+	for event := range events {
+		if err := stream.Send(toProtoFileChangeEvent(event)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func toProtoFileChangeEvent(e usecase.FileChangeEvent) *infrafleetv1.FileChangeEvent {
+	return &infrafleetv1.FileChangeEvent{
+		Kind:            e.Kind,
+		AbsolutePath:    e.Path,
+		OldAbsolutePath: e.OldPath,
+		IsDirectory:     e.IsDirectory,
+	}
 }
 
 func (s *Server) IsDevServerConnected(ctx context.Context, req *infrafleetv1.IsDevServerConnectedRequest) (*infrafleetv1.IsDevServerConnectedResponse, error) {

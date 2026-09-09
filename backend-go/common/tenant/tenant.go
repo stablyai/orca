@@ -18,6 +18,7 @@ var (
 	tenantIDKey = &contextKey{"tenant_id"}
 	userIDKey   = &contextKey{"user_id"}
 	roleKey     = &contextKey{"role"}
+	clientIPKey = &contextKey{"client_ip"}
 )
 
 // ErrNoTenant is returned by RequireTenantID when the context carries no
@@ -60,14 +61,39 @@ func UserID(ctx context.Context) (string, bool) {
 	return v, ok && v != ""
 }
 
-// Role returns the caller's global role and whether one was present. A
-// bearer-JWT-authenticated caller (usecase.AuthValidator's path) never
-// populates this today — only the cookie/session path
-// (authclient.SessionValidator) does, per that gap's own doc comment. Every
-// caller of Role must treat ok==false the same as an empty/non-admin role,
-// never as "trust it."
+// Role returns the caller's global role and whether one was present.
+// Populated end-to-end for both the cookie/session path
+// (authclient.SessionValidator) and, since CR-RBAC-002
+// (BE-SOL-002/TASK-BE-003/004), the bearer-JWT path too
+// (usecase.AuthValidator, via jwtauth.Claims.Role) — a JWT minted before
+// that change simply carries no role claim, which resolves the same as any
+// other absent claim (ok==false), not an error. Every caller of Role must
+// still treat ok==false the same as an empty/non-admin role, never as
+// "trust it."
 func Role(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(roleKey).(string)
+	return v, ok && v != ""
+}
+
+// WithClientIP attaches the caller's real client IP (resolved once, at the
+// api-gateway edge, from the inbound HTTP request — see
+// httpgateway.authMiddleware) to ctx. Two distinct roles share this same
+// accessor pair (TASK-BE-023 / CR-RBAC-005): api-gateway's outbound
+// AttachIdentity reads it back via ClientIP to stamp it onto outgoing gRPC
+// metadata (grpcmw.MetadataClientIP), and an internal service's
+// TenantExtractionInterceptor calls WithClientIP itself after extracting
+// that same metadata key from an inbound request — so a downstream audit
+// call site can always just call ClientIP(ctx), regardless of which hop
+// populated it.
+func WithClientIP(ctx context.Context, ip string) context.Context {
+	return context.WithValue(ctx, clientIPKey, ip)
+}
+
+// ClientIP returns the caller's real client IP and whether one was present.
+// Empty/ok==false for any request path with no HTTP edge in front of it
+// (e.g. a background job) — never an error, same fail-safe posture as Role.
+func ClientIP(ctx context.Context) (string, bool) {
+	v, ok := ctx.Value(clientIPKey).(string)
 	return v, ok && v != ""
 }
 

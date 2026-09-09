@@ -118,8 +118,8 @@ func TestRepository_AuditLog_AppendAndQueryFiltersByTenant(t *testing.T) {
 	tenant1 := uuid.NewString()
 	tenant2 := uuid.NewString()
 
-	e1, _ := domain.NewAuditEntry(uuid.NewString(), tenant1, uuid.NewString(), "user.login", "target-1", time.Now())
-	e2, _ := domain.NewAuditEntry(uuid.NewString(), tenant2, uuid.NewString(), "user.login", "target-2", time.Now())
+	e1, _ := domain.NewAuditEntry(uuid.NewString(), tenant1, uuid.NewString(), "user.login", "target-1", domain.OutcomeAllowed, "", time.Now())
+	e2, _ := domain.NewAuditEntry(uuid.NewString(), tenant2, uuid.NewString(), "user.login", "target-2", domain.OutcomeAllowed, "", time.Now())
 	if err := repo.Append(ctx, e1); err != nil {
 		t.Fatalf("append e1: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestRepository_AuditLog_AppendAndQueryFiltersByTenant(t *testing.T) {
 		t.Fatalf("append e2: %v", err)
 	}
 
-	entries, _, err := repo.Query(ctx, tenant1, time.Time{}, "", 50)
+	entries, _, err := repo.Query(ctx, tenant1, time.Time{}, "", "", "", "", 50)
 	if err != nil {
 		t.Fatalf("query: %v", err)
 	}

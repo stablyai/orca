@@ -13,7 +13,7 @@ export type AuthUser = {
   id: string
   email: string
   name: string
-  role: 'developer' | 'lead' | 'admin'
+  role: 'developer' | 'admin' // was: 'developer' | 'lead' | 'admin'
   /** OAuth provider used to authenticate, or 'none' for local-password accounts */
   provider: 'none' | SsoProvider
   avatarUrl?: string

@@ -16,9 +16,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/stablyai/orca-go/common/auditclient"
 	"github.com/stablyai/orca-go/common/grpcmw"
 	"github.com/stablyai/orca-go/common/health"
 	"github.com/stablyai/orca-go/common/logging"
@@ -34,6 +37,7 @@ import (
 	projectpostgres "github.com/stablyai/orca-go/services/project-service/internal/adapter/postgres"
 	"github.com/stablyai/orca-go/services/project-service/internal/usecase"
 
+	authv1 "github.com/stablyai/orca-go/proto/gen/go/orca/auth/v1"
 	projectv1 "github.com/stablyai/orca-go/proto/gen/go/orca/project/v1"
 )
 
@@ -115,6 +119,18 @@ func run() error {
 	}
 	defer func() { _ = devServerLister.Close() }()
 
+	// Audit-append client (TASK-BE-018/019, CR-RBAC-005) — requireProjectAccess/
+	// requireRepoAccess (internal/usecase/authorization.go) use this to record
+	// every OPA allow/deny decision to auth-service's audit_log. Lazy dial
+	// (grpc.NewClient doesn't block on connect), same convention as every
+	// other outbound client above.
+	authConn, err := grpc.NewClient(cfg.AuthServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+	if err != nil {
+		return fmt.Errorf("dialing auth-service: %w", err)
+	}
+	defer func() { _ = authConn.Close() }()
+	usecase.SetAuditClient(auditclient.New(authv1.NewAuthServiceClient(authConn)))
+
 	// Shared embedded-OPA evaluator (common/policy) for project-role/
 	// global-admin authorization — mirrors auth-service/annotation-service/
 	// task-service's own composition-root wiring. One Evaluator, pointed at
@@ -193,7 +209,7 @@ func run() error {
 	saveSparsePresetUC := usecase.NewSaveSparsePreset(sparsePresetRepo, repoRepo, repo, opa)
 	removeSparsePresetUC := usecase.NewRemoveSparsePreset(sparsePresetRepo, repoRepo, repo, opa)
 
-	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger))
+	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger), grpcmw.StatsHandler())
 	projectv1.RegisterProjectServiceServer(grpcServer, projectgrpc.New(projectgrpc.Deps{
 		CreateProject:       createProjectUC,
 		GetProject:          getProjectUC,

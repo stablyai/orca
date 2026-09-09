@@ -4,20 +4,25 @@ import type { AppState } from '../types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type OrcaUserRole = 'developer' | 'lead' | 'admin'
+// CR-RBAC-002: backend thật (auth-service) chỉ có 2 role toàn cục (user/admin,
+// roleToString ở api-gateway map non-admin → "developer" cho tương thích UI cũ)
+// — "lead" chưa từng tồn tại được cho user thật nào. "lead" đúng nghĩa chỉ ở
+// RepoRole (theo từng repo, xem RepoMemberManager.tsx), không phải role toàn cục.
+export type OrcaUserRole = 'developer' | 'admin'
 
 export type OrcaUser = {
   id: string
   email: string
   name: string
   avatarUrl?: string
-  teams: string[]
-  projects: string[]
   role: OrcaUserRole
+  // teams/projects: xoá — không nguồn nào đổ dữ liệu thật (CR-RBAC-004);
+  // scoping RBAC thật là infra-fleet-service's Department/Team grant, không
+  // phải field này trên OrcaUser.
 }
 
 export type AuthStatus =
-  | 'unknown'         // bootstrap has not yet called GET /auth/me
+  | 'unknown' // bootstrap has not yet called GET /auth/me
   | 'unauthenticated'
   | 'authenticating'
   | 'authenticated'
@@ -39,14 +44,12 @@ export type AuthSlice = {
 
 export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set) => ({
   currentUser: null,
-  authStatus: 'unknown',   // unknown until bootstrap resolves
+  authStatus: 'unknown', // unknown until bootstrap resolves
   authError: null,
 
-  setCurrentUser: (user) =>
-    set(() => ({ currentUser: user })),
+  setCurrentUser: (user) => set(() => ({ currentUser: user })),
 
-  setAuthStatus: (status, error) =>
-    set(() => ({ authStatus: status, authError: error ?? null })),
+  setAuthStatus: (status, error) => set(() => ({ authStatus: status, authError: error ?? null })),
 
   clearAuth: () =>
     set(() => ({
@@ -71,9 +74,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set) 
             email: user.email,
             name: user.name,
             avatarUrl: user.avatarUrl,
-            role: user.role,
-            teams: [],
-            projects: []
+            role: user.role
           }
         }))
       } else {

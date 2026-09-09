@@ -30,6 +30,27 @@ func TestRole_RoundTrips(t *testing.T) {
 	}
 }
 
+func TestClientIP_ReturnsFalseWhenAbsent(t *testing.T) {
+	if v, ok := ClientIP(context.Background()); ok || v != "" {
+		t.Errorf("want (\"\", false), got (%q, %v)", v, ok)
+	}
+}
+
+func TestClientIP_RoundTrips(t *testing.T) {
+	ctx := WithClientIP(context.Background(), "203.0.113.7")
+	v, ok := ClientIP(ctx)
+	if !ok || v != "203.0.113.7" {
+		t.Errorf("want (\"203.0.113.7\", true), got (%q, %v)", v, ok)
+	}
+}
+
+func TestClientIP_ReturnsFalseForEmptyString(t *testing.T) {
+	ctx := WithClientIP(context.Background(), "")
+	if v, ok := ClientIP(ctx); ok || v != "" {
+		t.Errorf("want (\"\", false), got (%q, %v)", v, ok)
+	}
+}
+
 func TestRole_DoesNotLeakBetweenIndependentContexts(t *testing.T) {
 	ctx1 := WithRole(context.Background(), "admin")
 	ctx2 := WithTenantID(context.Background(), "t1") // no WithRole call

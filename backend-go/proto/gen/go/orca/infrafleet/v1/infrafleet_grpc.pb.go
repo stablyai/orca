@@ -41,6 +41,7 @@ const (
 	InfraFleetService_CreateConnection_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/CreateConnection"
 	InfraFleetService_Relay_FullMethodName                       = "/orca.infrafleet.v1.InfraFleetService/Relay"
 	InfraFleetService_RelayByDevServer_FullMethodName            = "/orca.infrafleet.v1.InfraFleetService/RelayByDevServer"
+	InfraFleetService_StreamFileChanges_FullMethodName           = "/orca.infrafleet.v1.InfraFleetService/StreamFileChanges"
 	InfraFleetService_IsDevServerConnected_FullMethodName        = "/orca.infrafleet.v1.InfraFleetService/IsDevServerConnected"
 	InfraFleetService_ListSshTargets_FullMethodName              = "/orca.infrafleet.v1.InfraFleetService/ListSshTargets"
 	InfraFleetService_GetSshState_FullMethodName                 = "/orca.infrafleet.v1.InfraFleetService/GetSshState"
@@ -128,6 +129,18 @@ type InfraFleetServiceClient interface {
 	// pick the first repo/worktree" needs to reach the agent BEFORE that
 	// exists. Bypasses infra.connections entirely.
 	RelayByDevServer(ctx context.Context, in *RelayByDevServerRequest, opts ...grpc.CallOption) (*RelayResponse, error)
+	// StreamFileChanges subscribes to fs.changed push notifications for one
+	// watched path (BACKLOG-003) — Relay/RelayByDevServer above are unary
+	// request/response only, so they can carry fs.watch's initial ack but not
+	// the ongoing push stream the agent's watcher emits afterward. Same dual
+	// connection_id/dev_server_id addressing as Relay/RelayByDevServer
+	// (exactly one set); see devserveragent.Client.StreamFileChanges's doc
+	// comment for the fs.watch/fs.unwatch/fs.changed wire contract this
+	// subscribes to, and this RPC's own usecase for why it's plain
+	// server-streaming (no inbound frame needed — unlike AttachPty/
+	// AttachScreencast, there's no interactive input to send once watching
+	// starts; the caller ends the subscription by canceling this call's ctx).
+	StreamFileChanges(ctx context.Context, in *StreamFileChangesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChangeEvent], error)
 	// IsDevServerConnected answers "does this dev server have a live agent
 	// session right now" — cheap, side-effect-free (never dials). Replaces
 	// the hardcoded "disconnected" wscompat's devServer.list/listForUser used
@@ -468,6 +481,25 @@ func (c *infraFleetServiceClient) RelayByDevServer(ctx context.Context, in *Rela
 	return out, nil
 }
 
+func (c *infraFleetServiceClient) StreamFileChanges(ctx context.Context, in *StreamFileChangesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[FileChangeEvent], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &InfraFleetService_ServiceDesc.Streams[0], InfraFleetService_StreamFileChanges_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[StreamFileChangesRequest, FileChangeEvent]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type InfraFleetService_StreamFileChangesClient = grpc.ServerStreamingClient[FileChangeEvent]
+
 func (c *infraFleetServiceClient) IsDevServerConnected(ctx context.Context, in *IsDevServerConnectedRequest, opts ...grpc.CallOption) (*IsDevServerConnectedResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(IsDevServerConnectedResponse)
@@ -630,7 +662,7 @@ func (c *infraFleetServiceClient) InspectTerminalProcess(ctx context.Context, in
 
 func (c *infraFleetServiceClient) AttachPty(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[PtyClientFrame, PtyServerFrame], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &InfraFleetService_ServiceDesc.Streams[0], InfraFleetService_AttachPty_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &InfraFleetService_ServiceDesc.Streams[1], InfraFleetService_AttachPty_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -643,7 +675,7 @@ type InfraFleetService_AttachPtyClient = grpc.BidiStreamingClient[PtyClientFrame
 
 func (c *infraFleetServiceClient) AttachScreencast(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ScreencastClientFrame, ScreencastServerFrame], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &InfraFleetService_ServiceDesc.Streams[1], InfraFleetService_AttachScreencast_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &InfraFleetService_ServiceDesc.Streams[2], InfraFleetService_AttachScreencast_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -826,7 +858,7 @@ func (c *infraFleetServiceClient) CleanupEphemeralVmWorkspace(ctx context.Contex
 
 func (c *infraFleetServiceClient) StreamVmProvision(ctx context.Context, in *StreamVmProvisionRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[VmProvisionEvent], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &InfraFleetService_ServiceDesc.Streams[2], InfraFleetService_StreamVmProvision_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &InfraFleetService_ServiceDesc.Streams[3], InfraFleetService_StreamVmProvision_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -892,6 +924,18 @@ type InfraFleetServiceServer interface {
 	// pick the first repo/worktree" needs to reach the agent BEFORE that
 	// exists. Bypasses infra.connections entirely.
 	RelayByDevServer(context.Context, *RelayByDevServerRequest) (*RelayResponse, error)
+	// StreamFileChanges subscribes to fs.changed push notifications for one
+	// watched path (BACKLOG-003) — Relay/RelayByDevServer above are unary
+	// request/response only, so they can carry fs.watch's initial ack but not
+	// the ongoing push stream the agent's watcher emits afterward. Same dual
+	// connection_id/dev_server_id addressing as Relay/RelayByDevServer
+	// (exactly one set); see devserveragent.Client.StreamFileChanges's doc
+	// comment for the fs.watch/fs.unwatch/fs.changed wire contract this
+	// subscribes to, and this RPC's own usecase for why it's plain
+	// server-streaming (no inbound frame needed — unlike AttachPty/
+	// AttachScreencast, there's no interactive input to send once watching
+	// starts; the caller ends the subscription by canceling this call's ctx).
+	StreamFileChanges(*StreamFileChangesRequest, grpc.ServerStreamingServer[FileChangeEvent]) error
 	// IsDevServerConnected answers "does this dev server have a live agent
 	// session right now" — cheap, side-effect-free (never dials). Replaces
 	// the hardcoded "disconnected" wscompat's devServer.list/listForUser used
@@ -1084,6 +1128,9 @@ func (UnimplementedInfraFleetServiceServer) Relay(context.Context, *RelayRequest
 }
 func (UnimplementedInfraFleetServiceServer) RelayByDevServer(context.Context, *RelayByDevServerRequest) (*RelayResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RelayByDevServer not implemented")
+}
+func (UnimplementedInfraFleetServiceServer) StreamFileChanges(*StreamFileChangesRequest, grpc.ServerStreamingServer[FileChangeEvent]) error {
+	return status.Error(codes.Unimplemented, "method StreamFileChanges not implemented")
 }
 func (UnimplementedInfraFleetServiceServer) IsDevServerConnected(context.Context, *IsDevServerConnectedRequest) (*IsDevServerConnectedResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IsDevServerConnected not implemented")
@@ -1591,6 +1638,17 @@ func _InfraFleetService_RelayByDevServer_Handler(srv interface{}, ctx context.Co
 	}
 	return interceptor(ctx, in, info, handler)
 }
+
+func _InfraFleetService_StreamFileChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(StreamFileChangesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(InfraFleetServiceServer).StreamFileChanges(m, &grpc.GenericServerStream[StreamFileChangesRequest, FileChangeEvent]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type InfraFleetService_StreamFileChangesServer = grpc.ServerStreamingServer[FileChangeEvent]
 
 func _InfraFleetService_IsDevServerConnected_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(IsDevServerConnectedRequest)
@@ -2436,6 +2494,11 @@ var InfraFleetService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "StreamFileChanges",
+			Handler:       _InfraFleetService_StreamFileChanges_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "AttachPty",
 			Handler:       _InfraFleetService_AttachPty_Handler,

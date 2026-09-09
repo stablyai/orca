@@ -65,6 +65,51 @@ func TestOidcExchangeAndVerify_ReturnsVerifiedIdentity(t *testing.T) {
 	}
 }
 
+func TestOidcExchangeAndVerify_ParsesGroupsClaimWhenPresent(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"at-123"}`))
+	}))
+	defer tokenServer.Close()
+	userInfoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"sub":"idp-sub-3","email":"grace@example.com","email_verified":true,"name":"Grace Hopper","groups":["orca-admins","orca-engineering"]}`))
+	}))
+	defer userInfoServer.Close()
+
+	c := NewOidc(nil, domain.SsoProviderOIDC, OidcConfig{TokenURL: tokenServer.URL, UserInfoURL: userInfoServer.URL})
+	identity, err := c.ExchangeAndVerify(context.Background(), "code", "https://app.example.com/auth/callback", "verifier")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"orca-admins", "orca-engineering"}
+	if len(identity.Groups) != len(want) || identity.Groups[0] != want[0] || identity.Groups[1] != want[1] {
+		t.Errorf("groups = %v, want %v", identity.Groups, want)
+	}
+}
+
+func TestOidcExchangeAndVerify_AbsentGroupsClaimDoesNotError(t *testing.T) {
+	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"at-123"}`))
+	}))
+	defer tokenServer.Close()
+	userInfoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"sub":"idp-sub-4","email":"grace@example.com","email_verified":true,"name":"Grace Hopper"}`))
+	}))
+	defer userInfoServer.Close()
+
+	c := NewOidc(nil, domain.SsoProviderOIDC, OidcConfig{TokenURL: tokenServer.URL, UserInfoURL: userInfoServer.URL})
+	identity, err := c.ExchangeAndVerify(context.Background(), "code", "https://app.example.com/auth/callback", "verifier")
+	if err != nil {
+		t.Fatalf("unexpected error for a provider that sends no groups claim: %v", err)
+	}
+	if len(identity.Groups) != 0 {
+		t.Errorf("expected no groups, got %v", identity.Groups)
+	}
+}
+
 func TestOidcExchangeAndVerify_UnverifiedEmailIsPropagated(t *testing.T) {
 	tokenServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

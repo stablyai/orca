@@ -86,6 +86,11 @@ type oidcUserInfo struct {
 	Email         string `json:"email"`
 	EmailVerified bool   `json:"email_verified"`
 	Name          string `json:"name"`
+	// Groups requires the deployment's IdP (e.g. Keycloak) to have a
+	// "groups" client scope/mapper enabled on the client used here — a
+	// config note, not a code gap. Absent from the response when not
+	// configured; left nil, not an error (CR-RBAC-003/TASK-BE-007).
+	Groups []string `json:"groups"`
 }
 
 // ExchangeAndVerify exchanges code (+ PKCE verifier) for an access token at
@@ -156,6 +161,7 @@ func (c *OidcClient) ExchangeAndVerify(ctx context.Context, code, redirectURI, c
 		Email:         info.Email,
 		EmailVerified: info.EmailVerified,
 		Name:          info.Name,
+		Groups:        info.Groups,
 	}, nil
 }
 

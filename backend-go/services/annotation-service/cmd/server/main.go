@@ -16,9 +16,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/stablyai/orca-go/common/auditclient"
 	"github.com/stablyai/orca-go/common/grpcmw"
 	"github.com/stablyai/orca-go/common/health"
 	"github.com/stablyai/orca-go/common/logging"
@@ -33,6 +36,7 @@ import (
 	"github.com/stablyai/orca-go/services/annotation-service/internal/usecase"
 
 	annotationv1 "github.com/stablyai/orca-go/proto/gen/go/orca/annotation/v1"
+	authv1 "github.com/stablyai/orca-go/proto/gen/go/orca/auth/v1"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -80,12 +84,24 @@ func run() error {
 	}
 	opa := opaclient.New(evaluator)
 
+	// Audit-append client (TASK-BE-018/021, CR-RBAC-005) — UpdateAnnotation/
+	// DeleteAnnotation use this to record every OPA allow/deny decision to
+	// auth-service's audit_log. Lazy dial (grpc.NewClient doesn't block on
+	// connect), same convention as every other outbound client in this
+	// codebase's composition roots.
+	authConn, err := grpc.NewClient(cfg.AuthServiceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+	if err != nil {
+		return fmt.Errorf("dialing auth-service: %w", err)
+	}
+	defer func() { _ = authConn.Close() }()
+	auditClient := auditclient.New(authv1.NewAuthServiceClient(authConn))
+
 	createUC := usecase.NewCreateAnnotation(repo)
 	listUC := usecase.NewListAnnotations(repo)
-	updateUC := usecase.NewUpdateAnnotation(repo, opa)
-	deleteUC := usecase.NewDeleteAnnotation(repo, opa)
+	updateUC := usecase.NewUpdateAnnotation(repo, opa, auditClient)
+	deleteUC := usecase.NewDeleteAnnotation(repo, opa, auditClient)
 
-	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger))
+	grpcServer := grpc.NewServer(grpcmw.ChainUnary(logger), grpcmw.StatsHandler())
 	annotationv1.RegisterAnnotationServiceServer(grpcServer, annotationgrpc.New(createUC, listUC, updateUC, deleteUC))
 	reflection.Register(grpcServer) // convenient for grpcurl during local dev; keep enabled behind the mesh, not the public internet
 

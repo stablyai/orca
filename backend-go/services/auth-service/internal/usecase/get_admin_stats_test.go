@@ -24,11 +24,12 @@ func TestGetAdminStats_CountsReflectSeededFixtureData(t *testing.T) {
 	_ = sessions.CreateSession(context.Background(), revoked)
 
 	policies := newFakeAccessPolicyRepository()
+	publisher := &fakePolicyPublisher{}
 	clock := &fakeClock{now: now}
 	opa := &fakeOPAClient{allow: true}
 	ctx := withActor(context.Background(), "t1", "admin1")
 
-	create := NewCreateAccessPolicy(users, policies, clock, opa)
+	create := NewCreateAccessPolicy(users, policies, publisher, clock, opa)
 	if _, err := create.Execute(ctx, CreateAccessPolicyInput{Name: "p1", Kind: "rate-tier", DocumentJSON: `{}`}); err != nil {
 		t.Fatalf("seeding policy p1: %v", err)
 	}

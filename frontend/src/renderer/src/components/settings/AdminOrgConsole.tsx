@@ -17,6 +17,9 @@ import { translate } from '@/i18n/i18n'
 import { CompanyTab } from './admin-org-console-company-tab'
 import { DepartmentsTab } from './admin-org-console-departments-tab'
 import { UsersTab } from './admin-org-console-users-tab'
+import { TeamsTab } from './admin-org-console-teams-tab'
+import { PoliciesTab } from './admin-org-console-policies-tab'
+import { AuditTab } from './admin-org-console-audit-tab'
 
 export function AdminOrgConsole(): React.JSX.Element {
   return (
@@ -38,6 +41,9 @@ export function AdminOrgConsole(): React.JSX.Element {
           <TabsTrigger value="company">Company</TabsTrigger>
           <TabsTrigger value="departments">Departments</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="teams">Teams</TabsTrigger>
+          <TabsTrigger value="policies">Policies</TabsTrigger>
+          <TabsTrigger value="audit">Audit Log</TabsTrigger>
         </TabsList>
         <TabsContent value="company">
           <CompanyTab />
@@ -47,6 +53,15 @@ export function AdminOrgConsole(): React.JSX.Element {
         </TabsContent>
         <TabsContent value="users">
           <UsersTab />
+        </TabsContent>
+        <TabsContent value="teams">
+          <TeamsTab />
+        </TabsContent>
+        <TabsContent value="policies">
+          <PoliciesTab />
+        </TabsContent>
+        <TabsContent value="audit">
+          <AuditTab />
         </TabsContent>
       </Tabs>
     </div>

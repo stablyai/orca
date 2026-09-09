@@ -35,6 +35,7 @@ var (
 	githubTokenURL      = "https://github.com/login/oauth/access_token"
 	githubUserURL       = "https://api.github.com/user"
 	githubUserEmailsURL = "https://api.github.com/user/emails"
+	githubUserOrgsURL   = "https://api.github.com/user/orgs"
 )
 
 const githubScope = "read:user user:email"
@@ -100,6 +101,10 @@ type githubEmail struct {
 	Verified bool   `json:"verified"`
 }
 
+type githubOrg struct {
+	Login string `json:"login"`
+}
+
 // ExchangeAndVerify exchanges code for an access token, then calls GET
 // /user + GET /user/emails to resolve the caller's stable numeric id, name,
 // and verified primary email (GitHub's /user.email is frequently empty
@@ -151,13 +156,54 @@ func (c *GitHubClient) ExchangeAndVerify(ctx context.Context, code, redirectURI,
 		return usecase.VerifiedSsoIdentity{}, err
 	}
 
+	// Org membership is an enhancement to role resolution, not a login
+	// precondition — a GitHub API failure here must never fail the whole
+	// SSO flow, so degrade to empty Groups instead of propagating the error.
+	groups := c.fetchOrgGroups(ctx, tok.AccessToken)
+
 	return usecase.VerifiedSsoIdentity{
 		Provider:      domain.SsoProviderGitHub,
 		Subject:       strconv.FormatInt(user.ID, 10),
 		Email:         email,
 		EmailVerified: verified,
 		Name:          user.Name,
+		Groups:        groups,
 	}, nil
+}
+
+// fetchOrgGroups returns the caller's GitHub org memberships as
+// "org:<login>" strings. Org-level only for now — team-level granularity
+// (GET /orgs/{org}/teams/{team}/memberships/{username}) is an N+1-shaped
+// call per team and is left as a follow-up, not implemented here. Any
+// failure degrades to nil rather than erroring — see the call site's
+// comment.
+func (c *GitHubClient) fetchOrgGroups(ctx context.Context, accessToken string) []string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubUserOrgsURL, nil)
+	if err != nil {
+		return nil
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	var orgs []githubOrg
+	if err := json.NewDecoder(resp.Body).Decode(&orgs); err != nil {
+		return nil
+	}
+	groups := make([]string, 0, len(orgs))
+	for _, o := range orgs {
+		if o.Login != "" {
+			groups = append(groups, "org:"+o.Login)
+		}
+	}
+	return groups
 }
 
 func (c *GitHubClient) fetchUser(ctx context.Context, accessToken string) (githubUser, error) {

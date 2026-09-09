@@ -40,7 +40,7 @@ func (uc *UpdateUserRole) Execute(ctx context.Context, userID string, role domai
 	}
 
 	now := uc.clock.Now()
-	if entry, err := domain.NewAuditEntry(uuid.NewString(), updated.TenantID, actor.ID, "user.role_updated", updated.ID, now); err == nil {
+	if entry, err := domain.NewAuditEntry(uuid.NewString(), updated.TenantID, actor.ID, "user.role_updated", updated.ID, domain.OutcomeAllowed, "", now); err == nil {
 		_ = uc.audit.Append(ctx, entry)
 	}
 

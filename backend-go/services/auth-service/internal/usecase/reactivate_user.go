@@ -44,7 +44,7 @@ func (uc *ReactivateUser) Execute(ctx context.Context, userID string) (domain.Us
 	}
 
 	now := uc.clock.Now()
-	if entry, err := domain.NewAuditEntry(uuid.NewString(), updated.TenantID, actor.ID, "user.reactivated", updated.ID, now); err == nil {
+	if entry, err := domain.NewAuditEntry(uuid.NewString(), updated.TenantID, actor.ID, "user.reactivated", updated.ID, domain.OutcomeAllowed, "", now); err == nil {
 		_ = uc.audit.Append(ctx, entry)
 	}
 	return updated, nil

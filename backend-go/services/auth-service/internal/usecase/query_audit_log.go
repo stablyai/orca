@@ -9,8 +9,14 @@ import (
 )
 
 type QueryAuditLogInput struct {
-	TenantID  string
-	Since     time.Time
+	TenantID string
+	Since    time.Time
+	// ActorID/Action/Outcome are optional filters (TASK-BE-016) — zero
+	// value on each means "no filter," matching AuditRepository.Query's own
+	// empty-means-no-filter convention.
+	ActorID   string
+	Action    string
+	Outcome   domain.Outcome
 	PageToken string
 	PageSize  int32
 }
@@ -43,7 +49,7 @@ func (uc *QueryAuditLog) Execute(ctx context.Context, in QueryAuditLogInput) (Qu
 		pageSize = 50
 	}
 
-	entries, next, err := uc.audit.Query(ctx, in.TenantID, in.Since, in.PageToken, pageSize)
+	entries, next, err := uc.audit.Query(ctx, in.TenantID, in.Since, in.ActorID, in.Action, in.Outcome, in.PageToken, pageSize)
 	if err != nil {
 		return QueryAuditLogOutput{}, apperrors.New(apperrors.KindInternal, "AUTH_AUDIT_QUERY_FAILED", "failed to query audit log", err)
 	}

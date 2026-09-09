@@ -28,4 +28,8 @@ const Algorithm = jose.RS256
 type Claims struct {
 	jwt.Claims
 	TenantID string `json:"tenant_id,omitempty"`
+	// Role is the caller's global role ("admin"/"user") at token-issuance
+	// time — added so a bearer-JWT-authenticated caller propagates the same
+	// role claim the cookie/session path already does (BE-SOL-002).
+	Role string `json:"role,omitempty"`
 }

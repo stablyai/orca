@@ -20,6 +20,10 @@ type Config struct {
 	// root (../../policy/orca-authz), matching the "cd services/
 	// annotation-service && go run ./cmd/server" invocation in README.md.
 	OPABundlePath string
+	// AuthServiceAddr is UpdateAnnotation/DeleteAnnotation's audit-append
+	// dependency (TASK-BE-021/CR-RBAC-005, common/auditclient) — the only
+	// other service this one talks to purely to write audit_log rows.
+	AuthServiceAddr string
 }
 
 func Load() (Config, error) {
@@ -28,7 +32,8 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	return Config{
-		Base:          base,
-		OPABundlePath: commonconfig.StringEnv("OPA_BUNDLE_PATH", "/policy/orca-authz"),
+		Base:            base,
+		OPABundlePath:   commonconfig.StringEnv("OPA_BUNDLE_PATH", "/policy/orca-authz"),
+		AuthServiceAddr: commonconfig.StringEnv("AUTH_SERVICE_ADDR", "auth-service:9090"),
 	}, nil
 }
