@@ -1,3 +1,6 @@
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import { unified } from 'unified'
 import { defaultSchema } from 'rehype-sanitize'
 import { getRichMarkdownRoundTripOutput } from './markdown-round-trip'
 import { extractFrontMatter } from './markdown-frontmatter'
@@ -58,7 +61,14 @@ const UNSUPPORTED_PATTERNS: UnsupportedMatch[] = [
         'Editable only in code mode because this file contains reference-style links.'
       )
     },
-    pattern: /^\[[^\]]+\]:\s+\S+/m
+    // Why: this is a cheap pre-filter only, loose enough to admit definitions
+    // nested inside blockquotes or list items (`> [id]: url`, `- [id]: url`).
+    // `[label]: ` also opens an ordinary paragraph (e.g. `[Bug]: steps to
+    // reproduce…`). Confirming an actual reference-style link definition is
+    // delegated to `hasLinkReferenceDefinition`, which parses the CommonMark
+    // grammar via `remark-parse` instead of guessing the definition shape
+    // with regex.
+    pattern: /^[ >]*(?:[-*+]\s+|\d+[.)]\s+)?\[[^\]]+\]:/m
   },
   {
     reason: 'footnotes',
@@ -113,9 +123,13 @@ export function getMarkdownRichModeUnsupportedReason(
     if (matcher.reason === 'html-or-jsx') {
       continue
     }
-    if (matcher.pattern.test(contentWithoutCode)) {
-      return matcher.reason
+    if (!matcher.pattern.test(contentWithoutCode)) {
+      continue
     }
+    if (matcher.reason === 'reference-links' && !hasLinkReferenceDefinition(contentWithoutCode)) {
+      continue
+    }
+    return matcher.reason
   }
 
   if (hasHtml) {
@@ -154,6 +168,31 @@ export function getMarkdownRichModeEligibility(params: {
     exceedsSizeLimit: decision.exceedsSizeLimit,
     unsupportedMessage: resolveMarkdownRichModeUnsupportedMessage(decision.unsupportedReason)
   }
+}
+
+const linkReferenceDefinitionProcessor = unified().use(remarkParse).use(remarkGfm)
+
+// Why: `[label]: ` also opens an ordinary paragraph, so only an mdast
+// `definition` node — parsed per CommonMark's link reference definition
+// grammar — confirms the line is actually a reference-style link, not prose
+// that starts the same way. Definitions can nest inside container blocks
+// (blockquotes, list items), so the whole tree is walked rather than only
+// its top-level children.
+function hasLinkReferenceDefinition(content: string): boolean {
+  const tree = linkReferenceDefinitionProcessor.parse(content)
+  return containsDefinitionNode(tree)
+}
+
+function containsDefinitionNode(node: { type: string; children?: unknown[] }): boolean {
+  if (node.type === 'definition') {
+    return true
+  }
+  if (!Array.isArray(node.children)) {
+    return false
+  }
+  return node.children.some((child) =>
+    containsDefinitionNode(child as { type: string; children?: unknown[] })
+  )
 }
 
 function hasHtmlOrJsx(content: string, pattern: RegExp): boolean {
