@@ -20,6 +20,7 @@ import {
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isEditableTarget } from '@/lib/editable-target'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 
 export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
   return (
@@ -250,13 +251,17 @@ export function useFileExplorerKeys(opts: {
         'fileExplorer.copyRelativePath',
         e,
         platform,
-        keybindings
+        keybindings,
+        { layoutCharacterForCode: getLayoutBaseCharacterForCode }
       )
       const wantsCopyPath = keybindingMatchesAction(
         'fileExplorer.copyPath',
         e,
         platform,
-        keybindings
+        keybindings,
+        {
+          layoutCharacterForCode: getLayoutBaseCharacterForCode
+        }
       )
       if (!wantsCopyRelativePath && !wantsCopyPath) {
         return

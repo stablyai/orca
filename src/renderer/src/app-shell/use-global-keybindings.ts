@@ -166,7 +166,8 @@ export function useGlobalKeybindings(args: {
       // An empty floating workspace has no tab to close, so Cmd/Ctrl+W hides the overlay before other surfaces act.
       if (
         keybindingMatchesAction('tab.close', input, shortcutPlatform, keybindings, {
-          context: 'app'
+          context: 'app',
+          layoutCharacterForCode: getLayoutBaseCharacterForCode
         }) &&
         shouldMinimizeFloatingWorkspacePanelOnCloseShortcut({
           floatingTerminalOpen,
