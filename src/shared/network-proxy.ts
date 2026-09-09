@@ -1,13 +1,20 @@
 export type NetworkProxySettings = {
   httpProxyUrl?: string | null
   httpProxyBypassRules?: string | null
+  /** Absolute path to a PEM CA bundle, for a proxy that intercepts TLS. */
+  httpProxyCaPath?: string | null
 }
 
 export type ProxyUrlValidationResult =
   | { ok: true; value: string; message?: undefined }
   | { ok: false; value: ''; message: string }
 
+export type ProxyCaPathValidationResult =
+  | { ok: true; value: string; message?: undefined }
+  | { ok: false; value: ''; message: string }
+
 const PROXY_URL_MAX_LENGTH = 2048
+const PROXY_CA_PATH_MAX_LENGTH = 4096
 const PROXY_BYPASS_RULES_MAX_LENGTH = 4096
 const PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks4:', 'socks5:'])
 const PROXY_ENV_KEYS = [
@@ -69,6 +76,32 @@ export function normalizeProxyBypassRules(value: unknown): string {
     .join(';')
 }
 
+// Why absolute only: this is exported as NODE_EXTRA_CA_CERTS to spawned agent
+// CLIs, which run with their own working directories, so a relative path would
+// resolve differently for each of them. Existence is not checked here — this
+// also runs in the renderer, which has no fs; a missing file is reported once
+// where the CA is loaded.
+export function normalizeProxyCaPath(value: unknown): ProxyCaPathValidationResult {
+  if (typeof value !== 'string') {
+    return { ok: true, value: '' }
+  }
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return { ok: true, value: '' }
+  }
+  if (trimmed.length > PROXY_CA_PATH_MAX_LENGTH) {
+    return { ok: false, value: '', message: 'Proxy CA path is too long.' }
+  }
+  // Why hand-rolled: the renderer cannot import node:path, and a Windows path
+  // (C:\... or a UNC \\host\share) is absolute without a leading slash.
+  const isPosixAbsolute = trimmed.startsWith('/')
+  const isWindowsAbsolute = /^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith('\\\\')
+  if (!isPosixAbsolute && !isWindowsAbsolute) {
+    return { ok: false, value: '', message: 'Enter an absolute path to a PEM file.' }
+  }
+  return { ok: true, value: trimmed }
+}
+
 export function getProxyUrlFromEnvironment(
   env: Record<string, string | undefined>
 ): ProxyUrlValidationResult {
@@ -113,6 +146,13 @@ export function buildConfiguredProxyEnv(
   const noProxy = bypassRules ? bypassRules.replaceAll(';', ',') : ''
   env.NO_PROXY = noProxy
   env.no_proxy = noProxy
+  // Why: the agent CLIs are Node and Bun programs, and both read
+  // NODE_EXTRA_CA_CERTS at startup. Without it every request through an
+  // intercepting proxy fails verification and the proxy looks like an outage.
+  const caPath = normalizeProxyCaPath(settings?.httpProxyCaPath)
+  if (caPath.ok && caPath.value) {
+    env.NODE_EXTRA_CA_CERTS = caPath.value
+  }
   return env
 }
 

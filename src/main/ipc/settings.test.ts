@@ -643,6 +643,28 @@ describe('registerSettingsHandlers', () => {
     })
   })
 
+  it('re-applies sessions when only the proxy CA path changes', async () => {
+    // The CA is installed on the session next to the proxy, so a CA-only edit
+    // that skipped the sweep would never reach Chromium.
+    const before = { httpProxyUrl: 'http://proxy.example:8080', httpProxyCaPath: '' }
+    const after = {
+      httpProxyUrl: 'http://proxy.example:8080',
+      httpProxyCaPath: '/etc/ssl/certs/proxy-ca.pem'
+    }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockReturnValue(after)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { httpProxyCaPath: '/etc/ssl/certs/proxy-ca.pem' })
+
+    expect(applyElectronProxySettingsMock).toHaveBeenCalledWith(after)
+  })
+
   it('does not sweep sessions for a no-op proxy save', async () => {
     const settings = {
       httpProxyUrl: 'http://proxy.example:8080',

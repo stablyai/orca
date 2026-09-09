@@ -199,7 +199,13 @@ export function registerSettingsHandlers(
     const proxySettingsChanged =
       ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
       ('httpProxyBypassRules' in sanitizedArgs &&
-        before.httpProxyBypassRules !== result.httpProxyBypassRules)
+        before.httpProxyBypassRules !== result.httpProxyBypassRules) ||
+      // Why the CA counts: it is installed on the session alongside the proxy, so
+      // changing it alone must re-apply or the anchor never reaches Chromium.
+      ('httpProxyCaPath' in sanitizedArgs && before.httpProxyCaPath !== result.httpProxyCaPath)
+    console.warn(
+      `[dbg-settings] keys=${JSON.stringify(Object.keys(sanitizedArgs))} changed=${proxySettingsChanged} beforeCa=${JSON.stringify(before.httpProxyCaPath)} afterCa=${JSON.stringify(result.httpProxyCaPath)}`
+    )
     if (proxySettingsChanged) {
       // Start both authorities before yielding so requests cannot enter between their barriers.
       const defaultSessionApply = applyElectronProxySettings(result)
