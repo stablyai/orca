@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   bindingStore,
-  detectInstalledBrowsersMock,
+  detectAllBrowsersMock,
   getProfileMock,
   getRouteIdentityMock,
   importCookiesFromBrowserMock,
@@ -17,7 +17,7 @@ const {
     findPartitionByFingerprint: vi.fn(() => null as string | null),
     rebind: vi.fn()
   },
-  detectInstalledBrowsersMock: vi.fn(),
+  detectAllBrowsersMock: vi.fn(),
   getProfileMock: vi.fn(),
   getRouteIdentityMock: vi.fn(),
   importCookiesFromBrowserMock: vi.fn(),
@@ -27,7 +27,7 @@ const {
 }))
 
 vi.mock('./browser-cookie-import', () => ({
-  detectInstalledBrowsers: detectInstalledBrowsersMock,
+  detectAllBrowsers: detectAllBrowsersMock,
   importCookiesFromBrowser: importCookiesFromBrowserMock,
   selectBrowserProfile: selectBrowserProfileMock
 }))
@@ -83,7 +83,7 @@ beforeEach(() => {
   bindingStore.get.mockReturnValue(null)
   getRouteIdentityMock.mockReturnValue(routeIdentity)
   getProfileMock.mockReturnValue({ id: 'default', partition: 'persist:legacy-server-profile' })
-  detectInstalledBrowsersMock.mockReturnValue([chrome])
+  detectAllBrowsersMock.mockResolvedValue([chrome])
   importCookiesFromBrowserMock.mockResolvedValue({ ok: true, summary: { importedCookies: 4 } })
 })
 
@@ -133,7 +133,7 @@ describe('importCookiesIntoClientRoutePartition', () => {
     expect(
       await importCookiesIntoClientRoutePartition({ ...request, browserProfile: '../../etc' })
     ).toEqual({ ok: false, reason: 'Invalid browser profile name.' })
-    expect(detectInstalledBrowsersMock).not.toHaveBeenCalled()
+    expect(detectAllBrowsersMock).not.toHaveBeenCalled()
   })
 
   it('reselects a non-default desktop browser profile', async () => {

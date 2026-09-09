@@ -131,13 +131,18 @@ export const browserPageInteractionAndSessionsApi = {
   sessionDetectBrowsers: () => ipcRenderer.invoke('browser:session:detectBrowsers'),
   sessionDetectBrowsersForClientHost: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:detectBrowsersForClientHost', args),
-  sessionImportFromBrowser: (args: { profileId: string; browserFamily: string }) =>
-    ipcRenderer.invoke('browser:session:importFromBrowser', args),
+  sessionImportFromBrowser: (args: {
+    profileId: string
+    browserFamily: string
+    browserProfile?: string
+    customBrowserId?: string
+  }) => ipcRenderer.invoke('browser:session:importFromBrowser', args),
   sessionImportFromBrowserForClientHost: (args: {
     environmentId: string
     profileId: string
     browserFamily: string
     browserProfile?: string
+    customBrowserId?: string
   }) => ipcRenderer.invoke('browser:session:importFromBrowserForClientHost', args),
   sessionClientRouteImportSources: (args: { environmentId: string }) =>
     ipcRenderer.invoke('browser:session:clientRouteImportSources', args),

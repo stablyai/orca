@@ -158,6 +158,7 @@ export type BrowserApi = {
     profileId: string
     browserFamily: string
     browserProfile?: string
+    customBrowserId?: string
   }) => Promise<BrowserCookieImportResult>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionImportFromBrowserForClientHost: (args: {
@@ -165,6 +166,7 @@ export type BrowserApi = {
     profileId: string
     browserFamily: string
     browserProfile?: string
+    customBrowserId?: string
   }) => Promise<BrowserCookieImportResult | null>
   /** Import-source badges for one environment's client-hosted jars, keyed by profile id. */
   sessionClientRouteImportSources: (args: {
@@ -184,4 +186,6 @@ export type DetectedBrowserInfo = {
   label: string
   profiles: DetectedBrowserProfileInfo[]
   selectedProfile: string
+  // Disambiguator for auto-discovered 'custom'-family browsers; absent for hardcoded ones.
+  customBrowserId?: string
 }
