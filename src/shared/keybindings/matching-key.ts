@@ -89,7 +89,8 @@ export function letterKeyMatches(
   // Why: the mac-Option composed-character path has no logical key; the physical
   // code resolves through the active layout so non-QWERTY layouts match by character (#2858).
   const layoutCharacter = layoutCharacterForCode?.(input.code ?? '')
-  if (layoutCharacter) {
+  if (layoutCharacter !== undefined) {
+    // Why: a layout that assigns this key another character is a definitive non-match; the physical code would misfire the chord.
     return layoutCharacter.toUpperCase() === letter.toUpperCase()
   }
   return input.code === `Key${letter.toUpperCase()}`
@@ -176,9 +177,10 @@ export function keyMatches(
     // Why: the mac-Option composed-character path has no logical key; the physical
     // code resolves through the active layout so non-QWERTY layouts match by character (#2858).
     const layoutCharacter = layoutCharacterForCode?.(input.code ?? '')
-    const layoutToken = layoutCharacter ? normalizeKeyToken(layoutCharacter) : null
-    if (layoutToken && isPunctuationKeyToken(layoutToken)) {
-      return layoutToken === parsedKey
+    if (layoutCharacter !== undefined) {
+      // Why: a layout that assigns this key another character is a definitive non-match; the physical token would misfire the chord.
+      const layoutToken = normalizeKeyToken(layoutCharacter)
+      return layoutToken !== null && isPunctuationKeyToken(layoutToken) && layoutToken === parsedKey
     }
     return physicalPunctuationKey(input) === parsedKey
   }

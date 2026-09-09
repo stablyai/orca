@@ -459,6 +459,41 @@ describe('keybindings', () => {
       ).toBe(true)
     })
 
+    it('does not fall back to the physical bracket when the layout maps that key to a letter', () => {
+      // A layout where BracketLeft types 'q': the Option chord is a definitive non-match for
+      // a bracket binding, so the physical '[' token must not resolve it.
+      expect(
+        keybindingMatchesAction(
+          'tab.previousSameType',
+          {
+            key: '\u201c',
+            code: 'BracketLeft',
+            control: false,
+            meta: true,
+            alt: true,
+            shift: false
+          },
+          'darwin',
+          undefined,
+          { layoutCharacterForCode: (code) => (code === 'BracketLeft' ? 'q' : undefined) }
+        )
+      ).toBe(false)
+    })
+
+    it('does not fall back to the physical letter when the layout maps that key to punctuation', () => {
+      // Dvorak KeyZ types ';': already covered for the letter branch, asserted here as the
+      // symmetric partner of the bracket case above.
+      expect(
+        keybindingMatchesAction(
+          'editor.toggleWordWrap',
+          { key: '\u2026', code: 'KeyZ', control: false, meta: false, alt: true, shift: false },
+          'darwin',
+          undefined,
+          { layoutCharacterForCode: (code) => (code === 'KeyZ' ? ';' : undefined) }
+        )
+      ).toBe(false)
+    })
+
     it('resolves the bracket case from #4451 through the layout lookup and preserves it with no map', () => {
       const macOptionLeftBracket = {
         key: '“',
