@@ -149,6 +149,8 @@ async function startOrcadRuntime(
   // Why importable here: the store is an in-memory singleton whose module tree never reaches
   // Electron, and its file paths come from `start()`, which orcad never calls.
   const { agentHookServer } = await import('../agent-hooks/server')
+  const { installHookStatusSessionTabsRepublish } =
+    await import('../agent-hooks/hook-status-session-tabs-republish')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
@@ -184,6 +186,10 @@ async function startOrcadRuntime(
     // what powers serve→desktop promotion. A Node host can never do that, and the
     // constructor's default would advertise it.
     getDesktopWindowStatus: () => 'blocked',
+    // Why here too and not only on the desktop: main's OSC parse is the only producer for a
+    // PTY agent on this host, and the store is the only place `worktree.ps` and the mobile
+    // projection read from — unwired, orcad lists no PTY agents at all.
+    onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
     // Why here too and not only on the desktop: orcad serves `worktree.ps` and `agentSession.*`,
     // so without these a headless host publishes its structured chats nowhere and lists no agents.
     getAgentStatusSnapshot: () =>
@@ -193,6 +199,13 @@ async function startOrcadRuntime(
       forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
     }
   })
+
+  // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a
+  // pane's status row changes, and orcad's whole job is serving paired clients.
+  const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
+    agentHookServer,
+    () => runtime
+  )
 
   // Why the headless entry point rather than registerPtyHandlers directly: this is the
   // same call `--serve` makes, and it threads the store through. Without the store the
@@ -282,6 +295,7 @@ async function startOrcadRuntime(
         await stopOrcadDaemon()
         await browserProvider?.stop()
         setRuntimeBrowserCommandsFactory(null)
+        uninstallHookStatusRepublish()
         runOrcadQuitHandlers()
         instanceLock.release()
       }

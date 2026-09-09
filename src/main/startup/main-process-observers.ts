@@ -5,7 +5,7 @@ import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
 import { agentHookServer, type AgentHookProviderSessionIdentity } from '../agent-hooks/server'
 import { createHookProviderSessionInvalidator } from '../agent-hooks/hook-provider-session-invalidation'
-import { createHookStatusSessionTabsInvalidator } from '../agent-hooks/hook-status-session-tabs-invalidation'
+import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetry'
 import { initObservability } from '../observability'
@@ -63,32 +63,14 @@ export function initializeMainProcessObservers(): void {
   const unsubscribeProviderSessionChanges = agentHookServer.subscribeProviderSessionChanges(
     (sessions) => publishProviderSessionChanges(sessions)
   )
-  // Why: hook rows are the only carrier of live agent state on a headless host, and
-  // nothing else republishes `session.tabs` when one changes — so a paired client
-  // would keep the pane's last projection until an unrelated PTY touch came along.
-  const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
-  const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
-    if (hookStatusChangedSessionTabs(enriched)) {
-      state.runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
-    }
-  })
-  // Teardown: agent exit, pane close, and the SSH transient-disconnect batch all land
-  // here. Without it the live state published above becomes a zombie question card.
-  const unsubscribeHookStatusClear = agentHookServer.subscribePaneStatusClear((clear) => {
-    const clearedPaneKeys =
-      'paneKey' in clear
-        ? [clear.paneKey]
-        : hookStatusChangedSessionTabs.forgetConnection(clear.connectionId)
-    for (const paneKey of clearedPaneKeys) {
-      hookStatusChangedSessionTabs.forgetPane(paneKey)
-      state.runtime?.touchMobileSessionTabsForPane(paneKey)
-    }
-  })
+  const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
+    agentHookServer,
+    () => state.runtime
+  )
   state.unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
     unsubscribeProviderSessionChanges()
-    unsubscribeHookStatusSessionTabs()
-    unsubscribeHookStatusClear()
+    uninstallHookStatusRepublish()
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
