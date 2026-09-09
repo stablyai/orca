@@ -111,7 +111,8 @@
   "editor": {
     "richMarkdown": {
       "tooLarge": "File is larger than the {{limit}} rich editing limit. Showing source mode instead.",
-      "openAnyway": "Open anyway"
+      "openAnyway": "Open anyway",
+      "openPreview": "Open preview"
     }
   },
   "githubChecks": {
