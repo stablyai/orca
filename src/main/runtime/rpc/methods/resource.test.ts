@@ -22,6 +22,7 @@ const evidence: ResourceEvidence = {
       windows: [
         {
           role: 'BURST',
+          scope: 'session',
           windowMinutes: 300,
           remainingRatio: 0.81,
           remainingRatioGranularity: 0.01,

@@ -17,6 +17,7 @@ const evidence: ResourceEvidence = {
       windows: [
         {
           role: 'BURST',
+          scope: 'session',
           windowMinutes: 300,
           remainingRatio: 0.81,
           remainingRatioGranularity: 0.01,
@@ -71,6 +72,6 @@ describe('resource status CLI handler', () => {
 
     const output = log.mock.calls[0]![0] as string
     expect(output).toContain('codex: available')
-    expect(output).toContain('BURST (300m): ~81% left')
+    expect(output).toContain('session [BURST, 300m]: ~81% left')
   })
 })

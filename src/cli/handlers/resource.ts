@@ -2,6 +2,11 @@ import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import type { ResourceEvidence } from '../../shared/resource-evidence-types'
 
+/**
+ * One concise line per provider plus one per window, for `orca resource status`
+ * without `--json`. Each window names its `scope` so `weekly` and `fableWeekly`
+ * stay distinct. Machine consumers should use `--json`.
+ */
 function formatResourceEvidence(evidence: ResourceEvidence): string {
   const providerNames = Object.keys(evidence.providers) as (keyof ResourceEvidence['providers'])[]
   const lines = [`Resource evidence (queried ${evidence.queriedAt}):`]
@@ -16,7 +21,8 @@ function formatResourceEvidence(evidence: ResourceEvidence): string {
     const state = provider.available ? 'available' : provider.status
     lines.push(`  ${name}: ${state}${provider.rateLimited ? ' (rate-limited)' : ''} — ${age}`)
     for (const window of provider.windows) {
-      const label = `${window.role}${window.pool ? ` ${window.pool}` : ''} (${window.windowMinutes}m)`
+      const scope = window.pool ? `${window.scope} ${window.pool}` : window.scope
+      const label = `${scope} [${window.role}, ${window.windowMinutes}m]`
       const remaining = `~${Math.round(window.remainingRatio * 100)}% left`
       lines.push(`    ${label}: ${remaining}${window.resetAt ? `, resets ${window.resetAt}` : ''}`)
     }

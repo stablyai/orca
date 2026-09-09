@@ -69,11 +69,15 @@ export class RuntimeAccountController {
     }
   }
 
+  /**
+   * Identity-free projection of the current rate-limit snapshot for
+   * `resource.status`. With `refresh`, reuses the stale-aware plan (honours the
+   * poll throttle and `Retry-After`) — never the forced fetch or the
+   * inactive-account sweeps `refreshForMobile` adds. Reads only
+   * `RateLimitService` state, never account data.
+   */
   async getResourceEvidence(options?: { refresh?: boolean }): Promise<ResourceEvidence> {
     const { rateLimits } = this.requireServices()
-    // Why: refresh reuses the stale-aware plan (honours the poll throttle and
-    // Retry-After); never the forced fetch or the inactive-account sweeps
-    // refreshForMobile adds — this projection never touches account data.
     if (options?.refresh) {
       await rateLimits.refreshIfStale()
     }
