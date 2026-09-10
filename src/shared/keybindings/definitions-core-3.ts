@@ -177,6 +177,18 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Alt+Shift+C'])
   },
   {
+    id: 'fileExplorer.openInDefaultApp',
+    title: 'Open file in default app',
+    group: 'File Explorer',
+    scope: 'fileExplorer',
+    searchKeywords: ['shortcut', 'file explorer', 'open', 'default', 'app'],
+    defaultBindings: {
+      darwin: ['Mod+ArrowDown'],
+      linux: [],
+      win32: []
+    }
+  },
+  {
     id: 'fileExplorer.delete',
     title: 'Delete file',
     group: 'File Explorer',

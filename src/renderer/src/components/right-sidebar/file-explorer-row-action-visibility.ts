@@ -17,6 +17,19 @@ export function shouldShowViewFileAction(node: TreeNode): boolean {
   return !node.isDirectory
 }
 
+export function shouldShowOpenInDefaultAppAction(
+  node: TreeNode,
+  connectionId?: string | null,
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null
+): boolean {
+  return (
+    !node.isDirectory &&
+    !connectionId &&
+    !runtimeDownloadContext &&
+    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+  )
+}
+
 export function shouldShowRemoteDownloadAction(
   node: TreeNode,
   connectionId?: string | null,
