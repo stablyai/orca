@@ -69,9 +69,14 @@ describe('MessageRow control visibility', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(role === 'assistant' ? 2 : 0)
   })
 
-  it.each(['reasoning', 'system'] as const)('preserves chrome-free %s rows', (role) => {
-    renderMessage(role)
-    expect(screen.queryByRole('time')).toBeNull()
-    expect(screen.queryByRole('button')).toBeNull()
-  })
+  it.each(['reasoning', 'system'] as const)(
+    'omits timestamp and agent controls on %s rows',
+    (role) => {
+      renderMessage(role)
+      expect(screen.queryByRole('time')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Copy message' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Scroll this message to top' })).toBeNull()
+      expect(screen.queryAllByRole('button')).toHaveLength(role === 'reasoning' ? 1 : 0)
+    }
+  )
 })

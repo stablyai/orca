@@ -24,6 +24,11 @@ const RESOLUTION = {
 const CANONICAL_BODIES: AgentJournalItemBody[] = [
   {
     kind: 'message',
+    role: 'reasoning',
+    blocks: [{ type: 'text', text: 'Inspecting the request' }]
+  },
+  {
+    kind: 'message',
     role: 'user',
     blocks: [
       {

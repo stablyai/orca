@@ -9,6 +9,7 @@ import {
   codexItemBody,
   codexItemIdentity,
   codexJournalItem,
+  codexStreamingJournalItem,
   codexMessageBlocks,
   CodexTurnOrdinals,
   MAX_CODEX_TURN_ORDINAL_BYTES,
@@ -594,10 +595,11 @@ describe('codex item bodies', () => {
     })
   })
 
-  it('renders reasoning as status and exposes an unknown item as a provider frame', () => {
+  it('renders reasoning as a message and exposes an unknown item as a provider frame', () => {
     expect(codexItemBody({ type: 'reasoning', id: 'r', text: 'thinking' })).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(codexItemBody({ type: 'reasoning', id: 'r' })).toBeNull()
     expect(codexItemBody({ type: 'agentMessage', id: 'm', text: '' })).toBeNull()
@@ -822,6 +824,30 @@ describe('codex item bodies', () => {
     })
   })
 
+  it('keeps streamed reasoning as a message and leaves streamed plans as status', () => {
+    expect(codexStreamingJournalItem({ type: 'reasoning', id: 'r' }, 'thinking')).toEqual({
+      handled: true,
+      body: { kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text: 'thinking' }] }
+    })
+    expect(codexStreamingJournalItem({ type: 'reasoning', id: 'r' }, ' \n ')).toEqual({
+      handled: true,
+      body: null
+    })
+    expect(codexStreamingJournalItem({ type: 'plan', id: 'p' }, 'First\nSecond')).toEqual({
+      handled: true,
+      body: { kind: 'status', text: 'First\nSecond', presentation: 'plan-document' }
+    })
+  })
+
+  it('omits blank reasoning and preserves the plan document body', () => {
+    expect(codexItemBody({ type: 'reasoning', id: 'r', text: ' \n ' })).toBeNull()
+    expect(codexItemBody({ type: 'plan', id: 'p', text: 'First\nSecond' })).toEqual({
+      kind: 'status',
+      text: 'First\nSecond',
+      presentation: 'plan-document'
+    })
+  })
+
   it('renders array-shaped reasoning content', () => {
     expect(
       codexItemBody({
@@ -830,7 +856,11 @@ describe('codex item bodies', () => {
         summary: ['first', 'second'],
         content: [{ text: 'fallback' }]
       })
-    ).toEqual({ kind: 'status', text: 'first\nsecond' })
+    ).toEqual({
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'first\nsecond' }]
+    })
   })
 
   it('refuses a value that is not a thread item at all', () => {

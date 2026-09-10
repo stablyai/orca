@@ -37,6 +37,25 @@ function submission(
 }
 
 describe('structured agent session status projection', () => {
+  it('preserves reasoning text and identity for desktop and mobile consumers', () => {
+    const blocks = [{ type: 'text' as const, text: 'Inspecting the request' }]
+    expect(
+      projectStructuredItemToNativeChat(
+        item('reasoning-1', 2, {
+          kind: 'message',
+          role: 'reasoning',
+          blocks
+        })
+      )
+    ).toEqual({
+      id: 'reasoning-1',
+      role: 'reasoning',
+      blocks,
+      timestamp: 2,
+      source: 'transcript'
+    })
+  })
+
   it('reuses immutable item projections and refreshes revisions and resolved prompts', () => {
     const original = item('diff', 1, {
       kind: 'diff',

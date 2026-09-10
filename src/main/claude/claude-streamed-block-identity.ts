@@ -32,7 +32,9 @@ function scopeKey(sessionId: string, parentToolUseId: string | null): string {
   return `${sessionId}/${parentToolUseId ?? ''}`
 }
 
-export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry {
+export function createClaudeStreamedBlockRegistry(
+  blockType: 'text' | 'thinking' = 'text'
+): ClaudeStreamedBlockRegistry {
   const messages = new Map<string, StreamedMessage>()
 
   const messageFor = (scope: string): StreamedMessage => {
@@ -76,18 +78,18 @@ export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry
       const index = typeof event.index === 'number' ? event.index : 0
       if (event.type === 'content_block_start') {
         const block = claudeRecord(event.content_block)
-        if (block?.type !== 'text') {
+        if (block?.type !== blockType) {
           return null
         }
         const identity = mint(messageFor(scope), sessionId, index, uuid)
-        const text = claudeText(block.text)
+        const text = claudeText(block[blockType])
         return text ? { identity, text } : null
       }
       if (event.type !== 'content_block_delta') {
         return null
       }
       const delta = claudeRecord(event.delta)
-      const text = delta?.type === 'text_delta' ? claudeText(delta.text) : null
+      const text = delta?.type === `${blockType}_delta` ? claudeText(delta[blockType]) : null
       if (!text) {
         return null
       }

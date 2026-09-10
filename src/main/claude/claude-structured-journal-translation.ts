@@ -2,10 +2,6 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session-journa
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import {
   claudeMessageBody,
@@ -13,8 +9,6 @@ import {
   claudeHasReplayContent,
   claudeOutputEnvelope,
   claudeStreamingMessageBody,
-  claudeThinkingIdentity,
-  claudeThinkingText,
   claudeToolBody,
   claudeToolIdentity,
   claudeToolResults,
@@ -36,6 +30,7 @@ import {
   createClaudeProviderFrameFallback,
   isSettledClaudeResultKind
 } from './claude-structured-provider-fallback'
+import { createClaudeStreamedThinking } from './claude-streamed-thinking'
 import { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
@@ -106,6 +101,12 @@ export function createClaudeJournalTranslator(
     }
   })
 
+  const streamedThinking = createClaudeStreamedThinking(deps)
+  const flush = (): void => {
+    streamedText.flush()
+    streamedThinking.flush()
+  }
+
   const publishLifecycle = (sessionId: string, turnId: string, running: boolean): void => {
     const identity = lifecycleIdentity(sessionId, turnId)
     if (running) {
@@ -135,11 +136,11 @@ export function createClaudeJournalTranslator(
 
   const handleStream = (message: Record<string, unknown>): boolean => {
     const delta = streamedBlocks.observe(message)
-    if (!delta) {
-      return false
+    const thinking = streamedThinking.observe(message)
+    if (delta) {
+      streamedText.append(delta.identity, delta.text)
     }
-    streamedText.append(delta.identity, delta.text)
-    return true
+    return delta !== null || thinking
   }
 
   const handleMessage = (message: Record<string, unknown>, startsTurn: boolean): boolean => {
@@ -186,14 +187,7 @@ export function createClaudeJournalTranslator(
       tools.delete(result.toolUseId)
       changed = true
     }
-    const thinking = claudeThinkingText(outputEnvelope)
-    if (thinking) {
-      deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
-        kind: 'status',
-        text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-      })
-      changed = true
-    }
+    changed = streamedThinking.finalize(outputEnvelope) || changed
     changed = appendUnmodeledClaudeContent(providerFallback, outputEnvelope, message) || changed
     if (
       envelope.role === 'user' &&
@@ -244,7 +238,7 @@ export function createClaudeJournalTranslator(
   return {
     handle: (event) => {
       if (event.type === 'ended') {
-        streamedText.flush()
+        flush()
         // No event will ever settle a child once the provider is gone.
         subagents.settleSession()
         if (currentTurn) {
@@ -257,7 +251,7 @@ export function createClaudeJournalTranslator(
       if (event.type === 'message' && handleStream(event.message)) {
         return
       }
-      streamedText.flush()
+      flush()
       if (event.type === 'prompt') {
         handlePrompt(event)
       } else if (event.type === 'prompt-cancelled') {
@@ -280,6 +274,7 @@ export function createClaudeJournalTranslator(
         // would otherwise retain that text for the life of the session.
         streamedBlocks.clear()
         streamedText.settle()
+        streamedThinking.settle()
         const kind = claudeProviderFrameKind(event.message)
         // Ordinary turn bookkeeping stays suppressed; a reported failure never does.
         const failure = claudeResultFailure(event.message)
@@ -300,12 +295,13 @@ export function createClaudeJournalTranslator(
         publishActivity(event.kind, event.payload)
       }
     },
-    flush: streamedText.flush,
+    flush,
     get pendingStreamedBlocks() {
-      return streamedText.pending
+      return streamedText.pending + streamedThinking.pending
     },
     dispose: () => {
       streamedText.dispose()
+      streamedThinking.dispose()
       tools.clear()
       promptItems.clear()
       streamedBlocks.clear()
