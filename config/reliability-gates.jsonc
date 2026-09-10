@@ -46,7 +46,7 @@
         {
           "file": "src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts",
           "assertions": [
-            "retains the exit receipt through failed settlement and a later loaded retry"
+            "keeps exit receipt %s on retry"
           ]
         },
         {
