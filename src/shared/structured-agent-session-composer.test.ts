@@ -98,3 +98,68 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
     expect(runConversationCommand).not.toHaveBeenCalled()
   })
 })
+
+describe('agent-implemented commands pass through to the agent', () => {
+  const controller = {
+    snapshot: [],
+    invokeAction: async () => true,
+    setOption: async () => true
+  }
+  const PASSED_THROUGH = { handled: false, accepted: false, error: null }
+
+  // Claude's harness runs a slash command it finds in the message text, so
+  // claiming these answered "not available" for commands that do work.
+  it.each(['init', 'review', 'help'] as const)(
+    'sends /%s on to the Claude harness instead of refusing it',
+    async (name) => {
+      expect(isStructuredAgentSessionComposerCommand(`/${name}`, 'claude')).toBe(false)
+      expect(
+        await dispatchStructuredAgentSessionComposerCommand(`/${name}`, {
+          ...controller,
+          agent: 'claude'
+        })
+      ).toEqual(PASSED_THROUGH)
+    }
+  )
+
+  it.each(['clear', 'compact', 'model', 'effort'] as const)(
+    'still claims the host-owned /%s on Claude',
+    async (name) => {
+      expect(isStructuredAgentSessionComposerCommand(`/${name}`, 'claude')).toBe(true)
+      expect(
+        (
+          await dispatchStructuredAgentSessionComposerCommand(`/${name}`, {
+            ...controller,
+            agent: 'claude'
+          })
+        ).handled
+      ).toBe(true)
+    }
+  )
+
+  // Codex's app-server has no slash parser, but the model owns goal tools and
+  // creates a real goal from `/goal <objective>` arriving as prose.
+  it('passes /goal through on Codex, arguments and all', async () => {
+    expect(isStructuredAgentSessionComposerCommand('/goal', 'codex')).toBe(false)
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand('/goal ship the fix', {
+        ...controller,
+        agent: 'codex'
+      })
+    ).toEqual(PASSED_THROUGH)
+  })
+
+  it('keeps refusing a Codex command the model cannot carry out', async () => {
+    expect(isStructuredAgentSessionComposerCommand('/permissions', 'codex')).toBe(true)
+    expect(
+      await dispatchStructuredAgentSessionComposerCommand('/permissions', {
+        ...controller,
+        agent: 'codex'
+      })
+    ).toMatchObject({
+      handled: true,
+      error:
+        '/permissions is not available in chat sessions. Use the slash menu to see available commands.'
+    })
+  })
+})

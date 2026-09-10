@@ -1,4 +1,4 @@
-import { getVerifiedNativeChatCommands } from './native-chat-agent-profiles'
+import { getHostClaimedNativeChatCommands } from './native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
 import type { SlashCommandSuggestion } from './native-chat-slash-commands'
@@ -65,15 +65,19 @@ export function structuredSlashCommands(
 
 /** Wider than the offered menu on purpose: a TUI-only command still has to be
  *  claimed here and answered, or a hand-typed `/clear` reaches the model as
- *  literal prompt text. */
+ *  literal prompt text. Commands the agent itself implements are deliberately
+ *  absent — the profile unclaims those so they pass through as text. */
 function structuredRecognizedCommands(agent: AgentType): readonly SlashCommandSuggestion[] {
   return [
     ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
     ...CONVERSATION_COMMANDS,
-    ...getVerifiedNativeChatCommands(agent)
+    ...getHostClaimedNativeChatCommands(agent)
   ]
 }
 
+/** Whether the chat host, rather than the agent, owns this command. Callers also
+ *  use it to refuse attachments: a host command sends no message, so attachments
+ *  would be silently dropped, whereas a pass-through command is a real send. */
 export function isStructuredAgentSessionComposerCommand(
   text: string,
   agent: AgentType = 'codex'
