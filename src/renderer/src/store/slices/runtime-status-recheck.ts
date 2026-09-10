@@ -1,6 +1,6 @@
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
 import type { RuntimeEnvironmentStatus } from './runtime-status'
 
@@ -14,11 +14,13 @@ type RecheckState = {
   connectionGeneration: number
   environmentExists: () => boolean
   getConnectionGeneration: () => number
+  getCurrentStatus: () => RuntimeEnvironmentStatus | undefined
   publish: (status: RuntimeEnvironmentStatus) => void
 }
 
 type RuntimeStatusStore = {
   runtimeEnvironments: readonly { id: string }[]
+  runtimeStatusByEnvironmentId: ReadonlyMap<string, RuntimeEnvironmentStatus>
   setRuntimeEnvironmentStatus: (environmentId: string, status: RuntimeEnvironmentStatus) => void
 }
 
@@ -30,6 +32,7 @@ export function reconcileRuntimeStatusRecheck(args: {
   connectionGeneration: number
   environmentExists: () => boolean
   getConnectionGeneration: () => number
+  getCurrentStatus: () => RuntimeEnvironmentStatus | undefined
   publish: (status: RuntimeEnvironmentStatus) => void
 }): void {
   if (!shouldRecheck(args.status)) {
@@ -50,6 +53,7 @@ export function reconcileRuntimeStatusRecheck(args: {
       connectionGeneration: args.connectionGeneration,
       environmentExists: args.environmentExists,
       getConnectionGeneration: args.getConnectionGeneration,
+      getCurrentStatus: args.getCurrentStatus,
       publish: args.publish
     }
     rechecks.set(args.environmentId, state)
@@ -57,6 +61,7 @@ export function reconcileRuntimeStatusRecheck(args: {
     state.connectionGeneration = args.connectionGeneration
     state.environmentExists = args.environmentExists
     state.getConnectionGeneration = args.getConnectionGeneration
+    state.getCurrentStatus = args.getCurrentStatus
     state.publish = args.publish
   }
   armRuntimeStatusRecheck(args.environmentId, state)
@@ -75,6 +80,7 @@ export function reconcileRuntimeStatusForSlice(
     environmentExists: () =>
       get().runtimeEnvironments.some((environment) => environment.id === environmentId),
     getConnectionGeneration,
+    getCurrentStatus: () => get().runtimeStatusByEnvironmentId.get(environmentId),
     publish: (nextStatus) => get().setRuntimeEnvironmentStatus(environmentId, nextStatus)
   })
 }
@@ -101,9 +107,19 @@ export function clearRuntimeStatusRechecksForTests(): void {
   cancelRuntimeStatusRechecks([...rechecks.keys()])
 }
 
+/**
+ * Whether this recorded verdict is one the ladder must keep re-asking.
+ *
+ * Null qualifies because a host recorded unreachable is excluded from the client-event
+ * subscription set (that set is gated on a truthy status), so no reconnect signal can
+ * ever clear it and one failed boot probe otherwise outlives the outage. #16516
+ */
 function shouldRecheck(status: RuntimeStatus | null): boolean {
+  if (status === null) {
+    return true
+  }
   return Boolean(
-    status?.capabilities?.includes(REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
+    status.capabilities?.includes(REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
     status.remoteControl &&
     status.remoteControl.state !== 'ready'
   )
@@ -147,12 +163,34 @@ async function fireRuntimeStatusRecheck(
     })
     nextEntry = { status: unwrapRuntimeRpcResult<RuntimeStatus>(response), checkedAt: Date.now() }
   } catch (error: unknown) {
-    const remoteControl = extractRuntimeTransportDiagnostics(error)
-    nextEntry = {
-      status: null,
-      ...(remoteControl ? { remoteControl } : {}),
-      checkedAt: Date.now()
+    // The probe short-circuits locally for a manually disconnected host, so retrying only
+    // burns a timer against an answer the user already chose.
+    if (hasRuntimeRpcErrorCode(error, 'runtime_manually_disconnected')) {
+      cancelRuntimeStatusRecheck(environmentId)
+      return
     }
+    const remoteControl = extractRuntimeTransportDiagnostics(error)
+    const current = state.getCurrentStatus()
+    // A failed status.get dials its own fresh socket (sendRemoteRuntimeRequest), so its
+    // failure is unverifiable — main mints `runtime_unavailable` for a transport error it
+    // never received an answer to, and per docs/reference/ssh-execution-boundary.md loss of
+    // contact is never evidence the host exited. Nulling a live verdict here would retire the
+    // host's session-tabs mirror (it drops out of getReachableRuntimeSessionMirrorTargets) and
+    // then, on the next successful probe, rebuild it a second time via the connection-generation
+    // bump in setRuntimeEnvironmentStatus. Keep the live status and only refresh its diagnostics
+    // so the ladder keeps probing without a teardown. #19647
+    nextEntry =
+      hasRuntimeRpcErrorCode(error, 'runtime_unavailable') && current?.status != null
+        ? {
+            ...current,
+            status: remoteControl ? { ...current.status, remoteControl } : current.status,
+            checkedAt: Date.now()
+          }
+        : {
+            status: null,
+            ...(remoteControl ? { remoteControl } : {}),
+            checkedAt: Date.now()
+          }
   }
   state.inFlight = false
   if (
