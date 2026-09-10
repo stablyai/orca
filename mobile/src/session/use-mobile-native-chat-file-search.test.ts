@@ -145,4 +145,49 @@ describe('useMobileNativeChatFileSearch', () => {
     })
     expect(state?.nativeChatFilePaths).toEqual(['docs/readme.md'])
   })
+  it('b1: reset during A-B-A ignores stale files.list inventory and preserves the fresh load', async () => {
+    const pending: Array<(value: Awaited<ReturnType<RpcClient['sendRequest']>>) => void> = []
+    const sendRequest = vi.fn((method: string) =>
+      method === 'files.searchPaths'
+        ? Promise.resolve({
+            id: 'missing',
+            ok: false as const,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        : new Promise<Awaited<ReturnType<RpcClient['sendRequest']>>>((resolve) =>
+            pending.push(resolve)
+          )
+    )
+    const client = { sendRequest } as unknown as RpcClient
+    function Harness({ workspace }: { workspace: string }): null {
+      state = useMobileNativeChatFileSearch({ client, worktreeId: workspace })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness, { workspace: 'A' }))
+    })
+    act(() => state?.loadNativeChatFiles('app'))
+    await act(async () => vi.advanceTimersByTimeAsync(120))
+    await act(async () => renderer?.update(createElement(Harness, { workspace: 'B' })))
+    await act(async () => renderer?.update(createElement(Harness, { workspace: 'A' })))
+    act(() => state?.loadNativeChatFiles('app'))
+    await act(async () => vi.advanceTimersByTimeAsync(120))
+    expect(pending).toHaveLength(2)
+    await act(async () => {
+      pending[0](rpcSuccess(['stale/app.ts']))
+    })
+    act(() => state?.loadNativeChatFiles('fresh'))
+    await act(async () => vi.advanceTimersByTimeAsync(120))
+    expect(pending).toHaveLength(2)
+    expect(state?.nativeChatFilePaths).not.toContain('stale/app.ts')
+    await act(async () => {
+      pending[1](rpcSuccess(['fresh/app.ts']))
+    })
+    expect(state?.nativeChatFilePaths).toEqual(['fresh/app.ts'])
+    act(() => state?.loadNativeChatFiles('app'))
+    await act(async () => vi.advanceTimersByTimeAsync(120))
+    expect(state?.nativeChatFilePaths).toEqual(['fresh/app.ts'])
+    expect(pending).toHaveLength(2)
+  })
 })
