@@ -62,7 +62,7 @@ export function useHostStatusGates(args: {
     let cancelRetry = () => {}
     let attempt = 0
     const settleUnknown = () => {
-      if (cancelled || generation !== readGeneration()) {
+      if (cancelled) {
         return
       }
       const delay = STATUS_RETRY_DELAYS[attempt++]
@@ -94,7 +94,7 @@ export function useHostStatusGates(args: {
       }
     }
     const probe = async () => {
-      if (cancelled || generation !== readGeneration()) {
+      if (cancelled) {
         return
       }
       setUnverified(true)
@@ -103,7 +103,7 @@ export function useHostStatusGates(args: {
           timeoutMs: HOST_STATUS_REQUEST_TIMEOUT_MS,
           budgetSpansConnect: true
         })
-        if (cancelled || generation !== readGeneration()) {
+        if (cancelled) {
           return
         }
         const verdict = response.ok
@@ -147,14 +147,9 @@ export function useHostStatusGates(args: {
     }
   }, [client, connState, hostId, generation, readGeneration, retry, applyLoaded])
 
-  // A logical client survives cutover; its generation fences even a same-host late reply.
-  const proven =
-    loaded &&
-    loaded.hostId === hostId &&
-    loaded.client === client &&
-    loaded.generation === generation
-      ? loaded
-      : null
+  // A cutover re-probes (generation is an effect dep) but must not blank a host this client
+  // already proved: same host, same logical client, and the stale verdict is replaced in place.
+  const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
   if (!proven) {
     return {
       hostCapabilities: EMPTY_HOST_CAPABILITIES,

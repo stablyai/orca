@@ -74,7 +74,8 @@ export function HostProtocolGate({ hostId, children }: Props) {
           {children}
         </View>
         {pending ? (
-          // Preserve nested navigation; the logical client's admission gate fences mounted effects.
+          // Preserve nested navigation. Mounted effects are not fenced: they wait on connState and
+          // re-probe status.get themselves, so this overlay covers the UI, not the requests.
           <View
             style={styles.pendingOverlay}
             // Why: the fill owns the hit test for in-tree views only — native-Modal-hosted

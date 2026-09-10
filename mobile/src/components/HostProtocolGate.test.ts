@@ -319,7 +319,10 @@ describe('HostProtocolGate', () => {
       await client.migrateTo(replacement, 'relay')
     })
     expect(client.getGeneration()).toBe(2)
-    expect(renderedText(renderer)).toContain('Checking host compatibility')
+    // A cutover re-verifies without blanking a host this client already proved: no overlay, so
+    // the mounted routes stay visible and touchable while status.get is in flight.
+    expect(renderedText(renderer)).not.toContain('Checking host compatibility')
+    expect(renderedText(renderer)).not.toContain('Unable to verify this host')
     expect(renderedText(renderer)).toContain('HostContent')
     expect(probeMounts.count).toBe(1)
     // The replay rides the cutover itself, so the stream never gaps while the gate re-verifies.
