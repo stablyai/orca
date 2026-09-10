@@ -1,10 +1,7 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import { resolveAgentRowDisplayState } from '../../../src/shared/agent-status-row-display'
 
-// Mirrors the desktop AGENT_STATUS_STALE_AFTER_MS (src/shared/agent-status-types.ts:
-// 30 min). Defined locally rather than imported because a runtime-value import
-// from a root .ts breaks mobile's vitest transform (no tsconfig in the
-// mobile-only checkout); root type-only imports stay fine.
-export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
+export { AGENT_STATUS_STALE_AFTER_MS } from '../../../src/shared/agent-status-freshness'
 
 // Mirrors the desktop AgentStateDot vocabulary. The wire `state` is the agent
 // status state; 'blocked'/'waiting' read as attention states, 'done' as
@@ -18,27 +15,37 @@ export type AgentDotState =
   | 'idle'
   | 'interrupted'
 
+/**
+ * The dot this row shows. The staleness decay is the shared one
+ * (src/shared/agent-status-row-display.ts) so the phone and the desktop agree on when an
+ * agent that stopped reporting stops reading as active; only the dot vocabulary is local.
+ *
+ * `worktree ps` rows carry no live-PTY evidence, so `hasLivePty` stays unset and a decayed
+ * row lands on `idle` — the desktop's `unverifiable` claims liveness this reader cannot see.
+ */
 export function agentDotState(
-  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'workingMode' | 'interrupted' | 'updatedAt'>,
+  row: Pick<
+    RuntimeWorktreeAgentRow,
+    | 'state'
+    | 'workingMode'
+    | 'interrupted'
+    | 'updatedAt'
+    | 'restoredUnconfirmed'
+    | 'structuredHostOwned'
+  >,
   now: number
 ): AgentDotState {
   if (row.interrupted) {
     return 'interrupted'
   }
-  switch (row.state) {
+  const displayState = resolveAgentRowDisplayState(row, now)
+  switch (displayState) {
+    case 'working':
+      return row.workingMode === 'monitoring' ? 'monitoring' : 'working'
     case 'blocked':
     case 'waiting':
-      // Why: an agent that exits without a final report would otherwise read as
-      // active forever. Decay a stale active state to idle, matching desktop's
-      // renderer-side staleness decay (worktree-agent-rows.ts).
-      return now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS ? 'idle' : row.state
-    case 'working':
-      if (now - row.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
-        return 'idle'
-      }
-      return row.workingMode === 'monitoring' ? 'monitoring' : 'working'
     case 'done':
-      return 'done'
+      return displayState
   }
   return 'idle'
 }

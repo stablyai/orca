@@ -57,6 +57,52 @@ describe('agentDotState', () => {
       'interrupted'
     )
   })
+
+  it('keeps a host-owned structured row active past the window', () => {
+    // The structured session host still runs this row's provider child, so silence is not
+    // evidence it stopped. Mobile ignored `structuredHostOwned` before the decay was shared
+    // and decayed this row to idle while the desktop kept it.
+    const stale = AGENT_STATUS_STALE_AFTER_MS + 1
+    expect(
+      agentDotState(row({ state: 'working', updatedAt: 0, structuredHostOwned: true }), stale)
+    ).toBe('working')
+    expect(
+      agentDotState(
+        row({
+          state: 'working',
+          workingMode: 'monitoring',
+          updatedAt: 0,
+          structuredHostOwned: true
+        }),
+        stale
+      )
+    ).toBe('monitoring')
+    expect(
+      agentDotState(row({ state: 'blocked', updatedAt: 0, structuredHostOwned: true }), stale)
+    ).toBe('blocked')
+    // The exemption is the owned flag, not the age: an unowned row of the same age still decays.
+    expect(agentDotState(row({ state: 'working', updatedAt: 0 }), stale)).toBe('idle')
+  })
+
+  it('never shows a hydrated unconfirmed row as active, however recent', () => {
+    // A restored row may describe a turn that ended while nothing was listening. Today's host
+    // filters these out before they reach the wire, so this pins the contract, not a live path.
+    expect(
+      agentDotState(row({ state: 'working', updatedAt: 0, restoredUnconfirmed: true }), 1)
+    ).toBe('idle')
+    expect(
+      agentDotState(row({ state: 'blocked', updatedAt: 0, restoredUnconfirmed: true }), 1)
+    ).toBe('idle')
+  })
+
+  it('degrades to the plain window for a row from an older host', () => {
+    // An older host sends neither `structuredHostOwned` nor any evidence stamp. Absence must
+    // mean the ordinary updatedAt window — never "fresh", and never a throw.
+    const oldHostRow = row({ state: 'working', updatedAt: 0 })
+    expect(oldHostRow.structuredHostOwned).toBeUndefined()
+    expect(agentDotState(oldHostRow, AGENT_STATUS_STALE_AFTER_MS)).toBe('working')
+    expect(agentDotState(oldHostRow, AGENT_STATUS_STALE_AFTER_MS + 1)).toBe('idle')
+  })
 })
 
 describe('agentDisplayLabel', () => {

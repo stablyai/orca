@@ -14,14 +14,7 @@ import type {
   RuntimeWorktreeStatus
 } from '../../shared/runtime-types'
 import type { TuiAgent } from '../../shared/tui-agent'
-
-const WORKTREE_STATUS_PRIORITY: Record<RuntimeWorktreeStatus, number> = {
-  inactive: 0,
-  active: 1,
-  done: 2,
-  working: 3,
-  permission: 4
-}
+import { worktreeStatusRank } from '../../shared/worktree-status-rollup'
 
 type LeafStatusRecord = {
   ptyId: string | null
@@ -186,21 +179,14 @@ export function mapExplicitAgentStateToRuntimeTerminalStatus(
   }
 }
 
-export function mergeWorktreeStatus(
-  current: RuntimeWorktreeStatus,
-  next: RuntimeWorktreeStatus
-): RuntimeWorktreeStatus {
-  return WORKTREE_STATUS_PRIORITY[next] > WORKTREE_STATUS_PRIORITY[current] ? next : current
-}
-
 export function mergeWorktreeSummaryStatus(
   summary: RuntimeWorktreePsSummary,
   next: RuntimeWorktreeStatus,
   nextWorkingMode?: RuntimeWorktreePsSummary['workingMode']
 ): void {
-  const currentPriority = WORKTREE_STATUS_PRIORITY[summary.status]
-  const nextPriority = WORKTREE_STATUS_PRIORITY[next]
-  if (nextPriority > currentPriority) {
+  const currentRank = worktreeStatusRank(summary.status)
+  const nextRank = worktreeStatusRank(next)
+  if (nextRank > currentRank) {
     summary.status = next
     if (next === 'working' && nextWorkingMode === 'monitoring') {
       summary.workingMode = 'monitoring'
@@ -209,7 +195,7 @@ export function mergeWorktreeSummaryStatus(
     }
     return
   }
-  if (nextPriority === currentPriority && next === 'working') {
+  if (nextRank === currentRank && next === 'working') {
     if (nextWorkingMode === 'monitoring') {
       summary.workingMode = 'monitoring'
     } else {

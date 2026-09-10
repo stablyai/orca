@@ -12,7 +12,7 @@ this order, each independently shippable:
 3. shared: one worktree-status rollup and one freshness rule for every reader.
 
 The PR that carries this document is PR 1a. Sections below are grouped under
-the step that delivers them; PR 1a, PR 1b, PR 2a and PR 2b have landed.
+the step that delivers them; PR 1a, PR 1b, PR 2a, PR 2b and PR 3 have landed.
 
 ## The problem this solves
 
@@ -595,37 +595,99 @@ rendered one session twice and shifted the chat's elapsed clock.
 
 ## PR 3: one rollup, one clock
 
-The worktree card status is derived three times: `lib/worktree-status.ts` in
+The worktree card status was derived three times: `lib/worktree-status.ts` in
 the renderer, `runtime-worktree-status-projection.ts` in main, and
-`agent-row-display.ts` in mobile, which hand-copies the 30-minute constant.
-PR 3 moves the rollup and the decay into `src/shared` and makes all three
-call it.
+`agent-row-display.ts` in mobile, which hand-copied the 30-minute constant.
+PR 3 moved the rollup and the decay into `src/shared`.
 
-### The three copies
+### What landed
 
-| Copy | Lines | Reads |
-| --- | ---: | --- |
-| `renderer/src/lib/worktree-status.ts` | 222 | the sidebar store |
-| `main/runtime/runtime-worktree-status-projection.ts` | 255 | the hook snapshot |
-| `mobile/src/worktree/agent-row-display.ts` | 118 | `worktree ps` rows |
+Two modules, beside `agent-status-freshness.ts`:
 
-The mobile copy hand-copies the 30-minute constant rather than importing
-`AGENT_STATUS_STALE_AFTER_MS`, so the three can drift by edit as well as by
-logic. `isFreshNonDoneAgentStatus` in `shared/agent-status-freshness.ts` is
-already shared and is the model: the rollup should sit beside it.
+| Module                               | Owns                                                                      | Called by                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `shared/agent-status-row-display.ts` | the staleness decay and where a stale row lands (`idle` / `unverifiable`) | the sidebar row builder, mobile's row dot                                   |
+| `shared/worktree-status-rollup.ts`   | the priority ladder a worktree's signals are rolled up over               | the renderer's `resolveWorktreeStatus`, main's `mergeWorktreeSummaryStatus` |
 
-### Why this is last
+The ladder is `inactive < active < done < interrupted < monitoring < working <
+permission`. `RuntimeWorktreeStatus` on the wire is the subset without
+`interrupted` and `monitoring`, and its relative order is unchanged, so
+`worktree ps` rolls up exactly as before. The renderer's hand-ordered if-chain
+became a fold over that ladder; main's private priority table was deleted.
 
-Only after PR 2b do all three read equivalent rows. Sharing the rollup before
-that would unify the arithmetic over inputs that still disagree, which hides
-the disagreement rather than removing it.
+### The three copies did not share the same two things
 
-### Watch item
+The plan implied all three copies do both jobs. They do not. Mobile has no
+worktree rollup at all — it renders the `status` the host already computed on
+the `worktree ps` summary — so mobile joins on the decay only. The renderer and
+main join on both.
 
-Mobile currently ignores `structuredHostOwned`, so an owned structured row
-decays to idle there while the desktop keeps it. That is pre-existing, not a
-regression from PR 1a, and this step is where it stops being true — the shared
-rule already handles the owned case.
+### What changed on mobile
+
+Unifying was not a pure refactor for the phone. Two user-visible corrections,
+both bringing mobile to the behavior the desktop has always had:
+
+- **A host-owned structured row no longer decays.** Mobile ignored
+  `structuredHostOwned`, so an owned row read as idle on the phone after 30
+  minutes while the desktop kept it working. The structured host still runs
+  that row's provider child, so silence there is not evidence it stopped.
+- **A hydrated unconfirmed row never reads as active.** Mobile ignored
+  `restoredUnconfirmed`. This is a contract change rather than a live one:
+  `collectRuntimeWorktreePtyAgentSources` drops those rows before they reach
+  the wire, so today's host never sends one. The rule now holds regardless.
+
+### The evidence clock does not reach mobile, and should not
+
+The plan expected mobile to start measuring against the evidence clock. It does
+not, and the wire is the reason: `RuntimeWorktreeAgentRow` carries neither
+`evidenceObservedAt` nor `mirroredEvidenceReceivedAt`, so the shared rule falls
+through to `updatedAt` — which is the clock mobile already used. The row is
+unchanged on the wire.
+
+Forwarding those stamps would also be the wrong fix. Mobile is a replica on a
+different machine, so it subtracts host stamps from its own `now`; both
+timestamps are the host's, and swapping one for the other trades the reconnect
+error for the same clock-skew error. A phone-side receipt clock, not a wider
+row, is what that would need. Every field the rule reads is optional and absent
+degrades to the ordinary window, which is what keeps an older host safe.
+
+### Two things the plan got wrong
+
+- **Mobile was never walled off from `src/shared`.** The local constant carried
+  a comment claiming a runtime-value import from a root `.ts` breaks mobile's
+  vitest transform. It does not: `metro.config.js` already watches
+  `../src/shared`, about twenty mobile modules already value-import from it,
+  and the mobile suite passes with the real import. The comment was a
+  rationalisation, and it had already drifted — it cited the constant's old
+  home in `agent-status-types.ts`.
+- **`mergeWorktreeStatus` in main was dead.** Zero callers in production or
+  tests. It was deleted rather than rewired.
+
+### A gap this found
+
+Nothing pinned the `worktree ps` rollup order. A ladder mutated so that
+`permission` no longer outranked `working` passed the entire
+`orca-runtime.test.ts` aggregator (1262 tests) and the whole sidebar suite;
+only `renderer/src/lib` caught it. `runtime-worktree-status-projection.test.ts`
+now pins main's side directly.
+
+### Still duplicated
+
+- The `AgentDotState` union and `agentStateLabel` are still written twice, in
+  `components/AgentStateDot.tsx` and in mobile's `agent-row-display.ts`. That
+  is presentation vocabulary living in a React component, and the desktop union
+  has three members mobile does not render; moving it is not this step's job.
+- `selectFreshExplicitAgentStatus` in `runtime-hook-agent-row-selection.ts`
+  still hand-rolls the window against `updatedAt`, ignoring the evidence clock
+  and the host-owned exemption. It is a fourth decay site, outside the three
+  this step named, and routing it through the shared rule would change main's
+  behavior — which this step was required not to do.
+
+### Why this was last
+
+Only after PR 2b did all three read equivalent rows. Sharing the rollup before
+that would have unified the arithmetic over inputs that still disagreed, which
+hides the disagreement rather than removing it.
 
 ## What does not change
 
