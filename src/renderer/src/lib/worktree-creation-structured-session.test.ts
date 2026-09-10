@@ -383,6 +383,27 @@ describe('launchStructuredWorktreeSession', () => {
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
+  it('leaves an agent that cannot hold a structured session untouched, cancel or not', async () => {
+    // Why: the module trusts its callers for the route, so the agent check is the last local
+    // eligibility gate. Without it a dismissed creation reports itself cancelled for an agent that
+    // was never going to open a session here.
+    mocks.state = { pendingWorktreeCreations: {} }
+
+    await expect(
+      launchStructuredWorktreeSession({
+        creationId: 'creation-1',
+        request: { ...request, agent: 'gemini' },
+        agentLaunchRoute: 'structured-native-chat',
+        worktreeId: 'worktree-1',
+        shouldActivateOnCompletion: true,
+        fallbackStartupOpt: undefined,
+        activation: false,
+        primaryTabId: null
+      })
+    ).resolves.toEqual({ ...idle, activation: false, primaryTabId: null })
+    expect(mocks.startStructuredAgentLaunch).not.toHaveBeenCalled()
+  })
+
   it('never marks an abandoned creation for a first-message rename', async () => {
     storeWithWorktree()
     const launchResult = Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))

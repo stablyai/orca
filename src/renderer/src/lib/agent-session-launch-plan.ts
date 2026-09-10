@@ -26,9 +26,9 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
 }
 
 /**
- * A route decided once plus exactly what its structured launch delivers. The persisted quick-create
- * request carries the data fields, so a launch that happens after the workspace exists (or a
- * recovery replay) re-enters here without re-resolving.
+ * A route decided once plus exactly what its structured launch delivers. The quick-create request
+ * carries the data fields in renderer memory, so a launch that happens after the workspace exists
+ * (or a retry within the same session) re-enters here without re-resolving.
  */
 export type AgentSessionLaunchVerdict = {
   route: AgentLaunchRoute

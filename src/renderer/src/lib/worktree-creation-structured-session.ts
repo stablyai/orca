@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import type { StructuredAgentLegacyFallbackResult } from '@/lib/structured-agent-launch-settlement'
+import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { activateStructuredAgentSessionById } from '@/lib/structured-agent-session-tab-activation'
@@ -110,7 +111,7 @@ export async function launchStructuredWorktreeSession(
   const { activation, primaryTabId } = args
   const settled = { accepted: true, cancelled: false, visibilityUnknown: false }
   const { agent } = args.request
-  if (!agent) {
+  if (!isAgentSessionHandleProvider(agent)) {
     return { ...settled, activation, primaryTabId }
   }
   const isCancelled = (): boolean =>
@@ -119,8 +120,9 @@ export async function launchStructuredWorktreeSession(
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
   let refused = false
-  // Why: the composer decided route and delivery mode before the worktree existed; re-entering
-  // with that persisted verdict is what keeps recovery from re-resolving on a changed host.
+  // Why: the composer decided route and delivery mode before the worktree existed, and the request
+  // carries that verdict in renderer memory for the life of the create; re-entering with it is what
+  // keeps a retry from re-resolving against a host that has changed since.
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
     agent,
