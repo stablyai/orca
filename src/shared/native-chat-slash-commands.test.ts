@@ -104,16 +104,24 @@ describe('a session that reports its own command surface', () => {
     ])
   })
 
-  it('keeps a reported description on a command the curated catalog never claims', () => {
+  it('keeps a reported description and argument hint the curated catalog never claims', () => {
     expect(
       sessionSlashCommandSuggestions('codex', [
         {
           name: 'opsx:apply',
           kind: 'command',
           description: 'Apply the plan',
+          argumentHint: '<plan-id>',
           kindUnspecified: true
         }
       ])
-    ).toEqual([{ name: 'opsx:apply', description: 'Apply the plan', kindUnspecified: true }])
+    ).toEqual([
+      {
+        name: 'opsx:apply',
+        description: 'Apply the plan',
+        argumentHint: '<plan-id>',
+        kindUnspecified: true
+      }
+    ])
   })
 })

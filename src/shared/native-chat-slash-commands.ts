@@ -12,6 +12,8 @@ export type SlashCommandSuggestion = {
   name: string
   /** Optional one-line description for the suggestion row. */
   description?: string
+  /** Provider-authored argument sketch, e.g. `<objective>`. */
+  argumentHint?: string
   kindUnspecified?: true
 }
 
@@ -111,6 +113,7 @@ export function sessionSlashCommandSuggestions(
       return {
         name: entry.name,
         ...(description ? { description } : {}),
+        ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
         ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {})
       }
     })
