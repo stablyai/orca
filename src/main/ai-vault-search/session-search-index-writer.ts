@@ -174,6 +174,10 @@ export class SessionSearchIndexWriter {
     // the same transaction as the first of the new one. Chunk two onwards must
     // not repeat it.
     let replaced = append
+    // Set when the file record moved under this read. Nothing this write holds
+    // can land after that, so it stops buffering rather than reopening a
+    // transaction it already knows will roll back, once per remaining message.
+    let fenced = false
 
     const current = (): boolean => {
       const row = this.cursor(path)
@@ -233,16 +237,21 @@ export class SessionSearchIndexWriter {
 
     return {
       add: (message) => {
+        if (fenced) {
+          return
+        }
         hash = foldContentHash(hash, [message])
         for (const row of searchMessageRows([message])) {
           buffer.push(row)
           bufferedChars += row.text.length
         }
-        if (bufferedChars >= this.commitChars) {
-          write(null)
+        if (bufferedChars >= this.commitChars && !write(null)) {
+          fenced = true
+          buffer.length = 0
+          bufferedChars = 0
         }
       },
-      commit: (outcome) => write(outcome)
+      commit: (outcome) => !fenced && write(outcome)
     }
   }
 

@@ -259,6 +259,42 @@ it('re-reads a chunked file whole when its writer died between chunks', () => {
   expect(matches(index.db, 'messages_fts', 'chunkedneedle')).toBe(0)
 })
 
+it('stops a chunked read whose file was removed between its chunks', () => {
+  const writer = new SessionSearchIndexWriter(index.db, 400)
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  const messages = userMessages(CHUNKED_MESSAGE, 10)
+  for (const message of messages.slice(0, 4)) {
+    write.add(message)
+  }
+  expect(counts(index.db).messages).toBe(4)
+
+  writer.removeFile(SYNTHETIC_TRANSCRIPT)
+  const exec = SyncDatabase.prototype.exec
+  let opened = 0
+  vi.spyOn(SyncDatabase.prototype, 'exec').mockImplementation(function (
+    this: SyncDatabase,
+    sql: string
+  ) {
+    if (sql === 'BEGIN IMMEDIATE') {
+      opened += 1
+    }
+    exec.call(this, sql)
+  })
+  for (const message of messages.slice(4)) {
+    write.add(message)
+  }
+  expect(write.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })).toBe(
+    false
+  )
+  vi.restoreAllMocks()
+
+  // Not one row of the removed source came back. The read stopped at the first
+  // refusal rather than reopening a transaction it already knows will roll back,
+  // once for every message left in a file that may be a hundred megabytes.
+  expect(opened).toBe(1)
+  expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
+})
+
 it('replaces the previous generation without ever showing both', () => {
   replayTranscriptRead({ messages: userMessages('firstgeneration', 10) })
   replayTranscriptRead({ messages: userMessages('secondgeneration', 10) })
