@@ -128,7 +128,8 @@ export function buildMirroredHostGroups({
   validUnifiedTabIds,
   environmentId,
   worktreeId,
-  clientGroupIdByLocalTabId
+  clientGroupIdByLocalTabId,
+  honorSnapshotActiveFocus
 }: {
   currentGroups: readonly TabGroup[]
   hostGroups: readonly RuntimeMobileSessionTabGroup[]
@@ -140,6 +141,9 @@ export function buildMirroredHostGroups({
   environmentId: string
   worktreeId: string
   clientGroupIdByLocalTabId: ReadonlyMap<string, string>
+  /** True only when this frame carries navigation intent — a client focus request, or a host
+   *  `navigationIntent: 'follow'`. Unsolicited frames never move a client's focus (#5435). */
+  honorSnapshotActiveFocus: boolean
 }): TabGroup[] | null {
   const strippedGroups = retainClientPlacedMirroredTabs({
     groups: currentGroups,
@@ -149,6 +153,12 @@ export function buildMirroredHostGroups({
     nextActiveUnifiedTabId
   })
   const groupsById = new Map(strippedGroups.map((group) => [group.id, group]))
+  // Why pre-strip: stripping drops every mirrored tab this client did not place itself, so a group
+  // whose tabs are all mirrored comes back with `activeTabId: null` and its focus looks unheld.
+  // What the client was showing is only legible before that.
+  const clientActiveTabIdByGroupId = new Map(
+    currentGroups.map((group) => [group.id, group.activeTabId])
+  )
   const orderedGroups: TabGroup[] = []
   const seen = new Set<string>()
 
@@ -180,14 +190,26 @@ export function buildMirroredHostGroups({
     }
     const activeFromHost =
       hostGroup.activeTabId !== null ? (hostToLocalTabId.get(hostGroup.activeTabId) ?? null) : null
+    // Why this order: `activeFromHost` reports which tab the HOST has focused, which on a host
+    // running an agent follows the working session. It answers "where is the host looking", not
+    // "where should this client look", so it outranks the tab this client is showing only when the
+    // frame carries intent. Without that, every republication repointed each group the client was
+    // not currently visiting.
+    const heldTabId = existing?.activeTabId ?? clientActiveTabIdByGroupId.get(hostGroup.id) ?? null
+    const clientActiveTabId = heldTabId && tabOrder.includes(heldTabId) ? heldTabId : null
+    const hostActiveTabId =
+      activeFromHost && tabOrder.includes(activeFromHost) ? activeFromHost : null
     const activeTabId =
-      nextActiveUnifiedTabId && tabOrder.includes(nextActiveUnifiedTabId)
+      (nextActiveUnifiedTabId && tabOrder.includes(nextActiveUnifiedTabId)
         ? nextActiveUnifiedTabId
-        : activeFromHost && tabOrder.includes(activeFromHost)
-          ? activeFromHost
-          : existing?.activeTabId && tabOrder.includes(existing.activeTabId)
-            ? existing.activeTabId
-            : (tabOrder[0] ?? null)
+        : null) ??
+      (honorSnapshotActiveFocus ? hostActiveTabId : null) ??
+      // A group this client has never shown has no focus to preserve, so the host's is the only
+      // answer available — that is adoption, not an override.
+      clientActiveTabId ??
+      hostActiveTabId ??
+      tabOrder[0] ??
+      null
     orderedGroups.push({
       id: hostGroup.id,
       worktreeId,
