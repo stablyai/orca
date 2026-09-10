@@ -1,8 +1,24 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { TranscriptMessage } from '../ai-vault/session-transcript-consumers'
+import { sliceAtCodeUnitLimit } from '../ai-vault/session-scanner-text-normalization'
 import { identifierShadowText } from './session-search-identifier-split'
 
 const CHUNK_TARGET_CHARS = 8000
+
+/**
+ * How much of one tool output is indexed. Its head: a command, its arguments and
+ * the first lines of what it printed are what a user searches for, while the
+ * tail is the padding that makes these messages large in the first place.
+ *
+ * Tool output is 80-97 % of a transcript's bytes, and a single one can be a
+ * quarter of a megabyte (the reader's own per-message bound). Without this the
+ * index, the in-memory buffer a read holds and the transaction it commits are
+ * all sized by how much a tool printed rather than by how much is worth
+ * searching. 3 KB was the accuracy/size sweet spot in the original design
+ * measurement. User and assistant text is never capped: it is the conversation,
+ * and it is small.
+ */
+const TOOL_ROW_CHARS = 3072
 
 /**
  * Index just past the last whitespace in `[floor, end)`, or -1 when the window
@@ -47,11 +63,22 @@ function* textChunks(text: string): Generator<string> {
   }
 }
 
-/** One message becomes N rows: FTS5 ranks a short row far better than a huge one. */
+/**
+ * The row policy for one message: a `tool` message becomes one capped row, and
+ * anything else becomes N chunks, because FTS5 ranks a short row far better
+ * than a huge one.
+ */
 export function* searchMessageRows(
   messages: Iterable<TranscriptMessage>
 ): Generator<TranscriptMessage> {
   for (const message of messages) {
+    if (message.role === 'tool') {
+      yield {
+        ...message,
+        text: sliceAtCodeUnitLimit(message.text, TOOL_ROW_CHARS)
+      }
+      continue
+    }
     for (const text of textChunks(message.text)) {
       yield { ...message, text }
     }

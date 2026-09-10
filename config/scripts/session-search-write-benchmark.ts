@@ -73,7 +73,10 @@ function tableBytes(db: SyncDatabase): Record<string, number> {
   }
 }
 
-const corpus = await writeSyntheticTranscriptCorpus()
+// The default corpus puts tool output at about half the message text; set this
+// far higher to price the tool-row cap against the real 80-97 % band.
+const toolResultWords = Number(process.env.ORCA_SEARCH_BENCH_TOOL_WORDS ?? 200)
+const corpus = await writeSyntheticTranscriptCorpus({ toolResultWords })
 const indexPath = join(corpus.root, 'index.sqlite')
 try {
   const errors: unknown[] = []
@@ -125,6 +128,7 @@ try {
             platform: process.platform,
             node: process.version,
             transcriptMb: Math.round((corpus.transcriptBytes / (1024 * 1024)) * 100) / 100,
+            toolResultWords,
             sessions,
             rows,
             rebuildMs: Math.round(rebuildMs),

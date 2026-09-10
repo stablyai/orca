@@ -59,6 +59,12 @@ export type SyntheticCorpusOptions = {
   sessions?: number
   turnsPerSession?: number
   seed?: number
+  /**
+   * Words per tool result. The default keeps tool output at about half the
+   * message text; the real distribution is 80-97 %, which is what prices the
+   * tool-row cap, so the benchmark runs a second arm well above the default.
+   */
+  toolResultWords?: number
 }
 
 /** Writes a corpus of Claude JSONL transcripts and reports what it cost on disk. */
@@ -67,6 +73,7 @@ export async function writeSyntheticTranscriptCorpus(
 ): Promise<SyntheticCorpus> {
   const sessions = options.sessions ?? 40
   const turns = options.turnsPerSession ?? 60
+  const toolWords = options.toolResultWords ?? 200
   const random = mulberry32(options.seed ?? 1)
   const root = await mkdtemp(join(tmpdir(), 'orca-search-corpus-'))
   const files: string[] = []
@@ -114,7 +121,13 @@ export async function writeSyntheticTranscriptCorpus(
           timestamp: at,
           message: {
             role: 'user',
-            content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: words(random, 200) }]
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'toolu_1',
+                content: words(random, toolWords)
+              }
+            ]
           }
         })
       )

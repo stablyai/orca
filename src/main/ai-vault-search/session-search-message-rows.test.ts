@@ -87,6 +87,40 @@ it('leaves a message that fits as a single row', () => {
   expect(rows.map((row) => row.text)).toEqual(['short enough'])
 })
 
+it('caps a tool row at its head and never caps the conversation', async () => {
+  const index = await openSessionSearchIndexFile('ss-rows-tool-cap')
+  try {
+    // The reader hands over untruncated text (its own bound is 256 KB per
+    // message and a consumer may be handed more); the cap is this module's.
+    const output = `pericardium ${'padding '.repeat(140_000)}`
+    expect(output.length).toBeGreaterThan(1024 * 1024)
+
+    const toolRows = [...searchMessageRows([{ role: 'tool', text: output, timestamp: null }])]
+    expect(toolRows).toHaveLength(1)
+    expect(toolRows[0]!.text.length).toBe(3072)
+    // The head is what identifies what ran, so it is what survives.
+    expect(toolRows[0]!.text.startsWith('pericardium ')).toBe(true)
+
+    // The same text as an assistant turn is conversation, and keeps every byte.
+    const assistantRows = [
+      ...searchMessageRows([{ role: 'assistant', text: output, timestamp: null }])
+    ]
+    expect(assistantRows.map((row) => row.text).join('')).toBe(output)
+    expect(assistantRows.length).toBeGreaterThan(100)
+
+    for (const row of toolRows) {
+      insertSearchMessage(index.db, 1, row)
+    }
+    expect(
+      index.db
+        .prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?')
+        .get('pericardium')
+    ).toEqual({ n: 1 })
+  } finally {
+    await index.close()
+  }
+})
+
 it('keeps a tool row out of the conversation half', async () => {
   const index = await openSessionSearchIndexFile('ss-message-rows-tool')
   try {
