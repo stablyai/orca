@@ -83,3 +83,40 @@ export class SessionSearchPendingFiles {
     return this.dropped
   }
 }
+
+/** The queues a status report counts files owed a read across. */
+export type SessionSearchOwedFilesSource = {
+  hasStale(path: string): boolean
+  pendingFileCount: number
+  droppedPendingFileCount: number
+}
+
+/**
+ * Files still owed a read, counted by path across every queue that holds one.
+ *
+ * A union rather than a sum: one path sits in more than one the moment a read
+ * is declined during a pause and a caller then invalidates the same file, and
+ * summing reports one transcript as two.
+ *
+ * The drop counts are summed, because a drop is an event and not a membership;
+ * nothing retains the paths, so they cannot be deduplicated after the fact.
+ * Non-zero means the queue is knowingly incomplete, which is the only thing a
+ * caller can act on.
+ */
+export function sessionSearchOwedFiles(
+  store: SessionSearchOwedFilesSource | null,
+  queues: readonly Iterable<string>[],
+  droppedFromQueues: number
+): { pending: number; dropped: number } {
+  const queued = new Set<string>()
+  for (const queue of queues) {
+    for (const path of queue) {
+      queued.add(path)
+    }
+  }
+  const onlyQueued = [...queued].filter((path) => !store?.hasStale(path)).length
+  return {
+    pending: (store?.pendingFileCount ?? 0) + onlyQueued,
+    dropped: droppedFromQueues + (store?.droppedPendingFileCount ?? 0)
+  }
+}

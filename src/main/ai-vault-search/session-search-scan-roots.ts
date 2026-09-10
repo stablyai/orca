@@ -66,7 +66,7 @@ export function sessionSearchAgentForPath(
   let owner: { agent: AiVaultAgent; root: string } | null = null
   for (const [agent, source] of Object.entries(AI_VAULT_AGENT_SOURCES)) {
     for (const root of source?.rootDirs(roots, wslHomeDirs) ?? []) {
-      if (!underRoot(path, root) || (owner && owner.root.length >= root.length)) {
+      if (!isUnderScanRoot(path, root) || (owner && owner.root.length >= root.length)) {
         continue
       }
       owner = { agent: agent as AiVaultAgent, root }
@@ -75,7 +75,12 @@ export function sessionSearchAgentForPath(
   return owner?.agent ?? null
 }
 
-function underRoot(path: string, root: string): boolean {
+/**
+ * Containment on path segments, not on string prefix, and on both separators:
+ * discovery joins with the platform's, a configured root can arrive spelled
+ * with the other, and `/a/agents-old` is not inside `/a/agents`.
+ */
+export function isUnderScanRoot(path: string, root: string): boolean {
   return root.length > 0 && (path.startsWith(`${root}/`) || path.startsWith(`${root}\\`))
 }
 
@@ -131,9 +136,25 @@ function constituentRoots(
 function owningRoot(constituents: readonly string[], path: string): string | null {
   let owner: string | null = null
   for (const root of constituents) {
-    if (underRoot(path, root) && (owner === null || root.length > owner.length)) {
+    if (isUnderScanRoot(path, root) && (owner === null || root.length > owner.length)) {
       owner = root
     }
   }
   return owner
+}
+
+/**
+ * Roots that listed transcripts on the previous pass and list none on this one.
+ *
+ * The one bit of memory the retirement walk gets, and what it buys: a root that
+ * blinks empty for a single pass is unverifiable rather than proven gone, so a
+ * sync client swapping a directory out cannot retire a tree. It is deliberately
+ * not evidence that survives the process — see the invariant block in
+ * `session-search-deleted-sources.ts` for what that costs and why.
+ */
+export function sessionSearchEmptiedRoots(
+  previous: ReadonlySet<string>,
+  current: ReadonlySet<string>
+): Set<string> {
+  return new Set([...previous].filter((root) => !current.has(root)))
 }

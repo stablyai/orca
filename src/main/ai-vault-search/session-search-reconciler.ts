@@ -6,7 +6,14 @@ import {
 import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
 import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import {
+  mergeDegradedRoots,
+  scanIssueDegradedRoots,
+  unreadableRoots,
+  type SessionSearchDegradedRoot
+} from './session-search-degraded-roots'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
+import type { SessionSearchDirectoryReader } from './session-search-directory-listings'
 import {
   runSessionSearchIndexPass,
   type SessionSearchIndexPassResult
@@ -16,20 +23,16 @@ import type { SessionSearchIndexingStatus } from './session-search-indexing-stat
 import type { SessionSearchPendingFile } from './session-search-pending-files'
 import type { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import {
-  sessionSearchRootHealth,
-  type SessionSearchDegradedRoot,
-  type SessionSearchRootState
-} from './session-search-root-health'
-import {
   discoverSessionSearchCandidates,
   sessionSearchAgentForPath,
+  sessionSearchEmptiedRoots,
   sessionSearchRootListings,
   type SessionSearchScanRoots
 } from './session-search-scan-roots'
 import type { SessionSearchStore } from './session-search-store'
 
-// Why 512: one stat each, only for paths outside the recent window, and only
-// until the set drains after a sweep. Large enough to converge in a handful of
+// Why 512: one directory walk each, only for paths outside the recent window,
+// and only until the watch set drains. Large enough to converge in a handful of
 // cycles on a 3,600-session machine, small enough not to be the cycle's cost.
 export const DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS = 512
 
@@ -44,29 +47,23 @@ export type SessionSearchReconcileArgs = {
   pending: readonly SessionSearchPendingFile[]
   /** Paths the previous cycle watched; one missing from this one may be gone. */
   previousRecent: ReadonlySet<string>
-  /** Stats a cycle spends proving deletions; the rest stay watched. */
+  /** Directories a cycle walks proving deletions; the rest stay watched. */
   retirementChecksPerCycle?: number
-  /** What the last sweeps saw of each root; read, never written, by a cycle. */
-  previousRootStates?: ReadonlyMap<string, SessionSearchRootState>
-  /** Roots the previous pass reported as degraded. */
-  previousDegradedRoots?: readonly string[]
-  /**
-   * Whether a full sweep has ever completed. Before one has, a root with no
-   * recorded healthy count has simply never been censused, which is not the
-   * same as one that recovered.
-   */
-  afterSweep?: boolean
+  /** Real roots that listed transcripts on the previous pass; undefined before the first. */
+  previousRootsWithFiles?: ReadonlySet<string>
+  /** One readdir per directory per pass, shared with the rest of the pass. */
+  listings: SessionSearchDirectoryReader
   signal?: AbortSignal
 }
 
 export type SessionSearchReconcileResult = {
   /**
-   * Roots that list transcripts again after a pass judged them absent or
-   * degraded. A cycle only reads the newest N per agent, so on its own it would
-   * index the newest file of a remounted volume and leave the rest unreachable
-   * for the life of the process; the caller owes them a sweep.
+   * Real roots this cycle listed transcripts under. The caller compares it with
+   * the previous pass's: a root that lists transcripts again where it listed
+   * none is owed a sweep, because a cycle reads only the newest N per agent and
+   * would leave the rest of a remounted volume unreachable.
    */
-  recoveredRoots: string[]
+  rootsWithFiles: Set<string>
   /** What the next cycle watches: this cycle's recent window plus what it could not settle. */
   recentPaths: Set<string>
   /** Work drained but not read: over budget, unresolved, or cut short by an abort. */
@@ -153,34 +150,33 @@ export async function runSessionSearchReconcileCycle(
       owed.set(path, { entry: { path, candidate: null, forced: true }, fromStore: false })
     }
 
-    // Before the retirement, not after it: the cycle deletes rows too, so it
-    // needs the same fence the sweep has or one interval undoes the sweep's care.
+    // The cycle retires rows too, through the same function and the same proof
+    // rule as the sweep, because one interval is all it takes for a second rule
+    // to undo the first one's care.
     const listings = sessionSearchRootListings(args.roots, swept.discoveries)
-    const degradedRoots = (
-      await sessionSearchRootHealth({
-        listings,
-        issues,
-        holdsFiles: (root) => store.hasIndexedFilesUnder(root),
-        previous: args.previousRootStates ?? new Map(),
-        // A recent-window discovery can see a root that went to zero, but it is
-        // not a census and must never conclude one was emptied.
-        census: false,
-        signal
-      })
-    ).degraded
+    const roots = listings.map((listing) => listing.root)
+    const rootsWithFiles = new Set(
+      listings.filter((listing) => listing.files > 0).map((listing) => listing.root)
+    )
+    // Undefined, not empty, before any pass has recorded one: with an empty set
+    // the first cycle of a process reads every root as freshly recovered and
+    // buys a sweep it does not need.
+    const previousRootsWithFiles = args.previousRootsWithFiles
     const retirement = completed
-      ? await retireDeletedSessionSearchSources(
+      ? await retireDeletedSessionSearchSources({
           store,
-          [...new Set([...args.previousRecent, ...queued.unstattable])].filter(
+          paths: [...new Set([...args.previousRecent, ...queued.unstattable])].filter(
             (path) => !recentPaths.has(path)
           ),
-          {
-            signal,
-            limit: args.retirementChecksPerCycle ?? DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS,
-            degradedRoots
-          }
-        )
-      : { retired: [], unverifiable: [], unchecked: [] }
+          roots,
+          emptiedRoots: previousRootsWithFiles
+            ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
+            : new Set(),
+          listings: args.listings,
+          limit: args.retirementChecksPerCycle ?? DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS,
+          signal
+        })
+      : { retired: [], unverifiable: [], unchecked: [], degradedRoots: [] }
     for (const path of retirement.retired) {
       owed.delete(path)
     }
@@ -202,20 +198,27 @@ export async function runSessionSearchReconcileCycle(
         message: refusal.message
       })
     }
-    const wasDegraded = new Set(args.previousDegradedRoots ?? [])
+    // Roots that listed no transcripts and cannot be listed either: the walker
+    // swallows a readdir failure, so this is the only place it surfaces.
+    const unlistable = await unreadableRoots(
+      roots.filter((root) => !rootsWithFiles.has(root)),
+      args.listings,
+      signal
+    )
+    const degradedRoots = mergeDegradedRoots(
+      scanIssueDegradedRoots(roots, issues),
+      retirement.degradedRoots,
+      unlistable
+    )
+    if (completed) {
+      status.setDegradedRoots(degradedRoots)
+    }
+
     return {
-      recoveredRoots: listings
-        .filter(
-          (listing) =>
-            listing.files > 0 &&
-            (wasDegraded.has(listing.root) ||
-              (args.afterSweep === true &&
-                (args.previousRootStates?.get(listing.root)?.lastHealthyCount ?? 0) === 0))
-        )
-        .map((listing) => listing.root),
+      rootsWithFiles,
       // An unreadable source is not a deleted one, and a path the cap did not
       // reach was never checked at all: both stay watched instead of being
-      // retired or forgotten.
+      // retired or forgotten. A path proven present is settled and drops out.
       recentPaths: new Set([...recentPaths, ...retirement.unverifiable, ...retirement.unchecked]),
       deferred,
       degradedRoots,

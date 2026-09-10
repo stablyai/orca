@@ -1,77 +1,191 @@
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { basename, dirname } from 'node:path'
 import { splitOpenCodeSqliteCandidate } from '../ai-vault/session-scanner-opencode-sqlite-paths'
-import { underDegradedRoot, type SessionSearchDegradedRoot } from './session-search-root-health'
+import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
+import type { SessionSearchDirectoryReader } from './session-search-directory-listings'
+import { isUnderScanRoot } from './session-search-scan-roots'
 import type { SessionSearchStore } from './session-search-store'
+
+/*
+ * Retirement invariants. Every one of these is a test; changing this file means
+ * changing the list, not working around it.
+ *
+ * I1. A row is retired only when its file is PROVEN gone: some directory
+ *     between the file and its configured root lists successfully, and the next
+ *     path component toward the file is absent from that listing.
+ * I2. If no directory from the file's parent up to the configured root can be
+ *     listed, nothing is proven and no row is dropped. ENOENT/ENOTDIR is walked
+ *     up (the directory itself is a missing component of some ancestor);
+ *     EACCES, EIO, a WSL gate refusal, anything else, is unverifiable at once.
+ * I3. The rule is the same on the first pass after a process start and on every
+ *     later pass. It needs no memory of what previous passes saw, because the
+ *     walk is bounded at the configured root and never reasons about what is
+ *     above it.
+ * I4. A file, or a project directory, the user really deleted retires on the
+ *     first pass that proves it. There is no waiting period and no census.
+ *
+ * What I3 costs, stated rather than hidden: a volume mounted at exactly a
+ * configured root, unmounted so that the mountpoint stays present and lists
+ * empty, is indistinguishable from a root the user emptied. It retires. The
+ * realistic unmount shapes do not: a mount above the root leaves the root
+ * itself missing (the walk stops at the root boundary), and an unreadable root
+ * is an error, not a listing. One bit per root buys the remaining grace: a root
+ * that held transcripts on the previous pass and holds none on this one is
+ * unverifiable for that pass, so a single flap cannot retire a tree.
+ */
+
+// Walked up rather than believed: a directory that ENOENTs is itself the
+// missing component its parent has to be asked about.
+const MISSING_DIRECTORY = new Set(['ENOENT', 'ENOTDIR'])
 
 export type SessionSearchRetirement = {
   /** Paths proven gone and dropped from the index. */
   retired: string[]
-  /** Paths that could not be statted; their rows stay, and they stay watched. */
+  /** Rows kept: this pass could prove the file neither present nor gone. */
   unverifiable: string[]
-  /** Paths the per-cycle cap left for next time. */
+  /** Paths the per-pass cap left for next time. */
   unchecked: string[]
+  /** Roots owning at least one unverifiable verdict, with the reason. */
+  degradedRoots: SessionSearchDegradedRoot[]
 }
 
-// Why only ENOENT retires a source: docs/reference/ssh-execution-boundary.md —
-// loss of contact is never evidence of absence. An EACCES, an EIO or a stalled
-// WSL distro leaves the rows exactly where they are, because the alternative is
-// erasing a user's searchable history the first time a mount hiccups.
-const PROVEN_GONE = new Set(['ENOENT', 'ENOTDIR'])
+export type SessionSearchRetirementArgs = {
+  store: SessionSearchStore
+  /** Held paths this pass did not discover; everything else is still there. */
+  paths: readonly string[]
+  /** The real directories this pass walked; the longest one containing a path bounds its walk. */
+  roots: readonly string[]
+  /** Roots that listed transcripts on the previous pass and none on this one. */
+  emptiedRoots?: ReadonlySet<string>
+  /** One readdir per directory per pass, shared with the rest of the pass. */
+  listings: SessionSearchDirectoryReader
+  /** Directories walked before the pass moves on; the rest stay watched. */
+  limit?: number
+  signal?: AbortSignal
+}
+
+type SessionSearchSourceVerdict =
+  | { verdict: 'gone' }
+  | { verdict: 'present' }
+  | { verdict: 'unverifiable'; reason: string }
 
 /**
- * Retires index rows for sources that are provably gone. Callers pass the paths
- * the index holds but did not discover; everything else is either still there
- * or was never in the discovery window in the first place.
+ * Retires index rows for sources that are provably gone.
  *
- * The degraded-root fence lives here, not at the call sites, because both the
- * sweep and the cycle retire and either one alone would delete a user's history
- * the first time an SSH mount or an external drive is not there: every path
- * under it answers ENOENT at once. A file under a root this pass could not
- * trust is `unverifiable`, whatever the filesystem says
- * (docs/reference/ssh-execution-boundary.md).
+ * One function, called by both the sweep and the cycle, because either one
+ * alone deleting a user's history the first time a mount is missing is the bug
+ * this feature kept shipping. There is no separate root fence: the walk cannot
+ * reach a verdict of `gone` without a successful listing, so an unreadable or
+ * missing root produces `unverifiable` structurally rather than by a guard
+ * somebody has to remember to call (docs/reference/ssh-execution-boundary.md:
+ * loss of contact is never evidence of absence).
  */
 export async function retireDeletedSessionSearchSources(
-  store: SessionSearchStore,
-  paths: readonly string[],
-  options: {
-    signal?: AbortSignal
-    limit?: number
-    degradedRoots?: readonly SessionSearchDegradedRoot[]
-  } = {}
+  args: SessionSearchRetirementArgs
 ): Promise<SessionSearchRetirement> {
-  const { signal } = options
-  const degradedRoots = options.degradedRoots ?? []
-  const retirement: SessionSearchRetirement = { retired: [], unverifiable: [], unchecked: [] }
-  const limit = options.limit ?? Number.POSITIVE_INFINITY
+  const { store, paths, signal } = args
+  const emptiedRoots = args.emptiedRoots ?? new Set<string>()
+  const limit = args.limit ?? Number.POSITIVE_INFINITY
+  const retirement: SessionSearchRetirement = {
+    retired: [],
+    unverifiable: [],
+    unchecked: [],
+    degradedRoots: []
+  }
+  const degraded = new Map<string, string>()
   for (const [index, path] of paths.entries()) {
-    // Why capped: the sweep hands over every path it discovered, and one stat
-    // per transcript on a 3,600-session machine is not a cycle's worth of work.
-    // What is left keeps being watched, so the check finishes over a few cycles.
+    // Why capped: the sweep hands over every path it holds and did not
+    // discover, and under an unmount that is the whole index. What is left
+    // keeps being watched, so the check finishes over the next few passes.
     if (signal?.aborted || index >= limit) {
       retirement.unchecked.push(...paths.slice(index))
       break
     }
-    if (underDegradedRoot(path, degradedRoots)) {
-      retirement.unverifiable.push(path)
+    // A synthetic OpenCode row names the database it came from, never a file of
+    // its own; walking the candidate path would report every one of them gone.
+    const filePath = splitOpenCodeSqliteCandidate(path)?.dbPath ?? path
+    const root = configuredRootFor(filePath, args.roots)
+    const proof = await proveSource(filePath, root ?? dirname(filePath), {
+      listings: args.listings,
+      emptiedRoots,
+      signal
+    })
+    if (proof.verdict === 'gone') {
+      store.removeFile(path)
+      retirement.retired.push(path)
       continue
     }
-    // A synthetic OpenCode row names the database it came from, never a file of
-    // its own; statting the candidate path would report every one of them gone.
-    const statPath = splitOpenCodeSqliteCandidate(path)?.dbPath ?? path
-    try {
-      await wslGatedStat(statPath, 'scan', signal)
-    } catch (error) {
-      const code =
-        error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
-          ? error.code
-          : null
-      if (code !== null && PROVEN_GONE.has(code)) {
-        store.removeFile(path)
-        retirement.retired.push(path)
-        continue
-      }
-      retirement.unverifiable.push(path)
+    if (proof.verdict === 'present') {
+      continue
+    }
+    retirement.unverifiable.push(path)
+    // Only a configured root is an alarm worth raising: a row under no root
+    // this scan walks is already reported on its own, as an orphan.
+    if (root !== null && !degraded.has(root)) {
+      degraded.set(root, proof.reason)
     }
   }
+  retirement.degradedRoots = [...degraded].map(([root, reason]) => ({ root, reason }))
   return retirement
+}
+
+/**
+ * Walks from the file toward its configured root, asking each directory whether
+ * the next component toward the file is there. The first directory that answers
+ * decides; a directory that is itself missing moves the question up one level.
+ *
+ * The loop cannot pass the configured root, which is what makes the whole thing
+ * memoryless: everything above the root — a home directory on an unmounted
+ * volume, a detached drive, an SSH mount that is not there — is out of scope by
+ * construction rather than by a state machine that has to remember it.
+ */
+async function proveSource(
+  path: string,
+  root: string,
+  context: {
+    listings: SessionSearchDirectoryReader
+    emptiedRoots: ReadonlySet<string>
+    signal?: AbortSignal
+  }
+): Promise<SessionSearchSourceVerdict> {
+  let directory = dirname(path)
+  let child = basename(path)
+  while (directory === root || isUnderScanRoot(directory, root)) {
+    const listing = await context.listings.namesIn(directory, context.signal)
+    if (!listing.listed) {
+      if (listing.code !== null && MISSING_DIRECTORY.has(listing.code)) {
+        const parent = dirname(directory)
+        if (parent === directory) {
+          break
+        }
+        child = basename(directory)
+        directory = parent
+        continue
+      }
+      return { verdict: 'unverifiable', reason: listing.message }
+    }
+    if (listing.names.has(child)) {
+      return { verdict: 'present' }
+    }
+    if (directory === root && context.emptiedRoots.has(root)) {
+      // One pass of grace, so a root that blinks empty for a moment — a sync
+      // client mid-swap, a mount that has not settled — cannot retire a tree.
+      return {
+        verdict: 'unverifiable',
+        reason: 'Listed no transcripts where it listed some on the previous pass.'
+      }
+    }
+    return { verdict: 'gone' }
+  }
+  return { verdict: 'unverifiable', reason: `${root} could not be listed.` }
+}
+
+/** Longest configured root containing the path, or null for a row under none. */
+function configuredRootFor(path: string, roots: readonly string[]): string | null {
+  let owner: string | null = null
+  for (const root of roots) {
+    if (isUnderScanRoot(path, root) && (owner === null || root.length > owner.length)) {
+      owner = root
+    }
+  }
+  return owner
 }

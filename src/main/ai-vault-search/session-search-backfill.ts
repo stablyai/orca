@@ -5,23 +5,29 @@ import {
   withCursorChatMetaScan
 } from '../ai-vault/session-scanner-cursor-chat-meta'
 import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
-import { sessionSearchDiscoveredCounts } from './session-search-discovered-counts'
+import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import {
+  mergeDegradedRoots,
+  scanIssueDegradedRoots,
+  unreadableRoots,
+  type SessionSearchDegradedRoot
+} from './session-search-degraded-roots'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
+import type { SessionSearchDirectoryReader } from './session-search-directory-listings'
+import { sessionSearchDiscoveredCounts } from './session-search-discovered-counts'
 import { runSessionSearchIndexPass } from './session-search-index-pass'
 import type { SessionSearchIndexingStatus } from './session-search-indexing-status'
-import {
-  sessionSearchRootHealth,
-  type SessionSearchDegradedRoot,
-  type SessionSearchRootState
-} from './session-search-root-health'
+import type { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import {
   discoverSessionSearchCandidates,
+  isUnderScanRoot,
+  sessionSearchEmptiedRoots,
   sessionSearchRootListings,
   type SessionSearchScanRoots
 } from './session-search-scan-roots'
 import type { SessionSearchStore } from './session-search-store'
 
-// One stat each, for paths the sweep did not discover. Normally near zero; the
+// One walk each, for paths the sweep did not discover. Normally near zero; the
 // cap is there for the case that is not normal, an unmounted tree, where the
 // list is the whole index and every entry is a candidate for deletion.
 const RETIREMENT_CHECKS_PER_SWEEP = 512
@@ -32,8 +38,11 @@ export type SessionSearchBackfillArgs = {
   status: SessionSearchIndexingStatus
   /** Oldest transcript mtime worth indexing, or null for all history. */
   cutoffMs: number | null
-  /** What the last sweeps saw of each root, so a tree that went empty is visible. */
-  previousRootStates?: ReadonlyMap<string, SessionSearchRootState>
+  /** Real roots that listed transcripts on the previous pass; undefined before the first. */
+  previousRootsWithFiles?: ReadonlySet<string>
+  /** This pass's reading allowance; what does not fit comes back as `deferred`. */
+  allowance?: SessionSearchCycleAllowance
+  listings: SessionSearchDirectoryReader
   pace?: (signal?: AbortSignal) => Promise<void>
   signal?: AbortSignal
 }
@@ -44,10 +53,13 @@ export type SessionSearchBackfillResult = {
    * still exist on disk. Kept and reported rather than deleted.
    */
   orphanedFiles: number
-  /** Paths to watch for disappearance, plus whatever this sweep could not settle. */
+  /** What the next pass watches: only what this one could not settle. */
   watchPaths: Set<string>
-  rootStates: Map<string, SessionSearchRootState>
+  /** Real roots this sweep listed transcripts under, for the next pass to compare against. */
+  rootsWithFiles: Set<string>
   degradedRoots: SessionSearchDegradedRoot[]
+  /** Discovered candidates the allowance had no room for, newest first. */
+  deferred: SessionFileCandidate[]
   /** False when the sweep was aborted; it stays due until one finishes. */
   completed: boolean
 }
@@ -58,12 +70,19 @@ export type SessionSearchBackfillResult = {
  * first. Progress lives in the index's own `files` table rather than in memory,
  * so an interrupted sweep resumes here instead of starting over: the pass skips
  * anything the index already covers at its current stat.
+ *
+ * The reading is budgeted like a cycle's. A first run has a whole disk to get
+ * through and the process it runs in also serves a UI, so the sweep spends one
+ * allowance and hands the rest back; the caller keeps feeding it an allowance
+ * per pass until it drains. Discovery, health and retirement all complete on
+ * this pass either way — they are what the sweep is uniquely for.
  */
 export async function runSessionSearchBackfill(
   args: SessionSearchBackfillArgs
 ): Promise<SessionSearchBackfillResult> {
   const { store, status, signal } = args
   status.beginSweep()
+  args.allowance?.reset()
   await store.purgeOlderThan(args.cutoffMs, signal)
   await ensureSessionParseCacheLoaded()
   return withCursorChatMetaScan(async () => {
@@ -77,13 +96,16 @@ export async function runSessionSearchBackfill(
     status.planned(eligible.length, issues.length)
 
     let completed = true
+    let deferred: SessionFileCandidate[] = []
     try {
-      await runSessionSearchIndexPass(store, eligible, {
+      const pass = await runSessionSearchIndexPass(store, eligible, {
         signal,
         pace: args.pace,
+        allowance: args.allowance,
         onIndexed: (_candidate, bytes) => status.indexed(bytes),
         onFailed: () => status.failed()
       })
+      deferred = pass.deferred
     } catch (error) {
       if (!signal?.aborted) {
         throw error
@@ -100,64 +122,76 @@ export async function runSessionSearchBackfill(
       })
     }
     const listings = sessionSearchRootListings(args.roots, swept.discoveries)
-    const previousStates = args.previousRootStates ?? new Map()
-    // An aborted sweep saw part of the machine. It does not probe, it does not
-    // judge, and it does not carry an observation into the tally that decides a
-    // root was emptied: two interrupted passes must not add up to a conclusion
-    // no completed pass ever reached.
-    const health = completed
-      ? await sessionSearchRootHealth({
-          listings,
-          issues,
-          holdsFiles: (root) => store.hasIndexedFilesUnder(root),
-          previous: previousStates,
-          // A sweep walks every root without a limit, so it is the observation
-          // allowed to conclude that a root really was emptied.
-          census: true,
-          signal
-        })
-      : { degraded: [], states: new Map(previousStates) }
-    const degradedRoots = health.degraded
+    const roots = listings.map((listing) => listing.root)
+    const rootsWithFiles = new Set(
+      listings.filter((listing) => listing.files > 0).map((listing) => listing.root)
+    )
+    // Undefined, not empty, before any pass has recorded one: an empty set is
+    // a real observation and this is the absence of one.
+    const previousRootsWithFiles = args.previousRootsWithFiles
     const discoveredPaths = new Set(swept.candidates.map((candidate) => candidate.file.path))
     const held = completed ? store.indexedSources().map((source) => source.path) : []
     const undiscovered = held.filter((path) => !discoveredPaths.has(path))
+    // A path this scan walks no root for: the profile moved, a root was
+    // reconfigured, or an agent's store relocated between releases. It retires
+    // exactly like any other row if its own directory lists without it, and
+    // otherwise the rows stay and the count is reported, because an index
+    // holding content the configuration cannot reach is a problem to surface
+    // rather than a licence to delete a user's history. Nothing refreshes those
+    // rows, so `orphanedFiles` is the only honest signal that they are there.
     const orphans = new Set(
-      undiscovered.filter((path) => !listings.some((listing) => underRoot(path, listing.root)))
+      undiscovered.filter((path) => !roots.some((root) => isUnderScanRoot(path, root)))
     )
+    // An aborted sweep saw part of the machine, so its silence about a path is
+    // not evidence; it retires nothing and publishes no verdicts.
     const retirement = completed
-      ? await retireDeletedSessionSearchSources(store, undiscovered, {
-          signal,
+      ? await retireDeletedSessionSearchSources({
+          store,
+          paths: undiscovered,
+          roots,
+          emptiedRoots: previousRootsWithFiles
+            ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
+            : new Set(),
+          listings: args.listings,
           limit: RETIREMENT_CHECKS_PER_SWEEP,
-          degradedRoots
+          signal
         })
-      : { retired: [], unverifiable: [], unchecked: [] }
+      : { retired: [], unverifiable: [], unchecked: [], degradedRoots: [] }
+
+    // Roots that listed no transcripts and cannot be listed either: the walker
+    // swallows a readdir failure, so this is the only place it surfaces.
+    const unlistable = completed
+      ? await unreadableRoots(
+          roots.filter((root) => !rootsWithFiles.has(root)),
+          args.listings,
+          signal
+        )
+      : []
+
+    const degradedRoots = mergeDegradedRoots(
+      scanIssueDegradedRoots(roots, issues),
+      retirement.degradedRoots,
+      unlistable
+    )
+    const orphanedFiles = [...orphans].filter((path) => !retirement.retired.includes(path)).length
+    if (completed) {
+      // Only a sweep that finished publishes: an aborted one saw part of the
+      // machine, and its empty findings would clear a live alarm.
+      status.setDegradedRoots(degradedRoots)
+      status.setOrphanedFiles(orphanedFiles)
+    }
 
     return {
-      orphanedFiles: [...orphans].filter((path) => !retirement.retired.includes(path)).length,
-      watchPaths: new Set([
-        ...discoveredPaths,
-        ...retirement.unverifiable,
-        ...retirement.unchecked
-      ]),
-      rootStates: health.states,
+      orphanedFiles,
+      // Only what this pass could not settle. Watching every discovered path
+      // would make the next cycle re-walk the whole machine to learn nothing:
+      // an old file deleted between two sweeps is the next sweep's to find,
+      // which is the same promise the recency window already makes.
+      watchPaths: new Set([...retirement.unverifiable, ...retirement.unchecked]),
+      rootsWithFiles,
       degradedRoots,
+      deferred,
       completed
     }
   })
-}
-
-/**
- * A path this scan walks no root for: the profile moved, a root was
- * reconfigured, or an agent's store relocated between releases.
- *
- * The rule, one rule, and why it is not "delete it": such a file is retired
- * exactly like any other if its path answers ENOENT, because that is proof.
- * If it is still on disk, the rows stay and the count is reported, because the
- * index holding content the current configuration cannot reach is a
- * configuration problem to surface, not a licence to delete a user's
- * searchable history. Nothing refreshes those rows, so `orphanedFiles` is the
- * only honest signal that they are there.
- */
-function underRoot(path: string, root: string): boolean {
-  return root.length > 0 && (path.startsWith(`${root}/`) || path.startsWith(`${root}\\`))
 }

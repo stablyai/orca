@@ -13,7 +13,9 @@ it('stops a cycle at the file bound and again at the byte bound', () => {
   const bytes = new SessionSearchCycleAllowance({ files: 10, bytes: 100 })
   expect(bytes.spend(60)).toBe(true)
   expect(bytes.spend(60)).toBe(false)
-  expect(bytes.remaining).toEqual({ files: 9, bytes: 40 })
+  // 40 bytes of the hundred are left, and they are still spendable.
+  expect(bytes.spend(40)).toBe(true)
+  expect(bytes.spend(1)).toBe(false)
 })
 
 it('lets one oversized transcript through rather than never reading it', () => {
@@ -31,5 +33,10 @@ it('does not let an idle stretch buy one unbounded cycle', () => {
   const allowance = new SessionSearchCycleAllowance({ files: 2, bytes: 100 })
   allowance.reset()
   allowance.reset()
-  expect(allowance.remaining).toEqual({ files: 2, bytes: 100 })
+  // Two idle resets buy one cycle's worth, not two.
+  expect([allowance.spend(50), allowance.spend(50), allowance.spend(1)]).toEqual([
+    true,
+    true,
+    false
+  ])
 })

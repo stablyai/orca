@@ -225,35 +225,6 @@ export class SessionSearchStore {
     return this.stale.has(path)
   }
 
-  /**
-   * Whether the index holds any file under this directory.
-   *
-   * The evidence that a root once held transcripts has to outlive the process
-   * that saw them: carried in memory, it is empty on the first sweep after
-   * every restart, which is exactly when a detached volume looks like an agent
-   * that was never installed. A range scan on the path primary key, so it stays
-   * an index seek rather than a table walk.
-   */
-  hasIndexedFilesUnder(root: string): boolean {
-    if (root.length === 0) {
-      return false
-    }
-    try {
-      // Both separators: a root can arrive spelled with either one.
-      return (
-        this.db
-          .prepare(
-            `SELECT 1 FROM files
-             WHERE (path > ?1 AND path < ?2) OR (path > ?3 AND path < ?4) LIMIT 1`
-          )
-          .get(`${root}/`, `${root}/\uffff`, `${root}\\`, `${root}\\\uffff`) !== undefined
-      )
-    } catch (error) {
-      this.onError(error)
-      return false
-    }
-  }
-
   /** Files the index currently holds, for a status that reports what is there. */
   get indexedFileCount(): number {
     try {

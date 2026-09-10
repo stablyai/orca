@@ -15,6 +15,23 @@ export const DEFAULT_SESSION_SEARCH_BUDGET: SessionSearchBudget = {
 }
 
 /**
+ * The backfill's own allowance, spent once per pass on the sweep's leftovers.
+ *
+ * Why it is not the cycle's: the cycle budget is a steady-state trickle sized
+ * so a reconcile never competes with the user, and a first run has a whole
+ * machine to read. At 8 MB per 20 s, the 20 GB of transcripts on the author's
+ * machine would take about 14 hours to reach the index. At 128 MB it takes
+ * about 53 minutes, which is roughly five seconds of reading in every twenty on
+ * the measured 26 MB/s — heavy enough to finish, and still four fifths of every
+ * interval left for everything else. The pacer's load back-off applies on top,
+ * so a busy host stretches this out rather than fighting for the CPU.
+ */
+export const DEFAULT_SESSION_SEARCH_BACKFILL_BUDGET: SessionSearchBudget = {
+  files: 512,
+  bytes: 128 * 1024 * 1024
+}
+
+/**
  * One cycle's allowance. Work that does not fit is not dropped: the reconciler
  * keeps it queued and the next cycle opens a fresh allowance, so a burst is
  * paced out over cycles rather than either stalling the process or being lost.
@@ -55,9 +72,5 @@ export class SessionSearchCycleAllowance {
     this.bytes = Math.max(0, this.bytes - cost)
     this.spentAnything = true
     return true
-  }
-
-  get remaining(): SessionSearchBudget {
-    return { files: this.files, bytes: this.bytes }
   }
 }

@@ -1,6 +1,6 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { SessionSearchDiscoveredCount } from './session-search-discovered-counts'
-import type { SessionSearchDegradedRoot } from './session-search-root-health'
+import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
 
 /**
  * `current` is the honest ceiling: the reconciler promises the newest N per
@@ -65,7 +65,11 @@ export class SessionSearchIndexingStatus {
     return {
       phase: this.phase(),
       filesIndexed: this.filesIndexed,
-      filesTotal: this.filesTotal,
+      // Never below what the index already holds: the sweep's plan counts the
+      // transcripts on disk, and the store also holds rows a plan does not
+      // cover — orphans, and files retired later in the same pass — so the
+      // unclamped pair reports progress above 100 percent.
+      filesTotal: this.filesTotal === null ? null : Math.max(this.filesTotal, this.filesIndexed),
       bytesIndexed: this.bytesIndexed,
       filesPending: this.filesPending,
       droppedPending: this.droppedPending,
@@ -115,6 +119,11 @@ export class SessionSearchIndexingStatus {
     this.sweptClean ||= completed
   }
 
+  /** After `clear()`: the index is empty again, so no sweep has covered it. */
+  forgetSweep(): void {
+    this.sweptClean = false
+  }
+
   /** Files the index holds, counted in the store rather than tallied per attempt. */
   setFilesIndexed(files: number): void {
     this.filesIndexed = files
@@ -138,6 +147,9 @@ export class SessionSearchIndexingStatus {
 
   beginCycle(): void {
     this.working ??= 'indexing'
+    // A cycle reads the recency window, not a population; carrying the last
+    // sweep's total through it would report a ratio against the wrong thing.
+    this.filesTotal = null
   }
 
   setDiscovered(counts: Map<AiVaultAgent, SessionSearchDiscoveredCount>): void {

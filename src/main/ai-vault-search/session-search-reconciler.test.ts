@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import { SessionSearchDirectoryListings } from './session-search-directory-listings'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import {
   openSessionSearchIndexerHarness,
@@ -74,6 +75,7 @@ it('hands the store back its own overflow when a cycle is aborted', async () => 
     allowance: new SessionSearchCycleAllowance({ files: 10_000, bytes: 1_000_000_000 }),
     pending: [],
     previousRecent: new Set(),
+    listings: new SessionSearchDirectoryListings(),
     signal: controller.signal
   })
 

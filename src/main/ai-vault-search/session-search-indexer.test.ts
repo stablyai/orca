@@ -591,11 +591,48 @@ it('keeps a root that is gone at the first sweep after a restart', async () => {
   expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
 })
 
-// Round 5, item 1: an unmount on Linux, WSL or sshfs leaves the mountpoint
-// present and empty rather than missing, so it takes the listable-but-empty
-// branch. Armed from memory, that branch had no grace on the first sweep of a
-// process, and the whole root retired on it.
-it('keeps a root that is present but empty at the first sweep after a restart', async () => {
+// Round 7: what the stateless walk costs, stated rather than hidden. A volume
+// mounted at EXACTLY a configured root, unmounted so the mountpoint stays
+// present and lists empty, is indistinguishable from a root the user emptied:
+// there is no directory left whose absence could stop the walk. Inside one
+// process the transition buys a pass of grace; across a restart there is no
+// transition to see and the rows retire. The unmounts that actually happen are
+// above the root, and the next test is the one that covers them.
+it('retires an emptied configured root, one pass after it emptied', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['a session on the mounted volume'], SESSION_ID)
+  await newIndexer().start()
+
+  // The transcripts go; the root itself stays there and stays readable.
+  await rm(harness.claudeProjectDir, { recursive: true, force: true })
+  await indexer?.reconcile({ full: true })
+  expect(sessionsMatching('mounted')).toEqual([SESSION_ID])
+  expect(indexer?.status().phase).toBe('degraded')
+
+  await indexer?.reconcile({ full: true })
+  expect(sessionsMatching('mounted')).toEqual([])
+  expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
+})
+
+// The same root, with no previous pass to compare against: nothing carries the
+// transition across a restart, and the empty listing is proof on its own.
+it('retires an emptied configured root at once on the first pass of a process', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['a session on the mounted volume'], SESSION_ID)
+  await newIndexer().start()
+  expect(sessionsMatching('mounted')).toEqual([SESSION_ID])
+  indexer?.close()
+  resetTranscriptConsumersForTests()
+  resetSessionParseCacheForTests()
+
+  await rm(harness.claudeProjectDir, { recursive: true, force: true })
+  await newIndexer().start()
+  expect(sessionsMatching('mounted')).toEqual([])
+})
+
+// The shape a real unmount takes: on Linux, WSL and sshfs the mountpoint is
+// above the agent's root, so the root itself is missing. The walk stops at the
+// root boundary and never asks the empty parent anything, which is what makes
+// this hold with no memory on the first pass of a process.
+it('proves nothing from an empty directory above the configured root', async () => {
   for (let index = 0; index < 3; index++) {
     const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     await writeClaudeTranscript(transcriptPath(session), [`mounted session ${index}`], session)
@@ -606,9 +643,9 @@ it('keeps a root that is present but empty at the first sweep after a restart', 
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
 
-  // The mountpoint is still there when the process comes back; the volume is not.
+  // The volume that carried the agent's root is gone; what it was mounted
+  // under is still there, still listable, and empty of it.
   await rm(harness.roots.claudeProjectsDir ?? '', { recursive: true, force: true })
-  await mkdir(harness.roots.claudeProjectsDir ?? '', { recursive: true })
   await newIndexer().start()
 
   const status = indexer?.status()
@@ -664,20 +701,22 @@ it('reports rows under no configured root, and retires them only when gone', asy
   expect(sessionsMatching('profile')).toEqual([])
 })
 
-// Round 4, item 4: only a full sweep may conclude a root was emptied.
-it('does not let cycles conclude that a root was emptied', async () => {
+// Round 7 replaced "only a census may conclude" with "whoever can prove it".
+// A cycle walks the same directories and reaches the same verdict, so a project
+// directory the user deleted does not wait for the next sweep.
+it('lets a cycle retire a project directory the user deleted', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session about to vanish'], SESSION_ID)
   await newIndexer().start()
 
   await rm(harness.claudeProjectDir, { recursive: true, force: true })
+  // The pass that sees the root go from holding transcripts to holding none
+  // gives it one pass of grace, whether it is a sweep or a cycle.
   await indexer?.reconcile({ full: true })
   expect(sessionsMatching('vanish')).toEqual([SESSION_ID])
 
-  // Two cycles see the same empty root and must not add up to a sweep.
   await nextCycle()
-  await nextCycle()
-  expect(sessionsMatching('vanish')).toEqual([SESSION_ID])
-  expect(indexer?.status().phase).toBe('degraded')
+  expect(sessionsMatching('vanish')).toEqual([])
+  expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
 })
 
 // Finding 8: a path sits in both queues the moment a read is declined during a
