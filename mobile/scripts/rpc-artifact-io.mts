@@ -39,9 +39,9 @@ export async function emit(name: string, value: unknown): Promise<void> {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
   // Committed artifacts are checked by `format:check`; format here so regeneration cannot leave CI red.
   const formatted = await runProcess({
-    program: resolve(root, 'node_modules/.bin/oxfmt'),
-    args: ['--write', path],
-    cwd: root
+    program: 'pnpm',
+    args: ['exec', 'oxfmt', '--write', path],
+    cwd: resolve(root, 'mobile')
   })
   if (formatted.code !== 0) {
     throw new Error(`oxfmt --write ${path}: ${formatted.stderr}`)

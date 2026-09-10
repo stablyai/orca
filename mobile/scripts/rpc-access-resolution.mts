@@ -1,9 +1,25 @@
 import ts from 'typescript'
-export type RpcAccessKind = 'request' | 'subscribe'
+export type RpcAccessKind = 'request' | 'subscribe' | 'unsubscribe'
+export function unsubscribeFrameMethod(node: ts.Node): string | undefined {
+  if (
+    ts.isPropertyAssignment(node) &&
+    node.name.getText().replace(/['"]/g, '') === 'method' &&
+    ts.isStringLiteralLike(node.initializer) &&
+    node.initializer.text.endsWith('.unsubscribe')
+  ) {
+    return node.initializer.text
+  }
+}
 export function createRpcAccessResolver(program: ts.Program, paths: string[]) {
   const checker = program.getTypeChecker()
   function entryKind(name: string | undefined): RpcAccessKind | undefined {
-    return name === 'sendRequest' ? 'request' : name === 'subscribe' ? 'subscribe' : undefined
+    return name === 'sendRequest'
+      ? 'request'
+      : name === 'subscribe'
+        ? 'subscribe'
+        : name === 'sendUnsubscribe'
+          ? 'unsubscribe'
+          : undefined
   }
   function resolveKind(node: ts.Node, seen = new Set<ts.Node>()): RpcAccessKind | undefined {
     if (seen.has(node)) {
@@ -55,6 +71,7 @@ export function createRpcAccessResolver(program: ts.Program, paths: string[]) {
     }
   }
   const calls: ts.CallExpression[] = []
+  const references = new Map<ts.Symbol, ts.Identifier[]>()
   /** Symbol of the binding a function value is stored in, mapped to every function-type alias it
    *  is contextually assigned to. A call through such an alias resolves to the alias signature,
    *  not to the function, so without this the caller set is silently partial. */
@@ -72,6 +89,19 @@ export function createRpcAccessResolver(program: ts.Program, paths: string[]) {
     const walk = (node: ts.Node): void => {
       if (ts.isCallExpression(node)) {
         calls.push(node)
+      }
+      if (ts.isIdentifier(node)) {
+        let symbol = ts.isShorthandPropertyAssignment(node.parent)
+          ? checker.getShorthandAssignmentValueSymbol(node.parent)
+          : checker.getSymbolAtLocation(node)
+        if (symbol && symbol.flags & ts.SymbolFlags.Alias) {
+          symbol = checker.getAliasedSymbol(symbol)
+        }
+        if (symbol) {
+          const uses = references.get(symbol) ?? []
+          uses.push(node)
+          references.set(symbol, uses)
+        }
       }
       if (ts.isShorthandPropertyAssignment(node)) {
         // The symbol at a shorthand name is the object's property, not the value it carries.
@@ -105,18 +135,50 @@ export function createRpcAccessResolver(program: ts.Program, paths: string[]) {
       ? checker.getSymbolAtLocation(owner.name)
       : undefined
   }
-  function callers(owner: ts.SignatureDeclaration): ts.CallExpression[] {
-    const direct = calls.filter((call) => checker.getResolvedSignature(call)?.declaration === owner)
-    const binding = ownerBinding(owner)
-    const aliases = binding && aliasCarriers.get(binding)
-    if (!aliases?.size) {
-      return direct
+  function escapes(
+    binding: ts.Symbol,
+    enumerated: Set<ts.CallExpression>,
+    seen = new Set<ts.Symbol>()
+  ): boolean {
+    if (seen.has(binding)) {
+      return false
     }
+    seen.add(binding)
+    return (references.get(binding) ?? []).some((use) => {
+      const parent = use.parent
+      if (
+        (ts.isVariableDeclaration(parent) || ts.isFunctionDeclaration(parent)) &&
+        parent.name === use
+      ) {
+        return false
+      }
+      if (ts.isImportSpecifier(parent)) {
+        return false
+      }
+      if (ts.isCallExpression(parent) && parent.expression === use) {
+        return !enumerated.has(parent)
+      }
+      if (ts.isVariableDeclaration(parent) && parent.initializer === use) {
+        const alias = checker.getSymbolAtLocation(parent.name)
+        return !alias || escapes(alias, enumerated, seen)
+      }
+      // Only direct calls and fully enumerated local aliases prove a complete caller set.
+      return true
+    })
+  }
+  function callers(owner: ts.SignatureDeclaration): ts.CallExpression[] {
+    const binding = ownerBinding(owner)
+    if (!binding) {
+      return []
+    }
+    const direct = calls.filter((call) => checker.getResolvedSignature(call)?.declaration === owner)
+    const aliases = binding && aliasCarriers.get(binding)
     const aliased = calls.filter((call) => {
       const declaration = checker.getResolvedSignature(call)?.declaration
-      return Boolean(declaration?.parent && aliases.has(declaration.parent))
+      return Boolean(declaration?.parent && aliases?.has(declaration.parent))
     })
-    return [...direct, ...aliased.filter((call) => !direct.includes(call))]
+    const enumerated = new Set([...direct, ...aliased])
+    return escapes(binding, enumerated) ? [] : [...enumerated]
   }
   function methods(node: ts.Expression | undefined, seen = new Set<ts.Node>()): string[] {
     if (!node) {

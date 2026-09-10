@@ -1,6 +1,9 @@
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
-import { createRpcAccessResolver } from '../../scripts/rpc-access-resolution.mts'
+import {
+  createRpcAccessResolver,
+  unsubscribeFrameMethod
+} from '../../scripts/rpc-access-resolution.mts'
 
 function fixture(source: string) {
   const file = 'rpc-fixture.ts'
@@ -64,7 +67,7 @@ describe('RPC access symbol resolution', () => {
     const raw = resolver.calls.find((call) => resolver.resolveKind(call.expression) === 'request')!
     expect(resolver.methods(raw.arguments[0])).toEqual(['hidden.viaTypeAlias', 'resolved.direct'])
   })
-  it('carries the alias through a shorthand property handed to another function', () => {
+  it('fails closed for a property handed to another function', () => {
     const resolver = fixture(`
       declare const client: { sendRequest(method: string): void }
       type RunHook = (method: string) => void
@@ -76,7 +79,7 @@ describe('RPC access symbol resolution', () => {
       args.run('hidden.viaShorthand')
     `)
     const raw = resolver.calls.find((call) => resolver.resolveKind(call.expression) === 'request')!
-    expect(resolver.methods(raw.arguments[0])).toEqual(['hidden.viaShorthand', 'resolved.direct'])
+    expect(resolver.methods(raw.arguments[0])).toEqual([])
   })
   it('does not hide an unresolved caller behind an object binding', () => {
     const resolver = fixture(`
@@ -87,5 +90,81 @@ describe('RPC access symbol resolution', () => {
     `)
     const raw = resolver.calls.find((call) => resolver.resolveKind(call.expression) === 'request')!
     expect(resolver.methods(raw.arguments[0])).toEqual([])
+  })
+  it.each([
+    'return { send }',
+    'consume(send); return { send }',
+    'target.send = send; return target',
+    'const alias = send; return { send: alias }'
+  ])('fails closed across a destructured hook result: %s', (escape) => {
+    const resolver = fixture(`
+      declare const client: { sendRequest(method: string): void }
+      declare function consume(send: (method: string) => void): void
+      declare const target: { send: (method: string) => void }
+      function useFoo() {
+        const send = (method: string) => { client.sendRequest(method) }
+        send('git.status')
+        ${escape}
+      }
+      const { send: x } = useFoo()
+      x('git.checkout')
+    `)
+    const raw = resolver.calls.find((call) => resolver.resolveKind(call.expression) === 'request')!
+    expect(resolver.methods(raw.arguments[0])).toEqual([])
+  })
+  it('fails closed when an alias call is absent from the enumerated signatures', () => {
+    const resolver = fixture(`
+      declare const client: { sendRequest(method: string): void }
+      type RunHook = (method: string) => void
+      const send = (method: string) => { client.sendRequest(method) }
+      send('git.status')
+      const alias = send
+      const run: RunHook = alias
+      run('git.checkout')
+    `)
+    const raw = resolver.calls.find((call) => resolver.resolveKind(call.expression) === 'request')!
+    expect(resolver.methods(raw.arguments[0])).toEqual([])
+  })
+  it('records unsubscribe frame methods separately from requests and subscriptions', () => {
+    const source = ts.createSourceFile(
+      'frames.ts',
+      `
+      const frames = [
+        { method: 'terminal.unsubscribe' },
+        { method: 'session.tabs.unsubscribe' },
+        { method: 'nativeChat.unsubscribe' },
+        { method: 'browser.screencast.unsubscribe' },
+        { method: 'runtime.clientEvents.unsubscribe' },
+        { method: 'terminal.subscribe' },
+        { label: 'ignored.unsubscribe' }
+      ]
+      const dead = new Set(['github.prComments', 'ignored.unsubscribe'])
+    `,
+      ts.ScriptTarget.Latest,
+      true
+    )
+    const methods: string[] = []
+    function visit(node: ts.Node): void {
+      const method = unsubscribeFrameMethod(node)
+      if (method) {
+        methods.push(method)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+    expect(methods).toEqual([
+      'terminal.unsubscribe',
+      'session.tabs.unsubscribe',
+      'nativeChat.unsubscribe',
+      'browser.screencast.unsubscribe',
+      'runtime.clientEvents.unsubscribe'
+    ])
+    const resolver = fixture(`
+      declare const streams: { sendUnsubscribe(frame: unknown): void }
+      streams.sendUnsubscribe({ method: unknownMethod })
+    `)
+    expect(resolver.calls.map((call) => resolver.resolveKind(call.expression))).toEqual([
+      'unsubscribe'
+    ])
   })
 })

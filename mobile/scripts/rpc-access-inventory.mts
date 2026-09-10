@@ -1,10 +1,13 @@
 import { join } from 'node:path'
 import ts from 'typescript'
-import { createRpcAccessResolver } from './rpc-access-resolution.mts'
+import {
+  createRpcAccessResolver,
+  unsubscribeFrameMethod,
+  type RpcAccessKind
+} from './rpc-access-resolution.mts'
 import { emit, files, root } from './rpc-artifact-io.mts'
 
-type AccessKind = 'request' | 'subscribe'
-type CallSite = { file: string; line: number; column: number; kind: AccessKind; method: string }
+type CallSite = { file: string; line: number; column: number; kind: RpcAccessKind; method: string }
 const paths = [...files(join(root, 'mobile/src')), ...files(join(root, 'mobile/app'))].filter(
   (file) => /\.[jt]sx?$/.test(file)
 )
@@ -24,7 +27,7 @@ const { entryKind, resolveKind, methods } = createRpcAccessResolver(
 for (const file of paths) {
   const sf = program.getSourceFile(join(root, file))!
   const positions = new Set<number>()
-  function add(node: ts.Node, kind: AccessKind, call?: ts.CallExpression): void {
+  function add(node: ts.Node, kind: RpcAccessKind, call?: ts.CallExpression): void {
     const start = node.getStart(sf)
     if (positions.has(start)) {
       return
@@ -50,6 +53,17 @@ for (const file of paths) {
     })
   }
   function visit(node: ts.Node): void {
+    const unsubscribe = unsubscribeFrameMethod(node)
+    if (unsubscribe) {
+      const location = sf.getLineAndCharacterOfPosition(node.getStart(sf))
+      calls.push({
+        file,
+        line: location.line + 1,
+        column: location.character + 1,
+        kind: 'unsubscribe',
+        method: unsubscribe
+      })
+    }
     if (ts.isCallExpression(node)) {
       const kind = resolveKind(node.expression)
       if (kind) {
@@ -88,7 +102,7 @@ await emit('access-inventory', {
     unresolvedDynamic: calls.filter((call) => call.method.startsWith('dynamic:')).length,
     referenceOccurrences: referenceCount,
     referenceFileCount: referenceFiles.size,
-    note: 'calls are `file:line:column kind method`, where method is one literal, a `|`-joined family the checker resolved, or `dynamic:<callee>` when it resolved nothing. References are bare occurrences of the `sendRequest`/`subscribe` token with no call attached; only their count and files are recorded.'
+    note: 'calls are `file:line:column kind method`, where method is one literal, a `|`-joined family the checker resolved, or `dynamic:<callee>` when completeness cannot be proven. Kinds: request = sendRequest calls; subscribe = subscribe calls (including local listeners); unsubscribe = sendUnsubscribe calls and literal *.unsubscribe method fields in frame constructions, including test fixtures, without a reachability claim. References are bare occurrences of the `sendRequest`/`subscribe`/`sendUnsubscribe` token with no call attached; only their count and files are recorded.'
   },
   calls: rows,
   referenceFiles: [...referenceFiles].sort()
