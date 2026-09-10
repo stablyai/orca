@@ -22,6 +22,7 @@ import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-st
 import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { markStructuredWorktreeLaunchUnconfirmed } from '@/lib/worktree-creation-structured-recovery'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
 // switches app views; only the terminal route renders the creation panel.
@@ -197,6 +198,13 @@ export async function executeWorktreeCreation(
               ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
             }
           )
+    if (!structuredLaunch && !backendSpawned) {
+      ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+        startup: startupOpt,
+        agent: preparedRequest.agent,
+        activate: false
+      })
+    }
   }
 
   let structuredLaunchAccepted = structuredLaunch

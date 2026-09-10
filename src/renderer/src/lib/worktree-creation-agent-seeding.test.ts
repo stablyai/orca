@@ -4,7 +4,8 @@ import type { WorktreeCreationRequest } from './pending-worktree-creation'
 const mocks = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn(),
   completeWorktreeCreation: vi.fn(),
-  ensureWorktreeHasInitialTerminal: vi.fn()
+  ensureWorktreeHasInitialTerminal: vi.fn(),
+  ensureWebRuntimeWorktreeTerminalAfterWake: vi.fn()
 }))
 
 const store = {
@@ -24,6 +25,9 @@ vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
 }))
 vi.mock('@/lib/worktree-creation-completion', () => ({
   completeWorktreeCreation: mocks.completeWorktreeCreation
+}))
+vi.mock('@/lib/web-runtime-worktree-terminal-after-wake', () => ({
+  ensureWebRuntimeWorktreeTerminalAfterWake: mocks.ensureWebRuntimeWorktreeTerminalAfterWake
 }))
 
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
@@ -52,11 +56,17 @@ describe('executeWorktreeCreation agent seeding', () => {
     })
   })
 
-  it('does not seed a background shell when the request carries an agent selection', async () => {
+  it('routes a background agent selection through host-aware surface creation', async () => {
     await executeWorktreeCreation('creation-1', request)
 
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
     expect(mocks.ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expect(mocks.ensureWebRuntimeWorktreeTerminalAfterWake).toHaveBeenCalledOnce()
+    expect(mocks.ensureWebRuntimeWorktreeTerminalAfterWake).toHaveBeenCalledWith('worktree-1', {
+      startup: undefined,
+      agent: 'codex',
+      activate: false
+    })
     expect(mocks.completeWorktreeCreation).toHaveBeenCalledWith(
       expect.objectContaining({ primaryTabId: null })
     )

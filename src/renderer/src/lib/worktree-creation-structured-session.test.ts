@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   activateStructuredAgentSessionById: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
   ensureWorktreeHasInitialTerminal: vi.fn(),
+  ensureWebRuntimeWorktreeTerminalAfterWake: vi.fn(),
   preflightAgentTrust: vi.fn(),
   updateWorktreeMeta: vi.fn()
 }))
@@ -52,6 +53,10 @@ vi.mock('@/lib/structured-agent-session-tab-activation', () => ({
 
 vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
   ensureWorktreeHasInitialTerminal: mocks.ensureWorktreeHasInitialTerminal
+}))
+
+vi.mock('@/lib/web-runtime-worktree-terminal-after-wake', () => ({
+  ensureWebRuntimeWorktreeTerminalAfterWake: mocks.ensureWebRuntimeWorktreeTerminalAfterWake
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
@@ -351,6 +356,11 @@ describe('launchStructuredWorktreeSession', () => {
       undefined,
       { activateCreatedTabs: false, createNewTerminalForStartup: true }
     )
+    expect(mocks.ensureWebRuntimeWorktreeTerminalAfterWake).toHaveBeenCalledWith('worktree-1', {
+      startup: undefined,
+      agent: 'codex',
+      activate: false
+    })
   })
 
   it('stops the fallback mid-way when the creation is dismissed and retires nothing', async () => {

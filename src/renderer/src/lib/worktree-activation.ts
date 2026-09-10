@@ -1,8 +1,4 @@
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type {
-  WorktreeDefaultTabsLaunch,
-  WorktreeSetupLaunch
-} from '../../../shared/worktree/launch-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -29,7 +25,6 @@ import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
-import type { IssueCommandLaunch } from '@/lib/worktree-setup-issue-command-queue'
 import {
   ensureWorktreeHasInitialTerminal,
   reseedGatedEmptyWorkspace
@@ -38,6 +33,7 @@ import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-wor
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 import {
   activationProvidesInitialSurface,
+  type WorktreeActivationOptions,
   type WorktreeActivationSurfaceSelection
 } from './worktree-activation-surface-selection'
 
@@ -169,27 +165,20 @@ export function activateAndRevealFolderWorkspace(
     )
   }
 
+  if (opts?.providesInitialSurface !== true) {
+    ensureWebRuntimeWorktreeTerminalAfterWake(workspaceKey, {
+      runtimeEnvironmentId,
+      startup: opts?.startup,
+      agent: opts?.agent
+    })
+  }
+
   return { primaryTabId }
 }
 
 export function activateAndRevealWorktree(
   worktreeId: string,
-  opts?: WorktreeActivationSurfaceSelection & {
-    startup?: WorktreeStartupPayload
-    initialCwd?: string
-    setup?: WorktreeSetupLaunch
-    defaultTabs?: WorktreeDefaultTabsLaunch
-    issueCommand?: IssueCommandLaunch
-    sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
-    notifyHostRuntime?: boolean
-    revealInSidebar?: boolean
-    executionHostId?: ExecutionHostId
-    backendStartupTerminalSpawned?: boolean
-    /** Install a preserved fallback startup beside setup/default terminals already seeded. */
-    createNewTerminalForStartup?: boolean
-    /** Keep sidebar filters intact when navigating to a hidden target. */
-    clearSidebarFilters?: boolean
-  }
+  opts?: WorktreeActivationOptions
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
@@ -322,9 +311,12 @@ export function activateAndRevealWorktree(
   if (
     opts?.notifyHostRuntime !== false &&
     !opts?.backendStartupTerminalSpawned &&
-    opts?.agent == null
+    opts?.providesInitialSurface !== true
   ) {
-    ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId, {
+      startup: opts?.startup,
+      agent: opts?.agent
+    })
   }
 
   return { primaryTabId }
