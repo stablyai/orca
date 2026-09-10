@@ -22,10 +22,6 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
 
   constructor(private readonly ports: LegacyWorkerRecoveryPorts) {}
 
-  prepare(): LegacyWorkerTerminalRecoveryPlan {
-    return this.ports.preparePlan()
-  }
-
   reconcile(
     options: LegacyWorkerRecoveryOptions = {}
   ): Promise<LegacyWorkerTerminalRecoveryResult> {

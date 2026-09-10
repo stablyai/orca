@@ -14,6 +14,8 @@ import { recoverDeadTuiHandoffStatus } from './structured-agent-session-dead-tui
 import { readNativeSessionOptions } from './structured-agent-session-option-restoration'
 import type { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catchup'
+import { adapterSupportsCreateIfDeclared } from './structured-agent-session-provider-support'
+import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
 type HostHandoffAccess = {
   session: (sessionId: string) => StructuredAgentSessionHostSession
@@ -23,6 +25,7 @@ type HostHandoffAccess = {
   flush: (sessionId: string) => Promise<void>
   serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
   subscribers: AgentSessionSubscribers
+  publishStatus?: (sessionId: string) => void
   now: () => number
 }
 
@@ -80,8 +83,16 @@ export function createStructuredAgentSessionHostHandoff(
         return { state: 'live' }
       }
       host.session(sessionId).hasProviderChild = false
+      host.publishStatus?.(sessionId)
       try {
         await host.flush(sessionId)
+        const session = host.session(sessionId)
+        await session.journal.markPendingSubmissionsUnknown(
+          session.fence,
+          'provider_exited_before_acknowledgement'
+        )
+        host.subscribers.publish(sessionId, session.journal)
+        host.publishStatus?.(sessionId)
         host.eventSink(sessionId).unbind()
         return { state: 'stopped' }
       } catch (error) {
@@ -92,6 +103,13 @@ export function createStructuredAgentSessionHostHandoff(
     acquireNativeStop: async (sessionId, turnId, fence) =>
       (await deps.adapter.cancelTurn({ sessionId, turnId, fence })).cancelled,
     importTuiHistory: (input) => importTuiHistory(deps, host, input),
+    retryPendingSettlement: (sessionId) =>
+      retryLoadedStructuredAgentSessionSettlement({
+        deps,
+        sessionId,
+        session: host.session(sessionId),
+        now: host.now
+      }),
     prepareTuiHistoryCatchup: (sessionId, fence) => tuiHistoryCatchup.prepare(sessionId, fence),
     recoverTuiHistoryCatchup: (sessionId, fence) => tuiHistoryCatchup.recover(sessionId, fence),
     activateTuiHistoryCatchup: (sessionId) => tuiHistoryCatchup.activate(sessionId),
@@ -187,12 +205,21 @@ export async function acquireNativeHandoffOwner(
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
+  // Native handoff bypasses attach admission; reject before unbinding TUI ownership.
+  if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider)) {
+    throw new Error('structured_agent_session_unsupported')
+  }
   const eventSink = host.eventSink(input.sessionId)
   const priorBarrier = await eventSink.drained()
   if (!priorBarrier.ok) {
     throw priorBarrier.error
   }
   eventSink.unbind()
+  // Recheck immediately before acquisition; capability probes may drift while
+  // the old TUI event sink is draining.
+  if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider)) {
+    throw new Error('structured_agent_session_unsupported')
+  }
   const acquired = await deps.adapter.acquire({
     identity: journalIdentityFor(record, session.params),
     fence: input.fence,
@@ -225,6 +252,7 @@ export async function acquireNativeHandoffOwner(
     return rethrowAfterAgentSessionAcquisitionCleanup(deps.adapter, input.sessionId, error)
   }
   session.hasProviderChild = true
+  host.publishStatus?.(input.sessionId)
   session.fence = proved.lease.runtimeFence
   session.acquisitionGeneration = acquired.acquisitionGeneration ?? null
   eventSink.bind({

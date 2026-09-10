@@ -3,12 +3,14 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionHandoffStatus,
-  AgentSessionHistoryPage,
-  AgentSessionSubscribeEvent,
-  AgentSessionTurnActivity
+import {
+  agentSessionBackgroundTasksEqual,
+  type AgentSessionBackgroundTaskState,
+  type AgentSessionSlashCommand,
+  type AgentSessionHandoffStatus,
+  type AgentSessionHistoryPage,
+  type AgentSessionSubscribeEvent,
+  type AgentSessionTurnActivity
 } from './agent-session-wire'
 
 export type StructuredAgentSessionState = {
@@ -17,11 +19,14 @@ export type StructuredAgentSessionState = {
   fence: number | null
   items: AgentJournalRenderItem[]
   submissions: AgentJournalSubmission[]
+  /** Head-trim floor for `items`; paging back raises it so a live batch cannot undo the page. */
+  retainedItemLimit: number
   hasOlder: boolean
   status: 'idle' | 'loading' | 'ready' | 'error'
   error?: string
   handoff: AgentSessionHandoffStatus | null
   backgroundTasks?: AgentSessionBackgroundTaskState | null
+  commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
 }
 
@@ -33,18 +38,22 @@ export type StructuredAgentSessionAction =
   | { type: 'tail-page'; page: AgentSessionHistoryPage }
   | { type: 'older-page'; requestedEpoch: string; page: AgentSessionHistoryPage }
 
+const MAX_RETAINED_SUBMISSIONS = 256
+// Well above the renderer's initial read window (300) plus a page, so only genuinely
+// long live sessions trim; anything trimmed is still reachable by paging older.
+const MAX_RETAINED_ITEMS = 1024
+
 export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   epoch: null,
   cursor: null,
   fence: null,
   items: [],
   submissions: [],
+  retainedItemLimit: MAX_RETAINED_ITEMS,
   hasOlder: false,
   status: 'idle',
   handoff: null
 }
-
-const MAX_RETAINED_SUBMISSIONS = 256
 
 function backgroundTaskStatesEqual(
   left: AgentSessionBackgroundTaskState | null | undefined,
@@ -57,21 +66,14 @@ function backgroundTaskStatesEqual(
     !left ||
     !right ||
     left.state !== right.state ||
-    left.supportsTaskStop !== right.supportsTaskStop
+    left.supportsTaskStop !== right.supportsTaskStop ||
+    left.supportsStopAll !== right.supportsStopAll
   ) {
     return false
   }
-  if (left.tasks === right.tasks) {
-    return true
-  }
-  if (!left.tasks || !right.tasks || left.tasks.length !== right.tasks.length) {
-    return false
-  }
-  return left.tasks.every(
-    (task, index) =>
-      task.id === right.tasks?.[index]?.id &&
-      task.kind === right.tasks[index]?.kind &&
-      task.description === right.tasks[index]?.description
+  return (
+    agentSessionBackgroundTasksEqual(left.tasks, right.tasks) &&
+    agentSessionBackgroundTasksEqual(left.settledTasks, right.settledTasks)
   )
 }
 
@@ -88,6 +90,7 @@ function replacePage(
     fence,
     items: [...page.items].sort((left, right) => left.sequence - right.sequence),
     submissions: page.submissions,
+    retainedItemLimit: Math.max(MAX_RETAINED_ITEMS, page.items.length),
     hasOlder: page.hasOlder,
     status: 'ready',
     handoff: handoff ?? null,
@@ -116,6 +119,13 @@ function mergeItems(
     }
   }
   return [...byId.values()].sort((left, right) => left.sequence - right.sequence)
+}
+
+function trimRetainedItems(
+  items: AgentJournalRenderItem[],
+  limit: number
+): AgentJournalRenderItem[] {
+  return items.length <= limit ? items : items.slice(items.length - limit)
 }
 
 function mergeSubmissions(
@@ -183,9 +193,11 @@ export function reduceStructuredAgentSession(
       submissions: sameEpoch
         ? mergeSubmissions(state.submissions, action.page.submissions)
         : action.page.submissions,
+      retainedItemLimit: Math.max(MAX_RETAINED_ITEMS, action.page.items.length),
       hasOlder: action.page.hasOlder,
       status: 'ready',
       handoff: state.handoff,
+      ...(sameEpoch ? { commands: state.commands } : {}),
       ...(sameEpoch && state.activity !== undefined ? { activity: state.activity } : {}),
       ...(action.page.backgroundTasks !== undefined
         ? { backgroundTasks: action.page.backgroundTasks }
@@ -198,9 +210,11 @@ export function reduceStructuredAgentSession(
     if (state.epoch !== action.requestedEpoch || action.page.epoch !== action.requestedEpoch) {
       return state
     }
+    const paged = mergeItems(state.items, action.page.items, action.page.removedItemIds)
     return {
       ...state,
-      items: mergeItems(state.items, action.page.items, action.page.removedItemIds),
+      items: paged,
+      retainedItemLimit: Math.max(state.retainedItemLimit, paged.length),
       submissions: mergeSubmissions(state.submissions, action.page.submissions),
       hasOlder: action.page.hasOlder
     }
@@ -210,13 +224,10 @@ export function reduceStructuredAgentSession(
     return state
   }
   if (event.type === 'snapshot' || event.type === 'reset') {
-    return replacePage(
-      event.page,
-      event.fence,
-      event.handoff,
-      event.backgroundTasks,
-      event.activity
-    )
+    return {
+      ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks, event.activity),
+      commands: event.commands
+    }
   }
   if (state.epoch !== event.batch.cursor.epoch) {
     return state
@@ -236,6 +247,7 @@ export function reduceStructuredAgentSession(
     journalUnchanged &&
     (event.fence === undefined || event.fence === state.fence) &&
     (event.handoff === undefined || event.handoff === state.handoff) &&
+    (event.commands === undefined || event.commands === state.commands) &&
     backgroundTaskStatesEqual(backgroundTasks, state.backgroundTasks) &&
     activity?.turnId === state.activity?.turnId &&
     activity?.text === state.activity?.text &&
@@ -244,19 +256,24 @@ export function reduceStructuredAgentSession(
   ) {
     return state
   }
+  const merged = journalUnchanged
+    ? state.items
+    : mergeItems(state.items, event.batch.items, event.batch.removedItemIds)
+  const items = trimRetainedItems(merged, state.retainedItemLimit)
   return {
     ...state,
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
-    items: journalUnchanged
-      ? state.items
-      : mergeItems(state.items, event.batch.items, event.batch.removedItemIds),
+    items,
+    // A trim leaves older items behind the cursor, so paging must stay offered.
+    hasOlder: items.length < merged.length ? true : state.hasOlder,
     submissions: journalUnchanged
       ? state.submissions
       : mergeSubmissions(state.submissions, event.batch.submissions),
     status: 'ready',
     error: undefined,
     handoff: event.handoff ?? state.handoff,
+    commands: event.commands !== undefined ? event.commands : state.commands,
     ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
     ...(activity !== undefined ? { activity } : {})
   }

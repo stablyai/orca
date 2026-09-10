@@ -19,7 +19,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
           await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
           clientKind,
           clientCapabilities,
-          clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+          isStructuredNativeChatEnabled(runtime)
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
       }
@@ -42,7 +42,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
         result,
         clientKind,
         clientCapabilities,
-        clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+        isStructuredNativeChatEnabled(runtime)
       )
     }
   }),
@@ -57,7 +57,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
           raw,
           clientKind,
           clientCapabilities,
-          clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+          isStructuredNativeChatEnabled(runtime)
         )
         translated = translateProjectedSessionTabMove(raw, projected, params)
       }
@@ -142,7 +142,7 @@ async function assertVisibleMutationTab(
     await runtime.listMobileSessionTabs(worktree, pairedDeviceId),
     clientKind,
     clientCapabilities,
-    clientKind === 'mobile' ? isStructuredNativeChatEnabled(runtime) : undefined
+    isStructuredNativeChatEnabled(runtime)
   )
   assertProjectedSessionTabVisible(visible, tabId)
 }

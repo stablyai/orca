@@ -18,7 +18,7 @@ import {
   resolveAgentLaunchRoute,
   type AgentLaunchRoute
 } from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
+import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 
 export type OnboardingFolderAgentStartup = {
   command: string
@@ -135,8 +135,7 @@ export function resolveDismissedOnboardingFolderAgentLaunch(args: {
     agent,
     settings: args.settings,
     executionHostId: args.executionHostId,
-    platform: getClientPlatform(),
-    hostCapabilities: readLocalRuntimeCapabilities(),
+    hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
     workspaceKind: 'folder',
     nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable,
     requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(args.settings, agent),

@@ -120,22 +120,24 @@ describe('web session terminal orphan recovery regressions', () => {
       tabs: [{ ...pending, status: 'ready', terminal: handle }]
     }
     const call = vi.fn(async ({ method }: { method: string; params?: Record<string, unknown> }) =>
-      method === 'terminal.list'
-        ? {
-            ok: true as const,
-            result: listResult(worktree, [
-              {
-                handle,
-                ptyId: 'pty-rootless-active',
-                incarnationId: 'inc-rootless-active',
-                orphaned: true
-              }
-            ])
-          }
-        : {
-            ok: true as const,
-            result: { adopted: true, topologyRevision: 8, snapshot: adopted }
-          }
+      method === 'session.tabs.list'
+        ? { ok: true as const, result: adopted }
+        : method === 'terminal.list'
+          ? {
+              ok: true as const,
+              result: listResult(worktree, [
+                {
+                  handle,
+                  ptyId: 'pty-rootless-active',
+                  incarnationId: 'inc-rootless-active',
+                  orphaned: true
+                }
+              ])
+            }
+          : {
+              ok: true as const,
+              result: { adopted: true, topologyRevision: 8, snapshot: adopted }
+            }
     )
 
     await expect(
@@ -150,7 +152,8 @@ describe('web session terminal orphan recovery regressions', () => {
         params: expect.objectContaining({ handles: [handle] })
       })
     )
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
         params: expect.objectContaining({
@@ -187,22 +190,24 @@ describe('web session terminal orphan recovery regressions', () => {
       ]
     }
     const call = vi.fn(async ({ method }: { method: string; params?: Record<string, unknown> }) =>
-      method === 'terminal.list'
-        ? {
-            ok: true as const,
-            result: listResult(worktree, [
-              {
-                handle,
-                ptyId: 'pty-rootless-sole',
-                incarnationId: 'inc-rootless-sole',
-                orphaned: true
-              }
-            ])
-          }
-        : {
-            ok: true as const,
-            result: { adopted: true, topologyRevision: 8, snapshot: adopted }
-          }
+      method === 'session.tabs.list'
+        ? { ok: true as const, result: adopted }
+        : method === 'terminal.list'
+          ? {
+              ok: true as const,
+              result: listResult(worktree, [
+                {
+                  handle,
+                  ptyId: 'pty-rootless-sole',
+                  incarnationId: 'inc-rootless-sole',
+                  orphaned: true
+                }
+              ])
+            }
+          : {
+              ok: true as const,
+              result: { adopted: true, topologyRevision: 8, snapshot: adopted }
+            }
     )
 
     await expect(
@@ -242,22 +247,24 @@ describe('web session terminal orphan recovery regressions', () => {
       tabs: [{ ...primary, status: 'ready', terminal: primaryHandle }]
     }
     const call = vi.fn(async ({ method }: { method: string; params?: Record<string, unknown> }) =>
-      method === 'terminal.list'
-        ? {
-            ok: true as const,
-            result: listResult(worktree, [
-              {
-                handle: primaryHandle,
-                ptyId: 'pty-rootless-primary',
-                incarnationId: 'inc-rootless-primary',
-                orphaned: true
-              }
-            ])
-          }
-        : {
-            ok: true as const,
-            result: { adopted: true, topologyRevision: 8, snapshot: adopted }
-          }
+      method === 'session.tabs.list'
+        ? { ok: true as const, result: adopted }
+        : method === 'terminal.list'
+          ? {
+              ok: true as const,
+              result: listResult(worktree, [
+                {
+                  handle: primaryHandle,
+                  ptyId: 'pty-rootless-primary',
+                  incarnationId: 'inc-rootless-primary',
+                  orphaned: true
+                }
+              ])
+            }
+          : {
+              ok: true as const,
+              result: { adopted: true, topologyRevision: 8, snapshot: adopted }
+            }
     )
 
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
@@ -535,19 +542,21 @@ describe('web session terminal orphan recovery regressions', () => {
       ]
     }
     const call = vi.fn(async ({ method }: { method: string }) =>
-      method === 'terminal.list'
-        ? {
-            ok: true as const,
-            result: listResult(worktree, [
-              {
-                handle: 'term-claim',
-                ptyId: 'pty-claim',
-                incarnationId: 'inc-claim',
-                orphaned: true
-              }
-            ])
-          }
-        : { ok: true as const, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
+      method === 'session.tabs.list'
+        ? { ok: true as const, result: adopted }
+        : method === 'terminal.list'
+          ? {
+              ok: true as const,
+              result: listResult(worktree, [
+                {
+                  handle: 'term-claim',
+                  ptyId: 'pty-claim',
+                  incarnationId: 'inc-claim',
+                  orphaned: true
+                }
+              ])
+            }
+          : { ok: true as const, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
     )
 
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
@@ -563,7 +572,8 @@ describe('web session terminal orphan recovery regressions', () => {
         expect.objectContaining({ leafId: 'leaf-hold', terminal: 'term-hold', status: 'ready' })
       ])
     )
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
         params: expect.not.objectContaining({ topology: expect.anything() })
@@ -629,19 +639,21 @@ describe('web session terminal orphan recovery regressions', () => {
       ]
     }
     const call = vi.fn(async ({ method }: { method: string }) =>
-      method === 'terminal.list'
-        ? {
-            ok: true as const,
-            result: listResult(worktree, [
-              {
-                handle: 'term-claim',
-                ptyId: 'pty-claim',
-                incarnationId: 'inc-claim',
-                orphaned: true
-              }
-            ])
-          }
-        : { ok: true as const, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
+      method === 'session.tabs.list'
+        ? { ok: true as const, result: adopted }
+        : method === 'terminal.list'
+          ? {
+              ok: true as const,
+              result: listResult(worktree, [
+                {
+                  handle: 'term-claim',
+                  ptyId: 'pty-claim',
+                  incarnationId: 'inc-claim',
+                  orphaned: true
+                }
+              ])
+            }
+          : { ok: true as const, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
     )
 
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
@@ -661,7 +673,8 @@ describe('web session terminal orphan recovery regressions', () => {
         })
       ])
     )
-    expect(call).toHaveBeenLastCalledWith(
+    expect(call).toHaveBeenNthCalledWith(
+      2,
       expect.objectContaining({
         method: 'terminal.adoptOrphans',
         params: expect.objectContaining({
@@ -673,7 +686,7 @@ describe('web session terminal orphan recovery regressions', () => {
     )
   })
 
-  it('lets an adoption response replace a stale pre-adoption removal', async () => {
+  it('lets a post-adoption snapshot replace a stale pre-adoption removal', async () => {
     const worktree = 'repo::adoption-replacement'
     const leaves = [
       { leafId: 'leaf-remove', handle: 'term-remove' },
@@ -705,25 +718,27 @@ describe('web session terminal orphan recovery regressions', () => {
       ]
     }
     const call = vi.fn(async ({ method }: { method: string }) =>
-      method === 'terminal.list'
-        ? {
-            ok: true as const,
-            result: listResult(worktree, [
-              {
-                handle: 'term-remove',
-                ptyId: 'pty-new',
-                incarnationId: 'inc-new',
-                orphaned: true
-              },
-              {
-                handle: 'term-claim',
-                ptyId: 'pty-claim',
-                incarnationId: 'inc-claim',
-                orphaned: true
-              }
-            ])
-          }
-        : { ok: true as const, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
+      method === 'session.tabs.list'
+        ? { ok: true as const, result: adopted }
+        : method === 'terminal.list'
+          ? {
+              ok: true as const,
+              result: listResult(worktree, [
+                {
+                  handle: 'term-remove',
+                  ptyId: 'pty-new',
+                  incarnationId: 'inc-new',
+                  orphaned: true
+                },
+                {
+                  handle: 'term-claim',
+                  ptyId: 'pty-claim',
+                  incarnationId: 'inc-claim',
+                  orphaned: true
+                }
+              ])
+            }
+          : { ok: true as const, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
     )
 
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(

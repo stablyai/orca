@@ -29,8 +29,13 @@ const mocks = vi.hoisted(() => ({
   pasteFromClipboard: vi.fn(),
   submissions: [] as unknown[],
   monitoringBackgroundTasks: false,
+  showBackgroundTasks: false,
+  isWorking: false,
+  turnId: null as string | null,
   supportsBackgroundTaskStop: false,
+  supportsBackgroundTaskStopAll: true,
   backgroundTasks: [] as AgentSessionBackgroundTask[],
+  settledBackgroundTasks: [] as AgentSessionBackgroundTask[],
   stopBackgroundTask: vi.fn()
 }))
 
@@ -74,11 +79,16 @@ vi.mock('./use-structured-agent-session', async () => {
         blockedClientMessageId: outbox.blockedClientMessageId,
         send: outbox.send,
         retry: outbox.retry,
-        isWorking: false,
-        isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
-        supportsBackgroundTaskStop: mocks.supportsBackgroundTaskStop,
-        backgroundTasks: mocks.backgroundTasks,
-        turnId: null,
+        isWorking: mocks.isWorking,
+        backgroundTasks: {
+          show: mocks.showBackgroundTasks || mocks.monitoringBackgroundTasks,
+          isMonitoring: mocks.monitoringBackgroundTasks,
+          tasks: mocks.backgroundTasks,
+          settledTasks: mocks.settledBackgroundTasks,
+          supportsStop: mocks.supportsBackgroundTaskStop,
+          supportsStopAll: mocks.supportsBackgroundTaskStopAll
+        },
+        turnId: mocks.turnId,
         cancel: vi.fn(),
         stopBackgroundTask: (taskId?: string) => mocks.stopBackgroundTask(props.sessionId, taskId),
         respond: mocks.respond,
@@ -169,8 +179,13 @@ describe('NativeChatStructuredSession', () => {
     mocks.submissions = []
     mocks.monitoringBackgroundTasks = false
     mocks.supportsBackgroundTaskStop = false
+    mocks.supportsBackgroundTaskStopAll = true
+    mocks.turnId = null
     mocks.stopBackgroundTask.mockReset()
     mocks.backgroundTasks = []
+    mocks.settledBackgroundTasks = []
+    mocks.showBackgroundTasks = false
+    mocks.isWorking = false
   })
 
   it('routes app-menu paste into the structured composer', () => {
@@ -228,6 +243,17 @@ describe('NativeChatStructuredSession', () => {
     }
   )
 
+  // Every background-task test mounts the same local Claude session; only the ids differ.
+  const claudeSessionView = (tabId: string, sessionId: string) => (
+    <NativeChatStructuredSession
+      isVisible
+      tabId={tabId}
+      sessionId={sessionId}
+      target={{ kind: 'local' }}
+      agent="claude"
+    />
+  )
+
   it('places background monitoring above the usable composer and stops without an active turn', async () => {
     mocks.monitoringBackgroundTasks = true
     mocks.supportsBackgroundTaskStop = true
@@ -237,33 +263,24 @@ describe('NativeChatStructuredSession', () => {
     ]
     mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
 
-    render(
-      <NativeChatStructuredSession
-        isVisible
-        tabId="structured-tab-background"
-        sessionId="session-background"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
-    )
+    render(claudeSessionView('structured-tab-background', 'session-background'))
 
-    const status = screen
-      .getByText('Monitoring background tasks')
-      .closest('[data-native-chat-background-tasks="true"]')
+    const disclosure = screen.getByRole('button', { name: '1 agent · 1 shell' })
+    const status = disclosure.closest('[data-native-chat-background-tasks="true"]')
     const composer = screen.getByTestId('structured-composer')
     if (!status) {
       throw new Error('background task status was not rendered')
     }
     expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(mocks.composerProps?.isWorking).toBe(false)
-    expect(screen.queryByRole('list', { name: 'Running background tasks' })).toBeNull()
+    expect(screen.queryByRole('list', { name: 'Agents' })).toBeNull()
     expect(screen.queryByRole('button', { name: /^Stop / })).toBeNull()
 
-    const disclosure = screen.getByRole('button', { name: 'Monitoring background tasks' })
     expect(disclosure.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(disclosure)
     expect(disclosure.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByRole('list', { name: 'Running background tasks' })).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy()
+    expect(screen.getByRole('list', { name: 'Shell' })).toBeTruthy()
     expect(screen.getByText('sleep 180')).toBeTruthy()
     expect(screen.getByText('Background agent')).toBeTruthy()
 
@@ -271,6 +288,28 @@ describe('NativeChatStructuredSession', () => {
     await waitFor(() =>
       expect(mocks.stopBackgroundTask).toHaveBeenCalledWith('session-background', 'task-command')
     )
+  })
+
+  it('keeps the strip mounted through a running turn, with the turn owning the voice', () => {
+    // The strip stands for work that OUTLIVES a turn, so `show` is true while
+    // `isMonitoring` is false: mounted, but not speaking as the live indicator.
+    mocks.showBackgroundTasks = true
+    mocks.monitoringBackgroundTasks = false
+    mocks.isWorking = true
+    mocks.turnId = 'turn-midturn'
+    mocks.backgroundTasks = [{ id: 'task-monitor', kind: 'monitor', description: 'watcher' }]
+
+    render(claudeSessionView('structured-tab-midturn', 'session-midturn'))
+
+    const status = document.querySelector('[data-native-chat-background-tasks="true"]')
+    if (!status) {
+      throw new Error('background task status was not rendered during a running turn')
+    }
+    expect(mocks.composerProps?.isWorking).toBe(true)
+    // Dimmed monitor amber is the turn-owns-the-voice treatment.
+    expect(status.querySelector('.lucide-activity')?.classList).toContain('text-yellow-500/40')
+    fireEvent.click(screen.getByRole('button', { name: '1 monitor — monitoring' }))
+    expect(screen.getByText('watcher')).toBeTruthy()
   })
 
   it('tracks concurrent task stops independently and clears each pending result', async () => {
@@ -294,15 +333,9 @@ describe('NativeChatStructuredSession', () => {
     )
 
     render(
-      <NativeChatStructuredSession
-        isVisible
-        tabId="structured-tab-concurrent-background"
-        sessionId="session-concurrent-background"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
+      claudeSessionView('structured-tab-concurrent-background', 'session-concurrent-background')
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
+    fireEvent.click(screen.getByRole('button', { name: '2 shells — 2 working' }))
     const firstStop = screen.getByRole('button', { name: 'Stop First task' })
     const secondStop = screen.getByRole('button', { name: 'Stop Second task' })
 
@@ -335,27 +368,11 @@ describe('NativeChatStructuredSession', () => {
           }
         })
     )
-    const { rerender } = render(
-      <NativeChatStructuredSession
-        isVisible
-        tabId="structured-tab-stale-background"
-        sessionId="session-old"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
+    const { rerender } = render(claudeSessionView('structured-tab-stale-background', 'session-old'))
+    fireEvent.click(screen.getByRole('button', { name: '1 shell command — working' }))
     fireEvent.click(screen.getByRole('button', { name: 'Stop Shared task' }))
 
-    rerender(
-      <NativeChatStructuredSession
-        isVisible
-        tabId="structured-tab-stale-background"
-        sessionId="session-current"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
-    )
+    rerender(claudeSessionView('structured-tab-stale-background', 'session-current'))
     const currentStop = screen.getByRole('button', { name: 'Stop Shared task' })
     expect((currentStop as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(currentStop)
@@ -371,15 +388,7 @@ describe('NativeChatStructuredSession', () => {
     mocks.monitoringBackgroundTasks = true
     mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
 
-    render(
-      <NativeChatStructuredSession
-        isVisible
-        tabId="structured-tab-taskless-background"
-        sessionId="session-taskless-background"
-        target={{ kind: 'local' }}
-        agent="claude"
-      />
-    )
+    render(claudeSessionView('structured-tab-taskless-background', 'session-taskless-background'))
     expect(screen.queryByRole('button', { name: 'Stop background tasks' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Monitoring background tasks' }))
     expect(screen.getByText('Task details are unavailable for this session.')).toBeTruthy()

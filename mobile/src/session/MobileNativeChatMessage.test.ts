@@ -106,6 +106,21 @@ describe('MobileNativeChatMessage', () => {
     expect(texts.some((text) => text.includes('/tmp/host.png'))).toBe(true)
   })
 
+  it('makes user message text selectable', () => {
+    const tree = render(userMessage([{ type: 'text', text: 'Prompt I typed' }]))
+    const text = tree.root
+      .findAllByType('Text' as never)
+      .find((node) => String(node.children.join('')) === 'Prompt I typed')
+    expect(text?.props.selectable).toBe(true)
+  })
+
+  it('routes assistant prose through selectable Markdown', () => {
+    const tree = render(toolMessage([{ type: 'text', text: 'Agent reply prose' }]))
+    const markdown = tree.root.findByType('MobileMarkdown' as never)
+    expect(markdown.props.content).toBe('Agent reply prose')
+    expect(markdown.props.rangeSelectable).toBe(true)
+  })
+
   it('labels a tool row with the target path instead of raw input JSON', () => {
     const tree = render(
       toolMessage([{ type: 'tool-call', name: 'Read', input: { file_path: 'src/index.ts' } }]),

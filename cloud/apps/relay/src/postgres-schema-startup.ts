@@ -49,6 +49,20 @@ function concurrentCreateCollision(
   return false
 }
 
+const ALTER_TABLE_ADD_CONSTRAINT =
+  /^\s*ALTER\s+TABLE\s+\S+\s+ADD\s+CONSTRAINT\b/i
+
+// Postgres has no `ADD CONSTRAINT IF NOT EXISTS`, so a re-run and a concurrent
+// startup both land on 42710 once the constraint exists. Unlike a CREATE race
+// this is terminal, not transient: retrying only repeats it, so the statement
+// counts as applied.
+function constraintAlreadyApplied(error: unknown, statement: string): boolean {
+  return (
+    ALTER_TABLE_ADD_CONSTRAINT.test(statement) &&
+    (error as { code?: unknown }).code === '42710'
+  )
+}
+
 function retryableSchemaError(error: unknown, statement: string): boolean {
   const value = error as { code?: unknown; constraint?: unknown }
   return (
@@ -73,6 +87,7 @@ export async function applyPostgresSchema(
         await query(statement)
         break
       } catch (error) {
+        if (constraintAlreadyApplied(error, statement)) break
         const code = String((error as { code?: unknown }).code)
         const remainingMs = deadlineAt - now()
         const retryable = retryableSchemaError(error, statement)

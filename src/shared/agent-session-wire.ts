@@ -1,3 +1,5 @@
+import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
+import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 // ─── Structured agent-session wire contract ─────────────────────────────────
 // The shapes `agentSession.*` accepts and publishes. Phase 2 builds provider
 // adapters and clients against exactly these types, so everything here must be
@@ -54,18 +56,77 @@ export type AgentSessionHandoffRequest = {
 
 export type AgentSessionHandoffResult = { status: AgentSessionHandoffStatus }
 
+/** Per-task run state, reusing the agent-state vocabulary the dashboard already
+ *  renders. Optional on the wire: an old host sends none and clients fall back
+ *  to kind-derived defaults. */
+export type AgentSessionBackgroundTaskRunState =
+  | 'working'
+  | 'monitoring'
+  | 'waiting'
+  | 'blocked'
+  | 'done'
+  | 'idle'
+  | 'unverifiable'
+
 export type AgentSessionBackgroundTask = {
   id: string
   kind: 'agent' | 'workflow' | 'command' | 'monitor' | 'unknown'
   description?: string
+  /** Provider-reported identity (e.g. a subagent type). `description` stays the
+   *  display name; this is the fallback when the description is absent. */
+  name?: string
+  state?: AgentSessionBackgroundTaskRunState
+  /** Host epoch ms when the task was first observed, so clients render elapsed. */
+  startedAt?: number
+  /** Cumulative provider-reported token usage, where the provider supplies it. */
+  totalTokens?: number
 }
 
 export type AgentSessionBackgroundTaskState = {
   state: 'monitoring'
   /** Optional so mixed-version clients can consume state-only hosts. */
   tasks?: AgentSessionBackgroundTask[]
+  /** Terminal-state siblings of a still-live roster, kept apart from `tasks`
+   *  so old clients keep rendering exactly the live set they render today. */
+  settledTasks?: AgentSessionBackgroundTask[]
   /** Optional so clients only send targeted stops to hosts that accept them. */
   supportsTaskStop?: boolean
+  /** Whether an untargeted "stop everything" is available at all. Absent means
+   *  yes: every host that predates this field accepted one, and a client that
+   *  read absence as "no stop" would hide a working control on those hosts.
+   *  A host whose provider exposes no honest stop sends `false`. */
+  supportsStopAll?: boolean
+}
+
+function backgroundTaskFieldsEqual(
+  left: AgentSessionBackgroundTask,
+  right: AgentSessionBackgroundTask
+): boolean {
+  return (
+    left.id === right.id &&
+    left.kind === right.kind &&
+    left.description === right.description &&
+    left.name === right.name &&
+    left.state === right.state &&
+    left.startedAt === right.startedAt &&
+    left.totalTokens === right.totalTokens
+  )
+}
+
+/** Field equality for task lists, shared by the client reducer and the host
+ *  status feed so a publish whose only change is one task's state is never
+ *  judged equal and dropped. */
+export function agentSessionBackgroundTasksEqual(
+  left: AgentSessionBackgroundTask[] | undefined,
+  right: AgentSessionBackgroundTask[] | undefined
+): boolean {
+  if (left === right) {
+    return true
+  }
+  if (!left || !right || left.length !== right.length) {
+    return false
+  }
+  return left.every((task, index) => backgroundTaskFieldsEqual(task, right[index]))
 }
 
 export type AgentSessionTurnActivity = {
@@ -150,6 +211,8 @@ export type AgentSessionSubscribeEvent =
       fence: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      /** Omitted when unchanged; null clears a previous provider catalog. */
+      commands?: AgentSessionSlashCommand[] | null
       /** Latest provider-authored turn activity; optional for mixed-version hosts. */
       activity?: AgentSessionTurnActivity | null
     }
@@ -161,6 +224,8 @@ export type AgentSessionSubscribeEvent =
       fence?: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      /** Omitted when unchanged; null clears a previous provider catalog. */
+      commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
     }
@@ -172,6 +237,8 @@ export type AgentSessionSubscribeEvent =
       fence: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
+      /** Omitted when unchanged; null clears a previous provider catalog. */
+      commands?: AgentSessionSlashCommand[] | null
       activity?: AgentSessionTurnActivity | null
     }
   | { type: 'end' }
@@ -182,11 +249,14 @@ export type AgentSessionSubscribeEvent =
  *  from the journal so no client has to replay a transcript to learn whether a
  *  turn is running. Additive surface: an older host has no such method. */
 export type AgentSessionStatusSummary = {
+  rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
   workspaceId: string
   agent: AgentSessionRecord['provider']
   /** Null until the journal holds a persisted user or assistant message. */
   status: StructuredAgentSessionProjectedStatus | null
+  /** Present only while this host has the provider child executing the session. */
+  hostExecutionOwned?: true
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
@@ -195,6 +265,10 @@ export type AgentSessionStatusSummary = {
   toolInput?: string
   /** Preview of the newest assistant prose, so a settled row says what the agent said. */
   lastAssistantMessage?: string
+  /** Live provider-owned background tasks, so session lists can render
+   *  subagent children without holding a journal reader open. Optional for
+   *  mixed-version hosts. */
+  backgroundTasks?: AgentSessionBackgroundTask[]
   providerSession?: AgentProviderSessionMetadata
   updatedAt: number
 }
@@ -252,6 +326,7 @@ export function isAgentSessionWireRefusalCode(
 }
 
 export type AgentSessionWireRefusal = {
+  rewindReason?: AgentSessionRewindReason
   code: AgentSessionWireRefusalCode
   message: string
   /** On a stale fence, so the client can retry without another round trip. */
@@ -322,9 +397,28 @@ export type AgentSessionModelOption = {
   efforts: AgentSessionOptionChoice[]
 }
 
+/** One entry of the `/` menu the running provider reports for itself. `skill`
+ *  marks a name the session loaded as a skill rather than a built-in command;
+ *  commands the provider reserves for a terminal UI are already removed. */
+export type AgentSessionSlashCommand = {
+  name: string
+  kind: 'command' | 'skill'
+  /** Membership is authoritative, but this provider report did not classify the name. */
+  kindUnspecified?: true
+}
+
+/** The provider's own command surface, read per session. Additive read-only
+ *  surface: a host that predates it answers `method_not_found`, and the client
+ *  keeps rendering its curated catalog. */
+export type AgentSessionCommandsResult = {
+  commands?: AgentSessionSlashCommand[]
+}
+
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
+  rewind?: AgentSessionRewindSupport
+  conversationCommands?: readonly AgentSessionConversationCommand[]
   models: AgentSessionModelOption[]
   current: {
     model: string

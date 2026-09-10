@@ -113,10 +113,6 @@ export function createAgentStatusProviderSessionActions(
               ? { connectionId: existingRecord.connectionId }
               : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
-          ...(existingRecordMatchesProviderSession &&
-          existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-            ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' }
-            : {}),
           ...(preservesCompletedRecoveryRecord && existingRecord.interrupted !== undefined
             ? { interrupted: existingRecord.interrupted }
             : {}),

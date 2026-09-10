@@ -2,7 +2,9 @@ import { createAdaptorServer } from '@hono/node-server'
 import {
   hasAdmissionCapacity,
   HostDataAuthSchema,
+  parseRelayHostCapabilities,
   RELAY_ADMISSION_BUDGETS,
+  RELAY_HOST_CAPABILITIES_HEADER,
   RELAY_CLOSE_CODE,
   RELAY_DEFAULT_REGION,
   RELAY_PROTOCOL_LIMITS,
@@ -486,7 +488,8 @@ export function createRelayServer(
           sessions.acceptControl(
             webSocket,
             identity,
-            controlUpgrade?.inclusionWatermark
+            controlUpgrade?.inclusionWatermark,
+            parseRelayHostCapabilities(request.headers[RELAY_HOST_CAPABILITIES_HEADER])
           )
         })
       } catch {

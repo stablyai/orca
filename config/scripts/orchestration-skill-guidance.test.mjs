@@ -168,9 +168,10 @@ describe('orchestration kernel', () => {
     expect(kernel).toContain(
       '`projection.attention` categories, `projection.attention.requiresAction`, and literal `projection.nextAction` argv'
     )
-    expect(kernel).toContain(
-      'An `inspect` `nextAction` on a `live` row with `attention.requiresAction` false is informational, not a command to re-run: keep waiting with `check --wait`'
-    )
+    // Unverifiable workers can still owe release; the guide must explain the action itself.
+    expect(kernel).toContain('A `none` `nextAction` has no argv to run')
+    expect(kernel).toContain('read `liveness.reason` and keep waiting with `check --wait`')
+    expect(kernel).toContain('Absence never earns an argv; settlement and pending work still do')
     expect(kernel).toContain('choose `worker-stop` or `worker-abandon`')
   })
 
@@ -478,7 +479,7 @@ describe('owned orchestration references', () => {
 })
 
 describe('orchestration install stub', () => {
-  it('preserves the safe version-matched resolver and bounded old-binary fallback', () => {
+  it('preserves the safe version-matched resolver', () => {
     const stub = readFileSync(stubPath, 'utf8')
 
     expect(stub).toContain('discovery stub')
@@ -487,8 +488,6 @@ describe('orchestration install stub', () => {
     expect(stub).toContain('orca-dev')
     expect(stub).toContain('orca-ide')
     expect(stub).toContain('GNOME Orca screen reader')
-    expect(squash(stub)).toContain('explicitly reports that `skills get` is an unknown command')
-    expect(stub).toContain('do not invent commands')
     expect(stub).not.toMatch(/^orca /mu)
   })
 

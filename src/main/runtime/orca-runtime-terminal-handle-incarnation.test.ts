@@ -53,6 +53,28 @@ function register(runtime: OrcaRuntimeService, incarnationId: string): void {
 }
 
 describe('runtime terminal handle incarnation fencing', () => {
+  it('inspects the retained SSH PTY during renderer reload without an input write', async () => {
+    const { runtime } = makeRuntime()
+    const handle = runtime.preAllocateHandleForPty(PTY_ID)
+    register(runtime, 'incarnation-1')
+    syncGraph(runtime)
+    const inspectProcess = vi.fn().mockResolvedValue({ foregroundProcess: 'codex' })
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      inspectProcess
+    })
+    expect(runtime.markRendererReloading(1)).not.toBeNull()
+    expect((runtime as unknown as { handles: Map<string, unknown> }).handles.has(handle)).toBe(
+      false
+    )
+    await expect(
+      runtime.inspectTerminalProcess(handle, { expectedIncarnationId: 'incarnation-1' })
+    ).resolves.toEqual({ foregroundProcess: 'codex' })
+    expect(inspectProcess).toHaveBeenCalledWith(PTY_ID, { expectedIncarnationId: 'incarnation-1' })
+  })
+
   it('preserves a direct handle while the PTY incarnation is unchanged', async () => {
     const { runtime } = makeRuntime()
     const handle = runtime.preAllocateHandleForPty(PTY_ID)

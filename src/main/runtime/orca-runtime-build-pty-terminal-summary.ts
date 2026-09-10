@@ -7,6 +7,7 @@ import { getLatestPtyTitle } from './runtime-worktree-status-projection'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { TerminalHandleRecord } from './runtime-terminal-contracts'
 import { readTerminalTail } from './terminal-tail-read'
+import { structuredWorkerTerminalRefusal } from './structured-worker-terminal-refusal'
 import { randomUUID } from 'node:crypto'
 
 export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPtyRecordForPaneKey {
@@ -52,7 +53,11 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
     this.assertGraphReady()
     const record = this.handles.get(handle)
     if (!record || record.runtimeId !== this.runtimeId) {
-      throw new Error('terminal_handle_stale')
+      // A structured worker's handle is not stale — nothing went dead. It names a live agent
+      // session that simply has no terminal, and saying `terminal_handle_stale` sent callers
+      // hunting for a remint that will never exist. Read paths (`terminal read`,
+      // `isTerminalRunningAgent`, the identity probe) answer for it BEFORE reaching here.
+      throw structuredWorkerTerminalRefusal(handle, this._orchestrationDb)
     }
     if (record.rendererGraphEpoch !== this.rendererGraphEpoch) {
       throw new Error('terminal_handle_stale')

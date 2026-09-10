@@ -8,6 +8,7 @@
 // journal rather than skipping or compacting past it.
 
 import type { AgentType } from './agent-status-types'
+import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 export { type AgentType }
@@ -81,7 +82,7 @@ export type AgentJournalMessageItem = {
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
 
-export type AgentJournalToolCallItem = {
+export type AgentJournalToolCallItem = NativeChatToolMetadata & {
   kind: 'tool-call'
   name: string
   input: unknown
@@ -147,6 +148,9 @@ export type AgentJournalQuestionItem = {
 export type AgentJournalStatusItem = {
   kind: 'status'
   text: string
+  /** Optional display hints; unknown values retain the ordinary text fallback. */
+  presentation?: string
+  tone?: string
   /** Durable root-turn lifecycle used by clients to expose cancellation only
    *  while the provider can still accept it. */
   turnLifecycle?: { turnId: string; state: 'running' | 'completed' }
@@ -189,6 +193,7 @@ export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[n
  *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
 export type AgentJournalSubmission = {
   clientMessageId: string
+  /** Execution fence of the latest dispatch attempt or recovery. */
   fence: number
   payloadFingerprint: string
   dispatchState: AgentJournalDispatchState
@@ -198,6 +203,9 @@ export type AgentJournalSubmission = {
   reason: string | null
   submittedAt: number
   resolvedAt: number | null
+  /** Set when crash reconciliation resolved the dispatch, not the provider. A live
+   *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
+  recovered?: true
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

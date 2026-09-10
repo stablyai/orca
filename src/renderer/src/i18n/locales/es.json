@@ -4409,11 +4409,10 @@
           "92154beb7e": "Nuevo espacio de trabajo",
           "49f62c5665": "Tablero de espacios de trabajo",
           "5c9c7c16aa": "Agregar un proyecto para crear espacios de trabajo",
-          "ca6f729da2": "Nuevo espacio de trabajo ({{value0}})",
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
-          "25a95899c9": "Agregar proyecto",
           "spaces": "Espacios",
-          "views": "Vista de la barra lateral"
+          "views": "Vista de la barra lateral",
+          "addProject": "Agregar proyecto"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -14181,12 +14180,33 @@
           "795cbf26e2": "Filtrar...",
           "4616ea39fd": "Ir al workspace",
           "threadListOptionsFiltered": "Opciones de lista de hilos, filtros activos",
+          "showSearch": "Mostrar búsqueda",
           "markThreadRead": "Marcar hilo como leído",
           "59b131fbd9": "Marcar hilo como no leído",
           "beb2c19173": "No leído",
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
-          "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar."
+          "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar.",
+          "clearCompleted": "Borrar completados",
+          "none": "Ninguno",
+          "search": "Buscar",
+          "showUnreadOnly": "Mostrar solo no leídos",
+          "showChildAgents": "Mostrar agentes secundarios",
+          "activityOptions": "Opciones de actividad",
+          "interrupted": "Interrumpido",
+          "state": {
+            "working": "Trabajando",
+            "monitoring": "Supervisando tareas en segundo plano",
+            "blocked": "Bloqueado",
+            "waiting": "Esperando entrada",
+            "failed": "Fallido",
+            "done": "Completado",
+            "idle": "Inactivo",
+            "unverifiable": "Sin actualizaciones recientes",
+            "permission": "Requiere atención"
+          },
+          "filtersSection": "Filtros",
+          "viewSection": "Vista"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "Mostrar todos los hosts y proyectos"
@@ -14842,7 +14862,11 @@
   "dashboard": {
     "sidebar": {
       "label": "Agentes",
-      "dashboardLabel": "Panel de agentes"
+      "dashboardLabel": "Panel de agentes",
+      "openActivity": "Ver actividad",
+      "closeActivity": "Cerrar vista de actividad",
+      "projects": "Proyectos",
+      "workspaces": "Espacios de trabajo"
     }
   },
   "browser": {

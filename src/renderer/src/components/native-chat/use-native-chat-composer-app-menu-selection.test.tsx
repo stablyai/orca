@@ -23,7 +23,9 @@ function ComposerHarness(): React.JSX.Element {
     <div>
       <textarea
         aria-label="Composer"
-        ref={textareaRef}
+        ref={(element) => {
+          textareaRef.current = element
+        }}
         defaultValue={'first line\nsecond line'}
         onCompositionStart={() => {
           isComposingRef.current = true

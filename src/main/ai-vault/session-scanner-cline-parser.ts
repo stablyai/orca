@@ -9,6 +9,7 @@ import {
   updateTimeline
 } from './session-scanner-accumulator'
 import type { FileWithMtime } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   arrayValue,
   asRecord,
@@ -35,7 +36,8 @@ export function clineMessagesPathForMetadata(filePath: string): string {
 
 export async function parseClineSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messageSink?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const metadataContent = await wslGatedReadFile(file.path, 'utf-8', 'scan')
   let messagesContent: string | null = null
@@ -52,7 +54,7 @@ export async function parseClineSessionFile(
       throw error
     }
   }
-  return parseClineSessionContent(file, metadataContent, messagesContent, platform)
+  return parseClineSessionContent(file, metadataContent, messagesContent, platform, {}, messageSink)
 }
 
 function isMissingSessionPathError(error: unknown): boolean {
@@ -68,7 +70,8 @@ export function parseClineSessionContent(
   metadataContent: string,
   messagesContent: string | null,
   platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {}
+  options: ParserSessionOptions = {},
+  messageSink?: TranscriptMessageSink
 ): AiVaultSession | null {
   const metadata = parseJsonRecord(metadataContent)
   if (!metadata) {
@@ -76,7 +79,12 @@ export function parseClineSessionContent(
   }
   const pathSegments = file.path.replace(/\\/g, '/').split('/').filter(Boolean)
   const sessionId = extractString(metadata.session_id) ?? pathSegments.at(-2) ?? ''
-  const accumulator = createAccumulator({ agent: 'cline', file, sessionId })
+  const accumulator = createAccumulator({
+    agent: 'cline',
+    file,
+    sessionId,
+    messages: messageSink
+  })
   accumulator.cwd = extractString(metadata.cwd) ?? extractString(metadata.workspace_root)
   accumulator.model = extractString(metadata.model)
   updateTimeline(accumulator, metadata.started_at)

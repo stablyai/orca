@@ -17,7 +17,6 @@ import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { translate } from '@/i18n/i18n'
-import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
@@ -140,16 +139,30 @@ export function NativeChatStructuredSession(
             setOptionPickerRequest((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
             return true
           },
-          setOption: controller.setStructuredOption
+          setOption: controller.setStructuredOption,
+          conversationCommands: controller.conversationCommands,
+          runConversationCommand: controller.runConversationCommand
         }),
       optionsSurface: controller.optionSurface,
+      conversationCommands: controller.conversationCommands,
       optionSnapshot: controller.optionSnapshot,
       optionPickerRequest,
+      sessionCommands: controller.sessionCommands,
       worktreeId: fileLinkContext?.worktreeId,
       onError: setComposerError,
-      runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote'
+      runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote',
+      sessionId: props.sessionId,
+      runtimeEnvironmentId:
+        props.target.kind === 'local' ? null : (props.target.environmentId ?? null)
     }),
-    [controller, fileLinkContext?.worktreeId, optionPickerRequest, props.agent, props.target.kind]
+    [
+      controller,
+      fileLinkContext?.worktreeId,
+      optionPickerRequest,
+      props.agent,
+      props.sessionId,
+      props.target
+    ]
   )
 
   return (
@@ -169,7 +182,6 @@ export function NativeChatStructuredSession(
       onContextMenuCapture={paneCommands.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
-      <NativeChatOrchestrationPausedNotice dispatchStatus={props.orchestrationDispatchStatus} />
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
@@ -180,6 +192,7 @@ export function NativeChatStructuredSession(
         ) : (
           <NativeChatMessageList
             session={session}
+            journalItems={controller.journalItems}
             isWorking={controller.isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
@@ -291,10 +304,14 @@ export function NativeChatStructuredSession(
           {controller.error ?? composerError}
         </p>
       ) : null}
-      {controller.isMonitoringBackgroundTasks ? (
+      {controller.backgroundTasks.show ? (
         <NativeChatBackgroundTasksStatus
-          tasks={controller.backgroundTasks}
-          supportsTaskStop={controller.supportsBackgroundTaskStop}
+          isVisible={props.isVisible}
+          tasks={controller.backgroundTasks.tasks}
+          settledTasks={controller.backgroundTasks.settledTasks}
+          indicatorActive={controller.backgroundTasks.isMonitoring}
+          supportsTaskStop={controller.backgroundTasks.supportsStop}
+          supportsStopAll={controller.backgroundTasks.supportsStopAll}
           stoppingTaskIds={activeStoppingBackgroundTasks?.taskIds ?? NO_STOPPING_TASKS}
           stoppingAll={activeStoppingBackgroundTasks?.all ?? false}
           onStop={(taskId) => {
@@ -338,7 +355,9 @@ export function NativeChatStructuredSession(
           targetPtyId={null}
           agent={props.agent}
           canSend={!prompt}
-          isWorking={controller.isWorking}
+          // Stop, not status: only a provider-minted turn can be interrupted, so the button
+          // must not flip while a dispatch is still unanswered.
+          isWorking={controller.turnId !== null}
           onStop={() => {
             if (controller.turnId) {
               void controller.cancel(controller.turnId)

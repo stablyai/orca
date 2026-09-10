@@ -100,10 +100,14 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
         isPendingFirstAgentMessageRename: () => true
       })
       const items: AgentJournalRenderItem[] = []
+      // A real journal's sequence only ever advances, so the feed's projection
+      // cache must miss on every publish here: this test is about the rename.
+      let sequence = 0
       const journal = {
-        lastActivityAt: () => 0,
         snapshot: () => ({ items }),
-        isReadOnly: false
+        lastActivityAt: () => 1,
+        isReadOnly: false,
+        cursor: () => ({ epoch: 1, sequence: (sequence += 1) })
       } as unknown as AgentSessionJournal
       const pending: Promise<void>[] = []
       const observe = vi.fn((summary, options) => {
@@ -173,8 +177,9 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       getRepo: () => ({ id: REPO_ID, kind: 'folder', path: '/workspace/platform' }) as Repo
     })
     const journal = {
-      lastActivityAt: () => 0,
       isReadOnly: false,
+      lastActivityAt: () => 1,
+      cursor: () => ({ epoch: 1, sequence: 1 }),
       snapshot: () => ({
         items: [
           { body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Fix auth' }] } },

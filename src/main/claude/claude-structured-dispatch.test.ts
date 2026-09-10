@@ -7,6 +7,7 @@ import { dispatchClaudeTurn, resolveClaudeReplayWaiter } from './claude-structur
 import { readClaudeImage } from './claude-structured-dispatch-content'
 import type { ClaudeSession } from './claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
+import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
 function sessionFor(send = vi.fn().mockResolvedValue(undefined)): ClaudeSession {
   return {
@@ -21,6 +22,7 @@ function sessionFor(send = vi.fn().mockResolvedValue(undefined)): ClaudeSession 
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
+    commands: new ClaudeSlashCommandCatalog(),
     dispatchSequence: 0,
     optionMutationSequence: 0,
     options: new Map(),
@@ -419,6 +421,73 @@ describe('Claude structured dispatch image limits', () => {
         uuid: 'command-result-uuid'
       }
     })
+  })
+
+  it('accepts a slash command sent with an attachment from its result receipt', async () => {
+    const session = sessionFor()
+    const dispatched = dispatchClaudeTurn(
+      session,
+      {
+        clientMessageId: 'client-1',
+        body: userMessage([
+          { type: 'text', text: '/permissions' },
+          { type: 'image-ref', url: 'https://example.test/a.png' }
+        ])
+      },
+      100
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+    // The mapper moves the image ahead of the prompt, so Claude runs the command and replies
+    // with a result receipt instead of a user replay.
+    expect(
+      resolveClaudeReplayWaiter(session, {
+        type: 'result',
+        subtype: 'success',
+        session_id: 'provider-session',
+        uuid: 'command-result-uuid'
+      })
+    ).toBe(false)
+
+    await expect(dispatched).resolves.toMatchObject({
+      state: 'accepted',
+      providerIdentity: { uuid: 'command-result-uuid' }
+    })
+    // The sent order is the fix: the waiter's verdict alone was already what it is today.
+    expect(session.connection.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'url', url: 'https://example.test/a.png' } },
+            { type: 'text', text: '/permissions' }
+          ]
+        }
+      })
+    )
+  })
+
+  it('does not take a result receipt for leading whitespace Claude never reads as a command', async () => {
+    const session = sessionFor()
+    const dispatched = dispatchClaudeTurn(
+      session,
+      {
+        clientMessageId: 'client-1',
+        body: userMessage([{ type: 'text', text: '  /permissions' }])
+      },
+      100
+    )
+    await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
+
+    expect(
+      resolveClaudeReplayWaiter(session, {
+        type: 'result',
+        subtype: 'success',
+        session_id: 'provider-session',
+        uuid: 'unrelated-result-uuid'
+      })
+    ).toBe(false)
+
+    await expect(dispatched).resolves.toMatchObject({ state: 'unknown' })
   })
 
   it('correlates a later slash-command result by user_message_uuid despite a timed-out slash waiter', async () => {

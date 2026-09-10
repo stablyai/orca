@@ -14,7 +14,12 @@ import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 describe('orchestration mailbox pointer submit', () => {
   it('does not settle a replacement reservation after an old Enter write resolves', async () => {
     const db = new OrchestrationDb(':memory:')
-    const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'staged' })
+    const message = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'staged'
+    })
     const ptyId = 'pty-reused'
     const oldReservation = { ptyId, processIncarnation: 'inc-old' }
     const replacementReservation = { ptyId, processIncarnation: 'inc-new' }
@@ -86,8 +91,18 @@ describe('orchestration mailbox pointer submit', () => {
 
   it('does not overwrite a message already reserved by another pointer flight', () => {
     const db = new OrchestrationDb(':memory:')
-    const first = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'first' })
-    const second = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'second' })
+    const first = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'first'
+    })
+    const second = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'a',
+      to: 'run:run-1',
+      subject: 'second'
+    })
     const original = { ptyId: 'pty-a', processIncarnation: 'inc-a' }
     const replacement = { ptyId: 'pty-b', processIncarnation: 'inc-b' }
 

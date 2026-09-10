@@ -4,8 +4,15 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
-import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import {
+  readableProviderFrameText,
+  unhandledProviderFrameJournalItem
+} from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import {
+  claudeRecord,
+  claudeText,
+  type ClaudeMessageEnvelope
+} from './claude-structured-item-translation'
 
 export function claudeProviderFrameKind(message: Record<string, unknown>): string {
   const type = claudeText(message.type) ?? 'unknown'
@@ -122,4 +129,31 @@ export function createClaudeProviderFrameFallback(
       sink.publish()
     }
   }
+}
+
+export type ClaudeProviderFrameFallback = ReturnType<typeof createClaudeProviderFrameFallback>
+
+/** Journal each content part this build does not model, plus the empty assistant
+ *  frame a replay leaves behind (an empty USER frame is a replay with nothing to
+ *  show, not an unknown kind). Returns whether anything was appended. */
+export function appendUnmodeledClaudeContent(
+  fallback: ClaudeProviderFrameFallback,
+  envelope: ClaudeMessageEnvelope,
+  message: Record<string, unknown>
+): boolean {
+  let changed = false
+  for (const part of envelope.content.filter((part) => !isModeledClaudeContent(part))) {
+    const partType = claudeText(claudeRecord(part)?.type) ?? 'unknown'
+    fallback.append(
+      `message:${envelope.role}:content:${partType}`,
+      part,
+      readableProviderFrameText(part) ?? CLAUDE_UNRENDERABLE_CONTENT_TEXT
+    )
+    changed = true
+  }
+  if (envelope.content.length === 0 && envelope.role === 'assistant') {
+    fallback.append(`message:${envelope.role}:empty`, message)
+    changed = true
+  }
+  return changed
 }

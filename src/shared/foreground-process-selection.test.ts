@@ -49,3 +49,19 @@ describe('selectForegroundProcessCandidate', () => {
     })
   })
 })
+
+it('memoizes shared ancestry while validating a long agent/helper lineage', () => {
+  let reads = 0
+  const candidates = Array.from({ length: 1000 }, (_, index) => ({
+    pid: index + 1,
+    get ppid() {
+      reads += 1
+      return index
+    },
+    depth: index,
+    stat: 'S+',
+    command: index % 2 === 0 ? 'omp' : 'codex'
+  }))
+  expect(selectForegroundProcessCandidate(candidates)?.candidate.pid).toBe(1)
+  expect(reads).toBeLessThanOrEqual(1000)
+})

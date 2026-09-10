@@ -114,6 +114,8 @@ export type AgentStatusEntry = {
    *  which is the delivery/ordering clock a relay reconnect must restamp to stay monotonic.
    *  Absent for locally derived rows and old hosts; freshness falls back to `updatedAt`. */
   evidenceObservedAt?: number
+  /** True only while a host-held structured session is represented by its live status feed. */
+  structuredHostOwned?: true
   /** Timestamp (ms) when the current `state` was first reported.
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number

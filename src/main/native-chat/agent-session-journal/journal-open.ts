@@ -167,10 +167,11 @@ export function readJournalRowsAfterCursor(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  afterSequence: number
+  afterSequence: number,
+  limit?: number
 ): JournalRow[] {
   const rows: JournalRow[] = []
-  for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence)) {
+  for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
     const parsed = parseJournalRow(stored.rowJson)
     if (!parsed.ok) {
       break

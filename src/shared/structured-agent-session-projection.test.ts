@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
-import type { AgentJournalRenderItem } from './agent-session-journal-types'
+import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import { parsePaneKey } from './stable-pane-id'
 import {
   activeStructuredAgentSessionTurnId,
   hasPersistedStructuredAgentSessionTurn,
+  hasUnansweredStructuredAgentSessionDispatch,
   projectStructuredItemToNativeChat,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary,
@@ -19,7 +20,82 @@ function item(
   return { itemId, sequence, revision: 1, observedAt: sequence, body }
 }
 
+function submission(
+  clientMessageId: string,
+  dispatchState: AgentJournalSubmission['dispatchState']
+): AgentJournalSubmission {
+  return {
+    clientMessageId,
+    fence: 1,
+    payloadFingerprint: clientMessageId,
+    dispatchState,
+    providerItemId: null,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: dispatchState === 'pending' ? null : 2
+  }
+}
+
 describe('structured agent session status projection', () => {
+  it('reuses immutable item projections and refreshes revisions and resolved prompts', () => {
+    const original = item('diff', 1, {
+      kind: 'diff',
+      path: 'a.ts',
+      patch: {
+        head: '@@\n+first',
+        digest: 'one',
+        byteLength: 10,
+        truncated: false
+      }
+    })
+    const first = projectStructuredItemToNativeChat(original)
+    expect(projectStructuredItemToNativeChat(original)).toBe(first)
+    const revised = {
+      ...original,
+      revision: 2,
+      observedAt: 2000,
+      body: {
+        kind: 'diff' as const,
+        path: 'a.ts',
+        patch: {
+          head: '@@\n+second',
+          digest: 'two',
+          byteLength: 11,
+          truncated: false
+        }
+      }
+    }
+    const second = projectStructuredItemToNativeChat(revised)
+    expect(second).not.toBe(first)
+    expect(second).toMatchObject({
+      timestamp: 2000,
+      blocks: [{ type: 'tool-call' }, { type: 'tool-result', output: '@@\n+second' }]
+    })
+    const pending = item('approval', 2, {
+      kind: 'approval',
+      title: 'Allow?',
+      detail: null,
+      options: [],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+    expect(projectStructuredItemToNativeChat(pending)).toBeNull()
+    if (pending.body.kind !== 'approval') {
+      throw new Error('fixture')
+    }
+    const resolved = {
+      ...pending,
+      revision: 2,
+      body: {
+        ...pending.body,
+        resolution: { ...pending.body.resolution, state: 'resolved' as const }
+      }
+    }
+    expect(projectStructuredItemToNativeChat(resolved)).toMatchObject({
+      id: 'approval',
+      role: 'system'
+    })
+  })
+
   it('projects running, attention, and completed lifecycle states', () => {
     const running = item('running', 1, {
       kind: 'status',
@@ -77,6 +153,75 @@ describe('structured agent session status projection', () => {
     expect(projectStructuredAgentSessionStatusSummary([first, second])).toEqual({
       status: 'idle',
       latestPrompt: 'second line'
+    })
+  })
+
+  it('reads a session as working while a dispatch is unanswered, before any lifecycle row', () => {
+    const asked = item('asked', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const pending = [submission('m1', 'pending')]
+
+    expect(hasUnansweredStructuredAgentSessionDispatch(pending)).toBe(true)
+    expect(projectStructuredAgentSessionStatus([asked], pending)).toBe('working')
+    // The first send has no journalled message until the provider replays it.
+    expect(projectStructuredAgentSessionStatusSummary([], pending)).toEqual({
+      status: 'working',
+      latestPrompt: ''
+    })
+    expect(projectStructuredAgentSessionStatusSummary([asked], pending)).toEqual({
+      status: 'working',
+      latestPrompt: 'go'
+    })
+  })
+
+  it('does not resurrect old-host unknown work after its execution fence advances', () => {
+    const oldHostSubmission = { ...submission('m1', 'unknown'), fence: 2 }
+    expect(hasUnansweredStructuredAgentSessionDispatch([oldHostSubmission], 2)).toBe(true)
+    expect(hasUnansweredStructuredAgentSessionDispatch([oldHostSubmission], 3)).toBe(false)
+  })
+
+  it('recognizes recovery from an older host without the optional marker', () => {
+    expect(
+      hasUnansweredStructuredAgentSessionDispatch([
+        { ...submission('m1', 'unknown'), reason: 'host_restarted_before_acknowledgement' }
+      ])
+    ).toBe(false)
+  })
+
+  it('stops reading a resolved dispatch as work, and lets a pending prompt outrank it', () => {
+    const asked = item('asked', 1, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'go' }]
+    })
+    const prompt = item('prompt', 2, {
+      kind: 'approval',
+      title: 'Run command?',
+      detail: null,
+      options: [{ id: 'yes', label: 'Allow' }],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+
+    for (const state of ['accepted', 'rejected'] as const) {
+      expect(hasUnansweredStructuredAgentSessionDispatch([submission('m1', state)])).toBe(false)
+      expect(projectStructuredAgentSessionStatus([asked], [submission('m1', state)])).toBe('idle')
+    }
+    // The ack budget elapsing is a delivery answer, not an answer about the turn.
+    expect(hasUnansweredStructuredAgentSessionDispatch([submission('m1', 'unknown')])).toBe(true)
+    expect(
+      hasUnansweredStructuredAgentSessionDispatch([
+        { ...submission('m1', 'unknown'), recovered: true }
+      ])
+    ).toBe(false)
+    expect(
+      projectStructuredAgentSessionStatus([asked, prompt], [submission('m1', 'pending')])
+    ).toBe('attention')
+    expect(projectStructuredAgentSessionStatusSummary([], [])).toEqual({
+      status: null,
+      latestPrompt: ''
     })
   })
 
@@ -281,5 +426,68 @@ describe('structured agent session status projection', () => {
     expect(projected?.blocks).toEqual([
       { type: 'tool-call', name: 'shell', input: { command: 'cat package.json' }, state: 'running' }
     ])
+  })
+})
+
+describe('notice projection for desktop and mobile consumers', () => {
+  it.each([
+    { presentation: 'compaction' },
+    { presentation: 'plan-document' },
+    { tone: 'warning' },
+    { tone: 'error' },
+    { tone: 'notice' },
+    { presentation: 'future-presentation', tone: 'future-tone' }
+  ])('preserves readable text alongside optional metadata: %j', (metadata) => {
+    const projected = projectStructuredItemToNativeChat(
+      item('notice', 1, {
+        kind: 'status',
+        text: 'A readable document or notice',
+        ...metadata
+      })
+    )
+    expect(projected).toMatchObject({
+      role: 'system',
+      blocks: [{ type: 'text', text: 'A readable document or notice', ...metadata }]
+    })
+  })
+})
+
+it('preserves optional tool annotations for desktop and mobile projection', () => {
+  const metadata = {
+    exitCode: 127,
+    durationMs: 400,
+    webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]
+  }
+  const projected = projectStructuredItemToNativeChat(
+    item('annotated', 1, {
+      kind: 'tool-call',
+      name: 'shell',
+      input: null,
+      state: 'failed',
+      ...metadata
+    })
+  )
+  expect(projected?.blocks[0]).toEqual({
+    type: 'tool-call',
+    name: 'shell',
+    input: null,
+    state: 'failed',
+    ...metadata
+  })
+})
+
+it('preserves confirmed MCP identity and the raw name through projection', () => {
+  const body = {
+    kind: 'tool-call' as const,
+    name: 'my_server/ns.tool',
+    input: null,
+    state: 'running' as const,
+    mcpIdentity: { server: 'my_server', tool: 'ns.tool' }
+  }
+  const projected = projectStructuredItemToNativeChat(item('mcp', 1, body))
+  expect(projected?.blocks[0]).toMatchObject({
+    name: body.name,
+    mcpIdentity: body.mcpIdentity,
+    type: 'tool-call'
   })
 })

@@ -181,7 +181,7 @@ describe('ProjectCombobox', () => {
     expect(onValueChange).toHaveBeenCalledWith('project-group:folder-group')
   })
 
-  it('always offers an "Add a new project" action, including when the list is empty', () => {
+  it('always offers an "Add project" action, including when the list is empty', () => {
     const onAddProject = vi.fn()
 
     act(() => {
@@ -197,7 +197,7 @@ describe('ProjectCombobox', () => {
     openList()
 
     const addRow = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).find(
-      (node) => node.textContent?.includes('Add a new project')
+      (node) => node.textContent?.includes('Add project')
     )
     expect(addRow).toBeTruthy()
 
@@ -208,7 +208,7 @@ describe('ProjectCombobox', () => {
     expect(onAddProject).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps "Add a new project" reachable when the search matches nothing', () => {
+  it('keeps "Add project" reachable when the search matches nothing', () => {
     const onAddProject = vi.fn()
 
     act(() => {
@@ -226,7 +226,7 @@ describe('ProjectCombobox', () => {
 
     expect(container.textContent).toContain('No projects match your search.')
     const addRow = Array.from(container.querySelectorAll<HTMLElement>('[role="option"]')).find(
-      (node) => node.textContent?.includes('Add a new project')
+      (node) => node.textContent?.includes('Add project')
     )
     expect(addRow).toBeTruthy()
 
@@ -236,13 +236,13 @@ describe('ProjectCombobox', () => {
     expect(onAddProject).toHaveBeenCalledTimes(1)
   })
 
-  it('omits the "Add a new project" action when no handler is provided', () => {
+  it('omits the "Add project" action when no handler is provided', () => {
     act(() => {
       root.render(<ProjectCombobox options={projects} value={null} onValueChange={vi.fn()} />)
     })
     openList()
 
-    expect(container.textContent).not.toContain('Add a new project')
+    expect(container.textContent).not.toContain('Add project')
   })
 
   it('renders directory details for duplicate project names', () => {
@@ -313,7 +313,7 @@ describe('ProjectCombobox', () => {
     expect(onValueSelected).toHaveBeenCalledWith('github:stablyai/noqa')
   })
 
-  it('arms "Add a new project" when a query matches nothing, so Enter is never a wrong guess', () => {
+  it('arms "Add project" when a query matches nothing, so Enter is never a wrong guess', () => {
     const onAddProject = vi.fn()
     const onValueChange = vi.fn()
 

@@ -74,6 +74,18 @@ export function claudeMessageIdentity(
   return { provider: 'claude', sessionId: envelope.sessionId, uuid: envelope.uuid }
 }
 
+/** User bubbles belong to the submitted message; SDK user frames carry echoes
+ *  and tool results, so a user envelope keeps only its tool results. */
+export function claudeOutputEnvelope(envelope: ClaudeMessageEnvelope): ClaudeMessageEnvelope {
+  if (envelope.role !== 'user') {
+    return envelope
+  }
+  return {
+    ...envelope,
+    content: envelope.content.filter((part) => claudeRecord(part)?.type === 'tool_result')
+  }
+}
+
 function messageBlocks(envelope: ClaudeMessageEnvelope): NativeChatBlock[] {
   const blocks: NativeChatBlock[] = []
   for (const value of envelope.content) {

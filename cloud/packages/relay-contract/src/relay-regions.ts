@@ -8,6 +8,15 @@ export type RelayRegion = z.infer<typeof RelayRegionSchema>
 
 export const RELAY_DEFAULT_REGION: RelayRegion = 'us-central1'
 
+// Field-name segment for the flat per-region runtime counters, spelled out rather than derived so
+// the Terraform side can hold the same literal and a test can compare the two. `satisfies` makes a
+// new region a compile error here, which is the point: a region with no segment would silently
+// drop out of the region-skew alert's denominators.
+export const RELAY_REGION_METRIC_SEGMENTS = {
+  'us-central1': 'UsCentral1',
+  'asia-east2': 'AsiaEast2'
+} as const satisfies Record<RelayRegion, string>
+
 const RelayProbeOriginSchema = z.string().url().max(2_048).refine(isCanonicalHttpsOrigin)
 
 export const RelayRegionCatalogResponseSchema = z

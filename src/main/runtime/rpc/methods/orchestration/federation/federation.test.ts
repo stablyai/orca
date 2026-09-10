@@ -11,6 +11,7 @@ import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
 import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
+import { syncFederationBarrier } from './federation-sync-barrier.test-support'
 
 describe('orchestration federation', () => {
   const databases: OrchestrationDb[] = []
@@ -310,7 +311,7 @@ describe('orchestration federation', () => {
     expect(sent).toMatchObject({ ok: true, result: { lifecycle: { action: 'completed' } } })
     expect(homeDb.getTask(task.id)?.status).toBe('completed')
 
-    await homeRuntime.syncOrchestrationFederation()
+    await syncFederationBarrier(homeRuntime, homeDb)
 
     expect(homeDb.getTask(task.id)?.status).toBe('completed')
     expect(homeDb.getWorkerDispatch(dispatch.id)?.state).toBe('succeeded')
@@ -362,7 +363,7 @@ describe('orchestration federation', () => {
       ).toHaveLength(1)
     )
 
-    await homeRuntime.syncOrchestrationFederation()
+    await syncFederationBarrier(homeRuntime, homeDb)
     const question = homeDb
       .getRunMailboxHistory(task.run_id, 10)
       .find((message) => message.type === 'question')
@@ -383,7 +384,7 @@ describe('orchestration federation', () => {
       }
     })
     expect(reply).toMatchObject({ ok: true, result: { question: { status: 'answered' } } })
-    await homeRuntime.syncOrchestrationFederation()
+    await syncFederationBarrier(homeRuntime, homeDb)
 
     await expect(ask).resolves.toMatchObject({
       ok: true,
@@ -426,8 +427,8 @@ describe('orchestration federation', () => {
     })
     const questionId = (timedOut as { result: { messageId: string } }).result.messageId
 
-    await homeRuntime.syncOrchestrationFederation()
-    await homeDispatcher.dispatch({
+    await syncFederationBarrier(homeRuntime, homeDb)
+    const lateReply = await homeDispatcher.dispatch({
       id: 'rpc_home_late_reply',
       authToken: 'coordinator-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
@@ -435,6 +436,8 @@ describe('orchestration federation', () => {
       method: 'orchestration.reply',
       params: { id: questionId, body: 'yes', from: 'term_coord' }
     })
+    // A rejected reply enqueues no relay, which would only surface as the resume timing out.
+    expect(lateReply).toMatchObject({ ok: true, result: { question: { status: 'answered' } } })
     restartWorkerRuntime()
     const resumed = workerDispatcher.dispatch({
       id: 'rpc_remote_ask_resume',
@@ -445,7 +448,7 @@ describe('orchestration federation', () => {
       method: 'orchestration.ask',
       params: { from: 'term_windows_worker', resume: questionId, timeoutMs: 5_000 }
     })
-    await homeRuntime.syncOrchestrationFederation()
+    await syncFederationBarrier(homeRuntime, homeDb)
 
     await expect(resumed).resolves.toMatchObject({
       ok: true,
@@ -476,8 +479,8 @@ describe('orchestration federation', () => {
     loseNextAckResponse = true
     const remoteCall = vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer')
 
-    await expect(homeRuntime.syncOrchestrationFederation()).resolves.toBeUndefined()
-    await homeRuntime.syncOrchestrationFederation()
+    await expect(syncFederationBarrier(homeRuntime, homeDb)).resolves.toBeUndefined()
+    await syncFederationBarrier(homeRuntime, homeDb)
 
     expect(
       homeDb
@@ -612,7 +615,7 @@ describe('orchestration federation', () => {
   it('treats a worker runtime ID change as an epoch, not a new server', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
-    await homeRuntime.syncOrchestrationFederation()
+    await syncFederationBarrier(homeRuntime, homeDb)
     vi.spyOn(homeRuntime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
     const dispatch = homeDb.getDispatchContext(task.id)!
     const oldEpoch = homeDb.getFederatedDispatch(dispatch.id)?.remote_runtime_epoch

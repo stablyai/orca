@@ -1,3 +1,4 @@
+import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type {
   DeviceCredentialInstalled,
@@ -293,8 +294,15 @@ export class RelaySessionBroker {
   }
 
   private publishStatus(status: RelayBrokerStatus): void {
-    if (this.isCurrent()) {
-      this.options.onStatus(status)
+    if (!this.isCurrent()) {
+      return
+    }
+    const cellUrl = this.originPool.activeAssignment?.cellUrl
+    this.options.onStatus(status, relayStatusCellUrl(status, cellUrl))
+    if (status === 'registered' && cellUrl) {
+      // Fire-and-forget: the listener may probe this cell, and nothing about the
+      // live session is allowed to wait on that.
+      this.options.onAssignedCellActive?.(cellUrl)
     }
   }
 }
