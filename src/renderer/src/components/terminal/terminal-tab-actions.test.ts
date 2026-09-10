@@ -9,6 +9,7 @@ const {
   isWebRuntimeSessionActiveMock,
   isWebTerminalSurfaceTabIdMock,
   resolveHostSessionTabIdForWebSessionTabMock,
+  toastErrorMock,
   toHostSessionTabIdMock
 } = vi.hoisted(() => ({
   activateWebRuntimeSessionTabMock: vi.fn(),
@@ -19,7 +20,12 @@ const {
   isWebRuntimeSessionActiveMock: vi.fn(),
   isWebTerminalSurfaceTabIdMock: vi.fn(() => false),
   resolveHostSessionTabIdForWebSessionTabMock: vi.fn<() => string | null>(() => null),
+  toastErrorMock: vi.fn(),
   toHostSessionTabIdMock: vi.fn((tabId: string) => tabId)
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: (...args: unknown[]) => toastErrorMock(...args) }
 }))
 
 vi.mock('@/store', () => ({
@@ -52,7 +58,7 @@ import { createNewTerminalTab } from './terminal-tab-create'
 describe('createNewTerminalTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    createWebRuntimeSessionTerminalMock.mockResolvedValue(true)
+    createWebRuntimeSessionTerminalMock.mockResolvedValue({ status: 'created' })
     isWebRuntimeSessionActiveMock.mockReturnValue(false)
   })
 
@@ -171,6 +177,27 @@ describe('createNewTerminalTab', () => {
       cwd: '/repo/packages/app',
       activate: true
     })
+    expect(createTab).not.toHaveBeenCalled()
+  })
+
+  it('reports the host message when shortcut terminal creation fails', async () => {
+    const createTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    createWebRuntimeSessionTerminalMock.mockResolvedValue({
+      status: 'failed',
+      message: 'remote shell is unavailable'
+    })
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      createTab,
+      setActiveTabType: vi.fn()
+    })
+
+    createNewTerminalTab('wt-1')
+
+    await vi.waitFor(() =>
+      expect(toastErrorMock).toHaveBeenCalledWith('remote shell is unavailable')
+    )
     expect(createTab).not.toHaveBeenCalled()
   })
 })

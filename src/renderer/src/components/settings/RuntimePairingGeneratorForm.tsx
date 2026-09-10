@@ -7,6 +7,8 @@ import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseServerShareAddress } from '../../../../shared/network/server-share-address'
 import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
 import type { RuntimePairingIntent } from './runtime-pairing-link-state'
+import type { TailcatTunnelStatus } from '../../../../shared/tailcat-tunnel-status'
+import { RuntimePairingTunnelPanel } from './RuntimePairingTunnelPanel'
 import { translate } from '@/i18n/i18n'
 
 export type { RuntimePairingIntent } from './runtime-pairing-link-state'
@@ -18,6 +20,7 @@ type RuntimePairingGeneratorFormProps = {
   selectedAddress: string
   refreshingNetworkInterfaces: boolean
   isGeneratingPairing: boolean
+  tunnelStatus: TailcatTunnelStatus | null
   webClientUrl: string | null
   runtimePairingUrl: string | null
   copiedTarget: 'web' | 'pairing' | null
@@ -36,6 +39,7 @@ export function RuntimePairingGeneratorForm({
   selectedAddress,
   refreshingNetworkInterfaces,
   isGeneratingPairing,
+  tunnelStatus,
   webClientUrl,
   runtimePairingUrl,
   copiedTarget,
@@ -55,7 +59,11 @@ export function RuntimePairingGeneratorForm({
   const customAddressResult =
     intent === 'custom' ? parseServerShareAddress(selectedAddress) : { ok: true as const }
   const customAddressInvalid = selectedAddress !== '' && !customAddressResult.ok
-  const canGenerate = selectedAddress !== '' && (intent !== 'custom' || customAddressResult.ok)
+  const tunnelReady = tunnelStatus?.installed === true && tunnelStatus.compatible !== false
+  const canGenerate =
+    selectedAddress !== '' &&
+    (intent !== 'custom' || customAddressResult.ok) &&
+    (intent !== 'tunnel' || tunnelReady)
 
   return (
     <>
@@ -67,7 +75,7 @@ export function RuntimePairingGeneratorForm({
               'Where will this link be opened?'
             )}
           </legend>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2">
             {(
               [
                 [
@@ -101,6 +109,17 @@ export function RuntimePairingGeneratorForm({
                   translate(
                     'auto.components.settings.RuntimePairingUrlGenerator.customAddressHelp',
                     'SSH tunnel, reverse proxy, or custom hostname'
+                  )
+                ],
+                [
+                  'tunnel',
+                  translate(
+                    'auto.components.settings.RuntimePairingUrlGenerator.tunnelAnywhere',
+                    'Anywhere via Tailcat'
+                  ),
+                  translate(
+                    'auto.components.settings.RuntimePairingUrlGenerator.tunnelAnywhereHelp',
+                    'Encrypted peer-to-peer tunnel, no account or VPN needed'
                   )
                 ]
               ] as const
@@ -136,7 +155,9 @@ export function RuntimePairingGeneratorForm({
           </div>
         </fieldset>
 
-        {intent === 'local' ? (
+        {intent === 'tunnel' ? (
+          <RuntimePairingTunnelPanel status={tunnelStatus} />
+        ) : intent === 'local' ? (
           <div className="rounded-md border border-border/60 bg-muted/30 p-3 text-xs">
             <div className="font-medium">
               {translate(

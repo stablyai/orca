@@ -7,6 +7,10 @@ import type {
   RelayRevokeOutboxItem
 } from '../relay/relay-revoke-outbox'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+import {
+  PAIRING_OFFER_TUNNEL_VERSION,
+  type PairingTunnel
+} from '../../../shared/mobile-relay-pairing-offer'
 import type { RuntimePairingReach } from '../../../shared/runtime-pairing-reach'
 import { resolveAdvertisedPairingEndpoint } from '../pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
@@ -15,8 +19,10 @@ import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
   E2EE_KEY_UNAVAILABLE_GUIDANCE,
   pairingUnavailable,
+  TUNNEL_UNAVAILABLE_GUIDANCE,
   type MobileRelayPairingProvider,
-  type PairingOfferUnavailable
+  type PairingOfferUnavailable,
+  type RuntimeTunnelAdvertiser
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
@@ -78,6 +84,15 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.mobileRelayPairingProvider = provider
   }
 
+  setTunnelAdvertiser(advertiser: RuntimeTunnelAdvertiser | null): void {
+    this.tunnelAdvertiser = advertiser
+  }
+
+  /** True when any grant was handed out with a tunnel token, so the host should keep the tunnel up. */
+  hasTunnelGrants(): boolean {
+    return this.deviceRegistry?.hasPairingTransport('tailcat') ?? false
+  }
+
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
     const device = this.deviceRegistry?.getDevice(deviceId)
     if (device?.scope !== 'mobile') {
@@ -120,6 +135,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
     // next launch bind every interface. Defaults to network reach, which is what every other caller means.
     reach?: RuntimePairingReach
+    /** Embed the host's tunnel token so the client dials through tailcat instead of `address`. */
+    tunnel?: boolean
   }):
     | PairingOfferUnavailable
     | {
@@ -152,6 +169,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       return pairingUnavailable(advertised.reason, advertised.guidance)
     }
     const endpoint = advertised.endpoint
+    const tunnel = args.tunnel ? this.resolvePairingTunnel(rawEndpoint) : null
+    if (args.tunnel && !tunnel) {
+      return pairingUnavailable('tunnel_unavailable', TUNNEL_UNAVAILABLE_GUIDANCE)
+    }
     const deviceName = args.name ?? `CLI ${new Date().toLocaleDateString()}`
     const scope = args.scope ?? 'runtime'
     let device: DeviceEntry
@@ -160,26 +181,41 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       device = args.rotate
         ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach)
         : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
+      // Why: a re-advertised pending grant must reflect the transport of the link actually handed out.
+      this.deviceRegistry.setPairingTransport(device.deviceId, tunnel ? 'tailcat' : null)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
     }
     const pairingUrl = encodePairingOffer({
-      v: PAIRING_OFFER_VERSION,
+      v: tunnel ? PAIRING_OFFER_TUNNEL_VERSION : PAIRING_OFFER_VERSION,
       endpoint,
       deviceToken: device.token,
       publicKeyB64,
       pairedDeviceId: device.deviceId,
-      scope
+      scope,
+      ...(tunnel ? { tunnel } : {})
     })
     return {
       available: true,
       pairingUrl,
       endpoint,
       deviceId: device.deviceId,
+      // Why: a browser cannot dial a tunnel, so a tunnel link never advertises a web client URL.
       webClientUrl:
-        this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
+        this.webClientRoot && scope === 'runtime' && !tunnel
+          ? createWebClientUrl(endpoint, pairingUrl)
+          : null
     }
+  }
+
+  private resolvePairingTunnel(boundEndpoint: string): PairingTunnel | null {
+    const port = Number(new URL(boundEndpoint).port)
+    if (!Number.isInteger(port) || port <= 0) {
+      return null
+    }
+    const advertised = this.tunnelAdvertiser?.getPairingTunnel(port)
+    return advertised ? { ...advertised, port } : null
   }
 
   protected queueOrRetainRelayDeviceRevoke(deviceId: string, binding: RelayDeviceBinding): void {

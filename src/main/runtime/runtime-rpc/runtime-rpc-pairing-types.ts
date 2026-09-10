@@ -36,6 +36,8 @@ export type OrcaRuntimeRpcServerOptions = {
   wsPort?: number
   // Why: true when the caller pinned a port (`orca serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
   preferPinnedWsPort?: boolean
+  // Why: a Tailcat tunnel embeds the port in every link, so the listener must bind exactly it or fail.
+  requirePinnedWsPort?: boolean
   // Why: STA-2370 — bind the WS listener to all interfaces at startup instead of loopback-until-paired.
   // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
   exposeNetworkByDefault?: boolean
@@ -66,6 +68,12 @@ export type PairingOfferUnavailableReason =
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
   | 'network_exposure_failed'
+  | 'tunnel_unavailable'
+
+export type { RuntimeTunnelAdvertiser } from '../../../shared/tailcat-tunnel-status'
+
+export const TUNNEL_UNAVAILABLE_GUIDANCE =
+  'The Tailcat tunnel is not running on this host. Install the tailcat CLI and enable the tunnel, then generate the link again.'
 
 export type PairingOfferUnavailable = {
   available: false

@@ -11,6 +11,13 @@ import {
   invalidRemoteRuntimeResponseError,
   remoteRuntimeUnavailableError
 } from './remote-runtime-request-frames'
+import {
+  createRemoteRuntimeWebSocket,
+  describeRemoteRuntimeSocketError,
+  remoteRuntimeSocketCreationError
+} from './remote-runtime-tunnel-dialer'
+
+export { TUNNEL_DIALER_UNAVAILABLE_MESSAGE } from './remote-runtime-tunnel-dialer'
 
 export type RemoteRuntimeWebSocket = {
   ws: WebSocket
@@ -49,10 +56,10 @@ export function openRemoteRuntimeWebSocket(
       })
     )
   }
-  const onError = (): void => {
+  const onError = (error: Error): void => {
     callbacks.onError(
       ws,
-      remoteRuntimeUnavailableError('Could not connect to the remote Orca runtime.')
+      remoteRuntimeUnavailableError(describeRemoteRuntimeSocketError(pairing, error))
     )
   }
   const onClose = (code: number, reason: Buffer): void => callbacks.onClose(ws, code, reason)
@@ -119,12 +126,8 @@ function createSocket(
     }
   }
   try {
-    return { ok: true, ws: new WebSocket(pairing.endpoint), keyPair }
+    return { ok: true, ws: createRemoteRuntimeWebSocket(pairing), keyPair }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    return {
-      ok: false,
-      error: new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`)
-    }
+    return { ok: false, error: remoteRuntimeSocketCreationError(error) }
   }
 }

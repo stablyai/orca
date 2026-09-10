@@ -27,7 +27,12 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   if (!parsed.ok) {
     return { ok: false, kind: 'access-link-invalid', message: parsed.message }
   }
-  if (parsed.value.endpointKind === 'loopback' && !args.allowLoopback) {
+  // Why: a tunnel offer's loopback address is only the fallback; the tunnel is what gets dialed.
+  if (
+    parsed.value.endpointKind === 'loopback' &&
+    !args.allowLoopback &&
+    !parsed.value.pairing.tunnel
+  ) {
     return {
       ok: false,
       kind: 'host-unreachable',

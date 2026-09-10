@@ -5,6 +5,7 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
+import { showClientCreationActionError } from '@/lib/client-creation-action-error'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -30,6 +31,10 @@ export function createNewTerminalTab(
       command: shellOverride,
       ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
       activate: true
+    }).then((outcome) => {
+      if (outcome.status === 'failed') {
+        showClientCreationActionError(outcome.message)
+      }
     })
     return
   }

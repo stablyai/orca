@@ -14,6 +14,7 @@ import {
   dispatchFloatingWorkspaceGuestClose,
   dispatchFloatingWorkspaceGuestSelectIndex
 } from '@/lib/floating-workspace-guest-bridge'
+import { showClientCreationActionError } from '@/lib/client-creation-action-error'
 
 import { useAppStore } from '../../store'
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
@@ -39,7 +40,11 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
           environmentId,
           activate: true
         })
-        if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
+        if (outcome.status === 'created') {
+          return
+        }
+        if (isWebRuntimeSessionActive(environmentId)) {
+          showClientCreationActionError(outcome.message)
           return
         }
         const newTab = store.createTab(worktreeId)

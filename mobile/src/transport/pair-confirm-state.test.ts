@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { resolvePairConfirmRouteState } from './pair-confirm-state'
 import type { PairingOffer } from './types'
+import { PAIRING_TUNNEL_UNSUPPORTED_MESSAGE } from '../../../src/shared/pairing-transport-support'
 
 function encodeOffer(offer: PairingOffer): string {
   return Buffer.from(JSON.stringify(offer))
@@ -49,6 +50,20 @@ describe('resolvePairConfirmRouteState', () => {
       kind: 'error',
       offer: null,
       errorMessage: 'Not a valid pairing code'
+    })
+  })
+
+  it('refuses a Tailcat tunnel offer instead of dialing its fallback address', () => {
+    // Why: mobile has no tunnel dialer; the fallback address in a tunnel offer is the host's loopback.
+    const tunnelOffer: PairingOffer = {
+      ...offer,
+      v: 3,
+      tunnel: { v: 1, kind: 'tailcat', token: 'tcTOKEN', port: 6768 }
+    }
+    expect(resolvePairConfirmRouteState(encodeOffer(tunnelOffer))).toEqual({
+      kind: 'error',
+      offer: null,
+      errorMessage: PAIRING_TUNNEL_UNSUPPORTED_MESSAGE
     })
   })
 })

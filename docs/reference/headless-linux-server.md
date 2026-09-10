@@ -178,6 +178,30 @@ because its contract requires a pairing URL. Stop a foreground server with
 `device_registry_unavailable`, `e2ee_key_unavailable`, and
 `invalid_advertised_endpoint`.
 
+## Tailcat Tunnel
+
+When the server has no LAN, Tailscale, or reverse-proxy address that clients can
+reach, share it through [Tailcat](https://github.com/tailscale/tailcat)
+instead. Install the `tailcat` CLI on the server and on every client, then add
+`--tailcat`:
+
+```bash
+LIBGL_ALWAYS_SOFTWARE=1 /opt/orca/orca-linux.AppImage serve --port 6768 --tailcat
+```
+
+The ready block gains a `Tailcat tunnel:` line, and the pairing URL embeds the
+same address blob, so `--pairing-address` is optional. Orca stores the tunnel
+key at `<userData>/tailcat/orca-server.private.json`; keep it with the rest of
+the data directory so the link stays valid across restarts. In `--json` mode
+the `pairing` object carries `tunnel: { kind: "tailcat", token }`.
+
+Every Tailcat link embeds the runtime port, so `--tailcat` binds exactly
+`--port` (default 6768) and exits with an error if that port is taken; `--port 0`
+is refused. Without `--pairing-address` the WebSocket listener stays on loopback
+and only the tunnel reaches it. `--tailcat` cannot be combined with
+`--mobile-pairing`, because Orca Mobile cannot dial a tunnel yet. Orca probes the
+installed `tailcat` before using it and requires release 0.4 or newer.
+
 ## Systemd Service
 
 Create a dedicated service user and install directory. Run the service as this

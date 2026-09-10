@@ -15,6 +15,11 @@ import {
 } from './remote-runtime-client-handshake'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import {
+  createRemoteRuntimeWebSocket,
+  describeRemoteRuntimeSocketError,
+  remoteRuntimeSocketCreationError
+} from './remote-runtime-tunnel-dialer'
+import {
   isRemoteRuntimeBinaryFrameWithinLimit,
   REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
   serializeRemoteRuntimePayload,
@@ -226,13 +231,12 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     }
 
     try {
-      ws = new WebSocket(pairing.endpoint, {
+      ws = createRemoteRuntimeWebSocket(pairing, {
         maxPayload: REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES,
         ...(options?.perMessageDeflate === false ? { perMessageDeflate: false } : {})
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      fail(new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`))
+      fail(remoteRuntimeSocketCreationError(error))
       return
     }
 
@@ -242,11 +246,11 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       )
     }
 
-    function onError(): void {
+    function onError(error: Error): void {
       fail(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          'Could not connect to the remote Orca runtime.'
+          describeRemoteRuntimeSocketError(pairing, error)
         )
       )
     }

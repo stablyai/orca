@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   } as ClientCreationActionAvailability,
   state: {} as Record<string, unknown>,
   toastError: vi.fn(),
+  webRuntimeSessionActive: false,
+  createWebRuntimeSessionTerminal: vi.fn(),
   createBrowserTab: vi.fn(),
   openNewBrowserTabInActiveWorkspace: vi.fn(),
   openMobileEmulatorTab: vi.fn()
@@ -35,8 +37,9 @@ vi.mock('@/lib/client-creation-action-policy', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn(),
-  createWebRuntimeSessionTerminal: vi.fn(),
-  isWebRuntimeSessionActive: () => false
+  createWebRuntimeSessionTerminal: (...args: unknown[]) =>
+    mocks.createWebRuntimeSessionTerminal(...args),
+  isWebRuntimeSessionActive: () => mocks.webRuntimeSessionActive
 }))
 vi.mock('@/lib/open-mobile-emulator-tab', () => ({
   openMobileEmulatorTab: (...args: unknown[]) => mocks.openMobileEmulatorTab(...args)
@@ -76,6 +79,8 @@ describe('useTerminalCreateActions creation gates', () => {
     vi.clearAllMocks()
     mocks.browserAvailability = { state: 'enabled', provider: 'local-client' }
     mocks.simulatorAvailability = { state: 'enabled', provider: 'local-client' }
+    mocks.webRuntimeSessionActive = false
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
     mocks.state = {
       activeGroupIdByWorktree: {},
       groupsByWorktree: {},
@@ -115,5 +120,20 @@ describe('useTerminalCreateActions creation gates', () => {
     renderActions().handleNewSimulatorTab()
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(mocks.toastError).toHaveBeenCalledWith('emulator says no')
+  })
+
+  it('reports the host message when toolbar terminal creation fails', async () => {
+    mocks.webRuntimeSessionActive = true
+    mocks.state.activeGroupIdByWorktree = { [WORKTREE_ID]: 'group-1' }
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+      status: 'failed',
+      message: 'host refused the terminal'
+    })
+
+    renderActions().handleNewTab()
+
+    await vi.waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith('host refused the terminal')
+    )
   })
 })

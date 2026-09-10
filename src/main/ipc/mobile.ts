@@ -3,7 +3,12 @@ import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import { classifyRemotePairingHostname } from '../../shared/remote-pairing-address'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { DeviceEntry } from '../runtime/device-registry'
+import type { DeviceEntry, RuntimePairingTransport } from '../runtime/device-registry'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
+import { TUNNEL_UNAVAILABLE_GUIDANCE } from '../runtime/runtime-rpc/runtime-rpc-pairing-types'
+import { boundWebSocketPort, getTailcatTunnelService } from '../tunnel/tailcat-tunnel-host'
+
+const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
 import {
   getDefaultPairingAddress,
@@ -145,12 +150,50 @@ export function registerMobileHandlers(
     }
   )
 
+  ipcMain.handle('tunnel:getStatus', async () =>
+    getTailcatTunnelService(getCanonicalUserDataPath()).getStatus()
+  )
+
   ipcMain.handle(
     'mobile:getRuntimePairingUrl',
-    async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
-      const ip = args?.address ?? (await getDefaultPairingAddress(getDefaultRouteInterfaceNames))
+    async (
+      _event,
+      args?: {
+        address?: string
+        rotate?: boolean
+        reach?: RuntimePairingReach
+        transport?: RuntimePairingTransport
+      }
+    ) => {
+      // Why: a tunnel link needs no reachable address of its own; loopback is only the fallback it carries.
+      const ip =
+        args?.address ??
+        (args?.transport === 'tailcat'
+          ? RUNTIME_PAIRING_LOOPBACK_ADDRESS
+          : await getDefaultPairingAddress(getDefaultRouteInterfaceNames))
       if (!ip) {
         return { available: false as const }
+      }
+      if (args?.transport === 'tailcat') {
+        // Why: the tunnel proxies into loopback, so the listener never widens; the offer's address is
+        // only the fallback an old client would try.
+        const port = boundWebSocketPort(rpcServer)
+        try {
+          if (port === null) {
+            throw new Error('WebSocket pairing is unavailable.')
+          }
+          await getTailcatTunnelService(getCanonicalUserDataPath()).ensureServer(port)
+        } catch (error) {
+          console.error(
+            '[mobile] Tailcat tunnel failed to start for a runtime pairing offer:',
+            error
+          )
+          return {
+            available: false as const,
+            reason: 'tunnel_unavailable' as const,
+            guidance: error instanceof Error ? error.message : TUNNEL_UNAVAILABLE_GUIDANCE
+          }
+        }
       }
 
       // Why: STA-2370 — generating a runtime pairing offer is the user's explicit opt-in to remote
@@ -158,7 +201,9 @@ export function registerMobileHandlers(
       // listener stays on loopback, so report unavailable rather than advertise a dead LAN endpoint.
       // "This computer only" is the opposite opt-in: the loopback listener already serves it, and the widen
       // never narrows back, so that pick alone must not expose the runtime off-host.
-      const thisComputerOnly = servesThisComputerOnly(args?.reach, ip)
+      // Why: main enforces the tunnel's loopback-only reach; the renderer's reach is not trusted for it.
+      const thisComputerOnly =
+        args?.transport === 'tailcat' || servesThisComputerOnly(args?.reach, ip)
       if (!thisComputerOnly) {
         try {
           await rpcServer.ensureNetworkExposure()
@@ -186,10 +231,13 @@ export function registerMobileHandlers(
         scope: 'runtime',
         // Why: a grant that only ever pointed at loopback must not make the next launch bind every
         // interface when its local client reconnects (that would restore the exposure one restart later).
-        reach: thisComputerOnly ? 'this-computer' : 'network'
+        reach: thisComputerOnly ? 'this-computer' : 'network',
+        ...(args?.transport === 'tailcat' ? { tunnel: true } : {})
       })
       if (!offer.available) {
-        return { available: false as const }
+        return offer.reason === 'tunnel_unavailable'
+          ? { available: false as const, reason: offer.reason, guidance: offer.guidance }
+          : { available: false as const }
       }
 
       return {
