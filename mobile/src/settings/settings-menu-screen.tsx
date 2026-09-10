@@ -1,27 +1,22 @@
 import type { ReactNode } from 'react'
 import { Shield, LifeBuoy } from 'lucide-react-native'
 import { MobileSettingsFrame, MobileSettingsSection } from './mobile-settings-menu'
-import {
-  mobileSettingsMenuItems,
-  type MobileSettingsMenuAvailability
-} from './mobile-settings-menu-items'
+import { mobileSettingsMenuItems } from './mobile-settings-menu-items'
 
 export default function SettingsMenuScreen({
   push,
   onBack,
   openExternal,
-  availability,
   children
 }: {
   push: (route: string) => void
   onBack?: () => void
   openExternal: (url: string) => Promise<unknown>
-  availability?: MobileSettingsMenuAvailability
   children?: ReactNode
 }) {
   return (
     <MobileSettingsFrame onBack={onBack}>
-      <MobileSettingsSection items={mobileSettingsMenuItems(push, availability)} />
+      <MobileSettingsSection items={mobileSettingsMenuItems(push)} />
 
       {children}
 

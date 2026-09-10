@@ -31,15 +31,9 @@ function linkModeLabel(mode: MobileTerminalLinkOpenMode): string {
 }
 
 export default function BrowserSettingsScreen({
-  onBack,
-  scope = 'device',
-  available = true,
-  loadLinkMode = loadTerminalLinkOpenMode
+  onBack
 }: {
   onBack?: () => void
-  scope?: 'device' | 'host'
-  available?: boolean
-  loadLinkMode?: () => Promise<MobileTerminalLinkOpenMode>
 }): React.JSX.Element {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -49,7 +43,7 @@ export default function BrowserSettingsScreen({
 
   useEffect(() => {
     let active = true
-    void loadLinkMode().then(
+    void loadTerminalLinkOpenMode().then(
       (mode) => {
         if (active) {
           setLinkMode(mode)
@@ -64,7 +58,7 @@ export default function BrowserSettingsScreen({
     return () => {
       active = false
     }
-  }, [loadLinkMode])
+  }, [])
 
   const selectLinkMode = useCallback((mode: MobileTerminalLinkOpenMode) => {
     setError(null)
@@ -92,14 +86,8 @@ export default function BrowserSettingsScreen({
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <Text style={styles.groupHeading}>LINKS</Text>
         <Text style={styles.groupDescription}>
-          Choose where HTTP(S) links tapped in terminal output open
-          {scope === 'host' ? ' for this paired host' : ''}.
+          Choose where HTTP(S) links tapped in terminal output open.
         </Text>
-        {!available && (
-          <Text accessibilityRole="alert" style={styles.groupDescription}>
-            Browser preferences are not available in this app version.
-          </Text>
-        )}
         {error && (
           <Text accessibilityRole="alert" style={styles.groupDescription}>
             {error}

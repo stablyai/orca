@@ -5,13 +5,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 
-export default function NativeChatSettingsScreen({
-  onBack,
-  scope = 'device'
-}: {
-  onBack?: () => void
-  scope?: 'device' | 'host'
-}) {
+export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
 
@@ -39,9 +33,8 @@ export default function NativeChatSettingsScreen({
         <Text style={styles.groupHeading}>DEFAULT VIEW</Text>
         <Text style={styles.groupDescription}>
           Choose how supported agent sessions (Claude, Codex, and other chat-capable agents) open on
-          this device{scope === 'host' ? ' for this paired host' : ''}. Terminal shows the raw CLI;
-          Chat UI shows a chat interface like the desktop app. You can still switch any individual
-          session from its long-press menu.
+          this device. Terminal shows the raw CLI; Chat UI shows a chat interface like the desktop
+          app. You can still switch any individual session from its long-press menu.
         </Text>
         <View style={[styles.section, styles.sectionTopGap]}>
           <View style={styles.row}>

@@ -25,13 +25,11 @@ function XIcon({ size = 16, color = colors.textSecondary }) {
 export default function AboutScreen({
   onBack,
   openExternal,
-  versionLabel,
-  linksAvailable = true
+  versionLabel
 }: {
   onBack: () => void
   openExternal: (url: string) => Promise<unknown>
   versionLabel: string
-  linksAvailable?: boolean
 }) {
   const [error, setError] = useState<string | null>(null)
   const openLink = (url: string) => {
@@ -65,7 +63,6 @@ export default function AboutScreen({
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
           accessibilityLabel="Orca website"
-          disabled={!linksAvailable}
           onPress={() => openLink('https://onOrca.dev')}
         >
           <Globe size={16} color={colors.textSecondary} />
@@ -76,7 +73,6 @@ export default function AboutScreen({
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
           accessibilityLabel="Orca source code"
-          disabled={!linksAvailable}
           onPress={() => openLink('https://github.com/stablyai/orca')}
         >
           <GithubIcon />
@@ -87,7 +83,6 @@ export default function AboutScreen({
           style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
           accessibilityRole="button"
           accessibilityLabel="Orca on X"
-          disabled={!linksAvailable}
           onPress={() => openLink('https://x.com/orca_build')}
         >
           <XIcon />
