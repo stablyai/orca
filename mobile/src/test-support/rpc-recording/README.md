@@ -135,7 +135,10 @@ test requires the mutation to apply exactly once and change visible state to cou
 Set `RPC_FOUNDATION_REFERENCE_ROOT` to an archived `bcba08b3e4` source tree to corroborate the
 three B-seed mutants against the real defect; the reference checkout is never edited. Each seed
 pins the archived tree's visible state, so a later refactor of those files cannot pass by merely
-differing from main.
+differing from main. Archived-tree corroboration for b1/b2/b3 is **unproven in CI**:
+CI does not set `RPC_FOUNDATION_REFERENCE_ROOT`. These three checks remain opt-in; the
+in-memory mutant checks run in CI. No archived-tree checks are registered for other
+families because no reference states are defined for them.
 
 The original settings slice coverage maps nine host-RPC callers in
 `settings-recording-coverage.json`; device-preference entries are excluded by coordinator

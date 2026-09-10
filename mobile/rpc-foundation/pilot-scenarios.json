@@ -2254,6 +2254,251 @@
           "checkpoint": "settled"
         }
       ]
+    },
+    {
+      "id": "inventory-repeat-query",
+      "operation": "workspace.file-inventory",
+      "version": 1,
+      "family": "legacy-inventory",
+      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "schedules": ["normalized-repeat", "cache-cancels-debounce", "cache-stales-inflight"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "query",
+          "id": "alpha",
+          "args": {
+            "query": "  ALPHA  "
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "files.searchPaths#1",
+          "params": {
+            "worktree": "id:A",
+            "query": "alpha",
+            "limit": 16
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "alpha.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "action": "query",
+          "id": "beta",
+          "args": {
+            "query": "beta"
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "files.searchPaths#2",
+          "params": {
+            "worktree": "id:A",
+            "query": "beta",
+            "limit": 16
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "beta.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "action": "query",
+          "id": "gamma",
+          "args": {
+            "query": "gamma"
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "bind": "stale-search",
+          "request": "files.searchPaths#3",
+          "params": {
+            "worktree": "id:A",
+            "query": "gamma",
+            "limit": 16
+          }
+        },
+        {
+          "action": "query",
+          "id": "repeat-alpha",
+          "args": {
+            "query": "alpha"
+          }
+        },
+        {
+          "checkpoint": "cached-alpha"
+        },
+        {
+          "complete": "stale-search",
+          "params": {
+            "worktree": "id:A",
+            "query": "gamma",
+            "limit": 16
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "gamma.ts"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "stale-search-ignored"
+        },
+        {
+          "action": "query",
+          "id": "delta",
+          "args": {
+            "query": "delta"
+          }
+        },
+        {
+          "action": "query",
+          "id": "repeat-beta",
+          "args": {
+            "query": " BETA "
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "checkpoint": "cached-beta-cancels-debounce"
+        }
+      ]
+    },
+    {
+      "id": "settings-repo-metadata-single-host",
+      "operation": "settings.repo-metadata",
+      "version": 1,
+      "family": "settings.repo-metadata",
+      "sites": ["mobile/src/host-screen/use-host-repo-metadata.ts"],
+      "schedules": ["single-ssh-host"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "displayName": "Remote",
+                  "connectionId": "ssh-1"
+                },
+                {
+                  "id": "repo-2",
+                  "displayName": "Remote folder",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "single-host-without-label-lookups"
+        }
+      ]
+    },
+    {
+      "id": "settings-bot-overrides-refresh-refused",
+      "operation": "settings.bot-overrides",
+      "version": 1,
+      "family": "settings.bot-overrides",
+      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "schedules": ["success-then-refused"],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "checkpoint": "settings-pending"
+        },
+        {
+          "complete": "settings.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "settings": {
+                "disabledTuiAgents": ["claude"],
+                "defaultTuiAgent": "codex",
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"],
+                "hostSettingOverrides": {}
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        },
+        {
+          "action": "reset",
+          "id": "refresh"
+        },
+        {
+          "checkpoint": "refresh-pending"
+        },
+        {
+          "complete": "settings.get#2",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "refused",
+              "message": "Settings refused"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-retains-overrides"
+        }
+      ]
     }
   ]
 }

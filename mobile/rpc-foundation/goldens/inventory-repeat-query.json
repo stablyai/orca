@@ -1,0 +1,397 @@
+{
+  "operation": "workspace.file-inventory",
+  "family": "legacy-inventory",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "18f1dccead77f1301b82e8480c1eb1e29a88607b9fe096873a39f8863a09d632",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 2,
+  "values": {
+    "003a57e2bf31": {
+      "files": ["alpha.ts"]
+    },
+    "07920a7dd2ac": [
+      {
+        "name": "files.searchPaths#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"alpha\",\"limit\":16}}"
+      },
+      {
+        "name": "files.searchPaths#2",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"beta\",\"limit\":16}}"
+      },
+      {
+        "name": "files.searchPaths#3",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"gamma\",\"limit\":16}}"
+      }
+    ],
+    "16c03a5dc6c8": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "alpha",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "alpha.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "beta",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "beta.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#3",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "gamma",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 360
+        }
+      }
+    ],
+    "22ab9118541c": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "alpha",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "alpha.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "beta",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "beta.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#3",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "gamma",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 360,
+          "settledAt": 360,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "gamma.ts"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "3642acfe438f": {
+      "files": ["beta.ts"]
+    },
+    "4f53cda18c2b": [],
+    "d89c93bd8899": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "alpha": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "beta": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "gamma": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "repeat-alpha": {
+        "status": "fulfilled",
+        "startedAt": 360,
+        "settledAt": 360,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "eeba4d799744": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "alpha": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "beta": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "gamma": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "repeat-alpha": {
+        "status": "fulfilled",
+        "startedAt": 360,
+        "settledAt": 360,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "delta": {
+        "status": "fulfilled",
+        "startedAt": 360,
+        "settledAt": 360,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "repeat-beta": {
+        "status": "fulfilled",
+        "startedAt": 360,
+        "settledAt": 360,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "inventory-repeat-query",
+    "checkpoints": [
+      {
+        "id": "cached-alpha",
+        "observation": {
+          "sender": "16c03a5dc6c8",
+          "payloads": "07920a7dd2ac",
+          "settlements": "d89c93bd8899",
+          "state": "003a57e2bf31",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "stale-search-ignored",
+        "observation": {
+          "sender": "22ab9118541c",
+          "payloads": "07920a7dd2ac",
+          "settlements": "d89c93bd8899",
+          "state": "003a57e2bf31",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "cached-beta-cancels-debounce",
+        "observation": {
+          "sender": "22ab9118541c",
+          "payloads": "07920a7dd2ac",
+          "settlements": "eeba4d799744",
+          "state": "3642acfe438f",
+          "effects": "4f53cda18c2b"
+        }
+      }
+    ]
+  }
+}

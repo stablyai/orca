@@ -117,21 +117,23 @@ describe('RPC main recordings', () => {
         expect(result.verdict).toBe('killed')
       })
       const reference = referenceStates[scenario.id]
-      it.skipIf(!reference || !process.env.RPC_FOUNDATION_REFERENCE_ROOT)(
-        `${scenario.id}: rejects bcba08b3e4`,
-        async () => {
-          const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
-            reference: true
-          })
-          const result = await runRecording(
-            scenario,
-            adapters[scenario.operation],
-            vitestRecordingScheduler()
-          )
-          expect(visibleState(result)).toEqual(reference)
-          expect(reference).not.toEqual(visibleState(readGolden(goldens, scenario.id).recording))
-        }
-      )
+      if (reference) {
+        it.skipIf(!process.env.RPC_FOUNDATION_REFERENCE_ROOT)(
+          `${scenario.id}: rejects bcba08b3e4`,
+          async () => {
+            const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
+              reference: true
+            })
+            const result = await runRecording(
+              scenario,
+              adapters[scenario.operation],
+              vitestRecordingScheduler()
+            )
+            expect(visibleState(result)).toEqual(reference)
+            expect(reference).not.toEqual(visibleState(readGolden(goldens, scenario.id).recording))
+          }
+        )
+      }
     }
   }
 })
