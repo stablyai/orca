@@ -8,7 +8,7 @@ import type {
   AgentSessionBackgroundTaskRunState
 } from '../../shared/agent-session-wire'
 
-export const MAX_TASK_ID_LENGTH = 512
+const MAX_TASK_ID_LENGTH = 512
 const MAX_TASK_TEXT_LENGTH = 512
 
 export type ClaudeBackgroundTaskKind = AgentSessionBackgroundTask['kind']
