@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
+  "recorderSha256": "80932e82141514dd18d0a65bfc0e07be59cbb00db0bd27edcbc7a6123c1336c1",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -272,6 +272,40 @@
         ["Remote", "repo-2"]
       ]
     },
+    "6c2fa8796498": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "cached-query": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "warm-query": {
+        "status": "fulfilled",
+        "startedAt": 59000,
+        "settledAt": 59000,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
     "83ef5f7039bf": [
       {
         "name": "repo.list#1",
@@ -473,7 +507,7 @@
         }
       }
     ],
-    "ad9ee0962195": {
+    "cff69ce01bb1": {
       "mount": {
         "status": "fulfilled",
         "startedAt": 0,
@@ -494,6 +528,14 @@
         "status": "fulfilled",
         "startedAt": 0,
         "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "warm-query": {
+        "status": "fulfilled",
+        "startedAt": 59000,
+        "settledAt": 59000,
         "value": {
           "$rpc": "undefined"
         }
@@ -745,11 +787,21 @@
         }
       },
       {
+        "id": "cache-warm",
+        "observation": {
+          "sender": "d90e99979f09",
+          "payloads": "83ef5f7039bf",
+          "settlements": "6c2fa8796498",
+          "state": "071880b671a1",
+          "effects": "ec7bb9cef277"
+        }
+      },
+      {
         "id": "cache-expired",
         "observation": {
           "sender": "8dff1fd17ddc",
           "payloads": "26ce47c562c3",
-          "settlements": "ad9ee0962195",
+          "settlements": "cff69ce01bb1",
           "state": "071880b671a1",
           "effects": "ec7bb9cef277"
         }

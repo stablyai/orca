@@ -47,11 +47,13 @@ A checkpoint's own clock is not recorded. It is always the sum of the scripted `
 it is a function of the scenario rather than of the code under test; `run-recording.ts` asserts that
 equality at every checkpoint instead, which costs no bytes and fails loudly if it ever drifts.
 
-This covers thresholds the product schedules. It does not cover a threshold the product only
-consults when something else makes it act, such as the `Date.now()` cache TTL in
-`use-host-repo-metadata.ts`: both a 60 s and a 20 s TTL are expired when the scenario probes at
-60 s, and no observation exists in between. Closing that needs a scenario acting inside the window,
-which is a coverage decision, not a projection one.
+Recorded time covers thresholds the product schedules for itself. It cannot cover a threshold the
+product only consults when something else makes it act, because no observation exists unless a
+scenario acts inside the window. The `Date.now()` cache TTL in `use-host-repo-metadata.ts` is the
+one such case here, so `settings-repo-cache-expiry` probes the cache at 59 s as well as at 60 s;
+without the earlier probe a 20 s TTL and a 60 s TTL are both expired at 60 s and record identically.
+That probe is coverage, not a substitute for recorded time: it bounds how small a TTL reduction is
+visible, it does not make the reduction itself observable.
 
 ## Golden schema
 
