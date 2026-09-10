@@ -209,9 +209,10 @@ export function hasUnansweredStructuredAgentSessionDispatch(
 
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
-export function structuredAgentSessionTabId(sessionId: string): string {
-  return `structured-agent-session-${sessionId}`
-}
+export {
+  structuredAgentSessionIdFromTabId,
+  structuredAgentSessionTabId
+} from './structured-agent-session-tab-id'
 
 export function projectStructuredAgentSessionStatus(
   items: readonly AgentJournalRenderItem[],
