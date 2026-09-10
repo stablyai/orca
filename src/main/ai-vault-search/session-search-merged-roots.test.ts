@@ -14,12 +14,12 @@ import {
 
 // OpenClaw is the one agent whose roots are alternates for a single install, so
 // discovery reports them as ONE discovery whose rootDir is every path joined by
-// the platform's path delimiter. That string is not a directory, and every part
-// of the degraded-root fence silently did nothing for it: the probe readdir'd
-// the joined string and got ENOENT, containment never matched a real file, and
-// a scan issue recorded against a real root never compared equal. The result
-// was that the one agent most likely to live on a mounted volume was the one
-// whose transcripts a single unmount deleted.
+// the platform's path delimiter. That string is not a directory: readdir on it
+// answers ENOENT, containment never matches a real file, and a scan issue
+// recorded against a real root never compares equal to it. Everything that
+// judges a root works on the constituent directories, taken from the same
+// source table discovery reads, never by splitting the label -- a directory may
+// legally contain the delimiter.
 
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 const INTERVAL_MS = 20_000
@@ -91,7 +91,7 @@ it.skipIf(!CAN_DENY_READ)('fences one merged root without taking its partner dow
     // A real directory, not the joined string discovery reports.
     expect(degraded).toContain(join(current, 'agents'))
     expect(degraded.every((root) => !root.includes(delimiter))).toBe(true)
-    // Fenced: the unreadable root keeps its rows.
+    // Unprovable, so the unreadable root keeps its rows.
     expect(sessionsMatching('mounted')).toEqual(['mounted-session'])
   } finally {
     await chmod(join(current, 'agents'), 0o755)

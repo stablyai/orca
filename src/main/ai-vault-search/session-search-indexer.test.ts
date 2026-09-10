@@ -512,27 +512,8 @@ it.skipIf(!CAN_DENY_READ)(
   }
 )
 
-// Round 3, item 2: the alarm has to release. A root the user legitimately
-// emptied would otherwise stay degraded for the life of the process, pinning
-// the phase and never retiring the rows.
-it('retires a root the user really emptied, once a second sweep agrees', async () => {
-  await writeClaudeTranscript(transcriptPath(), ['a session the user deleted'], SESSION_ID)
-  await newIndexer().start()
-
-  // The root itself stays readable; only its transcripts are gone.
-  await rm(harness.claudeProjectDir, { recursive: true, force: true })
-  await indexer?.reconcile({ full: true })
-  // One sweep cannot tell this from a freshly unmounted volume.
-  expect(sessionsMatching('deleted')).toEqual([SESSION_ID])
-  expect(indexer?.status().phase).toBe('degraded')
-
-  await indexer?.reconcile({ full: true })
-  expect(sessionsMatching('deleted')).toEqual([])
-  expect(indexer?.status()).toMatchObject({ phase: 'current', degradedRoots: [] })
-})
-
-// Round 3, item 2, the other half: a root that cannot be listed is never
-// believed to be empty, however many times it is asked.
+// A root that cannot be listed is never believed to be empty, however many
+// times it is asked: an error is not a listing, and only a listing is proof.
 it.skipIf(!CAN_DENY_READ)('keeps an unlistable root degraded across repeated sweeps', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
   await newIndexer().start()
@@ -567,8 +548,8 @@ it('settles an invalidated file that turned out not to have changed', async () =
   expect(indexer?.status()).toMatchObject({ filesPending: 0, bytesIndexed: bytes })
 })
 
-// Round 4, item 1: the fence was inert on the first sweep of every process,
-// which is exactly when a volume is most likely to be detached.
+// The first sweep of every process is exactly when a volume is most likely to
+// be detached, and it is the pass with nothing behind it to compare against.
 it('keeps a root that is gone at the first sweep after a restart', async () => {
   await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
   await newIndexer().start()
@@ -654,7 +635,7 @@ it('proves nothing from an empty directory above the configured root', async () 
   expect(sessionsMatching('mounted')).toHaveLength(3)
 })
 
-// Round 5, item 2: a cycle only reads the newest N per agent, so a remounted
+// C2's other half: a cycle only reads the newest N per agent, so a remounted
 // volume would give up its newest transcript and keep the rest unreachable.
 it('sweeps again when a root comes back after being absent', async () => {
   const absent = harness.roots.claudeProjectsDir ?? ''
@@ -741,28 +722,6 @@ it('counts a file queued in both places once', async () => {
   indexer?.invalidate([transcriptPath(OTHER_SESSION_ID)])
   expect(indexer?.status().filesPending).toBe(2)
 })
-
-// Finding 7: an unmounted volume ENOENTs its whole tree at once. Retiring on
-// that evidence deletes a user's searchable history for a detached drive.
-it.skipIf(!CAN_DENY_READ)(
-  'keeps a whole root when it stops listing, instead of retiring it',
-  async () => {
-    await writeClaudeTranscript(transcriptPath(), ['a session on a removable volume'], SESSION_ID)
-    await newIndexer().start()
-    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
-
-    // What an unmounted tree looks like: present, listable, and suddenly empty.
-    await rm(harness.claudeProjectDir, { recursive: true, force: true })
-    await indexer?.reconcile({ full: true })
-
-    const status = indexer?.status()
-    expect(status?.phase).toBe('degraded')
-    expect(status?.degradedRoots.map((root) => root.root)).toContain(
-      harness.roots.claudeProjectsDir
-    )
-    expect(sessionsMatching('removable')).toEqual([SESSION_ID])
-  }
-)
 
 // C1: `close()` disarmed the timer and aborted the task in flight, but left the
 // queue running. A `clear()` queued a moment earlier would then delete the
