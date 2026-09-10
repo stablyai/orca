@@ -129,8 +129,11 @@ function joinLaunchDelivery(
   options: StructuredAgentLaunchOptions,
   established: StructuredAgentLaunchOptions['promptDelivery']
 ): StructuredAgentLaunchOptions {
+  // Why: the first caller's mode wins, but with none established an absent mode reads as submit —
+  // that would send a joiner's draft it never consented to send.
+  const mode = established ?? options.promptDelivery
   const { promptDelivery: _joinerMode, ...rest } = options
-  return established ? { ...rest, promptDelivery: established } : rest
+  return mode ? { ...rest, promptDelivery: mode } : rest
 }
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
