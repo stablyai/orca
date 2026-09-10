@@ -1,5 +1,8 @@
 import type { CodexRateLimitResetOutcome, ProviderRateLimits } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
+
+import { getMainHttpClient } from '../network/http-client'
+import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -80,16 +83,21 @@ function processEnvWithoutCodexHome(): NodeJS.ProcessEnv {
   return env
 }
 
+// Why: route these through the main HTTP client so they use Chromium's network stack, which
+// follows the session proxy Orca applies from `httpProxyUrl`. The platform global is undici and
+// ignores that proxy, so a configured proxy was bypassed for usage and reset-credit calls even
+// though the Claude path honours it (#19755). On a host without Chromium the port falls back to
+// the global, so behaviour there is unchanged.
 function fetchCodexUsage(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return getMainHttpClient().fetch(url, init)
 }
 
 function fetchCodexResetCredits(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return getMainHttpClient().fetch(url, init)
 }
 
 function consumeCodexResetCredit(url: string, init: RequestInit): Promise<Response> {
-  return fetch(url, init)
+  return getMainHttpClient().fetch(url, init)
 }
 
 async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<ProviderRateLimits> {
@@ -110,7 +118,11 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     windowsHide: true,
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
-      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
+      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
+      // Why: the probe spawns `codex` directly rather than the user's shell, so without the
+      // configured proxy it would reach the backend from the app's own IP instead of the proxy
+      // the user set — the same reasoning as claude-pty.ts (#19755). Returns {} when unset.
+      ...buildConfiguredProxyEnv(options?.networkProxySettings)
     })
   }
   const child = spawn(spawnCmd, spawnArgs, spawnOptions)
@@ -137,7 +149,8 @@ function resolvePtyCommand(options?: CodexRateLimitFetchOptions) {
     env: withCliRuntimeOnPath(codexCommand, {
       ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
       TERM: 'xterm-256color',
-      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {})
+      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
+      ...buildConfiguredProxyEnv(options?.networkProxySettings)
     })
   }
 }
