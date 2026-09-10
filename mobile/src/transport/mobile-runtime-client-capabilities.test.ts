@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_LAUNCH_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -21,6 +22,12 @@ describe('mobile runtime client capabilities', () => {
         CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       ])
     )
+  })
+
+  it('advertises agent.launch so the host may answer a create with either surface', () => {
+    // Why: `supportsAgentLaunch` refuses the method outright unless the client claims it, so
+    // without this every mobile create with an agent stays a terminal no matter the user default.
+    expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES).toContain(AGENT_LAUNCH_RUNTIME_CAPABILITY)
   })
 
   it('stays inside the bounds the host parses, which fail closed to no capabilities at all', () => {

@@ -35,7 +35,9 @@ const baseArgs = {
   agent,
   workspaceName: undefined,
   note: undefined,
-  worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+  worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
+  // Existing cases keep pinning the legacy create; the launch cases opt in explicitly.
+  agentLaunchSupported: false
 }
 
 describe('createWorkspaceFromComposerSource', () => {
@@ -299,5 +301,150 @@ describe('createWorkspaceFromComposerSource', () => {
       createdWithAgent: 'claude'
     })
     expect('startupCommand' in calls[0]!.params).toBe(false)
+  })
+  it('routes a branch selection with an agent through agent.launch', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(
+      () => ({ worktreeId: 'wt-branch-launch', outcome: { kind: 'structured' } }),
+      calls
+    )
+    const selection: MobileComposerCreateSelection = {
+      kind: 'branch',
+      baseBranch: 'main',
+      refName: 'main',
+      localBranchName: 'topic',
+      reuse: false,
+      branchNameOverride: 'topic'
+    }
+
+    const result = await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' },
+      agentLaunchSupported: true
+    })
+
+    expect(result).toEqual({ worktreeId: 'wt-branch-launch', name: 'topic' })
+    expect(calls[0]!.method).toBe('agent.launch')
+    const params = calls[0]!.params as {
+      agent: string
+      target: { create: Record<string, unknown> }
+    }
+    expect(params.agent).toBe('claude')
+    expect(params.target.create).toMatchObject({ baseBranch: 'main', name: 'topic' })
+    expect('startupAgent' in params.target.create).toBe(false)
+  })
+
+  it('routes a reused branch through agent.launch without spending the retry budget', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => new Error('Branch "topic" already exists locally.'), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'branch',
+      baseBranch: 'main',
+      refName: 'origin/topic',
+      localBranchName: 'topic',
+      reuse: true
+    }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'codex' },
+      agentLaunchSupported: true
+    })
+
+    expect(calls.map((call) => call.method)).toEqual(['agent.launch'])
+  })
+
+  it('routes a new-branch selection with an agent through agent.launch', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(
+      () => ({ worktreeId: 'wt-new-branch-launch', outcome: { kind: 'terminal', handle: 't' } }),
+      calls
+    )
+    const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' },
+      agentLaunchSupported: true
+    })
+
+    expect(calls[0]!.method).toBe('agent.launch')
+    const params = calls[0]!.params as { target: { create: Record<string, unknown> } }
+    expect(params.target.create).toMatchObject({ name: 'topic', branchNameOverride: 'topic' })
+    expect('startupAgent' in params.target.create).toBe(false)
+  })
+
+  it('keeps a work-item create on worktree.create so its unsent draft survives', async () => {
+    // Scope boundary: an agent-carrying work-item create pre-fills the issue/PR URL as an unsent
+    // `startupDraft`. A structured session has nowhere to hold one, so routing it would submit the
+    // URL as the first turn. Stay on the terminal until drafts land.
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-draft' } }), calls)
+    const selection: MobileComposerCreateSelection = {
+      kind: 'work-item',
+      item: {
+        provider: 'github',
+        type: 'issue',
+        number: 7,
+        title: 'Bug',
+        url: 'https://github.test/acme/app/issues/7',
+        repoId: 'repo-9'
+      }
+    }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' },
+      agentLaunchSupported: true
+    })
+
+    expect(calls.map((call) => call.method)).toEqual(['worktree.create'])
+    // The host picks the agent for a work item (desktop parity) and drafts the URL into it, so the
+    // payload carries `createdWithAgent` + `startupDraft` rather than a `startupAgent`.
+    expect(calls[0]!.params).toMatchObject({
+      createdWithAgent: 'claude',
+      startupDraft: 'https://github.test/acme/app/issues/7'
+    })
+  })
+
+  it('keeps the agent-first create for a branch selection on an old host', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-old-host' } }), calls)
+    const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' },
+      agentLaunchSupported: false
+    })
+
+    expect(calls[0]!.method).toBe('worktree.create')
+    expect(calls[0]!.params).toMatchObject({ startupAgent: 'claude', createdWithAgent: 'claude' })
+  })
+
+  it('never launches for a blank choice on a capable host', async () => {
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-blank-choice' } }), calls)
+    const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
+
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agentLaunchSupported: true
+    })
+
+    expect(calls[0]!.method).toBe('worktree.create')
+    expect('startupAgent' in calls[0]!.params).toBe(false)
   })
 })

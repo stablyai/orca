@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
@@ -9,6 +10,13 @@ import {
   getGeneratedWorktreeCreateRetryCandidate,
   isRetryableWorktreeCreateConflict
 } from '../../../src/shared/new-workspace/worktree-create-retry-policy'
+import {
+  AGENT_LAUNCH_METHOD,
+  agentLaunchCreateParams,
+  isAgentLaunchUnsupportedRefusal,
+  readAgentLaunchCreateOutcome,
+  type WorktreeCreateAgentLaunch
+} from './agent-launch-worktree-create'
 import { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 import {
   getWorktreeCreateReplayWindowMs,
@@ -49,6 +57,9 @@ export type CreateWorktreeWithNameRetryArgs = {
   nameWasGenerated?: boolean
   buildParams: (name: string) => Record<string, unknown>
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
+  /** Set when an agent was picked and the host may route the surface. Absent (or an unsupporting
+   *  host) leaves `buildParams`' own `startupAgent` to create the worktree agent-first. */
+  agentLaunch?: WorktreeCreateAgentLaunch
   maxAttempts?: number
   // Injected in tests; production mints a fresh idempotency key per candidate.
   mintMutationId?: () => string
@@ -66,6 +77,9 @@ export async function createWorktreeWithNameRetry(
   // Why: creating before status.get settles would silently disable safe replay
   // during the exact slow-network window this path is meant to recover from.
   const worktreeCreateIdempotency = await args.worktreeCreateIdempotency
+  // Why: the route must settle before the first create, so a name-collision retry cannot land on
+  // a different method than the attempt it replaces.
+  let launchAgent = await resolveAgentLaunchRoute(args.agentLaunch)
   const maxAttempts = args.maxAttempts ?? CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS
   const mintMutationId = args.mintMutationId ?? defaultWorktreeCreateMutationId
   let lastError: string | null = null
@@ -80,19 +94,31 @@ export async function createWorktreeWithNameRetry(
     const params = worktreeCreateIdempotency
       ? { ...candidateParams, clientMutationId: mintMutationId() }
       : candidateParams
-    const response = await sendWorktreeCreateResilient(client, params, worktreeCreateIdempotency)
+    let response = await sendWorktreeCreateResilient(
+      client,
+      worktreeCreateRequest(launchAgent, params),
+      worktreeCreateIdempotency
+    )
+    if (!response.ok && launchAgent && isAgentLaunchUnsupportedRefusal(response.error)) {
+      // The probe said the host knows `agent.launch` but it refused the call — most likely this
+      // client's capability list had not landed yet. Downgrade for good rather than fail a create.
+      launchAgent = null
+      response = await sendWorktreeCreateResilient(
+        client,
+        worktreeCreateRequest(null, params),
+        worktreeCreateIdempotency
+      )
+    }
     if (response.ok) {
-      const result = (response as RpcSuccess).result as {
-        worktree: { id: string; displayName?: string }
+      const created = readCreateResult((response as RpcSuccess).result, launchAgent !== null)
+      if (created) {
+        return {
+          worktreeId: created.worktreeId,
+          name: created.displayName?.trim() ? created.displayName : candidateName
+        }
       }
-      const authoritativeName = result.worktree.displayName
-      return {
-        worktreeId: result.worktree.id,
-        name:
-          typeof authoritativeName === 'string' && authoritativeName.trim()
-            ? authoritativeName
-            : candidateName
-      }
+      lastError = 'Failed to create workspace'
+      break
     }
     lastError = response.error.message
     if (!isRetryableWorktreeCreateConflict(lastError ?? '')) {
@@ -102,14 +128,55 @@ export async function createWorktreeWithNameRetry(
   return { error: lastError ?? 'Failed to create workspace' }
 }
 
-// Sends worktree.create, re-issuing whenever the request went delivery-ambiguous —
+async function resolveAgentLaunchRoute(
+  launch: WorktreeCreateAgentLaunch | undefined
+): Promise<TuiAgent | null> {
+  if (!launch) {
+    return null
+  }
+  return (await launch.supported) ? launch.agent : null
+}
+
+/** The create payload is identical either way; only who decides the surface differs. */
+function worktreeCreateRequest(
+  launchAgent: TuiAgent | null,
+  create: Record<string, unknown>
+): { method: string; params: Record<string, unknown> } {
+  return launchAgent
+    ? { method: AGENT_LAUNCH_METHOD, params: agentLaunchCreateParams(launchAgent, create) }
+    : { method: 'worktree.create', params: create }
+}
+
+// A launch receipt carries no display name, so the candidate stands in; the session route
+// re-resolves the authoritative one from the host either way.
+function readCreateResult(
+  result: unknown,
+  launched: boolean
+): { worktreeId: string; displayName?: string } | null {
+  if (launched) {
+    return readAgentLaunchCreateOutcome(result)
+  }
+  const created = result as { worktree?: { id?: unknown; displayName?: unknown } } | null
+  const worktreeId = created?.worktree?.id
+  if (typeof worktreeId !== 'string' || !worktreeId) {
+    return null
+  }
+  const displayName = created?.worktree?.displayName
+  return {
+    worktreeId,
+    ...(typeof displayName === 'string' ? { displayName } : {})
+  }
+}
+
+// Sends the create, re-issuing whenever the request went delivery-ambiguous —
 // the frame reached the wire but no response came back, so the host may already have
-// built the worktree. The shared clientMutationId in `params` keeps the retry
-// idempotent host-side. A definite failure (never sent, or a server error response)
-// is returned to the caller untouched.
+// built the worktree. The shared clientMutationId keeps the retry idempotent host-side —
+// `agent.launch` carries it in the same create payload, so a replayed launch reconciles onto the
+// first worktree and can at worst add a second surface inside it, never a second workspace.
+// A definite failure (never sent, or a server error response) is returned to the caller untouched.
 async function sendWorktreeCreateResilient(
   client: RpcClient,
-  params: Record<string, unknown>,
+  request: { method: string; params: Record<string, unknown> },
   worktreeCreateIdempotency: WorktreeCreateIdempotencySupport | false
 ): Promise<RpcResponse> {
   let migrationRetry = 0
@@ -118,7 +185,7 @@ async function sendWorktreeCreateResilient(
   let replayDeadlineAt: number | null = null
   for (;;) {
     try {
-      return await client.sendRequest('worktree.create', params, {
+      return await client.sendRequest(request.method, request.params, {
         timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
       })
     } catch (error) {
