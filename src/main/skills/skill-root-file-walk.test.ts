@@ -66,10 +66,13 @@ describe('findSkillFiles', () => {
 
     expect(await findSkillFiles(root, 4)).toEqual([join(edge, 'SKILL.md')])
     expect(statPaths).toEqual([])
-    expect(await findSkillFiles(root, 5)).toEqual([
-      join(edge, 'SKILL.md'),
-      join(edge, 'link00', 'SKILL.md')
-    ])
+    // Not a fixed array: `readdir` order decides both the result order and which of the 32
+    // links survives realpath dedup, and NTFS sorts `link00` before `SKILL.md` where APFS does not.
+    const withinDepth = await findSkillFiles(root, 5)
+    const viaLink = withinDepth.filter((path) => /[\\/]link\d{2}[\\/]SKILL\.md$/.test(path))
+    expect(withinDepth).toHaveLength(2)
+    expect(withinDepth).toContain(join(edge, 'SKILL.md'))
+    expect(viaLink).toHaveLength(1)
     expect(statPaths).toHaveLength(32)
   })
 
