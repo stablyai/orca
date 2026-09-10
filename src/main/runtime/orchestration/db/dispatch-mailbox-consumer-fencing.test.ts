@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../shared/orchestration-rpc-contract'
 import { createRootDispatch } from './root-dispatch-test-fixture'
 import type { DeliveryRow } from '../types'
 
@@ -35,11 +34,17 @@ describe('dispatch mailbox consumer fencing', () => {
     return { id: dispatch.id, runId: dispatch.run_id }
   }
 
-  function openDelivery(dispatchId: string, runId: string, generation: number) {
+  function openDelivery(
+    dispatchId: string,
+    runId: string,
+    generation: number,
+    consumerSource: 'dispatch' | 'attachment' = 'dispatch'
+  ) {
     return db.getOrCreateMailboxDelivery({
       runId,
       mailboxHandle: `dispatch:${dispatchId}`,
-      consumerGeneration: generation
+      consumerGeneration: generation,
+      consumerSource
     })
   }
 
@@ -65,7 +70,7 @@ describe('dispatch mailbox consumer fencing', () => {
     })
     const generationB = generationOf(dispatch.id)
     expect(generationB).toBe(generationA + 1)
-    expect(db.getDeliveryRaw(deliveryA!.delivery.id)?.status).toBe('fenced')
+    expect(db.getDeliveryRaw(deliveryA!.delivery.id)?.fenced).toBe(1)
 
     expect(() =>
       db.acknowledgeMailboxDelivery({
@@ -146,7 +151,7 @@ describe('dispatch mailbox consumer fencing', () => {
     })
 
     expect(generationOf(dispatchId)).toBe(1)
-    expect(db.getDeliveryRaw(stale!.delivery.id)?.status).toBe('fenced')
+    expect(db.getDeliveryRaw(stale!.delivery.id)?.fenced).toBe(1)
   })
 
   it('gives a federated attachment its own generation on the worker host', () => {
@@ -169,9 +174,9 @@ describe('dispatch mailbox consumer fencing', () => {
       from: 'home-peer',
       to: `dispatch:${dispatchId}`,
       subject: 'relayed before attach',
-      runId: ORCHESTRATION_LEGACY_RUN_ID
+      runId: 'run-home'
     })
-    const stale = openDelivery(dispatchId, ORCHESTRATION_LEGACY_RUN_ID, 0)
+    const stale = openDelivery(dispatchId, 'run-home', 0, 'attachment')
 
     // The worker host holds no dispatch_contexts row for a federated Dispatch.
     expect(db.getDispatchContextById(dispatchId)).toBeUndefined()
@@ -187,7 +192,7 @@ describe('dispatch mailbox consumer fencing', () => {
     })
 
     expect(db.getRemoteDispatchAttachment(dispatchId)?.consumer_generation).toBe(1)
-    expect((db.getDeliveryRaw(stale!.delivery.id) as DeliveryRow).status).toBe('fenced')
+    expect((db.getDeliveryRaw(stale!.delivery.id) as DeliveryRow).fenced).toBe(1)
   })
 
   it('starts a retry Dispatch on a fresh mailbox address rather than sharing the old one', () => {

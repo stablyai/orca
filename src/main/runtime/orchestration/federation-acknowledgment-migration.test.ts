@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
+import { restoreV40DeliverySchema } from './db/schema/delivery-v40-test-fixture'
 import { OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { SCHEMA_VERSION } from './db/contract-constants'
@@ -26,6 +27,7 @@ describe('federation acknowledgment migration', () => {
     db = undefined
 
     const oldDb = new Database(dbPath)
+    restoreV40DeliverySchema(oldDb)
     oldDb.exec('ALTER TABLE federated_dispatches DROP COLUMN to_home_acknowledged_sequence')
     oldDb.pragma('user_version = 26')
     expect(resolveOrchestrationMigrationStartVersion(oldDb, 26, 28)).toBe(26)

@@ -43,7 +43,8 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 36, table: 'remote_dispatch_attachments', column: 'consumer_generation' },
   { version: 37, table: 'dispatch_contexts', column: 'creator_handle' },
   { version: 37, table: 'dispatch_contexts', column: 'creator_pane_key' },
-  { version: 40, table: 'remote_dispatch_attachments', column: 'home_run_id' }
+  { version: 40, table: 'remote_dispatch_attachments', column: 'home_run_id' },
+  { version: 41, table: 'deliveries', column: 'fenced' }
 ] as const
 
 // Why: v34 shipped without these two, so a v34 stamp proves nothing about them; v35 repairs both
@@ -53,7 +54,6 @@ const VERSIONED_POST_V6_COLUMN_DEFAULTS = [
 ] as const
 
 const VERSIONED_POST_V6_INDEX_PREDICATES = [
-  { version: 35, index: 'idx_deliveries_one_outstanding', predicate: "mailbox_handle != ''" },
   {
     version: 35,
     index: 'idx_messages_pending_pointer_enter',
@@ -68,7 +68,6 @@ const POST_V6_INDEXES = [
   'idx_dispatch_run_status',
   'idx_gates_run_status',
   'idx_runs_coordinator_pane',
-  'idx_deliveries_one_outstanding',
   'idx_deliveries_run_created',
   'idx_questions_dispatch_status',
   'idx_federation_relay_pending',
@@ -99,8 +98,12 @@ function hasOrchestrationColumnDefault(
   return rows.some((row) => row.name === column && row.dflt_value === defaultValue)
 }
 
-function hasOrchestrationIndex(db: Database.Database, index: string): boolean {
-  return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?").get(index)
+function hasOrchestrationSchemaObject(
+  db: Database.Database,
+  name: string,
+  type: 'index' | 'view' | 'trigger' = 'index'
+): boolean {
+  return !!db.prepare('SELECT 1 FROM sqlite_master WHERE type = ? AND name = ?').get(type, name)
 }
 
 function hasOrchestrationIndexPredicate(
@@ -171,7 +174,18 @@ function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): 
       ({ version, index, predicate }) =>
         storedVersion < version || hasOrchestrationIndexPredicate(db, index, predicate)
     ) &&
-    POST_V6_INDEXES.every((index) => hasOrchestrationIndex(db, index)) &&
+    (storedVersion >= 41
+      ? hasOrchestrationSchemaObject(db, 'idx_deliveries_unacknowledged_mailbox') &&
+        hasOrchestrationSchemaObject(db, 'outstanding_deliveries', 'view') &&
+        hasOrchestrationSchemaObject(db, 'trg_deliveries_one_outstanding', 'trigger')
+      : hasOrchestrationSchemaObject(db, 'idx_deliveries_one_outstanding') &&
+        (storedVersion < 35 ||
+          hasOrchestrationIndexPredicate(
+            db,
+            'idx_deliveries_one_outstanding',
+            "mailbox_handle != ''"
+          ))) &&
+    POST_V6_INDEXES.every((index) => hasOrchestrationSchemaObject(db, index)) &&
     messagesAllowQuestions(db) &&
     hasConsistentLegacyAdoption(db)
   )

@@ -40,7 +40,7 @@ describe('Run delivery history', () => {
     )
     expect(history).toMatchObject({ count: 1, messages: [{ subject: 'later completion' }] })
     expect(history).not.toHaveProperty('deliveryId')
-    expect(db.getDeliveryRaw(delivery.delivery.id)?.status).toBe('outstanding')
+    expect(db.hasOutstandingRunDelivery(activeRunId!)).toBe(true)
     expect(db.getMessageById(delivery.messages[0].id)?.read).toBe(0)
   })
 })

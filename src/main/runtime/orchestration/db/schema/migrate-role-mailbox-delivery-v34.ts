@@ -1,7 +1,7 @@
 import type { OrchestrationDb } from '../orchestration-db'
 
 export function migrateRoleMailboxDeliveryV34(this: OrchestrationDb, current: number): void {
-  if (current >= 34) {
+  if (current >= 34 || !this.hasColumn('deliveries', 'status')) {
     return
   }
 

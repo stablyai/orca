@@ -6,6 +6,7 @@ import Database from '../../sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID, OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
+import { restoreV40DeliverySchema } from './db/schema/delivery-v40-test-fixture'
 import { SCHEMA_VERSION } from './db/contract-constants'
 
 describe('OrchestrationDb version-skew migration', () => {
@@ -25,6 +26,7 @@ describe('OrchestrationDb version-skew migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-version-skew-'))
     const dbPath = join(tempDir, 'orchestration.db')
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(`
       CREATE TABLE messages (
         id TEXT NOT NULL,
@@ -185,6 +187,7 @@ describe('OrchestrationDb version-skew migration', () => {
   it('does not repair an incomplete schema written by a future binary', () => {
     const dbPath = createLegacySchemaClaimingVersion(20)
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
 
     expect(resolveOrchestrationMigrationStartVersion(raw, 20, 19)).toBe(20)
     expect(raw.pragma('user_version', { simple: true })).toBe(20)
@@ -200,6 +203,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(
       'ALTER TABLE worker_terminal_resources DROP COLUMN recovery_attempt_count; ALTER TABLE worker_terminal_resources DROP COLUMN last_recovery_at;'
     )
@@ -241,6 +245,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(
       'ALTER TABLE worker_terminal_resources DROP COLUMN recovery_attempt_count; ALTER TABLE worker_terminal_resources DROP COLUMN last_recovery_at;'
     )
@@ -267,6 +272,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(`
       DROP INDEX idx_deliveries_one_outstanding;
       ALTER TABLE deliveries DROP COLUMN mailbox_handle;
@@ -303,6 +309,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(`
       DROP INDEX idx_deliveries_one_outstanding;
       ALTER TABLE deliveries DROP COLUMN mailbox_handle;
@@ -329,7 +336,7 @@ describe('OrchestrationDb version-skew migration', () => {
     const migratedDeliveries = db.db
       .prepare(
         `SELECT id, run_id, mailbox_handle, consumer_generation, message_ids,
-                status, created_at, acknowledged_at
+                fenced, created_at, acknowledged_at
          FROM deliveries`
       )
       .all()
@@ -342,7 +349,7 @@ describe('OrchestrationDb version-skew migration', () => {
           mailbox_handle: `run:${run.id}`,
           consumer_generation: run.consumer_generation,
           message_ids: originalMessageIds,
-          status: 'acknowledged',
+          fenced: 0,
           created_at: '2026-01-02 03:04:05',
           acknowledged_at: '2026-01-02 04:05:06'
         },
@@ -352,7 +359,7 @@ describe('OrchestrationDb version-skew migration', () => {
           mailbox_handle: `run:${run.id}`,
           consumer_generation: run.consumer_generation,
           message_ids: '["msg_fenced"]',
-          status: 'fenced',
+          fenced: 1,
           created_at: '2026-03-04 05:06:07',
           acknowledged_at: null
         },
@@ -362,7 +369,7 @@ describe('OrchestrationDb version-skew migration', () => {
           mailbox_handle: `run:${run.id}`,
           consumer_generation: run.consumer_generation,
           message_ids: '["msg_outstanding"]',
-          status: 'outstanding',
+          fenced: 0,
           created_at: '2026-02-03 04:05:06',
           acknowledged_at: null
         }
@@ -372,17 +379,12 @@ describe('OrchestrationDb version-skew migration', () => {
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'deliveries'")
       .all() as { name: string }[]
     expect(deliveryIndexes.map(({ name }) => name)).toEqual(
-      expect.arrayContaining(['idx_deliveries_one_outstanding', 'idx_deliveries_run_created'])
+      expect.arrayContaining([
+        'idx_deliveries_unacknowledged_mailbox',
+        'idx_deliveries_run_created'
+      ])
     )
-    expect(() =>
-      db!.db
-        .prepare(
-          `INSERT INTO deliveries (
-             id, run_id, mailbox_handle, consumer_generation, message_ids
-           ) VALUES (?, ?, ?, ?, '[]')`
-        )
-        .run('delivery_v34_duplicate', run.id, `run:${run.id}`, run.consumer_generation)
-    ).toThrow(/UNIQUE constraint failed/)
+    expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
   })
 
   it('cleans additive lifecycle rows when a v30 writer resets tasks before re-upgrade', () => {
@@ -413,6 +415,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     // v30 resetTasks predates both additive tables, so it only deletes their legacy parents.
     raw.exec(`
       DELETE FROM worker_dispatches;
@@ -433,6 +436,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(
       `DROP INDEX IF EXISTS idx_messages_pending_pointer_enter;
        DROP INDEX IF EXISTS idx_messages_pending_pointer_pty;
@@ -489,6 +493,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(`
       DROP TABLE deliveries;
       CREATE TABLE deliveries (
@@ -514,10 +519,12 @@ describe('OrchestrationDb version-skew migration', () => {
     expect(
       (
         db.db
-          .prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_deliveries_one_outstanding'")
+          .prepare(
+            "SELECT sql FROM sqlite_master WHERE name = 'idx_deliveries_unacknowledged_mailbox'"
+          )
           .get() as { sql: string }
       ).sql
-    ).toContain("mailbox_handle != ''")
+    ).toContain('acknowledged_at IS NULL AND fenced = 0')
 
     const run = db.createRun({
       objective: 'already stamped',
@@ -541,6 +548,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(`
       DROP INDEX IF EXISTS idx_messages_pending_pointer_enter;
       CREATE INDEX idx_messages_pending_pointer_enter
@@ -567,6 +575,7 @@ describe('OrchestrationDb version-skew migration', () => {
     db = undefined
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(`
       DROP INDEX IF EXISTS idx_deliveries_one_outstanding;
       CREATE UNIQUE INDEX idx_deliveries_one_outstanding
@@ -579,9 +588,11 @@ describe('OrchestrationDb version-skew migration', () => {
     expect(
       (
         db.db
-          .prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_deliveries_one_outstanding'")
+          .prepare(
+            "SELECT sql FROM sqlite_master WHERE name = 'idx_deliveries_unacknowledged_mailbox'"
+          )
           .get() as { sql: string }
       ).sql
-    ).toContain("mailbox_handle != ''")
+    ).toContain('acknowledged_at IS NULL AND fenced = 0')
   })
 })

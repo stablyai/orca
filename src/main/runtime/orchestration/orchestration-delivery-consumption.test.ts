@@ -3,7 +3,7 @@ import { OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 
-describe('retired mailbox deliveries', () => {
+describe('mailbox delivery consumption', () => {
   let db: OrchestrationDb
   afterEach(() => db?.close())
 
@@ -20,7 +20,7 @@ describe('retired mailbox deliveries', () => {
     return { run, params, insert }
   }
 
-  it('retires the heartbeat delivery atomically when completion suppresses its contents', () => {
+  it('advances past a heartbeat batch when completion suppresses its contents', () => {
     const { run, params } = setup()
     const task = db.createTask({ runId: run.id, spec: 'work' })
     const dispatch = createRootDispatch(db, task.id, 'worker')
@@ -37,7 +37,7 @@ describe('retired mailbox deliveries', () => {
     const first = db.getOrCreateRunDelivery(params)!
     const done = insert('worker_done')
     expect(reconcileLifecycleMessage(db, done).action).toBe('completed')
-    expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('acknowledged')
+    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
     expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
     expect(
       db
@@ -45,11 +45,11 @@ describe('retired mailbox deliveries', () => {
         ?.messages.map((m) => m.id)
     ).toEqual([done.id])
     expect(db.acknowledgeRunDelivery({ ...params, deliveryId: first.delivery.id }).duplicate).toBe(
-      true
+      false
     )
   })
 
-  it('repairs an already fully-read outstanding delivery before replay', () => {
+  it('ignores a fully read batch without rewriting it', () => {
     const { params, insert } = setup()
     const old = insert('old')
     const first = db.getOrCreateRunDelivery(params)!
@@ -58,7 +58,7 @@ describe('retired mailbox deliveries', () => {
     const current = db.getOrCreateRunDelivery(params)!
     expect(current.messages.map((m) => m.id)).toEqual([next.id])
     expect(current.replayed).toBe(false)
-    expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('acknowledged')
+    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
   })
 
   it('preserves the entire replay batch while any member is unread', () => {
@@ -74,16 +74,20 @@ describe('retired mailbox deliveries', () => {
     expect(replay.replayed).toBe(true)
   })
 
-  it('rolls retirement back with the enclosing lifecycle transaction', () => {
+  it('derives eligibility again when a read transaction rolls back', () => {
     const { params, insert } = setup()
     const message = insert('old')
     const first = db.getOrCreateRunDelivery(params)!
+    const before = db.getDeliveryRaw(first.delivery.id)
     db.db.exec('BEGIN')
     db.markAsReadAndDelivered([message.id])
-    expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('acknowledged')
+    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
+    expect(db.hasOutstandingRunDelivery(params.runId)).toBe(false)
     db.db.exec('ROLLBACK')
+    expect(db.hasOutstandingRunDelivery(params.runId)).toBe(true)
+    expect(db.getDeliveryRaw(first.delivery.id)).toEqual(before)
     expect(db.getMessageById(message.id)?.read).toBe(0)
-    expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('outstanding')
+    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
   })
 
   it('explains the delivery ID contract for invalid acknowledgements without consuming mail', () => {
@@ -94,10 +98,10 @@ describe('retired mailbox deliveries', () => {
       '--ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.'
     )
     expect(db.getMessageById(message.id)?.read).toBe(0)
-    expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('outstanding')
+    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
   })
 
-  it('checks the consumer generation before repairing an already read delivery', () => {
+  it('checks the consumer generation even when the prior batch is already read', () => {
     const { run, params, insert } = setup()
     const message = insert('old')
     const first = db.getOrCreateRunDelivery(params)!
@@ -109,15 +113,15 @@ describe('retired mailbox deliveries', () => {
         consumerGeneration: params.consumerGeneration + 1
       })
     ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
-    expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('outstanding')
+    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
   })
 
   it.each(['markAsRead', 'markAsReadAndDelivered'] as const)(
-    '%s retires dispatch mail without retiring a different mailbox',
+    '%s releases dispatch mail without changing a different mailbox',
     (method) => {
       const { run, params, insert } = setup()
       insert('coordinator mail')
-      const coordinator = db.getOrCreateRunDelivery(params)!
+      db.getOrCreateRunDelivery(params)!
       const task = db.createTask({ runId: run.id, spec: 'worker mail' })
       const dispatch = createRootDispatch(db, task.id, 'worker')
       const mailboxHandle = `dispatch:${dispatch.id}`
@@ -127,12 +131,16 @@ describe('retired mailbox deliveries', () => {
         to: mailboxHandle,
         subject: 'worker mail'
       })
-      const workerParams = { ...params, mailboxHandle }
-      const worker = db.getOrCreateMailboxDelivery(workerParams)!
+      const workerParams = {
+        ...params,
+        mailboxHandle,
+        consumerGeneration: dispatch.consumer_generation
+      }
+      db.getOrCreateMailboxDelivery(workerParams)!
       db[method]([message.id])
-      expect(db.getDeliveryRaw(worker.delivery.id)?.status).toBe('acknowledged')
+      expect(db.hasOutstandingMailboxDelivery(mailboxHandle)).toBe(false)
       expect(db.getOrCreateMailboxDelivery(workerParams)).toBeUndefined()
-      expect(db.getDeliveryRaw(coordinator.delivery.id)?.status).toBe('outstanding')
+      expect(db.hasOutstandingRunDelivery(run.id)).toBe(true)
     }
   )
 })

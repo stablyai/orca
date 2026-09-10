@@ -45,7 +45,6 @@ export type {
   WorkerReportSettlement,
   RunRow,
   DeliveryRow,
-  DeliveryStatus,
   LegacyAdoptionRow,
   LegacyCompatibilityPrincipalRow,
   LegacyPrincipalRole,

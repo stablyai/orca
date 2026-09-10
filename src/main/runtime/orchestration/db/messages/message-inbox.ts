@@ -9,8 +9,7 @@ const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
 function runBatchedMessageMutation(
   db: OrchestrationDb,
   ids: string[],
-  sqlForPlaceholders: (placeholders: string) => string,
-  retireReadDeliveries = false
+  sqlForPlaceholders: (placeholders: string) => string
 ): void {
   if (ids.length === 0) {
     return
@@ -21,14 +20,6 @@ function runBatchedMessageMutation(
       const batch = ids.slice(offset, offset + MESSAGE_ID_UPDATE_BATCH_SIZE)
       const placeholders = batch.map(() => '?').join(',')
       db.db.prepare(sqlForPlaceholders(placeholders)).run(...batch)
-      if (retireReadDeliveries) {
-        const mailboxes = db.db
-          .prepare(`SELECT DISTINCT to_handle FROM messages WHERE id IN (${placeholders})`)
-          .all(...batch) as { to_handle: string }[]
-        for (const mailbox of mailboxes) {
-          db.retireReadMailboxDelivery(mailbox.to_handle)
-        }
-      }
     }
     db.db.exec(`RELEASE ${MESSAGE_MUTATION_SAVEPOINT}`)
   } catch (error) {
@@ -169,8 +160,7 @@ export function markAsRead(this: OrchestrationDb, ids: string[]): void {
       `UPDATE messages
        SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`,
-    true
+       WHERE id IN (${placeholders})`
   )
 }
 
@@ -226,8 +216,7 @@ export function markAsReadAndDelivered(this: OrchestrationDb, ids: string[]): vo
        SET read = 1, delivered_at = COALESCE(delivered_at, datetime('now')),
            pointer_enter_pending = 0, pointer_pty_id = NULL,
            pointer_process_incarnation = NULL
-       WHERE id IN (${placeholders})`,
-    true
+       WHERE id IN (${placeholders})`
   )
 }
 

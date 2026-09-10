@@ -3,6 +3,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { exposeDeliveryTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
+import { requireMailboxConsumer } from './mailbox-consumer'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
 
 export function getDeliveryRaw(this: OrchestrationDb, id: string): DeliveryRow | undefined {
@@ -29,9 +30,9 @@ export function getOrCreateMailboxDelivery(
     runId: string
     mailboxHandle: string
     consumerGeneration: number
+    consumerSource?: 'dispatch' | 'attachment'
     limit?: number
     wakeTypes?: MessageType[]
-    requireCurrentRunConsumer?: boolean
   }
 ): { delivery: DeliveryRow; messages: MessageRow[]; replayed: boolean } | undefined {
   const limit = Math.min(
@@ -40,11 +41,9 @@ export function getOrCreateMailboxDelivery(
   )
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    if (params.requireCurrentRunConsumer) {
-      this.requireCurrentConsumer(params.runId, params.consumerGeneration)
-    }
+    requireMailboxConsumer(this, params)
     const existing = this.db
-      .prepare("SELECT * FROM deliveries WHERE mailbox_handle = ? AND status = 'outstanding'")
+      .prepare('SELECT * FROM outstanding_deliveries WHERE mailbox_handle = ?')
       .get(params.mailboxHandle) as DeliveryRow | undefined
     if (existing) {
       if (existing.consumer_generation !== params.consumerGeneration) {
@@ -53,11 +52,9 @@ export function getOrCreateMailboxDelivery(
           'This mailbox Delivery belongs to a fenced consumer generation.'
         )
       }
-      if (!this.retireReadMailboxDelivery(params.mailboxHandle)) {
-        const messages = this.getDeliveryMessages(existing)
-        this.db.exec('COMMIT')
-        return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
-      }
+      const messages = this.getDeliveryMessages(existing)
+      this.db.exec('COMMIT')
+      return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
     }
     if (params.wakeTypes?.length) {
       const placeholders = params.wakeTypes.map(() => '?').join(',')
@@ -117,15 +114,13 @@ export function acknowledgeMailboxDelivery(
     runId: string
     mailboxHandle: string
     consumerGeneration: number
+    consumerSource?: 'dispatch' | 'attachment'
     deliveryId: string
-    requireCurrentRunConsumer?: boolean
   }
 ): { delivery: DeliveryRow; duplicate: boolean } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    if (params.requireCurrentRunConsumer) {
-      this.requireCurrentConsumer(params.runId, params.consumerGeneration)
-    }
+    requireMailboxConsumer(this, params)
     const delivery = this.getDeliveryRaw(params.deliveryId)
     if (
       !delivery ||
@@ -137,16 +132,13 @@ export function acknowledgeMailboxDelivery(
         `Delivery ${params.deliveryId} does not belong to this mailbox. --ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.`
       )
     }
-    if (
-      delivery.consumer_generation !== params.consumerGeneration ||
-      delivery.status === 'fenced'
-    ) {
+    if (delivery.consumer_generation !== params.consumerGeneration || delivery.fenced === 1) {
       throw new OrchestrationError(
         'consumer_fenced',
         'This mailbox Delivery belongs to a fenced consumer generation.'
       )
     }
-    if (delivery.status === 'acknowledged') {
+    if (delivery.acknowledged_at !== null) {
       this.db.exec('COMMIT')
       return { delivery: exposeDeliveryTimestamps(delivery), duplicate: true }
     }
@@ -163,9 +155,7 @@ export function acknowledgeMailboxDelivery(
         .run(...messageIds)
     }
     this.db
-      .prepare(
-        "UPDATE deliveries SET status = 'acknowledged', acknowledged_at = datetime('now') WHERE id = ?"
-      )
+      .prepare("UPDATE deliveries SET acknowledged_at = datetime('now') WHERE id = ?")
       .run(delivery.id)
     const acknowledged = this.getDeliveryRaw(delivery.id) as DeliveryRow
     this.db.exec('COMMIT')
@@ -176,30 +166,13 @@ export function acknowledgeMailboxDelivery(
   }
 }
 
-// Acknowledgment keeps late consumer acks idempotent after lifecycle suppression.
-export function retireReadMailboxDelivery(this: OrchestrationDb, mailboxHandle: string): boolean {
-  const result = this.db
-    .prepare(
-      `UPDATE deliveries SET status = 'acknowledged', acknowledged_at = datetime('now')
-     WHERE mailbox_handle = ? AND status = 'outstanding'
-       AND NOT EXISTS (
-         SELECT 1 FROM json_each(deliveries.message_ids) AS member
-         JOIN messages ON messages.id = member.value WHERE messages.read = 0
-       )`
-    )
-    .run(mailboxHandle)
-  return result.changes > 0
-}
-
 export function hasOutstandingMailboxDelivery(
   this: OrchestrationDb,
   mailboxHandle: string
 ): boolean {
   return Boolean(
     this.db
-      .prepare(
-        "SELECT 1 FROM deliveries WHERE mailbox_handle = ? AND status = 'outstanding' LIMIT 1"
-      )
+      .prepare('SELECT 1 FROM outstanding_deliveries WHERE mailbox_handle = ? LIMIT 1')
       .get(mailboxHandle)
   )
 }
@@ -210,13 +183,13 @@ export function fenceOutstandingMailboxDelivery(
 ): void {
   this.db
     .prepare(
-      "UPDATE deliveries SET status = 'fenced' WHERE mailbox_handle = ? AND status = 'outstanding'"
+      `UPDATE deliveries SET fenced = 1
+       WHERE id IN (SELECT id FROM outstanding_deliveries WHERE mailbox_handle = ?)`
     )
     .run(mailboxHandle)
 }
 
 export type RoleMailboxDeliveryMethods = {
-  retireReadMailboxDelivery: typeof retireReadMailboxDelivery
   getDeliveryRaw: typeof getDeliveryRaw
   getDeliveryMessages: typeof getDeliveryMessages
   getOrCreateMailboxDelivery: typeof getOrCreateMailboxDelivery
@@ -227,7 +200,6 @@ export type RoleMailboxDeliveryMethods = {
 
 export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
-    retireReadMailboxDelivery,
     getDeliveryRaw,
     getDeliveryMessages,
     getOrCreateMailboxDelivery,

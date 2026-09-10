@@ -6,7 +6,7 @@ export function hasColumn(this: OrchestrationDb, table: string, column: string):
 }
 
 export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): void {
-  if (this.hasColumn('deliveries', 'mailbox_handle')) {
+  if (this.hasColumn('deliveries', 'mailbox_handle') && this.hasColumn('deliveries', 'status')) {
     // Excluding '' trades the pre-v34 per-run one-outstanding backstop for downgraded binaries; the
     // app-level BEGIN IMMEDIATE still serializes one process.
     this.db.exec(`

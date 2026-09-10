@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
+import { restoreV40DeliverySchema } from './db/schema/delivery-v40-test-fixture'
 import { OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import { SCHEMA_VERSION } from './db/contract-constants'
@@ -32,6 +33,7 @@ describe('nested worker depth migration (v30)', () => {
     fresh.close()
 
     const oldDb = new Database(dbPath)
+    restoreV40DeliverySchema(oldDb)
     oldDb.exec('ALTER TABLE dispatch_contexts DROP COLUMN depth')
     oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN depth')
     oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN home_run_id')
@@ -95,6 +97,7 @@ describe('nested worker depth migration (v30)', () => {
     // replay migrations from v6 instead of starting at 29.
     const dbPath = createV29Database()
     const oldDb = new Database(dbPath)
+    restoreV40DeliverySchema(oldDb)
     expect(resolveOrchestrationMigrationStartVersion(oldDb, 29, SCHEMA_VERSION)).toBe(29)
     oldDb.close()
   })

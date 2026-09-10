@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
+import { restoreV40DeliverySchema } from './db/schema/delivery-v40-test-fixture'
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
@@ -48,6 +49,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     seed.close()
 
     const raw = new Database(dbPath)
+    restoreV40DeliverySchema(raw)
     raw.exec(`
       ALTER TABLE dispatch_contexts DROP COLUMN consumer_generation;
       ALTER TABLE remote_dispatch_attachments DROP COLUMN consumer_generation;
@@ -78,6 +80,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
   it('does not send a v35 stamp back to the pre-Run repair floor', () => {
     const v35 = createV35Database()
     const raw = new Database(v35.path)
+    restoreV40DeliverySchema(raw)
     try {
       expect(resolveOrchestrationMigrationStartVersion(raw, 35, SCHEMA_VERSION)).toBe(35)
     } finally {
@@ -88,6 +91,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
   it('repairs a database stamped v36 that never got the columns', () => {
     const v35 = createV35Database()
     const raw = new Database(v35.path)
+    restoreV40DeliverySchema(raw)
     raw.pragma('user_version = 36')
     try {
       // Why: the skew repair is the only thing that catches a partially-written v36.

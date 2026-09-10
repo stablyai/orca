@@ -204,7 +204,7 @@ describe('Dispatch mailbox Delivery', () => {
       coordinatorPaneKey: 'tab_new:leaf_new'
     })
 
-    expect(db.getDeliveryRaw(delivery.delivery.id)?.status).toBe('outstanding')
+    expect(db.hasOutstandingMailboxDelivery(`dispatch:${dispatch.id}`)).toBe(true)
     expect(
       db.getOrCreateMailboxDelivery({
         runId: run.id,
