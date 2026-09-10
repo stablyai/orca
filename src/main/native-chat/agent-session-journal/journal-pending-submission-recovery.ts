@@ -1,9 +1,8 @@
 import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from './journal-store'
 
-/** Settles every submission a process fact left unanswerable. `reason` says
- *  which fact, and is what a later Retry reads to know the message never
- *  reached a provider. */
+/** Settles every submission a process fact left unanswerable. The retry policy
+ *  separately decides whether that fact proves the provider never received it. */
 export async function markJournalPendingSubmissionsUnknown(
   journal: AgentSessionJournal,
   fence: number,

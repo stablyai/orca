@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { dispatchClaudeTurn, resolveClaudeReplayWaiter } from './claude-structured-dispatch'
 import { readClaudeImage } from './claude-structured-dispatch-content'
+import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
 import type { ClaudeSession } from './claude-structured-session-state'
 import {
   childExited,
@@ -367,7 +368,9 @@ describe('Claude structured dispatch image limits', () => {
     })
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const firstWaiter = session.dispatchWaiters[0]
-    session.connection.send = vi.fn().mockRejectedValue(new Error('broken pipe'))
+    session.connection.send = vi
+      .fn()
+      .mockRejectedValue(claudeUnwrittenUserMessageError(new Error('broken pipe')))
 
     // A refused write is a transport fact, and the only thing besides child exit
     // that puts one message's delivery in doubt.
@@ -385,6 +388,20 @@ describe('Claude structured dispatch image limits', () => {
     expect(settled).toHaveBeenCalledWith({
       clientMessageId: 'client-1',
       providerIdentity: { provider: 'claude', sessionId: 'provider-session', uuid: firstUuid }
+    })
+  })
+
+  it('does not claim an SDK-pulled frame was unwritten when its write outcome is ambiguous', async () => {
+    const session = sessionFor(vi.fn().mockRejectedValue(new Error('input pump stopped')))
+
+    await expect(
+      dispatchClaudeTurn(session, {
+        clientMessageId: 'client-1',
+        body: userMessage([{ type: 'text', text: 'one' }])
+      })
+    ).resolves.toEqual({
+      state: 'unknown',
+      reason: 'provider_write_outcome_unknown: input pump stopped'
     })
   })
 

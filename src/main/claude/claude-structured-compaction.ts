@@ -15,7 +15,6 @@ export function compactClaudeSession(
     session.providerSessionId,
     async () => {
       const result = await dispatchClaudeTurn(session, {
-        clientMessageId: `compact-${input.fence}`,
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: '/compact' }] }
       })
       if (result.state === 'rejected') {

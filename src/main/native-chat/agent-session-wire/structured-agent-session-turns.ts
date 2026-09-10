@@ -127,10 +127,17 @@ export async function performSend(
   }
 
   const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
-  // Admission writes no dispatch row: the submission stays `pending`, which
-  // already means written and awaiting, and the provider's echo settles it
-  // through the late-settlement channel whenever the turn ahead of it ends.
+  // A first admission needs no dispatch row: the submission is already pending.
+  // A retry must durably clear the old doubt so clients do not mistake a
+  // successful re-admission for a refused redelivery.
   if (outcome.state === 'admitted') {
+    if (redeliver) {
+      await ctx.journal.resolveDispatch({
+        clientMessageId: input.clientMessageId,
+        state: 'pending',
+        fence: ctx.fence
+      })
+    }
     ctx.publish()
     return {
       ok: true,

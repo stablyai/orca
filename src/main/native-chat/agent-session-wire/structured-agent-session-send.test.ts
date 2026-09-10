@@ -113,6 +113,28 @@ describe('send', () => {
     expect(state.ok && state.page.submissions).toHaveLength(1)
   })
 
+  it('returns an admitted retry to pending until the provider echo accepts it', async () => {
+    await attach()
+    dispatch
+      .mockImplementationOnce(async () => ({
+        state: 'unknown' as const,
+        reason: 'provider_write_failed: connection closed before enqueue'
+      }))
+      .mockImplementationOnce(async () => ({ state: 'admitted' as const }))
+    const body = hostTestMessage('admitted on retry')
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+
+    await host.send(CALLER, params)
+    await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
+      ok: true,
+      replayed: false,
+      value: {
+        submission: { dispatchState: 'pending', reason: null, resolvedAt: null }
+      }
+    })
+    expect(dispatch).toHaveBeenCalledTimes(2)
+  })
+
   it('refuses to redeliver a retry for a turn the provider already owns', async () => {
     await attach()
     dispatch.mockImplementationOnce(async () => ({

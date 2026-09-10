@@ -3,6 +3,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeControlRequestError } from './claude-stream-json-connection'
+import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
 import {
   acquired,
   fakeClaude,
@@ -58,7 +59,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     const claude = fakeClaude({ replayUuid: null })
     const adapter = await acquired(claude)
     claude.connections[0]!.send = async () => {
-      throw new Error('broken pipe')
+      throw claudeUnwrittenUserMessageError(new Error('broken pipe'))
     }
     await expect(
       adapter.dispatch({

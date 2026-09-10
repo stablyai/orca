@@ -15,7 +15,10 @@ import {
 import { createClaudeChildTreeReaper, proveClaudeChildExit } from './claude-agent-sdk-exit-proof'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
-import { createClaudeUserMessageQueue } from './claude-agent-sdk-user-message-queue'
+import {
+  claudeUnwrittenUserMessageError,
+  createClaudeUserMessageQueue
+} from './claude-agent-sdk-user-message-queue'
 import type { ClaudeStructuredSdkOptions } from './claude-structured-launch-resolution'
 
 export { ClaudeControlRequestError }
@@ -236,7 +239,11 @@ export async function openClaudeStreamJsonConnection(
 
   const send = (message: Record<string, unknown>): Promise<void> => {
     if (closing || exited || terminalError || child.stdin.destroyed || !child.stdin.writable) {
-      return Promise.reject(terminalError ?? new Error('claude stream-json connection is closed'))
+      return Promise.reject(
+        claudeUnwrittenUserMessageError(
+          terminalError ?? new Error('claude stream-json connection is closed')
+        )
+      )
     }
     return inbox.push(message as unknown as SDKUserMessage)
   }

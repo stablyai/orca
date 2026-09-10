@@ -67,6 +67,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
   state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
   if (row.kind === 'item') {
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
+    acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     upsertItem(state, itemId, row.revision, {
       itemId,
       revision: row.revision,
@@ -88,6 +89,7 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     for (const mutation of row.mutations) {
       if (mutation.kind === 'item') {
         const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
+        acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
         upsertItem(state, itemId, mutation.revision, {
           itemId,
           revision: mutation.revision,
@@ -260,7 +262,7 @@ function applyDispatch(
   submission.dispatchState = row.state
   submission.providerItemId = row.providerItemId
   submission.reason = row.reason
-  submission.resolvedAt = row.ts
+  submission.resolvedAt = row.state === 'pending' ? null : row.ts
   if (row.recovered) {
     submission.recovered = row.recovered
   } else {
@@ -273,6 +275,39 @@ function applyDispatch(
   state.receipts.set(row.clientMessageId, {
     clientMessageId: row.clientMessageId,
     providerItemId: row.providerItemId,
+    cursor: { epoch: row.epoch, sequence: row.seq },
+    acceptedAt: row.ts
+  })
+}
+
+function acceptSubmissionFromProviderItem(
+  state: JournalReducerState,
+  providerItemId: string,
+  resolvedItemId: string,
+  row: Pick<JournalRow, 'epoch' | 'seq' | 'fence' | 'ts'>
+): void {
+  if (providerItemId === resolvedItemId) {
+    return
+  }
+  const submission = [...state.submissions.values()].find(
+    (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
+  )
+  if (
+    !submission ||
+    submission.dispatchState === 'accepted' ||
+    submission.dispatchState === 'rejected'
+  ) {
+    return
+  }
+  submission.fence = row.fence
+  submission.dispatchState = 'accepted'
+  submission.providerItemId = providerItemId
+  submission.reason = null
+  submission.resolvedAt = row.ts
+  delete submission.recovered
+  state.receipts.set(submission.clientMessageId, {
+    clientMessageId: submission.clientMessageId,
+    providerItemId,
     cursor: { epoch: row.epoch, sequence: row.seq },
     acceptedAt: row.ts
   })

@@ -60,8 +60,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
     identity: AgentSessionJournalIdentity
   }) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  /** The provider replay that proves a dispatch was delivered. Dispatch returns
-   *  on admission, so this is the only channel that settles a submission. */
+  /** Direct settlement path for a provider replay; its durable item row also reconciles delivery. */
   onDispatchSettledLate?: (input: {
     sessionId: string
     clientMessageId: string
@@ -97,9 +96,8 @@ export type ClaudeStructuredSessionAdapterDeps = {
 export type ClaudeDispatchWaiter = {
   resolve: (uuid: string | null) => void
   acceptsResult: boolean
-  /** Carried so the replay that settles this dispatch settles the journal
-   *  submission it came from, not just the in-memory turn identity. */
-  clientMessageId: string
+  /** Submission settled by the replay, or null for provider-control turns. */
+  clientMessageId: string | null
   /** Client uuid echoed by Claude so a replay is tied to its own dispatch. */
   sentUuid: string
   /** Sequence used to fence a late identity from a newer dispatch. */

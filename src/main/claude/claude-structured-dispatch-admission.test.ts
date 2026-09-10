@@ -86,4 +86,38 @@ describe('Claude structured dispatch admission', () => {
     expect(session.retiredDispatchWaiters).toHaveLength(2)
     expect(session.retiredDispatchWaiters.every((waiter) => waiter.retired === true)).toBe(true)
   })
+
+  it('bounds pending replay identities instead of retaining an unbounded queue', async () => {
+    const session = sessionFor()
+    for (let index = 0; index < 64; index += 1) {
+      await expect(
+        dispatchClaudeTurn(session, {
+          clientMessageId: `client-${index}`,
+          body: userMessage([{ type: 'text', text: String(index) }])
+        })
+      ).resolves.toEqual({ state: 'admitted' })
+    }
+
+    await expect(
+      dispatchClaudeTurn(session, {
+        clientMessageId: 'client-over-capacity',
+        body: userMessage([{ type: 'text', text: 'one too many' }])
+      })
+    ).resolves.toEqual({ state: 'rejected', reason: 'claude structured dispatch queue is full' })
+    expect(session.dispatchWaiters).toHaveLength(64)
+    expect(session.connection.send).toHaveBeenCalledTimes(64)
+  })
+
+  it('does not publish a journal settlement for a provider-control turn', async () => {
+    const session = sessionFor()
+    const settled = vi.fn()
+    await dispatchClaudeTurn(session, {
+      body: userMessage([{ type: 'text', text: '/compact' }])
+    })
+    const uuid = session.dispatchWaiters[0]!.sentUuid
+
+    resolveClaudeReplayWaiter(session, userReplayFrame(uuid, '/compact'), settled)
+
+    expect(settled).not.toHaveBeenCalled()
+  })
 })

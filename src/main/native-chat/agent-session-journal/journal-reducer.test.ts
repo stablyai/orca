@@ -216,6 +216,30 @@ describe('submission and dispatch state machine', () => {
     expect(items[0]?.revision).toBe(1)
   })
 
+  it('durably accepts a pending submission from the provider echo row itself', () => {
+    const body = userText('hi')
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'item',
+        itemId: 'claude:session-1:user-1',
+        revision: 1,
+        body,
+        ...base(2)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1',
+      resolvedAt: 1_002
+    })
+    expect(state.receipts.get('cm_1')).toMatchObject({
+      providerItemId: 'claude:session-1:user-1',
+      cursor: { epoch: EPOCH, sequence: 2 }
+    })
+  })
+
   it.each(['codex:thread-1:turn-1:0', 'claude:session-1:user-1'])(
     'preserves submitted text and attachments when %s is restored',
     (providerItemId) => {
@@ -382,6 +406,36 @@ describe('submission and dispatch state machine', () => {
     ])
     expect(state.submissions.get('cm_1')?.dispatchState).toBe('accepted')
     expect(state.receipts.get('cm_1')).toBeTruthy()
+  })
+
+  it('returns a proven retry to pending without moving its original submission', () => {
+    const state = fold([
+      submission,
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'pending',
+        providerItemId: null,
+        reason: null,
+        ...base(3)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'pending',
+      submittedAt: submission.ts,
+      reason: null,
+      resolvedAt: null
+    })
+    expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
   })
 
   it('ignores a dispatch for a submission this epoch never saw', () => {

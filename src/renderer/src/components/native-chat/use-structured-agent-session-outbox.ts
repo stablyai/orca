@@ -92,14 +92,20 @@ export function useStructuredAgentSessionOutbox(args: {
   }, [fence, sessionId, target])
 
   useEffect(() => {
-    const next = reconcileStructuredAgentSessionOutbox(outboxRef.current, submissions)
-    if (
-      next.some((entry, index) => entry !== outboxRef.current[index]) ||
-      next.length !== outboxRef.current.length
-    ) {
+    const current = outboxRef.current
+    const acceptedHead = submissions.some(
+      (submission) =>
+        submission.clientMessageId === current[0]?.clientMessageId &&
+        submission.dispatchState === 'accepted'
+    )
+    const next = reconcileStructuredAgentSessionOutbox(current, submissions)
+    if (next.some((entry, index) => entry !== current[index]) || next.length !== current.length) {
       outboxRef.current = next
       setOutbox(next)
       writeOutbox(sessionId, next)
+      if (acceptedHead) {
+        setError(null)
+      }
     }
   }, [sessionId, submissions])
 

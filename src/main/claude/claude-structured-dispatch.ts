@@ -15,13 +15,16 @@ import {
   claudeDispatchInvokesSlashCommand,
   claudeDispatchMessageContent
 } from './claude-structured-dispatch-content'
-import { dispatchWriteFailureReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import {
+  dispatchWriteFailureReason,
+  dispatchWriteOutcomeUnknownReason
+} from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { claudeUserMessageWasProvablyUnwritten } from './claude-agent-sdk-user-message-queue'
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
+const MAX_ACTIVE_DISPATCH_WAITERS = 64
 
-/** The provider replay that proves a dispatch was delivered, and under which
- *  identity. Dispatch returns before this arrives, so this is the ONLY channel
- *  that settles a submission as accepted. */
+/** Directly settles provider-proven delivery; the durable replay row independently reconciles it. */
 export type ClaudeLateDispatchSettlement = (input: {
   clientMessageId: string
   providerIdentity: AgentJournalItemIdentity
@@ -141,13 +144,14 @@ function settleWaiter(
   }
   waiter.settledUuid = uuid
   waiter.resolve(uuid)
-  // Dispatch returned on admission, so this replay is what settles the journal
-  // submission and the turn identity. Unfenced settlement, fenced identity:
-  // see `recoverLateIdentity`.
-  onSettledLate?.({
-    clientMessageId: waiter.clientMessageId,
-    providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
-  })
+  // Dispatch returned on admission. Settle delivery unfenced while the sequence
+  // still fences which turn owns the identity; see `recoverLateIdentity`.
+  if (waiter.clientMessageId) {
+    onSettledLate?.({
+      clientMessageId: waiter.clientMessageId,
+      providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+    })
+  }
   if (waiter.dispatchSequence === session.dispatchSequence) {
     session.activeTurnId = uuid
     session.activeTurnSequence = waiter.dispatchSequence
@@ -174,10 +178,12 @@ function recoverLateIdentity(
   // The provider acted on this dispatch, so the send it came from is delivered.
   // Unfenced on purpose: the dispatch-sequence check below only decides which
   // turn owns the identity, while delivery is settled for good either way.
-  onSettledLate?.({
-    clientMessageId: waiter.clientMessageId,
-    providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
-  })
+  if (waiter.clientMessageId) {
+    onSettledLate?.({
+      clientMessageId: waiter.clientMessageId,
+      providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+    })
+  }
   if (waiter.dispatchSequence === session.dispatchSequence) {
     session.activeTurnId = uuid
     session.activeTurnSequence = waiter.dispatchSequence
@@ -197,7 +203,7 @@ function waitForReplay(
   acceptsResult: boolean,
   sentUuid: string,
   replayContentKey: string,
-  clientMessageId: string
+  clientMessageId: string | null
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
@@ -244,13 +250,16 @@ export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
 
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId: string; body: AgentJournalMessageItem }
+  input: { clientMessageId?: string; body: AgentJournalMessageItem }
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
     content = await claudeDispatchMessageContent(input.body)
   } catch (error) {
     return { state: 'rejected', reason: (error as Error).message }
+  }
+  if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
+    return { state: 'rejected', reason: 'claude structured dispatch queue is full' }
   }
   const dispatchSequence = ++session.dispatchSequence
   // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
@@ -262,7 +271,7 @@ export async function dispatchClaudeTurn(
     acceptsResult,
     sentUuid,
     claudeDispatchContentKey(content),
-    input.clientMessageId
+    input.clientMessageId ?? null
   )
   const replayed = replay.promise
   try {
@@ -290,7 +299,12 @@ export async function dispatchClaudeTurn(
       retireWaiter(session, waiter)
       waiter.resolve(null)
     }
-    return { state: 'unknown', reason: dispatchWriteFailureReason(error) }
+    return {
+      state: 'unknown',
+      reason: claudeUserMessageWasProvablyUnwritten(error)
+        ? dispatchWriteFailureReason(error)
+        : dispatchWriteOutcomeUnknownReason(error)
+    }
   }
   // The write is the admission signal. Awaiting the echo here would block on the
   // turn already running, which is why the deadline this replaces kept declaring

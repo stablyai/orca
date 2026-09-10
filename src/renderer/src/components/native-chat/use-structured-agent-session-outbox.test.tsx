@@ -229,6 +229,7 @@ describe('useStructuredAgentSessionOutbox', () => {
       ]
     })
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+    expect(result.current.error).toBeNull()
   })
 
   it('lets no transport error reopen a send the journal already settled', async () => {
@@ -250,6 +251,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
     const id = result.current.outbox[0]!.clientMessageId
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
+    expect(result.current.error).toBe('Message delivery is unconfirmed')
 
     rerender({
       submissions: [
@@ -257,6 +259,7 @@ describe('useStructuredAgentSessionOutbox', () => {
       ]
     })
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+    expect(result.current.error).toBeNull()
   })
 
   it('drains a head the host refuses to redeliver so the queue behind it advances', async () => {

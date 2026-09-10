@@ -30,9 +30,17 @@ export const DISPATCH_DOUBT_CODEX_TURN_UNNAMED =
 /** The transport refused the frame; the underlying error follows the colon. */
 export const DISPATCH_DOUBT_WRITE_FAILED = 'provider_write_failed'
 
+/** The SDK took the frame, but its input pump did not prove whether the write completed. */
+export const DISPATCH_DOUBT_WRITE_OUTCOME_UNKNOWN = 'provider_write_outcome_unknown'
+
 export function dispatchWriteFailureReason(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return `${DISPATCH_DOUBT_WRITE_FAILED}: ${detail}`
+}
+
+export function dispatchWriteOutcomeUnknownReason(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error)
+  return `${DISPATCH_DOUBT_WRITE_OUTCOME_UNKNOWN}: ${detail}`
 }
 
 /**
