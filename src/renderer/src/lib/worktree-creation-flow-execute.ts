@@ -23,7 +23,8 @@ import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structu
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import {
   markStructuredWorktreeLaunchFailed,
-  markStructuredWorktreeLaunchUnconfirmed
+  markStructuredWorktreeLaunchUnconfirmed,
+  markStructuredWorktreePromptDeliveryUnconfirmed
 } from '@/lib/worktree-creation-structured-recovery'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
@@ -228,6 +229,10 @@ export async function executeWorktreeCreation(
     }
     if (structuredSession.visibilityUnknown) {
       markStructuredWorktreeLaunchUnconfirmed(creationId, worktree.id)
+      return
+    }
+    if (structuredSession.promptDeliveryUnknown) {
+      markStructuredWorktreePromptDeliveryUnconfirmed(creationId, worktree.id)
       return
     }
     if (structuredSession.failure) {

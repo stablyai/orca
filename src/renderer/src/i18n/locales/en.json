@@ -678,7 +678,7 @@
               "67e103dd60": "Workspace created but could not be activated.",
               "19c7683acf": "Selected agent is not available in the created workspace.",
               "8bc45efdbc": "Failed to resolve PR head.",
-              "structuredPromptDeliveryFailed": "The structured agent session did not accept the work item prompt. Open the chat and send it manually; Orca did not retry.",
+              "structuredPromptDeliveryFailed": "The structured agent session did not accept the work item prompt. Orca did not retry or start another writer.",
               "structuredUnavailable": "Submit after ready requires a local structured Codex or Claude session without custom launch arguments. The workspace was created, but no agent or prompt was started.",
               "agent": {
                 "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
@@ -834,6 +834,9 @@
             "structured": {
               "launch": {
                 "unknown": "Could not confirm whether Codex chat opened. Retry to check again."
+              },
+              "prompt": {
+                "unknown": "Could not confirm whether the work item prompt was delivered. Retry to reconcile the same message."
               }
             }
           }

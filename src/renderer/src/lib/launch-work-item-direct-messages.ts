@@ -49,5 +49,5 @@ export const structuredWorkItemComposerPreflightUnavailableMessage = (): string 
 export const structuredWorkItemPromptDeliveryFailedMessage = (): string =>
   translate(
     'auto.lib.launch.work.item.direct.structuredPromptDeliveryFailed',
-    'The structured agent session did not accept the work item prompt. Open the chat and send it manually; Orca did not retry.'
+    'The structured agent session did not accept the work item prompt. Orca did not retry or start another writer.'
   )

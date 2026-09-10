@@ -218,6 +218,128 @@ describe('startStructuredAgentLaunch', () => {
     expect(getStructuredAgentLaunchStatus(worktreeId, 'codex')).toBe('idle')
   })
 
+  it('retries a provider-unknown launch prompt with the same session and message identity', async () => {
+    const worktreeId = 'wt-prompt-provider-unknown'
+    const intent = launchIntent(worktreeId, 'native-codex-session-unknown')
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 7 })
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, intent.sessionId)
+    ])
+    mocks.callStructuredAgentSession
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { submission: { dispatchState: 'unknown', submittedAt: 42 } }
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        value: { submission: { dispatchState: 'accepted' } }
+      })
+
+    const first = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'Implement issue 58',
+      promptDelivery: 'submit-after-ready',
+      launchOrigin: 'work-item-start'
+    })
+    await expect(first.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: false,
+      deliveryUnknown: true
+    })
+    const [unconfirmed] = readOutbox(intent.sessionId)
+    expect(unconfirmed).toMatchObject({
+      sessionId: intent.sessionId,
+      state: 'unconfirmed',
+      retryAfterUnknownSubmittedAt: 42
+    })
+
+    const retry = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'Implement issue 58',
+      promptDelivery: 'submit-after-ready',
+      launchOrigin: 'work-item-start',
+      reuseStagedPrompt: true
+    })
+    await expect(retry.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+
+    const sendCalls = mocks.callStructuredAgentSession.mock.calls.filter(
+      ([, method]) => method === 'agentSession.send'
+    )
+    expect(sendCalls).toHaveLength(2)
+    expect(sendCalls[0]?.[2]).not.toHaveProperty('retryUnknown')
+    expect(sendCalls[1]?.[2]).toMatchObject({
+      retryUnknown: true,
+      envelope: { clientOperationId: unconfirmed?.clientMessageId }
+    })
+    expect(sendCalls[0]?.[2]).toMatchObject({
+      envelope: { clientOperationId: unconfirmed?.clientMessageId }
+    })
+    expect(mocks.createIntent).toHaveBeenCalledOnce()
+    expect(mocks.launch).toHaveBeenCalledOnce()
+    expect(readOutbox(intent.sessionId)).toEqual([])
+    await flushLaunchSettlement()
+    expect(getStructuredAgentLaunchStatus(worktreeId, 'codex')).toBe('idle')
+  })
+
+  it('reconciles a transport-ambiguous prompt with the original idempotency key', async () => {
+    const worktreeId = 'wt-prompt-transport-unknown'
+    const intent = launchIntent(worktreeId, 'native-codex-session-transport')
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 7 })
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, intent.sessionId)
+    ])
+    mocks.callStructuredAgentSession
+      .mockRejectedValueOnce(new Error('connection closed after send'))
+      .mockResolvedValueOnce({
+        ok: true,
+        replayed: true,
+        value: { submission: { dispatchState: 'accepted' } }
+      })
+
+    const first = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'Implement issue 58',
+      promptDelivery: 'submit-after-ready',
+      launchOrigin: 'work-item-start'
+    })
+    await expect(first.promptDeliveryResult).resolves.toEqual({
+      delivered: false,
+      failureNotified: false,
+      deliveryUnknown: true
+    })
+    const [unconfirmed] = readOutbox(intent.sessionId)
+    expect(unconfirmed).toMatchObject({
+      state: 'unconfirmed',
+      retryAfterUnknownSubmittedAt: null
+    })
+
+    const retry = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'Implement issue 58',
+      promptDelivery: 'submit-after-ready',
+      launchOrigin: 'work-item-start',
+      reuseStagedPrompt: true
+    })
+    await expect(retry.promptDeliveryResult).resolves.toMatchObject({ delivered: true })
+
+    const sendCalls = mocks.callStructuredAgentSession.mock.calls.filter(
+      ([, method]) => method === 'agentSession.send'
+    )
+    expect(sendCalls).toHaveLength(2)
+    expect(sendCalls[0]?.[2]).not.toHaveProperty('retryUnknown')
+    expect(sendCalls[1]?.[2]).not.toHaveProperty('retryUnknown')
+    expect(sendCalls[0]?.[2]).toMatchObject({
+      envelope: { clientOperationId: unconfirmed?.clientMessageId }
+    })
+    expect(sendCalls[1]?.[2]).toMatchObject({
+      envelope: { clientOperationId: unconfirmed?.clientMessageId }
+    })
+    expect(mocks.createIntent).toHaveBeenCalledOnce()
+    expect(mocks.launch).toHaveBeenCalledOnce()
+    expect(readOutbox(intent.sessionId)).toEqual([])
+  })
+
   it('keeps a Claude and a Codex launch in the same worktree apart', async () => {
     const worktreeId = 'wt-two-agents'
     mocks.launch.mockImplementation(async (intent: StructuredAgentSessionLaunchIntent) => {

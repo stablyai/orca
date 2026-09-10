@@ -55,7 +55,14 @@ export type StructuredLaunchCaller = {
 }
 
 export type StructuredLaunchCallerGroup = {
-  outcome: 'pending' | 'published' | 'failed' | 'refused' | 'unknown' | 'cancelled'
+  outcome:
+    | 'pending'
+    | 'published'
+    | 'failed'
+    | 'refused'
+    | 'unknown'
+    | 'prompt-unknown'
+    | 'cancelled'
   entries: Set<StructuredLaunchCaller>
   promptDeliveryResults: Set<Promise<StructuredPromptDeliveryResult>>
   refusalSettlement: {
@@ -154,7 +161,14 @@ function trackPromptDelivery(
     group.promptDeliveryResults.delete(promptDeliveryResult)
     group.onSettled()
   }
-  void promptDeliveryResult.then(settled, settled)
+  void promptDeliveryResult.then((result) => {
+    if (result.deliveryUnknown) {
+      group.outcome = 'prompt-unknown'
+    } else if (group.outcome === 'prompt-unknown') {
+      group.outcome = 'published'
+    }
+    settled()
+  }, settled)
 }
 
 export function addStructuredLaunchCaller(args: {
@@ -198,7 +212,7 @@ export function addStructuredLaunchCaller(args: {
   if (caller.promptDeliveryResult) {
     trackPromptDelivery(args.group, caller.promptDeliveryResult)
   }
-  if (['published', 'failed', 'cancelled'].includes(args.group.outcome)) {
+  if (['published', 'prompt-unknown', 'failed', 'cancelled'].includes(args.group.outcome)) {
     settleCallerWithoutFallback(caller)
   } else if (args.group.outcome === 'refused') {
     queueMicrotask(() => runCallerRefusalFallback(args.group, caller))
@@ -264,6 +278,7 @@ export function structuredLaunchCallersHavePendingWork(
   return (
     group.outcome === 'pending' ||
     group.outcome === 'unknown' ||
+    group.outcome === 'prompt-unknown' ||
     group.promptDeliveryResults.size > 0 ||
     (group.outcome === 'refused' && !group.refusalSettlement.settled)
   )

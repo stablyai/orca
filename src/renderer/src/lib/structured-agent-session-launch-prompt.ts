@@ -7,6 +7,7 @@ import {
   structuredAgentSessionSendRequest,
   type StructuredAgentSessionOutboxEntry
 } from '../../../shared/structured-agent-session-outbox'
+import { agentSessionRefusalOperationState } from '../../../shared/agent-session-refusal-retry'
 import { createStructuredAgentSessionOperationId } from '../../../shared/structured-agent-session-mutation'
 import {
   mutateStructuredAgentSessionLaunchPrompt,
@@ -17,14 +18,17 @@ import { callStructuredAgentSession } from '@/runtime/structured-agent-session-c
 export type StructuredPromptDeliveryResult = {
   delivered: boolean
   failureNotified: boolean
+  deliveryUnknown?: true
 }
 
 export type StructuredLaunchPromptOptions = {
   prompt?: string
+  promptDelivery?: 'auto-submit' | 'submit-after-ready'
   onPromptDelivered?: () => void
 }
 
 type LaunchReceipt = { sessionId: string; fence: number }
+type PromptDispatchOutcome = 'delivered' | 'failed' | 'unknown'
 
 function mutateEntry(
   entry: StructuredAgentSessionOutboxEntry,
@@ -35,8 +39,9 @@ function mutateEntry(
 
 async function dispatchStructuredLaunchPrompt(
   entry: StructuredAgentSessionOutboxEntry,
-  receipt: LaunchReceipt
-): Promise<boolean> {
+  receipt: LaunchReceipt,
+  strict: boolean
+): Promise<PromptDispatchOutcome> {
   if (
     !mutateEntry(entry, (current) => ({
       ...current,
@@ -44,7 +49,7 @@ async function dispatchStructuredLaunchPrompt(
       lastAttemptAt: Date.now()
     }))
   ) {
-    return false
+    return 'failed'
   }
   try {
     const result = await callStructuredAgentSession<
@@ -55,26 +60,47 @@ async function dispatchStructuredLaunchPrompt(
       structuredAgentSessionSendRequest(entry, receipt.fence)
     )
     if (!result.ok) {
-      mutateEntry(entry, (current) =>
-        requeueStructuredAgentSessionSendRefusal(current, result.refusal.code, () =>
+      const operationState = agentSessionRefusalOperationState(
+        'agentSession.send',
+        result.refusal.code
+      )
+      mutateEntry(entry, (current) => {
+        if (strict) {
+          return operationState === 'settled-rejected' ? null : { ...current, state: 'unconfirmed' }
+        }
+        return requeueStructuredAgentSessionSendRefusal(current, result.refusal.code, () =>
           createStructuredAgentSessionOperationId(() => crypto.randomUUID())
         )
-      )
-      return false
+      })
+      return operationState === 'settled-rejected' ? 'failed' : 'unknown'
     }
-    const dispatchState = result.value.submission.dispatchState
+    const submission = result.value.submission
+    const dispatchState = submission.dispatchState
     mutateEntry(entry, (current) =>
       dispatchState === 'accepted'
         ? null
-        : {
-            ...current,
-            state: dispatchState === 'unknown' ? 'unconfirmed' : 'queued'
-          }
+        : strict && dispatchState === 'rejected'
+          ? null
+          : {
+              ...current,
+              state:
+                dispatchState === 'unknown' || (strict && dispatchState === 'pending')
+                  ? 'unconfirmed'
+                  : 'queued',
+              retryAfterUnknownSubmittedAt:
+                strict && dispatchState === 'unknown' && typeof submission.submittedAt === 'number'
+                  ? submission.submittedAt
+                  : current.retryAfterUnknownSubmittedAt
+            }
     )
     return dispatchState === 'accepted'
+      ? 'delivered'
+      : dispatchState === 'rejected'
+        ? 'failed'
+        : 'unknown'
   } catch {
     mutateEntry(entry, (current) => ({ ...current, state: 'unconfirmed' }))
-    return false
+    return 'unknown'
   }
 }
 
@@ -90,10 +116,15 @@ export function settleStructuredAgentLaunchPrompt(args: {
     if (!args.stagedEntry) {
       return { delivered: false, failureNotified: true }
     }
-    const delivered = await dispatchStructuredLaunchPrompt(args.stagedEntry, receipt)
-    if (delivered) {
+    const strict = args.options.promptDelivery === 'submit-after-ready'
+    const outcome = await dispatchStructuredLaunchPrompt(args.stagedEntry, receipt, strict)
+    if (outcome === 'delivered') {
       args.options.onPromptDelivered?.()
     }
-    return { delivered, failureNotified: false }
+    return {
+      delivered: outcome === 'delivered',
+      failureNotified: false,
+      ...(strict && outcome === 'unknown' ? { deliveryUnknown: true as const } : {})
+    }
   })
 }

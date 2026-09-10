@@ -41,6 +41,21 @@ export function markStructuredWorktreeLaunchFailed(
   })
 }
 
+export function markStructuredWorktreePromptDeliveryUnconfirmed(
+  creationId: string,
+  worktreeId: string
+): void {
+  useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+    status: 'error',
+    error: translate(
+      'auto.lib.worktree.creation.flow.structured.prompt.unknown',
+      'Could not confirm whether the work item prompt was delivered. Retry to reconcile the same message.'
+    ),
+    structuredLaunchRecoveryWorktreeId: worktreeId,
+    structuredLaunchRetryDisabled: false
+  })
+}
+
 export async function retryStructuredWorktreeLaunch(
   creationId: string,
   request: WorktreeCreationRequest,
@@ -64,6 +79,10 @@ export async function retryStructuredWorktreeLaunch(
   }
   if (structuredSession.visibilityUnknown) {
     markStructuredWorktreeLaunchUnconfirmed(creationId, worktreeId)
+    return
+  }
+  if (structuredSession.promptDeliveryUnknown) {
+    markStructuredWorktreePromptDeliveryUnconfirmed(creationId, worktreeId)
     return
   }
   if (structuredSession.failure) {

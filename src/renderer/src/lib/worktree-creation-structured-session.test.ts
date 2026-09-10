@@ -288,6 +288,50 @@ describe('launchStructuredWorktreeSession', () => {
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
+  it('keeps an unconfirmed strict prompt on the same structured-session recovery path', async () => {
+    const claimDefinitiveRefusalFallback = vi.fn()
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'session-1',
+      launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+      promptDeliveryResult: Promise.resolve({
+        delivered: false,
+        failureNotified: false,
+        deliveryUnknown: true
+      }),
+      claimDefinitiveRefusalFallback
+    })
+
+    const result = await launchStructuredWorktreeSession({
+      creationId: 'creation-1',
+      request: {
+        repoId: 'repo-1',
+        name: 'routing-recovery',
+        setupDecision: 'run',
+        agent: 'codex',
+        workItemStartPromptDelivery: 'submit-after-ready',
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: 'Fix the route',
+        quickTelemetry: null
+      },
+      worktreeId: 'worktree-1',
+      shouldActivateOnCompletion: true,
+      fallbackStartupOpt: undefined,
+      activation: false,
+      primaryTabId: null
+    })
+
+    expect(result).toMatchObject({
+      accepted: true,
+      visibilityUnknown: false,
+      promptDeliveryUnknown: true
+    })
+    expect(result.failure).toBeUndefined()
+    expect(claimDefinitiveRefusalFallback).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
   it('fails closed without terminal fallback when the strict launch is refused', async () => {
     const claimDefinitiveRefusalFallback = vi.fn()
     mocks.startStructuredAgentLaunch.mockReturnValue({

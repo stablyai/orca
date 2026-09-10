@@ -19,6 +19,7 @@ export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
   cancelled: boolean
   visibilityUnknown: boolean
+  promptDeliveryUnknown?: true
   failure?: 'launch-refused' | 'prompt-delivery'
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
@@ -154,6 +155,16 @@ export async function launchStructuredWorktreeSession(args: {
         return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
       }
       if (promptDelivery?.delivered !== true) {
+        if (promptDelivery?.deliveryUnknown) {
+          return {
+            accepted,
+            cancelled,
+            visibilityUnknown,
+            promptDeliveryUnknown: true,
+            activation,
+            primaryTabId
+          }
+        }
         failure = 'prompt-delivery'
         return {
           accepted,

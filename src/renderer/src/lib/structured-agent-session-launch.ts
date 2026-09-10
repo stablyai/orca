@@ -209,6 +209,7 @@ function structuredAgentLaunchState(
   const existing = pendingStructuredLaunchesByIdentity.get(identity)
   if (existing) {
     const recoveringUnknown = existing.visibilityUnknown
+    const recoveringPrompt = existing.callers.outcome === 'prompt-unknown'
     if (recoveringUnknown) {
       existing.callers.outcome = 'pending'
       existing.promise = reconcileUnknownLaunch(existing)
@@ -219,7 +220,7 @@ function structuredAgentLaunchState(
     const text = options.prompt?.trim() ?? ''
     const stagedPrompt =
       text && existing.callers.outcome !== 'refused'
-        ? ((options.reuseStagedPrompt && recoveringUnknown
+        ? ((options.reuseStagedPrompt && (recoveringUnknown || recoveringPrompt)
             ? findStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
             : null) ?? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text))
         : null

@@ -201,4 +201,50 @@ describe('structured worktree creation unknown outcome', () => {
     expect(mocks.launchStructuredWorktreeSession).toHaveBeenCalledOnce()
     expect(mocks.ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
   })
+
+  it('reconciles an unconfirmed prompt on the existing worktree and session route', async () => {
+    mocks.launchStructuredWorktreeSession
+      .mockResolvedValueOnce({
+        accepted: true,
+        cancelled: false,
+        visibilityUnknown: false,
+        promptDeliveryUnknown: true,
+        activation: false,
+        primaryTabId: null
+      })
+      .mockResolvedValueOnce({
+        accepted: true,
+        cancelled: false,
+        visibilityUnknown: false,
+        activation: false,
+        primaryTabId: null
+      })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
+      status: 'error',
+      error:
+        'Could not confirm whether the work item prompt was delivered. Retry to reconcile the same message.',
+      structuredLaunchRecoveryWorktreeId: 'worktree-1',
+      structuredLaunchRetryDisabled: false
+    })
+
+    retryBackgroundWorktreeCreation('creation-1')
+    await vi.waitFor(() => expect(mocks.launchStructuredWorktreeSession).toHaveBeenCalledTimes(2))
+
+    expect(store.createWorktree).toHaveBeenCalledOnce()
+    expect(mocks.launchStructuredWorktreeSession).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        creationId: 'creation-1',
+        request,
+        worktreeId: 'worktree-1',
+        recoverUnknownLaunch: true
+      })
+    )
+    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
+      cleanupVm: false
+    })
+    expect(mocks.ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+  })
 })
