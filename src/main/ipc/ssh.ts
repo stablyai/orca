@@ -9,6 +9,7 @@ import type {
 } from '../../shared/ssh-ai-vault-relay'
 import { SshPortForwardManager } from '../ssh/ssh-port-forward'
 import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
+import type { RemoteAgentHookInstallReport } from '../../shared/agent-hook-types'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import {
   getSshTargetRegistryStore,
@@ -111,6 +112,25 @@ export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
     }
     const info = session.getAiVaultHostInfo()
     return info ? [info] : []
+  })
+}
+
+/** Lists managed-hook install reports collected from active SSH relay sessions.
+ *
+ * Host-aware `agent hooks status` (#8711) needs the remote host result instead
+ * of substituting the desktop's local install state.
+ */
+export function getActiveSshAgentHookInstallReports(): RemoteAgentHookInstallReport[] {
+  return [...activeSessions.values()].map((session) => {
+    return (
+      session.getAgentHookInstallReport() ?? {
+        targetId: session.targetId,
+        remoteHome: null,
+        state: 'unavailable',
+        detail: 'SSH hook installation status is not available yet',
+        statuses: []
+      }
+    )
   })
 }
 

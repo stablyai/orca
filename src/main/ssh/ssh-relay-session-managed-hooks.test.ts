@@ -90,7 +90,20 @@ describe('SshRelaySession managed hooks', () => {
         return { agents: ['codex'] }
       }
       return method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
-        ? { installers: 1, errors: 0 }
+        ? {
+            home: '/home/orca',
+            installers: 1,
+            errors: 0,
+            statuses: [
+              {
+                agent: 'codex',
+                state: 'installed',
+                configPath: '/home/orca/.codex/hooks.json',
+                managedHooksPresent: true,
+                detail: null
+              }
+            ]
+          }
         : { ok: true }
     })
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
