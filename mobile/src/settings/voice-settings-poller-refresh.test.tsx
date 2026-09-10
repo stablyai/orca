@@ -70,6 +70,25 @@ describe('voice settings poller integration', () => {
     )
   })
 
+  it('shows the spinner, not the error card, when it mounts before focus lands', async () => {
+    const operations = {
+      load: vi.fn(),
+      configure: vi.fn(),
+      download: vi.fn(),
+      delete: vi.fn()
+    } as VoiceSettingsOperations
+    await act(async () => {
+      renderer = create(
+        createElement(VoiceSettingsScreen, { operations, focused: false, onBack: vi.fn() })
+      )
+    })
+    // The poller is gated on focus, so no read runs and only the initial flag decides
+    // this paint. Base started it false and flashed the error card here.
+    expect(operations.load).not.toHaveBeenCalled()
+    expect(renderer.root.findAllByType('ActivityIndicator')).toHaveLength(1)
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('Failed to load voice settings')
+  })
+
   it('re-shows the spinner when a refocus retries a failed load', async () => {
     const operations = {
       load: vi
