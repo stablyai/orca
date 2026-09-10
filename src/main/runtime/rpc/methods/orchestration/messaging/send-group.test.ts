@@ -167,39 +167,43 @@ describe('orchestration.send group addresses', () => {
     expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${sibling}`])
   })
 
-  it('addresses the Run a nested coordinator created, not the Run it is a worker in', async () => {
-    // A nested coordinator is both a worker of its parent Run and the coordinator of the Run it
-    // created. It typed `@all` while coordinating, so it means the workers it started. Reaching
-    // its siblings instead is the wrong-audience delivery this whole change exists to remove,
-    // and it reports success, so the sender never learns its sub-workers heard nothing.
-    const nestedPane = 'tab_nested:11111111-1111-4111-8111-111111111111'
-    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_nested')])
-    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
-      handle === 'term_coord' ? coordinatorPaneKey : handle === 'term_nested' ? nestedPane : null
-    )
-    createRootDispatch(
-      db,
-      db.createTask({ spec: 'nested', runId: activeRunId }).id,
-      'term_nested',
-      nestedPane
-    )
-    const sibling = dispatchWorker('term_sibling')
-    const childRun = db.createRun({
-      objective: 'child Run',
-      coordinatorHandle: 'term_nested',
-      coordinatorPaneKey: nestedPane
-    })
-    const subWorker = dispatchWorker('term_sub', childRun.id)
+  it.each([false, true])(
+    'addresses the nested coordinator child Run (explicit scope: %s)',
+    async (explicit) => {
+      // A nested coordinator is both a worker of its parent Run and the coordinator of the Run it
+      // created. It typed `@all` while coordinating, so it means the workers it started. Reaching
+      // its siblings instead is the wrong-audience delivery this whole change exists to remove,
+      // and it reports success, so the sender never learns its sub-workers heard nothing.
+      const nestedPane = 'tab_nested:11111111-1111-4111-8111-111111111111'
+      setupWithTerminals([makeSummary('term_coord'), makeSummary('term_nested')])
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_coord' ? coordinatorPaneKey : handle === 'term_nested' ? nestedPane : null
+      )
+      createRootDispatch(
+        db,
+        db.createTask({ spec: 'nested', runId: activeRunId }).id,
+        'term_nested',
+        nestedPane
+      )
+      const sibling = dispatchWorker('term_sibling')
+      const childRun = db.createRun({
+        objective: 'child Run',
+        coordinatorHandle: 'term_nested',
+        coordinatorPaneKey: nestedPane
+      })
+      const subWorker = dispatchWorker('term_sub', childRun.id)
 
-    const result = (await call('orchestration.send', {
-      from: 'term_nested',
-      to: '@all',
-      subject: 'shared context'
-    })) as GroupReceipt
+      const result = (await call('orchestration.send', {
+        from: 'term_nested',
+        to: '@all',
+        ...(explicit ? { run: childRun.id } : {}),
+        subject: 'shared context'
+      })) as GroupReceipt
 
-    expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${subWorker}`])
-    expect(result.messages.map((m) => m.to_handle)).not.toContain(`dispatch:${sibling}`)
-  })
+      expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${subWorker}`])
+      expect(result.messages.map((m) => m.to_handle)).not.toContain(`dispatch:${sibling}`)
+    }
+  )
 
   it('names the remote workers it skipped when every live Dispatch is federated', async () => {
     setupWithTerminals([makeSummary('term_coord')])
@@ -520,5 +524,45 @@ describe('orchestration.send group addresses', () => {
     })) as { messages: { subject: string }[] }
     expect(checked.messages.map((m) => m.subject)).toEqual(['pause all work'])
     expect(db.getUnreadMessages(`dispatch:${dispatch.id}`)).toHaveLength(0)
+  })
+  it.each(['@codex', '@idle'])('does not claim remote membership for %s', async (to) => {
+    setupWithTerminals(
+      [makeSummary('term_coord'), makeSummary('term_codex', { agentIdentity: 'codex' })],
+      { term_codex: 'idle' }
+    )
+    const local = dispatchWorker('term_codex')
+    const remote = db.createStartingWorkerDispatch({
+      taskSpec: 'remote work',
+      taskRunId: activeRunId,
+      startOptions: {},
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      federation: {
+        environmentId: 'remote',
+        environmentName: 'remote',
+        peerFingerprint: 'peer',
+        protocolVersion: 3
+      }
+    })
+    const result = (await call('orchestration.send', {
+      from: 'term_coord',
+      to,
+      subject: 'filtered guidance'
+    })) as GroupReceipt
+    expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${local}`])
+    expect(result.warnings).toBeUndefined()
+    expect(db.getUnreadMessages(`dispatch:${remote.dispatch.id}`)).toHaveLength(0)
+
+    db.completeDispatch(local)
+    await expect(
+      call('orchestration.send', {
+        from: 'term_coord',
+        to,
+        subject: 'no known matches'
+      })
+    ).rejects.toMatchObject({
+      code: 'terminal_not_found',
+      message: `No recipients resolved for group address: ${to}`
+    })
   })
 })

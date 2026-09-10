@@ -24,10 +24,11 @@ function listRunGroupCandidates(args: {
   db: OrchestrationDb
   runtime: OrcaRuntimeService
   senderRunId: string
+  groupAddress: string
   agents: readonly OrchestrationAddressableAgent[]
   warnings: SendRecipientWarning[]
 }): GroupCandidate[] {
-  const { db, runtime, senderRunId, agents, warnings } = args
+  const { db, runtime, senderRunId, groupAddress, agents, warnings } = args
   const live = db
     .listWorkerTerminalResources({ runId: senderRunId })
     .filter((row) => row.dispatchStatus === 'pending' || row.dispatchStatus === 'dispatched')
@@ -39,11 +40,14 @@ function listRunGroupCandidates(args: {
   return live.flatMap((row) => {
     const to = `dispatch:${row.dispatchId}`
     if (federated.has(row.dispatchId)) {
-      warnings.push({
-        code: 'recipient_unreachable',
-        recipient: to,
-        message: `${to} runs on a remote Orca server; group fan-out does not relay there. Send --to ${to} instead.`
-      })
+      // Remote identity and status are unknown, so only @all establishes membership.
+      if (groupAddress.toLowerCase() === '@all') {
+        warnings.push({
+          code: 'recipient_unreachable',
+          recipient: to,
+          message: `${to} runs on a remote Orca server; group fan-out does not relay there. Send --to ${to} instead.`
+        })
+      }
       return []
     }
     const paneKey =
@@ -141,6 +145,7 @@ export async function sendGroupMessage(args: {
           db,
           runtime,
           senderRunId: audienceRunId,
+          groupAddress,
           agents,
           warnings: groupWarnings
         })
