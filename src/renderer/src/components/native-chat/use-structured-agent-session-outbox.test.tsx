@@ -293,6 +293,60 @@ describe('useStructuredAgentSessionOutbox', () => {
     expect(result.current.error).toBeNull()
   })
 
+  it('ignores a transport failure after the host admitted the send', async () => {
+    const inFlight = deferred<ReturnType<typeof acceptedResult>>()
+    mocks.call.mockReturnValueOnce(inFlight.promise)
+    const { result, rerender } = renderHook(
+      ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence: 1,
+          submissions
+        }),
+      { initialProps: { submissions: [] as readonly AgentJournalSubmission[] } }
+    )
+
+    act(() => expect(result.current.send('admitted before the RPC')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    const id = result.current.outbox[0]!.clientMessageId
+    rerender({ submissions: [pendingResultFor(id, 10).value.submission] })
+    expect(result.current.outbox[0]?.state).toBe('dispatching')
+
+    await act(async () => inFlight.reject(new Error('socket closed')))
+    expect(result.current.outbox[0]?.state).toBe('dispatching')
+    expect(result.current.error).toBeNull()
+  })
+
+  it('keeps a failed tail-save error when the admitted head is republished', async () => {
+    const inFlight = deferred<ReturnType<typeof acceptedResult>>()
+    mocks.call.mockReturnValueOnce(inFlight.promise)
+    const { result, rerender } = renderHook(
+      ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence: 1,
+          submissions
+        }),
+      { initialProps: { submissions: [] as readonly AgentJournalSubmission[] } }
+    )
+
+    act(() => expect(result.current.send('admitted head')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    const id = result.current.outbox[0]!.clientMessageId
+    rerender({ submissions: [pendingResultFor(id, 10).value.submission] })
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
+      throw new Error('storage full')
+    })
+    act(() => expect(result.current.send('tail that cannot be saved')).toBe(false))
+    expect(result.current.error).toBe('Message could not be saved to the outbox')
+
+    rerender({ submissions: [{ ...pendingResultFor(id, 10).value.submission }] })
+    expect(result.current.error).toBe('Message could not be saved to the outbox')
+    setItem.mockRestore()
+  })
+
   it('restores a persisted admitted send from host pending state', async () => {
     mocks.call.mockImplementationOnce(async (_target, _method, params) => {
       const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope

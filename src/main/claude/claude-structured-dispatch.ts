@@ -220,11 +220,15 @@ function waitForReplay(
   return { waiter, promise }
 }
 
-function retireWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
+function forgetWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
   const index = session.dispatchWaiters.indexOf(waiter)
   if (index !== -1) {
     session.dispatchWaiters.splice(index, 1)
   }
+}
+
+function retireWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
+  forgetWaiter(session, waiter)
   if (!waiter.retired) {
     waiter.retired = true
     session.retiredDispatchWaiters.push(waiter)
@@ -295,13 +299,18 @@ export async function dispatchClaudeTurn(
         }
       }
     }
-    if (!waiter.retired) {
+    const provablyUnwritten = claudeUserMessageWasProvablyUnwritten(error)
+    if (provablyUnwritten) {
+      forgetWaiter(session, waiter)
+      forgetRetiredWaiter(session, waiter)
+      waiter.resolve(null)
+    } else if (!waiter.retired) {
       retireWaiter(session, waiter)
       waiter.resolve(null)
     }
     return {
       state: 'unknown',
-      reason: claudeUserMessageWasProvablyUnwritten(error)
+      reason: provablyUnwritten
         ? dispatchWriteFailureReason(error)
         : dispatchWriteOutcomeUnknownReason(error)
     }

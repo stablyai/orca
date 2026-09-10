@@ -18,6 +18,7 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { journalItemRevisionIsStale } from './journal-item-revision'
 import type { JournalRow } from './journal-row-schema'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
@@ -66,6 +67,9 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
   }
   state.lastActivityAt = Math.max(state.lastActivityAt, row.ts)
   if (row.kind === 'item') {
+    if (journalItemRevisionIsStale(state, row.itemId, row.revision)) {
+      return
+    }
     const itemId = resolveJournalItemId(state, row.itemId, row.body)
     acceptSubmissionFromProviderItem(state, row.itemId, itemId, row)
     upsertItem(state, itemId, row.revision, {
@@ -88,6 +92,9 @@ export function applyJournalRow(state: JournalReducerState, row: JournalRow): vo
     }
     for (const mutation of row.mutations) {
       if (mutation.kind === 'item') {
+        if (journalItemRevisionIsStale(state, mutation.itemId, mutation.revision)) {
+          continue
+        }
         const itemId = resolveJournalItemId(state, mutation.itemId, mutation.body)
         acceptSubmissionFromProviderItem(state, mutation.itemId, itemId, row)
         upsertItem(state, itemId, mutation.revision, {

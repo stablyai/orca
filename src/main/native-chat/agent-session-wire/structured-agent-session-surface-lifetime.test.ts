@@ -193,6 +193,31 @@ describe('a chat that closes', () => {
     expect(closeSession).not.toHaveBeenCalled()
     expect(host.hasSession(SESSION)).toBe(true)
   })
+
+  it('releases a compatibility wait when the session is evicted', async () => {
+    await attach()
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const body = hostTestMessage('pending until close')
+    const result = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    if (!result.ok) {
+      throw new Error('send was refused')
+    }
+    const settlement = host.waitForSendSettlement(SESSION, result.value.clientMessageId)
+    const rejection = expect(settlement).rejects.toThrow(
+      'agent session closed before send settlement'
+    )
+
+    await host.close(SESSION)
+
+    await rejection
+  })
 })
 
 describe('a session with a turn in flight', () => {
@@ -274,6 +299,38 @@ describe('a session evicted and opened again', () => {
 })
 
 describe('an unexpected provider exit', () => {
+  it('publishes terminal settlement to a waiting older client', async () => {
+    await attach()
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const body = hostTestMessage('pending until provider exit')
+    const result = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    if (!result.ok) {
+      throw new Error('send was refused')
+    }
+    const settlement = host.waitForSendSettlement(SESSION, result.value.clientMessageId)
+    const exitedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+
+    await host.handleAdapterEvent({
+      type: 'ended',
+      sessionId: SESSION,
+      reason: 'provider exited',
+      cause: 'unexpected-exit',
+      fence: exitedFence,
+      acquisitionGeneration: 'generation-1'
+    })
+
+    await expect(settlement).resolves.toMatchObject({
+      value: { submission: { dispatchState: 'unknown' } }
+    })
+  })
+
   it('turns a journal sink failure into observed-exit settlement and lease release', async () => {
     await attach()
     const session = (

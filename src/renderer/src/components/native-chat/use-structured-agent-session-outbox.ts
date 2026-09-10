@@ -93,20 +93,29 @@ export function useStructuredAgentSessionOutbox(args: {
 
   useEffect(() => {
     const current = outboxRef.current
-    const acceptedHead = submissions.some(
-      (submission) =>
-        submission.clientMessageId === current[0]?.clientMessageId &&
-        submission.dispatchState === 'accepted'
+    const headSubmission = submissions.find(
+      (submission) => submission.clientMessageId === current[0]?.clientMessageId
     )
+    const hostOwnsHead =
+      headSubmission?.dispatchState === 'pending' || headSubmission?.dispatchState === 'accepted'
+    const hostSettledHeadError =
+      current[0]?.state === 'unconfirmed' ||
+      blockedIdRef.current === headSubmission?.clientMessageId
     const next = reconcileStructuredAgentSessionOutbox(current, submissions)
     if (next.some((entry, index) => entry !== current[index]) || next.length !== current.length) {
       outboxRef.current = next
       setOutbox(next)
       writeOutbox(sessionId, next)
-      if (acceptedHead) {
+    }
+    if (hostOwnsHead) {
+      if (dispatchingRef.current) {
         dispatchGenerationRef.current += 1
         dispatchingRef.current = false
+      }
+      if (blockedIdRef.current === headSubmission.clientMessageId) {
         blockedIdRef.current = null
+      }
+      if (hostSettledHeadError) {
         setError(null)
       }
     }

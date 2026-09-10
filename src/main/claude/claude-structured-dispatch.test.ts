@@ -391,6 +391,29 @@ describe('Claude structured dispatch image limits', () => {
     })
   })
 
+  it('does not let a provably unwritten attempt block retry correlation', async () => {
+    const send = vi
+      .fn()
+      .mockRejectedValueOnce(claudeUnwrittenUserMessageError(new Error('broken pipe')))
+      .mockResolvedValue(undefined)
+    const session = sessionFor(send)
+    const body = userMessage([{ type: 'text', text: 'retry me' }])
+
+    await expect(
+      dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
+    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    expect(session.dispatchWaiters).toHaveLength(0)
+    expect(session.retiredDispatchWaiters).toHaveLength(0)
+
+    await expect(
+      dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
+    ).resolves.toEqual({ state: 'admitted' })
+    expect(resolveClaudeReplayWaiter(session, userReplayFrame('fresh-replay', 'retry me'))).toBe(
+      true
+    )
+    expect(session.activeTurnId).toBe('fresh-replay')
+  })
+
   it('does not claim an SDK-pulled frame was unwritten when its write outcome is ambiguous', async () => {
     const session = sessionFor(vi.fn().mockRejectedValue(new Error('input pump stopped')))
 

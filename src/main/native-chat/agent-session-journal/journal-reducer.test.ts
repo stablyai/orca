@@ -240,6 +240,41 @@ describe('submission and dispatch state machine', () => {
     })
   })
 
+  it('does not accept a submission from a stale provider item behind its tombstone', () => {
+    const body = userText('hi')
+    const providerItemId = 'claude:session-1:user-1'
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      { kind: 'tombstone', itemId: providerItemId, revision: 2, ...base(2) },
+      { kind: 'item', itemId: providerItemId, revision: 1, body, ...base(3) }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.aliases.has(providerItemId)).toBe(false)
+  })
+
+  it('does not accept a submission from a stale lifecycle item behind its tombstone', () => {
+    const body = userText('hi')
+    const providerItemId = 'claude:session-1:user-1'
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'settlement-1',
+        mutations: [
+          { kind: 'tombstone', itemId: providerItemId, revision: 2 },
+          { kind: 'item', itemId: providerItemId, revision: 1, body }
+        ],
+        ...base(2)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.aliases.has(providerItemId)).toBe(false)
+  })
+
   it.each(['codex:thread-1:turn-1:0', 'claude:session-1:user-1'])(
     'preserves submitted text and attachments when %s is restored',
     (providerItemId) => {
