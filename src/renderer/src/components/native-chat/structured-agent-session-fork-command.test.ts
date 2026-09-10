@@ -7,7 +7,15 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: call,
   StructuredAgentSessionCapabilityError: CapabilityError
 }))
-vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+// Interpolates like the real `translate`: a refusal that carries the provider's words renders
+// them, so a mock that returned the raw fallback would hide exactly the regression under test.
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, params?: Record<string, string>) =>
+    Object.entries(params ?? {}).reduce(
+      (text, [name, value]) => text.replaceAll(`{{${name}}}`, value),
+      fallback
+    )
+}))
 import { forkStructuredSessionFromTurn } from './structured-agent-session-fork-command'
 
 let id = 0
@@ -90,6 +98,28 @@ describe('fork create intent replay', () => {
   ])('reports a %s refusal in its own words', async (forkReason, message) => {
     call.mockResolvedValue({ ok: false, refusal: { forkReason } })
     await expect(forkStructuredSessionFromTurn(input())).rejects.toThrow(message)
+  })
+
+  it("reports a settled provider rejection in the provider's own words and retires the attempt", async () => {
+    const args = input()
+    call
+      .mockResolvedValueOnce({
+        ok: false,
+        refusal: {
+          code: 'agent_session_operation_invalid',
+          forkReason: 'provider-refused',
+          message:
+            'Claude Code returned an error result: No message found with message.uuid of: 0e99dedf'
+        }
+      })
+      .mockResolvedValueOnce({ ok: true, value: { sessionId: 'child' } })
+    // The generic sentence told the user to RETRY a deterministic rejection retrying cannot fix.
+    await expect(forkStructuredSessionFromTurn(args)).rejects.toThrow('No message found with')
+    await expect(forkStructuredSessionFromTurn(args)).resolves.toBe('child')
+    // Settled means no child was minted, so the retry is allowed a fresh id.
+    expect(call.mock.calls[1]?.[2].envelope.sessionId).not.toBe(
+      call.mock.calls[0]?.[2].envelope.sessionId
+    )
   })
 
   it('surfaces the pre-request capability guard instead of an unconfirmed outcome', async () => {

@@ -197,3 +197,13 @@ export function claudeToolIdentity(sessionId: string, toolUseId: string): AgentJ
 export function claudeThinkingIdentity(sessionId: string, uuid: string): AgentJournalItemIdentity {
   return { provider: 'orca', clientMessageId: `claude-thinking:${sessionId}:${uuid}` }
 }
+
+/** A streamed text block before its final frame. Orca-keyed deliberately: it is minted from a
+ *  `stream_event` uuid, which the transcript never records, so a claude-keyed row here would offer
+ *  fork and rewind an anchor `--resume-session-at` cannot resolve. The final frame retires it. */
+export function claudeStreamedTextIdentity(
+  sessionId: string,
+  uuid: string
+): AgentJournalItemIdentity {
+  return { provider: 'orca', clientMessageId: `claude-stream:${sessionId}:${uuid}` }
+}

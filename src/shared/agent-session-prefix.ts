@@ -99,10 +99,14 @@ export function selectAgentSessionPrefix(
     }
     boundary = end
     if (key.provider === 'claude') {
+      // The launch resumes the SOURCE session's transcript, so a leaf from any other Claude session
+      // on this journal names a uuid that transcript does not contain.
       const leaf = snapshot.items
         .slice(0, boundary)
         .map((item) => parseAgentJournalItemKey(providerKey(item.itemId)))
-        .findLast((identity) => identity?.provider === 'claude')
+        .findLast(
+          (identity) => identity?.provider === 'claude' && identity.sessionId === key.sessionId
+        )
       if (leaf?.provider !== 'claude') {
         return { ok: false, reason: 'invalid-target' }
       }

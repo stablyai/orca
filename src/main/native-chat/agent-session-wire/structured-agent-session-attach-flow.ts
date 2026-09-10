@@ -194,13 +194,34 @@ export async function performAttach(
     if (error instanceof AgentSessionAcquisitionRefusal) {
       return { ok: false, refusal: { code: error.code, message: error.message } }
     }
-    return {
-      ok: false,
-      refusal: classifyStoreFailure(
-        error,
-        store.getRecord(sessionId)?.lease.runtimeFence ?? null,
-        store.getRecord(sessionId)
-      )
+    try {
+      return {
+        ok: false,
+        refusal: classifyStoreFailure(
+          error,
+          store.getRecord(sessionId)?.lease.runtimeFence ?? null,
+          store.getRecord(sessionId)
+        )
+      }
+    } catch (unclassified) {
+      // Only reached for a fault with no refusal vocabulary of its own — which is where a provider
+      // rejection like an unresolvable `--resume-session-at` uuid lands. Settling the fork PROVED no
+      // provider session exists, so its reason is safe to report and its child id safe to retire;
+      // rethrowing instead reaches the client as one generic "could not be confirmed", telling the
+      // user to retry a deterministic rejection retrying cannot fix. An `attempted` fork is
+      // ambiguous and still rethrows, because a retry there could mint a second child.
+      const settled = store.getRecord(sessionId)?.fork
+      if (settled?.phase === 'refused' && settled.reason) {
+        return {
+          ok: false,
+          refusal: {
+            code: 'agent_session_operation_invalid',
+            message: settled.reason,
+            forkReason: 'provider-refused'
+          }
+        }
+      }
+      throw unclassified
     }
   }
 

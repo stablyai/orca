@@ -139,6 +139,16 @@ function refusalError(attempt: ForkAttempt, key: string, refusal: AgentSessionWi
       })
     )
   }
+  // The host settled this attempt, so no child exists and the id is retired — but the provider's
+  // own words are the only actionable part, and a canned sentence would throw them away again.
+  if (reason === 'provider-refused') {
+    attempts.delete(key)
+    return new Error(
+      translate('components.native-chat.forkRefused', 'Could not fork this turn: {{reason}}', {
+        reason: refusal.message
+      })
+    )
+  }
   if (reason === 'outcome-unknown' || reason === 'proof-mismatch') {
     attempt.unconfirmed = true
     return new Error(unconfirmed())

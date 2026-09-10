@@ -326,7 +326,15 @@ describe('fork from a structured turn', () => {
     acquire.mockImplementationOnce(async () => {
       throw new Error('codex app-server timed out verifying forked history')
     })
-    await expect(host.fork(caller, child, source)).rejects.toThrow()
+    // Cleanup PROVED the release, so the failure refuses in the provider's own words rather than
+    // throwing: a throw reaches the client as the generic unconfirmed sentence.
+    expect(await host.fork(caller, child, source)).toMatchObject({
+      ok: false,
+      refusal: {
+        forkReason: 'provider-refused',
+        message: 'codex app-server timed out verifying forked history'
+      }
+    })
     expect(release).toHaveBeenCalled()
     expect(store.getRecord('child-session')?.fork).toMatchObject({ phase: 'refused', retained: [] })
     expect(await host.fork(caller, child, source)).toMatchObject({ ok: true })
@@ -351,7 +359,10 @@ describe('fork from a structured turn', () => {
     acquire.mockImplementationOnce(async () => {
       throw new AgentSessionPreSpawnError(new Error('managed account is switching'))
     })
-    await expect(host.fork(caller, child, source)).rejects.toThrow('managed account is switching')
+    expect(await host.fork(caller, child, source)).toMatchObject({
+      ok: false,
+      refusal: { forkReason: 'provider-refused', message: 'managed account is switching' }
+    })
     // Settled, not stranded — and the dead prefix is dropped rather than rewritten on every
     // lease renewal for the life of the record.
     expect(store.getRecord('child-session')?.fork).toMatchObject({
