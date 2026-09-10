@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 import type { Repo } from '../../../../shared/repo-types'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -17,11 +18,13 @@ function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
 }
 
 function makeSession(
-  repoId: string,
+  repo: Repo,
   sidebarRepoHeaderIds: readonly string[]
 ): ProjectHeaderDragSession {
   return {
-    repoId,
+    repoId: repo.id,
+    repoHostId: getRepoExecutionHostId(repo),
+    projectGroupId: repo.projectGroupId ?? null,
     bucketKey: 'ungrouped',
     sidebarRepoHeaderIds,
     pointerId: 1,
@@ -41,7 +44,7 @@ describe('commitProjectHeaderDragDrop', () => {
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
     commitProjectHeaderDragDrop({
-      session: makeSession('c', ['a', 'b', 'c']),
+      session: makeSession(repos[2]!, ['a', 'b', 'c']),
       sidebarDropIndex: 0,
       orderedRepoIds: ['a', 'b', 'c'],
       repoById,
@@ -59,7 +62,7 @@ describe('commitProjectHeaderDragDrop', () => {
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
     commitProjectHeaderDragDrop({
-      session: makeSession('same', ['b', 'same', 'c']),
+      session: makeSession(repos[1]!, ['b', 'same', 'c']),
       sidebarDropIndex: 0,
       orderedRepoIds: ['b', 'same', 'c', 'same'],
       repoById,
@@ -77,7 +80,7 @@ describe('commitProjectHeaderDragDrop', () => {
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
     commitProjectHeaderDragDrop({
-      session: makeSession('same', ['b', 'same', 'c']),
+      session: makeSession(repos[1]!, ['b', 'same', 'c']),
       sidebarDropIndex: 2,
       orderedRepoIds: ['b', 'same', 'c', 'same'],
       repoById,
@@ -99,7 +102,7 @@ describe('commitProjectHeaderDragDrop', () => {
     const repoById = new Map(repos.map((repo) => [repo.id, repo]))
 
     commitProjectHeaderDragDrop({
-      session: makeSession('c', ['a', 'b', 'c']),
+      session: makeSession(repos[2]!, ['a', 'b', 'c']),
       sidebarDropIndex: 0,
       orderedRepoIds: ['a', 'b', 'c'],
       repoById,
@@ -108,6 +111,45 @@ describe('commitProjectHeaderDragDrop', () => {
       onCommitProjectGroupOrder
     })
 
-    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-1', -1)
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith('c', 'group-1', -1, 'local')
+  })
+
+  it('preserves the dragged host when another host has the same repo id', () => {
+    const onCommitProjectGroupOrder = vi.fn()
+    const localRepo = makeRepo('same', {
+      executionHostId: 'local',
+      projectGroupId: 'local-group'
+    })
+    const runtimeRepo = makeRepo('same', {
+      executionHostId: 'runtime:env-1',
+      projectGroupId: 'runtime-group'
+    })
+    const runtimeSibling = makeRepo('other', {
+      executionHostId: 'runtime:env-1',
+      projectGroupId: 'runtime-group',
+      projectGroupOrder: 1
+    })
+    const repoById = new Map([
+      [localRepo.id, localRepo],
+      [runtimeSibling.id, runtimeSibling]
+    ])
+    const session = makeSession(runtimeRepo, ['same', 'other'])
+
+    commitProjectHeaderDragDrop({
+      session,
+      sidebarDropIndex: 2,
+      orderedRepoIds: ['same', 'other', 'same'],
+      repoById,
+      usesProjectGroupOrdering: true,
+      onCommitRepoOrder: vi.fn(),
+      onCommitProjectGroupOrder
+    })
+
+    expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(
+      'same',
+      'runtime-group',
+      expect.any(Number),
+      'runtime:env-1'
+    )
   })
 })

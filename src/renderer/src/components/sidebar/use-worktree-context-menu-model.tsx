@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoById, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import { useAllWorktrees, useRepoForWorktree, useRepoMap, useWorktreeMap } from '@/store/selectors'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   getCyclicProjectedWorktreeLineageIds,
@@ -31,22 +31,14 @@ import {
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 import { useWorktreeParentPickerTransition } from './use-worktree-parent-picker-transition'
 import { useWorktreeContextMenuSecondaryActions } from './use-worktree-context-menu-secondary-actions'
-
-export type WorktreeContextMenuProps = {
-  worktree: Worktree
-  children: React.ReactNode
-  contentClassName?: string
-  selectedWorktrees?: readonly Worktree[]
-  onContextMenuSelect?: (event: React.MouseEvent<HTMLElement>) => readonly Worktree[]
-  onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
-  onOpenChange?: (open: boolean) => void
-  onLifecycleComplete?: () => void
-}
+import { filterProjectGroupsForRepo } from '@/store/slices/project-group-owner-routing'
+import type { WorktreeContextMenuProps } from './worktree-context-menu-props'
 
 export function useWorktreeContextMenuModel({
   worktree,
   children,
   contentClassName,
+  projectGroupHostLabel,
   selectedWorktrees,
   onContextMenuSelect,
   onAssignWorkspaceStatus,
@@ -62,7 +54,7 @@ export function useWorktreeContextMenuModel({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
-  const repo = useRepoById(worktree.repoId)
+  const repo = useRepoForWorktree(worktree)
   const deleteState = useAppStore((s) =>
     getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
   )
@@ -403,7 +395,8 @@ export function useWorktreeContextMenuModel({
     onContextMenuSelect,
     parentPicker,
     parentPickerOpen,
-    projectGroups,
+    projectGroupHostLabel,
+    projectGroups: repo ? filterProjectGroupsForRepo(projectGroups, repo) : [],
     ptyIdsByTabId,
     removesProject,
     repo,

@@ -7,6 +7,7 @@ import {
 } from './project-header-drop'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 import type { Repo } from '../../../../shared/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function commitProjectHeaderDragDrop(args: {
   session: ProjectHeaderDragSession
@@ -15,10 +16,14 @@ export function commitProjectHeaderDragDrop(args: {
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (
+    repoId: string,
+    projectGroupId: string | null,
+    order: number,
+    repoHostId: ExecutionHostId
+  ) => void
 }): void {
-  const draggedRepo = args.repoById.get(args.session.repoId)
-  if (!draggedRepo) {
+  if (!args.repoById.has(args.session.repoId)) {
     return
   }
 
@@ -59,7 +64,12 @@ export function commitProjectHeaderDragDrop(args: {
       dropIndex: siblingDropIndex,
       repoOrderRankById
     })
-    args.onCommitProjectGroupOrder(args.session.repoId, draggedRepo.projectGroupId ?? null, order)
+    args.onCommitProjectGroupOrder(
+      args.session.repoId,
+      args.session.projectGroupId,
+      order,
+      args.session.repoHostId
+    )
     return
   }
 

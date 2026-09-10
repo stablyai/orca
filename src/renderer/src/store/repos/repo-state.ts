@@ -193,7 +193,10 @@ export type RepoSlice = {
     runtimeEnvironmentId?: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createProjectGroup: (
+    name: string,
+    options?: { hostId?: ExecutionHostId }
+  ) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
       projectGroupId: string
@@ -242,7 +245,8 @@ export type RepoSlice = {
   moveProjectToGroup: (
     projectId: string,
     groupId: string | null,
-    order?: number
+    order?: number,
+    options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
   // options.hostId disambiguates which host's row to remove when the id exists on multiple hosts; else the focused host is assumed.
   // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.

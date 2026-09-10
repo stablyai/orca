@@ -2,6 +2,7 @@ import type { PointerEvent } from 'react'
 
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
 import type { Repo } from '../../../../shared/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type RepoDragState = {
   draggingRepoId: string | null
@@ -21,17 +22,24 @@ export type UseRepoHeaderDragArgs = {
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (
+    repoId: string,
+    projectGroupId: string | null,
+    order: number,
+    repoHostId: ExecutionHostId
+  ) => void
   getScrollContainer: () => HTMLElement | null
 }
 
 export type RepoHeaderDragController = {
   state: RepoDragState
-  onHandlePointerDown: (event: PointerEvent<HTMLElement>, repoId: string) => void
+  onHandlePointerDown: (event: PointerEvent<HTMLElement>, repo: Repo) => void
 }
 
 export type ProjectHeaderDragSession = {
   repoId: string
+  repoHostId: ExecutionHostId
+  projectGroupId: string | null
   bucketKey: ProjectHeaderDragBucketKey
   sidebarRepoHeaderIds: readonly string[]
   pointerId: number

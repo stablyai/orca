@@ -1,5 +1,6 @@
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
+  getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
@@ -9,6 +10,7 @@ import {
 import type { FolderWorkspacePathStatusRequest } from '../../../../../../shared/folder-workspace-path-status'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
 
 /** null means "no host filter" — every host is visible. */
 export function getVisibleSidebarHostIdSet(
@@ -19,6 +21,21 @@ export function getVisibleSidebarHostIdSet(
     visibleWorkspaceHostIds ??
     (workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [workspaceHostScope])
   return visibleHostIds ? new Set<ExecutionHostId>(visibleHostIds) : null
+}
+
+export function filterReposForVisibleHosts(
+  repos: readonly Repo[],
+  visibleHostIdSet: ReadonlySet<ExecutionHostId> | null,
+  defaultHostId: ExecutionHostId
+): readonly Repo[] {
+  if (!visibleHostIdSet) {
+    return repos
+  }
+  return repos.filter((repo) => {
+    const hostId =
+      repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
+    return visibleHostIdSet.has(hostId)
+  })
 }
 
 // Why shared: the sidebar render path and the Cmd+1–9 order must apply the same

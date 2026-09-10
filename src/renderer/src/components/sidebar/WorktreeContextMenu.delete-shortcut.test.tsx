@@ -112,8 +112,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/store/selectors', () => ({
   useAllWorktrees: () => [],
-  useRepoById: (repoId?: string) =>
-    repoId ? { id: repoId, name: repoId, displayName: repoId } : undefined,
+  useRepoForWorktree: (worktree?: { repoId?: string }) =>
+    worktree?.repoId
+      ? { id: worktree.repoId, name: worktree.repoId, displayName: worktree.repoId }
+      : undefined,
   useRepoMap: () => new Map(),
   useWorktreeMap: () => new Map()
 }))

@@ -8,9 +8,11 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
+  toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
+import { findRepoForHost } from './slices/repo-host-identity'
 import {
   getIndexedAllWorktrees as getCachedAllWorktrees,
   getIndexedRepoMap as getCachedRepoMap,
@@ -289,8 +291,23 @@ export function selectRepoByIdForActiveWorkspace(
   return resolved
 }
 
+type RepoOwningWorktree = Pick<Worktree, 'hostId' | 'repoId' | 'runtimeOwnerEnvironmentId'>
+
+export function selectRepoForWorktree(
+  state: Pick<AppState, 'repos' | 'settings'>,
+  worktree: RepoOwningWorktree
+): Repo | null {
+  const runtimeOwnerEnvironmentId = worktree.runtimeOwnerEnvironmentId?.trim()
+  const hostId = runtimeOwnerEnvironmentId
+    ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
+    : worktree.hostId
+  return findRepoForHost(state.repos, worktree.repoId, { settings: state.settings, hostId })
+}
+
 export const useRepoById = (repoId: string | null) =>
   useAppStore((s) => selectRepoByIdForActiveWorkspace(s, repoId))
+export const useRepoForWorktree = (worktree: RepoOwningWorktree) =>
+  useAppStore((s) => selectRepoForWorktree(s, worktree))
 export const useProjectHostSetupProjection = () =>
   useAppStore((s) => getProjectHostSetupProjectionFromState(s))
 

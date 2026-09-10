@@ -13,6 +13,11 @@ import {
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
+import {
+  createProjectGroupFromRepo,
+  moveProjectToGroupFromMenu,
+  removeProjectFromGroupFromMenu
+} from './project-group-menu-actions'
 
 export function useWorktreeContextMenuCommands(args: {
   activeContextWorktrees: readonly Worktree[]
@@ -70,10 +75,7 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo) {
         return
       }
-      const group = await args.createProjectGroup(name)
-      if (group) {
-        await args.moveProjectToGroup(args.repo.id, group.id)
-      }
+      await createProjectGroupFromRepo(args.repo, name, args)
     },
     [args]
   )
@@ -82,13 +84,13 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo || args.repo.projectGroupId === groupId) {
         return
       }
-      void args.moveProjectToGroup(args.repo.id, groupId)
+      void moveProjectToGroupFromMenu(args.repo, groupId, args.moveProjectToGroup)
     },
     [args]
   )
   const handleRemoveProjectFromGroup = useCallback(() => {
     if (args.repo) {
-      void args.moveProjectToGroup(args.repo.id, null)
+      void removeProjectFromGroupFromMenu(args.repo, args.moveProjectToGroup)
     }
   }, [args])
   const handleAssignWorkspaceStatus = useCallback(

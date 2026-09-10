@@ -24,7 +24,7 @@ describe('createProjectHeaderDragSession', () => {
     const scrollContainer = document.createElement('div')
     document.body.append(scrollContainer, handleEl)
 
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const repo = createRepo('repo-a')
     const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
 
     const session = createProjectHeaderDragSession({
@@ -36,8 +36,7 @@ describe('createProjectHeaderDragSession', () => {
         target: handleEl,
         currentTarget: handleEl
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo,
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
@@ -54,7 +53,7 @@ describe('createProjectHeaderDragSession', () => {
     const scrollContainer = document.createElement('div')
     document.body.append(scrollContainer, header)
 
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const repo = createRepo('repo-a')
     const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
 
     const session = createProjectHeaderDragSession({
@@ -66,13 +65,44 @@ describe('createProjectHeaderDragSession', () => {
         target: label,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo,
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
 
     expect(session?.repoId).toBe('repo-a')
+  })
+
+  it('captures the group and host from the dragged repo row', () => {
+    const header = document.createElement('div')
+    header.setAttribute('data-repo-header-drag-handle', '')
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, header)
+    const repo = {
+      ...createRepo('same', 'runtime-group'),
+      executionHostId: 'runtime:env-1' as const
+    }
+    const sidebarRepoHeaderIdsByBucket = new Map([['group:runtime-group', ['same', 'other']]])
+
+    const session = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: header,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repo,
+      sidebarRepoHeaderIdsByBucket,
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(session).toMatchObject({
+      repoId: 'same',
+      repoHostId: 'runtime:env-1',
+      projectGroupId: 'runtime-group'
+    })
   })
 
   it('arms a drag session when pressing the project icon svg (SVGElement target)', () => {
@@ -85,7 +115,7 @@ describe('createProjectHeaderDragSession', () => {
     const scrollContainer = document.createElement('div')
     document.body.append(scrollContainer, header)
 
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const repo = createRepo('repo-a')
     const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
 
     const session = createProjectHeaderDragSession({
@@ -97,8 +127,7 @@ describe('createProjectHeaderDragSession', () => {
         target: iconSvg,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo,
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
@@ -119,7 +148,7 @@ describe('createProjectHeaderDragSession', () => {
     const scrollContainer = document.createElement('div')
     document.body.append(scrollContainer, header)
 
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const repo = createRepo('repo-a')
     const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
 
     const session = createProjectHeaderDragSession({
@@ -131,8 +160,7 @@ describe('createProjectHeaderDragSession', () => {
         target: actionIcon,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo,
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
@@ -154,7 +182,7 @@ describe('createProjectHeaderDragSession', () => {
     const scrollContainer = document.createElement('div')
     document.body.append(scrollContainer, header)
 
-    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const repo = createRepo('repo-a')
     const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
 
     const sessionFromActions = createProjectHeaderDragSession({
@@ -166,8 +194,7 @@ describe('createProjectHeaderDragSession', () => {
         target: actions,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo,
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
@@ -180,8 +207,7 @@ describe('createProjectHeaderDragSession', () => {
         target: label,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo,
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })
@@ -194,8 +220,7 @@ describe('createProjectHeaderDragSession', () => {
         target: header,
         currentTarget: header
       } as unknown as React.PointerEvent<HTMLElement>,
-      repoId: 'repo-a',
-      repoById,
+      repo,
       sidebarRepoHeaderIdsByBucket,
       getScrollContainer: () => scrollContainer
     })

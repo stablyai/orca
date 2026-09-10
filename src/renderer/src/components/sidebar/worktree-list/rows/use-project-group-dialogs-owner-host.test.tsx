@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useProjectGroupDialogs, type ProjectGroupDialogs } from './use-project-group-dialogs'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({
   moveProjectToGroup: vi.fn(),
@@ -42,6 +43,15 @@ const remoteGroup: ProjectGroup = {
   updatedAt: 1
 }
 
+const remoteRepo: Repo = {
+  id: 'repo-1',
+  path: '/srv/repo',
+  displayName: 'Repo',
+  badgeColor: '#111',
+  addedAt: 1,
+  executionHostId: 'runtime:env-1'
+}
+
 let latest: ProjectGroupDialogs | null = null
 const roots: Root[] = []
 
@@ -66,6 +76,8 @@ async function renderHookProbe(): Promise<void> {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.createProjectGroup.mockResolvedValue(remoteGroup)
+  mocks.moveProjectToGroup.mockResolvedValue(true)
   mocks.updateProjectGroup.mockResolvedValue(true)
   mocks.deleteProjectGroupWithContainedProjects.mockResolvedValue({
     status: 'deleted-group',
@@ -86,6 +98,89 @@ afterEach(async () => {
 })
 
 describe('project group dialogs carry the owner host', () => {
+  it('creates a group through the paired repo owner', async () => {
+    await renderHookProbe()
+    await act(async () => {
+      latest!.handleCreateGroupFromRepo(remoteRepo)
+    })
+    await act(async () => {
+      await latest!.handleSubmitProjectGroupName('Flute')
+    })
+
+    expect(mocks.createProjectGroup).toHaveBeenCalledWith('Flute', {
+      hostId: 'runtime:env-1'
+    })
+    expect(mocks.moveProjectToGroup).toHaveBeenCalledWith(
+      remoteRepo.id,
+      remoteGroup.id,
+      undefined,
+      {
+        hostId: 'runtime:env-1'
+      }
+    )
+  })
+
+  it('reports when the owner host does not confirm group creation', async () => {
+    mocks.createProjectGroup.mockResolvedValue(null)
+    await renderHookProbe()
+    await act(async () => {
+      latest!.handleCreateGroupFromRepo(remoteRepo)
+    })
+    await act(async () => {
+      await latest!.handleSubmitProjectGroupName('Flute')
+    })
+
+    expect(mocks.moveProjectToGroup).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith('Failed to create group', {
+      description:
+        "Orca could not confirm the new group with the project's host. Check the connection and try again."
+    })
+  })
+
+  it('reports when the group is created but the initial move is not confirmed', async () => {
+    mocks.moveProjectToGroup.mockResolvedValue(false)
+    await renderHookProbe()
+    await act(async () => {
+      latest!.handleCreateGroupFromRepo(remoteRepo)
+    })
+    await act(async () => {
+      await latest!.handleSubmitProjectGroupName('Flute')
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledWith('Group created, but move was not confirmed', {
+      description:
+        "Orca could not confirm the move with the project's host. Recheck the project after reconnecting."
+    })
+  })
+
+  it('reports when a move is not confirmed by the owner host', async () => {
+    mocks.moveProjectToGroup.mockResolvedValue(false)
+    await renderHookProbe()
+    await act(async () => {
+      latest!.handleMoveProjectToGroup(remoteRepo, remoteGroup.id)
+      await Promise.resolve()
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledWith('Failed to move project', {
+      description:
+        "Orca could not confirm the move with the project's host. Recheck the project after reconnecting."
+    })
+  })
+
+  it('reports when removing a project from its group is not confirmed', async () => {
+    mocks.moveProjectToGroup.mockResolvedValue(false)
+    await renderHookProbe()
+    await act(async () => {
+      latest!.handleRemoveProjectFromGroup(remoteRepo)
+      await Promise.resolve()
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledWith('Failed to remove project from group', {
+      description:
+        "Orca could not confirm the change with the project's host. Recheck the project after reconnecting."
+    })
+  })
+
   it('renames through the host that owns the group row', async () => {
     await renderHookProbe()
     await act(async () => {

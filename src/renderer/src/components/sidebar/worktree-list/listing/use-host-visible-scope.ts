@@ -2,15 +2,13 @@ import { useMemo } from 'react'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import {
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { filterFolderWorkspacesFromOtherDevices } from '../../workspace-creator-visibility'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
+  filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from './host-filtering'
 
@@ -31,16 +29,10 @@ export function useSidebarHostVisibleScope(args: {
     () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
     [visibleWorkspaceHostIds, workspaceHostScope]
   )
-  const visibleReposForRows = useMemo(() => {
-    if (!visibleHostIdSet) {
-      return repos
-    }
-    return repos.filter((repo) => {
-      const hostId =
-        repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
-      return visibleHostIdSet.has(hostId)
-    })
-  }, [defaultHostId, repos, visibleHostIdSet])
+  const visibleReposForRows = useMemo(
+    () => filterReposForVisibleHosts(repos, visibleHostIdSet, defaultHostId),
+    [defaultHostId, repos, visibleHostIdSet]
+  )
   const visibleProjectGroupsForRows = useMemo(
     () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
     [defaultHostId, projectGroups, visibleHostIdSet]

@@ -29,6 +29,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     titleRenaming,
     isDeleting,
     isRuntimeDisconnected,
+    projectGroupHostLabel,
     isQueuedForDeletion,
     deleteLabel,
     handleClick,
@@ -112,6 +113,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       ) : (
         <WorktreeContextMenu
           worktree={worktree}
+          projectGroupHostLabel={projectGroupHostLabel}
           selectedWorktrees={selectedWorktrees}
           onContextMenuSelect={handleContextMenuSelect}
           onAssignWorkspaceStatus={onAssignWorkspaceStatus}
