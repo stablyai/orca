@@ -149,7 +149,7 @@ describe('structured agent session reducer', () => {
     })
     const withOlder = reduceStructuredAgentSession(snapshot, {
       type: 'older-page',
-      requestedEpoch: 'epoch-a',
+      requestedCursor: { epoch: 'epoch-a', sequence: 50 },
       page: {
         sessionId: 'session-a',
         epoch: 'epoch-a',
@@ -383,6 +383,77 @@ describe('structured agent session reducer', () => {
       { id: 'task-1', kind: 'agent', description: 'review the change' }
     ])
     expect(changed.items).toBe(monitoring.items)
+  })
+
+  it('applies a publication whose only change is one task state or settled roster', () => {
+    const monitoring = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: hydrationPage([item('message', 1)]),
+        backgroundTasks: {
+          state: 'monitoring',
+          tasks: [
+            { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', startedAt: 100 }
+          ]
+        }
+      }
+    })
+    const batch = (backgroundTasks: NonNullable<typeof monitoring.backgroundTasks>) =>
+      reduceStructuredAgentSession(monitoring, {
+        type: 'event',
+        event: {
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: { cursor: monitoring.cursor!, items: [], removedItemIds: [], submissions: [] },
+          fence: 1,
+          backgroundTasks
+        }
+      })
+
+    const stateOnly = batch({
+      state: 'monitoring',
+      tasks: [
+        { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'waiting', startedAt: 100 }
+      ]
+    })
+    expect(stateOnly).not.toBe(monitoring)
+    expect(stateOnly.backgroundTasks?.tasks?.[0]?.state).toBe('waiting')
+
+    const settledOnly = batch({
+      state: 'monitoring',
+      tasks: [
+        { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', startedAt: 100 }
+      ],
+      settledTasks: [{ id: 'task-2', kind: 'agent', state: 'done', startedAt: 50 }]
+    })
+    expect(settledOnly).not.toBe(monitoring)
+    expect(settledOnly.backgroundTasks?.settledTasks).toHaveLength(1)
+
+    const tokensOnly = batch({
+      state: 'monitoring',
+      tasks: [
+        {
+          id: 'task-1',
+          kind: 'agent',
+          name: 'deep_review',
+          state: 'working',
+          startedAt: 100,
+          totalTokens: 18_130
+        }
+      ]
+    })
+    expect(tokensOnly.backgroundTasks?.tasks?.[0]?.totalTokens).toBe(18_130)
+
+    const unchanged = batch({
+      state: 'monitoring',
+      tasks: [
+        { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', startedAt: 100 }
+      ]
+    })
+    expect(unchanged).toBe(monitoring)
   })
 
   it('clears additive background state when a replacement snapshot omits the field', () => {

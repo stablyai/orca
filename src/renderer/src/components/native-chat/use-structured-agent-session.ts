@@ -93,7 +93,7 @@ export function useStructuredAgentSession(args: {
     [state.activity, state.items, turnId]
   )
   const turnTiming = useStructuredAgentTurnTiming(state, turnId)
-  const backgroundTasksView = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
+  const backgroundTasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
 
   useEffect(() => {
     if (!isVisible || !optionCatalog) {
@@ -193,12 +193,7 @@ export function useStructuredAgentSession(args: {
       conversationCommands.sendStructuredConversationCommand({
         command,
         pending: commandPending,
-        blocked: Boolean(
-          turnId ||
-          prompts.length ||
-          backgroundTasksView.isMonitoringBackgroundTasks ||
-          outbox.length
-        ),
+        blocked: Boolean(turnId || prompts.length || backgroundTasks.isMonitoring || outbox.length),
         send: (command) =>
           mutate<AgentSessionConversationCommandResult>(
             'agentSession.conversationCommand',
@@ -223,7 +218,7 @@ export function useStructuredAgentSession(args: {
     workingStartedAt: turnTiming.workingStartedAt,
     settledTurns: turnTiming.settledTurns,
     turnActivity,
-    ...backgroundTasksView,
+    backgroundTasks,
     turnId,
     cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
     stopBackgroundTask: (taskId?: string) =>

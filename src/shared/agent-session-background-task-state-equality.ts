@@ -1,4 +1,7 @@
-import type { AgentSessionBackgroundTaskState } from './agent-session-wire'
+import {
+  agentSessionBackgroundTasksEqual,
+  type AgentSessionBackgroundTaskState
+} from './agent-session-wire'
 
 /** Structural equality so a republished roster never churns transcript identity. */
 export function backgroundTaskStatesEqual(
@@ -17,16 +20,8 @@ export function backgroundTaskStatesEqual(
   ) {
     return false
   }
-  if (left.tasks === right.tasks) {
-    return true
-  }
-  if (!left.tasks || !right.tasks || left.tasks.length !== right.tasks.length) {
-    return false
-  }
-  return left.tasks.every(
-    (task, index) =>
-      task.id === right.tasks?.[index]?.id &&
-      task.kind === right.tasks[index]?.kind &&
-      task.description === right.tasks[index]?.description
+  return (
+    agentSessionBackgroundTasksEqual(left.tasks, right.tasks) &&
+    agentSessionBackgroundTasksEqual(left.settledTasks, right.settledTasks)
   )
 }
