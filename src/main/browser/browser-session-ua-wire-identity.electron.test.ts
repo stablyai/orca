@@ -6,11 +6,12 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 
-// Why this runs a real Electron: Cloudflare Turnstile rejects a Chrome-shaped UA that ships no
-// client hints (error 600010) and clears a declared Electron client. The header layer is the
-// only place that identity can be proven, and the vm-based unit tests cannot see Chromium's
-// header emission at all. Every partition must therefore keep the stock Electron UA on the wire
-// for ordinary hosts and present the Firefox identity on Google's sign-in hosts only.
+// Why this runs a real Electron: sites that hold a transplanted session re-check the browser
+// identity that minted it, and an `Orca/x.y.z … Electron/x.y.z` UA is not one any browser sends —
+// LinkedIn and x.com revoked live sessions over it (STA-7147). The header layer is the only place
+// that identity can be proven, and the vm-based unit tests cannot see Chromium's header emission
+// at all. Every partition must therefore strip the Electron and app tokens on the wire for
+// ordinary hosts and present the Firefox identity on Google's sign-in hosts only.
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -31,6 +32,7 @@ type CapturedRequest = {
 }
 
 type FixtureResult = {
+  rawUserAgent: string
   sessionUserAgent: string
   navigatorUserAgent: string
   requests: CapturedRequest[]
@@ -48,8 +50,12 @@ function buildFixtureMain(modulePath: string, resultPath: string): string {
   return `
 const { app, BrowserWindow, session } = require('electron')
 const { writeFileSync } = require('node:fs')
-const { setupGoogleAuthUserAgentOverride } = require(${JSON.stringify(modulePath)})
+const { cleanElectronUserAgent, setupClientHintsOverride } = require(${JSON.stringify(modulePath)})
 const resultPath = ${JSON.stringify(resultPath)}
+// Why: production's UA carries an app token ("Orca/1.4.198") between the engine comment and
+// Chrome/, and an unnamed fixture emits none — which would leave half of cleanElectronUserAgent
+// unexercised while the test still passed.
+app.setName('OrcaWireIdentityFixture')
 let currentStep = 'starting'
 const mark = (step) => {
   currentStep = step
@@ -65,8 +71,12 @@ async function run() {
   mark('ready')
   const partition = 'persist:wire-identity-test'
   const sess = session.fromPartition(partition)
-  setupGoogleAuthUserAgentOverride(sess)
-  mark('auth switch installed')
+  // Mirrors installBrowserSessionPartitionPolicies for a non-native profile.
+  const rawUserAgent = sess.getUserAgent()
+  const cleanUa = cleanElectronUserAgent(rawUserAgent)
+  sess.setUserAgent(cleanUa)
+  setupClientHintsOverride(sess, cleanUa)
+  mark('clean identity installed')
 
   // Why: onSendHeaders reports the headers exactly as they leave the network stack, after the
   // product's onBeforeSendHeaders listener has rewritten them. The requests must actually be
@@ -95,6 +105,7 @@ async function run() {
   const navigatorUserAgent = await window.webContents.executeJavaScript('navigator.userAgent')
   clearTimeout(timeout)
   writeFileSync(resultPath, JSON.stringify({
+    rawUserAgent,
     sessionUserAgent: sess.getUserAgent(),
     navigatorUserAgent,
     requests
@@ -157,12 +168,18 @@ async function runFixture(): Promise<FixtureResult> {
 }
 
 describe('browser session wire identity under Electron', () => {
-  it('sends the stock Electron UA to ordinary hosts and Firefox to Google auth hosts', async () => {
+  it('strips the Electron and app tokens for ordinary hosts and sends Firefox to Google auth hosts', async () => {
     const result = await runFixture()
 
-    // Presence precondition: the stock identity still carries the Electron token that the old
-    // Chrome-shaped rewrite stripped, so an identity check below cannot pass on an empty UA.
-    expect(result.sessionUserAgent).toMatch(/ Electron\/\d/)
+    // Presence precondition: the raw identity really does carry the tokens, so the absence
+    // assertions below cannot pass vacuously on an empty or already-clean UA.
+    expect(result.rawUserAgent).toMatch(/ Electron\/\d/)
+    expect(result.rawUserAgent).toMatch(/\(KHTML, like Gecko\) \S+ Chrome\//)
+
+    // The whole point of STA-7147: nothing between the engine comment and Chrome/, and no
+    // Electron token anywhere — the shape a real Chrome sends.
+    expect(result.sessionUserAgent).not.toContain('Electron/')
+    expect(result.sessionUserAgent).toMatch(/\(KHTML, like Gecko\) Chrome\/[\d.]+ Safari\/537\.36$/)
 
     const ordinary = result.requests.find((request) => request.url === 'https://example.com/')
     expect(ordinary, JSON.stringify(result.requests)).toBeDefined()
