@@ -55,10 +55,19 @@ export type SessionSearchIndexStatus = {
  * what is owed a read, what has failed and how often, what the index holds and
  * therefore what may have been deleted, what to report — is answered by a row
  * in the `files` table. There is no queue, no watch set, no hold-out map and no
- * counter with a reset rule. Two things outlive a pass and are not rows: the
- * timer, and one bit per root recording whether the previous pass listed
- * transcripts under it, which is the grace the retirement walk needs and cannot
- * get from the index. That is the whole of it.
+ * counter with a reset rule.
+ *
+ * What is left here, and why none of it can be a row:
+ * - `previousRootsWithFiles`, the one bit per root the retirement walk's grace
+ *   needs. Deliberately not durable: see the mountpoint trade in
+ *   `session-search-deleted-sources.ts`.
+ * - `cyclesSinceSweep` and `sweepNext`, which are about the timer rather than
+ *   about any file, and mean nothing to a second process.
+ * - `degradedRoots`, `lastReconcileAt` and `lastSweepCompletedAt`: what the last
+ *   pass observed, held so `status()` can answer between passes.
+ * - `lastCounts`, the one cached query result, read only after `close()` so that
+ *   describing what happened does not reopen a handle the owner has finished
+ *   with. While the indexer is open every call re-queries.
  *
  * **Immutable after construction.** There is no `pause`, `resume`, `clear` or
  * `setHistoryDays`. A configuration change is `close()` and a new instance;

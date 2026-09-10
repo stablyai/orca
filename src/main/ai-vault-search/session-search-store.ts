@@ -189,15 +189,6 @@ export class SessionSearchStore {
   }
 
   /**
-   * Files the index currently holds, for a status that reports what is there.
-   * Throws on a handle that cannot answer; zero is a number a caller would
-   * render, and "the index is empty" is not what a broken handle means.
-   */
-  get indexedFileCount(): number {
-    return Number((this.db.prepare('SELECT count(*) AS n FROM files').get() as { n: number }).n)
-  }
-
-  /**
    * Every row this index holds. The candidate list for retirement and the whole
    * of the status, read in one query so that no pass has to carry either.
    *
