@@ -176,6 +176,10 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'dry-run',
       'return-preamble',
       'retry-request'
+    ],
+    notes: [
+      'Without --inject the dispatch is recorded only: the task becomes dispatched, the terminal is not told, and the response reports injected: false (newer runtimes also return a warning saying so). Deliver the task yourself, or use --inject for a recognized agent CLI.',
+      'To dispatch a recorded-only task again with --inject, reset it first: orca orchestration task-update --id <task_id> --status failed, then the same command with --status ready.'
     ]
   },
   {
