@@ -1,4 +1,5 @@
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
+import { declinedQuestionCallOrdinals } from './native-chat-declined-question'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 
 const MAX_PREVIEW_LENGTH = 80
@@ -268,6 +269,9 @@ export type ToolRunMember = {
   /** Brief argument, or '' when the call has none worth showing. */
   arg: string
   mcpIdentity?: NativeChatMcpIdentity
+  /** A question the user declined rather than answered. The refusal is carried
+   *  only by the result body, which a collapsed run never shows. */
+  declinedQuestion?: true
 }
 
 /** The run header's leading calls. Capped at the same limit the joined string
@@ -275,15 +279,24 @@ export type ToolRunMember = {
  *  a run. */
 export function toolRunSummaryMembers(blocks: readonly NativeChatBlock[]): ToolRunMember[] {
   const members: ToolRunMember[] = []
+  // Blocks carry no tool ids, so a call takes the nth result in block order.
+  const errorByOrdinal = declinedQuestionCallOrdinals(blocks)
+  let callOrdinal = -1
   for (const block of blocks) {
     if (!isToolCallBlock(block)) {
       continue
     }
+    callOrdinal += 1
     const name = block.name.trim()
     if (!name) {
       continue
     }
-    members.push({ name, arg: briefToolArg(block.input), mcpIdentity: block.mcpIdentity })
+    members.push({
+      name,
+      arg: briefToolArg(block.input),
+      mcpIdentity: block.mcpIdentity,
+      ...(errorByOrdinal.has(callOrdinal) ? { declinedQuestion: true as const } : {})
+    })
     if (members.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
       break
     }
