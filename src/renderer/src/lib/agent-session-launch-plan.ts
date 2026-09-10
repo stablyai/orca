@@ -106,6 +106,8 @@ export function structuredAgentSessionLaunchFeasible(
   const { settings, ...args } = request
   // Why: the narrow settings ride on the built input, not the store, so a caller names the exact
   // settings this answer turns on without having to hold a whole store-shaped object.
+  // The builder still reads launch customization off `store.settings`: safe only because the caller
+  // names the object the store already holds — a different one would split this answer's sources.
   return structuredAgentLaunchSupported({ ...buildAgentLaunchRouteInput(store, args), settings })
 }
 
