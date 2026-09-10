@@ -929,7 +929,7 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function attachHostSessionMirror(
-    options: { cols?: number; rows?: number; existingPtyId?: string },
+    options: { cols?: number; rows?: number; existingPtyId?: string; sessionId?: string },
     notifySpawn = true,
     expectedAttachGeneration?: number,
     expectedLifecycleEpoch?: number
@@ -988,7 +988,7 @@ export function createRemoteRuntimePtyTransport(
       // attach() has no result consumer; publish its identity before the first image.
       onPtyRebind?.(
         remotePtyId,
-        options.existingPtyId ?? remotePtyId,
+        options.existingPtyId ?? options.sessionId ?? remotePtyId,
         authoritativePtyIncarnationId
       )
     }

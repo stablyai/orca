@@ -66,6 +66,46 @@ describe('remote PTY incarnation recovery', () => {
     }
   )
 
+  it.each(['terminal-1', 'terminal-2'])(
+    'uses the persisted session ID for connect reattachment to %s',
+    async (nextHandle) => {
+      resolvedPaneHandle = nextHandle
+      const originalCall = mocks.runtimeCall.getMockImplementation()!
+      mocks.runtimeCall.mockImplementation(async (request: { method: string }) => {
+        const response = await originalCall(request)
+        if (request.method === 'terminal.resolvePane') {
+          response.result.terminal.incarnationId = 'inc-new'
+        }
+        return response
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onPtyRebind = vi.fn()
+      const onPtySpawn = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-tab-1',
+        leafId: 'pane:1',
+        onPtyRebind,
+        onPtySpawn
+      })
+      try {
+        await transport.connect({
+          url: '',
+          sessionId: 'remote:env-1@@terminal-1',
+          callbacks: {}
+        })
+        expect(onPtyRebind).toHaveBeenCalledExactlyOnceWith(
+          `remote:env-1@@${nextHandle}`,
+          'remote:env-1@@terminal-1',
+          'inc-new'
+        )
+        expect(onPtySpawn).not.toHaveBeenCalled()
+      } finally {
+        transport.destroy?.()
+      }
+    }
+  )
+
   it.each(
     [
       { mirror: true, rotate: false, next: null, inventory: false },
