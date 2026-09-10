@@ -17,6 +17,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     attachments?: readonly StructuredNativeChatAttachment[]
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
+  releaseSendOrigin: (origin: MobileNativeChatSendOrigin) => void
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
@@ -38,6 +39,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
   const {
     acceptSend,
     captureSendOrigin,
+    releaseSendOrigin,
     clearDraftForSend,
     holdUnconfirmedSend,
     onSendError,
@@ -52,47 +54,54 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       attachments?: readonly StructuredNativeChatAttachment[]
     ): Promise<MobileNativeChatSendOutcome> => {
       const origin = captureSendOrigin(text.trimEnd())
-      if (!origin) {
-        onSendError('Message not sent (disconnected)')
-        return 'rejected'
-      }
-      clearDraftForSend(origin, text)
-      const outcome =
-        attachments !== undefined
-          ? await sendStructured(text, images, deadline, attachments)
-          : deadline !== undefined
-            ? await sendStructured(text, images, deadline)
-            : images !== undefined
-              ? await sendStructured(text, images)
-              : await sendStructured(text)
-      if (outcome === 'accepted') {
-        if (
-          !isStructuredAgentSessionComposerCommand(text, 'codex') &&
-          !isStructuredAgentSessionComposerCommand(text, 'claude')
-        ) {
-          acceptSend(origin, text.trimEnd(), images)
+      try {
+        if (!origin) {
+          onSendError('Message not sent (disconnected)')
+          return 'rejected'
         }
-        return 'accepted'
-      }
-      if (outcome === 'unknown') {
-        if (
-          isStructuredAgentSessionComposerCommand(text, 'codex') ||
-          isStructuredAgentSessionComposerCommand(text, 'claude')
-        ) {
-          restoreRejectedDraft(origin, text)
+        clearDraftForSend(origin, text)
+        const outcome =
+          attachments !== undefined
+            ? await sendStructured(text, images, deadline, attachments)
+            : deadline !== undefined
+              ? await sendStructured(text, images, deadline)
+              : images !== undefined
+                ? await sendStructured(text, images)
+                : await sendStructured(text)
+        if (outcome === 'accepted') {
+          if (
+            !isStructuredAgentSessionComposerCommand(text, 'codex') &&
+            !isStructuredAgentSessionComposerCommand(text, 'claude')
+          ) {
+            acceptSend(origin, text.trimEnd(), images)
+          }
+          return 'accepted'
+        }
+        if (outcome === 'unknown') {
+          if (
+            isStructuredAgentSessionComposerCommand(text, 'codex') ||
+            isStructuredAgentSessionComposerCommand(text, 'claude')
+          ) {
+            restoreRejectedDraft(origin, text)
+            return 'unknown'
+          }
+          holdUnconfirmedSend(origin, text.trimEnd(), () =>
+            onSendError('Delivery unconfirmed — check chat before retrying')
+          )
           return 'unknown'
         }
-        holdUnconfirmedSend(origin, text.trimEnd(), () =>
-          onSendError('Delivery unconfirmed — check chat before retrying')
-        )
-        return 'unknown'
+        restoreRejectedDraft(origin, text)
+        return 'rejected'
+      } finally {
+        if (origin) {
+          releaseSendOrigin(origin)
+        }
       }
-      restoreRejectedDraft(origin, text)
-      return 'rejected'
     },
     [
       acceptSend,
       captureSendOrigin,
+      releaseSendOrigin,
       clearDraftForSend,
       holdUnconfirmedSend,
       onSendError,

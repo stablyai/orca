@@ -101,6 +101,7 @@ export function useMobileNativeChatController(args: {
     pending: chatPending,
     imagePreviewsByMessageId: chatImagePreviewsByMessageId,
     captureSendOrigin,
+    releaseSendOrigin,
     readSeededLaunchDraft,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
@@ -234,6 +235,7 @@ export function useMobileNativeChatController(args: {
     agentRef: activeChatAgentRef,
     commandSendRef: recordSessionOptionCommandRef,
     captureSendOrigin,
+    releaseSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
@@ -245,6 +247,7 @@ export function useMobileNativeChatController(args: {
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
+    releaseSendOrigin,
     clearDraftForSend,
     acceptSend,
     holdUnconfirmedSend,

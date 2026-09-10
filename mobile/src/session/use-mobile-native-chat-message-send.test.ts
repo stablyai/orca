@@ -39,6 +39,7 @@ describe('useMobileNativeChatMessageSend', () => {
   let api: Send | null = null
   const acceptSend = vi.fn()
   const captureSendOrigin = vi.fn(() => ({ draftKey: 'k', pendingKey: 'p' }) as never)
+  const releaseSendOrigin = vi.fn()
   const clearDraftForSend = vi.fn()
   const restoreRejectedDraft = vi.fn()
   const holdUnconfirmedSend = vi.fn()
@@ -61,6 +62,7 @@ describe('useMobileNativeChatMessageSend', () => {
         agentRef,
         commandSendRef,
         captureSendOrigin,
+        releaseSendOrigin,
         readSeededLaunchDraftSeed,
         clearDraftForSend,
         restoreRejectedDraft,
@@ -95,6 +97,7 @@ describe('useMobileNativeChatMessageSend', () => {
     typeCommandWithOutcome.mockResolvedValue('accepted')
     acceptSend.mockReset()
     captureSendOrigin.mockClear()
+    releaseSendOrigin.mockClear()
     clearDraftForSend.mockReset()
     restoreRejectedDraft.mockReset()
     holdUnconfirmedSend.mockReset()
@@ -104,6 +107,7 @@ describe('useMobileNativeChatMessageSend', () => {
     resetMobileNativeChatTerminalWritesForTests()
   })
   afterEach(() => {
+    expect(releaseSendOrigin).toHaveBeenCalledTimes(captureSendOrigin.mock.calls.length)
     act(() => {
       renderer?.unmount()
     })

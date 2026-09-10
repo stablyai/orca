@@ -16,7 +16,6 @@ export type MobileNativeChatPendingMessage = {
 
 export type MobileNativeChatSendOrigin = {
   draftKey: string
-  draftEditGeneration: number
   pendingKey: string | null
   normalizedText: string
   baselineOccurrences: number

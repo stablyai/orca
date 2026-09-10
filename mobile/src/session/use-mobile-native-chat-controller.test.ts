@@ -110,6 +110,7 @@ vi.mock('./use-mobile-native-chat-drafts', () => ({
       pending: [],
       imagePreviewsByMessageId: {},
       captureSendOrigin,
+      releaseSendOrigin: vi.fn(),
       readSeededLaunchDraft: () => null,
       readSeededLaunchDraftSeed: () => null,
       clearDraftForSend,
@@ -161,7 +162,6 @@ const sendWithOutcome = vi.mocked(sendMobileNativeChatMessageWithOutcome)
 
 const ORIGIN = {
   draftKey: 'h\0w\0tab-1',
-  draftEditGeneration: 0,
   pendingKey: 'h\0w\0tab-1\0session-1',
   normalizedText: 'look',
   baselineOccurrences: 0,
