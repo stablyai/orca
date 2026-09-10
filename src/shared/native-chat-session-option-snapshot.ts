@@ -221,14 +221,20 @@ export function buildNativeChatSessionOptionSnapshot(args: {
     return []
   }
   // Why: every row is an available model — the catalog's or a probe's. A tracked id
-  // outside both (a raw launch flag, a stale persisted pick) names none of them, so it
-  // is never offered and never shown as the value.
+  // outside both is never offered as a choice, whatever its provenance; whether it may
+  // still be *named* is a separate question, answered by `nameableModelId` below.
   const modelChoices = models.map(({ id, label, description }) => ({
     value: id,
     label,
     ...(description ? { description } : {})
   }))
   const listedModel = models.find((candidate) => candidate.id === effectiveModelId)
+  // Why: an id the picker cannot offer is still nameable when the agent itself reported
+  // it — a custom model, or one newer than this catalog, is what the session is actually
+  // running. Only an unconfirmed id (a launch flag, a typed value) is withheld, so the
+  // pill never echoes back input no agent has stood behind.
+  const nameableModelId =
+    listedModel || modelTracked?.source === 'reported' ? effectiveModelId : null
   const modelAction = actionForApply(catalog.modelApply, modelTracked, mode, liveTransport)
   const snapshot: SessionOptionDescriptor[] = [
     {
@@ -237,12 +243,12 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       category: 'model',
       kind: {
         type: 'select',
-        ...(listedModel ? { currentValue: listedModel.id } : {}),
+        ...(nameableModelId ? { currentValue: nameableModelId } : {}),
         choices: modelChoices
       },
-      // An unlisted id is tracked but unnameable: `unknown` is what the pill reads to
-      // withhold it, keeping the raw string out of the trigger.
-      valueSource: listedModel
+      // `unknown` is what the pill reads to withhold a value, keeping an unconfirmed
+      // raw string out of the trigger. A reported one keeps its own provenance.
+      valueSource: nameableModelId
         ? (modelTracked?.source ?? (defaultModelId ? 'default' : 'unknown'))
         : 'unknown',
       transport: liveTransport,

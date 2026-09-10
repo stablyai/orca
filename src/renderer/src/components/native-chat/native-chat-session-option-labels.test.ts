@@ -55,7 +55,8 @@ describe('nativeChatModelPillLabel', () => {
     // the seed carries, so the composer's pill must read the neutral category rather
     // than echoing back the string the launch was typed with.
     const record = createNativeChatSessionOptionRecord('claude')
-    record.model = { value: 'claude-opus-5', source: 'reported' }
+    // `applied` is what seedNativeChatAppliedSessionOptions writes for a launch flag.
+    record.model = { value: 'claude-opus-5', source: 'applied' }
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: withTrackedNativeChatModel(
@@ -70,6 +71,27 @@ describe('nativeChatModelPillLabel', () => {
     })
 
     expect(nativeChatModelPillLabel(snapshot[0]!)).toBe('Model')
+  })
+
+  it('names a reported model the list cannot carry, end to end from the builder', () => {
+    // The other half of the rule: Claude's own header named this model, so the pill shows
+    // it even though no catalog carries it and the dropdown cannot offer it.
+    const record = createNativeChatSessionOptionRecord('claude')
+    record.model = { value: 'my-custom-model', source: 'reported' }
+    const snapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: CLAUDE_SESSION_OPTION_CATALOG,
+      models: withTrackedNativeChatModel(
+        CLAUDE_SESSION_OPTION_CATALOG,
+        CLAUDE_SESSION_OPTION_CATALOG.models,
+        record
+      ),
+      record,
+      mode: 'live',
+      modelLabel: 'Model',
+      liveTransport: 'catalog'
+    })
+
+    expect(nativeChatModelPillLabel(snapshot[0]!)).toBe('my-custom-model')
   })
 
   it('falls back to the raw id when the list no longer offers it', () => {

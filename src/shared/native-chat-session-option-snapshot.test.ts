@@ -11,6 +11,7 @@ import {
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
+  applyNativeChatReportedSessionOptions,
   createNativeChatSessionOptionRecord,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
@@ -88,7 +89,8 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     // The builder no longer appends the tracked model itself — reconciling it is
     // the caller's job (withTrackedNativeChatModel), so every row is a real choice.
     const record = claudeRecord()
-    record.model = { value: 'experimental-model', source: 'reported' }
+    // `applied`, not `reported`: an unconfirmed pick is the case that is withheld.
+    record.model = { value: 'experimental-model', source: 'applied' }
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -127,7 +129,9 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     // `readCodexStructuredSessionOptions` refuses only when nothing resolves at all — so
     // the row has to survive the blank picker instead of taking the pill with it.
     const record = createNativeChatSessionOptionRecord('codex')
-    record.model = { value: 'gpt-5.9-secret', source: 'reported' }
+    // What `applyStructuredAgentSessionOptions` actually writes for Codex, whose reader
+    // emits no `confirmed` ids — so this id is unconfirmed and stays unnamed.
+    record.model = { value: 'gpt-5.9-secret', source: 'dispatched' }
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: { ...CODEX_SESSION_OPTION_CATALOG, models: [], defaultModelIsCliDefault: true },
       models: [],
@@ -207,7 +211,8 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       // flag (`worker-start --model claude-opus-5`) in the picker and in the pill as
       // though the CLI had listed it. Only available models may be offered or named.
       const record = claudeRecord()
-      record.model = { value: 'claude-opus-5', source: 'reported' }
+      // `applied` is what a launch flag lands as; see the reported case below.
+      record.model = { value: 'claude-opus-5', source: 'applied' }
       const reconciled = withTrackedNativeChatModel(
         CLAUDE_SESSION_OPTION_CATALOG,
         CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -233,6 +238,60 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       expect(model.kind.choices.some((choice) => choice.value === 'claude-opus-5')).toBe(false)
       // Restoring this session's effort row from `unknownModelOptions` is a follow-up.
       expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
+    })
+
+    it('names an unlisted model the agent reported, without offering it as a choice', () => {
+      // Claude prints a custom model in its own header, and the screen parser passes that
+      // raw name through (claude-terminal-session-options: a custom model reports no
+      // effort but keeps its name). That is the model actually running, so it is named —
+      // it just stays unpickable, because the picker only offers available models.
+      const record = claudeRecord()
+      record.model = { value: 'my-custom-model', source: 'reported' }
+      const snapshot = buildNativeChatSessionOptionSnapshot({
+        catalog: CLAUDE_SESSION_OPTION_CATALOG,
+        models: withTrackedNativeChatModel(
+          CLAUDE_SESSION_OPTION_CATALOG,
+          CLAUDE_SESSION_OPTION_CATALOG.models,
+          record
+        ),
+        record,
+        mode: 'live',
+        modelLabel: 'Model',
+        liveTransport: 'catalog'
+      })
+      const model = snapshot[0]!
+      if (model.kind.type !== 'select') {
+        throw new Error('model descriptor must be a select')
+      }
+      expect(model).toMatchObject({ valueSource: 'reported' })
+      expect(model.kind.currentValue).toBe('my-custom-model')
+      expect(model.kind.choices.some((choice) => choice.value === 'my-custom-model')).toBe(false)
+    })
+
+    it('withholds the same id until an agent confirms it', () => {
+      // The transition the rule exists for: `worker-start --model my-custom-model` lands
+      // unconfirmed and is not named, then Claude's header confirms what is running.
+      const record = claudeRecord()
+      const pill = (): SessionOptionDescriptor =>
+        buildNativeChatSessionOptionSnapshot({
+          catalog: CLAUDE_SESSION_OPTION_CATALOG,
+          models: CLAUDE_SESSION_OPTION_CATALOG.models,
+          record,
+          mode: 'live',
+          modelLabel: 'Model',
+          liveTransport: 'catalog'
+        })[0]!
+
+      record.model = { value: 'my-custom-model', source: 'dispatched' }
+      const before = pill()
+      expect(before).toMatchObject({ valueSource: 'unknown' })
+      expect(before.kind.type === 'select' ? before.kind.currentValue : 'set').toBeUndefined()
+
+      applyNativeChatReportedSessionOptions(record, { model: 'my-custom-model' })
+      expect(record.model).toEqual({ value: 'my-custom-model', source: 'reported' })
+      const after = pill()
+      expect(after).toMatchObject({ valueSource: 'reported' })
+      expect(after.kind.type === 'select' ? after.kind.currentValue : null).toBe('my-custom-model')
     })
 
     it('leaves the list alone when the tracked model is already listed', () => {
