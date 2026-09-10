@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveActiveSessionTab } from './active-session-tab'
 
-type Tab = { id: string; type: 'terminal' | 'browser'; isActive: boolean }
+type Tab = { id: string; type: 'terminal' | 'browser' | 'agent-session'; isActive: boolean }
 
 function terminalTab(id: string, isActive: boolean): Tab {
   return { id, type: 'terminal', isActive }
@@ -132,6 +132,23 @@ describe('resolveActiveSessionTab', () => {
     )
 
     expect(result.activeTab?.id).toBe('browser')
+    expect(result.selectionSource).toBe('snapshot')
+  })
+
+  it('opens the chat a create-worktree launch landed on, over the workspace shell', () => {
+    // Why: a workspace created from the mobile sheet with an agent arrives on a fresh route with
+    // no device pick, so the host's own activation is the only thing that says "open the chat".
+    // `agent.launch` publishes and activates that tab before it answers, so it is already in the
+    // first snapshot the route fetches.
+    const result = resolveActiveSessionTab(
+      [
+        { id: 'shell', type: 'terminal', isActive: false },
+        { id: 'agent-session:s-1', type: 'agent-session', isActive: true }
+      ],
+      { pendingActiveSessionTabId: null, selectedSessionTabId: null }
+    )
+
+    expect(result.activeTab?.id).toBe('agent-session:s-1')
     expect(result.selectionSource).toBe('snapshot')
   })
 

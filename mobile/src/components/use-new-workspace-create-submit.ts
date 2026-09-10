@@ -56,6 +56,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
   getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
+  getAgentLaunchSupport: () => Promise<boolean>
   transitionDrawer: (view: Exclude<NewWorktreeDrawerView, 'transition'>) => void
   setError: Dispatch<SetStateAction<string>>
   onCreated: (worktreeId: string, name: string) => void
@@ -164,7 +165,8 @@ export function useNewWorkspaceCreateSubmit(args: {
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
-            worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport()
+            worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
+            agentLaunchSupported: args.getAgentLaunchSupport()
           })
         : await createBlankWorkspace({
             client,
@@ -174,7 +176,8 @@ export function useNewWorkspaceCreateSubmit(args: {
             createdWithAgentId,
             comment: trimmedNote,
             setupDecision,
-            worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport()
+            worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
+            agentLaunchSupported: args.getAgentLaunchSupport()
           })
       if ('error' in result) {
         args.setError(result.error)
