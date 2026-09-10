@@ -36,6 +36,30 @@ describe('client UI RPC pairing-local field seams', () => {
     expect(runtime.updateUIState).toHaveBeenCalledWith({ sidebarWidth: 280 })
   })
 
+  // A browser session profile id is a randomUUID minted in one machine's main process, and its
+  // cookie jar lives only there. Syncing the selection would point a paired client at a profile
+  // it does not have — its Settings pane would show no Active row — and clobber the choice each
+  // client made for its own `local` host.
+  it('drops a paired client browser session profile selection', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => getDefaultUIState())
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', {
+        sidebarWidth: 280,
+        defaultBrowserSessionProfileIdByHostId: {
+          local: '11111111-2222-3333-4444-555555555555'
+        }
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith({ sidebarWidth: 280 })
+  })
+
   // Driven off the census so a field added to PAIRING_LOCAL_UI_FIELDS without wiring a seam
   // fails here rather than shipping. Sample values are what a paired web client actually sends.
   const pairingLocalSamples: Record<(typeof PAIRING_LOCAL_UI_FIELDS)[number], unknown> = {
@@ -53,7 +77,10 @@ describe('client UI RPC pairing-local field seams', () => {
     agentsReadFilter: 'unread',
     agentsGroupBy: 'project',
     activityClearedAtByPaneKey: { 'tab-1:leaf-1': 123 },
-    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
+    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 },
+    defaultBrowserSessionProfileIdByHostId: {
+      local: '11111111-2222-3333-4444-555555555555'
+    }
   }
 
   it.each(PAIRING_LOCAL_UI_FIELDS.map((field) => [field] as const))(

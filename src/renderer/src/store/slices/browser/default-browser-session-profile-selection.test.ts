@@ -108,6 +108,29 @@ describe('deleteBrowserSessionProfile persistence', () => {
     })
   })
 
+  // The delete request is awaited, so the selection can change while it is in flight; deciding
+  // from the pre-request snapshot would clear the store without persisting the clear.
+  it('persists the clear when the profile is selected while the delete is in flight', async () => {
+    const store = createTestStore()
+    let resolveDelete: (ok: boolean) => void = () => {}
+    mockApi.browser.sessionDeleteProfile.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveDelete = resolve
+      })
+    )
+
+    const deleting = store.getState().deleteBrowserSessionProfile('profile-a')
+    store.getState().setDefaultBrowserSessionProfileId('profile-a')
+    mockApi.ui.set.mockClear()
+    resolveDelete(true)
+    await deleting
+
+    expect(store.getState().defaultBrowserSessionProfileId).toBeNull()
+    expect(mockApi.ui.set).toHaveBeenCalledWith({
+      defaultBrowserSessionProfileIdByHostId: { local: null }
+    })
+  })
+
   it('leaves the persisted selection alone when another profile is deleted', async () => {
     const store = createTestStore()
     store.getState().setDefaultBrowserSessionProfileId('profile-a')

@@ -12,6 +12,7 @@ import { expect } from '@stablyai/playwright-test'
 import { test as base } from './orca-app'
 import { createRestartSession } from './orca-restart'
 import { waitForSessionReady } from './store'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 
 const PROFILE_ROW = '[data-testid="browser-session-profile-row"]'
 const PROFILE_ID_ATTRIBUTE = 'data-browser-session-profile-id'
@@ -80,7 +81,7 @@ async function openBrowserSessionProfileSettings(page: Page): Promise<void> {
   await expect(profileRow(page, 'default')).toBeVisible()
 }
 
-/** Create a session profile, make it active, and wait for its row to render; returns its id. */
+/** Create a session profile, make it active, and wait until the choice is persisted; returns its id. */
 export async function createAndSelectBrowserSessionProfile(
   page: Page,
   label: string
@@ -95,7 +96,17 @@ export async function createAndSelectBrowserSessionProfile(
     return profile.id
   }, label)
   await expect(profileRow(page, profileId)).toContainText(label)
+  // Why poll persisted state and not just the row: the store writes it through a fire-and-forget
+  // ui.set, so a relaunch assertion could otherwise race the IPC it depends on.
+  await expect.poll(() => readPersistedProfileForLocalHost(page)).toBe(profileId)
   return profileId
+}
+
+function readPersistedProfileForLocalHost(page: Page): Promise<string | null> {
+  return page.evaluate(async (hostId) => {
+    const persisted = await window.api.ui.get()
+    return persisted?.defaultBrowserSessionProfileIdByHostId?.[hostId] ?? null
+  }, LOCAL_EXECUTION_HOST_ID)
 }
 
 /**

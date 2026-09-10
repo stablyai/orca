@@ -107,12 +107,13 @@ export function createBrowserProfileListActions(
     },
 
     deleteBrowserSessionProfile: async (profileId) => {
-      const state = get()
-      const hostId = getBrowserSettingsHostId(state)
-      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(state)
-      const wasSelected = getDefaultBrowserProfileForHost(state, hostId) === profileId
-
+      const hostId = getBrowserSettingsHostId(get())
+      const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
       const dropDeletedProfile = (): void => {
+        // Why read the selection here and not before the awaited request: the user can select
+        // this very profile while the delete is in flight, and a pre-request snapshot would
+        // clear the store without persisting the clear.
+        const clearedSelection = getDefaultBrowserProfileForHost(get(), hostId) === profileId
         set((s) => ({
           ...profileListByHostUpdate(
             s,
@@ -123,7 +124,7 @@ export function createBrowserProfileListActions(
         }))
         // Why only when it was selected: an unrelated deletion leaves the persisted
         // selection untouched, and rewriting it would be a pointless disk write.
-        if (wasSelected) {
+        if (clearedSelection) {
           void window.api.ui
             .set({
               defaultBrowserSessionProfileIdByHostId: get().defaultBrowserSessionProfileIdByHostId
