@@ -1,7 +1,6 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionSearchScope } from './session-search-engine-types'
-import { quoteFtsTerm } from './session-search-query-planner'
-import { scopedExpression } from './session-search-retrieval'
+import { quoteFtsTerm, scopedExpression } from './session-search-query-planner'
 
 // Why: a query term with zero postings is usually a typo. The index's own
 // vocabulary (fts5vocab) is the dictionary, so repair needs no model and can

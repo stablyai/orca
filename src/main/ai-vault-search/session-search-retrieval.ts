@@ -6,6 +6,7 @@ import {
   orExpression,
   phraseExpression,
   planSessionSearchQuery,
+  scopedExpression,
   type SessionSearchQueryPlan
 } from './session-search-query-planner'
 import type { SessionRowFilter } from './session-search-row-filter'
@@ -56,26 +57,12 @@ export type Retrieved = {
 }
 
 /**
- * What a scope is, now that there is one FTS table.
- *
- * `conversation` used to be a second table holding a copy of the two prose
- * columns. It is a column filter instead: PR 2 measured the filter at
- * 1.16-1.36x the p95 of the dedicated table on a 105 MB corpus, against a 2x
- * bar, and the table cost a tenth of the index to maintain.
- *
- * The filter binds to the whole expression, so it is applied here and nowhere
- * else — `{cols}: (a AND b)` filters both terms, while a prefix pasted in front
- * of a bare `a AND b` would filter only `a` and quietly search tool output for
- * the rest.
+ * The bm25 weights a scope ranks with. The conversation pair stays here rather
+ * than beside `scopedExpression`, because weights are a property of this SQL
+ * and nothing else asks for them.
  */
-const CONVERSATION_COLUMNS = '{user_text assistant_text}'
-
 export function scopedWeights(scope: SessionSearchScope): string {
   return scope === 'all' ? FULL_WEIGHTS : CONVERSATION_WEIGHTS
-}
-
-export function scopedExpression(scope: SessionSearchScope, expression: string): string {
-  return scope === 'all' ? expression : `${CONVERSATION_COLUMNS}: (${expression})`
 }
 
 /** The FTS half of a search: the route ladder and the SQL each rung runs. */

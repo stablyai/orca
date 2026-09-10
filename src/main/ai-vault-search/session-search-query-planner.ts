@@ -1,3 +1,4 @@
+import type { SessionSearchScope } from './session-search-engine-types'
 import { identifierShadowTerms } from './session-search-identifier-split'
 
 // Tokens exactly as the unicode61 tokenizer with `_ . - / +` tokenchars emits them.
@@ -113,4 +114,27 @@ export function andExpression(terms: readonly string[]): string {
 
 export function orExpression(terms: readonly string[]): string {
   return terms.map(quoteFtsTerm).join(' OR ')
+}
+
+/**
+ * What a scope is, now that there is one FTS table.
+ *
+ * `conversation` used to be a second table holding a copy of the two prose
+ * columns. It is a column filter instead: PR 2 measured the filter at
+ * 1.16-1.36x the p95 of the dedicated table on a 105 MB corpus, against a 2x
+ * bar, and the table cost a tenth of the index to maintain.
+ *
+ * It lives beside the other expression builders, and not with the retrieval
+ * that uses it, because the typo repair has to ask the same question of the
+ * same scope and importing it from there is a cycle.
+ *
+ * The filter binds to the whole expression, so it is applied here and nowhere
+ * else — `{cols}: (a AND b)` filters both terms, while a prefix pasted in front
+ * of a bare `a AND b` would filter only `a` and quietly search tool output for
+ * the rest.
+ */
+const CONVERSATION_COLUMNS = '{user_text assistant_text}'
+
+export function scopedExpression(scope: SessionSearchScope, expression: string): string {
+  return scope === 'all' ? expression : `${CONVERSATION_COLUMNS}: (${expression})`
 }
