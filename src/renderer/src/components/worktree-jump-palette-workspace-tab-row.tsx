@@ -16,6 +16,7 @@ import {
 } from './worktree-jump-palette-primitives'
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import { resolvePaletteRepoForWorktree } from '@/lib/palette-repo-resolution'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 
 export function WorktreeJumpPaletteWorkspaceTabRow({
   entry,
@@ -75,7 +76,7 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
               secondaryMatches={result.secondaryMatches}
-              elideSecondaryPathHead={result.contentType === 'editor'}
+              elideSecondaryPathHead={isEditorTabContentType(result.contentType)}
               sessionAge={sessionAge}
               leadingBadges={
                 <>
