@@ -172,7 +172,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
-  if (record.type === 'response_item' && payload.type === 'message') {
+  if (record.type === 'response_item') {
     if (state.historyMode === 'paginated') {
       return
     }
@@ -280,7 +280,10 @@ function codexResumeStateFromParseState(
   return {
     consumeLine: (line) => consumeCodexRecordLine(state, line),
     consumeLineBytes: (line) => {
-      const timelineOnlyRecord = readCodexTimelineOnlyRecord(line)
+      const timelineOnlyRecord = readCodexTimelineOnlyRecord(
+        line,
+        state.accumulator.messages.active && state.historyMode !== 'paginated'
+      )
       if (timelineOnlyRecord) {
         updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
       } else {

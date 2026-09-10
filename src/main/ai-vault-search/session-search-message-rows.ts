@@ -20,23 +20,8 @@ const CHUNK_TARGET_CHARS = 8000
  */
 const TOOL_ROW_CHARS = 3072
 
-/**
- * A character no FTS token can contain, so a cut just past it tears nothing.
- *
- * Whitespace alone is not enough. Minified JSON, a base64 blob and a one-line
- * log all run past 8,000 characters without a space, so a whitespace-only
- * backoff finds nothing and the cut lands inside whatever word straddles the
- * target — `pericardium` becomes `perica` in one row and `rdium` in the next,
- * and the term the user types matches neither.
- *
- * Surrogates are excluded so a cut never lands between the two halves of one
- * astral character. A few of the tokenizer's `tokenchars` (`. - / +`) are
- * treated as boundaries here even though unicode61 keeps them inside a token:
- * cutting at one costs the joined form of a path, which is a far smaller loss
- * than the torn word this exists to prevent, and only in a window that holds no
- * whitespace at all.
- */
-const TOKEN_BOUNDARY = /[^\p{L}\p{N}_\uD800-\uDFFF]/u
+// Keep unicode61's tokenchars and combining marks intact, including before an available space.
+const TOKEN_BOUNDARY = /[^\p{L}\p{N}\p{M}\p{Co}_.\-/+\uD800-\uDFFF]/u
 
 /**
  * Index just past the last token boundary in `[floor, end)`, or -1 when the

@@ -58,6 +58,28 @@ it('cuts at whitespace rather than through the word on the boundary', async () =
   }
 })
 
+it.each(['/repo/pericardium.ts', 'PROJ-12345', 'C++', 'cafe\u0301ine'])(
+  'preserves the exact FTS token %s at a chunk boundary',
+  async (token) => {
+    const index = await openSessionSearchIndexFile('ss-rows-tokenchars')
+    try {
+      const text = ' '.repeat(7998) + token
+      const chunks = [...searchMessageRows([{ role: 'user', text, timestamp: null }])]
+      expect(chunks.map((row) => row.text).join('')).toBe(text)
+      for (const row of chunks) {
+        insertSearchMessage(index.db, 1, row)
+      }
+      expect(
+        index.db
+          .prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?')
+          .get(`"${token}"`)
+      ).toEqual({ n: 1 })
+    } finally {
+      await index.close()
+    }
+  }
+)
+
 it('backs up to any whitespace, not only a newline', () => {
   // An ideographic space separates words in a CJK transcript exactly as a
   // space does here, and a newline-only backoff tears the token after it.

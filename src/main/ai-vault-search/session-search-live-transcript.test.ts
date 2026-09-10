@@ -102,8 +102,8 @@ it('keeps a tool result searchable but out of the conversation half', async () =
     path,
     `${codexRolloutLines(
       ['rg', 'pericardium'],
-      'src/main/pericardium.ts:12: match',
-      'search for the pericardium module'
+      `outputonly ${'padding '.repeat(600)}tailonly`,
+      'promptonly search for the module'
     ).join('\n')}\n`
   )
   await parseTranscript(path, 'codex', codexHome)
@@ -112,7 +112,11 @@ it('keeps a tool result searchable but out of the conversation half', async () =
   expect(sessionsMatching('pericardium')).toHaveLength(1)
   // The prompt is conversation; the command output is not, and the column
   // filter is what tells them apart.
-  expect(sessionsMatching('{user_text assistant_text}: pericardium')).toHaveLength(1)
+  expect(sessionsMatching('outputonly')).toHaveLength(1)
+  expect(sessionsMatching('tailonly')).toHaveLength(0)
+  expect(sessionsMatching('rg')).toHaveLength(1)
+  expect(sessionsMatching('{user_text assistant_text}: promptonly')).toHaveLength(1)
+  expect(sessionsMatching('{user_text assistant_text}: outputonly')).toHaveLength(0)
   expect(sessionsMatching('{user_text assistant_text}: rg')).toHaveLength(0)
 })
 

@@ -101,11 +101,18 @@ export function codexRolloutLines(command: string[], output: string, prompt: str
     }),
     codexLine({
       timestamp: recordTimestamp(2),
-      type: 'event_msg',
+      type: 'response_item',
       payload: {
-        type: 'item_completed',
-        item: { type: 'CommandExecution', command, aggregated_output: output }
+        type: 'function_call',
+        call_id: 'call-1',
+        name: 'shell',
+        arguments: JSON.stringify({ command })
       }
+    }),
+    codexLine({
+      timestamp: recordTimestamp(3),
+      type: 'response_item',
+      payload: { type: 'function_call_output', call_id: 'call-1', output }
     })
   ]
 }
