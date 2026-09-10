@@ -70,6 +70,24 @@ describe('buildTitleDerivedAgentRows', () => {
     ])
   })
 
+  it('keeps MiniMax Code identity for title-derived sidebar rows', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'MiniMax Code' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-minimax-code'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.entry.prompt, row.state])).toEqual([
+      ['minimax-code', 'MiniMax Code', 'idle']
+    ])
+  })
+
   it('normalizes Pi-compatible title-derived rows to the launched OMP owner', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'omp' })],

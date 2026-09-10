@@ -68,6 +68,7 @@ const NAME_TOKENS: readonly (readonly [string, TuiAgent])[] = [
   ['antigravity', 'antigravity'],
   ['opencode', 'opencode'],
   ['mimo', 'mimo-code'],
+  ['minimax code', 'minimax-code'],
   ['openclaw', 'openclaw'],
   ['aider', 'aider'],
   ['grok', 'grok'],
@@ -85,6 +86,7 @@ const PATTERN_NAMES: readonly (readonly [RegExp, TuiAgent])[] = [
 const EMITTED_DISPLAY_LABEL_AGENTS = [
   'claude-agent-teams',
   'mimo-code',
+  'minimax-code',
   'prime-agent',
   'command-code',
   'copilot'

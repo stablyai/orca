@@ -31,6 +31,22 @@ describe('resolvePublishedPaneAgentIdentity', () => {
   })
 
   describe('title is the last resort, and the parser is what makes that safe', () => {
+    it.each(['Minimax Code', '⠋ MiniMax Code', 'Orca | MiniMax Code'])(
+      'identifies a shell-started MiniMax Code pane from %s',
+      (title) => {
+        expect(resolve({ title })).toBe('minimax-code')
+        expect(resolve({ title, foregroundAgent: 'codex' })).toBe('codex')
+      }
+    )
+
+    it.each([
+      'Review the MiniMax Code integration',
+      '~/minimax/code',
+      'minimax-code-fixtures ready'
+    ])('does not claim MiniMax Code identity from %s', (title) => {
+      expect(resolve({ title })).toBeUndefined()
+    })
+
     // The misdelivery this PR exists to stop, re-checked with title ALLOWED at the bottom. The old
     // code matched `buildAgentNameRe('claude').test(title)`; the parser is categorically stricter
     // and yields nothing for a name that only appears in task text.

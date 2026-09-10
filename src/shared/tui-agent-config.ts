@@ -134,6 +134,14 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: mirrors opencode's cursor-gated signal by parity; mimo's startup stream isn't separately validated.
     draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
   },
+  'minimax-code': {
+    detectCmd: 'mcode',
+    // Why: the published CLI sets process.title before starting the TUI.
+    expectedProcess: 'minimax-code',
+    promptInjectionMode: 'argv',
+    // Why: subcommand-shaped prompts must remain positional.
+    argvPromptSeparator: '--'
+  },
   pi: {
     detectCmd: 'pi',
     promptInjectionMode: 'argv',

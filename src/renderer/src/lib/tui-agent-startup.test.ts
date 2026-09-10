@@ -64,6 +64,35 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('passes MiniMax Code prompts as positional argv behind a `--` separator', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'minimax-code',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'minimax-code',
+      launchCommand: "mcode -- 'Summarize the failing tests'",
+      expectedProcess: 'minimax-code',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('mcode')
+    })
+  })
+
+  it('keeps subcommand-shaped MiniMax Code prompts as the positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'minimax-code',
+        prompt: 'exec the release plan',
+        cmdOverrides: {},
+        platform: 'win32',
+        shell: 'powershell'
+      })?.launchCommand
+    ).toBe("mcode -- 'exec the release plan'")
+  })
+
   it('launches aider first and injects the draft prompt after startup', () => {
     expect(
       buildAgentStartupPlan({
