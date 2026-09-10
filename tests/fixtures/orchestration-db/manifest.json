@@ -1,0 +1,498 @@
+{
+  "fixtures": [
+    {
+      "tag": "v1.4.180",
+      "variant": "no-unbound-mail",
+      "file": "v1.4.180-no-unbound-mail.sqlite",
+      "commit": "0b62333cf179adbd839843456e111e2cdaf0bffd",
+      "userVersion": 25,
+      "populateShape": {
+        "dispatchArguments": "positional",
+        "attachmentCarriesRunId": false,
+        "includeUnboundDirectMail": false
+      },
+      "sha256": "2f93f8316b86523ffd790d4ac41096deff7ec29993fe64607ec976f9dee58f79",
+      "expected": {
+        "runIds": ["run_39dfe6bac86e"],
+        "taskIds": ["task_484cf911a753"],
+        "dispatchIds": ["ctx_a1d1d1fd16e7"],
+        "messages": [
+          {
+            "id": "msg_fixture_run_mailbox",
+            "to": "run:run_39dfe6bac86e",
+            "read": 0,
+            "run_id": "run_39dfe6bac86e"
+          }
+        ],
+        "legacyAdoptionsCount": 0,
+        "attachments": [
+          {
+            "dispatchId": "ctx_federated_fixture",
+            "taskId": "task_federated_fixture"
+          }
+        ],
+        "tableRowCounts": {
+          "coordinator_runs": 0,
+          "decision_gates": 0,
+          "deliveries": 0,
+          "dispatch_contexts": 1,
+          "federated_dispatches": 0,
+          "federation_relay_items": 0,
+          "legacy_adoptions": 0,
+          "legacy_compatibility_principals": 0,
+          "legacy_mail_receipts": 0,
+          "legacy_operation_receipts": 0,
+          "messages": 1,
+          "mutation_receipts": 1,
+          "question_threads": 0,
+          "remote_dispatch_attachments": 1,
+          "remote_questions": 0,
+          "runs": 2,
+          "sqlite_sequence": 1,
+          "tasks": 1,
+          "worker_dispatches": 0,
+          "worker_terminal_archives": 0,
+          "worker_terminal_resources": 0
+        }
+      }
+    },
+    {
+      "tag": "v1.4.180",
+      "variant": "unbound-mail",
+      "file": "v1.4.180.sqlite",
+      "commit": "0b62333cf179adbd839843456e111e2cdaf0bffd",
+      "userVersion": 25,
+      "populateShape": {
+        "dispatchArguments": "positional",
+        "attachmentCarriesRunId": false,
+        "includeUnboundDirectMail": true
+      },
+      "sha256": "cebccbc0d0a135bc6ab2bad90ca5fd76f54cdd8d410a9b256cbdf004ffe7a2ed",
+      "expected": {
+        "runIds": ["run_65bdd8a41d0d"],
+        "taskIds": ["task_046a9bbd575e"],
+        "dispatchIds": ["ctx_c8d622c57dce"],
+        "messages": [
+          {
+            "id": "msg_fixture_direct",
+            "to": "terminal-delta",
+            "read": 0,
+            "run_id": "run_legacy_local"
+          },
+          {
+            "id": "msg_fixture_run_mailbox",
+            "to": "run:run_65bdd8a41d0d",
+            "read": 0,
+            "run_id": "run_65bdd8a41d0d"
+          }
+        ],
+        "legacyAdoptionsCount": 0,
+        "attachments": [
+          {
+            "dispatchId": "ctx_federated_fixture",
+            "taskId": "task_federated_fixture"
+          }
+        ],
+        "tableRowCounts": {
+          "coordinator_runs": 0,
+          "decision_gates": 0,
+          "deliveries": 0,
+          "dispatch_contexts": 1,
+          "federated_dispatches": 0,
+          "federation_relay_items": 0,
+          "legacy_adoptions": 0,
+          "legacy_compatibility_principals": 0,
+          "legacy_mail_receipts": 0,
+          "legacy_operation_receipts": 0,
+          "messages": 2,
+          "mutation_receipts": 1,
+          "question_threads": 0,
+          "remote_dispatch_attachments": 1,
+          "remote_questions": 0,
+          "runs": 2,
+          "sqlite_sequence": 1,
+          "tasks": 1,
+          "worker_dispatches": 0,
+          "worker_terminal_archives": 0,
+          "worker_terminal_resources": 0
+        }
+      }
+    },
+    {
+      "tag": "v1.4.190",
+      "variant": "no-unbound-mail",
+      "file": "v1.4.190-no-unbound-mail.sqlite",
+      "commit": "6e4f817101daa18d82824b69243d9079baa9c416",
+      "userVersion": 29,
+      "populateShape": {
+        "dispatchArguments": "positional",
+        "attachmentCarriesRunId": false,
+        "includeUnboundDirectMail": false
+      },
+      "sha256": "13b06e27a98d2eb098ad17a8be02dd0171abc0daa300cca6d3cd8b9ade5868ef",
+      "expected": {
+        "runIds": ["run_e76472bca182"],
+        "taskIds": ["task_97ceb59bbe79"],
+        "dispatchIds": ["ctx_f73c5bbc9189"],
+        "messages": [
+          {
+            "id": "msg_fixture_run_mailbox",
+            "to": "run:run_e76472bca182",
+            "read": 0,
+            "run_id": "run_e76472bca182"
+          }
+        ],
+        "legacyAdoptionsCount": 0,
+        "attachments": [
+          {
+            "dispatchId": "ctx_federated_fixture",
+            "taskId": "task_federated_fixture"
+          }
+        ],
+        "tableRowCounts": {
+          "coordinator_runs": 0,
+          "decision_gates": 0,
+          "deliveries": 0,
+          "dispatch_contexts": 1,
+          "federated_dispatches": 0,
+          "federation_relay_items": 0,
+          "legacy_adoptions": 0,
+          "legacy_compatibility_principals": 0,
+          "legacy_mail_receipts": 0,
+          "legacy_operation_receipts": 0,
+          "messages": 1,
+          "mutation_caller_identities": 0,
+          "mutation_receipt_ledger": 1,
+          "mutation_receipts": 1,
+          "question_threads": 0,
+          "remote_dispatch_attachments": 1,
+          "remote_questions": 0,
+          "run_coordinator_handles": 1,
+          "runs": 2,
+          "sqlite_sequence": 1,
+          "tasks": 1,
+          "worker_dispatches": 0,
+          "worker_terminal_archives": 0,
+          "worker_terminal_resources": 0
+        }
+      }
+    },
+    {
+      "tag": "v1.4.190",
+      "variant": "unbound-mail",
+      "file": "v1.4.190.sqlite",
+      "commit": "6e4f817101daa18d82824b69243d9079baa9c416",
+      "userVersion": 29,
+      "populateShape": {
+        "dispatchArguments": "positional",
+        "attachmentCarriesRunId": false,
+        "includeUnboundDirectMail": true
+      },
+      "sha256": "8851d344aada7840b508a339fbbcea7edc7d9f4fa13cdbc336fabbdf4531e552",
+      "expected": {
+        "runIds": ["run_409330fa79a8"],
+        "taskIds": ["task_506a92ccffe2"],
+        "dispatchIds": ["ctx_ec295461d908"],
+        "messages": [
+          {
+            "id": "msg_fixture_direct",
+            "to": "terminal-delta",
+            "read": 0,
+            "run_id": "run_legacy_local"
+          },
+          {
+            "id": "msg_fixture_run_mailbox",
+            "to": "run:run_409330fa79a8",
+            "read": 0,
+            "run_id": "run_409330fa79a8"
+          }
+        ],
+        "legacyAdoptionsCount": 0,
+        "attachments": [
+          {
+            "dispatchId": "ctx_federated_fixture",
+            "taskId": "task_federated_fixture"
+          }
+        ],
+        "tableRowCounts": {
+          "coordinator_runs": 0,
+          "decision_gates": 0,
+          "deliveries": 0,
+          "dispatch_contexts": 1,
+          "federated_dispatches": 0,
+          "federation_relay_items": 0,
+          "legacy_adoptions": 0,
+          "legacy_compatibility_principals": 0,
+          "legacy_mail_receipts": 0,
+          "legacy_operation_receipts": 0,
+          "messages": 2,
+          "mutation_caller_identities": 0,
+          "mutation_receipt_ledger": 1,
+          "mutation_receipts": 1,
+          "question_threads": 0,
+          "remote_dispatch_attachments": 1,
+          "remote_questions": 0,
+          "run_coordinator_handles": 1,
+          "runs": 2,
+          "sqlite_sequence": 1,
+          "tasks": 1,
+          "worker_dispatches": 0,
+          "worker_terminal_archives": 0,
+          "worker_terminal_resources": 0
+        }
+      }
+    },
+    {
+      "tag": "v1.4.198",
+      "variant": "no-unbound-mail",
+      "file": "v1.4.198-no-unbound-mail.sqlite",
+      "commit": "a2b1751aa2c8d9f2badd132584d00b67580c23df",
+      "userVersion": 30,
+      "populateShape": {
+        "dispatchArguments": "params",
+        "attachmentCarriesRunId": false,
+        "includeUnboundDirectMail": false
+      },
+      "sha256": "39d046458e9bf8268bda8b1d06f08c23d19a97c9bca12d808b7c1538968c6411",
+      "expected": {
+        "runIds": ["run_42ce12492703"],
+        "taskIds": ["task_bfdb2a91d83a"],
+        "dispatchIds": ["ctx_e90198e9544d"],
+        "messages": [
+          {
+            "id": "msg_fixture_run_mailbox",
+            "to": "run:run_42ce12492703",
+            "read": 0,
+            "run_id": "run_42ce12492703"
+          }
+        ],
+        "legacyAdoptionsCount": 0,
+        "attachments": [
+          {
+            "dispatchId": "ctx_federated_fixture",
+            "taskId": "task_federated_fixture"
+          }
+        ],
+        "tableRowCounts": {
+          "coordinator_runs": 0,
+          "decision_gates": 0,
+          "deliveries": 0,
+          "dispatch_contexts": 1,
+          "federated_dispatches": 0,
+          "federation_relay_items": 0,
+          "legacy_adoptions": 0,
+          "legacy_compatibility_principals": 0,
+          "legacy_mail_receipts": 0,
+          "legacy_operation_receipts": 0,
+          "messages": 1,
+          "mutation_caller_identities": 0,
+          "mutation_receipt_ledger": 1,
+          "mutation_receipts": 1,
+          "question_threads": 0,
+          "remote_dispatch_attachments": 1,
+          "remote_questions": 0,
+          "run_coordinator_handles": 1,
+          "runs": 2,
+          "sqlite_sequence": 1,
+          "tasks": 1,
+          "worker_dispatches": 0,
+          "worker_terminal_archives": 0,
+          "worker_terminal_resources": 0
+        }
+      }
+    },
+    {
+      "tag": "v1.4.198",
+      "variant": "unbound-mail",
+      "file": "v1.4.198.sqlite",
+      "commit": "a2b1751aa2c8d9f2badd132584d00b67580c23df",
+      "userVersion": 30,
+      "populateShape": {
+        "dispatchArguments": "params",
+        "attachmentCarriesRunId": false,
+        "includeUnboundDirectMail": true
+      },
+      "sha256": "8d5312aa1f26dcd59901d9c331f2d3383bc689dd6dc222232bf1b51024cd6892",
+      "expected": {
+        "runIds": ["run_d9bb01ac774f"],
+        "taskIds": ["task_a70c53ec04f4"],
+        "dispatchIds": ["ctx_0cdc9bab391c"],
+        "messages": [
+          {
+            "id": "msg_fixture_direct",
+            "to": "terminal-delta",
+            "read": 0,
+            "run_id": "run_legacy_local"
+          },
+          {
+            "id": "msg_fixture_run_mailbox",
+            "to": "run:run_d9bb01ac774f",
+            "read": 0,
+            "run_id": "run_d9bb01ac774f"
+          }
+        ],
+        "legacyAdoptionsCount": 0,
+        "attachments": [
+          {
+            "dispatchId": "ctx_federated_fixture",
+            "taskId": "task_federated_fixture"
+          }
+        ],
+        "tableRowCounts": {
+          "coordinator_runs": 0,
+          "decision_gates": 0,
+          "deliveries": 0,
+          "dispatch_contexts": 1,
+          "federated_dispatches": 0,
+          "federation_relay_items": 0,
+          "legacy_adoptions": 0,
+          "legacy_compatibility_principals": 0,
+          "legacy_mail_receipts": 0,
+          "legacy_operation_receipts": 0,
+          "messages": 2,
+          "mutation_caller_identities": 0,
+          "mutation_receipt_ledger": 1,
+          "mutation_receipts": 1,
+          "question_threads": 0,
+          "remote_dispatch_attachments": 1,
+          "remote_questions": 0,
+          "run_coordinator_handles": 1,
+          "runs": 2,
+          "sqlite_sequence": 1,
+          "tasks": 1,
+          "worker_dispatches": 0,
+          "worker_terminal_archives": 0,
+          "worker_terminal_resources": 0
+        }
+      }
+    },
+    {
+      "tag": "v1.4.199",
+      "variant": "no-unbound-mail",
+      "file": "v1.4.199-no-unbound-mail.sqlite",
+      "commit": "28957d6004dd191b6f0baff493a9fd3d37405d9d",
+      "userVersion": 40,
+      "populateShape": {
+        "dispatchArguments": "params",
+        "attachmentCarriesRunId": true,
+        "includeUnboundDirectMail": false
+      },
+      "sha256": "443b12c2829c458efaa36e6fa9bf5e8a44a98403e93b9b27abfd9e3d797e7b7c",
+      "expected": {
+        "runIds": ["run_61865635c015"],
+        "taskIds": ["task_4d1fbd116509"],
+        "dispatchIds": ["ctx_c012d382bdd0"],
+        "messages": [
+          {
+            "id": "msg_fixture_run_mailbox",
+            "to": "run:run_61865635c015",
+            "read": 0,
+            "run_id": "run_61865635c015"
+          }
+        ],
+        "legacyAdoptionsCount": 0,
+        "attachments": [
+          {
+            "dispatchId": "ctx_federated_fixture",
+            "taskId": "task_federated_fixture"
+          }
+        ],
+        "tableRowCounts": {
+          "attempt_observation_facts": 0,
+          "coordinator_runs": 0,
+          "decision_gates": 0,
+          "deliveries": 0,
+          "dispatch_contexts": 1,
+          "federated_dispatches": 0,
+          "federation_relay_items": 0,
+          "legacy_adoptions": 0,
+          "legacy_compatibility_principals": 0,
+          "legacy_mail_receipts": 0,
+          "legacy_operation_receipts": 0,
+          "messages": 1,
+          "mutation_caller_identities": 0,
+          "mutation_receipt_ledger": 1,
+          "mutation_receipts": 1,
+          "question_threads": 0,
+          "remote_dispatch_attachments": 1,
+          "remote_questions": 0,
+          "run_coordinator_handles": 1,
+          "runs": 2,
+          "sqlite_sequence": 1,
+          "structured_pointer_operations": 0,
+          "tasks": 1,
+          "worker_dispatches": 0,
+          "worker_terminal_archives": 0,
+          "worker_terminal_resources": 0
+        }
+      }
+    },
+    {
+      "tag": "v1.4.199",
+      "variant": "unbound-mail",
+      "file": "v1.4.199.sqlite",
+      "commit": "28957d6004dd191b6f0baff493a9fd3d37405d9d",
+      "userVersion": 40,
+      "populateShape": {
+        "dispatchArguments": "params",
+        "attachmentCarriesRunId": true,
+        "includeUnboundDirectMail": true
+      },
+      "sha256": "fca6b6dd267a25d30ed7ae94dc211cc4a02b14fca4dbb3cfeb80ac4d6df9b678",
+      "expected": {
+        "runIds": ["run_0ecdaeb2bed7"],
+        "taskIds": ["task_6446be2d442f"],
+        "dispatchIds": ["ctx_bff3e6225c11"],
+        "messages": [
+          {
+            "id": "msg_fixture_direct",
+            "to": "terminal-delta",
+            "read": 0,
+            "run_id": "run_unbound"
+          },
+          {
+            "id": "msg_fixture_run_mailbox",
+            "to": "run:run_0ecdaeb2bed7",
+            "read": 0,
+            "run_id": "run_0ecdaeb2bed7"
+          }
+        ],
+        "legacyAdoptionsCount": 0,
+        "attachments": [
+          {
+            "dispatchId": "ctx_federated_fixture",
+            "taskId": "task_federated_fixture"
+          }
+        ],
+        "tableRowCounts": {
+          "attempt_observation_facts": 0,
+          "coordinator_runs": 0,
+          "decision_gates": 0,
+          "deliveries": 0,
+          "dispatch_contexts": 1,
+          "federated_dispatches": 0,
+          "federation_relay_items": 0,
+          "legacy_adoptions": 0,
+          "legacy_compatibility_principals": 0,
+          "legacy_mail_receipts": 0,
+          "legacy_operation_receipts": 0,
+          "messages": 2,
+          "mutation_caller_identities": 0,
+          "mutation_receipt_ledger": 1,
+          "mutation_receipts": 1,
+          "question_threads": 0,
+          "remote_dispatch_attachments": 1,
+          "remote_questions": 0,
+          "run_coordinator_handles": 1,
+          "runs": 3,
+          "sqlite_sequence": 1,
+          "structured_pointer_operations": 0,
+          "tasks": 1,
+          "worker_dispatches": 0,
+          "worker_terminal_archives": 0,
+          "worker_terminal_resources": 0
+        }
+      }
+    }
+  ]
+}

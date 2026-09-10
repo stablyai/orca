@@ -34,3 +34,6 @@
 # Generated runtime English subset: compared byte-for-byte by
 # verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf
+# Orchestration DB fixtures are byte-compared against a sha256 in manifest.json and were
+# written by real release tags; any eol or text filtering would corrupt them.
+/tests/fixtures/orchestration-db/*.sqlite binary

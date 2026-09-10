@@ -6,6 +6,12 @@ import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import { SCHEMA_VERSION } from './db/contract-constants'
 
+/**
+ * Cheap breadth: every integer stamp from 0 to SCHEMA_VERSION, which no set of binary fixtures
+ * can afford. It cannot see a forgotten column, because it builds the CURRENT schema and only
+ * rewrites user_version -- db/shipped-schema-fixtures.test.ts opens files real releases wrote and
+ * is the honest counterpart. Keep both: this one covers versions, that one covers bytes.
+ */
 describe('orchestration migration from every prior version stamp', () => {
   const tempDirs: string[] = []
 
