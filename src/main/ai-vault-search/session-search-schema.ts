@@ -141,9 +141,7 @@ function openExisting(path: string): SyncDatabase {
   // with an error nothing classifies as worth rebuilding for.
   let db: SyncDatabase | null = openWithPragmas(path)
   try {
-    // Only `stale`: a `fresh` file has nothing to throw away, and removing it
-    // would make every first open of a new profile a create-remove-create.
-    if (readSchemaState(db) === 'stale') {
+    if (isStaleSchema(db)) {
       // Why: DROP TABLE on a multi-GB FTS index takes minutes and runs inside the
       // scanner service's init, past its ready timeout; unlinking is instant.
       db.close()
@@ -209,20 +207,22 @@ export function removeSessionSearchDatabase(path: string): void {
 }
 
 /**
- * `fresh` only when there is no `meta` table at all. A meta table whose version
- * row is missing or unparseable is a damaged index, not a new one: seeding the
- * current version over it would keep whatever rows the old schema left.
+ * Whether what is on disk has to be thrown away. No `meta` table at all is a
+ * file with nothing in it to throw away, and removing it would make the first
+ * open of every new profile a create-remove-create. A meta table whose version
+ * row is missing or unparseable is a damaged index rather than a new one:
+ * seeding the current version over it would keep whatever rows the old schema
+ * left.
  */
-function readSchemaState(db: SyncDatabase): 'fresh' | 'current' | 'stale' {
+function isStaleSchema(db: SyncDatabase): boolean {
   const table = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'")
     .get()
   if (!table) {
-    return 'fresh'
+    return false
   }
   const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as
     | { value: string }
     | undefined
-  const parsed = row ? Number(row.value) : Number.NaN
-  return parsed === SESSION_SEARCH_SCHEMA_VERSION ? 'current' : 'stale'
+  return (row ? Number(row.value) : Number.NaN) !== SESSION_SEARCH_SCHEMA_VERSION
 }
