@@ -272,10 +272,13 @@ describe('visibility views', () => {
                (3,1,'claude','c','c','tombstoned','');
         INSERT INTO search_pending_deletes(path,session_row_id) VALUES ('c',3);
         INSERT INTO search_write_batches(id,session_row_id) VALUES (7,1);
-        INSERT INTO messages(id,session_row_id,batch_id,role) VALUES (1,1,NULL,'user'),(2,1,7,'user')`)
+        INSERT INTO messages(id,session_row_id,batch_id,role) VALUES (1,1,NULL,'user'),(2,1,7,'user'),
+               (3,3,NULL,'user')`)
       expect(db.prepare(`SELECT title FROM ${VISIBLE_SESSIONS} ORDER BY id`).all()).toEqual([
         { title: 'published' }
       ])
+      // Row 3 is the one a batch-pointer filter alone would return: its batch is
+      // long gone and only the session-keyed tombstone retires it.
       expect(db.prepare(`SELECT id FROM ${VISIBLE_MESSAGES} ORDER BY id`).all()).toEqual([
         { id: 1 }
       ])

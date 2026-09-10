@@ -31,6 +31,22 @@ afterEach(async () => {
   await index.close()
 })
 
+/**
+ * The read shape every query site has to use: an FTS table joined to the
+ * visible half. Both views subtract tombstones, so a hit here is a row a search
+ * may return right now, with no cleanup pass required first.
+ */
+function matches(db: SyncDatabase, table: string, term: string): number {
+  return (
+    db
+      .prepare(
+        `SELECT count(*) AS n FROM ${table} JOIN visible_messages m ON m.id = ${table}.rowid
+         WHERE ${table} MATCH ?`
+      )
+      .get(term) as { n: number }
+  ).n
+}
+
 function counts(db: SyncDatabase): Record<string, number> {
   const one = (sql: string): number => (db.prepare(sql).get() as { n: number }).n
   return {
@@ -69,18 +85,9 @@ it('writes both FTS tables for every published conversational row', async () => 
   // messages_fts carries every row; conversation_fts is the tool-free half.
   expect(counts(index.db).full).toBe(3)
   expect(counts(index.db).conversation).toBe(2)
-  const matches = (table: string, term: string): number =>
-    (
-      index.db
-        .prepare(
-          `SELECT count(*) AS n FROM ${table} JOIN visible_messages m ON m.id = ${table}.rowid
-           WHERE ${table} MATCH ?`
-        )
-        .get(term) as { n: number }
-    ).n
-  expect(matches('messages_fts', 'gamma')).toBe(1)
-  expect(matches('conversation_fts', 'gamma')).toBe(0)
-  expect(matches('conversation_fts', 'beta')).toBe(1)
+  expect(matches(index.db, 'messages_fts', 'gamma')).toBe(1)
+  expect(matches(index.db, 'conversation_fts', 'gamma')).toBe(0)
+  expect(matches(index.db, 'conversation_fts', 'beta')).toBe(1)
 })
 
 it('hides staged rows from both halves until the read finishes', async () => {
@@ -178,15 +185,31 @@ it('replaces the previous generation without ever showing both', async () => {
 
   expect(counts(index.db).sessions).toBe(1)
   expect(counts(index.db).messages).toBe(10)
-  const hits = (term: string): number =>
-    (
-      index.db
-        .prepare(
-          `SELECT count(*) AS n FROM messages_fts JOIN visible_messages m ON m.id = messages_fts.rowid
-           WHERE messages_fts MATCH ?`
-        )
-        .get(term) as { n: number }
-    ).n
-  expect(hits('firstgeneration')).toBe(0)
-  expect(hits('secondgeneration')).toBe(10)
+  expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(0)
+  expect(matches(index.db, 'messages_fts', 'secondgeneration')).toBe(10)
+})
+
+// The cleanup lane cannot start before the first microtask, so everything below
+// reads the index in the state a search issued in the same tick would see.
+it('answers for only the new generation the moment a replace publishes', async () => {
+  replayTranscriptRead({ messages: userMessages('firstgeneration', 3) })
+  replayTranscriptRead({ messages: userMessages('secondgeneration', 3) })
+
+  expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(0)
+  expect(matches(index.db, 'messages_fts', 'secondgeneration')).toBe(3)
+  expect(counts(index.db).messages).toBe(3)
+  // Both generations really are still on disk; only the views subtract one.
+  expect(counts(index.db).rawMessages).toBe(6)
+  await store.settled()
+})
+
+it('stops answering for a removed file the moment it is removed', async () => {
+  replayTranscriptRead({ messages: userMessages('removedneedle', 3) })
+  store.removeFile(SYNTHETIC_TRANSCRIPT)
+
+  expect(counts(index.db).sessions).toBe(0)
+  expect(counts(index.db).messages).toBe(0)
+  expect(matches(index.db, 'messages_fts', 'removedneedle')).toBe(0)
+  expect(counts(index.db).rawMessages).toBe(3)
+  await store.settled()
 })

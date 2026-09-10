@@ -67,6 +67,10 @@ CREATE TABLE IF NOT EXISTS search_pending_deletes(
   session_row_id INTEGER NOT NULL,
   batch_id INTEGER
 );
+-- Both views subtract this set on every read; without it each one scans the table.
+-- Partial because a batch-keyed tombstone names a session that is still visible.
+CREATE INDEX IF NOT EXISTS search_pending_deletes_session
+  ON search_pending_deletes(session_row_id) WHERE batch_id IS NULL;
 -- A row exists only while its batch is in flight; publish clears its messages and deletes it.
 CREATE TABLE IF NOT EXISTS search_write_batches(
   id INTEGER PRIMARY KEY,
@@ -91,11 +95,17 @@ CREATE VIRTUAL TABLE IF NOT EXISTS conversation_fts USING fts5(
 );
 -- Why: staged rows must never reach a result. One definition per half, so a new
 -- read site cannot forget one; SQLite flattens both into the caller's plan.
+-- Both halves subtract the same session-keyed tombstones. A message outlives its
+-- session row until the cleanup lane reaches it, so filtering messages on the
+-- batch pointer alone would show a replaced generation beside its successor and
+-- would keep answering for a file that was already removed.
 CREATE VIEW IF NOT EXISTS ${VISIBLE_SESSIONS} AS SELECT * FROM sessions
   WHERE index_ready = 1
     AND id NOT IN (SELECT session_row_id FROM search_pending_deletes WHERE batch_id IS NULL);
 CREATE VIEW IF NOT EXISTS ${VISIBLE_MESSAGES} AS SELECT * FROM messages
-  WHERE batch_id IS NULL;
+  WHERE batch_id IS NULL
+    AND session_row_id NOT IN
+      (SELECT session_row_id FROM search_pending_deletes WHERE batch_id IS NULL);
 `
 
 /**
