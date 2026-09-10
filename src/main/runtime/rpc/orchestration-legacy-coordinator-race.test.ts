@@ -422,7 +422,7 @@ describe('legacy coordinator takeover races', () => {
     const pending = harness.dispatcher.dispatch(
       request(
         'orchestration.send',
-        { from: COORDINATOR_HANDLE, to: '@all', subject: 'must remain unsent' },
+        { from: COORDINATOR_HANDLE, to: '@codex', subject: 'must remain unsent' },
         'send-group-takeover'
       )
     )

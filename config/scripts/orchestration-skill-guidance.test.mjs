@@ -381,13 +381,9 @@ describe('owned orchestration references', () => {
       expect(reference).toContain(group)
     }
     expect(reference).toContain('Dispatch lifecycle messages never target groups')
-    expect(squash(reference)).toContain(
-      "means the live Dispatches of the sender's own Run, delivered to each `dispatch:<id>` mailbox"
-    )
-    expect(squash(reference)).toContain('a sender bound to no Run is refused')
-    expect(squash(reference)).toContain(
-      'A coordinator is not a Dispatch, so no group address reaches one'
-    )
+    expect(squash(reference)).toContain("means the live Dispatches of the sender's own Run.")
+    expect(squash(reference)).toContain('A sender bound to no Run is refused')
+    expect(squash(reference)).toContain('A Run group excludes its owning coordinator')
     expect(reference).toContain('gate-create --task <task_id>')
     expect(reference).toContain("Do not create a gate merely to answer a worker's `ask`")
     expect(reference).toContain('successful `send` proves durable enqueue')

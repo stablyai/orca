@@ -409,4 +409,116 @@ describe('orchestration.send group addresses', () => {
     expect(result.messages[0].thread_id).toMatch(/^thread_/)
     expect(result.messages[0].thread_id).toBe(result.messages[1].thread_id)
   })
+  it.each(['@all', '@idle'])('does not enumerate host terminals for %s', async (to) => {
+    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a')], { term_a: 'idle' })
+    const worker = dispatchWorker('term_a')
+    const result = (await call('orchestration.send', {
+      from: 'term_coord',
+      to,
+      subject: 'guidance'
+    })) as GroupReceipt
+    expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${worker}`])
+    expect(runtime.listTerminals).not.toHaveBeenCalled()
+  })
+
+  it.each(['run', 'payload'])('does not acquire group membership from %s', async (source) => {
+    setupWithTerminals([
+      makeSummary('term_coord'),
+      makeSummary('term_a'),
+      makeSummary('term_loner')
+    ])
+    const worker = dispatchWorker('term_a')
+    const scope =
+      source === 'run' ? { run: activeRunId } : { payload: JSON.stringify({ dispatchId: worker }) }
+    await expect(
+      call('orchestration.send', {
+        from: 'term_loner',
+        to: '@all',
+        subject: 'outside sender',
+        ...scope
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(db.getInbox(100)).toHaveLength(0)
+    expect(runtime.listTerminals).not.toHaveBeenCalled()
+  })
+
+  it('rejects an explicit Run that conflicts with the group audience', async () => {
+    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_a')])
+    dispatchWorker('term_a')
+    const other = db.createRun({
+      objective: 'other',
+      coordinatorHandle: 'term_other',
+      coordinatorPaneKey: 'tab_other:leaf_other'
+    })
+    dispatchWorker('term_b', other.id)
+    await expect(
+      call('orchestration.send', {
+        from: 'term_coord',
+        to: '@all',
+        run: other.id,
+        subject: 'explicit scope'
+      })
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(db.getInbox(100)).toHaveLength(0)
+  })
+
+  it.each(['@codex', '@idle'])(
+    '%s resolves a reminted worker handle by its stable pane',
+    async (to) => {
+      const pane = 'tab_worker:11111111-1111-4111-8111-111111111111'
+      setupWithTerminals(
+        [
+          makeSummary('term_coord'),
+          makeSummary('term_new', {
+            tabId: 'tab_worker',
+            leafId: '11111111-1111-4111-8111-111111111111',
+            agentIdentity: 'codex'
+          })
+        ],
+        { term_new: 'idle' }
+      )
+      vi.spyOn(runtime, 'getTerminalHandleForPaneKey').mockImplementation((key) =>
+        key === pane ? 'term_new' : null
+      )
+      const task = db.createTask({ spec: 'surviving worker', runId: activeRunId })
+      const dispatch = createRootDispatch(db, task.id, 'term_old', pane)
+      const result = (await call('orchestration.send', {
+        from: 'term_coord',
+        to,
+        subject: 'still reachable'
+      })) as GroupReceipt
+      expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${dispatch.id}`])
+    }
+  )
+
+  it('delivers a parent broadcast to the mailbox a nested coordinator reads', async () => {
+    const nestedPane = 'tab_nested:11111111-1111-4111-8111-111111111111'
+    setupWithTerminals([makeSummary('term_coord'), makeSummary('term_nested')])
+    vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+      handle === 'term_coord' ? coordinatorPaneKey : handle === 'term_nested' ? nestedPane : null
+    )
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ spec: 'nested', runId: activeRunId }).id,
+      'term_nested',
+      nestedPane
+    )
+    const child = db.createRun({
+      objective: 'child',
+      coordinatorHandle: 'term_nested',
+      coordinatorPaneKey: nestedPane
+    })
+    const sent = (await call('orchestration.send', {
+      from: 'term_coord',
+      to: '@all',
+      subject: 'pause all work'
+    })) as GroupReceipt
+    expect(sent.messages.map((m) => m.to_handle)).toEqual([`run:${child.id}`])
+    const checked = (await call('orchestration.check', {
+      terminal: 'term_nested',
+      peek: true
+    })) as { messages: { subject: string }[] }
+    expect(checked.messages.map((m) => m.subject)).toEqual(['pause all work'])
+    expect(db.getUnreadMessages(`dispatch:${dispatch.id}`)).toHaveLength(0)
+  })
 })
