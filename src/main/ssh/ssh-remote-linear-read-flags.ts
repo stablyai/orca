@@ -69,6 +69,7 @@ export const LINEAR_MCP_ISSUE_LIST_FLAGS = new Set([
   'query',
   'state',
   'cursor',
+  'page-recovery',
   'order-by',
   'project',
   'release',

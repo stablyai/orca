@@ -103,9 +103,11 @@ Examples:
 
 const LINEAR_MCP_ISSUE_LIST_HELP = `orca linear list-issues
 
-Usage: orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]
+Usage: orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--page-recovery <vector>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]
 
-List Linear issues with MCP-compatible filters and cursor pagination`
+List Linear issues with MCP-compatible filters and cursor pagination.
+
+Capable runtimes return sorted admitted batches for --workspace all; resume with --page-recovery. Concrete workspaces keep --cursor. Check hasMore and partial before reporting completeness.`
 
 const LINEAR_SEARCH_HELP = `orca linear search
 

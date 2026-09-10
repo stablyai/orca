@@ -1,3 +1,4 @@
+import { boundLinearListReply, rejectOversizedLinearListRequest } from './linear-list-reply-budget'
 import { isStreamingMethod, type RpcEnvelopeMeta, type RpcRegistry, type RpcRequest } from './core'
 
 import { errorResponse, successResponse } from './errors'
@@ -35,6 +36,11 @@ export class RpcStreamingDispatcher {
   ): Promise<void> {
     const { runtime, registry, orchestrationMutations, legacyOrchestration, meta } =
       this.dependencies
+    const rejected = rejectOversizedLinearListRequest(request)
+    if (rejected) {
+      reply(JSON.stringify(rejected))
+      return
+    }
     const envelopeMeta = meta()
     const method = registry.get(request.method)
     if (!method) {
@@ -59,7 +65,7 @@ export class RpcStreamingDispatcher {
 
     const parsedParams = parseRpcRequestParams(request, method, envelopeMeta)
     if (parsedParams.error) {
-      reply(JSON.stringify(parsedParams.error))
+      reply(JSON.stringify(boundLinearListReply(request, parsedParams.error)))
       return
     }
 
@@ -107,6 +113,7 @@ export class RpcStreamingDispatcher {
           return method.handler(effectiveParams, {
             runtime,
             signal: options?.signal,
+            retainUntilDelivery: options?.retainUntilDelivery,
             requestId: request.id,
             connectionId: options?.connectionId,
             clientId: options?.clientId,
@@ -140,9 +147,17 @@ export class RpcStreamingDispatcher {
           legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
         )
         recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
-        reply(JSON.stringify(successResponse(request.id, envelopeMeta, result)))
+        reply(
+          JSON.stringify(
+            boundLinearListReply(request, successResponse(request.id, envelopeMeta, result))
+          )
+        )
       } catch (error) {
-        reply(JSON.stringify(mapDispatcherError(request, envelopeMeta, error)))
+        reply(
+          JSON.stringify(
+            boundLinearListReply(request, mapDispatcherError(request, envelopeMeta, error))
+          )
+        )
       }
       return
     }
@@ -160,6 +175,7 @@ export class RpcStreamingDispatcher {
         {
           runtime,
           signal: options?.signal,
+          retainUntilDelivery: options?.retainUntilDelivery,
           requestId: request.id,
           connectionId: options?.connectionId,
           clientId: options?.clientId,
@@ -183,7 +199,11 @@ export class RpcStreamingDispatcher {
         request.params
       )
     } catch (error) {
-      reply(JSON.stringify(mapDispatcherError(request, envelopeMeta, error)))
+      reply(
+        JSON.stringify(
+          boundLinearListReply(request, mapDispatcherError(request, envelopeMeta, error))
+        )
+      )
     }
   }
 }

@@ -162,6 +162,17 @@ export class UnixSocketTransport implements RpcTransport {
   // handlers (e.g. orchestration.check --wait) arm it. See §3.1.
   private dispatchMessage(socket: Socket, rawMessage: string, inflight: Set<() => void>): void {
     let replied = false
+    let delivered = false
+    const retained = new Set<() => void>()
+    const settleDelivery = (): void => {
+      delivered = true
+      for (const release of retained) {
+        release()
+      }
+      retained.clear()
+      socket.off('close', settleDelivery)
+    }
+    socket.once('close', settleDelivery)
     let keepaliveTimer: NodeJS.Timeout | null = null
     // Why: each dispatch needs its own abort signal and keepalive timer
     // cleanup. Socket close runs every cleanup without touching sibling
@@ -192,7 +203,9 @@ export class UnixSocketTransport implements RpcTransport {
       replied = true
       cleanupDispatch(false)
       if (!socket.destroyed && socket.writable) {
-        socket.write(`${response}\n`)
+        socket.write(`${response}\n`, settleDelivery)
+      } else {
+        settleDelivery()
       }
     }
 
@@ -215,6 +228,13 @@ export class UnixSocketTransport implements RpcTransport {
 
     this.messageHandler?.(rawMessage, reply, {
       signal: abortController.signal,
+      retainUntilDelivery: (release) => {
+        if (delivered) {
+          release()
+        } else {
+          retained.add(release)
+        }
+      },
       startKeepalive
     })
   }

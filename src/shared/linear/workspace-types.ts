@@ -31,6 +31,7 @@ export type LinearCollectionResult<T> = {
 }
 
 export type LinearConnectionStatus = {
+  mcpListPageRecoveryVersion?: 1
   connected: boolean
   viewer: LinearViewer | null
   workspaces?: LinearWorkspace[]

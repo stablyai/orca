@@ -1,3 +1,4 @@
+import type { LinearConnectionStatus } from '../../shared/linear/workspace-types'
 import type { LinearMcpIssueListRequest } from '../../shared/linear/agent-access'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
@@ -40,6 +41,29 @@ export async function dispatchRemoteLinearListIssues(
     updatedAt: optionalString(parsed.flags, 'updated-at'),
     includeArchived: parsed.flags.get('include-archived') === true,
     workspaceId: optionalString(parsed.flags, 'workspace')
+  }
+  const continuation = optionalString(parsed.flags, 'page-recovery')
+  if (continuation && (request.workspaceId !== 'all' || request.cursor)) {
+    throw new RemoteCliArgumentError(
+      'invalid_argument',
+      '--page-recovery requires --workspace all and cannot use --cursor'
+    )
+  }
+  if (request.workspaceId === 'all') {
+    const status = await dispatcher.dispatch({
+      id: 'linear-page-capability',
+      authToken: 'remote-cli',
+      method: 'linear.status',
+      params: {}
+    })
+    if (status.ok && (status.result as LinearConnectionStatus).mcpListPageRecoveryVersion === 1) {
+      request.pageRecovery = { version: 1, ...(continuation ? { continuation } : {}) }
+    } else if (continuation) {
+      throw new RemoteCliArgumentError(
+        'linear_list_concrete_workspace_required',
+        'This runtime does not support page recovery; restart concrete workspaces and reconcile by issue ID.'
+      )
+    }
   }
   return await dispatcher.dispatch({
     id: `remote-cli-${Date.now()}`,

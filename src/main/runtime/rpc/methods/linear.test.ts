@@ -130,17 +130,23 @@ describe('linear RPC methods', () => {
     expect(runtime.linearListIssues).toHaveBeenCalledWith(undefined, 5, 'workspace-1', {
       attributeFilter: undefined
     })
-    expect(runtime.linearMcpIssueList).toHaveBeenCalledWith({
-      team: 'ENG',
-      assignee: 'me',
-      cursor: 'next',
-      orderBy: 'updatedAt',
-      workspaceId: 'workspace-1'
-    })
-    expect(runtime.linearMcpIssueList).toHaveBeenCalledWith({
-      limit: 5,
-      workspaceId: 'workspace-1'
-    })
+    expect(runtime.linearMcpIssueList).toHaveBeenCalledWith(
+      {
+        team: 'ENG',
+        assignee: 'me',
+        cursor: 'next',
+        orderBy: 'updatedAt',
+        workspaceId: 'workspace-1'
+      },
+      { signal: undefined, retainUntilDelivery: undefined }
+    )
+    expect(runtime.linearMcpIssueList).toHaveBeenCalledWith(
+      {
+        limit: 5,
+        workspaceId: 'workspace-1'
+      },
+      { signal: undefined, retainUntilDelivery: undefined }
+    )
     expect(runtime.linearGetIssue).toHaveBeenCalledWith('issue-3', 'workspace-1')
     expect(runtime.linearCreateIssue).toHaveBeenCalledWith(
       'team-1',

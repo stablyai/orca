@@ -1,3 +1,4 @@
+import { linearListRecoveryInstructions } from '../shared/linear/list-recovery-format'
 import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
 import {
   matchAutomationOwnerConflict,
@@ -181,11 +182,14 @@ function nextStepsFromData(data: unknown): string[] {
     typeof data === 'object' &&
     Array.isArray((data as { nextSteps?: unknown }).nextSteps)
   ) {
-    return (data as { nextSteps: unknown[] }).nextSteps.filter(
-      (step): step is string => typeof step === 'string'
-    )
+    return [
+      ...(data as { nextSteps: unknown[] }).nextSteps.filter(
+        (step): step is string => typeof step === 'string'
+      ),
+      ...linearListRecoveryInstructions(data)
+    ]
   }
-  return []
+  return linearListRecoveryInstructions(data)
 }
 
 function localCliErrorData(error: unknown, context: CliErrorContext): unknown {

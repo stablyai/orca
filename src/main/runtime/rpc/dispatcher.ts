@@ -1,3 +1,4 @@
+import { boundLinearListReply, rejectOversizedLinearListRequest } from './linear-list-reply-budget'
 import {
   buildRegistry,
   isStreamingMethod,
@@ -24,7 +25,11 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
 
-export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
+export type DispatcherOptions = {
+  runtime: OrcaRuntimeService
+  methods?: readonly RpcAnyMethod[]
+  linearListDelivery?: RpcDispatchStreamingOptions
+}
 
 type DispatchCallOptions = RpcDispatchStreamingOptions
 
@@ -35,7 +40,10 @@ export class RpcDispatcher {
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
   private readonly streamingDispatcher: RpcStreamingDispatcher
 
-  constructor({ runtime, methods = ALL_RPC_METHODS }: DispatcherOptions) {
+  private readonly linearListDelivery?: RpcDispatchStreamingOptions
+
+  constructor({ runtime, methods = ALL_RPC_METHODS, linearListDelivery }: DispatcherOptions) {
+    this.linearListDelivery = linearListDelivery
     this.runtime = runtime
     this.registry = buildRegistry(methods)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
@@ -50,6 +58,11 @@ export class RpcDispatcher {
   }
 
   async dispatch(request: RpcRequest, options?: DispatchCallOptions): Promise<RpcResponse> {
+    options ??= this.linearListDelivery
+    const rejected = rejectOversizedLinearListRequest(request)
+    if (rejected) {
+      return rejected
+    }
     const meta = this.meta()
     const method = this.registry.get(request.method)
     if (!method) {
@@ -68,7 +81,7 @@ export class RpcDispatcher {
 
     const parsedParams = parseRpcRequestParams(request, method, meta)
     if (parsedParams.error) {
-      return parsedParams.error
+      return boundLinearListReply(request, parsedParams.error)
     }
 
     if (isStreamingMethod(method)) {
@@ -92,6 +105,7 @@ export class RpcDispatcher {
         context: {
           runtime: this.runtime,
           signal: options?.signal,
+          retainUntilDelivery: options?.retainUntilDelivery,
           connectionId: options?.connectionId,
           requestId: request.id,
           clientId: options?.clientId,
@@ -104,12 +118,12 @@ export class RpcDispatcher {
         orchestrationMutations: this.orchestrationMutations,
         legacyOrchestration: this.legacyOrchestration
       })
-      return successResponse(request.id, meta, result)
+      return boundLinearListReply(request, successResponse(request.id, meta, result))
     } catch (error) {
       if (request.method.startsWith('emulator.')) {
         emulatorProbeError(`rpc ${request.method}`, error, { params: request.params })
       }
-      return mapDispatcherError(request, meta, error)
+      return boundLinearListReply(request, mapDispatcherError(request, meta, error))
     }
   }
 

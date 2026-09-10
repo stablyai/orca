@@ -1,3 +1,4 @@
+import { linearListFlagHelp } from './linear-list-flag-help'
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
@@ -73,6 +74,10 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  const linearListHelp = command === 'linear list-issues' ? linearListFlagHelp(flag) : undefined
+  if (linearListHelp) {
+    return linearListHelp
+  }
   const skillsHelp = formatSkillsCommandFlagHelp(command, flag)
   if (skillsHelp) {
     return skillsHelp
@@ -92,15 +97,6 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear search' && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
-  if (command === 'linear list-issues' && flag === 'cursor') {
-    return '--cursor <cursor>      Opaque cursor from a previous list-issues page; issued cursors bind the workspace, raw Linear cursors need --workspace'
-  }
-  if (command === 'linear list-issues' && flag === 'priority') {
-    return '--priority <0-4>       0=none, 1=urgent, 2=high, 3=medium, 4=low'
-  }
-  if (command === 'linear list-issues' && flag === 'limit') {
-    return '--limit <n>            Max issues to return; omit to return every match'
-  }
   if (command === 'artifacts list' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
   }
@@ -118,9 +114,6 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   }
   if (command === 'orchestration worker-list' && flag === 'include-remote') {
     return '--include-remote      Include connected-server worker observations'
-  }
-  if (command === 'linear list-issues' && flag === 'workspace') {
-    return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
   if (command.startsWith('linear ') && flag === 'workspace') {
     return '--workspace <id>      Connected Linear workspace id'

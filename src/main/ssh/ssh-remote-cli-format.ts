@@ -1,3 +1,4 @@
+import { linearListRecoveryInstructions } from '../../shared/linear/list-recovery-format'
 import type { CliStatusResult } from '../../shared/runtime-types'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { formatRemoteLinearCli } from './ssh-remote-linear-output'
@@ -23,6 +24,7 @@ function formatRemoteCliError(error: { message: string; data?: unknown }): strin
     isRecord(error.data) && Array.isArray(error.data.nextSteps)
       ? error.data.nextSteps.filter((step): step is string => typeof step === 'string')
       : []
+  nextSteps.push(...linearListRecoveryInstructions(error.data))
   if (nextSteps.length === 0) {
     return error.message
   }

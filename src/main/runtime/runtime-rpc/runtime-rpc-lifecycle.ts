@@ -1,3 +1,5 @@
+import { isLinearPageRequest, linearListDeliveryFailure } from '../rpc/linear-list-reply-budget'
+import type { RpcRequest } from '../rpc/core'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../rpc/transport'
@@ -50,6 +52,15 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           reply(JSON.stringify(response))
         })
         .catch((error) => {
+          try {
+            const request = JSON.parse(msg) as RpcRequest
+            if (isLinearPageRequest(request)) {
+              reply(JSON.stringify(linearListDeliveryFailure(request)))
+              return
+            }
+          } catch {
+            /* Invalid requests use the ordinary correlation fallback. */
+          }
           const message = error instanceof Error ? error.message : String(error)
           // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
           let id = 'unknown'

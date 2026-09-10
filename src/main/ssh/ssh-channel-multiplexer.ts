@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: the SSH relay protocol state machine keeps
    request, notification, keepalive, and cancellation semantics paired. */
+import { LinearListSshDelivery, type LinearListDeliveryContext } from './linear-list-ssh-delivery'
 import {
   FrameDecoder,
   MessageType,
@@ -39,7 +40,10 @@ export type SshMultiplexerRequestOptions = {
 
 export type NotificationHandler = (method: string, params: Record<string, unknown>) => void
 export type MethodNotificationHandler = (params: Record<string, unknown>) => void
-export type RequestHandler = (params: Record<string, unknown>) => unknown
+export type RequestHandler = (
+  params: Record<string, unknown>,
+  delivery?: LinearListDeliveryContext
+) => unknown
 
 export type MultiplexerDisposeReason = 'shutdown' | 'connection_lost'
 
@@ -499,15 +503,29 @@ export class SshChannelMultiplexer {
       return
     }
 
+    const delivery = LinearListSshDelivery.forRequest(msg)
+    const unsubscribe = delivery ? this.onDispose(delivery.abort) : undefined
+    const finish = (): void => {
+      unsubscribe?.()
+      delivery?.finish()
+    }
+    const send = (response: JsonRpcResponse): void => {
+      try {
+        this.sendMessage(delivery ? delivery.bound(response) : response, finish)
+      } catch (error) {
+        finish()
+        throw error
+      }
+    }
     try {
-      const result = await handler(msg.params ?? {})
-      this.sendMessage({
+      const result = await handler(msg.params ?? {}, delivery)
+      send({
         jsonrpc: '2.0',
         id: msg.id,
         result: result ?? null
       })
     } catch (err) {
-      this.sendMessage({
+      send({
         jsonrpc: '2.0',
         id: msg.id,
         error: {

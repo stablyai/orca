@@ -6,7 +6,9 @@ import { createRequire } from 'node:module'
 // an eager module import and satisfies the no-`import()`-type lint rule.
 export type LinearSdkModule = {
   LinearClient: new (options: {
-    apiKey: string
+    apiKey?: string
+    accessToken?: string
+    apiUrl?: string
     headers?: Record<string, string>
     signal?: AbortSignal
   }) => LinearClient

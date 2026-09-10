@@ -34,7 +34,16 @@ export const LINEAR_ERROR_CODES = [
   'linear_permission_denied',
   'linear_auth_expired',
   'linear_network_error',
-  'linear_partial'
+  'linear_partial',
+  'linear_list_record_too_large',
+  'linear_list_acquisition_too_large',
+  'linear_list_capacity',
+  'linear_list_metadata_capacity',
+  'linear_list_invalid_response',
+  'linear_list_cursor_cycle',
+  'linear_list_empty_page',
+  'linear_list_stale_recovery',
+  'linear_list_concrete_workspace_required'
 ] as const
 
 export type LinearErrorCode = (typeof LINEAR_ERROR_CODES)[number]

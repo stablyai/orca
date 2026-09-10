@@ -196,9 +196,12 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
     }
   }
 
-  async linearMcpIssueList(params: LinearMcpIssueListRequest): Promise<LinearMcpIssueListResult> {
+  async linearMcpIssueList(
+    params: LinearMcpIssueListRequest,
+    options: { signal?: AbortSignal; retainUntilDelivery?: (release: () => void) => void } = {}
+  ): Promise<LinearMcpIssueListResult> {
     try {
-      return await listMcpIssues(params)
+      return await listMcpIssues(params, options)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }

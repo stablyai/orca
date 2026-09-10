@@ -1,3 +1,4 @@
+import { invalidateLinearAccountReads } from './linear-account-read-lifetime'
 import { getSecretStore } from '../../shared/secret-store'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import {
@@ -44,6 +45,7 @@ function writeEncryptedToken(path: string, apiKey: string): void {
 }
 
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
+  invalidateLinearAccountReads(workspaceId)
   ensureOrcaDir()
   if (workspaceId !== LEGACY_WORKSPACE_ID) {
     ensureWorkspaceTokenDir()
@@ -93,6 +95,7 @@ export function loadToken(options: { force?: boolean; workspaceId?: string } = {
 }
 
 export function clearTokenFile(workspaceId: string): void {
+  invalidateLinearAccountReads(workspaceId)
   forgetCachedToken(workspaceId)
   try {
     unlinkSync(getWorkspaceTokenPath(workspaceId))

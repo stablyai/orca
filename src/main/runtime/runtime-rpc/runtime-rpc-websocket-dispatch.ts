@@ -101,10 +101,24 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
     const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
 
     // Why: older pairings may lack scope metadata, so stamp the authenticated scope onto status.get.
+    const retained = new Set<() => void>()
+    const settleDelivery = (): void => {
+      for (const release of retained) {
+        release()
+      }
+      retained.clear()
+    }
+    const replyWithTransfer = (response: string): void => {
+      try {
+        reply(response)
+      } finally {
+        settleDelivery()
+      }
+    }
     const replyForRequest =
       request.method === 'status.get'
-        ? (response: string): void => reply(injectDeviceScope(response, device.scope))
-        : reply
+        ? (response: string): void => replyWithTransfer(injectDeviceScope(response, device.scope))
+        : replyWithTransfer
 
     const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
     const pairingProvider = this.mobileRelayPairingProvider
@@ -149,6 +163,9 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
             : undefined,
         pairing: pairingContext,
         signal: abortRegistration?.signal,
+        retainUntilDelivery: (release) => {
+          retained.add(release)
+        },
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler),
@@ -156,6 +173,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
           this.registerBinaryMessageHandler(connectionId, handler)
       })
     } finally {
+      settleDelivery()
       abortRegistration?.dispose()
       this.releaseLongPoll(longPoll, device.deviceId)
     }

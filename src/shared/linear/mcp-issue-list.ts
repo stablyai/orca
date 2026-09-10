@@ -8,6 +8,7 @@ export type LinearMcpIssueListRequest = {
   limit?: number
   query?: string
   state?: string
+  pageRecovery?: { version: 1; continuation?: string }
   cursor?: string
   orderBy?: 'createdAt' | 'updatedAt'
   project?: string
@@ -28,11 +29,20 @@ export type LinearMcpIssueListResult = {
   // must fall back to meta rather than read absence as "complete".
   truncated?: boolean
   meta: {
-    // null when the caller set no --limit, i.e. every matching issue was read.
+    // null when the caller set no --limit, capacity/time bounds still apply.
     limit: number | null
     returned: number
     hasMore: boolean
     nextCursor?: string
+    pageRecovery?: {
+      version: 1
+      continuation: string
+      ordering: 'admitted_batch'
+      consistency: 'best_effort'
+      stopReason?: string
+    }
+    concreteRecovery?: { workspaceId: string; cursor?: string; done: boolean }[]
+    omittedWorkspaceErrors?: number
     orderBy: 'createdAt' | 'updatedAt'
     workspaceId?: (string & {}) | 'all'
     partial: boolean
@@ -40,6 +50,7 @@ export type LinearMcpIssueListResult = {
       workspace: LinearWorkspaceCandidate
       code: LinearErrorCode
       message: string
+      data?: unknown
     }[]
   }
 }

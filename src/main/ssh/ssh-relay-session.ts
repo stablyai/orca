@@ -1433,7 +1433,7 @@ export class SshRelaySession {
   }
 
   private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer, connectionIncarnation: string): void {
-    mux.onRequest('orca.cli', async (params) => {
+    mux.onRequest('orca.cli', async (params, delivery) => {
       if (!this.runtime) {
         throw new Error('Orca runtime is unavailable')
       }
@@ -1465,7 +1465,8 @@ export class SshRelaySession {
           env,
           ...(stdin !== undefined ? { stdin } : {}),
           ...(artifactInput ? { artifactInput } : {}),
-          runtimeAuthority
+          runtimeAuthority,
+          delivery
         })
       } finally {
         this.activeCompatibilityAttachmentIds.delete(runtimeAuthority.attachmentId)

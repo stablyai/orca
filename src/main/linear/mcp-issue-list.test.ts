@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const rawRequest = vi.fn()
 const getClients = vi.fn()
@@ -21,12 +21,14 @@ const clientEntry = (
   request: ReturnType<typeof vi.fn> = rawRequest
 ) => ({
   workspace: workspace(id, organizationName),
-  client: { client: { rawRequest: request } }
+  apiKey: id,
+  client: { options: { apiKey: id }, client: { rawRequest: request } }
 })
 
 vi.mock('./linear-request-concurrency', () => ({
   acquire,
-  release
+  release,
+  reserveLinearListing: () => () => {}
 }))
 
 vi.mock('./linear-token-store', () => ({
@@ -40,11 +42,21 @@ vi.mock('./client', () => ({
 }))
 
 describe('MCP-compatible Linear issue listing', () => {
+  afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
     vi.clearAllMocks()
     const entry = clientEntry('workspace-1', 'Acme')
     getClients.mockReturnValue([entry])
     getStatus.mockReturnValue({ workspaces: [entry.workspace] })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url, options) => {
+        const { query, variables } = JSON.parse(options.body)
+        const selected = getClients(options.headers.get('Authorization'))[0]
+        const body = await selected.client.client.rawRequest(query, variables)
+        return body instanceof Response ? body : Response.json(body)
+      })
+    )
   })
 
   it('passes rich filters, ordering, archive scope, and cursor to Linear', async () => {
@@ -157,7 +169,7 @@ describe('MCP-compatible Linear issue listing', () => {
     })
   })
 
-  it('fans out one bounded provider request per workspace concurrently', async () => {
+  it('takes one provider page at a time and sorts the admitted batch', async () => {
     const firstRequest = vi.fn()
     const secondRequest = vi.fn()
     let resolveFirst: ((value: unknown) => void) | undefined
@@ -182,10 +194,10 @@ describe('MCP-compatible Linear issue listing', () => {
     })
     const { listMcpIssues } = await import('./mcp-issue-list')
 
-    const pending = listMcpIssues({ limit: 1, workspaceId: 'all' })
+    const pending = listMcpIssues({ limit: 2, workspaceId: 'all', pageRecovery: { version: 1 } })
     await vi.waitFor(() => {
       expect(firstRequest).toHaveBeenCalledTimes(1)
-      expect(secondRequest).toHaveBeenCalledTimes(1)
+      expect(secondRequest).not.toHaveBeenCalled()
     })
     resolveFirst?.({
       data: {
@@ -195,6 +207,7 @@ describe('MCP-compatible Linear issue listing', () => {
         }
       }
     })
+    await vi.waitFor(() => expect(secondRequest).toHaveBeenCalledTimes(1))
     resolveSecond?.({
       data: {
         issues: {
@@ -205,10 +218,10 @@ describe('MCP-compatible Linear issue listing', () => {
     })
 
     const result = await pending
-    expect(result.issues.map((issue) => issue.identifier)).toEqual(['OPS-1'])
-    expect(result.meta).toMatchObject({ returned: 1, hasMore: true, partial: false })
+    expect(result.issues.map((issue) => issue.identifier)).toEqual(['OPS-1', 'ENG-1'])
+    expect(result.meta).toMatchObject({ returned: 2, hasMore: false, partial: false })
     expect(result.meta.nextCursor).toBeUndefined()
-    expect(firstRequest.mock.calls[0]?.[1]).toMatchObject({ first: 1 })
+    expect(firstRequest.mock.calls[0]?.[1]).toMatchObject({ first: 2 })
     expect(secondRequest.mock.calls[0]?.[1]).toMatchObject({ first: 1 })
   })
 
@@ -221,7 +234,7 @@ describe('MCP-compatible Linear issue listing', () => {
         }
       }
     })
-    const failedRequest = vi.fn().mockRejectedValue(new Error('429 rate limit exceeded'))
+    const failedRequest = vi.fn().mockResolvedValue(new Response('rate limited', { status: 429 }))
     const healthy = clientEntry('workspace-1', 'Acme', healthyRequest)
     const failed = clientEntry('workspace-2', 'Beta', failedRequest)
     getStatus.mockReturnValue({ workspaces: [healthy.workspace, failed.workspace] })
@@ -236,15 +249,15 @@ describe('MCP-compatible Linear issue listing', () => {
     })
     const { listMcpIssues } = await import('./mcp-issue-list')
 
-    const result = await listMcpIssues({ workspaceId: 'all' })
+    const result = await listMcpIssues({ workspaceId: 'all', pageRecovery: { version: 1 } })
 
     expect(result.issues.map((issue) => issue.identifier)).toEqual(['ENG-1'])
     expect(result.meta).toMatchObject({ partial: true, returned: 1 })
-    expect(result.meta.workspaceErrors).toEqual([
+    expect(result.meta.workspaceErrors).toMatchObject([
       {
         workspace: { id: 'workspace-2', name: 'Beta' },
         code: 'linear_rate_limited',
-        message: '429 rate limit exceeded'
+        message: 'Linear provider request failed (HTTP 429).'
       }
     ])
   })
@@ -272,7 +285,11 @@ describe('MCP-compatible Linear issue listing', () => {
     await expect(listMcpIssues({ cursor: 'next' })).rejects.toMatchObject({
       code: 'linear_invalid_workspace'
     })
-    const result = await listMcpIssues({ workspaceId: 'all', limit: 1 })
+    const result = await listMcpIssues({
+      workspaceId: 'all',
+      limit: 1,
+      pageRecovery: { version: 1 }
+    })
 
     expect(result.meta).toMatchObject({ hasMore: true, workspaceId: 'all' })
     expect(result.meta.nextCursor).toBeUndefined()

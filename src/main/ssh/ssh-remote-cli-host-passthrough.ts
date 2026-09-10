@@ -1,3 +1,4 @@
+import type { LinearListDeliveryContext } from './linear-list-ssh-delivery'
 // The SSH shim runs the bundled CLI so remote shells get the full command surface.
 import { app } from 'electron'
 import { spawn as nodeSpawn } from 'node:child_process'
@@ -27,6 +28,7 @@ export type SshCliRuntimeAuthority = {
 }
 
 export type RemoteOrcaCliRequest = {
+  delivery?: LinearListDeliveryContext
   argv: string[]
   cwd: string
   env: Record<string, string>

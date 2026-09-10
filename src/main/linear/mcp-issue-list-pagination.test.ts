@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const rawRequest = vi.fn()
 const getClients = vi.fn()
@@ -17,12 +17,14 @@ const workspace = (id: string, organizationName: string) => ({
 
 const clientEntry = (id: string, organizationName: string) => ({
   workspace: workspace(id, organizationName),
-  client: { client: { rawRequest } }
+  apiKey: id,
+  client: { options: { apiKey: id }, client: { rawRequest } }
 })
 
 vi.mock('./linear-request-concurrency', () => ({
   acquire,
-  release
+  release,
+  reserveLinearListing: () => () => {}
 }))
 
 vi.mock('./linear-token-store', () => ({
@@ -64,11 +66,19 @@ function pageResponse(
 }
 
 describe('list-issues pagination contract', () => {
+  afterEach(() => vi.unstubAllGlobals())
   beforeEach(() => {
     vi.clearAllMocks()
     const entry = clientEntry('workspace-1', 'Acme')
     getClients.mockReturnValue([entry])
     getStatus.mockReturnValue({ workspaces: [entry.workspace] })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url, options) => {
+        const { query, variables } = JSON.parse(options.body)
+        return Response.json(await rawRequest(query, variables))
+      })
+    )
   })
 
   it('marks a full page with more results as truncated and binds workspace into nextCursor', async () => {
@@ -231,11 +241,9 @@ describe('list-issues pagination contract', () => {
     )
     const { listMcpIssues } = await import('./mcp-issue-list')
 
-    const result = await listMcpIssues({})
+    await expect(listMcpIssues({})).rejects.toMatchObject({ code: 'linear_list_invalid_response' })
 
     expect(rawRequest).toHaveBeenCalledTimes(1)
-    expect(result.truncated).toBe(true)
-    expect(result.meta.nextCursor).toBeUndefined()
   })
 
   it('stops on the read budget and hands back a cursor instead of outliving the RPC', async () => {

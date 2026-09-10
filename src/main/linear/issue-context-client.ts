@@ -181,11 +181,17 @@ export async function withLinearRead<T>(
   try {
     return await read()
   } catch (error) {
-    if (isAuthError(error)) {
+    if (
+      isAuthError(error) ||
+      (error instanceof LinearAgentAccessError && error.code === 'linear_auth_expired')
+    ) {
       clearToken(entry.workspace.id)
       throw linearError('linear_auth_expired', 'Linear authentication expired.', {
         nextSteps: ['Reconnect Linear from Orca settings.']
       })
+    }
+    if (error instanceof LinearAgentAccessError) {
+      throw error
     }
     throw linearError(classifyLinearError(error), linearMessage(error))
   } finally {

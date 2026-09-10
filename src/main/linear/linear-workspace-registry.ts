@@ -1,3 +1,4 @@
+import { invalidateLinearAccountReads } from './linear-account-read-lifetime'
 // ── Token + workspace storage ────────────────────────────────────────
 // Why: tokens remain encrypted via safeStorage, while workspace metadata stays
 // plaintext so status checks can render connected accounts without decrypting
@@ -197,6 +198,7 @@ export function upsertWorkspace(
   workspace: LinearWorkspace,
   options: { select?: boolean } = {}
 ): void {
+  invalidateLinearAccountReads(workspace.id)
   const file = getWorkspaceFile()
   const current = file.workspaces.find((entry) => entry.id === workspace.id)
   const credentialRevision = (current?.credentialRevision ?? 0) + 1

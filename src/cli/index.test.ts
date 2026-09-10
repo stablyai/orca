@@ -450,7 +450,7 @@ describe('orca root help', () => {
     expect(listIssuesHelp).toContain('--workspace <id|all>  Connected Linear workspace id, or all')
     expect(listIssuesHelp).toContain('0=none, 1=urgent, 2=high, 3=medium, 4=low')
     expect(listIssuesHelp).toContain(
-      '--limit <n>            Max issues to return; omit to return every match'
+      '--limit <n>            Max issues to return; omit to read until exhaustion or a capacity/time stop'
     )
     expect(listIssuesHelp).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()

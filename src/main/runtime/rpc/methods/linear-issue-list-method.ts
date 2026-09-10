@@ -22,6 +22,10 @@ const McpListIssues = z
     query: OptionalString,
     state: OptionalString,
     cursor: OptionalString,
+    pageRecovery: z
+      .object({ version: z.literal(1), continuation: z.string().max(65536).optional() })
+      .strict()
+      .optional(),
     orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
     project: OptionalString,
     release: OptionalString,
@@ -41,9 +45,9 @@ const ListIssues = z.union([McpListIssues, LegacyListIssues])
 export const LINEAR_ISSUE_LIST_METHOD = defineMethod({
   name: 'linear.listIssues',
   params: ListIssues,
-  handler: async (params, { runtime }) => {
+  handler: async (params, { runtime, signal, retainUntilDelivery }) => {
     if (isMcpIssueListRequest(params)) {
-      return runtime.linearMcpIssueList(params)
+      return runtime.linearMcpIssueList(params, { signal, retainUntilDelivery })
     }
     return runtime.linearListIssues(params?.filter, params?.limit, params?.workspaceId, {
       attributeFilter: params?.attributeFilter
@@ -54,7 +58,8 @@ export const LINEAR_ISSUE_LIST_METHOD = defineMethod({
 export const LINEAR_MCP_ISSUE_LIST_METHOD = defineMethod({
   name: 'linear.mcpListIssues',
   params: McpListIssues,
-  handler: async (params, { runtime }) => runtime.linearMcpIssueList(params)
+  handler: async (params, { runtime, signal, retainUntilDelivery }) =>
+    runtime.linearMcpIssueList(params, { signal, retainUntilDelivery })
 })
 
 const MCP_ISSUE_LIST_KEYS = [
@@ -73,7 +78,8 @@ const MCP_ISSUE_LIST_KEYS = [
   'priority',
   'createdAt',
   'updatedAt',
-  'includeArchived'
+  'includeArchived',
+  'pageRecovery'
 ] as const
 
 function isMcpIssueListRequest(

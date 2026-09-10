@@ -289,7 +289,11 @@ function linearMcpListWarnings(result: LinearMcpIssueListResult): string {
   )
   if (result.meta.hasMore) {
     warnings.unshift(
-      `warning: more results available; next cursor: ${result.meta.nextCursor ?? 'n/a'}`
+      result.meta.concreteRecovery
+        ? 'warning: account roster changed; reconnect failed accounts and use --json concreteRecovery positions with the unchanged query, reconciling by workspace and issue ID'
+        : result.meta.pageRecovery
+          ? `warning: admitted batch; continue with --workspace all --page-recovery ${result.meta.pageRecovery.continuation}`
+          : `warning: more results available; next cursor: ${result.meta.nextCursor ?? 'n/a'}`
     )
   }
   return warnings.length > 0 ? `${warnings.join('\n')}\n` : ''

@@ -179,6 +179,7 @@ export function getStatus(): LinearConnectionStatus {
 
   return {
     connected: state.workspaces.length > 0,
+    mcpListPageRecoveryVersion: 1,
     viewer: activeWorkspace,
     workspaces: state.workspaces,
     activeWorkspaceId: state.activeWorkspaceId,

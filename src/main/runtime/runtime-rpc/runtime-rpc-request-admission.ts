@@ -1,3 +1,4 @@
+import { isLinearPageRequest } from '../rpc/linear-list-reply-budget'
 import type { RuntimeMetadata } from '../../../shared/runtime-bootstrap'
 import { writeRuntimeMetadata } from '../runtime-metadata'
 import type { RpcMessageContext } from '../rpc/transport'
@@ -36,7 +37,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
 
     try {
       return await this.dispatcher.dispatch(request, {
-        signal: longPoll ? context?.signal : undefined
+        signal: longPoll || isLinearPageRequest(request) ? context?.signal : undefined,
+        retainUntilDelivery: context?.retainUntilDelivery
       })
     } finally {
       this.releaseLongPoll(longPoll)

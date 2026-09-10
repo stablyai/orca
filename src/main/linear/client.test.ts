@@ -390,3 +390,30 @@ describe('Linear client workspace storage', () => {
     expect(() => linear.getClients('bad')).toThrow('Could not decrypt')
   })
 })
+
+describe('in-flight Linear account revision invalidation', () => {
+  it('cancels reads on every test/reconnect/upsert and disconnect while status reads preserve them', async () => {
+    const linear = await loadClientModule()
+    await linear.connect('token-alpha')
+    const { registerLinearAccountRead } = await import('./linear-account-read-lifetime')
+    const { upsertWorkspace } = await import('./linear-workspace-registry')
+    for (const mutate of [
+      () => linear.testConnection('org-alpha'),
+      () => linear.connect('token-alpha'),
+      () => upsertWorkspace(linear.getStatus().workspaces![0])
+    ]) {
+      const before = linear.getStatus().workspaces![0].credentialRevision!
+      const read = registerLinearAccountRead('org-alpha')
+      linear.getStatus()
+      expect(read.signal.aborted).toBe(false)
+      await mutate()
+      expect(read.signal.aborted).toBe(true)
+      expect(linear.getStatus().workspaces![0].credentialRevision).toBeGreaterThan(before)
+      read.dispose()
+    }
+    const read = registerLinearAccountRead('org-alpha')
+    linear.disconnect('org-alpha')
+    expect(read.signal.aborted).toBe(true)
+    read.dispose()
+  })
+})

@@ -1,3 +1,4 @@
+import type { LinearConnectionStatus } from '../../shared/linear/workspace-types'
 import type {
   LinearMcpIssueListRequest,
   LinearMcpIssueListResult
@@ -36,6 +37,24 @@ export const runLinearListIssues: CommandHandler = async ({ flags, client, json 
     updatedAt: getOptionalStringFlag(flags, 'updated-at'),
     includeArchived: flags.get('include-archived') === true,
     workspaceId: getOptionalStringFlag(flags, 'workspace')
+  }
+  const continuation = getOptionalStringFlag(flags, 'page-recovery')
+  if (continuation && (request.workspaceId !== 'all' || request.cursor)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--page-recovery requires --workspace all and cannot use --cursor'
+    )
+  }
+  if (request.workspaceId === 'all') {
+    const status = await client.call<LinearConnectionStatus>('linear.status', {})
+    if (status.result.mcpListPageRecoveryVersion === 1) {
+      request.pageRecovery = { version: 1, ...(continuation ? { continuation } : {}) }
+    } else if (continuation) {
+      throw new RuntimeClientError(
+        'linear_list_concrete_workspace_required',
+        'This runtime does not support page recovery; restart concrete workspaces and reconcile by issue ID.'
+      )
+    }
   }
   const response = await client.call<LinearMcpIssueListResult>('linear.mcpListIssues', request)
   if (!json) {
