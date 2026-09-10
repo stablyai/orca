@@ -66,7 +66,7 @@ describe('runtime status recheck', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.checkedAt).toBe(1)
   })
 
-  it('cancels on removal, capability loss, and null without probing again', async () => {
+  it('cancels on removal and capability loss without probing again', async () => {
     const getStatus = vi.fn()
     const store = createStore(getStatus)
     store.getState().setRuntimeEnvironmentStatus('env-a', {
@@ -148,7 +148,75 @@ describe('runtime status recheck', () => {
     })
   })
 
-  it('keeps setter side effects when a recheck discovers disconnection', async () => {
+  it('re-probes a host recorded unreachable until it answers again', async () => {
+    // A boot probe that failed while the host was asleep must not outlive the outage:
+    // nothing else re-asks, because the client-event subscription set is gated on a truthy status.
+    const getStatus = vi
+      .fn()
+      .mockResolvedValueOnce(unavailableResponse())
+      .mockResolvedValue(response(status('ready')))
+    const store = createStore(getStatus)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(getStatus).toHaveBeenCalledWith({
+      selector: 'env-a',
+      timeoutMs: 10_000,
+      observeOnly: true
+    })
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBeNull()
+
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(
+      store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.remoteControl
+    ).toMatchObject({ state: 'ready' })
+
+    const callsAtRecovery = getStatus.mock.calls.length
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(getStatus).toHaveBeenCalledTimes(callsAtRecovery)
+  })
+
+  it('does not re-toast while the ladder keeps confirming the same outage', async () => {
+    // The ladder republishes null on every failed retry; only a real truthy -> null
+    // transition is news, so the warning must not pop once per retry.
+    const getStatus = vi.fn().mockResolvedValue(unavailableResponse())
+    const store = createStore(getStatus)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
+    await vi.advanceTimersByTimeAsync(3_000 + 6_000 + 12_000 + 30_000)
+
+    expect(getStatus).toHaveBeenCalledTimes(4)
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('stops re-probing a manually disconnected host', async () => {
+    // The probe short-circuits locally for these, so retrying only burns a timer forever.
+    const getStatus = vi.fn().mockResolvedValue({
+      id: 'runtime.manualDisconnect',
+      ok: false,
+      error: {
+        code: 'runtime_manually_disconnected',
+        message: 'Runtime environment is manually disconnected.'
+      },
+      _meta: { runtimeId: 'rt' }
+    })
+    const store = createStore(getStatus)
+
+    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 1 })
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(getStatus).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(300_000)
+    expect(getStatus).toHaveBeenCalledOnce()
+  })
+
+  it('preserves a live verdict when an unverifiable probe cannot reach the host (#19647)', async () => {
+    // A failed status.get dials its own fresh socket, so its runtime_unavailable answer is
+    // unverifiable — the client could not ask. Nulling the recorded live status here would drop
+    // the environment out of the session-tabs mirror targets and dim its sidebar rows even though
+    // its established flows are still delivering. The verdict must survive; only its diagnostics
+    // are refreshed to reconnecting so the ladder keeps probing.
     const getStatus = vi.fn().mockResolvedValue({
       id: 'status.get',
       ok: false,
@@ -167,13 +235,45 @@ describe('runtime status recheck', () => {
 
     await vi.advanceTimersByTimeAsync(3_000)
 
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBeNull()
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.remoteControl).toMatchObject(
-      {
-        state: 'reconnecting'
-      }
-    )
-    expect(toast.warning).toHaveBeenCalledOnce()
+    const entry = store.getState().runtimeStatusByEnvironmentId.get('env-a')
+    expect(entry?.status).not.toBeNull()
+    expect(entry?.status?.remoteControl).toMatchObject({ state: 'reconnecting' })
+    // No truthy -> null transition, so the disconnect toast must not fire on an unverifiable probe.
+    expect(toast.warning).not.toHaveBeenCalled()
+  })
+
+  it('does not advance the connection generation when recovering from an unverifiable probe (#19647)', async () => {
+    // The double-teardown: nulling a live status retires the mirror once, and the null -> truthy
+    // recovery advances the connection generation, rebuilding it a second time. Preserving the
+    // verdict across the outage keeps the generation stable, so recovery is not a reconnect.
+    const getStatus = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'status.get',
+        ok: false,
+        error: {
+          code: 'runtime_unavailable',
+          message: 'offline',
+          data: { remoteControl: status('reconnecting').remoteControl }
+        },
+        _meta: { runtimeId: 'rt' }
+      })
+      .mockResolvedValue(response(status('ready')))
+    const store = createStore(getStatus)
+    store.getState().setRuntimeEnvironmentStatus('env-a', {
+      status: status('awaiting_ready'),
+      checkedAt: 1
+    })
+    const generationBefore = store
+      .getState()
+      .runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
+
+    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.advanceTimersByTimeAsync(6_000)
+
+    const entry = store.getState().runtimeStatusByEnvironmentId.get('env-a')
+    expect(entry?.status?.remoteControl).toMatchObject({ state: 'ready' })
+    expect(entry?.connectionGeneration).toBe(generationBefore)
   })
 })
 
@@ -210,6 +310,15 @@ function status(
       lastError: null
     }
   } as RuntimeStatus
+}
+
+function unavailableResponse() {
+  return {
+    id: 'status.get',
+    ok: false as const,
+    error: { code: 'runtime_unavailable', message: 'offline' },
+    _meta: { runtimeId: 'rt' }
+  }
 }
 
 function response(result: RuntimeStatus) {

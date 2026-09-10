@@ -97,3 +97,28 @@ export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): 
     state === 'connected' || state === 'runtime-unavailable' || state === 'workspace-window-closed'
   )
 }
+
+/**
+ * Only this verdict earns the destructive glyph. 'checking' and 'reconnecting' are
+ * unverifiable, not down, per docs/reference/ssh-execution-boundary.md.
+ */
+export function isDisconnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
+  return state === 'disconnected'
+}
+
+/** The same derivation, read straight off a recorded status entry. */
+export function runtimeHostConnectionStateForEntry(
+  entry:
+    | {
+        status: RuntimeStatus | null
+        remoteControl?: RuntimeStatus['remoteControl'] | null
+      }
+    | null
+    | undefined
+): RuntimeHostConnectionState {
+  return runtimeHostConnectionState({
+    hasStatusEntry: Boolean(entry),
+    status: entry?.status ?? null,
+    remoteControl: entry?.remoteControl ?? entry?.status?.remoteControl ?? null
+  })
+}

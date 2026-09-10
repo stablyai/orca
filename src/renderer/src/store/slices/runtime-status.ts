@@ -236,6 +236,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         get().runtimeEnvironments.some((environment) => environment.id === environmentId),
       getConnectionGeneration: () =>
         runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(environmentId),
+      getCurrentStatus: () => get().runtimeStatusByEnvironmentId.get(environmentId),
       publish: (entry) => get().setRuntimeEnvironmentStatus(environmentId, entry)
     })
     if (runtimeRestarted) {
@@ -299,6 +300,15 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (entry) => {
       if (entry.status === null && options?.publishUnreachable === false) {
         // Unverifiable, not exited: leave the cached verdict for the caller's retry to settle.
+        return
+      }
+      // A null entry here only ever comes from a failed status.get, which dials its own fresh
+      // socket — an unverifiable transport failure, never a host-answered "gone". Overwriting a
+      // recorded live verdict with it retires the host's session-tabs mirror and dims its sidebar
+      // rows for a host whose established flows are still delivering. Keep the live verdict; the
+      // status recheck ladder keeps probing and settles it on a real answer. A first-contact
+      // failure (no prior live status) still records null so host coverage completes. #19647
+      if (entry.status === null && get().runtimeStatusByEnvironmentId.get(environmentId)?.status) {
         return
       }
       // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null

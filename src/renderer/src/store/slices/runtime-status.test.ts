@@ -710,9 +710,8 @@ describe('runtime-status slice', () => {
     clearRuntimeCompatibilityCacheForTests()
   })
 
-  // Both directions of the failure-publication policy, from one failing probe. A user-initiated
-  // check publishes the outage it just observed; a caller holding live transport evidence must
-  // not, because status.get dials its own socket and its failure is unverifiable, not exited.
+  // First-contact failure (no recorded verdict yet): a default check records the outage so host
+  // coverage completes; a caller holding live transport evidence records nothing (unverifiable).
   it.each([
     { name: 'a user-initiated check', options: undefined, publishes: true },
     { name: 'publishUnreachable defaulted', options: {}, publishes: true },
@@ -721,22 +720,34 @@ describe('runtime-status slice', () => {
       options: { publishUnreachable: false },
       publishes: false
     }
-  ])('records null and returns false when a runtime refresh fails: $name', async (scenario) => {
-    const getStatus = vi.fn().mockRejectedValue(new Error('closed'))
-    stubRuntimeEnvironmentApi({ getStatus })
+  ])(
+    'records null and returns false when a first-contact refresh fails: $name',
+    async (scenario) => {
+      stubRuntimeEnvironmentApi({ getStatus: vi.fn().mockRejectedValue(new Error('closed')) })
+      const store = createSliceStore()
+
+      // The dial-answered contract the bridge's bounded retry chain reads is policy-independent.
+      const reachable = await store
+        .getState()
+        .refreshRuntimeEnvironmentStatus('env-a', undefined, scenario.options)
+      expect(reachable).toBe(false)
+      expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(
+        scenario.publishes ? null : undefined
+      )
+    }
+  )
+
+  // #19647: a failed status.get dials its own fresh socket, so a default (non-opted-out) refresh
+  // must not overwrite a recorded live verdict with null — that retires the host's session-tabs
+  // mirror and dims its still-live rows on a fault the client could not even ask through.
+  it('preserves a recorded live verdict when a default refresh probe fails', async () => {
+    stubRuntimeEnvironmentApi({ getStatus: vi.fn().mockRejectedValue(new Error('closed')) })
     const store = createSliceStore()
     const cached = makeStatus()
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: cached, checkedAt: 1 })
 
-    const reachable = await store
-      .getState()
-      .refreshRuntimeEnvironmentStatus('env-a', undefined, scenario.options)
-
-    // The dial-answered contract the bridge's bounded retry chain reads is policy-independent.
-    expect(reachable).toBe(false)
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(
-      scenario.publishes ? null : cached
-    )
+    expect(await store.getState().refreshRuntimeEnvironmentStatus('env-a')).toBe(false)
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(cached)
   })
 
   it('hydrates saved environments through the single-environment refresh path', async () => {

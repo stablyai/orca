@@ -17,6 +17,12 @@ export type RuntimeEndpointLinkFault = {
   /** ws:// endpoint that routes through this hop. */
   endpoint: string
   setMode: (mode: RuntimeLinkFaultMode) => void
+  /**
+   * Severs every established flow once, leaving `mode` in force for what dials next.
+   * With `stall-new` this is the link flap that puts the shared-control socket into
+   * `reconnecting` while its replacement dial hangs.
+   */
+  dropEstablished: () => number
   /** Connections accepted since the last reset — proves a dial actually reached the hop. */
   acceptedConnectionCount: () => number
   stalledConnectionCount: () => number
@@ -82,6 +88,16 @@ export async function startRuntimeEndpointLinkFault(
         }
         stalled.clear()
       }
+    },
+    dropEstablished: () => {
+      let dropped = 0
+      for (const socket of live) {
+        if (!stalled.has(socket)) {
+          socket.destroy()
+          dropped += 1
+        }
+      }
+      return dropped
     },
     acceptedConnectionCount: () => accepted,
     stalledConnectionCount: () => stalledTotal,
