@@ -5,6 +5,7 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,

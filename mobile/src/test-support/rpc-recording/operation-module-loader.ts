@@ -4,8 +4,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import * as React from 'react'
 import ts from 'typescript'
+import { OPERATION_MUTATIONS, type Mutation } from './operation-mutations'
 
-export type Mutation = 'acceptance' | 'order' | 'race'
+export type { Mutation }
 export type OperationModule = Record<string, (...args: any[]) => unknown>
 
 // Only mounting boundaries are substituted; every operation and projection is loaded from source.
@@ -97,27 +98,15 @@ export function operationModuleLoader(root: string, mutation?: Mutation) {
       cache.set(file, result)
       return result
     }
-    const replace = (before: string, after: string) => {
-      if (!source.includes(before)) {
-        throw new Error(`Mutant no longer applies: ${mutation}`)
+    const spec = mutation ? OPERATION_MUTATIONS[mutation] : undefined
+    if (spec && file.endsWith(spec.file)) {
+      // Counting occurrences, not replace calls: `replace` would silently take only the first.
+      const occurrences = source.split(spec.before).length - 1
+      if (occurrences !== 1) {
+        throw new Error(`Mutant anchor matched ${occurrences} sites, expected 1: ${mutation}`)
       }
-      source = source.replace(before, after)
+      source = source.replace(spec.before, spec.after)
       mutationCount++
-    }
-    if (mutation === 'race' && file.endsWith('use-mobile-native-chat-file-search.ts')) {
-      replace('!response.ok || generationRef.current !== generation', '!response.ok')
-    }
-    if (
-      mutation === 'acceptance' &&
-      file.endsWith('use-mobile-tasks-project-metadata-actions.tsx')
-    ) {
-      replace('if (result.ok === false)', 'if (result?.ok === false)')
-    }
-    if (mutation === 'order' && file.endsWith('use-mobile-tasks-item-detail-loading.tsx')) {
-      replace(
-        "{ timeoutMs: 30_000 }\n        ),\n        client.sendRequest(\n          'linear.issueComments'",
-        "{ timeoutMs: 30_000 }\n        ).then((response) => { if (!isSuccess(response)) throw new Error(response.error.message); return response }),\n        client.sendRequest(\n          'linear.issueComments'"
-      )
     }
     const exports: OperationModule = {}
     cache.set(file, exports)

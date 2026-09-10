@@ -47,11 +47,17 @@ export function captureArguments(args: readonly unknown[]): RecordedValue {
   }))
 }
 
-export function captureError(error: unknown): RecordedValue {
+/** `code` and `cause` are recorded only when present, so an error without them keeps three fields. */
+export function captureError(error: unknown, depth = 0): RecordedValue {
+  const detail = error as { code?: unknown; cause?: unknown }
+  const code = error instanceof Error ? detail.code : undefined
+  const cause = error instanceof Error && depth < 4 ? detail.cause : undefined
   return {
     category: error instanceof Error ? error.constructor.name : typeof error,
     message: error instanceof Error ? error.message : String(error),
-    isRpcDeliveryUnknown: isRpcDeliveryUnknown(error)
+    isRpcDeliveryUnknown: isRpcDeliveryUnknown(error),
+    ...(code === undefined ? {} : { code: captureValue(code) }),
+    ...(cause === undefined ? {} : { cause: captureError(cause, depth + 1) })
   }
 }
 

@@ -34,16 +34,30 @@ wire ids never identify completions. Timers only advance explicitly, and zero-ti
 flush due timers, promise continuations, and React work after every step. Date, performance,
 Math.random, Web Crypto random bytes/UUIDs, and transport ids are deterministic.
 
+### Time thresholds
+
+No observation carries a timestamp, so a threshold is only observable when a checkpoint sits on
+each side of it. Every scripted threshold is straddled rather than jumped: the 30 s request
+deadline by `{"advance":11000}`, `deadline-pending`, `{"advance":19000}` in both the sibling and
+interruption schedules, the 120 ms search debounce by 119 ms, `debounce-pending`, 1 ms in `b1`, and
+the 60 s repo-metadata cache TTL by 59 s, `cache-warm`, 1 s in `settings-repo-cache-expiry`.
+Shortening any of the three moves an observation into the earlier partition; lengthening one
+already failed, because a completion for a request that was never issued is refused.
+
 ## Golden schema
 
-Each file pins `runnerVersion`, `baseline`, `lockfileSha256` (mobile's lockfile), `platform`,
-`scenarioVersion`, `projectionVersion`, `goldenFormatVersion`, `operation`, `family`, and
-`namedDeltas`. Checkpoints
+Each file pins `runnerVersion`, `baseline`, `lockfileSha256` (mobile's lockfile),
+`recorderSha256`, `platform`, `scenarioVersion`, `projectionVersion`, `goldenFormatVersion`,
+`operation`, `family`, and `namedDeltas`. `recorderSha256` covers every non-markdown file under
+this directory plus `pilot-scenarios.json`, so the runner that produced a golden is as pinned as
+the product baseline: editing an adapter projection, a fixture or a scenario fails candidate mode
+on the header and forces a deliberate re-record. Checkpoints
 contain ordered sender calls and serialized physical application payloads, action and request
 settlements, projected state, and ordered external effects. Sender args have three positional
 slots; absent, undefined and null are distinct `$rpc` tags. Literal objects containing `$rpc`
 are escaped. Only object keys are sorted; array/effect order, options, budgets and errors stay
-observable. Errors contain category, message and `isRpcDeliveryUnknown`, never stack paths.
+observable. Errors contain category, message and `isRpcDeliveryUnknown`, never stack paths, plus
+`code` and a recursively captured `cause` when the thrown error carries them.
 Platform is provenance; candidate comparison does not require the same operating system.
 
 ### Value pool
@@ -78,7 +92,9 @@ Task-model projections record setter invocations and resulting model values, not
 
 ## Commands and checker contract
 
-Record only from unchanged pinned product sources and lockfile:
+Record only from unchanged pinned product sources and lockfile. The fence exempts only
+`mobile/src/test-support/rpc-recording`, which `recorderSha256` pins instead; every other
+test-support path is compared against the baseline like product code:
 
 ```sh
 ORCA_BACKGROUND_LAUNCH=1 RPC_FOUNDATION_RECORD=1 pnpm --dir mobile exec tsx scripts/rpc-recording.mts --record
@@ -94,12 +110,19 @@ checks that golden file bytes did not change. It throws for invalid inputs or fa
 success returns `{ok:true, stdout, stderr, scenarios, mutants}`. It never writes goldens.
 The checker is owned by lane A and was absent on this baseline.
 
-Set `RPC_FOUNDATION_REFERENCE_ROOT` to an archived `bcba08b3e4` source tree to additionally
-prove all three B-seeds differ in visible state from main; the reference checkout is never
-edited. Mutants replace one asserted source expression in memory, then run the same real
-hook. `runRecordingMutant` accepts a mutated mounting adapter, scheduler, baseline and optional
-observation projection, and returns `{verdict: "killed" | "survived", recording}`. The B-seed
-tests require the mutation to apply exactly once and change visible state to count as killed.
+Mutants are the defect evidence. `operation-mutations.ts` holds one anchored source edit per
+adapter family, and every family's recording must change visible state when its mutant is applied,
+which is what shows that family's `state()` projection observes the operation's real output.
+Anchors are asserted to match exactly one site, because a repeated anchor would half-apply while
+still counting as applied. Mutants replace the expression in memory, then run the same real hook.
+`runRecordingMutant` accepts a mutated mounting adapter, scheduler, baseline and optional
+observation projection, and returns `{verdict: "killed" | "survived", recording}`. Every mutant
+test requires the mutation to apply exactly once and change visible state to count as killed.
+
+Set `RPC_FOUNDATION_REFERENCE_ROOT` to an archived `bcba08b3e4` source tree to corroborate the
+three B-seed mutants against the real defect; the reference checkout is never edited. Each seed
+pins the archived tree's visible state, so a later refactor of those files cannot pass by merely
+differing from main.
 
 The original settings slice coverage maps nine host-RPC callers in
 `settings-recording-coverage.json`; device-preference entries are excluded by coordinator

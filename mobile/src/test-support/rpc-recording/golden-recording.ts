@@ -10,6 +10,7 @@ import {
   type InternedRecording,
   type ValuePool
 } from './golden-value-pool'
+import { recorderSha256 } from './recorder-digest'
 import type { Recording, RecordingScenario } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 
@@ -23,6 +24,7 @@ export type GoldenRecording = {
   runnerVersion: number
   baseline: string
   lockfileSha256: string
+  recorderSha256: string
   platform: string
   scenarioVersion: number
   projectionVersion: number
@@ -48,6 +50,7 @@ export function goldenRecording(
     lockfileSha256: createHash('sha256')
       .update(readFileSync(join(root, 'mobile/pnpm-lock.yaml')))
       .digest('hex'),
+    recorderSha256: recorderSha256(root),
     platform: process.platform,
     scenarioVersion: scenario.version,
     projectionVersion: 1,

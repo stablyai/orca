@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { ProcessSpec, ProcessResult } from '../../../../src/shared/child-process/process-spec'
+import { MUTATION_NAMES } from './operation-mutations'
 import { readScenarios } from './scenario-input'
 
 export type Step1ExitOptions = {
@@ -23,8 +24,7 @@ export async function runStep1Exit(options: Step1ExitOptions): Promise<{
   if (!Number.isInteger(options.determinismRuns) || options.determinismRuns < 2) {
     throw new Error('Step 1 requires at least two determinism runs')
   }
-  const supported = ['acceptance', 'order', 'race']
-  if (options.requireMutants.some((name) => !supported.includes(name))) {
+  if (options.requireMutants.some((name) => !MUTATION_NAMES.includes(name as never))) {
     throw new Error('Unknown required mutant')
   }
   const input = readScenarios(resolve(options.scenarios))

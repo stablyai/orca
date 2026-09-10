@@ -5,6 +5,7 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
@@ -1039,6 +1040,136 @@
         "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
       }
     ],
+    "8d323268159a": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ],
     "9124f267b7f2": [
       {
         "name": "repo.list#1",
@@ -1601,6 +1732,16 @@
         "id": "settings-repo-metadata-fulfilled.reject-peer-pending:settled",
         "observation": {
           "sender": "e4f081111321",
+          "payloads": "83ef5f7039bf",
+          "settlements": "d9339f09e8a7",
+          "state": "6134b73f18d0",
+          "effects": "3d1e2998e81c"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.timeout:deadline-pending",
+        "observation": {
+          "sender": "8d323268159a",
           "payloads": "83ef5f7039bf",
           "settlements": "d9339f09e8a7",
           "state": "6134b73f18d0",

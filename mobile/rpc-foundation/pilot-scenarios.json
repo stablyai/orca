@@ -22,7 +22,13 @@
           }
         },
         {
-          "advance": 120
+          "advance": 119
+        },
+        {
+          "checkpoint": "debounce-pending"
+        },
+        {
+          "advance": 1
         },
         {
           "complete": "files.searchPaths#1",
@@ -2169,7 +2175,17 @@
           "checkpoint": "cache-hit"
         },
         {
-          "advance": 60000
+          "advance": 59000
+        },
+        {
+          "action": "load-cached",
+          "id": "warm-query"
+        },
+        {
+          "checkpoint": "cache-warm"
+        },
+        {
+          "advance": 1000
         },
         {
           "action": "load-cached",

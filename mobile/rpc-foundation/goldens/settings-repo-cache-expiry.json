@@ -5,6 +5,7 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
@@ -400,6 +401,61 @@
         ]
       }
     ],
+    "41cc01615a00": {
+      "mount": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "cached-query": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "warm-query": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "4ddeef13a71d": {
+      "mount": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "cached-query": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "warm-query": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "expired-query": {
+        "status": "pending"
+      }
+    },
     "55d9d2103270": {
       "mount": {
         "status": "fulfilled",
@@ -577,29 +633,6 @@
         }
       }
     ],
-    "a25d7fa96042": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "load": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "cached-query": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "expired-query": {
-        "status": "pending"
-      }
-    },
     "cb0c60728eb4": {
       "mount": {
         "status": "fulfilled",
@@ -701,11 +734,21 @@
         }
       },
       {
+        "id": "cache-warm",
+        "observation": {
+          "sender": "17b91aa59878",
+          "payloads": "83ef5f7039bf",
+          "settlements": "41cc01615a00",
+          "state": "071880b671a1",
+          "effects": "ec7bb9cef277"
+        }
+      },
+      {
         "id": "cache-expired",
         "observation": {
           "sender": "1172c375aeee",
           "payloads": "26ce47c562c3",
-          "settlements": "a25d7fa96042",
+          "settlements": "4ddeef13a71d",
           "state": "071880b671a1",
           "effects": "ec7bb9cef277"
         }

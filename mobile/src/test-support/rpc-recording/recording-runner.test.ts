@@ -1,10 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
 import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { describe, expect, it } from 'vitest'
-import { captureArguments, captureValue } from './recording-values'
+import { captureArguments, captureError, captureValue } from './recording-values'
+import { RECORDER_DIRECTORY, recorderSha256 } from './recorder-digest'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import {
@@ -216,6 +217,58 @@ describe('recording boundaries', () => {
     ).toThrow('diverges from the base')
   })
 
+  it('records an error code and cause, and omits both when the error carries neither', () => {
+    expect(captureError(new Error('plain'))).toEqual({
+      category: 'Error',
+      message: 'plain',
+      isRpcDeliveryUnknown: false
+    })
+    const detailed = Object.assign(new TypeError('outer'), {
+      code: 'refused',
+      cause: new Error('inner')
+    })
+    expect(captureError(detailed)).toMatchObject({
+      code: 'refused',
+      cause: { category: 'Error', message: 'inner' }
+    })
+  })
+
+  it('digests every executable recorder input and ignores prose', () => {
+    const root = mkdtempSync(join(tmpdir(), 'rpc-recorder-'))
+    try {
+      const directory = join(root, RECORDER_DIRECTORY)
+      mkdirSync(directory, { recursive: true })
+      mkdirSync(join(root, 'mobile/rpc-foundation'), { recursive: true })
+      writeFileSync(join(root, 'mobile/rpc-foundation/pilot-scenarios.json'), '{}')
+      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 1')
+      const original = recorderSha256(root)
+      writeFileSync(join(directory, 'README.md'), 'prose')
+      expect(recorderSha256(join(root, '.'))).toBe(original)
+      writeFileSync(join(directory, 'runner.ts'), 'export const runner = 2')
+      expect(recorderSha256(join(root, './'))).not.toBe(original)
+    } finally {
+      rmSync(root, { recursive: true })
+    }
+  })
+
+  it('refuses a mutation anchor that matches more than once', () => {
+    const root = mkdtempSync(join(tmpdir(), 'rpc-mutant-'))
+    try {
+      const anchor = 'const overrides = result?.settings?.prBotAuthorOverrides'
+      mkdirSync(join(root, 'mod'), { recursive: true })
+      writeFileSync(
+        join(root, 'mod/use-pr-bot-author-overrides.ts'),
+        `const result = {} as { settings?: { prBotAuthorOverrides?: unknown } }\nexport function first() {\n  ${anchor}\n  return overrides\n}\nexport function second() {\n  ${anchor}\n  return overrides\n}\n`
+      )
+      const loader = operationModuleLoader(root, 'bot-overrides-envelope')
+      expect(() => loader.load('mod/use-pr-bot-author-overrides.ts')).toThrow(
+        'matched 2 sites, expected 1'
+      )
+    } finally {
+      rmSync(root, { recursive: true })
+    }
+  })
+
   it('keeps absent and explicit undefined replies in separate matrix partitions', () => {
     const rows = replyPartitions({ settings: {} }, [['settings']])
     const absent = rows.find((row) => row.id === 'result-absent')!
@@ -243,6 +296,7 @@ function sampleGolden(id: string): GoldenRecording {
     runnerVersion: 1,
     baseline: 'a'.repeat(40),
     lockfileSha256: 'b'.repeat(64),
+    recorderSha256: 'c'.repeat(64),
     platform: process.platform,
     scenarioVersion: 1,
     projectionVersion: 1,

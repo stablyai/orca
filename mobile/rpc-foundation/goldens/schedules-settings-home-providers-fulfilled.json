@@ -5,6 +5,7 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
@@ -291,6 +292,80 @@
       }
     ],
     "4f53cda18c2b": [],
+    "5871e7f00cdb": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ],
     "79b8c1b0d1d1": {
       "host-1": ["github"]
     },
@@ -1050,6 +1125,16 @@
           "settlements": "e0a7980f2ddc",
           "state": "79b8c1b0d1d1",
           "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.timeout:deadline-pending",
+        "observation": {
+          "sender": "5871e7f00cdb",
+          "payloads": "13d58e42ea1c",
+          "settlements": "e0a7980f2ddc",
+          "state": "44136fa355b3",
+          "effects": "4f53cda18c2b"
         }
       },
       {

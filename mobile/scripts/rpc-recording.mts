@@ -20,7 +20,8 @@ const baseline = await runProcess({
     'mobile/src',
     'src/shared',
     'mobile/pnpm-lock.yaml',
-    ':!mobile/src/test-support'
+    // Only the recorder is exempt, and every golden pins `recorderSha256` over it instead.
+    ':!mobile/src/test-support/rpc-recording'
   ],
   cwd: root
 })

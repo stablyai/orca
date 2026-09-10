@@ -5,6 +5,7 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
@@ -1180,6 +1181,149 @@
         "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
       }
     ],
+    "d0bb33de375c": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        }
+      },
+      {
+        "name": "folderWorkspace.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "folderWorkspace.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        }
+      },
+      {
+        "name": "projectGroup.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "projectGroup.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "worktree.ps#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.ps"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 10000
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ],
     "d84bbd1e6a18": [
       {
         "name": "repo.list#1",
@@ -1592,6 +1736,16 @@
         "id": "settings-resume-metadata-fulfilled.reject-peer-pending:settled",
         "observation": {
           "sender": "d84bbd1e6a18",
+          "payloads": "979c190bfe01",
+          "settlements": "27ad71a245af",
+          "state": "44136fa355b3",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.timeout:deadline-pending",
+        "observation": {
+          "sender": "d0bb33de375c",
           "payloads": "979c190bfe01",
           "settlements": "27ad71a245af",
           "state": "44136fa355b3",
