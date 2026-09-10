@@ -5,8 +5,9 @@ import ts from 'typescript'
 import { emit, files, git, option, root } from './rpc-artifact-io.mts'
 
 const prHead = await git('rev-parse', `${option('pr-head')}^{commit}`)
-const baseline = await git('rev-parse', 'e80fae0c4d^{commit}')
-const diff = await git('diff', '--name-only', baseline, prHead, '--', 'mobile')
+const prDiffBase = await git('rev-parse', 'e80fae0c4d^{commit}')
+const mainBaseline = await git('rev-parse', 'aac38d698f^{commit}')
+const diff = await git('diff', '--name-only', prDiffBase, prHead, '--', 'mobile')
 const changed = diff.split('\n').filter((file) => /\.[jt]sx?$/.test(file) && !/\.test\./.test(file))
 const hash = (text: string): string => createHash('sha256').update(text).digest('hex')
 const rows: unknown[] = []
@@ -60,7 +61,7 @@ function inventory(file: string, source: string, revision: string, settingsOnly:
           ts.forEachChild(part, evidence)
         }
         evidence(owner)
-        const id = `${revision === baseline ? 'main' : 'pr19675'}:${file}:${symbol}:${method}:${line}`
+        const id = `${revision === mainBaseline ? 'main' : 'pr19675'}:${file}:${symbol}:${method}:${line}`
         rows.push({
           id,
           file,
@@ -69,6 +70,8 @@ function inventory(file: string, source: string, revision: string, settingsOnly:
           revision,
           method,
           kind: literal ? 'host-rpc' : 'device-preference',
+          recordable: Boolean(literal),
+          ...(!literal ? { reason: 'local device storage, no host RPC' } : {}),
           options: literal
             ? node.arguments
                 .slice(node.arguments.indexOf(literal) + 2)
@@ -95,7 +98,7 @@ for (const file of [...files(join(root, 'mobile/src')), ...files(join(root, 'mob
   (file) => /\.[jt]sx?$/.test(file) && !/\.test\.|\.generated\./.test(file)
 )) {
   const source = readFileSync(join(root, file), 'utf8')
-  if (/['"]settings\.(get|set)['"]/.test(source)) inventory(file, source, baseline, true)
+  if (/['"]settings\.(get|set)['"]/.test(source)) inventory(file, source, mainBaseline, true)
 }
 const pending = changed.filter(
   (file) =>
@@ -134,7 +137,8 @@ if (!rows.length) throw new Error('Empty settings census')
 emit('settings-19675', {
   schemaVersion: 1,
   prHead,
-  baseline,
+  prDiffBase,
+  mainBaseline,
   diffSha256: hash(diff),
   changedFiles: changed,
   files: sources,

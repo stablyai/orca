@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
   "prHead": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
-  "baseline": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+  "prDiffBase": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+  "mainBaseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "diffSha256": "c368b849e83867b1c7712ef4be9d1412df8b969756caee79ac85e3478119294a",
   "changedFiles": [
     "mobile/app/about.tsx",
@@ -218,47 +219,47 @@
   "files": [
     {
       "file": "mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "bcaa4a01f302d7f874035664c1ff0afba4e00deae534ffc3920c60910a10b839"
     },
     {
       "file": "mobile/src/components/use-new-workspace-create-submit.ts",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "623620f8b3adcd99f128d3f4c93d88e59d20956308c3a448aad6ed1eb4cb1a40"
     },
     {
       "file": "mobile/src/components/use-new-workspace-runtime-context.ts",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "0e53eb187f37dafa752753e347d2ababd4f4d3bf76f85ef82f901d602dfafc8b"
     },
     {
       "file": "mobile/src/home/mobile-home-host-requests.ts",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "0758445ede58d1a7746d43c7ac94129a7e30211b29937d7d35a4c6ce3f90e63b"
     },
     {
       "file": "mobile/src/host-screen/use-host-repo-metadata.ts",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "4f4cf8e57bf6538a97a912e7a874602ef56b198658f32cf375a7903c0bd03ba6"
     },
     {
       "file": "mobile/src/session/mobile-new-tab-agent-loader.ts",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "647f5adc304c905920a817876b6c70737bdb6302c201549bffc0e49cd1f6931d"
     },
     {
       "file": "mobile/src/session/use-pr-bot-author-overrides.ts",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "1e77d19923ba02e52d97406fcb3537aeecee9bd56051a2f9734a098456cba42e"
     },
     {
       "file": "mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "ac9312352bbe52528aa1ab07142d97f5ffc86afcff2174db1662e894f4e5966d"
     },
     {
       "file": "mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx",
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "sha256": "ac9c60376922e4426df6598759b7cca7640084be8f4805db06d9a642e7b12a4f"
     },
     {
@@ -288,9 +289,10 @@
       "file": "mobile/src/agent-history/MobileAgentSessionHistoryPanel.tsx",
       "symbol": "loadMobileResumeMetadata",
       "line": 387,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": ["{ timeoutMs: RESUME_RPC_TIMEOUT_MS }"],
       "arguments": ["'settings.get'", "undefined", "{ timeoutMs: RESUME_RPC_TIMEOUT_MS }"],
       "consumedFields": [
@@ -342,9 +344,10 @@
       "file": "mobile/src/components/use-new-workspace-create-submit.ts",
       "symbol": "create",
       "line": 91,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": [],
       "arguments": ["'settings.get'"],
       "consumedFields": [
@@ -423,9 +426,10 @@
       "file": "mobile/src/components/use-new-workspace-runtime-context.ts",
       "symbol": "useNewWorkspaceRuntimeContext",
       "line": 42,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": [],
       "arguments": ["'settings.get'"],
       "consumedFields": [
@@ -468,9 +472,10 @@
       "file": "mobile/src/home/mobile-home-host-requests.ts",
       "symbol": "fetchMobileHomeTaskProviders",
       "line": 76,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": [],
       "arguments": ["client", "hostId", "'settings.get'"],
       "consumedFields": [
@@ -509,9 +514,10 @@
       "file": "mobile/src/host-screen/use-host-repo-metadata.ts",
       "symbol": "fetchRepoMetadata",
       "line": 124,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": [],
       "arguments": ["requestClient", "'settings.get'"],
       "consumedFields": [
@@ -571,9 +577,10 @@
       "file": "mobile/src/session/mobile-new-tab-agent-loader.ts",
       "symbol": "loadMobileNewTabAgentOptions",
       "line": 26,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": [],
       "arguments": ["'settings.get'"],
       "consumedFields": [
@@ -607,9 +614,10 @@
       "file": "mobile/src/session/use-pr-bot-author-overrides.ts",
       "symbol": "usePRBotAuthorOverrides",
       "line": 35,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": [],
       "arguments": ["'settings.get'"],
       "consumedFields": [
@@ -642,9 +650,10 @@
       "file": "mobile/src/tasks/use-mobile-tasks-runtime-hydration.tsx",
       "symbol": "hydrateTaskState",
       "line": 253,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": [],
       "arguments": ["'settings.get'"],
       "consumedFields": [
@@ -774,9 +783,10 @@
       "file": "mobile/src/tasks/use-mobile-tasks-workspace-create-actions.tsx",
       "symbol": "createWorkspace",
       "line": 75,
-      "revision": "e80fae0c4d4d70424d52eebe383c57b2291b9daa",
+      "revision": "aac38d698ff75ac4c8658addab48ef5a83617619",
       "method": "settings.get",
       "kind": "host-rpc",
+      "recordable": true,
       "options": [],
       "arguments": ["'settings.get'"],
       "consumedFields": [
@@ -863,6 +873,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "saveTerminalLinkOpenMode(mode).catch",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": ["() =>\n      setError('Could not save browser preferences. Try again.')"],
       "consumedFields": ["saveTerminalLinkOpenMode(mode).catch"],
@@ -890,6 +902,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "saveTerminalLinkOpenMode",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": ["mode"],
       "consumedFields": ["saveTerminalLinkOpenMode(mode).catch"],
@@ -917,6 +931,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "useMobileDefaultSessionViewPreference",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": [],
       "consumedFields": [
@@ -959,6 +975,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "savePushNotificationsEnabled",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": ["enabled"],
       "consumedFields": [],
@@ -980,6 +998,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "loadPushNotificationsEnabled",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": [],
       "consumedFields": [],
@@ -1001,6 +1021,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "loadDefaultSessionView().then",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": [
         "(view) => {\n      // Why: a fast toggle is authoritative over the older storage read.\n      if (!stale && mutationRevisionRef.current === loadRevision) {\n        setDefaultViewState(view)\n      }\n    }"
@@ -1028,6 +1050,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "loadDefaultSessionView",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": [],
       "consumedFields": [
@@ -1053,6 +1077,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "saveDefaultSessionView(view).catch",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": [
         "async () => {\n      const persisted = await loadDefaultSessionView()\n      if (mountedRef.current && mutationRevisionRef.current === revision) {\n        setDefaultViewState(persisted)\n      }\n    }"
@@ -1085,6 +1111,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "saveDefaultSessionView",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": ["view"],
       "consumedFields": [
@@ -1115,6 +1143,8 @@
       "revision": "dc423947f48c9a0f694f48995aae5dcf817b1e35",
       "method": "loadDefaultSessionView",
       "kind": "device-preference",
+      "recordable": false,
+      "reason": "local device storage, no host RPC",
       "options": [],
       "arguments": [],
       "consumedFields": ["mountedRef.current", "mutationRevisionRef.current"],
