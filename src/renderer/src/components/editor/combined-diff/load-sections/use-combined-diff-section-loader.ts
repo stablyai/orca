@@ -154,7 +154,9 @@ export function useCombinedDiffSectionLoader({
       }
       setSections((prev) => {
         return prev.map((s, i) =>
-          i === index
+          // Re-check dirty at settle: the scheduling guard ran before the await, so a draft typed
+          // while this fetch was in flight would otherwise be overwritten by disk content.
+          i === index && !s.dirty
             ? {
                 ...s,
                 diffResult: storedResult,

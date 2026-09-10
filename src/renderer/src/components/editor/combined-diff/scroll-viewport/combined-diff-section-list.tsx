@@ -106,7 +106,11 @@ export function CombinedDiffSectionList({
                 <DiffSectionItem
                   section={section}
                   index={virtualItem.index}
-                  editStateKey={`${viewStateKey}:${section.key}:${section.contentGeneration ?? 0}`}
+                  // Scope excludes contentGeneration: a revalidation that lands after a save
+                  // would otherwise orphan the stored selection and undo history. Staleness is
+                  // already handled by the content check in createPierreEditor.
+                  editStateKey={`${viewStateKey}:${section.key}`}
+                  renderKey={`${viewStateKey}:${section.key}:${section.contentGeneration ?? 0}`}
                   isBranchMode={isBranchMode}
                   sideBySide={sideBySide}
                   settings={settings}

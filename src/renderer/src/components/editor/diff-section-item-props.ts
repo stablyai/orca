@@ -6,6 +6,8 @@ export type DiffSectionItemProps = {
   section: DiffSection
   index: number
   editStateKey?: string
+  /** Remount identity; changes when refetched content replaces the section. */
+  renderKey?: string
   isBranchMode: boolean
   sideBySide: boolean
   settings: {

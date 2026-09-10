@@ -26,6 +26,7 @@ export function DiffSectionItem({
   section,
   index,
   editStateKey,
+  renderKey,
   isBranchMode,
   sideBySide,
   settings,
@@ -240,7 +241,7 @@ export function DiffSectionItem({
     () =>
       fileDiff ? (
         <PierreDiffSurface
-          key={editStateKey}
+          key={renderKey ?? editStateKey}
           fileDiff={fileDiff}
           sideBySide={sideBySide}
           settings={settings}
@@ -283,6 +284,7 @@ export function DiffSectionItem({
       hasLineCommentAction,
       isEditable,
       editStateKey,
+      renderKey,
       pendingComment,
       section.path,
       settings,
