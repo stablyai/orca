@@ -39,6 +39,11 @@ const ResourceUsageStatusSegment = lazyWithRetry(() =>
     default: module.ResourceUsageStatusSegment
   }))
 )
+const LineBlameStatusSegment = lazyWithRetry(() =>
+  import('./LineBlameStatusSegment').then((module) => ({
+    default: module.LineBlameStatusSegment
+  }))
+)
 const PortsStatusSegment = lazyWithRetry(() =>
   import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
 )
@@ -81,6 +86,7 @@ export function StatusBarSurface({
     showEmptyUsageCta,
     showFloatingTerminalToggle,
     showFloatingWorkspaceAttentionDot,
+    showLineBlame,
     showPorts,
     showResourceUsage,
     showSsh,
@@ -252,6 +258,7 @@ export function StatusBarSurface({
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
           ) : null}
+          {showLineBlame ? <LineBlameStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
           {showPorts ? <PortsStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
           {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
         </React.Suspense>

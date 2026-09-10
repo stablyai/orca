@@ -1,5 +1,9 @@
 import { getRuntimeGitScope as getRuntimeGitScopeImplementation } from './runtime-git-client-context'
 import {
+  getRuntimeGitFileBlame as getRuntimeGitFileBlameImplementation,
+  getRuntimeGitLineBlame as getRuntimeGitLineBlameImplementation
+} from './runtime-git-blame-client'
+import {
   getRuntimeGitBranchCompare as getRuntimeGitBranchCompareImplementation,
   getRuntimeGitBranchDiff as getRuntimeGitBranchDiffImplementation,
   getRuntimeGitCommitCompare as getRuntimeGitCommitCompareImplementation,
@@ -63,6 +67,8 @@ export const getRuntimeGitConflictOperation = getRuntimeGitConflictOperationImpl
 export const abortRuntimeGitMerge = abortRuntimeGitMergeImplementation
 export const abortRuntimeGitRebase = abortRuntimeGitRebaseImplementation
 export const getRuntimeGitDiff = getRuntimeGitDiffImplementation
+export const getRuntimeGitFileBlame = getRuntimeGitFileBlameImplementation
+export const getRuntimeGitLineBlame = getRuntimeGitLineBlameImplementation
 export const getRuntimeGitBranchCompare = getRuntimeGitBranchCompareImplementation
 export const getRuntimeGitCommitCompare = getRuntimeGitCommitCompareImplementation
 export const getRuntimeGitUpstreamStatus = getRuntimeGitUpstreamStatusImplementation

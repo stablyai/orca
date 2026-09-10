@@ -11,6 +11,8 @@ import {
   GitFilePath,
   GitForkSync,
   GitHistory,
+  GitFileBlame,
+  GitLineBlame,
   GitPush,
   GitRebaseFromBase,
   GitRemoteCommitUrl,
@@ -105,6 +107,18 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.listRuntimeGitLocalBranches(params.worktree)
   }),
   ...GIT_DIFF_METHODS,
+  defineMethod({
+    name: 'git.fileBlame',
+    params: GitFileBlame,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitFileBlame(params.worktree, params.filePath)
+  }),
+  defineMethod({
+    name: 'git.lineBlame',
+    params: GitLineBlame,
+    handler: async (params, { runtime }) =>
+      runtime.getRuntimeGitLineBlame(params.worktree, params.filePath, params.line)
+  }),
   defineMethod({
     name: 'git.branchCompare',
     params: GitBranchCompare,

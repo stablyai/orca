@@ -141,7 +141,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "lineBlameToggleDescription": "Show the author and date of the last commit that changed the line at your cursor."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3983,6 +3984,10 @@
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
           },
+          "LineBlameStatusSegment": {
+            "uncommitted": "Uncommitted",
+            "uncommittedTooltip": "This line has uncommitted changes."
+          },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "The previous connection closed",
             "workspace_window_closed": "The workspace window is closed",
@@ -7100,7 +7105,9 @@
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "7ddd66fede": "Editor Word Wrap",
-          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling."
+          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
+          "inlineBlameTitle": "Inline Git Blame",
+          "inlineBlameDescription": "Show who last changed the cursor line at the end of that line."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -9114,6 +9121,10 @@
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "lineBlameTitle": "Line Author",
+            "lineBlameDescription": "Show who last changed the current line in the status bar.",
+            "lineBlameKeywordAuthor": "author",
+            "lineBlameKeywordLine": "line",
             "tray": {
               "tray": "tray",
               "system": "system tray",
@@ -9121,7 +9132,8 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
-            }
+            },
+            "lineBlameKeywordBlame": "blame"
           }
         },
         "auto": {
@@ -15175,6 +15187,9 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "useInlineGitBlame": {
+          "uncommitted": "Uncommitted changes"
         },
         "CheckRunAnnotations": {
           "copy": "Copy annotations"

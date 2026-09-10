@@ -72,6 +72,7 @@ describe('feature interactions', () => {
       'cookie-import',
       'floating-workspace',
       'floating-workspace-hidden',
+      'line-blame',
       'mobile-pairing',
       'notifications',
       'ports',

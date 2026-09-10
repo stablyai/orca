@@ -143,6 +143,22 @@ export function getLocalAgentRuntimeTarget(
     : { runtime: 'host' }
 }
 
+/**
+ * Whether a path is a folder workspace's own root.
+ *
+ * Why exported: a folder workspace is a legitimate root that is not a registered
+ * worktree, so `resolveRegisteredWorktreePath` rejects it and every caller needs
+ * this same fallback before deciding a path is unauthorized. Spelled once so the
+ * rule cannot drift between them.
+ */
+export function isFolderWorkspaceRootPath(store: Store, requestedPath: string): boolean {
+  const folderWorkspaces =
+    typeof store.getFolderWorkspaces === 'function' ? store.getFolderWorkspaces() : []
+  return folderWorkspaces.some(
+    (workspace) => comparableLocalPath(workspace.folderPath) === comparableLocalPath(requestedPath)
+  )
+}
+
 export async function resolveModelDiscoveryLocalPath(
   store: Store,
   requestedPath: string
@@ -150,13 +166,7 @@ export async function resolveModelDiscoveryLocalPath(
   try {
     return await resolveRegisteredWorktreePath(requestedPath, store)
   } catch (error) {
-    const folderWorkspaces =
-      typeof store.getFolderWorkspaces === 'function' ? store.getFolderWorkspaces() : []
-    const isFolderWorkspaceRoot = folderWorkspaces.some(
-      (workspace) =>
-        comparableLocalPath(workspace.folderPath) === comparableLocalPath(requestedPath)
-    )
-    if (!isFolderWorkspaceRoot) {
+    if (!isFolderWorkspaceRootPath(store, requestedPath)) {
       throw error
     }
     return resolveAuthorizedPath(requestedPath, store)
