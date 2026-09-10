@@ -36,10 +36,11 @@ const BUMP = `INSERT INTO meta(key, value) VALUES ('${GENERATION_KEY}', '1')
  * trigger is what makes the fence true rather than nearly true, because the
  * vocabulary still decides which candidates survive its scan limit.
  *
- * The `WHEN` clause is what keeps it free. A replace and a `removeFile` delete
- * a session's rows while its `sessions` row still stands, so neither fires
- * here, and both already bump through `files`. Only the drain deletes a row
- * whose session is gone. The cost of the fence is real and worth naming: a
+ * The `WHEN` clause is what keeps it free. `removeFile` deletes a session's
+ * rows while its `sessions` row still stands, so it does not fire here; a
+ * replace cuts the old `sessions` row loose and leaves its messages to the
+ * drain (PR 2 round 10). Both already bump through `files`; the drain is the
+ * only path that deletes a row whose session is gone, and it fires here. The cost of the fence is real and worth naming: a
  * cursor outstanding while a purge runs is refused once per batch, which
  * `SessionSearchCursorError` reports as `stale-generation` so a caller
  * re-issues page one rather than showing anyone an error.
