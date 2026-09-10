@@ -21,7 +21,26 @@ type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipi
 type GroupCandidate = OrchestrationAddressableAgent & { mailbox?: { to: string; runId: string } }
 
 /**
- * The sender's Run's live Dispatches as group candidates, addressed as `dispatch:<id>`.
+ * The Run whose Dispatches a group address means.
+ *
+ * A nested coordinator is BOTH a worker of its parent Run and the coordinator of the Run it
+ * created, and `resolveMessageRun` answers with the parent — correctly, because that is where
+ * its own `worker_done` belongs. Audience is the other question: it typed `@all` while acting
+ * as a coordinator, so it means the workers it started, not the siblings it was started
+ * beside. Resolving audience off the coordinated Run is why this does not just reuse
+ * `routing.run`; a leaf worker coordinates nothing and falls through to its Dispatch's Run.
+ */
+function resolveGroupAudienceRunId(
+  db: OrchestrationDb,
+  senderPaneKey: string | undefined,
+  senderRunId: string | undefined
+): string | undefined {
+  const coordinated = senderPaneKey ? db.getCurrentRunForPane(senderPaneKey) : undefined
+  return coordinated?.id ?? senderRunId
+}
+
+/**
+ * A Run's live Dispatches as group candidates, addressed as `dispatch:<id>`.
  *
  * Why the Run and not the host: `@all` used to resolve against every terminal on the machine,
  * so a coordinator meaning "my three reviewers" once reached 126 agents across every open
@@ -96,7 +115,8 @@ export async function sendGroupMessage(args: {
   } = args
   // `@worktree:<id>` names one workspace explicitly; every other group means the sender's Run.
   const worktreeGroup = groupAddress.toLowerCase().startsWith('@worktree:')
-  if (!worktreeGroup && !senderRunId) {
+  const audienceRunId = resolveGroupAudienceRunId(db, senderPaneKey, senderRunId)
+  if (!worktreeGroup && !audienceRunId) {
     throw new OrchestrationError(
       'invalid_argument',
       `${groupAddress} addresses the sender's Run, and ${from} is not bound to one. Send to run:<id> or dispatch:<id> instead.`
@@ -116,14 +136,20 @@ export async function sendGroupMessage(args: {
   const agents = [...terminals, ...listAddressableStructuredWorkers()]
   const groupWarnings: SendRecipientWarning[] = []
   const candidates: GroupCandidate[] =
-    worktreeGroup || !senderRunId
+    worktreeGroup || !audienceRunId
       ? agents
-      : listRunGroupCandidates({ db, senderRunId, agents, warnings: groupWarnings })
+      : listRunGroupCandidates({ db, senderRunId: audienceRunId, agents, warnings: groupWarnings })
   const handles = resolveGroupAddress(groupAddress, from, candidates, (handle: string) =>
     runtime.getAgentStatusForHandle(handle)
   )
   if (handles.length === 0) {
-    throw new Error(`No recipients resolved for group address: ${groupAddress}`)
+    // Why the warnings are appended: when every live Dispatch was skipped as federated, they
+    // hold the only text naming the workers that DO exist and how to address each one.
+    const skipped = groupWarnings.map((warning) => warning.message).join(' ')
+    throw new OrchestrationError(
+      'terminal_not_found',
+      `No recipients resolved for group address: ${groupAddress}${skipped ? ` ${skipped}` : ''}`
+    )
   }
 
   const legacyAdoptedMailboxOwner = db.getLegacyAdoptedRunMailboxOwner()
