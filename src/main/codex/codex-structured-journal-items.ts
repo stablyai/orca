@@ -3,6 +3,8 @@ import type {
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
 import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-terminal-settlement'
+import { UNRETAINED_JOURNAL_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { structuredAgentSessionPayloadLimits } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   codexItemIdentity,
   codexJournalItem,
@@ -89,7 +91,16 @@ export class CodexJournalItems {
     ) {
       return { handled: true, admission: { accepted: false, reason: 'failed' } }
     }
-    const translated = codexJournalItem(item)
+    // Only the completed item is the last holder of its output. An `item/started`
+    // or `item/updated` body is provisional — the completed one supersedes it,
+    // and on an interrupt the settlement row carries the last text — so retaining
+    // here would rewrite a growing payload's whole prefix on every update.
+    const translated = codexJournalItem(
+      item,
+      event.method === 'item/completed'
+        ? structuredAgentSessionPayloadLimits(this.deps.sink)
+        : UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+    )
     const command = readCodexJournalString(item, 'command')
     if (command) {
       const boundedCommand = Buffer.from(command, 'utf8')
@@ -214,7 +225,10 @@ export class CodexJournalItems {
       }
       const evicted = this.activeItems.get(oldest)
       if (evicted) {
-        const translated = codexJournalItem(evicted.item).body
+        const translated = codexJournalItem(
+          evicted.item,
+          structuredAgentSessionPayloadLimits(this.deps.sink)
+        ).body
         if (translated) {
           const admission = appendCodexLifecycleItem(
             this.deps.sink,

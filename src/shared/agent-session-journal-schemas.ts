@@ -25,7 +25,8 @@ const BoundedPayload = z.object({
   head: z.string(),
   byteLength: z.number(),
   digest: z.string(),
-  truncated: z.boolean()
+  truncated: z.boolean(),
+  spilled: z.literal(true).optional()
 })
 
 const ProviderFrame = z.object({

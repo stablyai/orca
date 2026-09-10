@@ -7,12 +7,17 @@ import type {
 import {
   boundInlineText,
   boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  UNRETAINED_JOURNAL_PAYLOAD_LIMITS
 } from './journal-payload-bounds'
+
+// Everything here retains nothing, and both cases are bounded already:
+// `boundJournalStatusText` bounds Orca's own short status sentences, and
+// `cancelledJournalPromptBody` re-bounds a body the journal bounded on the way
+// in. Neither is the last holder of any bytes.
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
 
-const JOURNAL_PROMPT_OPTION_LIMITS = { inlineHeadBytes: 1024 }
+const JOURNAL_PROMPT_OPTION_LIMITS = { ...UNRETAINED_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1024 }
 const JOURNAL_PROMPT_ID_MAX_BYTES = 1024
 
 export function cancelledJournalPromptBody(
@@ -34,7 +39,7 @@ export function cancelledJournalPromptBody(
 }
 
 export function boundJournalStatusText(text: string): string {
-  return boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+  return boundInlineText(text, UNRETAINED_JOURNAL_PAYLOAD_LIMITS).text
 }
 
 function boundJournalPromptBody(
@@ -68,13 +73,16 @@ function boundPromptOptions(
 }
 
 function boundPromptText(value: string): string {
-  return boundInlineText(value, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+  return boundInlineText(value, UNRETAINED_JOURNAL_PAYLOAD_LIMITS).text
 }
 
 function boundPromptIdentifier(value: string): string {
   if (Buffer.byteLength(value, 'utf8') <= JOURNAL_PROMPT_ID_MAX_BYTES) {
     return value
   }
-  const bounded = boundPayload(value, { inlineHeadBytes: JOURNAL_PROMPT_ID_MAX_BYTES - 33 })
+  const bounded = boundPayload(value, {
+    ...UNRETAINED_JOURNAL_PAYLOAD_LIMITS,
+    inlineHeadBytes: JOURNAL_PROMPT_ID_MAX_BYTES - 33
+  })
   return `${bounded.head}#${bounded.digest.slice(0, 32)}`
 }

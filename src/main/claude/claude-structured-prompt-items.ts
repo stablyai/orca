@@ -7,7 +7,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import {
   boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  type JournalPayloadLimits
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import {
@@ -43,12 +43,15 @@ export function claudePromptIdentity(input: {
   }
 }
 
-export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
+export function claudeApprovalItem(
+  prompt: ClaudePendingPrompt,
+  limits: JournalPayloadLimits
+): AgentJournalApprovalItem {
   const serialized = JSON.stringify(prompt.input)
   return {
     kind: 'approval',
     title: `Allow ${prompt.toolName}?`,
-    detail: serialized ? boundInlineText(serialized, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text : null,
+    detail: serialized ? boundInlineText(serialized, limits).text : null,
     options: CLAUDE_APPROVAL_DECISIONS.map((decision) => ({
       id: decision,
       label: APPROVAL_LABELS[decision]

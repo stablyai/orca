@@ -15,7 +15,7 @@ import { loadJournal } from './journal-open'
 import {
   boundInlineText,
   boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  UNRETAINED_JOURNAL_PAYLOAD_LIMITS
 } from './journal-payload-bounds'
 import { journalDatabaseFile, journalDirectoryFor, journalPathSegment } from './journal-paths'
 import { AgentSessionJournalError, type AgentSessionJournal } from './journal-store'
@@ -220,7 +220,7 @@ describe('replay', () => {
 
 describe('bounds', () => {
   it('marks a clipped payload instead of dropping bytes silently', () => {
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 16 }
+    const limits = { ...UNRETAINED_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 16 }
     const bounded = boundPayload('x'.repeat(4_096), limits)
     expect(bounded.truncated).toBe(true)
     expect(bounded.head).toHaveLength(16)
@@ -229,7 +229,7 @@ describe('bounds', () => {
   })
 
   it('never splits a multi-byte character across the bound', () => {
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 4 }
+    const limits = { ...UNRETAINED_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 4 }
     // Each character is three bytes, so a naive slice would land mid-sequence.
     const bounded = boundPayload('日本語テスト', limits)
     expect(bounded.head).toBe('日')
@@ -237,10 +237,10 @@ describe('bounds', () => {
   })
 
   it('leaves a payload inside the bound untouched', () => {
-    const bounded = boundPayload('small', DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+    const bounded = boundPayload('small', UNRETAINED_JOURNAL_PAYLOAD_LIMITS)
     expect(bounded.truncated).toBe(false)
     expect(bounded.head).toBe('small')
-    expect(boundInlineText('small', DEFAULT_JOURNAL_PAYLOAD_LIMITS).text).toBe('small')
+    expect(boundInlineText('small', UNRETAINED_JOURNAL_PAYLOAD_LIMITS).text).toBe('small')
   })
 })
 

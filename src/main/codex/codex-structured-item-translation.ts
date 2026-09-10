@@ -4,7 +4,7 @@ import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
   boundInlineText,
   boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  type JournalPayloadLimits
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { codexImageItemBody } from './codex-image-item-translation'
@@ -31,13 +31,16 @@ export {
 // Codex thread items → journal item bodies.
 
 /** `userMessage` carries structured content parts; `agentMessage` a flat text. */
-export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
+export function codexMessageBlocks(
+  item: CodexThreadItem,
+  limits: JournalPayloadLimits
+): NativeChatBlock[] {
   const text =
     item.type === 'agentMessage'
       ? (readString(item, 'text') ?? readTextContent(item, 'content'))
       : readString(item, 'text')
   if (text !== null) {
-    return [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    return [{ type: 'text', text: boundInlineText(text, limits).text }]
   }
   const content = item.content
   if (!Array.isArray(content)) {
@@ -52,7 +55,7 @@ export function codexMessageBlocks(item: CodexThreadItem): NativeChatBlock[] {
     if (partText !== null) {
       blocks.push({
         type: 'text',
-        text: boundInlineText(partText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+        text: boundInlineText(partText, limits).text
       })
       continue
     }
@@ -85,9 +88,9 @@ export type CodexJournalItem = {
   handled: boolean
 }
 
-function commandItem(item: CodexThreadItem): CodexJournalItem {
+function commandItem(item: CodexThreadItem, limits: JournalPayloadLimits): CodexJournalItem {
   const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
-  const bounded = output === null ? null : boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+  const bounded = output === null ? null : boundInlineText(output, limits)
   const parsed = commandActionFacts(item)
   return {
     body: {
@@ -96,7 +99,7 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
       // Raw command and cwd stay so the expanded view still shows what ran.
       input: boundToolInput(
         { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
-        DEFAULT_JOURNAL_PAYLOAD_LIMITS
+        limits
       ),
       state: commandState(item),
       ...toolExecutionMetadata(item),
@@ -106,7 +109,7 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
   }
 }
 
-function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
+function fileChangeItem(item: CodexThreadItem, limits: JournalPayloadLimits): CodexJournalItem {
   const changes = Array.isArray(item.changes)
     ? item.changes.flatMap((change) => {
         const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
@@ -120,14 +123,14 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
       body: {
         kind: 'tool-call',
         name: 'apply_patch',
-        input: boundToolInput({ changes: item.changes ?? null }, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+        input: boundToolInput({ changes: item.changes ?? null }, limits),
         state: commandState(item)
       },
       handled: true
     }
   }
   const patch = changes.map((change) => change.diff).join('\n')
-  const bounded = boundInlineText(patch, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
+  const bounded = boundInlineText(patch, limits).bounded
   return {
     body: {
       kind: 'diff',
@@ -161,18 +164,18 @@ function mcpToolArguments(value: unknown): unknown {
   return Array.isArray(value) ? { arguments: value } : Object.keys(value).length > 0 ? value : null
 }
 
-function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
+function mcpToolCallItem(item: CodexThreadItem, limits: JournalPayloadLimits): CodexJournalItem {
   const server = readString(item, 'server')
   const tool = readString(item, 'tool')
   const failure = readString(readRecord(item.error), 'message')
   const text = failure ?? readTextContent(readRecord(item.result), 'content')
-  const bounded = text === null ? null : boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+  const bounded = text === null ? null : boundInlineText(text, limits)
   return {
     body: {
       kind: 'tool-call',
       name: mcpToolCallName(item),
       ...(server && tool ? { mcpIdentity: { server, tool } } : {}),
-      input: boundToolInput(mcpToolArguments(item.arguments), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+      input: boundToolInput(mcpToolArguments(item.arguments), limits),
       state: failure === null ? commandState(item) : 'failed',
       ...(bounded === null ? {} : { output: bounded.bounded })
     },
@@ -205,16 +208,16 @@ function webSearchInput(item: CodexThreadItem): Record<string, unknown> | null {
  *  action, then sends the action, so `action` is the completion signal — a
  *  completed item's own `query` is routinely still empty. The hits arrive on
  *  `results` and are the call's output. */
-function webSearchItem(item: CodexThreadItem): CodexJournalItem {
+function webSearchItem(item: CodexThreadItem, limits: JournalPayloadLimits): CodexJournalItem {
   const results = toolWebSearchResults(item.results)
   const hits = Array.isArray(item.results) && item.results.length > 0 ? item.results : null
-  const bounded = hits && boundInlineText(JSON.stringify(hits), DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+  const bounded = hits && boundInlineText(JSON.stringify(hits), limits)
   return {
     body: {
       kind: 'tool-call',
       name: 'web_search',
       ...(results.length > 0 ? { webSearchResults: results } : {}),
-      input: boundToolInput(webSearchInput(item), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+      input: boundToolInput(webSearchInput(item), limits),
       state: item.action === null || item.action === undefined ? 'running' : 'completed',
       ...(bounded === null ? {} : { output: bounded.bounded })
     },
@@ -228,9 +231,12 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
  * Known empty items wait for later deltas. Unknown types become bounded status
  * rows so a provider release cannot make new activity invisible.
  */
-export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
+export function codexJournalItem(
+  item: CodexThreadItem,
+  limits: JournalPayloadLimits
+): CodexJournalItem {
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
-    const blocks = codexMessageBlocks(item)
+    const blocks = codexMessageBlocks(item, limits)
     return {
       body:
         blocks.length === 0
@@ -240,16 +246,16 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
     }
   }
   if (item.type === 'commandExecution') {
-    return commandItem(item)
+    return commandItem(item, limits)
   }
   if (item.type === 'fileChange') {
-    return fileChangeItem(item)
+    return fileChangeItem(item, limits)
   }
   if (item.type === 'mcpToolCall') {
-    return mcpToolCallItem(item)
+    return mcpToolCallItem(item, limits)
   }
   if (item.type === 'webSearch') {
-    return webSearchItem(item)
+    return webSearchItem(item, limits)
   }
   if (item.type === 'imageView' || item.type === 'imageGeneration') {
     return { body: codexImageItemBody(item), handled: true }
@@ -262,7 +268,7 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
           ? null
           : {
               kind: 'status',
-              text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+              text: boundInlineText(text, limits).text,
               presentation: 'plan-document'
             },
       handled: true
@@ -274,43 +280,50 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       readTextContent(item, 'summary') ??
       readTextContent(item, 'content')
     return {
-      body:
-        text === null
-          ? null
-          : { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
+      body: text === null ? null : { kind: 'status', text: boundInlineText(text, limits).text },
       handled: true
     }
   }
-  const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item)
+  const unhandled = unhandledProviderFrameJournalItem('codex', `item:${item.type}`, item, limits)
   return unhandled ? { body: unhandled.body, handled: false } : { body: null, handled: true }
 }
 
-export function codexItemBody(item: CodexThreadItem): AgentJournalItemBody | null {
-  return codexJournalItem(item).body
+export function codexItemBody(
+  item: CodexThreadItem,
+  limits: JournalPayloadLimits
+): AgentJournalItemBody | null {
+  return codexJournalItem(item, limits).body
 }
 
 /** Snapshot body for text still streaming, before its item completes. */
-export function codexStreamingMessageBody(text: string): AgentJournalItemBody {
+export function codexStreamingMessageBody(
+  text: string,
+  limits: JournalPayloadLimits
+): AgentJournalItemBody {
   return {
     kind: 'message',
     role: 'assistant',
-    blocks: [{ type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }]
+    blocks: [{ type: 'text', text: boundInlineText(text, limits).text }]
   }
 }
 
 /** Snapshot body for any item-level stream, keyed onto its parent item. */
-export function codexStreamingJournalItem(item: CodexThreadItem, text: string): CodexJournalItem {
+export function codexStreamingJournalItem(
+  item: CodexThreadItem,
+  text: string,
+  limits: JournalPayloadLimits
+): CodexJournalItem {
   if (item.type === 'agentMessage') {
-    return { body: codexStreamingMessageBody(text), handled: true }
+    return { body: codexStreamingMessageBody(text, limits), handled: true }
   }
   if (item.type === 'commandExecution') {
-    return commandItem({ ...item, aggregatedOutput: text })
+    return commandItem({ ...item, aggregatedOutput: text }, limits)
   }
   if (item.type === 'fileChange') {
     const path = Array.isArray(item.changes)
       ? readString(readRecord(item.changes[0]), 'path')
       : null
-    const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded
+    const bounded = boundInlineText(text, limits).bounded
     return {
       body: { kind: 'diff', path: path ?? 'pending patch', patch: bounded },
       handled: true
@@ -320,12 +333,12 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     return {
       body: {
         kind: 'status',
-        text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+        text: boundInlineText(text, limits).text,
         presentation: 'plan-document'
       },
       handled: true
     }
   }
-  const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
+  const bounded = boundInlineText(text, limits)
   return { body: { kind: 'status', text: bounded.text }, handled: true }
 }

@@ -44,6 +44,7 @@ export type NativeChatTextBlock = {
       byteLength: number
       digest: string
       truncated: boolean
+      spilled?: true
     }
   }
 }

@@ -1,11 +1,11 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+  structuredAgentSessionPayloadLimits,
+  type StructuredAgentSessionEventSink
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { boundInlineText } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import {
   claudeMessageBody,
@@ -166,7 +166,7 @@ export function createClaudeJournalTranslator(
       tools.set(tool.id, tool)
       deps.sink.appendItem(
         claudeToolIdentity(envelope.sessionId, tool.id),
-        claudeToolBody({ tool })
+        claudeToolBody({ tool }, structuredAgentSessionPayloadLimits(deps.sink))
       )
       changed = true
     }
@@ -178,7 +178,7 @@ export function createClaudeJournalTranslator(
       }
       deps.sink.appendItem(
         claudeToolIdentity(envelope.sessionId, result.toolUseId),
-        claudeToolBody({ tool, result })
+        claudeToolBody({ tool, result }, structuredAgentSessionPayloadLimits(deps.sink))
       )
       // A spawn call's result is the parent turn's evidence its child finished.
       subagents.observeToolResult(result.toolUseId, result.failed)
@@ -190,7 +190,7 @@ export function createClaudeJournalTranslator(
     if (thinking) {
       deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
         kind: 'status',
-        text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+        text: boundInlineText(thinking, structuredAgentSessionPayloadLimits(deps.sink)).text
       })
       changed = true
     }
@@ -234,7 +234,10 @@ export function createClaudeJournalTranslator(
         promptKey: event.prompt.promptKey
       })
       identities.push(identity)
-      deps.sink.appendItem(identity, claudeApprovalItem(event.prompt))
+      deps.sink.appendItem(
+        identity,
+        claudeApprovalItem(event.prompt, structuredAgentSessionPayloadLimits(deps.sink))
+      )
       deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
     }
     promptItems.set(event.prompt.promptKey, identities)

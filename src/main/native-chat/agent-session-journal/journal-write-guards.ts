@@ -13,13 +13,16 @@ export class AgentSessionJournalError extends Error {
   }
 }
 
-/** A journal written by a newer schema is readable but never writable: this
- *  host cannot represent rows it does not understand. */
+/** A latched journal is readable but never writable. Two things latch one: rows
+ *  from a newer schema this host cannot represent, and a repair that could not
+ *  put the rows it must drop somewhere durable first. The message names neither,
+ *  because the guard is not told which — `journalStoreLoadedFields` and the
+ *  repair path both set the same flag. */
 export function assertJournalWritable(readOnly: boolean, sessionId: string): void {
   if (readOnly) {
     throw new AgentSessionJournalError(
       'journal_read_only',
-      `agent-session journal for ${sessionId} uses a newer schema; this host is read-only`
+      `agent-session journal for ${sessionId} is latched read-only`
     )
   }
 }

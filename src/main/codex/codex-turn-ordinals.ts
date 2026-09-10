@@ -1,3 +1,4 @@
+import { JOURNAL_OVERFLOW_NOT_RETAINED } from '../native-chat/agent-session-journal/journal-overflow-store'
 import {
   boundPayload,
   digestPayload
@@ -32,7 +33,9 @@ export class CodexTurnOrdinals {
     const suffix = `#${digestPayload(value).slice(0, 24)}`
     return `${
       boundPayload(encoded, {
-        inlineHeadBytes: 256 - Buffer.byteLength(suffix, 'utf8')
+        inlineHeadBytes: 256 - Buffer.byteLength(suffix, 'utf8'),
+        // A turn key; the digest suffix carries what the clip drops.
+        overflow: JOURNAL_OVERFLOW_NOT_RETAINED
       }).head
     }${suffix}`
   }

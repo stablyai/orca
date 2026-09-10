@@ -35,9 +35,13 @@ import {
   boundInlineText,
   boundPayload,
   boundToolInput,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
+  UNRETAINED_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from './journal-payload-bounds'
+
+// The bounds here retain nothing on purpose: the provider's transcript file is
+// the durable copy, it is what this import reads, Orca never deletes it, and the
+// remnant disclosure names its path in the timeline.
 import type { AgentSessionJournal } from './journal-store'
 
 export type LegacyImportOptions = ResolveSessionFileOptions & {
@@ -78,7 +82,7 @@ export async function appendLegacyTranscriptMessages(input: {
         sessionId: input.sessionId,
         recordId: message.id
       },
-      legacyItemBody(message, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
+      legacyItemBody(message, UNRETAINED_JOURNAL_PAYLOAD_LIMITS),
       { fence: input.fence, observedAt: message.timestamp ?? undefined }
     )
     appended += 1
@@ -112,7 +116,7 @@ export async function prepareLegacyTranscriptImport(input: {
   options?: LegacyImportOptions
 }): Promise<{ ok: true; items: JournalReplacementItem[] } | { ok: false; error: string }> {
   const options = input.options ?? {}
-  const limits = options.limits ?? DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  const limits = options.limits ?? UNRETAINED_JOURNAL_PAYLOAD_LIMITS
   const transcriptAgent = resolveNativeChatTranscriptAgent(input.agent)
   if (!transcriptAgent) {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }

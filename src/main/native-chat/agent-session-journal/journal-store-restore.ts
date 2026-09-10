@@ -10,7 +10,7 @@ import type { JournalEpochController } from './journal-epoch-controller'
 import { replayJournal } from './journal-open'
 import type { JournalStoreHost } from './journal-store-collaborators'
 import { openJournalStoreState } from './journal-store-open'
-import { deleteJournalRepairedSuffix } from './journal-repair-marker'
+import { quarantineAndDeleteJournalRepairedSuffix } from './journal-repair-suffix'
 
 export function restoreJournalStore(
   host: JournalStoreHost,
@@ -23,15 +23,17 @@ export function restoreJournalStore(
       const opened = host.database()
       return replayJournal(opened.db, opened.readOnly, host.identity.sessionId)
     },
-    deleteSuffix: (fromSeq, contentFrom) =>
-      deleteJournalRepairedSuffix({
+    repairSuffix: (fromSeq, contentFrom) =>
+      quarantineAndDeleteJournalRepairedSuffix({
         db: host.database().db,
+        journalDir: host.journalDir,
         sessionId: host.identity.sessionId,
         epoch: host.state().epoch,
         fromSeq,
         contentFrom,
         now: host.now()
       }),
+    latchReadOnly: () => host.setReadOnly(true),
     start: () => collaborators.epochController.start('session_created', 0),
     // `unreconcilable_prefix` is the durable statement that this epoch exists
     // because a repair emptied one: replay reads it back and keeps asking for

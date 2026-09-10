@@ -9,6 +9,7 @@ import {
   journalFileFormatRemnantDisclosure
 } from './journal-file-format-remnant'
 import type { JournalLoad } from './journal-open'
+import type { JournalRepairedSuffix } from './journal-repair-suffix'
 import { journalRepairDisclosure, type JournalRepairDisclosure } from './journal-repair-disclosure'
 import { staleSubagentRosterRevisions } from './journal-subagent-liveness'
 
@@ -32,11 +33,13 @@ export async function openJournalStoreState(input: {
   journalDir: string
   loaded: JournalLoad | null | undefined
   replay: () => JournalLoad | null
-  /** Drops the rejected suffix and records the rebuild it owes, in ONE
-   *  transaction. Corruption is not preserved; replay keeps reporting `corrupt`
+  /** Copies the rejected suffix somewhere durable, then drops it and records
+   *  the rebuild it owes in ONE transaction. Replay keeps reporting `corrupt`
    *  until provider history republishes the epoch or the session writes past
    *  `contentFrom`, the first sequence the repair left free. */
-  deleteSuffix: (fromSeq: number, contentFrom: number) => number
+  repairSuffix: (fromSeq: number, contentFrom: number) => JournalRepairedSuffix
+  /** Latches the journal against writes for the rest of its life. */
+  latchReadOnly: () => void
   start: () => void
   adopt: (loaded: JournalLoad) => void
   /** Republishes an anchor row for an epoch a repair emptied. */
@@ -60,7 +63,13 @@ export async function openJournalStoreState(input: {
   }
   input.adopt(loaded)
   if (loaded.truncateFrom !== undefined && !loaded.readOnly) {
-    input.deleteSuffix(loaded.truncateFrom, loaded.state.lastSequence + 1)
+    // The rejected rows are the only copy of everything the session wrote after
+    // the fault. Without a durable one this open takes no repair at all: the
+    // journal latches read-only with its rows intact, and a later open retries.
+    if (!input.repairSuffix(loaded.truncateFrom, loaded.state.lastSequence + 1).quarantined) {
+      input.latchReadOnly()
+      return
+    }
   }
   // A repair that took every live row leaves the epoch with no anchor. Publish
   // one before anything can append into it: an ordinary row at sequence 1 would

@@ -59,17 +59,22 @@ export type AgentJournalItemIdentity =
 
 // ─── Bounded payloads ───────────────────────────────────────────────────────
 
-/** A tool output or diff body clipped to a head. The remainder is DISCARDED,
- *  never stored: crossing a bound sets `truncated` and the two fields below
- *  describe what was dropped, so it is marked rather than silently lost. */
+/** A tool output or diff body clipped to a head. `truncated` marks the clip and
+ *  the two fields below describe the original, so a bounded body is never a
+ *  silently short one. */
 export type AgentJournalBoundedPayload = {
   head: string
   /** Byte length of the ORIGINAL payload, not of `head`. */
   byteLength: number
-  /** sha256 of the original payload — identification only; nothing stores or
-   *  retrieves the discarded remainder by it. */
+  /** sha256 of the original payload. Also the key the full bytes are retained
+   *  under on the execution host when `spilled` is set. */
   digest: string
   truncated: boolean
+  /** The full payload was retained on the execution host under `digest` before
+   *  the clip. Absent on a row written by a build that could not retain it, and
+   *  on one whose retention failed — those still carry head, length and digest.
+   *  Additive: an older client ignores it and renders the head as it always did. */
+  spilled?: true
 }
 
 // ─── Render-model items ─────────────────────────────────────────────────────

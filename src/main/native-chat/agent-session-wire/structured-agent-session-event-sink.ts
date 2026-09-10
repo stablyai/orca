@@ -6,6 +6,10 @@ import type {
 import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
+import {
+  UNRETAINED_JOURNAL_PAYLOAD_LIMITS,
+  type JournalPayloadLimits
+} from '../agent-session-journal/journal-payload-bounds'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 
@@ -63,6 +67,18 @@ export type StructuredAgentSessionEventSink = {
   tryPublish?(options?: StructuredAgentSessionAppendOptions): StructuredAgentSessionSinkAdmission
   /** Couples durable-queue pressure to the exact provider stream producing it. */
   bindReadingControl?(control: StructuredAgentSessionReadingControl): () => void
+  /** Row payload budget for the bound session, which retains what it clips into
+   *  that session's overflow store. Absent on a sink with no journal behind it. */
+  payloadLimits?(): JournalPayloadLimits
+}
+
+/** The budget a translator bounds with. A sink that cannot name a journal — a
+ *  test double, or one still unbound — retains nothing, which is exactly what a
+ *  row written before overflow retention existed carried. */
+export function structuredAgentSessionPayloadLimits(
+  sink: Pick<StructuredAgentSessionEventSink, 'payloadLimits'>
+): JournalPayloadLimits {
+  return sink.payloadLimits?.() ?? UNRETAINED_JOURNAL_PAYLOAD_LIMITS
 }
 
 export type StructuredAgentSessionEventTarget = {
@@ -114,6 +130,9 @@ export function createDeferredStructuredAgentSessionEventSink(
     watermarks?: Partial<StructuredAgentSessionSinkWatermarks>
     readingControl?: StructuredAgentSessionReadingControl
     onBackpressureChange?: (backpressured: boolean, state: StructuredAgentSessionSinkState) => void
+    /** This session's journal directory, so a payload bounded before the first
+     *  bind still retains what it clips. */
+    journalDirectory?: () => string | null
   } = {}
 ): DeferredStructuredAgentSessionEventSink {
   const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
@@ -121,7 +140,8 @@ export function createDeferredStructuredAgentSessionEventSink(
     watermarks,
     ...(deps.onError ? { onError: deps.onError } : {}),
     ...(deps.readingControl ? { readingControl: deps.readingControl } : {}),
-    ...(deps.onBackpressureChange ? { onBackpressureChange: deps.onBackpressureChange } : {})
+    ...(deps.onBackpressureChange ? { onBackpressureChange: deps.onBackpressureChange } : {}),
+    ...(deps.journalDirectory ? { journalDirectory: deps.journalDirectory } : {})
   })
 
   const appendLifecycleBatch = (
@@ -218,7 +238,8 @@ export function createDeferredStructuredAgentSessionEventSink(
           run: (bound) => bound.publish(activity)
         })
       },
-      tryPublish: publish
+      tryPublish: publish,
+      payloadLimits: queue.payloadLimits
     },
     bind: (next) => queue.bind(next),
     unbind: () => queue.unbind(),

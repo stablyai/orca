@@ -6,10 +6,10 @@ import {
   describeToolInput
 } from '../../shared/native-chat-tool-summary'
 import {
-  codexItemBody,
+  codexItemBody as boundCodexItemBody,
   codexItemIdentity,
-  codexJournalItem,
-  codexMessageBlocks,
+  codexJournalItem as boundCodexJournalItem,
+  codexMessageBlocks as boundCodexMessageBlocks,
   CodexTurnOrdinals,
   MAX_CODEX_TURN_ORDINAL_BYTES,
   MAX_CODEX_TURN_ORDINAL_ENTRIES,
@@ -17,6 +17,16 @@ import {
   readCodexThreadItem,
   type CodexThreadItem
 } from './codex-structured-item-translation'
+import { UNRETAINED_JOURNAL_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
+
+// These cases assert the clip and the shape of a translated row. Retention of
+// what the clip drops has its own suite, so they all bound the same way.
+const codexItemBody = (item: CodexThreadItem) =>
+  boundCodexItemBody(item, UNRETAINED_JOURNAL_PAYLOAD_LIMITS)
+const codexJournalItem = (item: CodexThreadItem) =>
+  boundCodexJournalItem(item, UNRETAINED_JOURNAL_PAYLOAD_LIMITS)
+const codexMessageBlocks = (item: CodexThreadItem) =>
+  boundCodexMessageBlocks(item, UNRETAINED_JOURNAL_PAYLOAD_LIMITS)
 
 /** The tool-call input a Codex item lands on, which is what the row label and
  *  the collapsed run header are both derived from. */

@@ -1,5 +1,6 @@
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { structuredAgentSessionPayloadLimits } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   codexApprovalItem,
   codexPromptIdentity,
@@ -38,7 +39,8 @@ export class CodexJournalPrompts {
       const questions = codexQuestionItems({
         threadId: event.threadId,
         promptKey: event.promptKey,
-        params: event.params
+        params: event.params,
+        limits: structuredAgentSessionPayloadLimits(this.deps.sink)
       })
       const promptItems = questions.map(({ identity, body }) => ({ identity, body }))
       const admission = this.admit(event, promptItems)
@@ -63,7 +65,8 @@ export class CodexJournalPrompts {
     const body = codexApprovalItem({
       method: event.method,
       params: event.params,
-      detail: this.detailFor(event.threadId, event.codexItemId)
+      detail: this.detailFor(event.threadId, event.codexItemId),
+      limits: structuredAgentSessionPayloadLimits(this.deps.sink)
     })
     const admission = this.admit(event, [{ identity, body }])
     if (!admission.accepted) {

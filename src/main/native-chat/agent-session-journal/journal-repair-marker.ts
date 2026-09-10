@@ -14,7 +14,6 @@
 // sequence owns the epoch and stops the retry.
 
 import type Database from '../../sqlite/sync-database'
-import { deleteJournalRowSuffix } from './journal-row-table'
 
 const SELECT_REPAIR = 'SELECT epoch, content_from FROM journal_repairs WHERE session_id = ?'
 const UPSERT_REPAIR = `INSERT INTO journal_repairs (session_id, epoch, content_from, repaired_at)
@@ -45,25 +44,14 @@ export function clearJournalRepairMarker(db: Database.Database, sessionId: strin
   db.prepare(DELETE_REPAIR).run(sessionId)
 }
 
-/** Drop the rejected suffix and record that it is owed, atomically. */
-export function deleteJournalRepairedSuffix(input: {
-  db: Database.Database
-  sessionId: string
-  epoch: string
-  /** First sequence of the rejected suffix. */
-  fromSeq: number
-  /** First sequence left free once the suffix is gone. */
-  contentFrom: number
+/** Raise the marker inside the caller's repair transaction, so the rows and the
+ *  record that they are owed commit together. */
+export function writeJournalRepairMarker(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string,
+  contentFrom: number,
   now: number
-}): number {
-  input.db.exec('BEGIN IMMEDIATE')
-  try {
-    const deleted = deleteJournalRowSuffix(input.db, input.sessionId, input.epoch, input.fromSeq)
-    input.db.prepare(UPSERT_REPAIR).run(input.sessionId, input.epoch, input.contentFrom, input.now)
-    input.db.exec('COMMIT')
-    return deleted
-  } catch (error) {
-    input.db.exec('ROLLBACK')
-    throw error
-  }
+): void {
+  db.prepare(UPSERT_REPAIR).run(sessionId, epoch, contentFrom, now)
 }

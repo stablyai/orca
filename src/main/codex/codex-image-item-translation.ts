@@ -1,12 +1,12 @@
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import { buildImageDataUri } from '../../shared/image-data-uri'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { DEFAULT_JOURNAL_INLINE_HEAD_BYTES } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { readString } from './codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 
 // Leave room for operation text and the journal envelope beside inline image bytes.
-const MAX_IMAGE_REFERENCE_BYTES = DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes / 2
+const MAX_IMAGE_REFERENCE_BYTES = DEFAULT_JOURNAL_INLINE_HEAD_BYTES / 2
 
 function imagePath(item: CodexThreadItem, key: string): string | null {
   const value = readString(item, key)

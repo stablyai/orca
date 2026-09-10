@@ -6,7 +6,7 @@ import type {
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
   boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  type JournalPayloadLimits
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 
 export type ClaudeMessageEnvelope = {
@@ -171,18 +171,19 @@ export function claudeThinkingText(envelope: ClaudeMessageEnvelope): string | nu
   return parts.length > 0 ? parts.join('\n') : null
 }
 
-export function claudeToolBody(input: {
-  tool: ClaudeToolUse
-  result?: ClaudeToolResult
-}): AgentJournalItemBody {
+export function claudeToolBody(
+  input: {
+    tool: ClaudeToolUse
+    result?: ClaudeToolResult
+  },
+  limits: JournalPayloadLimits
+): AgentJournalItemBody {
   return {
     kind: 'tool-call',
     name: input.tool.name,
     input: input.tool.input,
     state: input.result ? (input.result.failed ? 'failed' : 'completed') : 'running',
-    ...(input.result
-      ? { output: boundInlineText(input.result.output, DEFAULT_JOURNAL_PAYLOAD_LIMITS).bounded }
-      : {})
+    ...(input.result ? { output: boundInlineText(input.result.output, limits).bounded } : {})
   }
 }
 

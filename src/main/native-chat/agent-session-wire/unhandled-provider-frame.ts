@@ -2,7 +2,6 @@ import type { AgentJournalStatusItem } from '../../../shared/agent-session-journ
 import {
   boundInlineText,
   boundPayload,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
 import { classifyProviderFrame } from './provider-frame-disposition'
@@ -75,7 +74,7 @@ export function unhandledProviderFrameJournalItem(
   provider: string,
   kind: string,
   payload: unknown,
-  limits: JournalPayloadLimits = DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  limits: JournalPayloadLimits
 ): UnhandledProviderFrameJournalItem | null {
   const classification = classifyProviderFrame(provider, kind, payload)
   if (

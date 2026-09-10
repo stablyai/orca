@@ -7,6 +7,7 @@ import {
   PROVIDER_FRAME_CLASSIFICATIONS
 } from './provider-frame-disposition'
 import { unhandledProviderFrameJournalItem } from './unhandled-provider-frame'
+import { UNRETAINED_JOURNAL_PAYLOAD_LIMITS } from '../agent-session-journal/journal-payload-bounds'
 
 describe('provider frame classification catalog', () => {
   it('classifies every pinned Codex app-server notification method', () => {
@@ -206,10 +207,15 @@ describe('codex subagent item disposition', () => {
 
   it('journals no fallback row for subagent activity', () => {
     expect(
-      unhandledProviderFrameJournalItem('codex', 'item:subAgentActivity', {
-        kind: 'completed',
-        agentThreadId: 'child-1'
-      })
+      unhandledProviderFrameJournalItem(
+        'codex',
+        'item:subAgentActivity',
+        {
+          kind: 'completed',
+          agentThreadId: 'child-1'
+        },
+        UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+      )
     ).toBeNull()
   })
 

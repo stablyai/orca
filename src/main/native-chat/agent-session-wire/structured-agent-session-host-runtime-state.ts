@@ -1,5 +1,6 @@
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type DeferredStructuredAgentSessionEventSink,
@@ -60,10 +61,25 @@ export class StructuredAgentSessionHostRuntimeState {
       onError: (error) => {
         this.deps.onEventSinkError?.({ sessionId, error })
         this.onEventSinkFailure?.(sessionId, error)
-      }
+      },
+      // Frames can arrive before the first bind — a fresh attach acquires the
+      // provider child first — and their payload bounds still have to retain.
+      journalDirectory: () => this.journalDirectoryFor(sessionId)
     })
     this.eventSinks.set(sessionId, created)
     return created
+  }
+
+  /** Derived from the record, so it answers while no journal is open. A bound
+   *  target still wins: a recovery attach opens a different directory. */
+  private journalDirectoryFor(sessionId: string): string | null {
+    const record = this.deps.store.getRecord(sessionId)
+    return record
+      ? journalDirectoryFor(this.deps.journalRoot, {
+          workspaceId: record.location.workspaceId,
+          sessionId
+        })
+      : null
   }
 
   discardEventSink(sessionId: string): void {

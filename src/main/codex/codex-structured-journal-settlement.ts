@@ -21,6 +21,7 @@ import {
 import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
+import { structuredAgentSessionPayloadLimits } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 export type CodexActiveJournalItem = {
   threadId: string
@@ -50,9 +51,10 @@ export function settleCodexJournalSession(input: {
   const turnOrdinalsToForget: { threadId: string; turnId: string }[] = []
   for (const active of input.activeItems.values()) {
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
+    const limits = structuredAgentSessionPayloadLimits(input.sink)
     const translated = streamed
-      ? codexStreamingJournalItem(active.item, streamed.text)
-      : codexJournalItem(active.item)
+      ? codexStreamingJournalItem(active.item, streamed.text, limits)
+      : codexJournalItem(active.item, limits)
     const body = interruptedBody(translated.body)
     if (body) {
       mutations.push({ kind: 'item', identity: active.identity, body })
@@ -123,9 +125,10 @@ export function settleCodexJournalTurn(input: {
       continue
     }
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
+    const limits = structuredAgentSessionPayloadLimits(input.sink)
     const translated = streamed
-      ? codexStreamingJournalItem(active.item, streamed.text)
-      : codexJournalItem(active.item)
+      ? codexStreamingJournalItem(active.item, streamed.text, limits)
+      : codexJournalItem(active.item, limits)
     const body = interruptedBody(translated.body)
     if (body) {
       mutations.push({ kind: 'item', identity: active.identity, body })
@@ -176,9 +179,10 @@ export function settleCodexOversizedNotification(input: {
       continue
     }
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
+    const limits = structuredAgentSessionPayloadLimits(input.sink)
     const translated = streamed
-      ? codexStreamingJournalItem(active.item, streamed.text)
-      : codexJournalItem(active.item)
+      ? codexStreamingJournalItem(active.item, streamed.text, limits)
+      : codexJournalItem(active.item, limits)
     const body = interruptedBody(translated.body)
     if (body) {
       mutations.push({ kind: 'item', identity: active.identity, body })

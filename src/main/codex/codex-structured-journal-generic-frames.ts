@@ -12,6 +12,7 @@ import {
   MAX_CODEX_GENERIC_TURN_BUCKETS
 } from './codex-structured-journal-limits'
 import { readCodexTurnId } from './codex-structured-thread-facts'
+import { structuredAgentSessionPayloadLimits } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
 type SuppressedSummary = { count: number; publishedCount: number }
@@ -63,7 +64,12 @@ export class CodexJournalGenericFrames {
     payload: unknown,
     threadId = 'session'
   ): CodexJournalTranslationAdmission {
-    const translated = unhandledProviderFrameJournalItem('codex', kind, payload)
+    const translated = unhandledProviderFrameJournalItem(
+      'codex',
+      kind,
+      payload,
+      structuredAgentSessionPayloadLimits(this.deps.sink)
+    )
     // A frame the classifier declines is deliberately not journaled, which is success.
     // Failing admission here force-closes the provider through the retry queue.
     if (!translated) {

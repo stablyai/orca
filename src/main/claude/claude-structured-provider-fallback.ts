@@ -1,8 +1,8 @@
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+  structuredAgentSessionPayloadLimits,
+  type StructuredAgentSessionEventSink
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { boundInlineText } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import { CLAUDE_STREAM_JSON_FRAME_KINDS } from '../native-chat/agent-session-wire/claude-stream-json-frame-schema'
 import {
   readableProviderFrameText,
@@ -112,13 +112,12 @@ export function createClaudeProviderFrameFallback(
   return {
     append: (kind, payload, displayText) => {
       sequence += 1
-      const translated = unhandledProviderFrameJournalItem('claude', kind, payload)
+      const limits = structuredAgentSessionPayloadLimits(sink)
+      const translated = unhandledProviderFrameJournalItem('claude', kind, payload, limits)
       if (!translated) {
         return
       }
-      const bounded = displayText
-        ? boundInlineText(displayText, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
-        : null
+      const bounded = displayText ? boundInlineText(displayText, limits).text : null
       sink.appendItem(
         {
           provider: 'orca',

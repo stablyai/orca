@@ -6,7 +6,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import {
   boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  type JournalPayloadLimits
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import {
   CODEX_APPROVAL_DECISIONS,
@@ -40,7 +40,7 @@ const PENDING = {
 
 const MAX_CODEX_PROMPT_QUESTIONS = 64
 const MAX_CODEX_PROMPT_OPTIONS = 64
-const PROMPT_OPTION_LIMITS = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1024 }
+const PROMPT_OPTION_INLINE_HEAD_BYTES = 1024
 
 function readParams(params: unknown): Record<string, unknown> {
   return typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
@@ -51,12 +51,13 @@ function readString(source: Record<string, unknown>, key: string): string | null
   return typeof value === 'string' && value.length > 0 ? value : null
 }
 
-function boundPromptText(value: string): string {
-  return boundInlineText(value, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+function boundPromptText(value: string, limits: JournalPayloadLimits): string {
+  return boundInlineText(value, limits).text
 }
 
-function boundPromptOptionLabel(value: string): string {
-  return boundInlineText(value, PROMPT_OPTION_LIMITS).text
+function boundPromptOptionLabel(value: string, limits: JournalPayloadLimits): string {
+  return boundInlineText(value, { ...limits, inlineHeadBytes: PROMPT_OPTION_INLINE_HEAD_BYTES })
+    .text
 }
 
 /**
@@ -82,6 +83,7 @@ export function codexApprovalItem(input: {
   /** What is being approved, taken from the item Codex already announced —
    *  the approval request itself does not repeat the command or the patch. */
   detail: string | null
+  limits: JournalPayloadLimits
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
   return {
@@ -92,14 +94,17 @@ export function codexApprovalItem(input: {
         : input.method === CODEX_COMMAND_APPROVAL_METHOD
           ? 'Run a command?'
           : 'Approve this action?',
-    detail: boundNullablePromptText(approvalDetail(params) ?? input.detail),
+    detail: boundNullablePromptText(approvalDetail(params) ?? input.detail, input.limits),
     options: codexApprovalOptions(input.params),
     resolution: { ...PENDING }
   }
 }
 
-function boundNullablePromptText(value: string | null): string | null {
-  return value === null ? null : boundPromptText(value)
+function boundNullablePromptText(
+  value: string | null,
+  limits: JournalPayloadLimits
+): string | null {
+  return value === null ? null : boundPromptText(value, limits)
 }
 
 function approvalDetail(params: Record<string, unknown>): string | null {
@@ -134,6 +139,7 @@ export function codexQuestionItems(input: {
   threadId: string
   promptKey: string
   params: unknown
+  limits: JournalPayloadLimits
 }): CodexQuestionItem[] {
   const questions = readParams(input.params).questions
   if (!Array.isArray(questions)) {
@@ -152,8 +158,8 @@ export function codexQuestionItems(input: {
       identity: codexPromptIdentity({ ...input, questionId }),
       body: {
         kind: 'question',
-        question: boundPromptText(prompt),
-        options: questionOptions(question, questionId),
+        question: boundPromptText(prompt, input.limits),
+        options: questionOptions(question, questionId, input.limits),
         ...(questionAllowsFreeText(question)
           ? { freeTextQuestionId: codexJournalPromptIdPart(questionId) }
           : {}),
@@ -175,7 +181,8 @@ function questionAllowsFreeText(question: Record<string, unknown>): boolean {
 
 function questionOptions(
   question: Record<string, unknown>,
-  questionId: string
+  questionId: string,
+  limits: JournalPayloadLimits
 ): AgentJournalPromptOption[] {
   const options = question.options
   if (!Array.isArray(options)) {
@@ -193,7 +200,7 @@ function questionOptions(
       // question id, and the client only ever hands back an option id.
       mapped.push({
         id: encodeCodexJournalQuestionOptionId(questionId, label),
-        label: boundPromptOptionLabel(label)
+        label: boundPromptOptionLabel(label, limits)
       })
     }
   }

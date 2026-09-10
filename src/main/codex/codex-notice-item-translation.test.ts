@@ -2,30 +2,44 @@ import { describe, expect, it } from 'vitest'
 import { codexItemBody, codexStreamingJournalItem } from './codex-structured-item-translation'
 import { AgentJournalItemBodySchema } from '../../shared/agent-session-journal-schemas'
 import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
+import { UNRETAINED_JOURNAL_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
 
 describe('plan document translation', () => {
   it('marks both complete documents and streaming snapshots', () => {
     const item = { id: 'plan-1', type: 'plan', text: '# Plan\n\nReadable prose.' }
-    expect(codexItemBody(item)).toEqual({
+    expect(codexItemBody(item, UNRETAINED_JOURNAL_PAYLOAD_LIMITS)).toEqual({
       kind: 'status',
       text: item.text,
       presentation: 'plan-document'
     })
-    expect(codexStreamingJournalItem(item, '# Plan\n\nPartial').body).toEqual({
+    expect(
+      codexStreamingJournalItem(item, '# Plan\n\nPartial', UNRETAINED_JOURNAL_PAYLOAD_LIMITS).body
+    ).toEqual({
       kind: 'status',
       text: '# Plan\n\nPartial',
       presentation: 'plan-document'
     })
-    expect(codexItemBody({ id: 'plan-1', type: 'plan' })).toBeNull()
+    expect(
+      codexItemBody({ id: 'plan-1', type: 'plan' }, UNRETAINED_JOURNAL_PAYLOAD_LIMITS)
+    ).toBeNull()
   })
   it('preserves the full existing reasoning body byte for byte', () => {
     expect(
-      codexItemBody({ id: 'r', type: 'reasoning', summary: ['Thinking through the problem.'] })
+      codexItemBody(
+        { id: 'r', type: 'reasoning', summary: ['Thinking through the problem.'] },
+        UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+      )
     ).toEqual({
       kind: 'status',
       text: 'Thinking through the problem.'
     })
-    expect(codexStreamingJournalItem({ id: 'r', type: 'reasoning' }, 'Thinking…')).toEqual({
+    expect(
+      codexStreamingJournalItem(
+        { id: 'r', type: 'reasoning' },
+        'Thinking…',
+        UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+      )
+    ).toEqual({
       body: { kind: 'status', text: 'Thinking…' },
       handled: true
     })
@@ -36,7 +50,9 @@ describe('image item translation', () => {
   it.each(['/remote/work/image.png', 'C:\\work\\image.png'])(
     'preserves the execution-host path %s and old-reader operation text',
     (path) => {
-      expect(codexItemBody({ id: 'view', type: 'imageView', path })).toEqual({
+      expect(
+        codexItemBody({ id: 'view', type: 'imageView', path }, UNRETAINED_JOURNAL_PAYLOAD_LIMITS)
+      ).toEqual({
         kind: 'message',
         role: 'assistant',
         blocks: [
@@ -47,13 +63,16 @@ describe('image item translation', () => {
     }
   )
   it('prefers saved paths over unbounded inline image data', () => {
-    const body = codexItemBody({
-      id: 'gen',
-      type: 'imageGeneration',
-      status: 'completed',
-      savedPath: '/remote/image.png',
-      result: 'A'.repeat(100_000)
-    })
+    const body = codexItemBody(
+      {
+        id: 'gen',
+        type: 'imageGeneration',
+        status: 'completed',
+        savedPath: '/remote/image.png',
+        result: 'A'.repeat(100_000)
+      },
+      UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+    )
     expect(body).toEqual({
       kind: 'message',
       role: 'assistant',
@@ -72,7 +91,10 @@ describe('image item translation', () => {
     'maps bounded image data onto a meaningful existing image-ref: %s',
     (result) => {
       expect(
-        codexItemBody({ id: 'gen', type: 'imageGeneration', status: 'completed', result })
+        codexItemBody(
+          { id: 'gen', type: 'imageGeneration', status: 'completed', result },
+          UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+        )
       ).toMatchObject({
         kind: 'message',
         role: 'assistant',
@@ -86,12 +108,15 @@ describe('image item translation', () => {
   it.each(['A'.repeat(20_000), 'not valid image bytes', 'data:text/html;base64,AAAA', ''])(
     'keeps unavailable results bounded and readable',
     (result) => {
-      const body = codexItemBody({
-        id: 'gen',
-        type: 'imageGeneration',
-        status: 'completed',
-        result
-      })
+      const body = codexItemBody(
+        {
+          id: 'gen',
+          type: 'imageGeneration',
+          status: 'completed',
+          result
+        },
+        UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+      )
       expect(body).toEqual({
         kind: 'message',
         role: 'assistant',
@@ -105,7 +130,12 @@ describe('image item translation', () => {
     [{ status: 'completed', failure: { type: 'usageLimitExceeded' } }, 'Image generation failed'],
     [{ status: 'future-state' }, 'Image generation: preview unavailable']
   ])('does not invent completed output for %j', (fields, text) => {
-    expect(codexItemBody({ id: 'gen', type: 'imageGeneration', ...fields })).toEqual({
+    expect(
+      codexItemBody(
+        { id: 'gen', type: 'imageGeneration', ...fields },
+        UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+      )
+    ).toEqual({
       kind: 'message',
       role: 'assistant',
       blocks: [{ type: 'text', text }]

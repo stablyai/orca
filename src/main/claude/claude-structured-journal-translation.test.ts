@@ -17,7 +17,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
+  UNRETAINED_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
@@ -567,7 +567,7 @@ describe('Claude structured journal translation', () => {
 
     expect(state.items.at(-1)?.body).toEqual({
       kind: 'status',
-      text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+      text: boundInlineText(thinking, UNRETAINED_JOURNAL_PAYLOAD_LIMITS).text
     })
   })
 

@@ -11,6 +11,7 @@ import {
   encodeCodexQuestionOptionId
 } from './codex-structured-prompt-replies'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../native-chat/agent-session-journal/journal-row-schema'
+import { UNRETAINED_JOURNAL_PAYLOAD_LIMITS } from '../native-chat/agent-session-journal/journal-payload-bounds'
 
 const THREAD_ID = 'thread-abc'
 const CODEX_ITEM_ID = 'item-4'
@@ -42,7 +43,8 @@ describe('codex approval items', () => {
     const command = codexApprovalItem({
       method: CODEX_COMMAND_APPROVAL_METHOD,
       params: { availableDecisions: ['accept'] },
-      detail: 'rm -rf build'
+      detail: 'rm -rf build',
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
     })
 
     expect(command).toMatchObject({
@@ -52,10 +54,20 @@ describe('codex approval items', () => {
       resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
     })
     expect(
-      codexApprovalItem({ method: CODEX_FILE_CHANGE_APPROVAL_METHOD, params: {}, detail: null })
+      codexApprovalItem({
+        method: CODEX_FILE_CHANGE_APPROVAL_METHOD,
+        params: {},
+        detail: null,
+        limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+      })
     ).toMatchObject({ title: 'Apply file changes?', detail: null })
     expect(
-      codexApprovalItem({ method: 'item/other/requestApproval', params: {}, detail: null })
+      codexApprovalItem({
+        method: 'item/other/requestApproval',
+        params: {},
+        detail: null,
+        limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+      })
     ).toMatchObject({ title: 'Approve this action?' })
   })
 
@@ -63,7 +75,8 @@ describe('codex approval items', () => {
     const item = codexApprovalItem({
       method: CODEX_COMMAND_APPROVAL_METHOD,
       params: { reason: 'writes outside the workspace' },
-      detail: 'rm -rf build'
+      detail: 'rm -rf build',
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
     })
 
     expect(item.detail).toBe('writes outside the workspace')
@@ -74,21 +87,24 @@ describe('codex approval items', () => {
       codexApprovalItem({
         method: CODEX_COMMAND_APPROVAL_METHOD,
         params: { command: ['git', 'status'] },
-        detail: 'parent command'
+        detail: 'parent command',
+        limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
       }).detail
     ).toBe('git status')
     expect(
       codexApprovalItem({
         method: CODEX_COMMAND_APPROVAL_METHOD,
         params: { command: ['pnpm', 'test'], reason: 'same parent reason' },
-        detail: 'parent command'
+        detail: 'parent command',
+        limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
       }).detail
     ).toBe('pnpm test')
     expect(
       codexApprovalItem({
         method: CODEX_FILE_CHANGE_APPROVAL_METHOD,
         params: { grantRoot: '/outside' },
-        detail: null
+        detail: null,
+        limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
       }).detail
     ).toBe('"/outside"')
   })
@@ -97,7 +113,8 @@ describe('codex approval items', () => {
     const item = codexApprovalItem({
       method: CODEX_COMMAND_APPROVAL_METHOD,
       params: { command: 'x'.repeat(2_000_000) },
-      detail: null
+      detail: null,
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
     })
 
     expect(item.detail).toContain('output truncated')
@@ -118,7 +135,12 @@ describe('codex question items', () => {
   }
 
   it('makes one journal item per question, each with its own resolution', () => {
-    const items = codexQuestionItems({ threadId: THREAD_ID, promptKey: CODEX_ITEM_ID, params })
+    const items = codexQuestionItems({
+      threadId: THREAD_ID,
+      promptKey: CODEX_ITEM_ID,
+      params,
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+    })
 
     expect(items.map((item) => item.questionId)).toEqual(['q1', 'q2'])
     expect(items.map((item) => item.body.question)).toEqual(['Which branch?', 'Proceed?'])
@@ -126,7 +148,12 @@ describe('codex question items', () => {
   })
 
   it('keys each question separately so two answers cannot collide on one row', () => {
-    const items = codexQuestionItems({ threadId: THREAD_ID, promptKey: CODEX_ITEM_ID, params })
+    const items = codexQuestionItems({
+      threadId: THREAD_ID,
+      promptKey: CODEX_ITEM_ID,
+      params,
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+    })
 
     expect(items.map((item) => item.identity)).toEqual([
       { provider: 'orca', clientMessageId: 'codex-prompt:thread-abc:item-4:q1' },
@@ -135,7 +162,12 @@ describe('codex question items', () => {
   })
 
   it('names the question inside every option id, because codex replies by question', () => {
-    const items = codexQuestionItems({ threadId: THREAD_ID, promptKey: CODEX_ITEM_ID, params })
+    const items = codexQuestionItems({
+      threadId: THREAD_ID,
+      promptKey: CODEX_ITEM_ID,
+      params,
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+    })
 
     expect(items[0]?.body.options).toEqual([
       { id: encodeCodexQuestionOptionId('q1', 'main'), label: 'main' },
@@ -148,7 +180,8 @@ describe('codex question items', () => {
     const items = codexQuestionItems({
       threadId: THREAD_ID,
       promptKey: CODEX_ITEM_ID,
-      params: { questions: [{ question: 'no id' }, { id: 'q3' }, { id: 'q4', question: 'ok' }] }
+      params: { questions: [{ question: 'no id' }, { id: 'q3' }, { id: 'q4', question: 'ok' }] },
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
     })
 
     expect(items.map((item) => item.questionId)).toEqual(['q4'])
@@ -156,7 +189,12 @@ describe('codex question items', () => {
 
   it('returns nothing when the request carries no questions at all', () => {
     expect(
-      codexQuestionItems({ threadId: THREAD_ID, promptKey: CODEX_ITEM_ID, params: {} })
+      codexQuestionItems({
+        threadId: THREAD_ID,
+        promptKey: CODEX_ITEM_ID,
+        params: {},
+        limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
+      })
     ).toEqual([])
   })
 
@@ -173,7 +211,8 @@ describe('codex question items', () => {
             options: [{ label: 'Known' }, { label: 'Other', isOther: true }]
           }
         ]
-      }
+      },
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
     })
 
     expect(withoutOptions?.body).toMatchObject({ options: [], freeTextQuestionId: 'q1' })
@@ -197,7 +236,8 @@ describe('codex question items', () => {
             options: Array.from({ length: 80 }, () => ({ label: longLabel }))
           }
         ]
-      }
+      },
+      limits: UNRETAINED_JOURNAL_PAYLOAD_LIMITS
     })
     const item = items[0]
 

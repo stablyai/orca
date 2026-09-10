@@ -16,7 +16,7 @@ import {
   appendLegacyTranscriptMessages,
   importLegacyTranscriptIntoJournal
 } from './journal-legacy-import'
-import { DEFAULT_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
+import { UNRETAINED_JOURNAL_PAYLOAD_LIMITS } from './journal-payload-bounds'
 import { openAgentSessionJournal } from './journal-store-factory'
 import type { AgentSessionJournal } from './journal-store'
 
@@ -419,7 +419,10 @@ describe('payload bounds on import', () => {
       agent: 'claude',
       sessionId: CLAUDE_SESSION,
       fence: 1,
-      options: { filePath, limits: { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1_024 } }
+      options: {
+        filePath,
+        limits: { ...UNRETAINED_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 1_024 }
+      }
     })
 
     const item = journal.snapshot().items[0]
@@ -540,7 +543,7 @@ describe('import failures', () => {
 
   it('bounds oversized legacy tool-call input before journal publication', async () => {
     const journalDir = join(root, 'bounded-tool-input-journal')
-    const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
+    const limits = { ...UNRETAINED_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
     const journal = await open('claude', CLAUDE_SESSION, { journalDir })
     const filePath = await writeFixture('oversized-tool-input.jsonl', [
       {
@@ -650,7 +653,7 @@ describe('import failures', () => {
 // row that also has text, and omp's execution cells always pair the invocation
 // with its output — so the multi-block path carries untrusted tool input too.
 describe('multi-block legacy messages', () => {
-  const limits = { ...DEFAULT_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
+  const limits = { ...UNRETAINED_JOURNAL_PAYLOAD_LIMITS, inlineHeadBytes: 64 }
   const oversized = 'x'.repeat(10_000)
 
   /** The tool-call block of the first imported multi-block message. */

@@ -1,3 +1,4 @@
+import { JOURNAL_OVERFLOW_NOT_RETAINED } from '../native-chat/agent-session-journal/journal-overflow-store'
 import {
   boundPayload,
   digestPayload
@@ -19,8 +20,11 @@ export function codexJournalPromptIdPart(value: string): string {
     return value
   }
   const suffix = `#${digestPayload(value).slice(0, 32)}`
+  // A prompt id, not user content: the clipped tail is replaced by the digest
+  // suffix that keeps it unique, so there is nothing to retain.
   const bounded = boundPayload(value, {
-    inlineHeadBytes: CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES - suffix.length
+    inlineHeadBytes: CODEX_JOURNAL_PROMPT_ID_COMPONENT_MAX_BYTES - suffix.length,
+    overflow: JOURNAL_OVERFLOW_NOT_RETAINED
   })
   return `${bounded.head}${suffix}`
 }
