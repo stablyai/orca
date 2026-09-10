@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
-import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
+import { ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
@@ -24,6 +24,8 @@ import {
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 import { useSettledMobileNativeChatInputLock } from './use-mobile-native-chat-input-lease'
+import { useMobileNativeChatPromptJump } from './use-mobile-native-chat-prompt-jump'
+import { MobileNativeChatJumpControl } from './MobileNativeChatJumpControl'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -258,6 +260,7 @@ export function MobileNativeChatView({
     },
     [hasMore, loadingEarlier, onLoadEarlier]
   )
+  const promptJump = useMobileNativeChatPromptJump(listRef, data, atBottom)
 
   // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
   // owns them; the bridge lane keeps its three-dot indicator.
@@ -310,6 +313,8 @@ export function MobileNativeChatView({
               keyboardShouldPersistTaps="handled"
               onScroll={onScroll}
               scrollEventThrottle={32}
+              onViewableItemsChanged={promptJump.onViewableItemsChanged}
+              onScrollToIndexFailed={promptJump.onScrollToIndexFailed}
               onContentSizeChange={() => {
                 if (data.length > 0 && atBottom) {
                   listRef.current?.scrollToEnd({ animated: false })
@@ -349,16 +354,12 @@ export function MobileNativeChatView({
               }
             />
           </GestureDetector>
-          {/* Jump-to-latest control. */}
-          {!atBottom ? (
-            <Pressable
-              accessibilityLabel="Scroll to latest"
-              style={[styles.fab, styles.fabBottom]}
-              onPress={() => listRef.current?.scrollToEnd({ animated: true })}
-            >
-              <ArrowDown size={18} color={colors.textPrimary} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
+          <MobileNativeChatJumpControl
+            atBottom={atBottom}
+            showPromptJump={promptJump.showPromptJump}
+            onScrollToLatest={() => listRef.current?.scrollToEnd({ animated: true })}
+            onJumpToPrompt={promptJump.onJumpToPrompt}
+          />
         </GestureHandlerRootView>
       )}
       <MobileNativeChatPromptCard
