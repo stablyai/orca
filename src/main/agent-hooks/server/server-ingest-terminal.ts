@@ -17,7 +17,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     payload: ParsedAgentStatusPayload
   }): void {
     const physicalPaneKey = event.paneKey.trim()
-    const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
+    let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     const legacyPaneKey = parseLegacyNumericPaneKey(paneKey)
     if (paneKey.length === 0) {
@@ -57,6 +57,27 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       typeof event.terminalHandle === 'string' && event.terminalHandle.trim().length > 0
         ? event.terminalHandle.trim()
         : undefined
+    let mutationBefore: EnrichedAgentHookEventPayload | undefined
+    const indexedPaneKey = terminalHandle
+      ? this.getStatusPaneKeyForTerminalHandle(terminalHandle)
+      : undefined
+    if (indexedPaneKey && indexedPaneKey !== paneKey) {
+      const indexedStatus = this.state.lastStatusByPaneKey.get(indexedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      if (
+        indexedStatus &&
+        indexedStatus.terminalHandle === terminalHandle &&
+        this.sameTerminalOwner(indexedStatus, { connectionId, worktreeId })
+      ) {
+        mutationBefore = indexedStatus
+        this.transferPaneAuthority(indexedPaneKey, paneKey, event.ptyId, Date.now(), {
+          authorityVerified: true,
+          emitStatusRowMutation: false
+        })
+        paneKey = this.resolvePaneKeyAlias(paneKey)
+      }
+    }
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -66,6 +87,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.payload.agentType === 'claude'
     ) {
       // Why: OSC has no child identity or lead boundary, so it cannot replace a persisted child-only proof before the lifecycle hook arrives.
+      this.commitStatusRowMutation(mutationBefore, previous)
       return
     }
     // Why: preserve the hook-completed turn stamp while OSC repaints the current state.
@@ -82,6 +104,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       previous.terminalHandle === (terminalHandle ?? previous.terminalHandle) &&
       terminalStatusPayloadMatchesHook(previous.payload, event.payload, preserveActiveTurnStamp)
     ) {
+      this.refreshTerminalStatusEvidence(previous, mutationBefore)
       return
     }
     // Why: the OSC 9999 wire payload has no providerSession field at all, so an OSC observation is
@@ -114,7 +137,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         payload: event.payload
       },
       undefined,
-      'osc'
+      'osc',
+      undefined,
+      mutationBefore
     )
   }
 }

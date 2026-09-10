@@ -82,6 +82,16 @@ export type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => v
 export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
+export type AgentHookStatusRowIdentity = {
+  paneKey: string
+  worktreeId?: string
+  terminalHandle?: string
+}
+export type AgentHookStatusRowMutation = {
+  before: AgentHookStatusRowIdentity | null
+  after: AgentHookStatusRowIdentity | null
+}
+export type StatusRowMutationListener = (mutation: AgentHookStatusRowMutation) => void
 export type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 export type StatusDropListener = (paneKey: string) => void
 export type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void

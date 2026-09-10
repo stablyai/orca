@@ -55,7 +55,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
       const pty = this.ptysById.get(ptyId)
       const leaves = this.getLeavesForPty(ptyId)
       if (
-        !pty?.incarnationId ||
+        !pty ||
         pty.incarnationId !== retained.incarnationId ||
         leaves.length !== 1 ||
         this.handleByPtyId.has(ptyId)
@@ -91,6 +91,10 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    const retained = this.handleByPtyIncarnation.get(pty.ptyId)
+    if (retained?.incarnationId === pty.incarnationId) {
+      return retained.handle
+    }
     const existingHandle =
       this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
     if (existingHandle) {

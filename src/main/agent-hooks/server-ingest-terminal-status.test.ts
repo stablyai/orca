@@ -267,6 +267,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
           worktreeId: 'wt-1',
           connectionId: null,
           receivedAt: 1_000,
+          evidenceObservedAt: 1_000,
           stateStartedAt: 1_000,
           payload: {
             state: 'working',
@@ -282,6 +283,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
           worktreeId: 'wt-1',
           connectionId: null,
           receivedAt: 1_000,
+          evidenceObservedAt: 1_000,
           stateStartedAt: 1_000,
           state: 'working',
           prompt: 'ship it',
@@ -363,7 +365,8 @@ describe('AgentHookServer ingestTerminalStatus', () => {
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
           paneKey: PANE,
-          receivedAt: 1_000,
+          receivedAt: 1_250,
+          evidenceObservedAt: 1_250,
           stateStartedAt: 1_000,
           state: 'working',
           prompt: 'same turn'

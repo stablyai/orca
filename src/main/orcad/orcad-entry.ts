@@ -145,9 +145,10 @@ async function startOrcadRuntime(
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
-  // Why importable here: the store is an in-memory singleton whose module tree never reaches
-  // Electron, and its file paths come from `start()`, which orcad never calls.
+  // Why importable here: the singleton's module tree never reaches Electron, and orcad supplies
+  // its persistence and endpoint paths explicitly below.
   const { agentHookServer } = await import('../agent-hooks/server')
+  const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
 
@@ -165,7 +166,11 @@ async function startOrcadRuntime(
           await stopOrcadDaemon()
         }
       } finally {
-        uninstallHookStatusRepublish()
+        try {
+          uninstallHookStatusRepublish()
+        } finally {
+          agentHookServer.stop()
+        }
       }
     }
   })
@@ -182,6 +187,10 @@ async function startOrcadRuntime(
   // Why: every SSH connect consults this sidecar. Left unbound it reports nothing trusted,
   // which is safe but silently discards accept records on every launch.
   initSshHostKeyStoreFile(profile.dataFile)
+
+  if (isAgentStatusHooksEnabled(store.getSettings())) {
+    await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
+  }
 
   // Why before the runtime and the PTY handlers: `setLocalPtyProvider` installs the daemon
   // adapter as THE local provider, and the registry's contract is that it lands before
@@ -221,7 +230,9 @@ async function startOrcadRuntime(
       forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
     },
     reconcileAgentStatusForEndedProcess: (paneKeys) =>
-      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys)
+      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
+    buildAgentHookPtyEnv: () =>
+      isAgentStatusHooksEnabled(store.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
 
   // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a

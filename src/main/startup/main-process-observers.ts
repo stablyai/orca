@@ -3,8 +3,7 @@ import { join } from 'node:path'
 import { AgentAwakeService } from '../agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
-import { agentHookServer, type AgentHookProviderSessionIdentity } from '../agent-hooks/server'
-import { createHookProviderSessionInvalidator } from '../agent-hooks/hook-provider-session-invalidation'
+import { agentHookServer } from '../agent-hooks/server'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetry'
@@ -40,36 +39,15 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
-  const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
-  const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
-    const ownedIdentities = identities.map((identity) => ({
-      ...identity,
-      worktreeId:
-        identity.worktreeId ??
-        state.runtime?.getTerminalWorktreeIdForPaneKey(identity.paneKey) ??
-        undefined
-    }))
-    for (const worktreeId of collectChangedProviderSessionWorktrees(ownedIdentities)) {
-      // Why not `notifyMobileSessionTabsChanged` alone: it re-emits at the unchanged
-      // `snapshotVersion`, which every client drops on its monotonic gate.
-      state.runtime?.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
-    }
-  }
-  state.publishProviderSessionChanges = publishProviderSessionChanges
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     state.agentAwakeService?.setStatuses(statuses)
   })
-  // Healthy session.tabs streams need a push when transcript identity changes.
-  const unsubscribeProviderSessionChanges = agentHookServer.subscribeProviderSessionChanges(
-    (sessions) => publishProviderSessionChanges(sessions)
-  )
   const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
     agentHookServer,
     () => state.runtime
   )
   state.unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
-    unsubscribeProviderSessionChanges()
     uninstallHookStatusRepublish()
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.

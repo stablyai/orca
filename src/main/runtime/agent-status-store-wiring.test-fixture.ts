@@ -2,7 +2,9 @@ import { AgentHookServer } from '../agent-hooks/server'
 import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
 
 type WiredRuntime = {
-  touchMobileSessionTabsForPane(paneKey: string, worktreeId?: string | null): void
+  getTerminalWorktreeIdForHandle(handle: string): string | null
+  getTerminalWorktreeIdForPaneKey(paneKey: string): string | null
+  touchMobileSessionTabsForWorktree(worktreeId: string): void
 }
 
 /**

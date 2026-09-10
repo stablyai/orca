@@ -37,7 +37,8 @@ import type {
   ServerAgentStatusListener,
   ServerStatusLineListener,
   StatusChangeListener,
-  StatusDropListener
+  StatusDropListener,
+  StatusRowMutationListener
 } from './server-types'
 
 /** Shared mutable state for the layered hook-server implementation. */
@@ -54,6 +55,10 @@ export abstract class AgentHookServerState {
   protected statusDropListeners = new Set<StatusDropListener>()
   protected statusChangeListeners = new Set<StatusChangeListener>()
   protected providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
+  protected statusRowMutationListeners = new Set<StatusRowMutationListener>()
+  // Runtime terminal handles are stable across pane remints, unlike tab/leaf keys. This index is
+  // deliberately in-memory only and contains no rows of its own.
+  protected paneKeyByTerminalHandle = new Map<string, string>()
   // Why: setListener is a single slot owned by the main-window fanout; the
   // plugin event bus (and future consumers) need an additive subscription
   // that also works in headless serve, where no window listener exists.
@@ -154,7 +159,8 @@ export abstract class AgentHookServerState {
     payload: AgentHookEventPayload,
     onAccepted?: () => void,
     origin?: AgentStatusObservationOrigin,
-    observedAt?: number
+    observedAt?: number,
+    mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload
   protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
   protected abstract clearAssistantMessageRetry(paneKey: string): void
@@ -200,7 +206,10 @@ export abstract class AgentHookServerState {
     entry: EnrichedAgentHookEventPayload | null | undefined
   ): EnrichedAgentHookEventPayload | null
   protected abstract hasLiveClaimsForPaneKey(paneKey: string): boolean
-  protected abstract clearPaneState(paneKey: string): void
+  protected abstract clearPaneState(
+    paneKey: string,
+    options?: { emitStatusRowMutation?: boolean }
+  ): void
   protected abstract deleteStatusEntry(
     paneKey: string,
     options?: { preserveAuthority?: boolean }

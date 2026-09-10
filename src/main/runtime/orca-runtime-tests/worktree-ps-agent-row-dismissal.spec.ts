@@ -10,6 +10,7 @@ import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fi
  * parse, not a hand-built snapshot.
  */
 const LEAF_ID = '77777777-7777-4777-8777-777777777777'
+const REMINTED_LEAF_ID = '88888888-8888-4888-8888-888888888888'
 const PANE_KEY = `tab-dismiss:${LEAF_ID}`
 
 function wiredRuntime(incarnationId?: string): {
@@ -79,11 +80,11 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
 
   it('tells paired clients to republish on the transition and on the dismissal', async () => {
     const { runtime, statusWiring } = wiredRuntime()
-    const republish = vi.spyOn(runtime, 'touchMobileSessionTabsForPane')
+    const republish = vi.spyOn(runtime, 'touchMobileSessionTabsForWorktree')
     const uninstall = statusWiring.attach(runtime)
     try {
       emitWorkingStatus(runtime, 1)
-      expect(republish).toHaveBeenCalledWith(PANE_KEY, TEST_WORKTREE_ID)
+      expect(republish).toHaveBeenCalledWith(TEST_WORKTREE_ID)
 
       // The same payload again changes nothing a client would render.
       republish.mockClear()
@@ -95,11 +96,11 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
         '\x1b]9999;{"state":"done","prompt":"ship it","agentType":"codex"}\x07',
         3
       )
-      expect(republish).toHaveBeenCalledWith(PANE_KEY, TEST_WORKTREE_ID)
+      expect(republish).toHaveBeenCalledWith(TEST_WORKTREE_ID)
 
       republish.mockClear()
       statusWiring.statusStore.dropStatusEntry(PANE_KEY)
-      expect(republish).toHaveBeenCalledWith(PANE_KEY)
+      expect(republish).toHaveBeenCalledWith(TEST_WORKTREE_ID)
     } finally {
       uninstall()
       republish.mockRestore()
@@ -137,11 +138,21 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
     }
   )
 
-  it('rejoins mobile status through the incarnation handle after a tab id remint', async () => {
+  it('publishes one provider-addressable row through remint, dismissal, and exit', async () => {
     const { runtime, statusWiring } = wiredRuntime('incarnation-1')
     emitWorkingStatus(runtime, 1)
     const row = statusWiring.statusStore.getStatusSnapshot()[0]!
     expect(row.terminalHandle).toMatch(/^term_/)
+    statusWiring.statusStore.ingestRemote(
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-dismiss',
+        worktreeId: TEST_WORKTREE_ID,
+        providerSession: { key: 'session_id', id: 'provider-session-1' },
+        payload: { state: 'working', prompt: 'ship it', agentType: 'codex' }
+      },
+      null
+    )
 
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -149,7 +160,7 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
           tabId: 'tab-reminted',
           worktreeId: TEST_WORKTREE_ID,
           title: 'Codex',
-          activeLeafId: LEAF_ID,
+          activeLeafId: REMINTED_LEAF_ID,
           layout: null
         }
       ],
@@ -157,7 +168,7 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
         {
           tabId: 'tab-reminted',
           worktreeId: TEST_WORKTREE_ID,
-          leafId: LEAF_ID,
+          leafId: REMINTED_LEAF_ID,
           paneRuntimeId: 1,
           ptyId: 'dismiss-pty'
         }
@@ -168,14 +179,14 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
           publicationEpoch: 'reminted-epoch',
           snapshotVersion: 1,
           activeGroupId: null,
-          activeTabId: `tab-reminted::${LEAF_ID}`,
+          activeTabId: `tab-reminted::${REMINTED_LEAF_ID}`,
           activeTabType: 'terminal',
           tabs: [
             {
               type: 'terminal',
-              id: `tab-reminted::${LEAF_ID}`,
+              id: `tab-reminted::${REMINTED_LEAF_ID}`,
               parentTabId: 'tab-reminted',
-              leafId: LEAF_ID,
+              leafId: REMINTED_LEAF_ID,
               ptyId: 'dismiss-pty',
               title: 'Codex',
               isActive: true
@@ -185,12 +196,53 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
       ]
     })
 
-    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-    expect(result.tabs[0]).toMatchObject({
-      type: 'terminal',
-      agentStatus: { state: 'working', prompt: 'ship it' }
-    })
-    statusWiring.statusStore.stop()
+    const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const events: Awaited<ReturnType<typeof runtime.listMobileSessionTabs>>[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+    const uninstall = statusWiring.attach(runtime)
+    try {
+      emitWorkingStatus(runtime, 2)
+      await vi.waitFor(() => expect(events).toHaveLength(1))
+      const remintedPaneKey = `tab-reminted:${REMINTED_LEAF_ID}`
+      expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: remintedPaneKey,
+          terminalHandle: row.terminalHandle,
+          providerSession: { key: 'session_id', id: 'provider-session-1' }
+        })
+      ])
+      expect(events[0]).toMatchObject({
+        snapshotVersion: before.snapshotVersion + 1,
+        tabs: [
+          expect.objectContaining({
+            agentStatus: expect.objectContaining({
+              state: 'working',
+              providerSession: { key: 'session_id', id: 'provider-session-1' }
+            })
+          })
+        ]
+      })
+
+      statusWiring.statusStore.dropStatusEntry(remintedPaneKey)
+      await vi.waitFor(() => expect(events).toHaveLength(2))
+      expect(events[1]).toMatchObject({
+        snapshotVersion: before.snapshotVersion + 2,
+        tabs: [expect.objectContaining({ agentStatus: expect.objectContaining({ state: 'done' }) })]
+      })
+      expect((await runtime.getWorktreePs()).worktrees[0]?.agents).toEqual([])
+
+      runtime.onPtyExit('dismiss-pty', 0)
+      await vi.waitFor(() => expect(events).toHaveLength(3))
+      expect(events[2]).toMatchObject({ snapshotVersion: before.snapshotVersion + 4 })
+      expect(
+        events[2]?.tabs.every((tab) => tab.type !== 'terminal' || tab.agentStatus === undefined)
+      ).toBe(true)
+      expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
+    } finally {
+      uninstall()
+      unsubscribe()
+      statusWiring.statusStore.stop()
+    }
   })
 
   it('keeps runtime-owned legacy OSC rows in worktree.ps and mobile projections', async () => {

@@ -134,27 +134,31 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.server = createServer((req, res) => {
       void handleRequest(req, res)
     })
-    await new Promise<void>((resolve, reject) => {
-      const onStartupError = (err: Error): void => {
-        // Why: swap the startup reject-handler for a logging one so a later runtime 'error' can't crash main as an unhandled event.
-        this.server?.off('listening', onListening)
-        reject(err)
-      }
-      const onListening = (): void => {
-        this.server?.off('error', onStartupError)
-        this.server?.on('error', (err) => {
-          console.error('[agent-hooks] server error', err)
-        })
-        const address = this.server!.address()
-        if (address && typeof address === 'object') {
-          this.port = address.port
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onStartupError = (err: Error): void => {
+          this.server?.off('listening', onListening)
+          reject(err)
         }
-        this.maybeWriteEndpointFile()
-        resolve()
-      }
-      this.server!.once('error', onStartupError)
-      this.server!.listen(0, '127.0.0.1', onListening)
-    })
+        const onListening = (): void => {
+          this.server?.off('error', onStartupError)
+          this.server?.on('error', (err) => {
+            console.error('[agent-hooks] server error', err)
+          })
+          const address = this.server!.address()
+          if (address && typeof address === 'object') {
+            this.port = address.port
+          }
+          this.maybeWriteEndpointFile()
+          resolve()
+        }
+        this.server!.once('error', onStartupError)
+        this.server!.listen(0, '127.0.0.1', onListening)
+      })
+    } catch (error) {
+      this.stop()
+      throw error
+    }
   }
 
   stop(): void {
@@ -166,7 +170,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
+    this.onClaudeStatusLine = null
     this.onPaneStatusCleared = null
+    this.onTransportInterference = null
+    this.transportInterference.reset()
     for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
@@ -178,6 +185,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
+    this.paneKeyByTerminalHandle.clear()
     this.hydratedAuthorityCommitments = Object.freeze([])
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()
@@ -189,9 +197,18 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.restartedStatusLaunchTokenHashByPaneKey.clear()
     this.retiredPaneFencesByKey.clear()
     this.connectionTimestampWatermarkById.clear()
+    this.evidenceObservedAtByPaneKey.clear()
+    this.activeHookTurnCompletedAtByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
+    this.paneKeyAliasPersistenceListener = null
     // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
+    this.paneStatusClearListeners.clear()
+    this.statusDropListeners.clear()
+    this.statusChangeListeners.clear()
+    this.providerSessionChangeListeners.clear()
+    this.enrichedStatusListeners.clear()
+    this.statusRowMutationListeners.clear()
   }
 }

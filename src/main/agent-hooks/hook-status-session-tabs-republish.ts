@@ -1,14 +1,12 @@
 import type { AgentHookServer } from './server'
-import { createHookStatusSessionTabsInvalidator } from './hook-status-session-tabs-invalidation'
 
 type SessionTabsRepublisher = {
-  touchMobileSessionTabsForPane(paneKey: string, worktreeId?: string | null): void
+  getTerminalWorktreeIdForHandle(handle: string): string | null
+  getTerminalWorktreeIdForPaneKey(paneKey: string): string | null
+  touchMobileSessionTabsForWorktree(worktreeId: string): void
 }
 
-type StatusStore = Pick<
-  AgentHookServer,
-  'subscribeEnrichedStatus' | 'subscribePaneStatusClear' | 'subscribeStatusDrop'
->
+type StatusStore = Pick<AgentHookServer, 'subscribeStatusRowMutations'>
 
 /**
  * Republish `session.tabs` whenever a pane's status row changes.
@@ -22,31 +20,28 @@ export function installHookStatusSessionTabsRepublish(
   statusStore: StatusStore,
   getRuntime: () => SessionTabsRepublisher | null | undefined
 ): () => void {
-  const changedSessionTabs = createHookStatusSessionTabsInvalidator()
-  const unsubscribeStatus = statusStore.subscribeEnrichedStatus((enriched) => {
-    if (changedSessionTabs(enriched)) {
-      getRuntime()?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
+  return statusStore.subscribeStatusRowMutations((mutation) => {
+    const runtime = getRuntime()
+    if (!runtime) {
+      return
+    }
+    const worktreeIds = new Set<string>()
+    for (const identity of [mutation.before, mutation.after]) {
+      if (!identity) {
+        continue
+      }
+      const worktreeId =
+        identity.worktreeId ??
+        (identity.terminalHandle
+          ? runtime.getTerminalWorktreeIdForHandle(identity.terminalHandle)
+          : null) ??
+        runtime.getTerminalWorktreeIdForPaneKey(identity.paneKey)
+      if (worktreeId) {
+        worktreeIds.add(worktreeId)
+      }
+    }
+    for (const worktreeId of worktreeIds) {
+      runtime.touchMobileSessionTabsForWorktree(worktreeId)
     }
   })
-  // Teardown: certified agent exit, pane close, and explicit connection clears land here.
-  // Transport loss alone keeps the last remote observation as unverifiable evidence.
-  const unsubscribeClear = statusStore.subscribePaneStatusClear((clear) => {
-    const clearedPaneKeys =
-      'paneKey' in clear ? [clear.paneKey] : changedSessionTabs.forgetConnection(clear.connectionId)
-    for (const paneKey of clearedPaneKeys) {
-      changedSessionTabs.forgetPane(paneKey)
-      getRuntime()?.touchMobileSessionTabsForPane(paneKey)
-    }
-  })
-  // Why a third tap: a user dismissal deletes the row without a pane clear, and it now leaves
-  // `worktree ps` and the phone with it — so the paired client has to be told.
-  const unsubscribeDrop = statusStore.subscribeStatusDrop((paneKey) => {
-    changedSessionTabs.forgetPane(paneKey)
-    getRuntime()?.touchMobileSessionTabsForPane(paneKey)
-  })
-  return () => {
-    unsubscribeStatus()
-    unsubscribeClear()
-    unsubscribeDrop()
-  }
 }
