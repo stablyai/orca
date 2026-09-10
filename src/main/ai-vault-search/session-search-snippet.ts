@@ -4,6 +4,8 @@ import {
   SESSION_SEARCH_SNIPPET_MARK_OPEN
 } from './session-search-engine-types'
 import { orExpression, type SessionSearchQueryPlan } from './session-search-query-planner'
+import { scopedExpression } from './session-search-retrieval'
+import type { SessionSearchScope } from './session-search-engine-types'
 
 const SNIPPET_TOKENS = 12
 // Why a ceiling on top of the token count: a transcript chunk can be 8000
@@ -27,18 +29,26 @@ export const EMPTY_SNIPPET: SessionSearchSnippet = { text: '', truncated: false 
  */
 export function sessionSearchSnippet(
   db: SyncDatabase,
-  table: 'messages_fts' | 'conversation_fts',
+  scope: SessionSearchScope,
   rowid: number,
   plan: SessionSearchQueryPlan
 ): SessionSearchSnippet {
   // Why: the identifier shadow column is word soup; a hit that also matches in a
   // prose column should be shown from there. Column -1 (any column) is the
   // fallback for rows that only matched through the shadow column.
-  const columns = table === 'messages_fts' ? [0, 1, 2, -1] : [0, 1, -1]
+  //
+  // The same four for every scope, because the scope is already in the
+  // expression below. A conversation snippet cannot come out of `tool_text` for
+  // the reason the search could not: the row has to match
+  // `{user_text assistant_text}: …` before any of these columns is read, and a
+  // row that matches under that filter carries its mark in column 0 or 1. A
+  // second list here would be a guard with nothing left to guard, and the two
+  // would mask each other's mistakes.
+  const columns = [0, 1, 2, -1]
   const select = columns
     .map(
       (column, index) =>
-        `snippet(${table}, ${column}, '${SESSION_SEARCH_SNIPPET_MARK_OPEN}', '${SESSION_SEARCH_SNIPPET_MARK_CLOSE}', '…', ${SNIPPET_TOKENS}) AS c${index}`
+        `snippet(messages_fts, ${column}, '${SESSION_SEARCH_SNIPPET_MARK_OPEN}', '${SESSION_SEARCH_SNIPPET_MARK_CLOSE}', '…', ${SNIPPET_TOKENS}) AS c${index}`
     )
     .join(', ')
   try {
@@ -51,12 +61,14 @@ export function sessionSearchSnippet(
     // returned to a caller.
     const row = db
       .prepare(
-        `SELECT ${select} FROM ${table}
-         JOIN messages m ON m.id = ${table}.rowid
+        `SELECT ${select} FROM messages_fts
+         JOIN messages m ON m.id = messages_fts.rowid
          JOIN sessions s ON s.id = m.session_row_id
-         WHERE ${table} MATCH ? AND ${table}.rowid IN (SELECT ?)`
+         WHERE messages_fts MATCH ? AND messages_fts.rowid IN (SELECT ?)`
       )
-      .get(orExpression(plan.terms), rowid) as Record<string, string> | undefined
+      .get(scopedExpression(scope, orExpression(plan.terms)), rowid) as
+      | Record<string, string>
+      | undefined
     if (!row) {
       return EMPTY_SNIPPET
     }

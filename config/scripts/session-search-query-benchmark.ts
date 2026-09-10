@@ -12,7 +12,6 @@ import type {
   SessionSearchScope
 } from '../../src/main/ai-vault-search/session-search-engine-types'
 import { registerSessionSearchIndexConsumer } from '../../src/main/ai-vault-search/session-search-index-consumer'
-import { openSessionSearchDatabase } from '../../src/main/ai-vault-search/session-search-schema'
 import { SessionSearchStore } from '../../src/main/ai-vault-search/session-search-store'
 import type SyncDatabase from '../../src/main/sqlite/sync-database'
 import {
@@ -64,8 +63,7 @@ async function indexCorpus(
 ): Promise<{ corpus: SyntheticCorpus; db: SyncDatabase; release: () => void }> {
   resetSessionParseCacheForTests()
   const corpus = await writeSyntheticTranscriptCorpus(options)
-  const indexPath = join(corpus.root, 'index.sqlite')
-  const store = new SessionSearchStore(indexPath, (error) => {
+  const store = new SessionSearchStore(join(corpus.root, 'index.sqlite'), (error) => {
     throw error
   })
   const unregister = registerSessionSearchIndexConsumer(store)
@@ -77,17 +75,15 @@ async function indexCorpus(
       stats
     )
   }
-  // The reader's own handle: the store keeps its connection private, and every
-  // read here is a single statement, so a second one pins no WAL snapshot.
-  const db = openSessionSearchDatabase(indexPath)
   return {
     corpus,
-    db,
+    // The handle a composed reader gets. Every read here is one synchronous
+    // statement, which is the contract that comes with it.
+    db: store.connection,
     release: () => {
       unregister()
       resetTranscriptConsumersForTests()
       resetSessionParseCacheForTests()
-      db.close()
       store.close()
     }
   }

@@ -2,9 +2,10 @@ import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// The corpus the `conversation_fts` shoot-out runs over. Written here rather
-// than by `session-search-synthetic-corpus.ts` because the answer turns on one
-// property that generator fixes: how much of a transcript is tool output.
+// The corpus the scope benchmark runs over. Written here rather than by
+// `session-search-synthetic-corpus.ts` because what it costs to answer a
+// conversation query out of the one FTS table turns on the property that
+// generator fixes: how much of a transcript is tool output.
 //
 // Synthetic, always. This must never be pointed at a real transcript.
 
@@ -26,11 +27,10 @@ const PROSE = [
 ]
 // Tool output is paths, hashes and log lines — and the same words the
 // conversation uses, because a `rg` over this repository prints them. That
-// overlap is the whole question: it is what makes a conversation term's posting
-// list in `messages_fts` far longer than the same term's list in
-// `conversation_fts`, so the column filter has to read and discard the
-// difference. A tool vocabulary disjoint from the prose would make the two
-// tables answer from identical posting lists and prove nothing.
+// overlap is what the benchmark turns on: it is what makes a conversation
+// term's posting list carry rows the column filter then has to discard. A tool
+// vocabulary disjoint from the prose would leave nothing to discard and measure
+// the wrong thing.
 const TOOL_ONLY = [
   'src/main/ai-vault/session-transcript-reader.ts',
   'node_modules/.pnpm/typescript@5.9.2',
@@ -45,10 +45,9 @@ const TOOL_ONLY = [
   'byteOffset',
   'MAX_RETRIES'
 ]
-// Half the tool tokens are conversation words. Deliberately generous to the
-// table being questioned: the more of a query term lives in `tool_text`, the
-// more the column filter costs, so a verdict that survives this survives a real
-// transcript tree.
+// Half the tool tokens are conversation words. Deliberately pessimistic: the
+// more of a query term lives in `tool_text`, the more the column filter costs,
+// so a number measured here holds on a real transcript tree.
 const TOOL = [...PROSE, ...TOOL_ONLY]
 
 function mulberry32(seed: number): () => number {
