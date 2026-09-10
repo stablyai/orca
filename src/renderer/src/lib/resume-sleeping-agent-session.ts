@@ -4,10 +4,12 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
-  recordPaneIsOwnedByPreservedPane
+  recordPaneIsOwnedByPreservedPane,
+  stablePaneHasLivePty
 } from './sleeping-agent-pane-ownership'
 import {
   launchSleepingAgentSession,
@@ -100,12 +102,37 @@ function activeOrQueuedResumeClaimsProviderSession(
     if (samePaneOwnsRecovery && entry.paneKey === record.paneKey) {
       continue
     }
+    const tabId = getAgentStatusTabId(entry)
+    const pane = parsePaneKey(entry.paneKey)
     if (
-      worktreeTabIds.has(getAgentStatusTabId(entry) ?? '') &&
-      entry.worktreeId === record.worktreeId &&
-      entry.agentType === record.agent &&
+      entry.agentType !== record.agent ||
+      !agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
+    ) {
+      continue
+    }
+    // Why this arm carries no workspace scope: a provider session id names one transcript, so a
+    // pane whose exact PTY is live right now already owns it wherever that pane happens to sit, and
+    // resuming forks the agent the user is watching. The scoped arm below still needs its scope —
+    // a status row with no live PTY is a claim about the past. The two ids do drift: adopting an
+    // orphaned terminal re-keys `tabsByWorktree` without re-keying the sleeping records that name
+    // the old id (workspace-session-worktree-id.ts), and a completed turn on a live pane is exactly
+    // where the drift stops being caught.
+    if (
+      pane &&
+      tabId === pane.tabId &&
+      stablePaneHasLivePty(
+        pane.tabId,
+        pane.leafId,
+        state.ptyIdsByTabId,
+        state.terminalLayoutsByTabId[pane.tabId]
+      )
+    ) {
+      return true
+    }
+    if (
       entry.state !== 'done' &&
-      agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
+      worktreeTabIds.has(tabId ?? '') &&
+      entry.worktreeId === record.worktreeId
     ) {
       return true
     }
