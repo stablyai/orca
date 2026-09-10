@@ -450,6 +450,32 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[1])).toContain('Claude')
   })
 
+  it('headlines the tab custom title instead of the agent type label', () => {
+    const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'Terminal 1', customTitle: 'Payments' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
+    })
+    harness.noteTargets = [
+      {
+        paneKey: statusPaneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'Payments',
+        customTitle: 'Payments',
+        status: 'eligible'
+      }
+    ]
+
+    const tree = render()
+    const item = findByType(tree, 'DropdownMenuItem')
+
+    expect(collectText(item)).toContain('Payments')
+    // Why: the agent type moves to the secondary line instead of duplicating the name.
+    expect(collectText(item)).toContain('Claude')
+  })
+
   it('does not target title-detected rows skipped by target derivation', async () => {
     const paneKey = makePaneKey(TAB_B, LEAF_B)
     harness.worktreeAgentRows = [

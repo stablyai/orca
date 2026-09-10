@@ -22,6 +22,9 @@ export type NotesSendAgentTarget = {
   leafId: string
   agentType: AgentType | null | undefined
   tabTitle: string
+  // Why: the user's own rename, exposed separately from tabTitle so callers can
+  // headline it instead of the agent type label — a live status title is not a name.
+  customTitle: string | null
   status: 'eligible' | 'disabled'
   disabledReason?: string
 }
@@ -76,6 +79,7 @@ export function deriveNotesSendAgentTargets(
       // Why: prefer the user's own rename (same precedence as the tab bar) over
       // the live status text agents constantly overwrite the title with.
       tabTitle: target.tab.customTitle ?? target.tab.title,
+      customTitle: target.tab.customTitle?.trim() || null,
       status: target.status,
       ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
     })
@@ -142,6 +146,7 @@ function deriveTitleHintAgentTarget(
     leafId,
     agentType: tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title),
     tabTitle: tab.customTitle ?? tab.title,
+    customTitle: tab.customTitle?.trim() || null,
     status: disabledReason ? 'disabled' : 'eligible',
     ...(disabledReason ? { disabledReason } : {})
   }
@@ -179,7 +184,8 @@ function mergeLaunchAgentTitleTarget(
         existing.agentType && existing.agentType !== 'unknown'
           ? existing.agentType
           : target.agentType,
-      tabTitle: existing.tabTitle || target.tabTitle
+      tabTitle: existing.tabTitle || target.tabTitle,
+      customTitle: existing.customTitle || target.customTitle
     }
     return
   }

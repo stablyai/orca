@@ -129,6 +129,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_A,
         agentType: 'codex',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ])
@@ -157,6 +158,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_A,
         agentType: 'codex',
         tabTitle: 'Payments',
+        customTitle: 'Payments',
         status: 'eligible'
       }
     ])
@@ -225,6 +227,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Terminal 2',
+        customTitle: null,
         status: 'eligible'
       }
     ])
@@ -250,6 +253,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Terminal 2',
+        customTitle: null,
         status: 'eligible'
       }
     ])
@@ -495,6 +499,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Previous Codex session',
+        customTitle: null,
         status: 'eligible'
       }
     ])
@@ -530,6 +535,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Refactor',
+        customTitle: 'Refactor',
         status: 'eligible'
       }
     ])
@@ -737,6 +743,7 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'opencode',
         tabTitle: 'Terminal 2',
+        customTitle: null,
         status: 'eligible'
       }
     ])

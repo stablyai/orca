@@ -249,10 +249,15 @@ function AgentTargetMenuItem({
   const state = agentRowDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
+  const agentTypeLabel = formatAgentTypeLabel(target.agentType ?? agent?.agentType)
+  // Why: headline the user's own rename, same as the tab bar and dashboard rows —
+  // it tells apart multiple running agents of the same type better than the type name.
+  const primaryLabel = target.customTitle || agentTypeLabel
   const secondaryParts = [
+    ...(target.customTitle ? [agentTypeLabel] : []),
     agentStateLabel(state),
     ...(timeAgo ? [timeAgo] : []),
-    ...(tabTitle ? [tabTitle] : [])
+    ...(!target.customTitle && tabTitle ? [tabTitle] : [])
   ]
   return (
     <DropdownMenuItem
@@ -273,9 +278,7 @@ function AgentTargetMenuItem({
       />
       <AgentIcon agent={agentTypeToIconAgent(target.agentType ?? agent?.agentType)} size={14} />
       <span className="grid min-w-0 flex-1 text-left">
-        <span className="truncate">
-          {formatAgentTypeLabel(target.agentType ?? agent?.agentType)}
-        </span>
+        <span className="truncate">{primaryLabel}</span>
         <span className="truncate text-[11px] font-normal text-muted-foreground">
           {secondaryParts.join(' · ')}
         </span>
