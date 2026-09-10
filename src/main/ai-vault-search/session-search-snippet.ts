@@ -7,6 +7,15 @@ import { orExpression, type SessionSearchQueryPlan } from './session-search-quer
 import { scopedExpression } from './session-search-retrieval'
 import type { SessionSearchScope } from './session-search-engine-types'
 
+// What FTS5 wraps a match in before this module rewrites it to the public
+// marks. Private-use code points, and not `[[`, because two different jobs here
+// have to tell a mark from content: choosing the column to show, and refusing
+// to cut a snippet between an open mark and its close. Transcripts contain
+// `[[` — a bash `[[ -f x ]]`, numpy's `[[1, 2]]` — and a mark the content can
+// forge makes both of those decisions wrong on real text.
+const MARK_OPEN = '\uE000'
+const MARK_CLOSE = '\uE001'
+
 const SNIPPET_TOKENS = 12
 // Why a ceiling on top of the token count: a transcript chunk can be 8000
 // characters with no separator in it, which FTS5 reports as one token, so
@@ -45,11 +54,16 @@ export function sessionSearchSnippet(
   // second list here would be a guard with nothing left to guard, and the two
   // would mask each other's mistakes.
   const columns = [0, 1, 2, -1]
+  // Each column twice: once marked, once with empty marks. Whether a column
+  // matched is then the difference between two renderings of the same text,
+  // which content cannot forge — searching the marked one for a mark reads a
+  // transcript's own `[[` as a highlight and shows a column that matched
+  // nothing.
   const select = columns
-    .map(
-      (column, index) =>
-        `snippet(messages_fts, ${column}, '${SESSION_SEARCH_SNIPPET_MARK_OPEN}', '${SESSION_SEARCH_SNIPPET_MARK_CLOSE}', '…', ${SNIPPET_TOKENS}) AS c${index}`
-    )
+    .flatMap((column, index) => [
+      `snippet(messages_fts, ${column}, '${MARK_OPEN}', '${MARK_CLOSE}', '…', ${SNIPPET_TOKENS}) AS c${index}`,
+      `snippet(messages_fts, ${column}, '', '', '…', ${SNIPPET_TOKENS}) AS p${index}`
+    ])
     .join(', ')
   try {
     // Why the subselect: a bound `rowid = ?` or `rowid IN (?)` next to MATCH is
@@ -75,14 +89,24 @@ export function sessionSearchSnippet(
     // A snippet with nothing highlighted tells the user nothing; omit it.
     const marked = columns
       .map((_column, index) => row[`c${index}`])
-      .find((text) => text?.includes(SESSION_SEARCH_SNIPPET_MARK_OPEN))
-    return marked === undefined ? EMPTY_SNIPPET : truncateSnippet(marked)
+      .find((text, index) => text !== undefined && text !== row[`p${index}`])
+    return marked === undefined ? EMPTY_SNIPPET : publicMarks(truncateSnippet(marked))
   } catch {
     return EMPTY_SNIPPET
   }
 }
 
-/** Cut on a code-point boundary, and never between `[[` and its `]]`. */
+/** The internal marks, swapped for the ones a caller sees, once and at the end. */
+function publicMarks(snippet: SessionSearchSnippet): SessionSearchSnippet {
+  return {
+    ...snippet,
+    text: snippet.text
+      .replaceAll(MARK_OPEN, SESSION_SEARCH_SNIPPET_MARK_OPEN)
+      .replaceAll(MARK_CLOSE, SESSION_SEARCH_SNIPPET_MARK_CLOSE)
+  }
+}
+
+/** Cut on a code-point boundary, and never between a mark and its close. */
 export function truncateSnippet(text: string): SessionSearchSnippet {
   if (text.length <= SNIPPET_MAX_CHARS) {
     return { text, truncated: false }
@@ -92,11 +116,8 @@ export function truncateSnippet(text: string): SessionSearchSnippet {
     return { text, truncated: false }
   }
   const cut = points.slice(0, SNIPPET_MAX_CHARS).join('')
-  const opened = cut.lastIndexOf(SESSION_SEARCH_SNIPPET_MARK_OPEN)
+  const opened = cut.lastIndexOf(MARK_OPEN)
   // An open mark with no close hands the renderer something it can never close.
-  const balanced =
-    opened !== -1 && !cut.includes(SESSION_SEARCH_SNIPPET_MARK_CLOSE, opened)
-      ? cut.slice(0, opened)
-      : cut
+  const balanced = opened !== -1 && !cut.includes(MARK_CLOSE, opened) ? cut.slice(0, opened) : cut
   return { text: balanced, truncated: true }
 }
