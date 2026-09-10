@@ -1,16 +1,10 @@
 import type { ProjectDetailLoadingModel } from './use-mobile-tasks-project-detail-loading'
 import { useEffect } from './mobile-tasks-dependencies'
-import {
-  type GitHubAssignableUser,
-  type GitHubIssueType,
-  isSuccess,
-  splitRepositorySlug
-} from './mobile-tasks-legacy-foundation'
+import { splitRepositorySlug } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoadingModel) {
   const {
     activeGitHubProjectHost,
-    client,
     projectIssueTypeRepository,
     projectMetadataRepository,
     projectMetadataSeedLogins,
@@ -23,11 +17,12 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectIssueTypesLoading,
     setProjectLabelsError,
     setProjectLabelsLoading,
+    taskOperations,
     tasksSupported
   } = model
   useEffect(() => {
     const slug = splitRepositorySlug(projectMetadataRepository)
-    if (!tasksSupported || !client || !slug) {
+    if (!tasksSupported || !taskOperations || !slug) {
       setProjectAvailableLabels([])
       setProjectLabelsLoading(false)
       setProjectLabelsError('')
@@ -38,26 +33,13 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectAvailableLabels([])
     setProjectLabelsError('')
     setProjectLabelsLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listLabelsBySlug',
-        { owner: slug.owner, repo: slug.repo, host: activeGitHubProjectHost },
-        { timeoutMs: 30_000 }
-      )
-      .then((response) => {
+    void taskOperations.projectRead
+      .listItemLabels({ owner: slug.owner, repo: slug.repo, host: activeGitHubProjectHost })
+      .then((labels) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; labels?: string[] }
-          | { ok: false; error?: { message?: string } }
-        if (!result.ok) {
-          throw new Error(result.error?.message ?? 'Failed to load labels')
-        }
-        setProjectAvailableLabels(result.labels ?? [])
+        setProjectAvailableLabels(labels)
       })
       .catch((err) => {
         if (!stale) {
@@ -73,11 +55,11 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     return () => {
       stale = true
     }
-  }, [activeGitHubProjectHost, client, projectMetadataRepository, tasksSupported])
+  }, [activeGitHubProjectHost, projectMetadataRepository, taskOperations, tasksSupported])
 
   useEffect(() => {
     const slug = splitRepositorySlug(projectMetadataRepository)
-    if (!tasksSupported || !client || !slug) {
+    if (!tasksSupported || !taskOperations || !slug) {
       setProjectAssignableUsers([])
       setProjectAssignableUsersLoading(false)
       setProjectAssignableUsersError('')
@@ -88,31 +70,18 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectAssignableUsers([])
     setProjectAssignableUsersError('')
     setProjectAssignableUsersLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listAssignableUsersBySlug',
-        {
-          owner: slug.owner,
-          repo: slug.repo,
-          host: activeGitHubProjectHost,
-          ...(projectMetadataSeedLogins ? { seedLogins: projectMetadataSeedLogins.split(',') } : {})
-        },
-        { timeoutMs: 30_000 }
-      )
-      .then((response) => {
+    void taskOperations.projectRead
+      .listItemAssignableUsers({
+        owner: slug.owner,
+        repo: slug.repo,
+        host: activeGitHubProjectHost,
+        ...(projectMetadataSeedLogins ? { seedLogins: projectMetadataSeedLogins.split(',') } : {})
+      })
+      .then((users) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; users?: GitHubAssignableUser[] }
-          | { ok: false; error?: { message?: string } }
-        if (!result.ok) {
-          throw new Error(result.error?.message ?? 'Failed to load assignees')
-        }
-        setProjectAssignableUsers(result.users ?? [])
+        setProjectAssignableUsers(users)
       })
       .catch((err) => {
         if (!stale) {
@@ -132,15 +101,15 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     }
   }, [
     activeGitHubProjectHost,
-    client,
     projectMetadataRepository,
     projectMetadataSeedLogins,
+    taskOperations,
     tasksSupported
   ])
 
   useEffect(() => {
     const slug = splitRepositorySlug(projectIssueTypeRepository)
-    if (!tasksSupported || !client || !slug) {
+    if (!tasksSupported || !taskOperations || !slug) {
       setProjectIssueTypes([])
       setProjectIssueTypesLoading(false)
       setProjectIssueTypesError('')
@@ -151,26 +120,13 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     setProjectIssueTypes([])
     setProjectIssueTypesError('')
     setProjectIssueTypesLoading(true)
-    void client
-      .sendRequest(
-        'github.project.listIssueTypesBySlug',
-        { owner: slug.owner, repo: slug.repo, host: activeGitHubProjectHost },
-        { timeoutMs: 30_000 }
-      )
-      .then((response) => {
+    void taskOperations.projectRead
+      .listIssueTypes({ owner: slug.owner, repo: slug.repo, host: activeGitHubProjectHost })
+      .then((types) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; types?: GitHubIssueType[] }
-          | { ok: false; error?: { message?: string } }
-        if (!result.ok) {
-          throw new Error(result.error?.message ?? 'Failed to load issue types')
-        }
-        setProjectIssueTypes(result.types ?? [])
+        setProjectIssueTypes(types)
       })
       .catch((err) => {
         if (!stale) {
@@ -188,7 +144,7 @@ export function useMobileTasksProjectMetadataLoading(model: ProjectDetailLoading
     return () => {
       stale = true
     }
-  }, [activeGitHubProjectHost, client, projectIssueTypeRepository, tasksSupported])
+  }, [activeGitHubProjectHost, projectIssueTypeRepository, taskOperations, tasksSupported])
   return model
 }
 

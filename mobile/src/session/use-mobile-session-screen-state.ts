@@ -25,9 +25,16 @@ import type {
 } from './mobile-session-route-types'
 import { useMobileSessionTabActionTargets } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 
 export function useMobileSessionScreenState(scope: MobileSessionFoundationModel) {
-  const { worktreeId, hostId, initialCreateWarning } = scope
+  const { worktreeId, hostId, initialCreateWarning, client } = scope
+  // Single host-operations provider for the whole session model; every screen hook
+  // reads its namespace off this instead of holding the raw RPC client.
+  const sessionOperations = useMemo(
+    () => (client ? defaultHostSessionOperations(client) : null),
+    [client]
+  )
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
   const [sessionTabs, setSessionTabs] = useState<MobileSessionTab[]>([])
@@ -125,6 +132,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const toastHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const toastSeqRef = useRef(0)
   return {
+    sessionOperations,
     terminals,
     setTerminals,
     terminalsRef,

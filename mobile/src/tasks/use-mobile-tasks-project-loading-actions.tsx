@@ -1,24 +1,19 @@
 import type { TaskPaginationActionsModel } from './use-mobile-tasks-task-pagination-actions'
 import {
-  type GitHubProjectOwnerType,
-  type GitHubProjectPartialFailure,
   type GitHubProjectRef,
   type GitHubProjectSettings,
-  type GitHubProjectSummary,
   type GitHubProjectViewSummary,
   githubProjectHost,
   githubProjectKey,
   parseProjectInput,
   useCallback
 } from './mobile-tasks-dependencies'
-import { type GitHubProjectTable, isSuccess } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksProjectLoadingActions(model: TaskPaginationActionsModel) {
   const {
     activeGitHubProject,
     activeGitHubProjectHost,
     activeGitHubProjectViewId,
-    client,
     connState,
     githubProjectPasteInput,
     githubProjectSettings,
@@ -39,65 +34,42 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     setPendingGitHubProjectViewSelection,
     setShowGitHubProjectPicker,
     setShowGitHubProjectViewPicker,
+    taskOperations,
     taskStateHydrated,
     tasksSupported
   } = model
   const loadGitHubProjects = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !tasksSupported) {
+    if (!taskOperations || connState !== 'connected' || !tasksSupported) {
       return
     }
     setGithubProjectError('')
     setGithubProjectPartialFailures([])
-    const response = await client.sendRequest('github.project.listAccessible', {
-      host: 'github.com'
-    })
-    if (!isSuccess(response)) {
-      throw new Error(response.error.message)
-    }
-    const result = response.result as
-      | {
-          ok: true
-          projects: GitHubProjectSummary[]
-          partialFailures?: GitHubProjectPartialFailure[]
-        }
-      | { ok: false; error: { message: string } }
-    if (!result.ok) {
-      throw new Error(result.error.message)
-    }
+    const result = await taskOperations.projectRead.listAccessible('github.com')
     setGithubProjects(result.projects)
-    setGithubProjectPartialFailures(result.partialFailures ?? [])
-  }, [client, connState, tasksSupported])
+    setGithubProjectPartialFailures(result.partialFailures)
+  }, [connState, taskOperations, tasksSupported])
 
   const loadGitHubProjectViews = useCallback(
     async (project: GitHubProjectRef): Promise<GitHubProjectViewSummary[]> => {
-      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
+      if (!taskOperations || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
         return []
       }
-      const response = await client.sendRequest('github.project.listViews', {
+      const views = await taskOperations.projectRead.listViews({
         owner: project.owner,
         host: githubProjectHost(project.host),
         ownerType: project.ownerType,
-        projectNumber: project.number
+        number: project.number
       })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as
-        | { ok: true; views: GitHubProjectViewSummary[] }
-        | { ok: false; error: { message: string } }
-      if (!result.ok) {
-        throw new Error(result.error.message)
-      }
-      setGithubProjectViews(result.views)
-      return result.views
+      setGithubProjectViews(views)
+      return views
     },
-    [client, connState, taskStateHydrated, tasksSupported]
+    [connState, taskOperations, taskStateHydrated, tasksSupported]
   )
 
   const loadGitHubProjectTable = useCallback(
     async (options: { force?: boolean; queryOverride?: string } = {}): Promise<void> => {
       if (
-        !client ||
+        !taskOperations ||
         connState !== 'connected' ||
         !tasksSupported ||
         !activeGitHubProject ||
@@ -109,39 +81,26 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       setGithubProjectLoading(true)
       setGithubProjectError('')
       try {
-        const response = await client.sendRequest(
-          'github.project.viewTable',
-          {
-            owner: activeGitHubProject.owner,
-            host: activeGitHubProjectHost,
-            ownerType: activeGitHubProject.ownerType,
-            projectNumber: activeGitHubProject.number,
-            viewId: activeGitHubProjectViewId,
-            ...(options.queryOverride !== undefined ? { queryOverride: options.queryOverride } : {})
-          },
-          { timeoutMs: 60_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | { ok: true; data: GitHubProjectTable }
-          | { ok: false; error: { message: string }; totalCount?: number }
-        if (!result.ok) {
-          throw new Error(result.error.message)
-        }
-        setGithubProjectTable(result.data)
-        setGithubProjectSearch(options.queryOverride ?? result.data.selectedView.filter ?? '')
+        const table = await taskOperations.projectRead.loadTable({
+          owner: activeGitHubProject.owner,
+          host: activeGitHubProjectHost,
+          ownerType: activeGitHubProject.ownerType,
+          number: activeGitHubProject.number,
+          viewId: activeGitHubProjectViewId,
+          ...(options.queryOverride !== undefined ? { queryOverride: options.queryOverride } : {})
+        })
+        setGithubProjectTable(table)
+        setGithubProjectSearch(options.queryOverride ?? table.selectedView.filter ?? '')
         setGithubProjectViews((current) =>
-          current.some((view) => view.id === result.data.selectedView.id)
+          current.some((view) => view.id === table.selectedView.id)
             ? current
             : [
                 ...current,
                 {
-                  id: result.data.selectedView.id,
-                  number: result.data.selectedView.number,
-                  name: result.data.selectedView.name,
-                  layout: result.data.selectedView.layout
+                  id: table.selectedView.id,
+                  number: table.selectedView.number,
+                  name: table.selectedView.name,
+                  layout: table.selectedView.layout
                 }
               ]
         )
@@ -156,8 +115,8 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       activeGitHubProject,
       activeGitHubProjectHost,
       activeGitHubProjectViewId,
-      client,
       connState,
+      taskOperations,
       tasksSupported
     ]
   )
@@ -249,7 +208,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
   )
 
   const resolveGitHubProjectFromInput = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
+    if (!taskOperations || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
       return
     }
     const input = githubProjectPasteInput.trim()
@@ -262,28 +221,10 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     setGithubProjectPasteError('')
     setGithubProjectError('')
     try {
-      const response = await client.sendRequest('github.project.resolveRef', {
+      const result = await taskOperations.projectRead.resolveRef({
         input,
         host: githubProjectHost(parsed.host)
       })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as
-        | {
-            ok: true
-            owner: string
-            ownerType: GitHubProjectOwnerType
-            number: number
-            title: string
-            host?: string
-            viewNumber?: number
-          }
-        | { ok: false; error: { message: string } }
-      if (!result.ok) {
-        setGithubProjectPasteError(result.error.message)
-        return
-      }
       setGithubProjectPasteInput('')
       setShowGitHubProjectPicker(false)
       await selectGitHubProject(
@@ -301,10 +242,10 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       setGithubProjectPasteBusy(false)
     }
   }, [
-    client,
     connState,
     githubProjectPasteInput,
     selectGitHubProject,
+    taskOperations,
     taskStateHydrated,
     tasksSupported
   ])

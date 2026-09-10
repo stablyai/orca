@@ -43,7 +43,17 @@ export const MOBILE_SESSION_ROUTE_SOURCE_FILES = [
   './MobileSessionContentRow.tsx',
   './MobileSessionActiveContent.tsx',
   './MobileSessionCommandDock.tsx',
-  './MobileSessionSheets.tsx'
+  './MobileSessionSheets.tsx',
+  // The adapters the route's RPCs moved into. Without them the runtime strings and identity
+  // fields that left the hooks would leave this family's scope entirely.
+  './native-host-session-browser-operations.ts',
+  './native-host-session-file-operations.ts',
+  './native-host-session-markdown-operations.ts',
+  './native-host-session-native-chat-operations.ts',
+  './native-host-session-quick-command-operations.ts',
+  './native-host-session-tab-operations.ts',
+  './native-host-session-terminal-file-operations.ts',
+  './native-host-session-terminal-operations.ts'
 ] as const
 
 export function readMobileSessionRouteSource(relativePath: string): string {

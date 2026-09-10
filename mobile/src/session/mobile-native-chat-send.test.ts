@@ -200,7 +200,7 @@ describe('sendMobileNativeChatMessage', () => {
     )
   })
 
-  it('sends the text verbatim when clearInputFirst is not set', async () => {
+  it('sends the text verbatim, never prefixed with a clear byte', async () => {
     // An image send pastes the image (behind its own leading Ctrl+U) before this
     // text write; a clear byte here would kill the pasted image off the input line.
     const client = clientWithResponse({

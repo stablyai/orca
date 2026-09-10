@@ -19,6 +19,7 @@ import type {
   TerminalGestureInputBucket,
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
+import type { HostSessionOperations } from './host-session-operations'
 import type { MobileSessionScreenStateModel } from './use-mobile-session-screen-state'
 
 export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateModel) {
@@ -49,6 +50,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   // Why: state (not a ref) so the connection verdict re-renders when the endpoint loads and the Tailscale hint can appear.
   const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
+  const sessionOperationsRef = useRef<HostSessionOperations | null>(null)
   const connStateRef = useRef<ConnectionState>(connState)
   // Why: measured once on mount, then passed with every subscribe so the server can auto-fit the PTY to phone dims.
   const viewportRef = useRef<{ cols: number; rows: number } | null>(null)
@@ -162,6 +164,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     hostEndpoint,
     setHostEndpoint,
     clientRef,
+    sessionOperationsRef,
     connStateRef,
     viewportRef,
     viewportMeasuredRef,

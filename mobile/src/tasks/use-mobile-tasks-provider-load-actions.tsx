@@ -1,10 +1,10 @@
+import type { HostTaskListOperations } from './host-task-list-operations'
 import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
   PER_REPO_FETCH_LIMIT,
-  type RpcClient,
   extractGitHubIssueSourceError,
   extractGitHubIssueSourceFallback,
   isGitHubWorkItemsSshRemoteRequiredError,
@@ -13,13 +13,10 @@ import {
 import {
   GITHUB_REPO_CONCURRENCY,
   type GitHubRepoSources,
-  type GitHubWorkItem,
-  type LinearStatusResponse,
   type LinearTeam,
   type RepoSummary,
   type TaskItem,
   createGitHubTask,
-  isSuccess,
   mapWithConcurrency,
   reconcileTeamSelection,
   scopeGitHubTaskSearch,
@@ -29,7 +26,6 @@ import {
 export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) {
   const {
     appliedQuery,
-    client,
     connState,
     defaultLinearTeamSelectionRef,
     githubKind,
@@ -38,62 +34,53 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
     setLinearWorkspaces,
     setSelectedLinearTeamIds,
     setSelectedLinearWorkspaceId,
+    taskOperations,
     taskUiReady,
     tasksSupported
   } = model
   const loadLinearContext = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !tasksSupported) {
+    if (!taskOperations || connState !== 'connected' || !tasksSupported) {
       return
     }
-    const statusResponse = await client.sendRequest('linear.status')
-    if (!isSuccess(statusResponse)) {
-      throw new Error(statusResponse.error.message)
-    }
-    const status = statusResponse.result as LinearStatusResponse
-    setLinearConnected(status.connected === true)
-    if (status.connected !== true) {
+    const status = await taskOperations.read.linearStatus()
+    setLinearConnected(status.connected)
+    if (!status.connected) {
       setLinearWorkspaces([])
       setLinearTeams([])
       setSelectedLinearTeamIds(new Set())
       setSelectedLinearWorkspaceId(null)
       return
     }
-    const workspaces = status.workspaces ?? []
     const workspaceId =
-      status.selectedWorkspaceId ?? status.activeWorkspaceId ?? workspaces[0]?.id ?? null
-    setLinearWorkspaces(workspaces)
+      status.selectedWorkspaceId ?? status.activeWorkspaceId ?? status.workspaces[0]?.id ?? null
+    // Committed before the team read: a failed team read must leave the picker populated and the
+    // workspace resolved, or the next list request goes out with no workspace at all.
+    setLinearWorkspaces(status.workspaces)
     setSelectedLinearWorkspaceId(workspaceId)
-
-    const teamsResponse = await client.sendRequest('linear.listTeams', {
-      workspaceId: workspaceId ?? undefined
-    })
-    if (!isSuccess(teamsResponse)) {
-      throw new Error(teamsResponse.error.message)
-    }
-    const teams = teamsResponse.result as LinearTeam[]
+    const teams = await taskOperations.read.linearTeams(workspaceId)
     setLinearTeams(teams)
     setSelectedLinearTeamIds(reconcileTeamSelection(teams, defaultLinearTeamSelectionRef.current))
-  }, [client, connState, tasksSupported])
+  }, [connState, taskOperations, tasksSupported])
 
   const persistLinearTeamSelection = useCallback(
     (teamIds: Set<string>, allTeams: LinearTeam[]) => {
-      if (!client || !taskUiReady) {
+      if (!taskOperations || !taskUiReady) {
         return
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
-      void client
-        .sendRequest('settings.update', { defaultLinearTeamSelection: selection })
+      void taskOperations.preference
+        .updateSettings({ defaultLinearTeamSelection: selection })
         .catch(() => {
           // Best-effort preference persistence; the local picker state already changed.
         })
     },
-    [client, taskUiReady]
+    [taskOperations, taskUiReady]
   )
 
   const fetchGitHubItemsPage = useCallback(
     async (
-      requestClient: RpcClient,
+      listOperations: HostTaskListOperations,
       queriedRepos: RepoSummary[],
       before?: string
     ): Promise<{
@@ -108,21 +95,12 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            const response = await requestClient.sendRequest('github.listWorkItems', {
-              repo: `id:${repo.id}`,
+            const envelope = await listOperations.listGitHub({
+              repoId: repo.id,
               limit: PER_REPO_FETCH_LIMIT,
               query: scopeGitHubTaskSearch(appliedQuery, githubKind),
               before
             })
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            const envelope = response.result as {
-              items: Array<Omit<GitHubWorkItem, 'repoId' | 'repoName'>>
-              sources?: GitHubRepoSources
-              errors?: { issues?: { message: string } }
-              issueSourceFellBack?: true
-            }
             return {
               items: envelope.items.map((item) => createGitHubTask(repo, item)),
               sources: envelope.sources,
@@ -177,24 +155,22 @@ export function useMobileTasksProviderLoadActions(model: RuntimeHydrationModel) 
   )
 
   const countGitHubItems = useCallback(
-    async (requestClient: RpcClient, queriedRepos: RepoSummary[]): Promise<number> => {
+    async (
+      listOperations: HostTaskListOperations,
+      queriedRepos: RepoSummary[]
+    ): Promise<number> => {
       const counts = await mapWithConcurrency(
         queriedRepos,
         GITHUB_REPO_CONCURRENCY,
         async (repo) => {
           try {
-            const response = await requestClient.sendRequest(
-              'github.countWorkItems',
-              {
-                repo: `id:${repo.id}`,
-                query: scopeGitHubTaskSearch(appliedQuery, githubKind)
-              },
-              { timeoutMs: 30_000 }
-            )
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            return typeof response.result === 'number' ? response.result : 0
+            // Awaited inside the try on purpose: returning the promise would let a per-repo
+            // rejection escape this catch, reject the whole batch and reach a caller with no
+            // handler. A failed count is a zero, not a failed load.
+            return await listOperations.countGitHub({
+              repoId: repo.id,
+              query: scopeGitHubTaskSearch(appliedQuery, githubKind)
+            })
           } catch (err) {
             const isExpectedSshSkip = isGitHubWorkItemsSshRemoteRequiredError(err)
             const logWorkItemCountFailure = isExpectedSshSkip ? console.log : console.warn

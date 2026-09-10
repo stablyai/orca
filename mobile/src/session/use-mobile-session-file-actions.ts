@@ -12,7 +12,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     worktreeId,
     routeWorktreeName,
     isFloatingWorkspaceRoute,
-    client,
+    sessionOperations,
     sessionTabsRef,
     terminalLinkOpenMode,
     activeSessionTabIdRef,
@@ -28,7 +28,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
   } = scope
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
   const { handleFileTap, handleNativeChatFileTap } = useMobileFileTapHandlers<MobileSessionTab>({
-    client,
+    operations: sessionOperations?.terminalFile ?? null,
     hostId,
     worktreeId,
     worktreeName: routeWorktreeName,

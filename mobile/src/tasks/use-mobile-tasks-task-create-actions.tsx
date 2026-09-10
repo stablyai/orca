@@ -5,13 +5,11 @@ import {
   type TaskItem,
   createGitHubTask,
   createGitLabTask,
-  createLinearTask,
-  isSuccess
+  createLinearTask
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
   const {
-    client,
     createBody,
     createRepoId,
     createTeamId,
@@ -28,12 +26,13 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     setCreatingTask,
     setError,
     setShowCreateTask,
+    taskOperations,
     taskStateHydrated,
     taskUiReady,
     tasksSupported
   } = model
   const createTask = useCallback(async (): Promise<void> => {
-    if (!client || !tasksSupported || !taskStateHydrated || creatingTask) {
+    if (!taskOperations || !tasksSupported || !taskStateHydrated || creatingTask) {
       return
     }
     const title = createTitle.trim()
@@ -50,28 +49,12 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
             `Add a Git repository before creating a ${provider === 'github' ? 'GitHub' : 'GitLab'} issue.`
           )
         }
-        const response = await client.sendRequest(
-          provider === 'github' ? 'github.createIssue' : 'gitlab.createIssue',
-          {
-            repo: `id:${repo.id}`,
-            title,
-            body: createBody
-          }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          number?: number
-          url?: string
-          error?: string
-        }
-        if (result.ok === false) {
-          throw new Error(
-            result.error ?? `Failed to create ${provider === 'github' ? 'GitHub' : 'GitLab'} issue`
-          )
-        }
+        const result = await taskOperations.providerWrite.createIssue({
+          provider,
+          repoId: repo.id,
+          title,
+          body: createBody
+        })
         if (typeof result.number === 'number') {
           const createdAt = new Date().toISOString()
           if (provider === 'github') {
@@ -109,26 +92,11 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
         if (!team) {
           throw new Error('Select a Linear team first.')
         }
-        const response = await client.sendRequest('linear.createIssue', {
-          teamId: team.id,
+        const result = await taskOperations.linear.createIssue({
+          team,
           title,
-          description: createBody.trim() || undefined,
-          workspaceId: team.workspaceId
+          description: createBody.trim() || undefined
         })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as {
-          ok?: boolean
-          id?: string
-          identifier?: string
-          title?: string
-          url?: string
-          error?: string
-        }
-        if (result.ok === false || !result.id || !result.identifier) {
-          throw new Error(result.error ?? 'Failed to create Linear issue')
-        }
         setActionItem(
           createLinearTask({
             id: result.id,
@@ -156,7 +124,6 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
       setCreatingTask(false)
     }
   }, [
-    client,
     createBody,
     createRepoId,
     createTeamId,
@@ -166,28 +133,19 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     linearTeams,
     loadTasks,
     provider,
+    taskOperations,
     taskStateHydrated,
     tasksSupported
   ])
 
   const setGitHubIssueSourcePreference = useCallback(
     async (repo: RepoSummary, preference: 'upstream' | 'origin'): Promise<void> => {
-      if (!client || !taskUiReady) {
+      if (!taskOperations || !taskUiReady) {
         return
       }
       setError('')
       try {
-        const response = await client.sendRequest(
-          'repo.update',
-          {
-            repo: `id:${repo.id}`,
-            updates: { issueSourcePreference: preference }
-          },
-          { timeoutMs: 15_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
+        await taskOperations.providerWrite.updateIssueSource(repo.id, preference)
         // Why: the host owns issueSourcePreference, so re-read the list instead of
         // patching the cached copy and hoping the two stay in step.
         await repoListReload().catch(() => {})
@@ -196,7 +154,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
         setError(err instanceof Error ? err.message : 'Failed to update issue source')
       }
     },
-    [client, loadTasks, repoListReload, taskUiReady]
+    [loadTasks, repoListReload, taskOperations, taskUiReady]
   )
   return Object.assign(model, { createTask, setGitHubIssueSourcePreference })
 }

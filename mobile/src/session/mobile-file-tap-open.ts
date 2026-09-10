@@ -1,13 +1,8 @@
-import type {
-  RuntimeFileOpenResult,
-  RuntimeNativeChatFileContext,
-  RuntimeTerminalPathResolution
-} from '../../../src/shared/runtime-types'
+import type { RuntimeNativeChatFileContext } from '../../../src/shared/runtime-types'
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import type { HostSessionTerminalFileOperations } from './host-session-terminal-file-operations'
 import { shouldActivateOpenedMobileSessionTab } from './opened-mobile-session-tab'
 
 export type FileTapSessionTab = {
@@ -16,7 +11,7 @@ export type FileTapSessionTab = {
 }
 
 export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
-  client: Pick<RpcClient, 'sendRequest'>
+  operations: HostSessionTerminalFileOperations
   hostId: string
   worktreeId: string
   worktreeName?: string
@@ -73,28 +68,18 @@ function reportOpenFailure<T extends FileTapSessionTab>(
 async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>
 ): Promise<void> {
-  const worktree = `id:${options.worktreeId}`
-  const response = await options.client.sendRequest(
-    'files.resolveTerminalPath',
-    {
-      worktree,
-      pathText: options.pathText,
-      // Why: opts into sibling-workspace resolutions; this caller honors resolved.worktree.
-      crossWorkspace: true,
-      ...(options.terminalHandle && options.terminalHandle.trim().length > 0
-        ? { terminal: options.terminalHandle }
-        : {}),
-      ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
-      ...(options.nativeChatContext ? { nativeChatContext: options.nativeChatContext } : {})
-    },
-    { timeoutMs: 10_000 }
-  )
-  if (!response.ok) {
-    reportOpenFailure(options)
-    return
-  }
-  const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
-  if (!resolved.exists || resolved.isDirectory) {
+  // Keep the raw values on the wire; only their emptiness decides whether they are sent.
+  const terminalHandle = options.terminalHandle?.trim() ? options.terminalHandle : null
+  const cwd = options.cwd?.trim() ? options.cwd : null
+  // Why: resolution opts into sibling-workspace hits; this caller honors resolved.workspaceId.
+  const resolved = await options.operations.resolveTerminalPath({
+    workspaceId: options.worktreeId,
+    terminalHandle,
+    pathText: options.pathText,
+    cwd,
+    nativeChatContext: options.nativeChatContext ?? null
+  })
+  if (!resolved) {
     reportOpenFailure(options)
     return
   }
@@ -102,32 +87,29 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
     return
   }
-  const resolvedWorktreeId = resolved.worktree?.trim() || options.worktreeId
-  const resolvedWorktree = `id:${resolvedWorktreeId}`
+  const resolvedWorktreeId = resolved.workspaceId?.trim() || options.worktreeId
   const resolvedWorktreeName =
     resolvedWorktreeId === options.worktreeId ? options.worktreeName : undefined
 
-  if (resolved.openTarget?.kind === 'absolute-file') {
+  if (resolved.kind === 'native-artifact') {
     options.triggerOpenFeedback()
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
         hostId: options.hostId,
         worktreeId: resolvedWorktreeId,
         source: 'terminalArtifact',
-        absolutePath: resolved.openTarget.absolutePath,
-        grantId: resolved.openTarget.grantId,
+        absolutePath: resolved.absolutePath,
+        grantId: resolved.grantId,
         pathText: options.pathText,
-        ...(options.cwd && options.cwd.trim().length > 0 ? { cwd: options.cwd } : {}),
-        ...(options.terminalHandle && options.terminalHandle.trim().length > 0
-          ? { terminal: options.terminalHandle }
-          : {}),
+        ...(cwd ? { cwd } : {}),
+        ...(terminalHandle ? { terminal: terminalHandle } : {}),
         ...(options.nativeChatContext
           ? {
               nativeChatTab: options.nativeChatContext.tabId,
               nativeChatSession: options.nativeChatContext.sessionId
             }
           : {}),
-        name: displayNameFromPath(resolved.openTarget.absolutePath),
+        name: displayNameFromPath(resolved.absolutePath),
         ...(options.line !== null ? { line: String(options.line) } : {}),
         ...(options.column !== null ? { column: String(options.column) } : {}),
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
@@ -135,15 +117,13 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     )
     return
   }
-
-  const openedPath =
-    resolved.openTarget?.kind === 'worktree-file'
-      ? resolved.openTarget.relativePath
-      : resolved.relativePath
-  if (!openedPath) {
+  // The native host never resolves a non-worktree, non-absolute target.
+  if (resolved.kind !== 'worktree-file') {
     reportOpenFailure(options)
     return
   }
+
+  const openedPath = resolved.relativePath
   options.triggerOpenFeedback()
   if (
     resolvedWorktreeId !== options.worktreeId ||
@@ -164,28 +144,12 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     )
     return
   }
-  if (
-    classifyMobileArtifact(openedPath) === 'html' &&
-    resolved.openTarget?.kind === 'worktree-file' &&
-    resolved.openTarget.provider === 'local'
-  ) {
-    options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
+  if (classifyMobileArtifact(openedPath) === 'html' && resolved.localAbsolutePath) {
+    options.openBrowser(filesystemPathToFileUri(resolved.localAbsolutePath))
     return
   }
-  const openResponse = await options.client.sendRequest(
-    'files.open',
-    { worktree: resolvedWorktree, relativePath: openedPath },
-    { timeoutMs: 15_000 }
-  )
-  if (!openResponse.ok) {
-    reportOpenFailure(options)
-    return
-  }
-  const openResult = (openResponse as RpcSuccess).result as RuntimeFileOpenResult
-  if (!openResult.opened) {
-    reportOpenFailure(options)
-    return
-  }
+  // A failed open throws; openMobileFileTap's catch reports it.
+  await options.operations.openWorktreeFile(resolvedWorktreeId, openedPath)
   scheduleOpenedWorktreeTabActivation(options, openedPath)
 }
 

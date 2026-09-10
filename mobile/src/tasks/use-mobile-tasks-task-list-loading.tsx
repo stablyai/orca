@@ -1,14 +1,9 @@
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
-import {
-  extractLinearIssueReadItems,
-  isHostedTaskRepo,
-  useCallback
-} from './mobile-tasks-dependencies'
+import { isHostedTaskRepo, useCallback } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   GITLAB_PER_PAGE,
   type GitLabTodo,
-  type GitLabWorkItem,
   LINEAR_LIMIT,
   type TaskItem,
   buildPartialRepositoryNotice,
@@ -16,7 +11,6 @@ import {
   createGitLabTask,
   createGitLabTodoTask,
   createLinearTask,
-  isSuccess,
   mapWithConcurrency,
   taskTime
 } from './mobile-tasks-legacy-foundation'
@@ -26,6 +20,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     appliedQuery,
     client,
     clientRef,
+    taskOperations,
     connState,
     countGitHubItems,
     fetchGitHubItemsPage,
@@ -57,12 +52,19 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   } = model
   const loadTasks = useCallback(
     async (options: { silent?: boolean } = {}): Promise<void> => {
-      if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
+      if (
+        !client ||
+        !taskOperations ||
+        connState !== 'connected' ||
+        !tasksSupported ||
+        !taskStateHydrated
+      ) {
         return
       }
       const generation = loadGenerationRef.current + 1
       loadGenerationRef.current = generation
       const requestClient = client
+      const listOperations = taskOperations.list
       const isCurrent = () =>
         loadGenerationRef.current === generation && clientRef.current === requestClient
       setError('')
@@ -108,7 +110,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             return
           }
           if (provider === 'github') {
-            const page = await fetchGitHubItemsPage(requestClient, queriedRepos)
+            const page = await fetchGitHubItemsPage(listOperations, queriedRepos)
             if (!isCurrent()) {
               return
             }
@@ -122,7 +124,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             setGithubCurrentPage(0)
             setItems(page.items)
             if (selectedRepoIds.size > 0) {
-              void countGitHubItems(requestClient, queriedRepos).then((count) => {
+              void countGitHubItems(listOperations, queriedRepos).then((count) => {
                 if (isCurrent()) {
                   setGithubTotalCount(count)
                 }
@@ -140,17 +142,12 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             return
           }
           if (provider === 'gitlab' && gitlabView === 'todos') {
-            const response = await requestClient.sendRequest('gitlab.todos', {
-              repo: `id:${queriedRepos[0]!.id}`
-            })
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
+            const todos = await listOperations.listGitLabTodos(queriedRepos[0]!.id)
             if (!isCurrent()) {
               return
             }
             setItems(
-              ((response.result as GitLabTodo[]) ?? [])
+              (todos as GitLabTodo[])
                 .map(createGitLabTodoTask)
                 .sort((a, b) => taskTime(b.updatedAt) - taskTime(a.updatedAt))
             )
@@ -161,24 +158,19 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             GITHUB_REPO_CONCURRENCY,
             async (repo) => {
               try {
-                const response = await requestClient.sendRequest('gitlab.listWorkItems', {
-                  repo: `id:${repo.id}`,
+                const envelope = await listOperations.listGitLab({
+                  repoId: repo.id,
                   state: gitlabFilter,
                   page: 1,
                   perPage: GITLAB_PER_PAGE,
                   query: appliedQuery.trim() || undefined
                 })
-                if (!isSuccess(response)) {
-                  throw new Error(response.error.message)
-                }
-                const envelope = response.result as {
-                  items: Array<Omit<GitLabWorkItem, 'repoId' | 'repoName'>>
-                  error?: { type?: string; message: string }
-                }
                 if (envelope.error?.type && envelope.error.type !== 'not_found') {
                   return { items: [], error: envelope.error.message }
                 }
-                return { items: envelope.items.map((item) => createGitLabTask(repo, item)) }
+                return {
+                  items: envelope.items.map((item) => createGitLabTask(repo, item))
+                }
               } catch (err) {
                 console.warn(`[mobile tasks] failed to fetch ${provider} work items`, repo.id, err)
                 return {
@@ -209,21 +201,11 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
           }
         } else {
           const normalizedQuery = appliedQuery.trim()
-          const response = normalizedQuery
-            ? await requestClient.sendRequest('linear.searchIssues', {
-                query: normalizedQuery,
-                limit: LINEAR_LIMIT,
-                workspaceId: selectedLinearWorkspaceId ?? undefined
-              })
-            : await requestClient.sendRequest('linear.listIssues', {
-                filter: linearFilter,
-                limit: LINEAR_LIMIT,
-                workspaceId: selectedLinearWorkspaceId ?? undefined
-              })
-          if (!isSuccess(response)) {
-            throw new Error(response.error.message)
-          }
-          const issues = extractLinearIssueReadItems(response.result)
+          const issues = await listOperations.listLinear({
+            ...(normalizedQuery ? { query: normalizedQuery } : { filter: linearFilter }),
+            limit: LINEAR_LIMIT,
+            workspaceId: selectedLinearWorkspaceId ?? undefined
+          })
           const filtered =
             selectedLinearTeamIds.size > 0
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))
@@ -267,6 +249,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       selectedLinearTeamIds,
       selectedLinearWorkspaceId,
       selectedRepoIds,
+      taskOperations,
       taskStateHydrated,
       tasksSupported
     ]

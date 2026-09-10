@@ -46,6 +46,10 @@ export type RpcClient = {
   close: () => void
 }
 
+/** The one method a request adapter needs. Narrowing to it keeps adapters testable with a stub
+ * and free of the reconnect and subscription surface they never touch. */
+export type RpcRequestSender = Pick<RpcClient, 'sendRequest'>
+
 export type ConnectOptions = {
   onStateChange?: (state: ConnectionState) => void
   onLog?: ConnectionLogSink

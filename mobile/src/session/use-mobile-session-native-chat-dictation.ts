@@ -26,6 +26,7 @@ export function useMobileSessionNativeChatDictation(
     hostId,
     worktreeId,
     client,
+    sessionOperations,
     connState,
     setInput,
     liveInputTerminalHandles,
@@ -50,7 +51,11 @@ export function useMobileSessionNativeChatDictation(
     scopeKey: nativeChatScopeKey,
     showToast
   })
-  const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(client, worktreeId)
+  const nativeChatOperations = sessionOperations?.nativeChat ?? null
+  const nativeChatTranscriptIsLocalReadable = useMobileNativeChatReadability(
+    nativeChatOperations,
+    worktreeId
+  )
   const {
     ready: nativeChatInputLeaseReady,
     readyRef: nativeChatInputLeaseReadyRef,
@@ -63,6 +68,7 @@ export function useMobileSessionNativeChatDictation(
   })
   const nativeChatController = useMobileNativeChatController({
     client,
+    nativeChatOperations,
     hostId,
     worktreeId,
     activeSessionTab,

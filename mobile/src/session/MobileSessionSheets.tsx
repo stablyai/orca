@@ -23,6 +23,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     client,
+    sessionOperations,
     worktreeName,
     sessionTabs,
     pendingDiffNotesDelivery,
@@ -103,7 +104,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
         onClose={() => setShowQuickCommands(false)}
-        client={client}
+        operations={sessionOperations?.quickCommand ?? null}
         repoId={
           isFolderWorkspaceRoute || isFloatingWorkspaceRoute
             ? null

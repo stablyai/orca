@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -20,7 +20,6 @@ import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
   type ProviderKey,
-  decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
@@ -34,6 +33,7 @@ import {
 } from '../../../src/components/codex-reset-credit'
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
+import { defaultHostAccountOperations } from '../../../src/accounts/default-host-account-operations'
 
 export default function AccountsScreen() {
   const router = useRouter()
@@ -42,6 +42,10 @@ export default function AccountsScreen() {
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
+  const operations = useMemo(
+    () => (client && hostId ? defaultHostAccountOperations(client) : null),
+    [client, hostId]
+  )
   const [hostName, setHostName] = useState<string>('')
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -66,6 +70,8 @@ export default function AccountsScreen() {
     scopeLabel: resetScopeLabel,
     confirmReset: confirmCodexReset
   } = useCodexResetCreditAction({
+    // Why: still the client — the capability probe behind this hook retries a failed
+    // status.get, which a one-shot operations read cannot reproduce.
     client,
     connected: connState === 'connected',
     hostId,
@@ -88,6 +94,8 @@ export default function AccountsScreen() {
       return
     }
     let stale = false
+    // Why: the local host catalog, not the adapter — `operations` is null in exactly the
+    // host-missing case this reports, so routing it there would show a blank screen instead.
     void loadHosts().then((hosts) => {
       if (stale) {
         return
@@ -109,37 +117,19 @@ export default function AccountsScreen() {
   // when the user switches accounts. Falls back to a one-shot accounts.list
   // if the subscription stream errors.
   useEffect(() => {
-    if (!client || connState !== 'connected') {
+    if (!operations || connState !== 'connected') {
       return
     }
-    const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
-      if (!payload || typeof payload !== 'object') {
-        return
-      }
-      const evt = payload as { type?: string; snapshot?: unknown }
-      if (evt.type === 'ready' || evt.type === 'snapshot') {
-        try {
-          acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
-        } catch {
-          rejectInvalidSnapshot()
-        }
-      }
-    })
-    return unsubscribe
-  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
+    return operations.subscribe(acceptSnapshot, rejectInvalidSnapshot)
+  }, [acceptSnapshot, connState, operations, rejectInvalidSnapshot])
 
   const refresh = useCallback(async () => {
-    if (!client) {
+    if (!operations) {
       return
     }
     setRefreshing(true)
     try {
-      const res = await client.sendRequest('accounts.list')
-      if (res.ok) {
-        acceptSnapshot(decodeAccountsSnapshot(res.result))
-      } else {
-        setError(res.error.message)
-      }
+      acceptSnapshot(await operations.snapshot())
     } catch (e) {
       if (e instanceof Error && e.message === 'Invalid accounts snapshot from host') {
         rejectInvalidSnapshot()
@@ -149,11 +139,11 @@ export default function AccountsScreen() {
     } finally {
       setRefreshing(false)
     }
-  }, [acceptSnapshot, client, rejectInvalidSnapshot])
+  }, [acceptSnapshot, operations, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
-      if (!client) {
+      if (!operations) {
         return
       }
       const codexTarget = provider === 'codex' ? snapshot?.rateLimits.codexTarget : null
@@ -161,33 +151,19 @@ export default function AccountsScreen() {
         return
       }
       setBusyAccountId(accountId ?? `${provider}:default`)
-      const method =
-        provider === 'claude'
-          ? 'accounts.selectClaude'
-          : codexTarget?.runtime === 'wsl'
-            ? 'accounts.selectCodexForTarget'
-            : 'accounts.selectCodex'
       try {
-        // Why: old hosts silently strip unknown target fields. Use the distinct
-        // targeted RPC for WSL so version skew fails before mutating host state.
-        const params =
-          codexTarget?.runtime === 'wsl' ? { accountId, target: codexTarget } : { accountId }
-        const res = await client.sendRequest(method, params)
-        if (!res.ok) {
-          Alert.alert('Could not switch account', res.error.message)
-        } else {
-          // Why: optimistic refresh — the streaming subscription will also
-          // emit, but a one-shot keeps the UI responsive even if the stream
-          // is temporarily disconnected.
-          await refresh()
-        }
+        await operations.select(provider, accountId, codexTarget)
+        // Why: optimistic refresh — the streaming subscription will also
+        // emit, but a one-shot keeps the UI responsive even if the stream
+        // is temporarily disconnected.
+        await refresh()
       } catch (e) {
         Alert.alert('Could not switch account', e instanceof Error ? e.message : String(e))
       } finally {
         setBusyAccountId(null)
       }
     },
-    [client, refresh, snapshot]
+    [operations, refresh, snapshot]
   )
 
   const renderProviderSection = (provider: ProviderKey, title: string) => {
@@ -343,7 +319,7 @@ export default function AccountsScreen() {
         <Pressable
           style={styles.iconButton}
           onPress={refresh}
-          disabled={!client || refreshing || connState !== 'connected'}
+          disabled={!operations || refreshing || connState !== 'connected'}
         >
           {refreshing ? (
             <ActivityIndicator size="small" color={colors.textSecondary} />

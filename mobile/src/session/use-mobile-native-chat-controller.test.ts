@@ -431,9 +431,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       expect.objectContaining({ text: '\x15', enter: false }),
       expect.any(Object)
     )
-    expect(sendWithOutcome).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ clearInputFirst: expect.anything() })
-    )
 
     clientStub.sendRequest.mockClear()
 
@@ -442,7 +439,6 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
     expect(sendWithOutcome).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'look' }))
-    expect(sendWithOutcome.mock.calls.at(-1)?.[0]).not.toHaveProperty('clearInputFirst')
   })
 
   it('holds an unknown-outcome send without posting the optimistic echo', async () => {

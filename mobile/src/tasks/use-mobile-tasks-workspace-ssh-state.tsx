@@ -1,6 +1,5 @@
 import type { WorkspaceSparseActionsModel } from './use-mobile-tasks-workspace-sparse-actions'
 import {
-  type SshConnectionState,
   normalizeSetupHookTrust,
   pickWorkspaceAgent,
   resolveWorkspaceAgentSelection,
@@ -8,22 +7,21 @@ import {
   useEffect,
   useMemo
 } from './mobile-tasks-dependencies'
-import {
-  type RepoHooksResponse,
-  type RepoSummary,
-  type SetupDecision,
-  isSuccess
+import type {
+  RepoHooksResponse,
+  RepoSummary,
+  SetupDecision
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsModel) {
   const {
-    client,
     runtimeTaskSettings,
     setWorkspaceAgent,
     setWorkspaceAgentOverridden,
     setWorkspaceDetectedAgentIds,
     setWorkspaceSshConnecting,
     setWorkspaceSshState,
+    taskWorkspaceCreationOperations,
     tasksSupported,
     workspaceAgent,
     workspaceAgentOverridden,
@@ -36,7 +34,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     workspaceSshState
   } = model
   const connectWorkspaceSshRepo = useCallback(async (): Promise<void> => {
-    if (!client || !tasksSupported || !workspaceCreateTargetConnectionId) {
+    if (!taskWorkspaceCreationOperations || !tasksSupported || !workspaceCreateTargetConnectionId) {
       return
     }
     setWorkspaceSshConnecting(true)
@@ -47,22 +45,8 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       reconnectAttempt: 0
     })
     try {
-      const response = await client.sendRequest(
-        'ssh.connect',
-        { targetId: workspaceCreateTargetConnectionId },
-        { timeoutMs: 120_000 }
-      )
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const state = (response.result as { state?: SshConnectionState | null }).state
       setWorkspaceSshState(
-        state ?? {
-          targetId: workspaceCreateTargetConnectionId,
-          status: 'connected',
-          error: null,
-          reconnectAttempt: 0
-        }
+        await taskWorkspaceCreationOperations.connectSsh(workspaceCreateTargetConnectionId)
       )
     } catch (err) {
       setWorkspaceSshState({
@@ -74,11 +58,11 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     } finally {
       setWorkspaceSshConnecting(false)
     }
-  }, [client, tasksSupported, workspaceCreateTargetConnectionId])
+  }, [taskWorkspaceCreationOperations, tasksSupported, workspaceCreateTargetConnectionId])
 
   const ensureWorkspaceSshReady = useCallback(
     async (repo: RepoSummary): Promise<void> => {
-      if (!repo.connectionId || !client || !tasksSupported) {
+      if (!repo.connectionId || !taskWorkspaceCreationOperations || !tasksSupported) {
         return
       }
       if (
@@ -87,11 +71,8 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       ) {
         return
       }
-      const response = await client.sendRequest('ssh.getState', { targetId: repo.connectionId })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const state = (response.result as { state?: SshConnectionState | null }).state ?? null
+      const state = await taskWorkspaceCreationOperations.readSshState(repo.connectionId)
+      // An unregistered target answers with no state at all; leave whatever the badge shows.
       if (state) {
         setWorkspaceSshState(state)
       }
@@ -99,11 +80,16 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
         throw new Error(`Connect ${repo.displayName} before creating a workspace.`)
       }
     },
-    [client, tasksSupported, workspaceSshState]
+    [taskWorkspaceCreationOperations, tasksSupported, workspaceSshState]
   )
 
   useEffect(() => {
-    if (!tasksSupported || !workspaceCreateDraft || !client || !workspaceCreateTargetRepo) {
+    if (
+      !tasksSupported ||
+      !workspaceCreateDraft ||
+      !taskWorkspaceCreationOperations ||
+      !workspaceCreateTargetRepo
+    ) {
       setWorkspaceDetectedAgentIds(null)
       return
     }
@@ -115,19 +101,13 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     }
     let stale = false
     setWorkspaceDetectedAgentIds(null)
-    const request = workspaceCreateTargetRepo.connectionId
-      ? client.sendRequest('preflight.detectRemoteAgents', {
-          connectionId: workspaceCreateTargetRepo.connectionId
-        })
-      : client.sendRequest('preflight.detectAgents')
-    void request
-      .then((response) => {
+    void taskWorkspaceCreationOperations
+      .detectAgents(workspaceCreateTargetRepo.connectionId ?? null)
+      .then((agentIds) => {
         if (stale) {
           return
         }
-        setWorkspaceDetectedAgentIds(
-          isSuccess(response) ? new Set(response.result as string[]) : new Set()
-        )
+        setWorkspaceDetectedAgentIds(new Set(agentIds))
       })
       .catch(() => {
         if (!stale) {
@@ -138,7 +118,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       stale = true
     }
   }, [
-    client,
+    taskWorkspaceCreationOperations,
     tasksSupported,
     workspaceCreateDraft,
     workspaceCreateSshStatus,
@@ -187,14 +167,10 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
           setupTrust?: RepoHooksResponse['setupTrust']
         }
     > => {
-      if (!client || !tasksSupported) {
+      if (!taskWorkspaceCreationOperations || !tasksSupported) {
         return { kind: 'decision', decision: override ?? 'inherit' }
       }
-      const response = await client.sendRequest('repo.hooks', { repo: `id:${repo.id}` })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as RepoHooksResponse
+      const result = await taskWorkspaceCreationOperations.readRepoHooks(repo.id)
       const setupCommand = result.hooks?.scripts?.setup?.trim()
       const setupTrust = normalizeSetupHookTrust(result.setupTrust) ?? undefined
       if (!setupCommand) {
@@ -213,7 +189,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
         setupTrust
       }
     },
-    [client, tasksSupported]
+    [taskWorkspaceCreationOperations, tasksSupported]
   )
   return Object.assign(model, {
     connectWorkspaceSshRepo,

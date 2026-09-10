@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
@@ -17,6 +18,10 @@ describe('useMobileNativeChatStop', () => {
   let stop: (() => void) | null = null
   const sendRequest = vi.fn()
   const onSendError = vi.fn()
+  // One provider for the whole suite, exactly as the session model memoizes it per client.
+  const operations = defaultHostSessionOperations({
+    sendRequest
+  } as unknown as RpcClient).nativeChat
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -43,7 +48,8 @@ describe('useMobileNativeChatStop', () => {
     streamIdentity: string
   }): null {
     stop = useMobileNativeChatStop({
-      client: { sendRequest } as unknown as RpcClient,
+      operations,
+      workspaceId: 'workspace-a',
       enabled,
       handleRef: { current: 'terminal-1' },
       deviceTokenRef: { current: 'mobile-1' },

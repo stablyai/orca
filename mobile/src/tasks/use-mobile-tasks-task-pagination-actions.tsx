@@ -5,15 +5,10 @@ import {
   useCallback,
   useMemo
 } from './mobile-tasks-dependencies'
-import {
-  type TaskItem,
-  buildPartialRepositoryNotice,
-  isSuccess
-} from './mobile-tasks-legacy-foundation'
+import { type TaskItem, buildPartialRepositoryNotice } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel) {
   const {
-    client,
     connState,
     fetchGitHubItemsPage,
     githubCurrentPage,
@@ -39,11 +34,12 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     setRetryingGithubSourceRepoPaths,
     setShowLinearConnect,
     setVisibleProviders,
+    taskOperations,
     taskUiReady,
     tasksSupported
   } = model
   const connectLinearAccount = useCallback(async (): Promise<void> => {
-    if (!client || connState !== 'connected' || !taskUiReady) {
+    if (!taskOperations || connState !== 'connected' || !taskUiReady) {
       return
     }
     const apiKey = linearApiKeyDraft.trim()
@@ -53,14 +49,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     setLinearConnectState('connecting')
     setLinearConnectError('')
     try {
-      const response = await client.sendRequest('linear.connect', { apiKey })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
-      const result = response.result as { ok?: boolean; error?: string }
-      if (result.ok === false) {
-        throw new Error(result.error ?? 'Failed to connect Linear')
-      }
+      await taskOperations.linear.connect(apiKey)
       setLinearApiKeyDraft('')
       setLinearConnectState('idle')
       setShowLinearConnect(false)
@@ -74,7 +63,14 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       setLinearConnectState('error')
       setLinearConnectError(err instanceof Error ? err.message : 'Connection failed')
     }
-  }, [client, connState, linearApiKeyDraft, linearConnectState, loadLinearContext, taskUiReady])
+  }, [
+    connState,
+    linearApiKeyDraft,
+    linearConnectState,
+    loadLinearContext,
+    taskOperations,
+    taskUiReady
+  ])
 
   const retryGitHubIssueSourceFetch = useCallback(
     async (repoPath: string): Promise<void> => {
@@ -139,7 +135,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
   const handleGitHubPageChange = useCallback(
     async (targetPage: number): Promise<void> => {
       if (
-        !client ||
+        !taskOperations ||
         !tasksSupported ||
         targetPage < 0 ||
         githubPaginationLoading ||
@@ -168,7 +164,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
         let loadedPages = githubPages.length
         const nextPages: Array<Extract<TaskItem, { provider: 'github' }>[]> = []
         while (loadedPages <= targetPage) {
-          const page = await fetchGitHubItemsPage(client, selectedHostedRepos, cursor)
+          const page = await fetchGitHubItemsPage(taskOperations.list, selectedHostedRepos, cursor)
           if (page.items.length === 0) {
             break
           }
@@ -195,11 +191,11 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       }
     },
     [
-      client,
       fetchGitHubItemsPage,
       githubPages,
       githubPaginationLoading,
       selectedHostedRepos,
+      taskOperations,
       tasksSupported
     ]
   )

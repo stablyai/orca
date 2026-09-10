@@ -1,10 +1,10 @@
 import type { ProjectFileMergeActionsModel } from './use-mobile-tasks-project-file-merge-actions'
 import { useCallback } from './mobile-tasks-dependencies'
-import { type TaskItem, isSuccess } from './mobile-tasks-legacy-foundation'
+import type { TaskItem } from './mobile-tasks-legacy-foundation'
+import { taskItemMutationTarget } from './mobile-tasks-mutation-targets'
 
 export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeActionsModel) {
   const {
-    client,
     detailPayload,
     loadTasks,
     mutatingStatus,
@@ -16,38 +16,22 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
     setItemRemoveAssigneesDraft,
     setItemRemoveLabelsDraft,
     setItems,
-    setMutatingStatus
+    setMutatingStatus,
+    taskOperations
   } = model
   const toggleGitLabStatus = useCallback(
     async (item: Extract<TaskItem, { provider: 'gitlab' }>): Promise<void> => {
-      if (!client || mutatingStatus || item.source.state === 'merged') {
+      if (!taskOperations || mutatingStatus || item.source.state === 'merged') {
         return
       }
       setMutatingStatus(true)
       setError('')
       const nextState = item.source.state === 'closed' ? 'opened' : 'closed'
       try {
-        const response =
-          item.source.type === 'issue'
-            ? await client.sendRequest('gitlab.updateIssue', {
-                repo: `id:${item.source.repoId}`,
-                number: item.source.number,
-                updates: { state: nextState },
-                projectRef: item.source.projectRef
-              })
-            : await client.sendRequest('gitlab.updateMRState', {
-                repo: `id:${item.source.repoId}`,
-                iid: item.source.number,
-                state: nextState,
-                projectRef: item.source.projectRef
-              })
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitLab item')
-        }
+        await taskOperations.itemMutation.setClosed(
+          taskItemMutationTarget(item),
+          nextState === 'closed'
+        )
         setActionItem(null)
         await loadTasks({ silent: true })
       } catch (err) {
@@ -56,7 +40,7 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
         setMutatingStatus(false)
       }
     },
-    [client, loadTasks, mutatingStatus]
+    [loadTasks, mutatingStatus, taskOperations]
   )
 
   const updateGitHubIssueMetadata = useCallback(
@@ -71,28 +55,18 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
         removeAssignees?: string[]
       }
     ): Promise<void> => {
-      if (!client || mutatingStatus) {
+      if (!taskOperations || mutatingStatus) {
         return
       }
       setMutatingStatus(true)
       setError('')
       try {
-        const response = await client.sendRequest(
-          'github.updateIssue',
-          {
-            repo: `id:${item.source.repoId}`,
-            number: item.source.number,
-            updates
-          },
-          { timeoutMs: 30_000 }
+        // Why `type: 'issue'` for PR rows too: labels and assignees only exist on GitHub's
+        // issue endpoint, and the PR endpoint would silently drop them.
+        await taskOperations.itemMutation.updateMetadata(
+          { ...taskItemMutationTarget(item), type: 'issue' },
+          updates
         )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as { ok?: boolean; error?: string }
-        if (result.ok === false) {
-          throw new Error(result.error ?? 'Failed to update GitHub issue')
-        }
 
         const nextLabels = [
           ...new Set([
@@ -167,7 +141,7 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
         setMutatingStatus(false)
       }
     },
-    [client, detailPayload, loadTasks, mutatingStatus]
+    [detailPayload, loadTasks, mutatingStatus, taskOperations]
   )
   return Object.assign(model, { toggleGitLabStatus, updateGitHubIssueMetadata })
 }

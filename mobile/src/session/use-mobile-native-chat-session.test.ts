@@ -3,10 +3,31 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import {
   useMobileNativeChatSession,
   type MobileNativeChatSession
 } from './use-mobile-native-chat-session'
+
+/** The hook now takes the operations provider; tests still drive a fake client so
+ *  they keep asserting the wire params the native provider actually sends. One
+ *  provider per client, exactly as the session model memoizes it. */
+const chatOperationsByClient = new WeakMap<
+  RpcClient,
+  ReturnType<typeof defaultHostSessionOperations>['nativeChat']
+>()
+function chatOperations(client: RpcClient | null) {
+  if (!client) {
+    return null
+  }
+  const cached = chatOperationsByClient.get(client)
+  if (cached) {
+    return cached
+  }
+  const operations = defaultHostSessionOperations(client).nativeChat
+  chatOperationsByClient.set(client, operations)
+  return operations
+}
 
 function message(id: string): NativeChatMessage {
   return {
@@ -34,7 +55,8 @@ describe('useMobileNativeChatSession', () => {
 
   function Harness({ client }: { client: RpcClient | null }): null {
     state = useMobileNativeChatSession({
-      client,
+      operations: chatOperations(client),
+      workspaceId: 'workspace-a',
       sourceIdentity: 'host-a\0workspace-a',
       agent: 'claude',
       sessionId: 'session',
@@ -456,7 +478,8 @@ describe('useMobileNativeChatSession transcriptLoading', () => {
     sourceIdentity?: string
   }): null {
     const session = useMobileNativeChatSession({
-      client,
+      operations: chatOperations(client),
+      workspaceId: 'workspace-a',
       sourceIdentity,
       agent,
       sessionId,

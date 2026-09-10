@@ -1,74 +1,23 @@
 import { useCallback } from 'react'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
-import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
-import {
-  buildMarkdownDiskFallbackDoc,
-  shouldReadMarkdownFromDiskAfterReadTabFailure
-} from './mobile-markdown-disk-fallback'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-application'
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
-  const { worktreeId, client, setMarkdownDocs, setFileDocs } = scope
+  const { worktreeId, sessionOperations, setMarkdownDocs, setFileDocs } = scope
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
-      if (!client) {
+      if (!sessionOperations) {
         return
       }
       setMarkdownDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
       try {
-        const response = await client.sendRequest('markdown.readTab', {
-          worktree: `id:${worktreeId}`,
-          tabId: tab.id
+        const doc = await sessionOperations.markdown.readTab({
+          workspaceId: worktreeId,
+          tabId: tab.id,
+          relativePath: tab.relativePath,
+          tabIsDirty: tab.isDirty
         })
-        if (response.ok) {
-          const result = (response as RpcSuccess).result as {
-            content: string
-            version: string
-            isDirty: boolean
-            editable?: boolean
-            readOnlyReason?: string
-          }
-          setMarkdownDocs((prev) =>
-            new Map(prev).set(tab.id, {
-              status: 'ready',
-              content: result.content,
-              localContent: result.content,
-              baseVersion: result.version,
-              isDirty: false,
-              editable: result.editable === true,
-              stale: result.isDirty,
-              readOnlyReason: result.readOnlyReason
-            })
-          )
-          return
-        }
-        if (!shouldReadMarkdownFromDiskAfterReadTabFailure(response as RpcFailure)) {
-          throw new Error((response as RpcFailure).error.message)
-        }
-        // Why: a headless host fails markdown.readTab (renderer_unavailable); fall back to the on-disk file for read-only render.
-        const fallback = await client.sendRequest('files.read', {
-          worktree: `id:${worktreeId}`,
-          relativePath: tab.relativePath
-        })
-        if (!fallback.ok) {
-          throw new Error('Unable to read markdown')
-        }
-        const fileResult = (fallback as RpcSuccess).result as {
-          content: string
-          truncated: boolean
-          byteLength: number
-        }
-        setMarkdownDocs((prev) =>
-          new Map(prev).set(
-            tab.id,
-            buildMarkdownDiskFallbackDoc({
-              content: fileResult.content,
-              truncated: fileResult.truncated,
-              tabIsDirty: tab.isDirty
-            })
-          )
-        )
+        setMarkdownDocs((prev) => new Map(prev).set(tab.id, doc))
       } catch {
         setMarkdownDocs((prev) =>
           new Map(prev).set(tab.id, {
@@ -78,17 +27,17 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         )
       }
     },
-    [client, worktreeId]
+    [sessionOperations, worktreeId]
   )
 
   const readFileTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'file' }>) => {
-      if (!client) {
+      if (!sessionOperations) {
         return
       }
       setFileDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
       try {
-        const doc = await resolveMobileFileTabDoc(client, {
+        const doc = await sessionOperations.file.readTab({
           worktreeId,
           relativePath: tab.relativePath,
           diffSource: tab.diffSource
@@ -112,7 +61,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         )
       }
     },
-    [client, worktreeId]
+    [sessionOperations, worktreeId]
   )
   return {
     readMarkdownTab,

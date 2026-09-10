@@ -1,14 +1,8 @@
 import type { ProjectProjectionModel } from './use-mobile-tasks-project-projection'
-import {
-  type GitHubOwnerRepo,
-  githubProjectKey,
-  useEffect,
-  useMemo
-} from './mobile-tasks-dependencies'
+import { githubProjectKey, useEffect, useMemo } from './mobile-tasks-dependencies'
 import {
   GITHUB_REPO_CONCURRENCY,
   getGitHubReviewerSeedUsers,
-  isSuccess,
   mapWithConcurrency,
   mergeGitHubAssignableUsers,
   projectRowType
@@ -18,7 +12,6 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
   const {
     actionItem,
     activeGitHubProject,
-    client,
     connState,
     detailPayload,
     findProjectRowRepo,
@@ -34,12 +27,13 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
     projectRowItem,
     provider,
     setGithubRepoSlugCache,
+    taskOperations,
     taskStateHydrated,
     tasksSupported
   } = model
   useEffect(() => {
     if (
-      !client ||
+      !taskOperations ||
       connState !== 'connected' ||
       !tasksSupported ||
       !taskStateHydrated ||
@@ -59,16 +53,13 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
     let cancelled = false
     void mapWithConcurrency(missing, GITHUB_REPO_CONCURRENCY, async (repo) => {
       try {
-        const response = await client.sendRequest(
-          'github.repoSlug',
-          { repo: `id:${repo.id}` },
-          { timeoutMs: 30_000 }
-        )
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
+        return {
+          repoId: repo.id,
+          entry: {
+            path: repo.path,
+            repository: await taskOperations.read.resolveGitHubRepoSlug(repo.id)
+          }
         }
-        const result = response.result as GitHubOwnerRepo | null
-        return { repoId: repo.id, entry: { path: repo.path, repository: result } }
       } catch {
         // Cached so readiness settles; `failed` marks it for retry on refresh.
         return { repoId: repo.id, entry: { path: repo.path, repository: null, failed: true } }
@@ -90,12 +81,12 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
       cancelled = true
     }
   }, [
-    client,
     connState,
     githubMode,
     githubRepoSlugCache,
     hostedRepos,
     provider,
+    taskOperations,
     taskStateHydrated,
     tasksSupported
   ])

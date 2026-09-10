@@ -5,6 +5,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
   const {
     worktreeId,
     client,
+    sessionOperations,
     setTerminals,
     terminals,
     terminalsRef,
@@ -31,7 +32,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     fetchTerminals
   } = scope
   async function handleRenameTerminal(value: string) {
-    if (!client || !renameTarget) {
+    if (!sessionOperations || !renameTarget) {
       return
     }
     const target = renameTarget
@@ -39,11 +40,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
 
     try {
       const title = value.trim()
-      const response = await client.sendRequest('terminal.rename', {
-        terminal: target.handle,
-        title
-      })
-      if (response.ok) {
+      if (await sessionOperations.terminal.rename(target.handle, title)) {
         setTerminals((prev) => {
           const next = prev.map((terminal) =>
             terminal.handle === target.handle
@@ -93,18 +90,13 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
   }
 
   async function handleCloseSessionTab(tab: MobileSessionTab) {
-    if (!client) {
+    if (!sessionOperations) {
       return
     }
     try {
-      const response = await client.sendRequest('session.tabs.close', {
-        worktree: `id:${worktreeId}`,
-        tabId: tab.id,
-        // Why: a tapped tab close is explicit user intent; older hosts strip
-        // the unknown field and keep their legacy behavior.
-        reason: 'user'
-      })
-      if (response.ok) {
+      // Why: a tapped tab close is explicit user intent; older hosts strip
+      // the unknown reason and keep their legacy behavior.
+      if (await sessionOperations.tab.close(worktreeId, tab.id)) {
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {

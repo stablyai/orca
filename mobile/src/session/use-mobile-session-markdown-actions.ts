@@ -1,7 +1,6 @@
 import { useEffect, useCallback } from 'react'
 import { BackHandler, Keyboard } from 'react-native'
 import * as Clipboard from 'expo-clipboard'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { triggerSuccess, triggerError } from '../platform/haptics'
 import type { DirtyMarkdownDraft, MobileSessionTab } from './mobile-session-route-types'
 import type { MobileSessionDiffCommentsModel } from './use-mobile-session-diff-comments'
@@ -11,7 +10,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
     hostId,
     worktreeId,
     router,
-    client,
+    sessionOperations,
     sessionTabs,
     setMarkdownDocs,
     markdownDocs,
@@ -117,7 +116,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
 
   const saveMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
-      if (!client) {
+      if (!sessionOperations) {
         return
       }
       const current = markdownDocs.get(tab.id)
@@ -138,20 +137,13 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
         return new Map(prev).set(tab.id, { ...existing, saving: true, saveError: undefined })
       })
       try {
-        const response = await client.sendRequest('markdown.saveTab', {
-          worktree: `id:${worktreeId}`,
+        const result = await sessionOperations.markdown.saveTab({
+          workspaceId: worktreeId,
           tabId: tab.id,
+          relativePath: tab.relativePath,
           baseVersion: current.baseVersion,
           content: current.localContent
         })
-        if (!response.ok) {
-          throw new Error((response as RpcFailure).error.message)
-        }
-        const result = (response as RpcSuccess).result as {
-          content: string
-          version: string
-          isDirty: false
-        }
         if (markdownSaveSeqRef.current.get(tab.id) !== saveSeq) {
           return
         }
@@ -160,7 +152,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
             status: 'ready',
             content: result.content,
             localContent: result.content,
-            baseVersion: result.version,
+            baseVersion: result.baseVersion,
             isDirty: false,
             editable: true
           })
@@ -189,7 +181,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionDiffComments
         markdownSaveInFlightRef.current.delete(tab.id)
       }
     },
-    [client, markdownDocs, showToast, worktreeId]
+    [markdownDocs, sessionOperations, showToast, worktreeId]
   )
   return {
     updateMarkdownLocalContent,

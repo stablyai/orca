@@ -12,11 +12,11 @@ import {
 } from './mobile-tasks-dependencies'
 import {
   type ActionableTaskItem,
-  type GitPushTarget,
   type RuntimeTaskSettings,
   type SetupDecision,
   isSuccess
 } from './mobile-tasks-legacy-foundation'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
 
 export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateModel) {
   const {
@@ -37,6 +37,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
     setWorkspaceAgentOverridden,
     setWorkspaceCreateDraft,
     taskStateHydrated,
+    taskWorkspaceCreationOperations,
     tasksSupported,
     trustedOrcaHooks,
     workspaceDetectedAgentIds,
@@ -55,7 +56,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       sparseCheckoutOverride?: { directories: string[]; presetId?: string },
       approvedSetupContentHash?: string
     ): Promise<void> => {
-      if (!client || !tasksSupported || !taskStateHydrated) {
+      if (!client || !taskWorkspaceCreationOperations || !tasksSupported || !taskStateHydrated) {
         return
       }
       setCreatingKey(item.key)
@@ -72,13 +73,12 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         await ensureWorkspaceSshReady(targetRepo)
         let latestRuntimeTaskSettings = runtimeTaskSettings
         try {
-          const settingsResponse = await client.sendRequest('settings.get')
-          if (isSuccess(settingsResponse)) {
-            latestRuntimeTaskSettings = ((
-              settingsResponse.result as { settings?: RuntimeTaskSettings }
-            ).settings ?? {}) as RuntimeTaskSettings
-            setRuntimeTaskSettings(latestRuntimeTaskSettings)
-          }
+          // This caller committed `{}` for a settings-less answer; the create sheet keeps its
+          // previous value instead, so the empty default stays local to this path.
+          latestRuntimeTaskSettings =
+            ((await taskWorkspaceCreationOperations.readRuntimeSettings()) ??
+              {}) as RuntimeTaskSettings
+          setRuntimeTaskSettings(latestRuntimeTaskSettings)
         } catch {
           // Best-effort refresh; the runtime still validates agent availability before spawning.
         }
@@ -156,35 +156,16 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         let params: Record<string, unknown>
         if (item.provider === 'github') {
           const source = item.source
-          let prStartPoint: { baseBranch: string; pushTarget?: GitPushTarget } | undefined
-          if (
-            shouldResolveHostedReviewStartPoint({
-              type: source.type,
-              baseBranchOverride
+          let prStartPoint:
+            | Awaited<ReturnType<HostWorkspaceCreationOperations['resolvePrBase']>>
+            | undefined
+          if (shouldResolveHostedReviewStartPoint({ type: source.type, baseBranchOverride })) {
+            prStartPoint = await taskWorkspaceCreationOperations.resolvePrBase({
+              repoId: source.repoId,
+              prNumber: source.number,
+              headRefName: source.branchName,
+              isCrossRepository: source.isCrossRepository
             })
-          ) {
-            const response = await client.sendRequest(
-              'worktree.resolvePrBase',
-              {
-                repo: `id:${source.repoId}`,
-                prNumber: source.number,
-                ...(source.branchName ? { headRefName: source.branchName } : {}),
-                ...(source.isCrossRepository !== undefined
-                  ? { isCrossRepository: source.isCrossRepository }
-                  : {})
-              },
-              { timeoutMs: 30_000 }
-            )
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            const result = response.result as
-              | { baseBranch: string; pushTarget?: GitPushTarget }
-              | { error: string }
-            if ('error' in result) {
-              throw new Error(result.error)
-            }
-            prStartPoint = result
           }
           params = buildTaskWorkspaceCreateParams({
             item,
@@ -201,35 +182,16 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
           })
         } else if (item.provider === 'gitlab') {
           const source = item.source
-          let mrStartPoint: { baseBranch: string; pushTarget?: GitPushTarget } | undefined
-          if (
-            shouldResolveHostedReviewStartPoint({
-              type: source.type,
-              baseBranchOverride
+          let mrStartPoint:
+            | Awaited<ReturnType<HostWorkspaceCreationOperations['resolveMrBase']>>
+            | undefined
+          if (shouldResolveHostedReviewStartPoint({ type: source.type, baseBranchOverride })) {
+            mrStartPoint = await taskWorkspaceCreationOperations.resolveMrBase({
+              repoId: source.repoId,
+              mrIid: source.number,
+              sourceBranch: source.branchName,
+              isCrossRepository: source.isCrossRepository
             })
-          ) {
-            const response = await client.sendRequest(
-              'worktree.resolveMrBase',
-              {
-                repo: `id:${source.repoId}`,
-                mrIid: source.number,
-                ...(source.branchName ? { sourceBranch: source.branchName } : {}),
-                ...(source.isCrossRepository !== undefined
-                  ? { isCrossRepository: source.isCrossRepository }
-                  : {})
-              },
-              { timeoutMs: 30_000 }
-            )
-            if (!isSuccess(response)) {
-              throw new Error(response.error.message)
-            }
-            const result = response.result as
-              | { baseBranch: string; pushTarget?: GitPushTarget }
-              | { error: string }
-            if ('error' in result) {
-              throw new Error(result.error)
-            }
-            mrStartPoint = result
           }
           params = buildTaskWorkspaceCreateParams({
             item,
@@ -258,6 +220,9 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             nameIsAutoManaged
           })
         }
+        // Why still inline: the operations seam's create is the composer's source flow, which
+        // builds different params and adds name-collision retry. Task-item create keeps its own
+        // params builder until that difference is deliberately reconciled.
         const response = await client.sendRequest('worktree.create', params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
         })
@@ -294,6 +259,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       router,
       runtimeTaskSettings,
       taskStateHydrated,
+      taskWorkspaceCreationOperations,
       tasksSupported,
       trustedOrcaHooks,
       workspaceDetectedAgentIds,

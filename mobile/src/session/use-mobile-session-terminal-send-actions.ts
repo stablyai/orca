@@ -48,7 +48,8 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     handleLiveInputAccessoryBytes,
     canSend,
     scheduleDelayedAction,
-    showToast
+    showToast,
+    sessionOperationsRef
   } = scope
   const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
@@ -148,9 +149,11 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         return false
       }
       const rpc = clientRef.current
+      const operations = sessionOperationsRef.current
       // Why: callers suppress follow-up controls/toasts when this live send is stale.
       if (
         !rpc ||
+        !operations ||
         connStateRef.current !== 'connected' ||
         handle !== activeHandleRef.current ||
         activeSessionTabTypeRef.current !== 'terminal'
@@ -159,27 +162,17 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
       }
       // Why: live-mirror deltas queued behind a dying send drain into the connect
       // wait and replay stale bytes after reconnect (#6713's `YZZYecho …` corruption).
-      return rpc
-        .sendRequest(
-          'terminal.send',
-          buildTerminalSendParams({
-            terminal: handle,
-            text,
-            enter: false,
-            deviceToken: deviceTokenRef.current
-          }),
-          TERMINAL_INPUT_SEND_OPTIONS
-        )
-        .then(
-          (response) => {
-            const accepted = isTerminalSendRpcAccepted(response)
-            if (accepted) {
-              reportWorkerTerminalUserInput(rpc, handle)
-            }
-            return accepted
-          },
-          () => false
-        )
+      const accepted = await operations.terminal.sendInput(
+        handle,
+        text,
+        false,
+        deviceTokenRef.current
+      )
+      if (accepted) {
+        // The adapter does not report takeover; a live keystroke still takes a worker over.
+        reportWorkerTerminalUserInput(rpc, handle)
+      }
+      return accepted
     },
     [showToast]
   )

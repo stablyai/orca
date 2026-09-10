@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RpcClient } from '../transport/rpc-client'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
 
 const push = vi.fn()
@@ -30,7 +32,8 @@ describe('useMobileFileTapHandlers', () => {
 
   function createOptions(sendRequest: ReturnType<typeof vi.fn>) {
     return {
-      client: { sendRequest },
+      operations: defaultHostSessionOperations({ sendRequest } as unknown as RpcClient)
+        .terminalFile,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       worktreeName: 'Orca',
@@ -77,7 +80,12 @@ describe('useMobileFileTapHandlers', () => {
     act(() => {
       renderer!.update(
         createElement(Harness, {
-          options: { ...firstOptions, client: { sendRequest: latestSendRequest } }
+          options: {
+            ...firstOptions,
+            operations: defaultHostSessionOperations({
+              sendRequest: latestSendRequest
+            } as unknown as RpcClient).terminalFile
+          }
         })
       )
     })

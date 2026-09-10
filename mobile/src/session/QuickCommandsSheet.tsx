@@ -3,7 +3,7 @@ import { Alert, View, Text, Pressable, StyleSheet } from 'react-native'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, spacing } from '../theme/mobile-theme'
 import { BottomDrawer } from '../components/BottomDrawer'
-import type { RpcClient } from '../transport/rpc-client'
+import type { HostSessionQuickCommandOperations } from './host-session-quick-command-operations'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
   getQuickCommandPreview,
@@ -23,7 +23,7 @@ import {
 type Props = {
   visible: boolean
   onClose: () => void
-  client: RpcClient | null
+  operations: HostSessionQuickCommandOperations | null
   repoId: string | null
   repoName: string | null
   onLaunch: (command: TerminalQuickCommand) => boolean
@@ -34,13 +34,13 @@ type SheetView = 'list' | 'editor' | 'agent'
 export function QuickCommandsSheet({
   visible,
   onClose,
-  client,
+  operations,
   repoId,
   repoName,
   onLaunch
 }: Props) {
   const { commands, loading, ready, error, persist } = useQuickCommands({
-    client,
+    operations,
     enabled: visible
   })
   const [view, setView] = useState<SheetView>('list')

@@ -2,17 +2,11 @@ import type { ProjectRepositoryResolutionModel } from './use-mobile-tasks-projec
 import {
   type GitHubProjectSettings,
   type TaskProvider,
-  trustedOrcaHooksWithSetupApproval,
   useCallback,
   useLayoutEffect,
   useState
 } from './mobile-tasks-dependencies'
-import {
-  type GitHubPreset,
-  type RepoSummary,
-  type TaskResumeState,
-  isSuccess
-} from './mobile-tasks-legacy-foundation'
+import type { GitHubPreset, RepoSummary, TaskResumeState } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksClientSettingsActions(model: ProjectRepositoryResolutionModel) {
   const {
@@ -64,6 +58,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setWorkspaceSparseSaving,
     setWorkspaceSshConnecting,
     setWorkspaceSshState,
+    taskOperations,
     taskResumeRef,
     taskUiReady,
     trustedOrcaHooks
@@ -101,16 +96,16 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
 
   const persistTaskResumeState = useCallback(
     (updates: Partial<TaskResumeState>) => {
-      if (!client || !taskUiReady) {
+      if (!taskOperations || !taskUiReady) {
         return
       }
       const next = { ...taskResumeRef.current, ...updates }
       taskResumeRef.current = next
-      void client.sendRequest('ui.set', { taskResumeState: next }).catch(() => {
+      void taskOperations.preference.updateResume(next).catch(() => {
         // Best-effort: desktop treats task resume as a convenience preference.
       })
     },
-    [client, taskUiReady]
+    [taskOperations, taskUiReady]
   )
 
   const toggleGitHubProjectFieldVisibility = useCallback(
@@ -140,77 +135,75 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
 
   const persistTaskSource = useCallback(
     (nextProvider: TaskProvider) => {
-      if (!client || !taskUiReady) {
+      if (!taskOperations || !taskUiReady) {
         return
       }
-      void client.sendRequest('settings.update', { defaultTaskSource: nextProvider }).catch(() => {
-        // Best-effort: a failed settings write should not block switching views.
-      })
+      void taskOperations.preference
+        .updateSettings({ defaultTaskSource: nextProvider })
+        .catch(() => {
+          // Best-effort: a failed settings write should not block switching views.
+        })
     },
-    [client, taskUiReady]
+    [taskOperations, taskUiReady]
   )
 
   const persistRepoSelection = useCallback(
     (selection: Set<string>, allRepos: RepoSummary[]) => {
-      if (!client || !taskUiReady) {
+      if (!taskOperations || !taskUiReady) {
         return
       }
       const nextSelection =
         selection.size === 0 || selection.size === allRepos.length ? null : [...selection]
       defaultRepoSelectionRef.current = nextSelection
-      void client
-        .sendRequest('settings.update', { defaultRepoSelection: nextSelection })
+      void taskOperations.preference
+        .updateSettings({ defaultRepoSelection: nextSelection })
         .catch(() => {
           // Best-effort: the in-memory repo picker already reflects the change.
         })
     },
-    [client, taskUiReady]
+    [taskOperations, taskUiReady]
   )
 
   const persistDefaultGitHubPreset = useCallback(
     (preset: GitHubPreset) => {
       setDefaultGitHubPreset(preset)
-      if (!client || !taskUiReady) {
+      if (!taskOperations || !taskUiReady) {
         return
       }
-      void client.sendRequest('settings.update', { defaultTaskViewPreset: preset }).catch(() => {
+      void taskOperations.preference.updateSettings({ defaultTaskViewPreset: preset }).catch(() => {
         // Best-effort: the current session still uses the selected preset.
       })
     },
-    [client, taskUiReady]
+    [taskOperations, taskUiReady]
   )
 
   const persistGitHubProjectSettings = useCallback(
     (nextSettings: GitHubProjectSettings) => {
       setGithubProjectSettings(nextSettings)
-      if (!client || !taskUiReady) {
+      if (!taskOperations || !taskUiReady) {
         return
       }
-      void client.sendRequest('settings.update', { githubProjects: nextSettings }).catch(() => {
+      void taskOperations.preference.updateSettings({ githubProjects: nextSettings }).catch(() => {
         // Best-effort: project selection can still work for the current session.
       })
     },
-    [client, taskUiReady]
+    [taskOperations, taskUiReady]
   )
 
   const persistSetupHookTrust = useCallback(
     async (repoId: string, contentHash: string, alwaysTrust: boolean): Promise<void> => {
-      if (!client) {
+      if (!taskOperations) {
         return
       }
-      const next = trustedOrcaHooksWithSetupApproval({
+      const next = await taskOperations.preference.persistSetupTrust({
         trust: trustedOrcaHooks,
         repoId,
         contentHash,
         alwaysTrust
       })
-      const response = await client.sendRequest('ui.set', { trustedOrcaHooks: next })
-      if (!isSuccess(response)) {
-        throw new Error(response.error.message)
-      }
       setTrustedOrcaHooks(next)
     },
-    [client, trustedOrcaHooks]
+    [taskOperations, trustedOrcaHooks]
   )
 
   const resetWorkspaceCreateState = useCallback((): void => {

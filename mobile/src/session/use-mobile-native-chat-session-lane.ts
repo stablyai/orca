@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import type { HostSessionNativeChatOperations } from './host-session-native-chat-operations'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -8,6 +9,8 @@ import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-s
  *  its identity inputs rather than unmounted, so a lane flip keeps its cache. */
 export function useMobileNativeChatSessionLane({
   client,
+  nativeChatOperations,
+  workspaceId,
   structured,
   agent,
   resolvedAgent,
@@ -19,6 +22,8 @@ export function useMobileNativeChatSessionLane({
   onSendError
 }: {
   client: RpcClient | null
+  nativeChatOperations: HostSessionNativeChatOperations | null
+  workspaceId: string
   structured: boolean
   /** Agent id for the structured provider session. */
   agent: string | null
@@ -35,7 +40,8 @@ export function useMobileNativeChatSessionLane({
   session: ReturnType<typeof useMobileNativeChatSession>
 } {
   const bridgeSession = useMobileNativeChatSession({
-    client,
+    operations: nativeChatOperations,
+    workspaceId,
     sourceIdentity,
     agent: structured ? null : resolvedAgent,
     sessionId: structured ? null : sessionId,

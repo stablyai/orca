@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
-  readRetiredNameRegistryForRepo,
   retiredNamesAfterRefresh,
   selectRetiredNameRegistry,
   type RetiredNamesLoad
 } from '../../../src/shared/worktree/retired-name-cache'
 import type { RetiredNameRegistry } from '../../../src/shared/worktree/retired-name-registry'
-import type { RpcClient } from '../transport/rpc-client'
+
+type ReadRetiredWorktreeNames = (repoId: string) => Promise<RetiredNameRegistry>
 
 export function buildRetiredWorktreeNamesRefreshKey(
   existingWorktreePaths: readonly string[] | undefined
@@ -24,15 +24,15 @@ export function buildRetiredWorktreeNamesRefreshKey(
  *  `retired-name-cache` so this and the desktop hook cannot drift on what a failure means, and no
  *  loading state is reported because create is never gated on this fetch. */
 export function useRetiredWorktreeNames(
-  client: RpcClient | null | undefined,
+  readRetiredNames: ReadRetiredWorktreeNames | null | undefined,
   repoId: string | null | undefined,
   refreshKey: unknown
 ): RetiredNameRegistry {
   const [loaded, setLoaded] = useState<RetiredNamesLoad | null>(null)
-  const activeRepoId = client && repoId ? repoId : null
+  const activeRepoId = readRetiredNames && repoId ? repoId : null
 
   useEffect(() => {
-    if (!client || !activeRepoId) {
+    if (!readRetiredNames || !activeRepoId) {
       setLoaded(null)
       return
     }
@@ -42,18 +42,13 @@ export function useRetiredWorktreeNames(
         setLoaded((previous) => retiredNamesAfterRefresh(previous, activeRepoId, registry))
       }
     }
-    void client
-      .sendRequest('worktree.listRetiredNames', { repo: `id:${activeRepoId}` })
-      .then((response) =>
-        settle(
-          readRetiredNameRegistryForRepo((response as { result?: unknown }).result, activeRepoId)
-        )
-      )
+    void readRetiredNames(activeRepoId)
+      .then(settle)
       .catch(() => settle(null))
     return () => {
       cancelled = true
     }
-  }, [activeRepoId, client, refreshKey])
+  }, [activeRepoId, readRetiredNames, refreshKey])
 
   return selectRetiredNameRegistry(loaded, activeRepoId)
 }

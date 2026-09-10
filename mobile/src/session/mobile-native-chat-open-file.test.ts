@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { RpcClient } from '../transport/rpc-client'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import { openMobileNativeChatFileTap } from './mobile-native-chat-open-file'
+
+/** The operations provider awaits its own RPC before the tap resumes, so drain
+ *  more than one microtask before asserting. */
+async function settle(): Promise<void> {
+  for (let tick = 0; tick < 6; tick += 1) {
+    await Promise.resolve()
+  }
+}
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -18,7 +28,7 @@ function activationState(activated: boolean) {
 
 function baseOptions(client: { sendRequest: ReturnType<typeof vi.fn> }) {
   return {
-    client,
+    operations: defaultHostSessionOperations(client as unknown as RpcClient).terminalFile,
     hostId: 'host-1',
     worktreeId: 'wt-1',
     pushPreviewRoute: vi.fn(),
@@ -56,7 +66,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -89,7 +99,7 @@ describe('openMobileNativeChatFileTap', () => {
       pathText: '~/orca-plans/result.html',
       nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
     })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -118,7 +128,7 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts:120:7' })
-    await Promise.resolve()
+    await settle()
 
     expect(sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -151,8 +161,8 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'gone/missing.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
     expect(options.pushPreviewRoute).not.toHaveBeenCalled()
@@ -166,8 +176,8 @@ describe('openMobileNativeChatFileTap', () => {
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
 
     expect(options.onOpenFailed).toHaveBeenCalledTimes(1)
   })
@@ -186,8 +196,8 @@ describe('openMobileNativeChatFileTap', () => {
     }
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(sendRequest).toHaveBeenCalledWith(

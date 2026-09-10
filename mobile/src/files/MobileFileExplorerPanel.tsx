@@ -16,10 +16,8 @@ import {
   flattenDirectoryCache,
   getDirectoryCacheState,
   type DirectoryCache,
-  type FileExplorerRow,
-  type MobileDirEntry
+  type FileExplorerRow
 } from './file-tree'
-import type { RpcSuccess } from '../transport/types'
 import { colors } from '../theme/mobile-theme'
 import {
   beginDirectoryLoad,
@@ -28,14 +26,11 @@ import {
   resetDirectoryLoadRevisions,
   type DirectoryLoadRevisions
 } from './directory-load-revisions'
-import {
-  directoryCacheFromFileList,
-  isMobileMethodUnavailableError,
-  type LegacyFilesListResult
-} from './file-list-fallback'
+import { directoryCacheFromFileList } from './file-list-fallback'
 import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
+import { defaultHostFileExplorerOperations } from './default-host-file-explorer-operations'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -48,6 +43,13 @@ export function MobileFileExplorerPanel(props: {
   const router = useRouter()
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
+  const operations = useMemo(
+    () => (client ? defaultHostFileExplorerOperations(client) : null),
+    [client]
+  )
+  // Why: Retry exists for the disconnected state, where there is no client and so no operations
+  // provider; the revive path calls the transport directly rather than hanging off one (#5049).
+  const reconnect = useCallback(() => forceReconnect(hostId), [forceReconnect, hostId])
   const scopeRef = useRef('')
   const scope = `${hostId}:${worktreeId}`
   scopeRef.current = scope
@@ -67,7 +69,7 @@ export function MobileFileExplorerPanel(props: {
       const loadToken = beginDirectoryLoad(directoryLoadRevisionsRef.current, scope, relativePath)
       const rootLoad = relativePath === ''
 
-      if (!client || connState !== 'connected') {
+      if (!operations || connState !== 'connected') {
         const message =
           connState === 'connected' ? 'Connecting to desktop...' : 'Waiting for desktop...'
         if (rootLoad) {
@@ -107,56 +109,25 @@ export function MobileFileExplorerPanel(props: {
       }))
 
       try {
-        const response = await client.sendRequest('files.readDir', {
-          worktree: `id:${worktreeId}`,
-          relativePath
-        })
-        if (!response.ok) {
-          // Why: desktops that predate the files.readDir mobile allowlist
-          // entry still serve the capped files.list; fall back so the Files
-          // tab keeps working until the desktop updates.
-          if (
-            rootLoad &&
-            isMobileMethodUnavailableError(response.error?.code, response.error?.message)
-          ) {
-            const legacy = await client.sendRequest('files.list', {
-              worktree: `id:${worktreeId}`
-            })
-            if (legacy.ok) {
-              if (
-                !isCurrentDirectoryLoad(
-                  directoryLoadRevisionsRef.current,
-                  scopeRef.current,
-                  loadToken
-                )
-              ) {
-                return
-              }
-              const legacyResult = (legacy as RpcSuccess).result as LegacyFilesListResult
-              setDirectoryCache(directoryCacheFromFileList(legacyResult.files))
-              // Why: the capped list silently omits files past the cap — keep
-              // the legacy explorer's "Showing first 5000" note.
-              setLegacyListTruncated(legacyResult.truncated)
-              return
-            }
-            throw new Error(
-              legacy.error?.message || response.error?.message || 'Unable to load files'
-            )
-          }
-          throw new Error(response.error?.message || 'Unable to load files')
-        }
+        const result = await operations.readDirectory(worktreeId, relativePath)
         if (
           !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
         ) {
           return
         }
-        const entries = (response as RpcSuccess).result as MobileDirEntry[]
+        if (result.kind === 'legacy-list') {
+          setDirectoryCache(directoryCacheFromFileList(result.files))
+          // Why: the capped list silently omits files past the cap — keep
+          // the legacy explorer's "Showing first 5000" note.
+          setLegacyListTruncated(result.truncated)
+          return
+        }
         if (rootLoad) {
           setLegacyListTruncated(false)
         }
         setDirectoryCache((prev) => ({
           ...prev,
-          [relativePath]: { entries }
+          [relativePath]: { entries: result.entries }
         }))
       } catch (err) {
         if (
@@ -187,7 +158,7 @@ export function MobileFileExplorerPanel(props: {
         }
       }
     },
-    [client, connState, worktreeId]
+    [connState, operations, worktreeId]
   )
 
   useEffect(() => {
@@ -249,12 +220,12 @@ export function MobileFileExplorerPanel(props: {
     (relativePath: string) => {
       if (connState !== 'connected' && hostId) {
         pendingDirectoryRetriesRef.current.add(relativePath)
-        void forceReconnect(hostId)
+        void reconnect()
         return
       }
       void loadDirectory(relativePath)
     },
-    [connState, forceReconnect, hostId, loadDirectory]
+    [connState, hostId, loadDirectory, reconnect]
   )
 
   const previewFile = useCallback(
@@ -332,7 +303,7 @@ export function MobileFileExplorerPanel(props: {
       <Pressable
         style={styles.retryButton}
         onPress={() =>
-          connState !== 'connected' && hostId ? void forceReconnect(hostId) : void loadDirectory('')
+          connState !== 'connected' && hostId ? void reconnect() : void loadDirectory('')
         }
       >
         <Text style={styles.retryText}>Retry</Text>

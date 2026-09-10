@@ -1,16 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
 import { normalizeSetupHookTrust } from '../tasks/setup-hook-trust'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
-import type {
-  MobileWorkspaceRepo,
-  RepoHooksResponse,
-  SetupHookDetails
-} from './new-worktree-modal-types'
+import type { HostWorkspaceCreationOperations } from '../worktree/host-workspace-creation-operations'
+import type { MobileWorkspaceRepo, SetupHookDetails } from './new-worktree-modal-types'
 
 export function useNewWorkspaceSetupScript(args: {
-  client: RpcClient | null
+  operations: HostWorkspaceCreationOperations | null
   selectedRepo: MobileWorkspaceRepo | null
 }): {
   setupCommand: string | null
@@ -24,7 +19,7 @@ export function useNewWorkspaceSetupScript(args: {
   showAdvanced: boolean
   setShowAdvanced: (show: boolean) => void
 } {
-  const { client, selectedRepo } = args
+  const { operations, selectedRepo } = args
   const [details, setDetails] = useState<SetupHookDetails | null>(null)
   const [setupDecisionChoice, setSetupDecisionChoice] = useState<Exclude<
     WorkspaceCreateSetupDecision,
@@ -35,17 +30,16 @@ export function useNewWorkspaceSetupScript(args: {
   const activeDetails = selectedRepo && details?.repoId === selectedRepo.id ? details : null
 
   useEffect(() => {
-    if (!client || !selectedRepo) {
+    if (!operations || !selectedRepo) {
       return
     }
     let stale = false
-    void client
-      .sendRequest('repo.hooks', { repo: `id:${selectedRepo.id}` })
-      .then((response) => {
-        if (stale || !response.ok) {
+    void operations
+      .readRepoHooksIfAvailable(selectedRepo.id)
+      .then((result) => {
+        if (stale || !result) {
           return
         }
-        const result = (response as RpcSuccess).result as RepoHooksResponse
         const command = result.hooks?.scripts?.setup?.trim() || null
         const runPolicy = result.setupRunPolicy ?? 'run-by-default'
         setDetails({
@@ -76,7 +70,7 @@ export function useNewWorkspaceSetupScript(args: {
     return () => {
       stale = true
     }
-  }, [client, selectedRepo])
+  }, [operations, selectedRepo])
 
   return {
     setupCommand: activeDetails?.command ?? null,

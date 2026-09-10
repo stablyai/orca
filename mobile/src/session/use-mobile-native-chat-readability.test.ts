@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import { FLOATING_WORKSPACE_WORKTREE_ID } from './floating-workspace'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 
@@ -29,8 +30,9 @@ describe('useMobileNativeChatReadability', () => {
     const client = {
       sendRequest
     } as unknown as RpcClient
+    const operations = defaultHostSessionOperations(client).nativeChat
     function Harness(): null {
-      readable = useMobileNativeChatReadability(client, worktreeId)
+      readable = useMobileNativeChatReadability(operations, worktreeId)
       return null
     }
     await act(async () => {
@@ -73,8 +75,9 @@ describe('useMobileNativeChatReadability', () => {
         })
         .mockImplementationOnce(() => new Promise((resolve) => (resolveNext = resolve)))
     } as unknown as RpcClient
+    const operations = defaultHostSessionOperations(client).nativeChat
     function Harness({ worktreeId }: { worktreeId: string }): null {
-      readable = useMobileNativeChatReadability(client, worktreeId)
+      readable = useMobileNativeChatReadability(operations, worktreeId)
       return null
     }
     await act(async () => {

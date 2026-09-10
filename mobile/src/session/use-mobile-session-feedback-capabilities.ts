@@ -21,6 +21,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     toastHideTimerRef,
     toastSeqRef,
     clientRef,
+    sessionOperations,
+    sessionOperationsRef,
     connStateRef,
     activeSessionTabTypeRef,
     delayedActionTimersRef,
@@ -39,6 +41,7 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   browserScreencastSupportedRef.current = browserScreencastSupported
   // Why: terminal gesture/input callbacks are stable/imperative, so keep their refs current before commit, not in a later effect.
   clientRef.current = client
+  sessionOperationsRef.current = sessionOperations
   connStateRef.current = connState
   activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
   sessionTabsRef.current = sessionTabs

@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 
 type SearchState = ReturnType<typeof useMobileNativeChatFileSearch>
@@ -20,8 +21,9 @@ describe('useMobileNativeChatFileSearch', () => {
   let state: SearchState | null = null
 
   async function mount(client: RpcClient): Promise<void> {
+    const operations = defaultHostSessionOperations(client).nativeChat
     function Harness(): null {
-      state = useMobileNativeChatFileSearch({ client, worktreeId: 'wt-1' })
+      state = useMobileNativeChatFileSearch({ operations, worktreeId: 'wt-1' })
       return null
     }
     await act(async () => {
@@ -86,6 +88,34 @@ describe('useMobileNativeChatFileSearch', () => {
       'files.searchPaths',
       'files.list'
     ])
+  })
+
+  it('does not cache a refused search, so the next keystroke retries it', async () => {
+    let refuse = true
+    const sendRequest = vi.fn(async (_method: string, params: { query: string }) => {
+      if (refuse) {
+        return {
+          id: 'refused',
+          ok: false as const,
+          error: { code: 'worktree_unavailable', message: 'Workspace moved' },
+          _meta: { runtimeId: 'runtime-1' }
+        }
+      }
+      return rpcSuccess([`src/${params.query}.ts`])
+    })
+    await mount({ sendRequest } as unknown as RpcClient)
+
+    act(() => state?.loadNativeChatFiles('comp'))
+    await act(async () => vi.advanceTimersByTimeAsync(120))
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(state?.nativeChatFilePaths).toEqual([])
+
+    // The identical prefix must reach the host again rather than serve a cached empty answer.
+    refuse = false
+    act(() => state?.loadNativeChatFiles('comp'))
+    await act(async () => vi.advanceTimersByTimeAsync(120))
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(state?.nativeChatFilePaths).toEqual(['src/comp.ts'])
   })
 
   it('cancels an in-flight query on a cache hit so a stale result cannot clobber it', async () => {

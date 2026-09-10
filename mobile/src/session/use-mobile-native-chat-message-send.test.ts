@@ -151,7 +151,6 @@ describe('useMobileNativeChatMessageSend', () => {
     await act(async () => {
       await api!.send('hello')
     })
-    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
@@ -161,7 +160,6 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send('hello')
     })
     expect(clearArgs().clearInput).toBe('\x15')
-    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
   })
 
@@ -200,7 +198,6 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.send('caption', ['file:///a.png'])
     })
     expect(clearInputWrite).not.toHaveBeenCalled()
-    expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 

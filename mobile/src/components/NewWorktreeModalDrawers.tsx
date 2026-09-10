@@ -23,7 +23,7 @@ type Composer = ReturnType<typeof useMobileComposerSource>
 export function NewWorktreeModalDrawers(props: {
   visible: boolean
   drawerView: NewWorktreeDrawerView
-  client: Parameters<typeof SmartWorkspaceSourceDrawer>[0]['client']
+  operations: Parameters<typeof SmartWorkspaceSourceDrawer>[0]['operations']
   composer: Composer
   sourceAvailability: SmartModeAvailabilityInput
   selectedRepo: MobileWorkspaceRepo | null
@@ -49,7 +49,7 @@ export function NewWorktreeModalDrawers(props: {
     <>
       <SmartWorkspaceSourceDrawer
         visible={props.visible && props.drawerView === 'source'}
-        client={props.client}
+        operations={props.operations}
         composer={props.composer}
         availability={props.sourceAvailability}
         repoId={props.selectedRepo?.id ?? null}

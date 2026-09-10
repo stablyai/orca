@@ -1,11 +1,9 @@
 import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
+import type { HostSessionNativeChatOperations } from './host-session-native-chat-operations'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
-import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
-import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
@@ -14,7 +12,7 @@ import { useMobileNativeChatSessionOptionController } from './use-mobile-native-
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
-import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
+import { useMobileNativeChatTerminalResponseLane } from './use-mobile-native-chat-terminal-response-lane'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -28,6 +26,7 @@ const NATIVE_CHAT_STREAM_THROTTLE_MS = 50
  *  route. The route remains responsible only for choosing and rendering the view. */
 export function useMobileNativeChatController(args: {
   client: RpcClient | null
+  nativeChatOperations: HostSessionNativeChatOperations | null
   hostId: string
   worktreeId: string
   activeSessionTab: MobileNativeChatTab | null
@@ -45,6 +44,7 @@ export function useMobileNativeChatController(args: {
 }): MobileNativeChatController {
   const {
     client,
+    nativeChatOperations,
     hostId,
     worktreeId,
     activeSessionTab,
@@ -84,6 +84,8 @@ export function useMobileNativeChatController(args: {
   const { structuredSession: structuredNativeChat, session: nativeChatSession } =
     useMobileNativeChatSessionLane({
       client,
+      nativeChatOperations,
+      workspaceId: worktreeId,
       structured: activeChatStructured,
       agent: activeChatAgent,
       resolvedAgent: activeChatResolution?.agent ?? null,
@@ -172,47 +174,26 @@ export function useMobileNativeChatController(args: {
     ? client != null && activeChatSessionId != null && connState === 'connected'
     : nativeChatInputLeaseReady && connState === 'connected'
 
-  const { answerAsk: handleNativeChatAnswerAsk, cancelPending: cancelNativeChatAnswer } =
-    useMobileNativeChatAnswerSend({
-      client,
-      enabled: inputSendable && !activeChatStructured,
-      handleRef: activeHandleRef,
-      deviceTokenRef,
-      agentRef: activeChatAgentRef,
-      sessionId: activeChatSessionId,
-      streamIdentity,
-      onSendError
-    })
-
-  const handleNativeChatCancelAsk = useMobileNativeChatCancelAsk({
+  const {
+    answerAsk: handleNativeChatAnswerAsk,
+    cancelAsk: handleNativeChatCancelAsk,
+    respondPermission: legacyHandleNativeChatRespondPermission,
+    stop: handleNativeChatStop
+  } = useMobileNativeChatTerminalResponseLane({
     client,
+    operations: nativeChatOperations,
+    workspaceId: worktreeId,
     enabled: inputSendable && !activeChatStructured,
     handleRef: activeHandleRef,
     deviceTokenRef,
-    cancelPending: cancelNativeChatAnswer,
-    onSendError
-  })
-
-  const legacyHandleNativeChatRespondPermission = useMobileNativeChatPermissionSend({
-    client,
-    enabled: inputSendable && !activeChatStructured,
-    handleRef: activeHandleRef,
-    deviceTokenRef,
-    onSendError
-  })
-
-  const handleNativeChatStop = useMobileNativeChatStop({
-    client,
-    enabled: inputSendable && !activeChatStructured,
-    handleRef: activeHandleRef,
-    deviceTokenRef,
+    agentRef: activeChatAgentRef,
+    sessionId: activeChatSessionId,
     streamIdentity,
-    cancelPending: cancelNativeChatAnswer,
     onSendError
   })
 
   const { nativeChatFilePaths, loadNativeChatFiles } = useMobileNativeChatFileSearch({
-    client,
+    operations: nativeChatOperations,
     worktreeId
   })
 

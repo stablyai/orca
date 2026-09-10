@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { resetWorkerTerminalTakeoverReportsForTest } from '../terminal/worker-terminal-takeover-report'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import { useMobileSessionTerminalSendActions } from './use-mobile-session-terminal-send-actions'
 import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
@@ -45,9 +46,12 @@ function mountSendSites(client: ReturnType<typeof clientFixture>, handle = 'term
   const activeHandleRef = ref<string | null>(handle)
   const activeSessionTabTypeRef = ref<string | null>('terminal')
   const sendLiveTerminalInputRef = ref(async (_handle: string, _text: string) => false)
+  const sessionOperations = defaultHostSessionOperations(client as unknown as RpcClient)
   const scope = {
     client,
     clientRef: ref(client),
+    sessionOperations,
+    sessionOperationsRef: ref(sessionOperations),
     activeHandle: handle,
     activeHandleRef,
     activeSessionTabTypeRef,

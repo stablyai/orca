@@ -2,7 +2,7 @@ import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcRequestSender } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { extractLinearIssueReadItems } from './linear-mobile-issue-read'
 import { PER_REPO_FETCH_LIMIT } from './mobile-work-items'
@@ -22,7 +22,7 @@ export function scopeGitHubQuery(query: string): string {
 }
 
 export async function searchGitHubItems(
-  client: RpcClient,
+  client: RpcRequestSender,
   repoId: string,
   query: string
 ): Promise<GitHubWorkItem[]> {
@@ -41,7 +41,7 @@ export async function searchGitHubItems(
 }
 
 export async function searchGitLabItems(
-  client: RpcClient,
+  client: RpcRequestSender,
   repoId: string,
   query: string,
   state: MrStateFilter
@@ -67,7 +67,7 @@ export async function searchGitLabItems(
 }
 
 export async function searchLinearIssues(
-  client: RpcClient,
+  client: RpcRequestSender,
   query: string,
   linearWorkspaceId: string | null | undefined
 ): Promise<LinearIssue[]> {
@@ -94,7 +94,7 @@ export async function searchLinearIssues(
 }
 
 export async function searchBranches(
-  client: RpcClient,
+  client: RpcRequestSender,
   repoId: string,
   query: string
 ): Promise<BaseRefSearchResult[]> {

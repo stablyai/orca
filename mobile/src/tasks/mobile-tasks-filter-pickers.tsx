@@ -148,7 +148,6 @@ export function renderMobileTasksLinearFilterPicker(model: ConnectionPresentatio
 
 export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresentationModel) {
   const {
-    client,
     linearWorkspaceOptions,
     loadLinearContext,
     selectedLinearWorkspaceId,
@@ -157,6 +156,7 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
     setSelectedLinearWorkspaceId,
     setShowLinearWorkspacePicker,
     showLinearWorkspacePicker,
+    taskOperations,
     taskUiReady
   } = model
   return (
@@ -168,13 +168,17 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
       onSelect={(workspaceId) => {
         setSelectedLinearWorkspaceId(workspaceId)
         setSelectedLinearTeamIds(new Set())
-        if (client) {
-          void client
-            .sendRequest('linear.selectWorkspace', { workspaceId })
+        if (taskOperations) {
+          const reportFailure = (err: unknown): void => {
+            setError(err instanceof Error ? err.message : 'Failed to switch workspace')
+          }
+          void taskOperations.linear
+            .selectWorkspace(workspaceId)
+            .catch(reportFailure)
+            // Why the reload runs either way: it re-reads the host's real workspace, so a
+            // refused switch cannot leave the optimistic selection above standing.
             .then(() => loadLinearContext())
-            .catch((err) => {
-              setError(err instanceof Error ? err.message : 'Failed to switch workspace')
-            })
+            .catch(reportFailure)
         }
       }}
       onClose={() => setShowLinearWorkspacePicker(false)}

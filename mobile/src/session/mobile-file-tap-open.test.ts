@@ -1,13 +1,27 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { RpcClient } from '../transport/rpc-client'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import { openMobileFileTap } from './mobile-file-tap-open'
+
+/** The operations provider awaits its own RPC before the tap resumes, so drain
+ *  more than one microtask before asserting. */
+async function settle(): Promise<void> {
+  for (let tick = 0; tick < 6; tick += 1) {
+    await Promise.resolve()
+  }
+}
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
 function createClient(responses: unknown[]) {
-  return {
+  const client = {
     sendRequest: vi.fn(async () => responses.shift())
+  }
+  return {
+    ...client,
+    operations: defaultHostSessionOperations(client as unknown as RpcClient).terminalFile
   }
 }
 
@@ -43,7 +57,7 @@ describe('openMobileFileTap', () => {
     const triggerOpenFeedback = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: '/tmp/result.json',
@@ -60,7 +74,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
+    await settle()
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -112,7 +126,7 @@ describe('openMobileFileTap', () => {
     const switchSessionTab = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'src/index.ts',
@@ -128,8 +142,8 @@ describe('openMobileFileTap', () => {
       switchSessionTab,
       scheduleDelayedAction
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(client.sendRequest).toHaveBeenCalledWith(
@@ -159,7 +173,7 @@ describe('openMobileFileTap', () => {
     const pushPreviewRoute = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: '/repo-b/docs/readme.md',
@@ -175,8 +189,8 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
 
     expect(pushPreviewRoute).toHaveBeenCalledWith({
       pathname: '/h/[hostId]/files/preview/[worktreeId]',
@@ -210,7 +224,7 @@ describe('openMobileFileTap', () => {
     const triggerOpenFeedback = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       worktreeName: 'Orca',
@@ -227,7 +241,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
+    await settle()
 
     expect(pushPreviewRoute).toHaveBeenCalledWith({
       pathname: '/h/[hostId]/files/preview/[worktreeId]',
@@ -264,7 +278,7 @@ describe('openMobileFileTap', () => {
     const openBrowser = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'public/report #1?.html',
@@ -280,7 +294,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
+    await settle()
 
     expect(openBrowser).toHaveBeenCalledWith('file:///repo/public/report%20%231%3F.html')
     expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything())
@@ -305,7 +319,7 @@ describe('openMobileFileTap', () => {
     ])
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'index.ts',
@@ -323,7 +337,7 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
+    await settle()
 
     expect(client.sendRequest).toHaveBeenCalledWith(
       'files.resolveTerminalPath',
@@ -358,7 +372,7 @@ describe('openMobileFileTap', () => {
     const openBrowser = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'report.html',
@@ -374,8 +388,8 @@ describe('openMobileFileTap', () => {
       switchSessionTab: vi.fn(),
       scheduleDelayedAction: vi.fn()
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
 
     expect(openBrowser).not.toHaveBeenCalled()
     expect(client.sendRequest).toHaveBeenCalledWith(
@@ -399,7 +413,7 @@ describe('openMobileFileTap', () => {
     const pushPreviewRoute = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: '/tmp/result.json',
@@ -436,8 +450,8 @@ describe('openMobileFileTap', () => {
         }
       })
     )
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
 
     expect(pushPreviewRoute).not.toHaveBeenCalled()
   })
@@ -462,7 +476,7 @@ describe('openMobileFileTap', () => {
     const onOpenFailed = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'src/index.ts',
@@ -479,9 +493,9 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
+    await settle()
 
     expect(onOpenFailed).toHaveBeenCalledTimes(1)
   })
@@ -507,7 +521,7 @@ describe('openMobileFileTap', () => {
     const scheduleDelayedAction = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'dist/app.zip',
@@ -524,9 +538,9 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction,
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
+    await settle()
 
     expect(onOpenFailed).toHaveBeenCalledTimes(1)
     expect(scheduleDelayedAction).not.toHaveBeenCalled()
@@ -545,7 +559,7 @@ describe('openMobileFileTap', () => {
     const onOpenFailed = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'gone/missing.ts',
@@ -565,8 +579,8 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
 
     expect(onOpenFailed).not.toHaveBeenCalled()
   })
@@ -590,7 +604,7 @@ describe('openMobileFileTap', () => {
     const onOpenFailed = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'src/index.ts',
@@ -610,8 +624,8 @@ describe('openMobileFileTap', () => {
       scheduleDelayedAction: vi.fn(),
       onOpenFailed
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
 
     expect(onOpenFailed).not.toHaveBeenCalled()
   })
@@ -638,7 +652,7 @@ describe('openMobileFileTap', () => {
     const switchSessionTab = vi.fn()
 
     openMobileFileTap({
-      client,
+      operations: client.operations,
       hostId: 'host-1',
       worktreeId: 'wt-1',
       pathText: 'src/index.ts',
@@ -657,10 +671,10 @@ describe('openMobileFileTap', () => {
       switchSessionTab,
       scheduleDelayedAction: (callback) => callbacks.push(callback)
     })
-    await Promise.resolve()
-    await Promise.resolve()
+    await settle()
+    await settle()
     callbacks.forEach((callback) => callback())
-    await Promise.resolve()
+    await settle()
 
     expect(switchSessionTab).not.toHaveBeenCalled()
   })

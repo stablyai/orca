@@ -1,13 +1,7 @@
 import type { ItemDetailLoadingModel } from './use-mobile-tasks-item-detail-loading'
 import { useEffect } from './mobile-tasks-dependencies'
 import {
-  type DetailComment,
-  type GitHubAssignableUser,
-  type GitHubDetailCheck,
-  type GitHubDetailFile,
-  type GitHubPRReviewSummary,
   editableProjectFields,
-  isSuccess,
   projectFieldDraftValue,
   projectRowType,
   splitRepositorySlug
@@ -16,7 +10,6 @@ import {
 export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel) {
   const {
     activeGitHubProjectHost,
-    client,
     githubProjectTable,
     projectRowDetailRefreshSeq,
     projectRowItem,
@@ -34,6 +27,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     setProjectRowDetailError,
     setProjectRowDetailLoading,
     setProjectTitleDraft,
+    taskOperations,
     tasksSupported
   } = model
   useEffect(() => {
@@ -78,7 +72,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     setProjectRowDetail(null)
     setProjectRowDetailError('')
 
-    if (!tasksSupported || !client || !type || !slug || !projectRowItem.content.number) {
+    if (!tasksSupported || !taskOperations || !type || !slug || !projectRowItem.content.number) {
       setProjectRowDetailLoading(false)
       return
     }
@@ -86,71 +80,33 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     let stale = false
     setProjectRowDetailLoading(true)
 
-    void client
-      .sendRequest(
-        'github.project.workItemDetailsBySlug',
-        {
-          owner: slug.owner,
-          repo: slug.repo,
-          host: activeGitHubProjectHost,
-          number: projectRowItem.content.number,
-          type
-        },
-        { timeoutMs: 30_000 }
-      )
-      .then((response) => {
+    void taskOperations.projectRead
+      .loadItemDetail({
+        owner: slug.owner,
+        repo: slug.repo,
+        host: activeGitHubProjectHost,
+        number: projectRowItem.content.number,
+        type
+      })
+      .then((details) => {
         if (stale) {
           return
         }
-        if (!isSuccess(response)) {
-          throw new Error(response.error.message)
-        }
-        const result = response.result as
-          | {
-              ok: true
-              details: {
-                body?: string
-                comments?: DetailComment[]
-                item?: {
-                  labels?: string[]
-                  reviewDecision?: string | null
-                  reviewRequests?: GitHubAssignableUser[]
-                  latestReviews?: GitHubPRReviewSummary[]
-                }
-                assignees?: string[]
-                headSha?: string
-                baseSha?: string
-                pullRequestId?: string
-                checks?: GitHubDetailCheck[]
-                files?: Array<{
-                  path: string
-                  oldPath?: string
-                  status?: GitHubDetailFile['status']
-                  additions?: number
-                  deletions?: number
-                  isBinary?: boolean
-                  viewerViewedState?: 'DISMISSED' | 'VIEWED' | 'UNVIEWED'
-                }>
-              }
-            }
-          | { ok: false; error: { message: string } }
-        if (!result.ok) {
-          throw new Error(result.error.message)
-        }
         setProjectRowDetail({
           provider: 'github',
-          body: result.details.body ?? '',
-          comments: result.details.comments ?? [],
-          labels: result.details.item?.labels ?? projectRowItem.content.labels.map((l) => l.name),
-          assignees: result.details.assignees ?? [],
-          reviewDecision: result.details.item?.reviewDecision,
-          reviewRequests: result.details.item?.reviewRequests ?? [],
-          latestReviews: result.details.item?.latestReviews ?? [],
-          headSha: result.details.headSha,
-          baseSha: result.details.baseSha,
-          pullRequestId: result.details.pullRequestId,
-          checks: result.details.checks ?? [],
-          files: result.details.files ?? []
+          body: details.body,
+          comments: details.comments,
+          // Why: the row already knows its labels when the host omits them.
+          labels: details.labels ?? projectRowItem.content.labels.map((label) => label.name),
+          assignees: details.assignees,
+          reviewDecision: details.reviewDecision,
+          reviewRequests: details.reviewRequests ?? [],
+          latestReviews: details.latestReviews ?? [],
+          headSha: details.headSha,
+          baseSha: details.baseSha,
+          pullRequestId: details.pullRequestId,
+          checks: details.checks,
+          files: details.files
         })
       })
       .catch((err) => {
@@ -169,10 +125,10 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     }
   }, [
     activeGitHubProjectHost,
-    client,
     githubProjectTable,
     projectRowDetailRefreshSeq,
     projectRowItem,
+    taskOperations,
     tasksSupported
   ])
   return model

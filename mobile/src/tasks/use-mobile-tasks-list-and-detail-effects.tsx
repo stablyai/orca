@@ -6,13 +6,8 @@ import {
   useCallback,
   useEffect
 } from './mobile-tasks-dependencies'
-import {
-  type LinearState,
-  type LinearTeam,
-  getTaskPresetQuery,
-  isSuccess,
-  scopeGitHubTaskSearch
-} from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { taskLinearTarget } from './mobile-tasks-mutation-targets'
 
 export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsModel) {
   const {
@@ -21,7 +16,6 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     activeGitHubProjectViewId,
     appliedGithubProjectSearch,
     appliedQuery,
-    client,
     connState,
     copiedLinkResetTimerRef,
     githubKind,
@@ -68,6 +62,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     setPrFileLoadingPath,
     showCreateTask,
     showGitHubProjectPicker,
+    taskOperations,
     taskStateHydrated,
     taskUiReady,
     tasksSupported
@@ -186,25 +181,19 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       )
       return
     }
-    if (!client) {
+    if (!taskOperations) {
       return
     }
     let stale = false
     setCreateTeamId(null)
-    void client
-      .sendRequest('linear.listTeams')
-      .then((response) => {
+    void taskOperations.linear
+      .listTeams()
+      .then((teams) => {
         if (stale) {
           return
         }
-        if (isSuccess(response)) {
-          const teams = response.result as LinearTeam[]
-          setLinearTeams(teams)
-          setCreateTeamId((current) => current ?? teams[0]?.id ?? null)
-        } else {
-          setLinearTeams([])
-          setCreateTeamId(null)
-        }
+        setLinearTeams(teams)
+        setCreateTeamId((current) => current ?? teams[0]?.id ?? null)
       })
       .catch(() => {
         if (!stale) {
@@ -215,10 +204,10 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     return () => {
       stale = true
     }
-  }, [client, hostedRepos, provider, showCreateTask, taskStateHydrated, tasksSupported])
+  }, [hostedRepos, provider, showCreateTask, taskOperations, taskStateHydrated, tasksSupported])
 
   useEffect(() => {
-    if (!tasksSupported || !linearMetadataItem || !client) {
+    if (!tasksSupported || !linearMetadataItem || !taskOperations) {
       setLinearStates([])
       setLinearCommentDraft('')
       setLinearSubIssueTitle('')
@@ -228,21 +217,13 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     setLinearStatesLoading(true)
     setLinearCommentDraft('')
     setLinearSubIssueTitle('')
-    const baseParams = {
-      teamId: linearMetadataItem.source.team.id,
-      workspaceId: linearMetadataItem.source.workspaceId
-    }
-    void client
-      .sendRequest('linear.teamStates', baseParams)
-      .then((statesResponse) => {
+    void taskOperations.linear
+      .teamStates(taskLinearTarget(linearMetadataItem))
+      .then((states) => {
         if (stale) {
           return
         }
-        if (isSuccess(statesResponse)) {
-          setLinearStates(statesResponse.result as LinearState[])
-        } else {
-          setLinearStates([])
-        }
+        setLinearStates(states)
       })
       .catch(() => {
         if (!stale) {
@@ -257,7 +238,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     return () => {
       stale = true
     }
-  }, [client, linearMetadataItem, tasksSupported])
+  }, [linearMetadataItem, taskOperations, tasksSupported])
 
   useEffect(() => {
     if (!actionItem) {

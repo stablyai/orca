@@ -5,7 +5,24 @@ import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-co
 import type { RpcClient } from '../transport/rpc-client'
 import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcResponse } from '../transport/types'
+import { defaultHostSessionOperations } from './default-host-session-operations'
 import { useQuickCommands } from './use-quick-commands'
+
+/** One provider per client, exactly as the session model memoizes it, so the
+ *  effect keys stay stable across renders. */
+const operationsByClient = new WeakMap<
+  RpcClient,
+  ReturnType<typeof defaultHostSessionOperations>['quickCommand']
+>()
+function quickCommandOperations(client: RpcClient) {
+  const cached = operationsByClient.get(client)
+  if (cached) {
+    return cached
+  }
+  const operations = defaultHostSessionOperations(client).quickCommand
+  operationsByClient.set(client, operations)
+  return operations
+}
 
 const FIRST: TerminalQuickCommand = {
   id: 'first',
@@ -57,7 +74,10 @@ describe('useQuickCommands', () => {
 
   async function mount(client: RpcClient, enabled = true): Promise<void> {
     function Harness(): null {
-      state = useQuickCommands({ client, enabled })
+      state = useQuickCommands({
+        operations: quickCommandOperations(client),
+        enabled
+      })
       return null
     }
     await act(async () => {
@@ -128,7 +148,10 @@ describe('useQuickCommands', () => {
     } as unknown as RpcClient
 
     function Harness({ enabled }: { enabled: boolean }): null {
-      state = useQuickCommands({ client, enabled })
+      state = useQuickCommands({
+        operations: quickCommandOperations(client),
+        enabled
+      })
       return null
     }
     await act(async () => {
@@ -307,7 +330,10 @@ describe('useQuickCommands', () => {
     } as unknown as RpcClient
 
     function Harness({ client }: { client: RpcClient }): null {
-      state = useQuickCommands({ client, enabled: true })
+      state = useQuickCommands({
+        operations: quickCommandOperations(client),
+        enabled: true
+      })
       return null
     }
     await act(async () => {
@@ -382,7 +408,10 @@ describe('useQuickCommands', () => {
     } as unknown as RpcClient
 
     function Harness({ enabled }: { enabled: boolean }): null {
-      state = useQuickCommands({ client, enabled })
+      state = useQuickCommands({
+        operations: quickCommandOperations(client),
+        enabled
+      })
       return null
     }
     await act(async () => {

@@ -7,6 +7,7 @@ import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-mo
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
+import { defaultHostWorkspaceCreationOperations } from '../worktree/default-host-workspace-creation-operations'
 import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
@@ -57,24 +58,28 @@ export function NewWorktreeModal(props: NewWorktreeModalProps) {
 function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const { visible, client, hostId, existingWorktreePaths, existingWorktrees, onCreated, onClose } =
     props
+  const operations = useMemo(
+    () => (client ? defaultHostWorkspaceCreationOperations(client) : null),
+    [client]
+  )
   const { repos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
-    client,
+    operations,
     hostId,
     visible
   })
   const navigation = useNewWorktreeDrawerNavigation(visible)
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
-  const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId)
+  const runtime = useNewWorkspaceRuntimeContext(operations, visible, hostId)
   const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
-    useNewWorktreeRuntimeCapabilities(client, visible)
+    useNewWorktreeRuntimeCapabilities(operations, visible)
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const executionTarget = useNewWorkspaceExecutionTarget({
-    client,
+    operations,
     connectionId: selectedRepoConnectionId,
     visible
   })
-  const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
+  const setupScript = useNewWorkspaceSetupScript({ operations, selectedRepo })
   const selectedRepoWorktreeBranches = useMemo(
     () => getComposerRepoWorktreeBranches(existingWorktrees ?? [], selectedRepo?.id ?? null),
     [existingWorktrees, selectedRepo]
@@ -94,8 +99,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     () => buildRetiredWorktreeNamesRefreshKey(existingWorktreePaths),
     [existingWorktreePaths]
   )
+  const readRetiredWorktreeNames = useMemo(
+    () => (operations ? (repoId: string) => operations.readRetiredWorktreeNames(repoId) : null),
+    [operations]
+  )
   const retiredWorktreeNames = useRetiredWorktreeNames(
-    client,
+    readRetiredWorktreeNames,
     selectedRepo?.id,
     retiredNamesRefreshKey
   )
@@ -233,7 +242,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       <NewWorktreeModalDrawers
         visible={visible}
         drawerView={navigation.drawerView}
-        client={client}
+        operations={operations}
         composer={composer}
         sourceAvailability={sourceAvailability}
         selectedRepo={selectedRepo}

@@ -12,6 +12,9 @@ const sendActionsSource = readMobileSessionRouteSource(
 const terminalInputSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-input.ts'
 )
+const terminalOperationsSource = readMobileSessionRouteSource(
+  '../session/native-host-session-terminal-operations.ts'
+)
 const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
 
 function sourceSlice(source: string, anchorStart: string, anchorEnd: string): string {
@@ -145,12 +148,22 @@ describe('session route offline-compose wiring', () => {
     // connect wait — a parked send replays stale bytes into the PTY. Accessory
     // keys get the same option inside terminal-live-accessory-raw-send.ts.
     expect(sendActionsSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
-    expect(terminalInputSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
-    const optionUses = [sendActionsSource, terminalInputSource].flatMap(
+    const optionUses = [sendActionsSource, terminalOperationsSource].flatMap(
       (source) => source.match(/TERMINAL_INPUT_SEND_OPTIONS/g) ?? []
     ).length
-    // Two owner imports plus one buffered, one live, and one gesture send.
-    expect(optionUses).toBe(5)
+    // Two owner imports plus one buffered send here and one adapter send.
+    expect(optionUses).toBe(4)
+    // The live mirror and the gesture arrows reach the PTY through that adapter send.
+    for (const source of [sendActionsSource, terminalInputSource]) {
+      expect(source).toContain('.terminal.sendInput(')
+    }
+    // And the option is on that send, not merely somewhere in the adapter file.
+    const sendInput = terminalOperationsSource.slice(
+      terminalOperationsSource.indexOf('async sendInput(')
+    )
+    expect(sendInput.slice(0, sendInput.indexOf('\n    },'))).toContain(
+      'TERMINAL_INPUT_SEND_OPTIONS'
+    )
     expect(TERMINAL_INPUT_SEND_OPTIONS).toEqual({ failWhenDisconnected: true })
   })
 

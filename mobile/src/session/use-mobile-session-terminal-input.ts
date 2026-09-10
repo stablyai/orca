@@ -1,15 +1,10 @@
 import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
-import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import {
   clearTerminalLiveInputFocusTimer,
   scheduleTerminalLiveInputFocus
 } from '../terminal/terminal-live-input'
 import { sendMobileTerminalQueryReply } from '../terminal/mobile-terminal-query-reply'
-import {
-  buildTerminalSendParams,
-  TERMINAL_INPUT_SEND_OPTIONS
-} from '../terminal/terminal-send-request'
 import { countTerminalGestureInputSequences } from '../terminal/terminal-gesture-input'
 import {
   isGestureMouseTrackingMode,
@@ -24,7 +19,8 @@ import type { MobileSessionFileActionsModel } from './use-mobile-session-file-ac
 
 export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsModel) {
   const {
-    client,
+    sessionOperations,
+    sessionOperationsRef,
     connState,
     toggleTerminalLiveInput,
     activeHandle,
@@ -105,24 +101,18 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       handle === activeHandleRef.current && activeSessionTabTypeRef.current === 'terminal'
     const isFresh = Date.now() - queued.lastUpdatedMs <= TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS
     const rpc = clientRef.current
-    if (!rpc || connStateRef.current !== 'connected' || !isActive || !isFresh) {
+    const operations = sessionOperationsRef.current
+    if (!rpc || !operations || connStateRef.current !== 'connected' || !isActive || !isFresh) {
       return
     }
 
     terminalGestureInputInFlightRef.current.add(handle)
     try {
       // Why: gesture arrows parked across a reconnect would move a TUI long after the swipe.
-      const response = await rpc.sendRequest(
-        'terminal.send',
-        buildTerminalSendParams({
-          terminal: handle,
-          text: queued.bytes,
-          enter: false,
-          deviceToken: deviceTokenRef.current
-        }),
-        TERMINAL_INPUT_SEND_OPTIONS
-      )
-      if (isTerminalSendRpcAccepted(response)) {
+      if (
+        await operations.terminal.sendInput(handle, queued.bytes, false, deviceTokenRef.current)
+      ) {
+        // The adapter does not report takeover; a gesture write still takes a worker over.
         reportWorkerTerminalUserInput(rpc, handle)
       }
     } catch {
@@ -193,7 +183,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
 
   const handleTerminalInput = useCallback(
     async (handle: string, bytes: string) => {
-      if (!client || connState !== 'connected' || bytes.length === 0) {
+      if (!sessionOperations || connState !== 'connected' || bytes.length === 0) {
         return
       }
       if (handle !== activeHandleRef.current || activeSessionTabTypeRef.current !== 'terminal') {
@@ -213,7 +203,7 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
       }
       enqueueTerminalGestureInput(handle, bytes, sequenceCount)
     },
-    [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
+    [allowTerminalGestureInput, connState, enqueueTerminalGestureInput, sessionOperations]
   )
 
   const handleTerminalQueryReply = useCallback((handle: string, bytes: string) => {
@@ -229,14 +219,14 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
   }, [])
 
   async function handleClearTerminal(target: Terminal) {
-    if (!client) {
+    if (!sessionOperations) {
       return
     }
     getTerminalRef(target.handle)?.clear()
     try {
-      await client.sendRequest('terminal.clearBuffer', {
-        terminal: target.handle
-      })
+      // The refusal envelope is not a failure here: the local buffer above is already cleared,
+      // and only a clear that never reached the host is reported.
+      await sessionOperations.terminal.clear(target.handle)
       showToast('Terminal cleared')
     } catch {
       showToast("Couldn't clear terminal", 1500)
