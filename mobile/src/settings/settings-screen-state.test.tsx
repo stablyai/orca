@@ -86,6 +86,73 @@ describe('shared settings screen state', () => {
     expect(JSON.stringify(renderer.toJSON())).toContain('Desktop unavailable')
     expect(operations.load).toHaveBeenCalledTimes(2)
   })
+  it('shows the spinner, not the error card, while the first voice read is pending', async () => {
+    const operations = {
+      load: vi.fn().mockImplementation(() => new Promise(() => {})),
+      configure: vi.fn(),
+      download: vi.fn(),
+      delete: vi.fn()
+    } as VoiceSettingsOperations
+    await act(async () => {
+      renderer = create(
+        createElement(VoiceSettingsScreen, { operations, focused: true, onBack: vi.fn() })
+      )
+    })
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('Failed to load voice settings')
+    expect(renderer.root.findAllByType('ActivityIndicator')).toHaveLength(1)
+  })
+  it('drops a poll that resolves after a toggle instead of clobbering it', async () => {
+    const loaded = {
+      enabled: true,
+      dictationMode: 'toggle',
+      selectedModelId: '',
+      models: []
+    }
+    let resolveStalePoll: (value: typeof loaded) => void = () => {}
+    const shared = {
+      load: vi
+        .fn()
+        .mockResolvedValueOnce(loaded)
+        .mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveStalePoll = resolve
+            })
+        ),
+      configure: vi.fn().mockImplementation(() => new Promise(() => {})),
+      download: vi.fn(),
+      delete: vi.fn()
+    }
+    const first = { ...shared } as VoiceSettingsOperations
+    await act(async () => {
+      renderer = create(
+        createElement(VoiceSettingsScreen, { operations: first, focused: true, onBack: vi.fn() })
+      )
+    })
+    const switchProps = () => renderer.root.findByProps({ testID: 'voice-enabled' }).props
+    expect(switchProps().value).toBe(true)
+
+    // A new operations identity restarts the poller, so a read is in flight below.
+    const second = { ...shared } as VoiceSettingsOperations
+    await act(async () => {
+      renderer.update(
+        createElement(VoiceSettingsScreen, { operations: second, focused: true, onBack: vi.fn() })
+      )
+    })
+    expect(shared.load).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      switchProps().onValueChange(false)
+    })
+    expect(switchProps().value).toBe(false)
+
+    await act(async () => {
+      resolveStalePoll(loaded)
+      await Promise.resolve()
+    })
+    // Without the request-epoch fence the stale read would flip the switch back on.
+    expect(switchProps().value).toBe(false)
+  })
   it('does not enable notifications after denied OS permission', async () => {
     const denied = {
       granted: false,
