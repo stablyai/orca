@@ -45,14 +45,12 @@ export class SessionSearchFileRecords {
    *
    * Rows a chunk commits answer searches the moment they land, so the session
    * they hang off has to be nameable before the read producing it ends — and it
-   * may never end, because a crash between chunks leaves exactly this row. The
-   * final commit overwrites all of it from the decoded session; until then the
-   * title in particular is provisional.
+   * may never end, because a crash between chunks leaves exactly this row. That
+   * is why the identity is required rather than optional: a read that has none
+   * does not chunk at all. The final commit overwrites all of it from the
+   * decoded session; until then the title in particular is provisional.
    */
-  updateProvisionalSession(rowId: number, identity: TranscriptSessionIdentity | null): void {
-    if (!identity) {
-      return
-    }
+  updateProvisionalSession(rowId: number, identity: TranscriptSessionIdentity): void {
     this.db
       .prepare(
         `UPDATE sessions SET session_id = ?, title = ?, cwd = ?, cwd_key = ?,

@@ -201,10 +201,22 @@ it('shows a reader on another handle one generation or the other, never a mixtur
 // Four of these fill the 400-char ceiling the two tests below construct.
 const CHUNKED_MESSAGE = `chunkedneedle ${'filler '.repeat(12)}nd`
 
+const PROVISIONAL_IDENTITY = {
+  sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+  cwd: '/repo/app',
+  title: 'provisional title',
+  createdAt: '2026-05-01T10:00:00.000Z',
+  updatedAt: '2026-05-01T10:05:00.000Z'
+}
+
+// Only a read that can name its session chunks at all, so every test below that
+// wants a chunk has to supply one.
+const named = (): typeof PROVISIONAL_IDENTITY => PROVISIONAL_IDENTITY
+
 it('leaves the session consistent after every chunk of a file too large for one transaction', () => {
   expect(CHUNKED_MESSAGE.length).toBe(100)
   const writer = new SessionSearchIndexWriter(index.db, 400)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
   for (const [position, message] of userMessages(CHUNKED_MESSAGE, 10).entries()) {
     write.add(message)
     const rows = counts(index.db).messages
@@ -238,7 +250,7 @@ it('leaves the session consistent after every chunk of a file too large for one 
 
 it('holds the ceiling against a single message larger than it', () => {
   const writer = new SessionSearchIndexWriter(index.db, 8000)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
   const exec = SyncDatabase.prototype.exec
   let opened = 0
   vi.spyOn(SyncDatabase.prototype, 'exec').mockImplementation(function (
@@ -269,17 +281,9 @@ it('holds the ceiling against a single message larger than it', () => {
   expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 3 })
 })
 
-const PROVISIONAL_IDENTITY = {
-  sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
-  cwd: '/repo/app',
-  title: 'provisional title',
-  createdAt: '2026-05-01T10:00:00.000Z',
-  updatedAt: '2026-05-01T10:05:00.000Z'
-}
-
 it('names a session on its first chunk, not only when the read ends', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, () => PROVISIONAL_IDENTITY)!
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
   for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
     write.add(message)
   }
@@ -312,24 +316,66 @@ it('names a session on its first chunk, not only when the read ends', () => {
   })
 })
 
-it('leaves a chunked session unnamed only while the parser has no id yet', () => {
+it('commits a whole-file read over the ceiling in one transaction, never a chunk', () => {
+  // The whole-file readers (Grok, Cursor, Gemini, OpenCode) pass no identity:
+  // their formats are rewritten in place and have no resumable state to ask.
   const writer = new SessionSearchIndexWriter(index.db, 400)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, () => null)!
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  const exec = SyncDatabase.prototype.exec
+  let opened = 0
+  vi.spyOn(SyncDatabase.prototype, 'exec').mockImplementation(function (
+    this: SyncDatabase,
+    sql: string
+  ) {
+    if (sql === 'BEGIN IMMEDIATE') {
+      opened += 1
+    }
+    exec.call(this, sql)
+  })
+
   for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
     write.add(message)
+    // Chunking here would publish rows under a session with an empty id, an
+    // empty title and a null cwd, and an interrupted read would leave that
+    // prefix answering searches for good.
+    expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0 })
   }
+  expect(write.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })).toBe(
+    true
+  )
+  vi.restoreAllMocks()
 
-  // A parser with nothing decoded is not a reason to write a wrong id; the row
-  // is still created, and the next chunk fills it in.
+  expect(opened).toBe(1)
+  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 10, full: 10 })
+  // And a real cursor, not the partial sentinel a chunk would have left.
+  expect(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset).toBe(4096)
+})
+
+it('starts chunking only once the parser has an id to name the session with', () => {
+  const writer = new SessionSearchIndexWriter(index.db, 400)
+  let decoded: typeof PROVISIONAL_IDENTITY | null = null
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, () => decoded)!
+  for (const message of userMessages(CHUNKED_MESSAGE, 4)) {
+    write.add(message)
+  }
+  // Past the ceiling, but the parser has decoded nothing: the buffer keeps
+  // growing rather than naming a session it cannot name.
+  expect(counts(index.db).messages).toBe(0)
+
+  decoded = PROVISIONAL_IDENTITY
+  write.add(userMessages(CHUNKED_MESSAGE, 1)[0]!)
+
+  // Everything held goes with the first chunk that can say what it is.
+  expect(counts(index.db).messages).toBe(5)
   expect(index.db.prepare('SELECT session_id, cwd FROM sessions').get()).toEqual({
-    session_id: '',
-    cwd: null
+    session_id: PROVISIONAL_IDENTITY.sessionId,
+    cwd: '/repo/app'
   })
 })
 
 it('reports a chunk-partial file as held, and as one that must be read whole', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
   for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
     write.add(message)
   }
@@ -356,7 +402,7 @@ it('reports a chunk-partial file as held, and as one that must be read whole', (
 
 it('re-reads a chunked file whole when its writer died between chunks', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
-  const abandoned = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  const abandoned = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
   for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
     abandoned.add(message)
   }
@@ -380,7 +426,7 @@ it('re-reads a chunked file whole when its writer died between chunks', () => {
 
 it('stops a chunked read whose file was removed between its chunks', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
-  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
   const messages = userMessages(CHUNKED_MESSAGE, 10)
   for (const message of messages.slice(0, 4)) {
     write.add(message)

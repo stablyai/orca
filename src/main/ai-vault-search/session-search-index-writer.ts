@@ -26,7 +26,8 @@ import {
  * single commit near a second and the WAL it produces near 64 MB, and it is far
  * above the largest real transcript (the 40-session benchmark corpus is 10.5 MB
  * in total), so an ordinary file never reaches it. Above the ceiling the read is
- * cut into chunks that each leave the index consistent — see `chunked`.
+ * cut into chunks that each leave the index consistent — but only a read that
+ * can name its session chunks at all. See `add`.
  */
 export const SESSION_SEARCH_COMMIT_CHARS = 32 * 1024 * 1024
 
@@ -54,7 +55,20 @@ type FileRow = {
 type FileCursor = Pick<FileRow, 'session_row_id' | 'byte_offset'>
 
 export type SessionSearchFileWrite = {
-  /** Buffers one message, committing a chunk when the buffer reaches the ceiling. */
+  /**
+   * Buffers one message, committing a chunk when the buffer reaches the ceiling
+   * — and only while this read can name the session it is writing.
+   *
+   * A chunk's rows answer searches the moment they land, so a read with no
+   * `identity` would publish them under a session with an empty id, an empty
+   * title and a null cwd, and an interrupted read would leave that prefix
+   * behind for good. The readers that supply no identity are the whole-file
+   * ones (Grok, Cursor, Gemini, OpenCode), whose formats are rewritten in place
+   * and have no resumable state to ask; they are also small — the largest on
+   * the author's machine is 5 MB — so buffering one to the end and committing
+   * it whole costs nothing. Chunking stays reserved for the readers that can
+   * say which session this is before the read ends.
+   */
   add(message: TranscriptMessage): void
   /**
    * Writes this file's rows, its session and its cursor in one transaction.
@@ -217,8 +231,14 @@ export class SessionSearchIndexWriter {
       )
     }
 
-    /** `outcome` is null for a chunk of a read that has not reached the file's end. */
-    const write = (outcome: TranscriptReadOutcome | null): boolean => {
+    /**
+     * `outcome` is null for a chunk of a read that has not reached the file's
+     * end, and `named` is what that chunk writes onto its session row.
+     */
+    const write = (
+      outcome: TranscriptReadOutcome | null,
+      named: TranscriptSessionIdentity | null
+    ): boolean => {
       const decoded = outcome?.session ?? null
       db.exec('BEGIN IMMEDIATE')
       try {
@@ -244,11 +264,12 @@ export class SessionSearchIndexWriter {
           }
           if (decoded) {
             this.records.updateSession(decoded, session, hash)
-          } else {
+          } else if (named) {
             // A chunk's rows answer searches as soon as they land, so the
             // session they hang off is written with whatever the parser has
             // decoded rather than left empty until a read that may never end.
-            this.records.updateProvisionalSession(session, identity?.() ?? null)
+            // `add` refuses to chunk without this, so it is never absent here.
+            this.records.updateProvisionalSession(session, named)
           }
           this.records.upsertFile(
             candidate,
@@ -283,7 +304,15 @@ export class SessionSearchIndexWriter {
         for (const row of searchMessageRows([message])) {
           buffer.push(row)
           bufferedChars += row.text.length
-          if (bufferedChars >= this.commitChars && !write(null)) {
+          if (bufferedChars < this.commitChars) {
+            continue
+          }
+          // Publishing a chunk under a session nothing can identify is worse
+          // than holding the buffer: the rows answer searches at once, and an
+          // interrupted read leaves that prefix for good. A read with nothing
+          // to name it keeps buffering and commits whole at `finish`.
+          const named = identity?.() ?? null
+          if (named && !write(null, named)) {
             fenced = true
             buffer.length = 0
             bufferedChars = 0
@@ -291,7 +320,7 @@ export class SessionSearchIndexWriter {
           }
         }
       },
-      commit: (outcome) => !fenced && write(outcome)
+      commit: (outcome) => !fenced && write(outcome, null)
     }
   }
 
