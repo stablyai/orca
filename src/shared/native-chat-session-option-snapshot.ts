@@ -1,8 +1,9 @@
-import type {
-  AgentSessionOptionCatalog,
-  CatalogMidSessionApply,
-  CatalogModel,
-  CatalogOption
+import {
+  resolveCatalogModelOptions,
+  type AgentSessionOptionCatalog,
+  type CatalogMidSessionApply,
+  type CatalogModel,
+  type CatalogOption
 } from './agent-session-option-catalog'
 import type {
   NativeChatLiveOptionTransport,
@@ -265,10 +266,9 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   }
   const trackedValues = record.valuesByModel[effectiveModelId] ?? {}
   // Why: an unlisted model still runs, so its options come from the catalog's launch-safe
-  // set rather than leaving the session unadjustable — the same fallback the launch
-  // resolver already applies (see agent-session-option-launch). Options, not choices: the
-  // model stays absent from `modelChoices` either way.
-  for (const option of listedModel?.options ?? catalog.unknownModelOptions ?? []) {
+  // set rather than leaving the session unadjustable. Options, not choices: the model
+  // stays absent from `modelChoices` either way.
+  for (const option of resolveCatalogModelOptions(catalog, models, effectiveModelId)) {
     const descriptor = optionDescriptor({
       option,
       tracked: trackedValues[option.id],

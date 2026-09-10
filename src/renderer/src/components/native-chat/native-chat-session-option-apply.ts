@@ -1,6 +1,6 @@
 import {
   findCatalogModel,
-  findCatalogOption,
+  resolveCatalogModelOptions,
   type AgentSessionOptionCatalog,
   type CatalogMidSessionApply,
   type CatalogModel,
@@ -72,8 +72,11 @@ function currentApply(
   if (optionId === 'model') {
     return { apply: ctx.catalog.modelApply, modelId }
   }
-  const model = modelId ? findCatalogModel({ ...ctx.catalog, models }, modelId) : undefined
-  const option = findCatalogOption(model, optionId)
+  // Why: the snapshot draws an unlisted model's rows from the launch-safe set, so
+  // resolving through the model list alone would reject the very rows it rendered.
+  const option = resolveCatalogModelOptions(ctx.catalog, models, modelId).find(
+    (candidate) => candidate.id === optionId
+  )
   return option ? { apply: option.apply, modelId } : null
 }
 

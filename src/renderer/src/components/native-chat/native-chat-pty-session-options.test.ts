@@ -612,6 +612,31 @@ describe('native chat PTY session options', () => {
     ).not.toContain('future-model')
   })
 
+  it('still lets the terminal adjust a model it cannot name', async () => {
+    // New on this path: `main` fabricated the row with `options: []`, so an unlisted model
+    // was inert here while the structured transport could still adjust it. Both now draw
+    // the launch-safe set, and the model is offered as a choice on neither.
+    // This has to apply for real: a `settable: true` row the apply path cannot resolve
+    // renders a control that throws when clicked, which is worse than no control.
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'future-model' })
+    const dispatch = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: dispatch
+    })!
+    expect(surface.getSnapshot().map(({ id }) => id)).toEqual(['model', 'effort'])
+
+    await surface.setOption('effort', 'high')
+
+    expect(dispatch).toHaveBeenCalledWith('/effort high')
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
+      settable: true,
+      kind: { currentValue: 'high' }
+    })
+  })
+
   it('keeps a tracked alias selectable when the host catalog omits it', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
