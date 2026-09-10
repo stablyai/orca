@@ -33,14 +33,20 @@ export const ORCHESTRATION_CHECK_METHODS: RpcMethod[] = [
 
       // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
       const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
-      const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+      let boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+      if (!boundRun && !params.run) {
+        const ownerRunIds = db.getRunMailboxOwnerIdsForHandle(handle)
+        if (ownerRunIds.length === 1) {
+          boundRun = db.getRun(ownerRunIds[0])
+        }
+      }
       if (params.run || boundRun) {
         return checkRunMailbox({
           params,
           runtime,
           db,
           handle,
-          paneKey,
+          paneKey: paneKey ?? boundRun?.coordinator_pane_key ?? undefined,
           typeFilter,
           signal,
           legacyCoordinatorRunId,

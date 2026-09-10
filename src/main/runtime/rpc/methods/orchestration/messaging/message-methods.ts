@@ -133,10 +133,54 @@ export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
     params: InboxParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
-      const messages = params.terminal
-        ? db.getAllMessagesForHandle(params.terminal, params.limit)
-        : db.getInbox(params.limit)
+      if (!params.terminal) {
+        const messages = db.getInbox(params.limit)
+        return { messages, count: messages.length }
+      }
+
+      if (params.terminal.startsWith('run:') || params.terminal.startsWith('dispatch:')) {
+        const messages = db.getAllMessagesForHandles([params.terminal], params.limit)
+        return { messages, count: messages.length }
+      }
+
+      const handles = new Set<string>([params.terminal])
+      const paneKey = runtime.getTerminalPaneKey(params.terminal) ?? undefined
+
+      const ownerRunIds = db.getRunMailboxOwnerIdsForHandle?.(params.terminal) ?? []
+      for (const runId of ownerRunIds) {
+        handles.add(`run:${runId}`)
+      }
+      const boundRun = paneKey ? db.getCurrentRunForPane?.(paneKey) : undefined
+      if (boundRun?.id) {
+        handles.add(`run:${boundRun.id}`)
+      }
+      type QueryableDb = {
+        db?: { prepare?: (sql: string) => { all: (param: unknown) => { id: string }[] } }
+      }
+      const rawDb = (db as unknown as QueryableDb).db
+      const runsWithCoord = rawDb
+        ?.prepare?.('SELECT id FROM runs WHERE coordinator_handle = ?')
+        ?.all?.(params.terminal)
+      if (runsWithCoord) {
+        for (const row of runsWithCoord) {
+          handles.add(`run:${row.id}`)
+        }
+      }
+
+      const activeDispatches = db.getActiveDispatchMailboxOwners?.(params.terminal, paneKey) ?? []
+      for (const d of activeDispatches) {
+        handles.add(`dispatch:${d.id}`)
+      }
+      const assigneeDispatches = rawDb
+        ?.prepare?.('SELECT id FROM dispatch_contexts WHERE assignee_handle = ?')
+        ?.all?.(params.terminal)
+      if (assigneeDispatches) {
+        for (const row of assigneeDispatches) {
+          handles.add(`dispatch:${row.id}`)
+        }
+      }
+
+      const messages = db.getAllMessagesForHandles(Array.from(handles), params.limit)
       return { messages, count: messages.length }
     }
   }),
