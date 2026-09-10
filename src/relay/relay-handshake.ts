@@ -10,6 +10,7 @@ import {
   FrameDecoder,
   encodeHandshakeFrame,
   parseHandshakeMessage,
+  describeRelayProtocolVersion,
   relayProtocolOffer,
   relayProtocolOfferAdmits,
   type DecodedFrame,
@@ -140,7 +141,7 @@ function handleDaemonHandshakeFrame(
   if (!negotiated) {
     relayLogLine(
       `[relay] Handshake mismatch: own=${launchVersion}/p${RELAY_PROTOCOL_VERSION}, ` +
-        `client=${msg.version}/p${msg.protocolVersion ?? 'none'}; closing socket`
+        `client=${msg.version}/p${describeRelayProtocolVersion(msg.protocolVersion)}; closing socket`
     )
     try {
       sock.write(
@@ -224,7 +225,7 @@ export function runConnectHandshake(
         // Why both numbers: with negotiation the daemon's build can legitimately differ from this
         // bridge's, so the version alone no longer says which relay answered.
         process.stderr.write(
-          `[relay-connect] Handshake OK at version=${msg.version} protocol=${msg.protocolVersion ?? 'none'}\n`
+          `[relay-connect] Handshake OK at version=${msg.version} protocol=${describeRelayProtocolVersion(msg.protocolVersion)}\n`
         )
         handshakeDone = true
         const leftover = decoder.drain()
@@ -236,7 +237,7 @@ export function runConnectHandshake(
         // Why: exit inside the write callback; stderr is async on pipe transports, so exiting early drops the version detail.
         process.stderr.write(
           `[relay-connect] Handshake mismatch: expected=${msg.expected}, daemon=${msg.got}, ` +
-            `daemonProtocol=${msg.protocolVersion ?? 'none'}, ours=${RELAY_PROTOCOL_VERSION}; ` +
+            `daemonProtocol=${describeRelayProtocolVersion(msg.protocolVersion)}, ours=${RELAY_PROTOCOL_VERSION}; ` +
             `exiting ${EXIT_CODE_VERSION_MISMATCH}\n`,
           () => {
             sock.destroy()

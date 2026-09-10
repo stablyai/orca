@@ -354,6 +354,36 @@ describe('handshake round-trip over a real Socket pair', () => {
     bridgeSock.destroy()
   })
 
+  // The refusal path logs the peer's claim, and `JSON.parse` yields objects a template literal
+  // cannot stringify. A throw there is inside the frame-decoder callback, so it would kill the
+  // daemon — and every PTY it still holds — on an unauthenticated frame.
+  it('refuses a hostile protocolVersion claim without taking the daemon down', async () => {
+    const { accepted } = await startDaemon('0.1.0+server-version')
+
+    const bridgeSock = connect(sockPath)
+    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
+    const reply = readDaemonReply(bridgeSock)
+
+    bridgeSock.write(
+      encodeHandshakeFrame(
+        JSON.parse(
+          '{"type":"orca-relay-handshake","version":"0.1.0+different","protocolVersion":{"toString":1}}'
+        ) as HandshakeMessage
+      )
+    )
+
+    await expect(reply).resolves.toMatchObject({ type: 'orca-relay-handshake-mismatch' })
+
+    // Still serving: a second, well-formed client is admitted after the hostile one.
+    const good = connect(sockPath)
+    await new Promise<void>((r) => good.once('connect', () => r()))
+    runConnectHandshake(good, '0.1.0+server-version', { onAccepted: vi.fn() })
+    await accepted
+
+    bridgeSock.destroy()
+    good.destroy()
+  })
+
   // Tolerance replaces a compatibility gate, never the auth gate: the credential file lives inside
   // the incumbent's own install dir, so presenting it is what proves the caller may reach it.
   it('still refuses a cross-build bridge that cannot present the endpoint credential', async () => {

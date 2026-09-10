@@ -50,6 +50,17 @@ function readVersion(value: unknown): number | null {
     : null
 }
 
+/**
+ * Renders a peer's claimed version for a log line without interpolating it.
+ *
+ * `JSON.parse` can hand back `{ "toString": 1 }`, and a template literal on that throws
+ * `Cannot convert object to primitive value` — inside the frame-decoder callback, which would
+ * take the daemon and every PTY it holds down with it.
+ */
+export function describeRelayProtocolVersion(value: unknown): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : 'none'
+}
+
 /** This build's own offer, sent on every handshake and reply. */
 export function relayProtocolOffer(): Required<RelayProtocolOffer> {
   return {
