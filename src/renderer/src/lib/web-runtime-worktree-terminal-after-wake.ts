@@ -11,6 +11,7 @@ import {
   endWebRuntimeWakeTerminalRespawn
 } from '@/runtime/web-runtime-wake-terminal-respawn'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): void {
   const state = useAppStore.getState()
@@ -39,8 +40,23 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
     return
   }
 
+  // Why the branch split: two states used to share one line. With NO rows the workspace is being
+  // seeded for the first time, and that decision belongs to the canonical predicate — an explicit
+  // empty row is the closed-last-terminal tombstone, not "never initialized", and this is the only
+  // door a tombstoned workspace reaches (the stream-frame path returns before it). With rows
+  // present the question is instead whether a woke workspace's tab chrome outlived its PTYs, which
+  // the tombstone has nothing to say about.
   const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
-  if (tabs.length > 0 && renderableTabCount === 0) {
+  if (tabs.length === 0) {
+    if (
+      !shouldAutoCreateInitialTerminal(
+        renderableTabCount,
+        Object.hasOwn(state.tabsByWorktree, worktreeId)
+      )
+    ) {
+      return
+    }
+  } else if (renderableTabCount === 0) {
     return
   }
 
