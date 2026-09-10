@@ -939,7 +939,9 @@ it('indexes a transcript the history window widened in during a sweep', async ()
   }
   const old = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(old, ['an ancient conversation'], OTHER_SESSION_ID)
-  const longAgo = new Date(Date.now() - 120 * 86_400_000)
+  // Dated on the clock the retention window is measured against, so 30 days
+  // really does exclude it.
+  const longAgo = new Date(clock.now() - 120 * 86_400_000)
   await utimes(old, longAgo, longAgo)
 
   let paced = 0
