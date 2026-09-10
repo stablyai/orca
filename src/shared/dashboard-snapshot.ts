@@ -1,3 +1,4 @@
+import { agentRowDotState } from './agent-row-dot-state'
 import type { AgentType, AgentWorkingMode } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
@@ -35,16 +36,17 @@ export const DASHBOARD_MAX_MAP_WORKSPACES = 2_000
 
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
-export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring'
+export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring' | 'interrupted'
 
 /** Completed agents stay green until acknowledged, then settle into gray idle. */
 export function dashboardCardDisplayState(
-  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen'>
+  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'interrupted' | 'unseen'>
 ): DashboardCardDisplayState {
-  if (card.dotState === 'working' && card.workingMode === 'monitoring') {
-    return 'monitoring'
+  if (card.dotState === 'done' && !card.interrupted && !card.unseen) {
+    return 'idle'
   }
-  return card.dotState === 'done' && !card.unseen ? 'idle' : card.dotState
+  const state = agentRowDotState(card.dotState, card.workingMode, card.interrupted)
+  return state === 'unverifiable' ? 'idle' : state
 }
 
 export type DashboardCardReview = {
@@ -90,6 +92,8 @@ export type DashboardCard = {
   dotState: DashboardCardDotState
   /** Additive discriminator; older pop-outs render this as ordinary working. */
   workingMode?: AgentWorkingMode
+  /** Additive terminal outcome; older pop-outs retain the base done state. */
+  interrupted?: boolean
   /** One-line task/prompt text shown on the card. */
   task: string
   /** The most recent message the user sent this agent (its current prompt). */

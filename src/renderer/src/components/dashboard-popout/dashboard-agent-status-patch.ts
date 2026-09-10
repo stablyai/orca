@@ -1,11 +1,10 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import {
-  dashboardCardDisplayState,
-  type DashboardCard,
-  type DashboardCardSubagent,
-  type DashboardSnapshot
+import type {
+  DashboardCard,
+  DashboardCardSubagent,
+  DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
-import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
+import { dashboardCardBucket } from '../dashboard/dashboard-card-bucket'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -51,9 +50,8 @@ export function patchDashboardSnapshotFromAgentStatus(
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
-  const bucket = dashboardBucketForDotState(
-    dashboardCardDisplayState({ dotState, workingMode, unseen })
-  )
+  const interrupted = event.state === 'done' && event.interrupted === true ? true : undefined
+  const bucket = dashboardCardBucket({ dotState, workingMode, interrupted, unseen })
   const nextCard: DashboardCard = {
     ...card,
     ...(event.agentType ? { agentType: event.agentType } : {}),
@@ -67,6 +65,7 @@ export function patchDashboardSnapshotFromAgentStatus(
     bucket,
     dotState,
     workingMode,
+    interrupted,
     unseen,
     stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,
     statusUpdatedAt: event.receivedAt,

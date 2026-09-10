@@ -257,6 +257,8 @@ function isDashboardCard(value: unknown): boolean {
     DASHBOARD_BUCKETS.has(card.bucket) &&
     typeof card.dotState === 'string' &&
     DASHBOARD_DOT_STATES.has(card.dotState) &&
+    (card.interrupted === undefined ||
+      (typeof card.interrupted === 'boolean' && (!card.interrupted || card.dotState === 'done'))) &&
     (card.workingMode === undefined ||
       (card.dotState === 'working' && card.workingMode === 'monitoring')) &&
     isBoundedString(card.task, AGENT_STATUS_MAX_FIELD_LENGTH, true) &&

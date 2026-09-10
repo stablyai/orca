@@ -1,4 +1,4 @@
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentRowDotState } from '@/lib/agent-row-dot-state'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
@@ -69,7 +69,7 @@ export function AiVaultVirtualRow({
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
-  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionLiveState: (session: AiVaultSession) => AgentRowDotState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions

@@ -1,4 +1,4 @@
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { agentRowDotState, type AgentRowDotState } from '@/lib/agent-row-dot-state'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import {
   promptsMatchSession,
@@ -174,15 +174,15 @@ export function findOriginalAiVaultSessionPaneInIndex(
 export function findAiVaultSessionLiveStateInIndex(
   index: AiVaultOriginalPaneIndex,
   session: AiVaultSession
-): AgentStatusState | null {
+): AgentRowDotState | null {
   const direct = index.liveByProvider.get(providerKey(session.agent, session.sessionId))
   if (direct?.[0]) {
-    return direct[0].state
+    return agentRowDotState(direct[0].state, direct[0].workingMode, direct[0].interrupted)
   }
-  const promptMatchedStates: AgentStatusState[] = []
+  const promptMatchedStates: AgentRowDotState[] = []
   for (const entry of index.liveWithoutProviderByAgent.get(session.agent) ?? []) {
     if (promptsMatchSession(session, entry)) {
-      promptMatchedStates.push(entry.state)
+      promptMatchedStates.push(agentRowDotState(entry.state, entry.workingMode, entry.interrupted))
     }
   }
   return promptMatchedStates.length === 1 ? promptMatchedStates[0] : null

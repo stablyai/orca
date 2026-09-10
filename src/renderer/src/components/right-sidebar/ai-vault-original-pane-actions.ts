@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentRowDotState } from '@/lib/agent-row-dot-state'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
@@ -18,7 +18,7 @@ export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
     session: AiVaultSession
   ) => ReturnType<typeof findOriginalAiVaultSessionPane>
-  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionLiveState: (session: AiVaultSession) => AgentRowDotState | null
   jumpToOriginalPane: (session: AiVaultSession) => void
   jumpToWorktree: (worktreeId: string) => void
 } {

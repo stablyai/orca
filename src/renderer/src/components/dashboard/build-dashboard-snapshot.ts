@@ -167,7 +167,7 @@ export function buildDashboardSnapshot(
       // agent-hook status) carry synthetic prompt/lastAssistantMessage — the
       // agent LABEL and a status word like "Idle". They're marked by
       // startedAt === 0, and must NOT be shown as real conversation.
-      const { isTitleDerived, dotState, workingMode, unseen, bucket } =
+      const { isTitleDerived, dotState, workingMode, interrupted, unseen, bucket } =
         dashboardRowBucketProjection(row, state.acknowledgedAgentsByPaneKey)
       const routingPaneKey = row.activationPaneKey ?? row.paneKey
       const parsed = parsePaneKey(routingPaneKey)
@@ -218,6 +218,7 @@ export function buildDashboardSnapshot(
         bucket,
         dotState,
         ...(workingMode ? { workingMode } : {}),
+        ...(interrupted ? { interrupted } : {}),
         task: isTitleDerived ? '' : rowTask(row),
         repoId: workspace.projectId,
         worktreeId,

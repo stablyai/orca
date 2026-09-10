@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentRowDotState } from '@/lib/agent-row-dot-state'
 import { useRepoById } from '@/store/selectors'
 import { resolveRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
@@ -35,7 +35,7 @@ export function SessionMetadata({
   vaultScope
 }: {
   session: AiVaultSession
-  liveState: AgentStatusState | null
+  liveState: AgentRowDotState | null
   updatedAt: string
   worktreeInfo: AiVaultSessionWorktreeInfo | null
   vaultScope: AiVaultScope

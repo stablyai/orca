@@ -22,7 +22,7 @@ import {
   getSessionDetailsId,
   SessionMetadata
 } from './ai-vault-session-row-display'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentRowDotState } from '@/lib/agent-row-dot-state'
 
 export function VaultSessionRow({
   session,
@@ -53,7 +53,7 @@ export function VaultSessionRow({
   onRequestDelete
 }: {
   session: AiVaultSession
-  liveState: AgentStatusState | null
+  liveState: AgentRowDotState | null
   resumeStartup: AiVaultResumeStartup
   realHomeResumeStartup: AiVaultResumeStartup
   worktreeInfo: AiVaultSessionWorktreeInfo | null

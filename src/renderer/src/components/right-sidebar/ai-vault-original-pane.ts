@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import { agentRowDotState, type AgentRowDotState } from '@/lib/agent-row-dot-state'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type {
@@ -183,18 +183,18 @@ export function resolveOriginalPaneTarget(args: {
 export function findAiVaultSessionLiveState(
   state: Pick<AppState, 'agentStatusByPaneKey'>,
   session: AiVaultSession
-): AgentStatusState | null {
-  const promptMatchedStates: AgentStatusState[] = []
+): AgentRowDotState | null {
+  const promptMatchedStates: AgentRowDotState[] = []
 
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
     if (!agentMatches(session, entry.agentType)) {
       continue
     }
     if (providerSessionMatches(session, entry.providerSession?.id)) {
-      return entry.state
+      return agentRowDotState(entry.state, entry.workingMode, entry.interrupted)
     }
     if (entry.providerSession === undefined && promptsMatchSession(session, entry)) {
-      promptMatchedStates.push(entry.state)
+      promptMatchedStates.push(agentRowDotState(entry.state, entry.workingMode, entry.interrupted))
     }
   }
 

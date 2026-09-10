@@ -9,7 +9,7 @@ import {
  *  acknowledged finish into `idle`, which is right for bucket counts but loses the one
  *  distinction the map exists to show: finished-and-unread vs finished-and-still-yours.
  *  Kept local so `DashboardCardDotState` — which crosses the pop-out bridge — is unchanged. */
-export type AgentMapNodeStatus = DashboardCardDisplayState | 'done-seen'
+export type AgentMapNodeStatus = Exclude<DashboardCardDisplayState, 'interrupted'> | 'done-seen'
 
 export function agentMapDurationMinutes(card: DashboardCard, now: number): number {
   if (!Number.isFinite(card.startedAt) || card.startedAt <= 0) {
@@ -23,7 +23,8 @@ export function agentMapNodeStatus(card: DashboardCard): AgentMapNodeStatus {
   if (card.dotState === 'done') {
     return card.unseen ? 'done' : 'done-seen'
   }
-  return dashboardCardDisplayState(card)
+  const displayState = dashboardCardDisplayState(card)
+  return displayState === 'interrupted' ? 'done' : displayState
 }
 
 export type AgentMapFlareStatus = Extract<DashboardCardDotState, 'waiting' | 'done'>
