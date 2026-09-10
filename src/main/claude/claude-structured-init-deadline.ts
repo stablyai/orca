@@ -67,15 +67,31 @@ export function createClaudeInitDeadline(sessionId: string, timeoutMs: number): 
   }
 }
 
-/** A fork can initialize control before its first real prompt creates transcript frames. */
+/**
+ * A fork can initialize control before its first real prompt creates transcript frames, so unlike a
+ * start or a resume it cannot require an init observation.
+ *
+ * It must not RACE for one either. The `initialize` control reply almost always beats the first
+ * transcript frame, but "almost always" made the identity proof — and therefore the published
+ * handle — depend on an ordering the CLI does not guarantee, so two runs of the same fork could
+ * take different proof paths. A fork's init slot is therefore always `null`: the launch's requested
+ * provider session id is the published identity, and identity is proved by the frame filter, which
+ * sees every frame whenever it arrives rather than only the ones that win a race.
+ */
 export async function initializeClaudeStructuredLaunch(
   connection: ClaudeStreamJsonConnection,
   deadline: ClaudeInitDeadline,
   input: { sessionId: string; timeoutMs: number; fork: boolean }
 ): Promise<[unknown, ClaudeInitObservation | null]> {
   const initialized = requestClaudeInitialization(connection, input.sessionId, input.timeoutMs)
-  return Promise.all([
+  if (!input.fork) {
+    return Promise.all([initialized, deadline.promise])
+  }
+  // A deadline REJECTION (foreign identity, fault, exit) still fails the acquisition promptly; only
+  // its resolution is discarded.
+  const [initialization] = await Promise.all([
     initialized,
-    input.fork ? Promise.race([deadline.promise, initialized.then(() => null)]) : deadline.promise
+    Promise.race([deadline.promise, initialized]).then(() => null)
   ])
+  return [initialization, null]
 }

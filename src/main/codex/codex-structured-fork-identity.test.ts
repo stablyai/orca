@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { assertCodexForkedIdentities } from './codex-structured-fork-identity'
+import {
+  assertCodexForkedIdentities,
+  assertCodexForkedTurnIds
+} from './codex-structured-fork-identity'
 const fork = {
   source: { provider: 'codex', threadId: 'parent' },
   throughId: 'selected',
@@ -32,5 +35,54 @@ describe('Codex fork retained identity proof', () => {
         { provider: 'codex', threadId: 'child', turnId: 'selected', ordinal: 0 }
       ])
     ).toThrow('proof-mismatch')
+  })
+
+  it('accepts provider items from turns a bounded journal never retained', () => {
+    expect(() =>
+      assertCodexForkedIdentities('child', fork, [
+        { provider: 'codex', threadId: 'child', turnId: 'compacted-away', ordinal: 0 },
+        { provider: 'codex', threadId: 'child', turnId: 'previous', ordinal: 0 },
+        { provider: 'codex', threadId: 'child', turnId: 'selected', ordinal: 0 },
+        { provider: 'codex', threadId: 'child', turnId: 'selected', ordinal: 1 }
+      ])
+    ).not.toThrow()
+  })
+})
+
+// `turnIds` arrives newest-first.
+describe('Codex fork retained turn proof', () => {
+  it('accepts a forked thread holding turns the bounded journal dropped', () => {
+    expect(() =>
+      assertCodexForkedTurnIds(fork, ['selected', 'previous', 'older', 'ancient'])
+    ).not.toThrow()
+  })
+
+  it('refuses a retained turn the fork dropped', () => {
+    expect(() => assertCodexForkedTurnIds(fork, ['selected', 'older'])).toThrow('proof-mismatch')
+  })
+
+  it('refuses a fork that renumbered a retained turn', () => {
+    expect(() => assertCodexForkedTurnIds(fork, ['selected', 'new-previous'])).toThrow(
+      'proof-mismatch'
+    )
+  })
+
+  it('refuses a fork that reordered the retained turns', () => {
+    const ordered = {
+      ...fork,
+      throughId: 'c',
+      retainedItemIds: ['codex:parent:a:0', 'codex:parent:b:0', 'codex:parent:c:0']
+    } as const
+    expect(() => assertCodexForkedTurnIds(ordered, ['c', 'a', 'b'])).toThrow('proof-mismatch')
+  })
+
+  it('refuses a fork that kept turns past the selected one', () => {
+    expect(() => assertCodexForkedTurnIds(fork, ['later', 'selected', 'previous'])).toThrow(
+      'proof-mismatch'
+    )
+  })
+
+  it('refuses an empty forked thread', () => {
+    expect(() => assertCodexForkedTurnIds(fork, [])).toThrow('proof-mismatch')
   })
 })

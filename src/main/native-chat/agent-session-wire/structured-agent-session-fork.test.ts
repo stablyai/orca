@@ -7,6 +7,7 @@ import * as prefixSelection from '../../../shared/agent-session-prefix'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionForkSource } from '../../../shared/agent-session-fork'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -155,6 +156,50 @@ async function setup(provider: 'claude' | 'codex' = 'codex') {
 }
 
 describe('fork from a structured turn', () => {
+  it('leaves the parent conversation usable while the child is still coming up', async () => {
+    const { host, store, params, child, source, acquire } = await setup()
+    // The child's provider bring-up is a process spawn plus a paginated history read; hold it open
+    // and prove the parent is not queued behind it.
+    let releaseChild = (): void => {}
+    const childEntered = new Promise<void>((resolveEntered) => {
+      const realAcquire = acquire.getMockImplementation()!
+      acquire.mockImplementation(async (input) => {
+        if (input.identity.sessionId !== 'child-session') {
+          return realAcquire(input)
+        }
+        resolveEntered()
+        await new Promise<void>((resolveHeld) => {
+          releaseChild = resolveHeld
+        })
+        return realAcquire(input)
+      })
+    })
+
+    const forking = host.fork(caller, child, source)
+    await childEntered
+
+    const parentId = params.envelope.sessionId
+    const cancelEnvelope: AgentSessionMutationEnvelope = {
+      sessionId: parentId,
+      clientOperationId: hostTestOperationId(),
+      expectedRuntimeFence: store.getRecord(parentId)!.lease.runtimeFence,
+      payloadFingerprint: computeAgentSessionPayloadFingerprint({
+        method: 'agentSession.cancel',
+        sessionId: parentId,
+        fields: { turnId: 'turn-2' }
+      })
+    }
+    // Settles while the fork is still held: under a source-wide lock this would deadlock the test.
+    const cancelled = await Promise.race([
+      host.cancel(caller, { envelope: cancelEnvelope, turnId: 'turn-2' }),
+      forking.then(() => 'fork-finished-first' as const)
+    ])
+    expect(cancelled).toMatchObject({ ok: true })
+
+    releaseChild()
+    expect(await forking).toMatchObject({ ok: true })
+  })
+
   it('keeps an unknown retained message role visible in the seeded child history', async () => {
     const { host, child, source } = await setup()
     vi.spyOn(prefixSelection, 'selectAgentSessionPrefix').mockReturnValueOnce({

@@ -10,6 +10,9 @@ import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 export function createClaudeSessionPublication(input: {
   connection: ClaudeSession['connection']
   init: ClaudeInitObservation | null
+  /** The launch's provider session id, and the only identity published. A resume proved it against
+   *  the init observation, and a fork ASKED the CLI for it and refuses the session on any frame
+   *  that names another — so an init observation can never disagree with it here. */
   providerSessionId: string
   initialization?: unknown
   claudeConfigDir: string
@@ -34,7 +37,7 @@ export function createClaudeSessionPublication(input: {
     acquisition: {
       process: input.process,
       link: claudeProviderHandleLink({
-        sessionId: input.init?.providerSessionId ?? input.providerSessionId,
+        sessionId: input.providerSessionId,
         leafUuid: input.leafUuid,
         resumed: input.resumed,
         fence: input.fence,
@@ -45,7 +48,7 @@ export function createClaudeSessionPublication(input: {
     },
     session: {
       connection: input.connection,
-      providerSessionId: input.init?.providerSessionId ?? input.providerSessionId,
+      providerSessionId: input.providerSessionId,
       claudeConfigDir: input.claudeConfigDir,
       leafUuid: input.leafUuid,
       fence: input.fence,
