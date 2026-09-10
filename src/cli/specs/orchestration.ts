@@ -109,11 +109,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
-      '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Only --peek and --all filter their rows.',
-      'Without --wait, --types does not filter a consuming check. An outstanding Delivery replays before the wake condition is tested.',
-      '--all shows the outstanding deliveryId for recovery; its history rows are not necessarily that batch. Check the full Delivery before --ack.',
+      '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack or all its messages are retired; process every message before acknowledging.'
+      'A bound Run replays the same Delivery until --ack or all its messages are marked read, even with --types; process every message before acknowledging.'
     ]
   },
   {

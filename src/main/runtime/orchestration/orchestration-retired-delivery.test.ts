@@ -86,33 +86,29 @@ describe('retired mailbox deliveries', () => {
     expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('outstanding')
   })
 
-  it('names the owning delivery when ack receives a message ID without consuming mail', () => {
+  it('explains the delivery ID contract for invalid acknowledgements without consuming mail', () => {
     const { params, insert } = setup()
     const message = insert('pending')
     const first = db.getOrCreateRunDelivery(params)!
     expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: message.id })).toThrow(
-      `Process the entire batch, then use --ack ${first.delivery.id}.`
+      '--ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.'
     )
     expect(db.getMessageById(message.id)?.read).toBe(0)
     expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('outstanding')
   })
 
-  it('does not reveal a delivery from another mailbox in a wrong-ID error', () => {
-    const { params, insert } = setup()
-    const foreign = db.createRun({
-      objective: 'other',
-      coordinatorHandle: 'other',
-      coordinatorPaneKey: 'other:22222222-2222-4222-9222-222222222222'
-    })
-    const message = insert('private')
+  it('checks the consumer generation before repairing an already read delivery', () => {
+    const { run, params, insert } = setup()
+    const message = insert('old')
     const first = db.getOrCreateRunDelivery(params)!
+    db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(message.id)
     expect(() =>
-      db.acknowledgeRunDelivery({
-        runId: foreign.id,
-        consumerGeneration: foreign.consumer_generation,
-        deliveryId: message.id
+      db.getOrCreateMailboxDelivery({
+        ...params,
+        mailboxHandle: `run:${run.id}`,
+        consumerGeneration: params.consumerGeneration + 1
       })
-    ).toThrow('Run orchestration check to obtain the Delivery id.')
+    ).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
     expect(db.getDeliveryRaw(first.delivery.id)?.status).toBe('outstanding')
   })
 

@@ -1,6 +1,6 @@
 import type { DeliveryRow, MessageRow, MessageType } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
-import { generateId, isGeneratedId } from '../generated-id'
+import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { exposeDeliveryTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
@@ -43,7 +43,9 @@ export function getOrCreateMailboxDelivery(
     if (params.requireCurrentRunConsumer) {
       this.requireCurrentConsumer(params.runId, params.consumerGeneration)
     }
-    const existing = this.getOutstandingMailboxDelivery(params.mailboxHandle)
+    const existing = this.db
+      .prepare("SELECT * FROM deliveries WHERE mailbox_handle = ? AND status = 'outstanding'")
+      .get(params.mailboxHandle) as DeliveryRow | undefined
     if (existing) {
       if (existing.consumer_generation !== params.consumerGeneration) {
         throw new OrchestrationError(
@@ -51,12 +53,11 @@ export function getOrCreateMailboxDelivery(
           'This mailbox Delivery belongs to a fenced consumer generation.'
         )
       }
-      const messages = this.getDeliveryMessages(existing)
-      if (messages.some((message) => message.read === 0)) {
+      if (!this.retireReadMailboxDelivery(params.mailboxHandle)) {
+        const messages = this.getDeliveryMessages(existing)
         this.db.exec('COMMIT')
         return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
       }
-      this.retireReadMailboxDelivery(params.mailboxHandle)
     }
     if (params.wakeTypes?.length) {
       const placeholders = params.wakeTypes.map(() => '?').join(',')
@@ -125,20 +126,6 @@ export function acknowledgeMailboxDelivery(
     if (params.requireCurrentRunConsumer) {
       this.requireCurrentConsumer(params.runId, params.consumerGeneration)
     }
-    if (isGeneratedId(params.deliveryId, 'msg')) {
-      const outstanding = this.getOutstandingMailboxDelivery(params.mailboxHandle)
-      const containsMessage =
-        outstanding &&
-        outstanding.run_id === params.runId &&
-        (JSON.parse(outstanding.message_ids) as string[]).includes(params.deliveryId)
-      const guidance = containsMessage
-        ? `Process the entire batch, then use --ack ${outstanding.id}.`
-        : 'Run orchestration check to obtain the Delivery id.'
-      throw new OrchestrationError(
-        'stale_delivery',
-        `--ack takes a Delivery id, not message id ${params.deliveryId}. ${guidance}`
-      )
-    }
     const delivery = this.getDeliveryRaw(params.deliveryId)
     if (
       !delivery ||
@@ -147,7 +134,7 @@ export function acknowledgeMailboxDelivery(
     ) {
       throw new OrchestrationError(
         'stale_delivery',
-        `Delivery ${params.deliveryId} does not belong to this mailbox.`
+        `Delivery ${params.deliveryId} does not belong to this mailbox. --ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.`
       )
     }
     if (
@@ -189,19 +176,9 @@ export function acknowledgeMailboxDelivery(
   }
 }
 
-export function getOutstandingMailboxDelivery(
-  this: OrchestrationDb,
-  mailboxHandle: string
-): DeliveryRow | undefined {
-  const row = this.db
-    .prepare("SELECT * FROM deliveries WHERE mailbox_handle = ? AND status = 'outstanding'")
-    .get(mailboxHandle) as DeliveryRow | undefined
-  return row ? exposeDeliveryTimestamps(row) : undefined
-}
-
 // Acknowledgment keeps late consumer acks idempotent after lifecycle suppression.
-export function retireReadMailboxDelivery(this: OrchestrationDb, mailboxHandle: string): void {
-  this.db
+export function retireReadMailboxDelivery(this: OrchestrationDb, mailboxHandle: string): boolean {
+  const result = this.db
     .prepare(
       `UPDATE deliveries SET status = 'acknowledged', acknowledged_at = datetime('now')
      WHERE mailbox_handle = ? AND status = 'outstanding'
@@ -211,13 +188,20 @@ export function retireReadMailboxDelivery(this: OrchestrationDb, mailboxHandle: 
        )`
     )
     .run(mailboxHandle)
+  return result.changes > 0
 }
 
 export function hasOutstandingMailboxDelivery(
   this: OrchestrationDb,
   mailboxHandle: string
 ): boolean {
-  return this.getOutstandingMailboxDelivery(mailboxHandle) !== undefined
+  return Boolean(
+    this.db
+      .prepare(
+        "SELECT 1 FROM deliveries WHERE mailbox_handle = ? AND status = 'outstanding' LIMIT 1"
+      )
+      .get(mailboxHandle)
+  )
 }
 
 export function fenceOutstandingMailboxDelivery(
@@ -232,7 +216,6 @@ export function fenceOutstandingMailboxDelivery(
 }
 
 export type RoleMailboxDeliveryMethods = {
-  getOutstandingMailboxDelivery: typeof getOutstandingMailboxDelivery
   retireReadMailboxDelivery: typeof retireReadMailboxDelivery
   getDeliveryRaw: typeof getDeliveryRaw
   getDeliveryMessages: typeof getDeliveryMessages
@@ -244,7 +227,6 @@ export type RoleMailboxDeliveryMethods = {
 
 export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
-    getOutstandingMailboxDelivery,
     retireReadMailboxDelivery,
     getDeliveryRaw,
     getDeliveryMessages,

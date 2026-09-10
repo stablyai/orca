@@ -5,7 +5,7 @@ describe('Run delivery history', () => {
   const h = createOrchestrationRpcHarness()
   afterEach(() => h.cleanup())
 
-  it('exposes the outstanding delivery without minting or acknowledging it', async () => {
+  it('does not label filtered history as an acknowledgeable delivery', async () => {
     const { db, ctx, activeRunId } = h.setup()
     const params = { terminal: 'term_coord', run: activeRunId, all: true }
     db.insertMessage({
@@ -15,7 +15,6 @@ describe('Run delivery history', () => {
       subject: 'waiting'
     })
     expect(await h.call('orchestration.check', params, ctx)).toMatchObject({
-      deliveryId: null,
       count: 1
     })
     expect(db.hasOutstandingRunDelivery(activeRunId!)).toBe(false)
@@ -23,10 +22,24 @@ describe('Run delivery history', () => {
       runId: activeRunId!,
       consumerGeneration: db.getRun(activeRunId!)!.consumer_generation
     })!
-    expect(await h.call('orchestration.check', { ...params, format: true }, ctx)).toMatchObject({
-      deliveryId: delivery.delivery.id,
-      count: 1
+    db.insertMessage({
+      from: 'worker',
+      to: `run:${activeRunId}`,
+      runId: activeRunId,
+      subject: 'later completion',
+      type: 'worker_done'
     })
+    const history = await h.call(
+      'orchestration.check',
+      {
+        ...params,
+        format: true,
+        types: 'worker_done'
+      },
+      ctx
+    )
+    expect(history).toMatchObject({ count: 1, messages: [{ subject: 'later completion' }] })
+    expect(history).not.toHaveProperty('deliveryId')
     expect(db.getDeliveryRaw(delivery.delivery.id)?.status).toBe('outstanding')
     expect(db.getMessageById(delivery.messages[0].id)?.read).toBe(0)
   })
