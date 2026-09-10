@@ -106,7 +106,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       this.store.writePublished(candidate)
       return
     }
-    this.store.markStale(candidate)
+    this.store.writeAbandoned(candidate)
   }
 }
 

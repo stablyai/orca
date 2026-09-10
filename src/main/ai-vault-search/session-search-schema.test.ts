@@ -255,9 +255,29 @@ it('retires an unfinished batch as part of opening, not of using', async () => {
 
   const reopened = openSessionSearchDatabase(path)
   try {
-    expect(reopened.prepare('SELECT count(*) AS n FROM search_pending_deletes').get()).toEqual({
-      n: 2
-    })
+    // One tombstone, not two: the session-keyed one already covers every row the
+    // batch holds, and a per-reopen duplicate would replay the same deletes.
+    expect(reopened.prepare('SELECT path FROM search_pending_deletes').all()).toEqual([
+      { path: '\u0000session:1' }
+    ])
+  } finally {
+    reopened.close()
+  }
+})
+
+it('retires a batch whose session survived it', async () => {
+  const path = await tempDatabasePath()
+  const crashed = openSessionSearchDatabase(path)
+  crashed.exec(`INSERT INTO sessions(id,index_ready,agent,session_id,file_path,title,resume_command)
+    VALUES (1,1,'claude','a','a','published','');
+    INSERT INTO search_write_batches(id,session_row_id) VALUES (7,1)`)
+  crashed.close()
+
+  const reopened = openSessionSearchDatabase(path)
+  try {
+    expect(reopened.prepare('SELECT path,batch_id FROM search_pending_deletes').all()).toEqual([
+      { path: '\u0000batch:7', batch_id: 7 }
+    ])
   } finally {
     reopened.close()
   }

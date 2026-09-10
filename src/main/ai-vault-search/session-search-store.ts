@@ -55,6 +55,10 @@ export class SessionSearchStore {
   ) {
     this.db = openSessionSearchDatabase(path)
     this.writer = new SessionSearchIndexWriter(this.db, options.walBudgetBytes)
+    // Opening tombstones whatever a dead writer left staged. Nothing else will
+    // schedule that drain: a store that is only ever read from, or one whose
+    // next read declines, would carry those rows for the life of the index.
+    this.scheduleCleanup()
   }
 
   setAcceptingWrites(accept: boolean): void {
@@ -114,6 +118,17 @@ export class SessionSearchStore {
     // one lands, a later pass must not re-read the whole queue.
     this.stale.delete(candidate.file.path)
     this.lastIndexedAt = new Date().toISOString()
+    this.scheduleCleanup()
+  }
+
+  /**
+   * A read that staged rows and then could not publish them. The tombstone its
+   * discard wrote needs the same drain a publish gets, or the staged rows sit in
+   * `messages` and both FTS tables until some unrelated write happens to
+   * schedule a pass — which for the last read before a shutdown is never.
+   */
+  writeAbandoned(candidate: SessionFileCandidate): void {
+    this.markStale(candidate)
     this.scheduleCleanup()
   }
 
@@ -263,8 +278,15 @@ export class SessionSearchStore {
       })
   }
 
-  /** Tests only: the cleanup lane is fire-and-forget everywhere else. */
-  settled(): Promise<void> {
-    return this.cleanup ?? Promise.resolve()
+  /**
+   * Tests only: the cleanup lane is fire-and-forget everywhere else. Loops
+   * because a pass requested while one was running is scheduled from the
+   * finished pass's own continuation, so awaiting a single promise would return
+   * with work still queued.
+   */
+  async settled(): Promise<void> {
+    while (this.cleanup) {
+      await this.cleanup
+    }
   }
 }

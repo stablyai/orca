@@ -176,6 +176,52 @@ it('retires a batch appended onto a live session when the writer dies', async ()
   }
 })
 
+it('drains the rows an incomplete read staged, without waiting for another write', async () => {
+  replayTranscriptRead({
+    messages: userMessages('incompleteread', 300),
+    outcome: { incomplete: true }
+  })
+  // Two flushes reached disk before the read turned out not to be publishable.
+  expect(counts(index.db).rawMessages).toBe(2 * SEARCH_WRITE_ROWS_PER_STEP)
+  await store.settled()
+
+  const after = counts(index.db)
+  expect(after.rawMessages).toBe(0)
+  expect(after.full).toBe(0)
+  expect(after.conversation).toBe(0)
+  expect(after.tombstones).toBe(0)
+  expect(after.batches).toBe(0)
+  // The file is still owed a whole re-read; only its staged rows are gone.
+  expect(store.pendingFileCount).toBe(1)
+  expect(errors).toEqual([])
+})
+
+it('drains what a dead writer left, under one tombstone, when the store reopens', async () => {
+  const staged = store.beginWrite(syntheticCandidate(), 'replace', 0)!
+  for (const message of userMessages('crashedrows', 200)) {
+    staged.add(message)
+  }
+  // No discard and no publish: the process died mid-write.
+  store.close()
+
+  const reopened = new SessionSearchStore(index.path, (error) => errors.push(error))
+  try {
+    // One tombstone covers the staging session and its batch alike; a second
+    // would replay the same deletes, and would be written again on every reopen.
+    expect(counts(index.db).tombstones).toBe(1)
+    await reopened.settled()
+    const after = counts(index.db)
+    expect(after.rawMessages).toBe(0)
+    expect(after.full).toBe(0)
+    expect(after.tombstones).toBe(0)
+    expect(after.batches).toBe(0)
+    expect(errors).toEqual([])
+  } finally {
+    reopened.close()
+    store = new SessionSearchStore(index.path, (error) => errors.push(error))
+  }
+})
+
 it('replaces the previous generation without ever showing both', async () => {
   replayTranscriptRead({ messages: userMessages('firstgeneration', 10) })
   await store.settled()
