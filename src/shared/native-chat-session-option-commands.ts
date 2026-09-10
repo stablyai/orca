@@ -1,8 +1,9 @@
-import type {
-  AgentSessionOptionCatalog,
-  CatalogMidSessionApply,
-  CatalogModel,
-  CatalogOptionApply
+import {
+  resolveCatalogModelOptions,
+  type AgentSessionOptionCatalog,
+  type CatalogMidSessionApply,
+  type CatalogModel,
+  type CatalogOptionApply
 } from './agent-session-option-catalog'
 import type { SessionOptionValue } from './native-chat-session-options'
 import {
@@ -175,8 +176,7 @@ export function recordNativeChatSessionOptionCommand(args: {
   })
   // Re-resolved: the command above may have just tracked a model.
   const modelId = resolveEffectiveNativeChatModelId(catalog, models, record)
-  const model = modelId ? models.find((candidate) => candidate.id === modelId) : undefined
-  for (const option of model?.options ?? []) {
+  for (const option of resolveCatalogModelOptions(catalog, models, modelId)) {
     opensAgentPicker =
       opensAgentPicker || isSessionOptionAgentPickerCommand(option.apply.midSession, command)
     changed =

@@ -4,6 +4,7 @@ import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-opti
 import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
 import {
   applyStructuredAgentSessionOptions,
+  commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot
 } from './structured-agent-session-options'
@@ -127,6 +128,35 @@ describe('structured agent session options', () => {
     expect(model).toMatchObject({ valueSource: 'reported' })
     expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('gpt-5.9-secret')
     expect(model.kind.type === 'select' ? model.kind.choices : null).toEqual([])
+  })
+
+  it('keeps an unchanged model reported when committing an effort write', () => {
+    const reported = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [],
+        current: {
+          model: 'gpt-5.9-secret',
+          effort: 'medium',
+          confirmed: ['model', 'effort']
+        }
+      }
+    )
+
+    const committed = commitStructuredAgentSessionOptionValues(reported, {
+      model: 'gpt-5.9-secret',
+      effort: 'high'
+    })
+    expect(committed.record.model).toEqual({ value: 'gpt-5.9-secret', source: 'reported' })
+    expect(committed.record.valuesByModel['gpt-5.9-secret']?.effort).toEqual({
+      value: 'high',
+      source: 'dispatched'
+    })
+    expect(structuredAgentSessionOptionSnapshot(committed)[0]).toMatchObject({
+      valueSource: 'reported',
+      kind: { currentValue: 'gpt-5.9-secret' }
+    })
   })
 
   it('projects live options as directly settable descriptors', () => {

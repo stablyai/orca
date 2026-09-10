@@ -1,4 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
+import {
+  applyStructuredAgentSessionOptions,
+  canSetStructuredAgentSessionOption,
+  createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionSnapshot
+} from '../../shared/structured-agent-session-options'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import {
@@ -167,6 +174,43 @@ describe('structured Codex session options', () => {
     )
     expect(restored.current).toEqual({ model: 'gpt-stale' })
     expect(restored.current.confirmed).toBeUndefined()
+
+    const changedModel = await readLiveCodexSessionOptions(
+      session(new Map([['model', 'gpt-stale']]), { model: 'gpt-old', effort: 'high' }),
+      undefined
+    )
+    expect(changedModel.current).toEqual({ model: 'gpt-stale', effort: 'high' })
+    expect(changedModel.current.confirmed).toBeUndefined()
+  })
+
+  it('confirms a restored model when the opened thread reported the same value', async () => {
+    const request = vi.fn(async () => ({
+      data: [{ model: 'gpt-live', displayName: 'GPT Live', isDefault: true }],
+      nextCursor: null
+    }))
+    const restored = {
+      connection: { request },
+      options: new Map([['model', 'gpt-unlisted']]),
+      reportedOptions: { model: 'gpt-unlisted' }
+    } as unknown as CodexSession
+
+    const result = await readLiveCodexSessionOptions(restored, undefined)
+    expect(result).toMatchObject({
+      current: { model: 'gpt-unlisted', confirmed: ['model'] }
+    })
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      result
+    )
+    const model = structuredAgentSessionOptionSnapshot(state)[0]!
+    expect(model).toMatchObject({
+      valueSource: 'reported',
+      kind: { currentValue: 'gpt-unlisted' }
+    })
+    expect(model.kind.type === 'select' ? model.kind.choices : []).not.toContainEqual(
+      expect.objectContaining({ value: 'gpt-unlisted' })
+    )
   })
 
   it('does not confirm a model it substituted rather than read', async () => {
@@ -221,6 +265,31 @@ describe('structured Codex session options', () => {
     await expect(
       applyCodexStructuredSessionOption(session, 'model', 'gpt-fast', undefined)
     ).resolves.toEqual({ model: 'gpt-fast', effort: 'low' })
+  })
+
+  it('applies a catalog-safe effort to a running unlisted model', async () => {
+    const session = optionSession(
+      vi.fn(async () => ({
+        data: [{ model: 'gpt-live', supportedReasoningEfforts: [{ reasoningEffort: 'high' }] }],
+        nextCursor: null
+      }))
+    )
+    session.reportedOptions = { model: 'gpt-unlisted', effort: 'medium' }
+    const result = await readLiveCodexSessionOptions(session, undefined)
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      result
+    )
+    expect(canSetStructuredAgentSessionOption(state, 'effort', 'high')).toBe(true)
+
+    await expect(
+      applyCodexStructuredSessionOption(session, 'effort', 'high', undefined)
+    ).resolves.toEqual({ model: 'gpt-unlisted', effort: 'high' })
+    expect(session.reportedOptions).toEqual({ model: 'gpt-unlisted' })
+    await expect(readLiveCodexSessionOptions(session, undefined)).resolves.toMatchObject({
+      current: { model: 'gpt-unlisted', effort: 'high', confirmed: ['model'] }
+    })
   })
 
   it('rejects values absent from the provider catalog', async () => {

@@ -10,6 +10,7 @@ import {
 import {
   applyNativeChatReportedSessionOptions,
   createNativeChatSessionOptionRecord,
+  getTrackedSessionOption,
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
@@ -128,7 +129,12 @@ export function commitStructuredAgentSessionOption(
     state.catalog.models,
     state.record
   )
-  setTrackedSessionOption(state.record, id, value, 'dispatched', effectiveModel)
+  const current =
+    id === 'model' ? state.record.model : getTrackedSessionOption(state.record, effectiveModel, id)
+  // A full commit response repeats unchanged values; keep any provider evidence they carry.
+  if (current?.value !== value) {
+    setTrackedSessionOption(state.record, id, value, 'dispatched', effectiveModel)
+  }
   return { ...state, pendingId: null }
 }
 

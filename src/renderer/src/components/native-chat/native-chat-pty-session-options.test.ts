@@ -628,6 +628,12 @@ describe('native chat PTY session options', () => {
     })!
     expect(surface.getSnapshot().map(({ id }) => id)).toEqual(['model', 'effort'])
 
+    surface.recordOutgoingCommand('/effort low')
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { currentValue: 'low' }
+    })
+
     await surface.setOption('effort', 'high')
 
     expect(dispatch).toHaveBeenCalledWith('/effort high')

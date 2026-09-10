@@ -3,6 +3,8 @@ import type {
   AgentSessionOptionChoice,
   AgentSessionOptionsResult
 } from '../../shared/agent-session-wire'
+import { resolveCatalogModelOptions } from '../../shared/agent-session-option-catalog'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import type { CodexOpenedThread } from './codex-structured-thread-open'
 import type { CodexSession } from './codex-structured-session-state'
@@ -11,6 +13,19 @@ import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wi
 
 const MODEL_PAGE_LIMIT = 100
 const MAX_MODEL_PAGES = 20
+
+function supportedEfforts(
+  model: AgentSessionModelOption | undefined,
+  modelId: string
+): readonly AgentSessionOptionChoice[] {
+  if (model) {
+    return model.efforts
+  }
+  const fallback = resolveCatalogModelOptions(CODEX_SESSION_OPTION_CATALOG, [], modelId).find(
+    (option) => option.id === 'effort'
+  )
+  return fallback?.kind.type === 'select' ? fallback.kind.choices : []
+}
 
 export function restoredCodexSessionOptions(
   options: Readonly<Record<string, string>> | undefined
@@ -140,12 +155,12 @@ export function readLiveCodexSessionOptions(
   const pendingEffort = session.options.get('effort')
   const model = pendingModel ?? session.reportedOptions.model
   const effort = pendingEffort ?? session.reportedOptions.effort
-  // Why: `session.options` holds a restored pick or a write of ours the thread has not
-  // echoed — neither is the agent speaking. A value that fell through to the opened
-  // thread's own state is, which is what lets an unlisted model still be named.
+  // A matching restored override still has the opened thread's evidence. Successful
+  // writes clear that evidence below, so equality cannot reuse a stale report.
+  const modelConfirmed = Boolean(model && model === session.reportedOptions.model)
   const confirmed = [
-    ...(!pendingModel && model ? ['model'] : []),
-    ...(!pendingEffort && effort ? ['effort'] : [])
+    ...(modelConfirmed ? ['model'] : []),
+    ...(modelConfirmed && effort && effort === session.reportedOptions.effort ? ['effort'] : [])
   ]
   return readCodexStructuredSessionOptions({
     connection: session.connection,
@@ -193,19 +208,26 @@ async function applyValidatedCodexStructuredSessionOption(
   }
   const modelId = key === 'model' ? value : catalog.current.model
   const model = catalog.models.find((entry) => entry.id === modelId)
+  const efforts = supportedEfforts(model, modelId)
   const requestedEffort = key === 'effort' ? value : priorEffort
   if (
     key === 'effort' &&
-    (!model?.efforts.length || !model.efforts.some((effort) => effort.value === requestedEffort))
+    (!efforts.length || !efforts.some((effort) => effort.value === requestedEffort))
   ) {
     throw new Error(`codex app-server model ${modelId} does not support ${value}`)
   }
   const effort =
-    model?.efforts.length === 0
+    efforts.length === 0
       ? undefined
-      : (model?.efforts.find((entry) => entry.value === requestedEffort)?.value ??
+      : (efforts.find((entry) => entry.value === requestedEffort)?.value ??
         model?.defaultEffort ??
-        model?.efforts[0]?.value)
+        efforts[0]?.value)
+  if (key === 'model') {
+    delete session.reportedOptions.model
+    delete session.reportedOptions.effort
+  } else {
+    delete session.reportedOptions.effort
+  }
   session.options.set('model', modelId)
   if (effort) {
     session.options.set('effort', effort)
