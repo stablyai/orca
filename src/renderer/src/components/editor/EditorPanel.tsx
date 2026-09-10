@@ -26,6 +26,8 @@ import {
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
 import { createCurrentMarkdownArtifactRequest } from './markdown-artifact-upload'
 import { useEditorPanelSave } from './useEditorPanelSave'
+import { useWorktreeDiffFileNavigation } from './useWorktreeDiffFileNavigation'
+import { useDiffSideBySideDefault } from './useDiffSideBySideDefault'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -106,15 +108,7 @@ function EditorPanelInner({
     },
     [clearCopiedPathToastResetTimer]
   )
-  const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
-  const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
-
-  if (settings?.diffDefaultView !== prevDiffView) {
-    setPrevDiffView(settings?.diffDefaultView)
-    if (settings?.diffDefaultView !== undefined) {
-      setSideBySide(settings.diffDefaultView === 'side-by-side')
-    }
-  }
+  const [sideBySide, setSideBySide] = useDiffSideBySideDefault(settings?.diffDefaultView)
 
   const requestedChangesMode =
     !!activeFile &&
@@ -168,6 +162,11 @@ function EditorPanelInner({
     openFiles,
     requestRenameForFile
   })
+  const {
+    canNavigateWorktreeFile,
+    handleNavigateWorktreeFile,
+    isWorktreeFileNavigationSurface
+  } = useWorktreeDiffFileNavigation({ activeFile, gitStatusEntries, requestedChangesMode })
   useEditorCmdSaveRequest({
     activeFile,
     openFiles,
@@ -217,6 +216,7 @@ function EditorPanelInner({
     markdownViewMode,
     markdownRichModeSizeOverridden,
     isChangesMode,
+    hasWorktreeDiffNavigation: canNavigateWorktreeFile,
     canOpenWorkspaceFileBrowser
   })
 
@@ -334,7 +334,12 @@ function EditorPanelInner({
 
   return (
     // Why: each split pane needs an isolated bridge between its diff editor and header controls.
-    <DiffNavigationProvider>
+    <DiffNavigationProvider
+      canNavigateFile={canNavigateWorktreeFile}
+      onNavigateFile={
+        isWorktreeFileNavigationSurface ? handleNavigateWorktreeFile : undefined
+      }
+    >
       <EditorPanelShell
         panelRef={setPanelRef}
         activeFile={activeFile}
