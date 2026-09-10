@@ -1,11 +1,14 @@
 import { readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import ts from 'typescript'
-import { files, root } from './rpc-artifact-io.mts'
+import { files, option, root } from './rpc-artifact-io.mts'
+
+/** Anchored: a bare `test-support` substring also excluded any product path containing it. */
+const NOT_SOURCE = /\.test\.|(^|\/)test-support\/|\.test-support\.tsx?$|\.generated\./
 
 const predicates: { file: string; line: number; expression: string }[] = []
 for (const file of files(join(root, 'mobile/src')).filter(
-  (file) => /\.tsx?$/.test(file) && !/\.test\.|test-support|\.generated\./.test(file)
+  (file) => /\.tsx?$/.test(file) && !NOT_SOURCE.test(file)
 )) {
   const sf = ts.createSourceFile(
     file,
@@ -45,7 +48,7 @@ const text =
     .map((row) => `- ${row.file}:${row.line} — \`${row.expression.replace(/`/g, '\\`')}\``)
     .join('\n') +
   '\n'
-const path = join(root, 'mobile/rpc-foundation/STEP0_5-TODO.md')
+const path = resolve(root, option('output', 'mobile/rpc-foundation/STEP0_5-TODO.md'))
 if (process.argv.includes('--check')) {
   if (readFileSync(path, 'utf8') !== text) {
     throw new Error('Stale acceptance census')

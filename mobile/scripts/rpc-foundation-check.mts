@@ -2,8 +2,10 @@
  * 'reference-only' | 'ticket', branch: { sha, file, line }, main: { sha, file, line } }] }.
  * Tickets require only main provenance; reference-only entries require both sides.
  */
-import { readFileSync, existsSync } from 'node:fs'
-import { isAbsolute, resolve } from 'node:path'
+import { readFileSync, existsSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { isAbsolute, join, resolve } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { runProcess } from '../../src/shared/child-process/run-process.ts'
 
 const root = resolve(import.meta.dirname, '../..')
@@ -78,6 +80,59 @@ async function run(args: string[]): Promise<void> {
     throw new Error(`Check failed: ${args.join(' ')}`)
   }
 }
+/** Any failure is a gate failure: an unresolvable sha and a missing path share git's wording. */
+async function gitLineCount(sha: string, file: string): Promise<number> {
+  const result = await runProcess({
+    program: 'git',
+    args: ['show', `${sha}:${file}`],
+    cwd: root,
+    maxOutputBytes: 8_000_000
+  })
+  if (result.code !== 0 || result.timedOut || result.outputTruncated) {
+    throw new Error(`Unresolvable provenance ${sha}:${file}: ${result.stderr.trim()}`)
+  }
+  return result.stdout.replace(/\n$/, '').split('\n').length
+}
+type VitestCase = { fullName: string; status: string }
+/** Exit 0 is not evidence the pinned test ran: a `-t` filter that matches nothing and an
+ *  `it.skip` are both a green skip. Require the named case itself to report `passed`, which a
+ *  retitled test (no match) and a skipped test (wrong status) each fail. Without a name, every
+ *  case in the file must pass, so nothing can be skipped away either. */
+async function vitest(file: string, name?: string): Promise<void> {
+  const report = join(tmpdir(), `rpc-foundation-${randomUUID()}.json`)
+  const label = name ? `${file} -t ${name}` : file
+  try {
+    await run([
+      'mobile/node_modules/vitest/vitest.mjs',
+      'run',
+      '--root',
+      'mobile',
+      file.replace(/^mobile\//, ''),
+      ...(name ? ['-t', name] : []),
+      '--reporter=json',
+      `--outputFile=${report}`
+    ])
+    const summary = JSON.parse(readFileSync(report, 'utf8'))
+    if (summary.success !== true || summary.numFailedTestSuites !== 0) {
+      throw new Error(`${label}: suite did not succeed`)
+    }
+    const cases: VitestCase[] = (summary.testResults ?? []).flatMap(
+      (suite: { assertionResults?: VitestCase[] }) => suite.assertionResults ?? []
+    )
+    const matched = name ? cases.filter((item) => item.fullName.includes(name)) : cases
+    if (!matched.length) {
+      throw new Error(`${label}: no test of that name ran`)
+    }
+    const unproven = matched.filter((item) => item.status !== 'passed')
+    if (unproven.length) {
+      throw new Error(
+        `${label}: ${unproven.map((item) => `${item.status} ${item.fullName}`).join('; ')}`
+      )
+    }
+  } finally {
+    rmSync(report, { force: true })
+  }
+}
 async function generator(name: string, path: string, extra: string[] = []): Promise<void> {
   await run([
     'mobile/node_modules/tsx/dist/cli.mjs',
@@ -110,6 +165,11 @@ async function checkStep0(): Promise<void> {
       ) {
         throw new Error(`Invalid ${side} provenance: ${entry.id}`)
       }
+      if ((await gitLineCount(location.sha, location.file)) < location.line) {
+        throw new Error(
+          `${side} provenance past end of file: ${entry.id} ${location.file}:${location.line}`
+        )
+      }
     }
   }
   if (flags.has('require-all-current-calls') || flags.has('require-no-dynamic-calls')) {
@@ -131,6 +191,7 @@ async function checkStep0(): Promise<void> {
   if (flags.has('require-native-rpc-inventory')) {
     await generator('rpc-native-inventory', resolve(artifacts, 'native-rpc-inventory.json'))
   }
+  await generator('rpc-acceptance-census', resolve(artifacts, 'STEP0_5-TODO.md'))
   for (const flag of ['require-gate-fail-closed', 'require-below-floor-block-e2e']) {
     if (!flags.has(flag)) {
       continue
@@ -154,28 +215,14 @@ async function checkStep0(): Promise<void> {
       if (!seed || !readFileSync(resolve(root, seed.file), 'utf8').includes(seed.name)) {
         throw new Error(`Missing regression: ${id}`)
       }
-      await run([
-        'mobile/node_modules/vitest/vitest.mjs',
-        'run',
-        '--root',
-        'mobile',
-        seed.file.replace(/^mobile\//, ''),
-        '-t',
-        seed.name
-      ])
+      await vitest(seed.file, seed.name)
     }
   }
   const ratchet = 'mobile/src/transport/screen-rpc-ratchet.test.ts'
   if (!existsSync(resolve(root, ratchet))) {
     throw new Error('Missing main ratchet')
   }
-  await run([
-    'mobile/node_modules/vitest/vitest.mjs',
-    'run',
-    '--root',
-    'mobile',
-    ratchet.replace(/^mobile\//, '')
-  ])
+  await vitest(ratchet)
 }
 try {
   if (!contracts[step]) {

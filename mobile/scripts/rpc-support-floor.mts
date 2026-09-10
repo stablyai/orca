@@ -87,7 +87,13 @@ for (const namespace of namespaces) {
     let source: string
     try {
       source = await git('show', `${sha}:${namespace.file}`)
-    } catch {
+    } catch (error) {
+      // Only a genuinely absent path is an exclusion; a truncated read or any other git failure
+      // must not be laundered into "file absent".
+      const message = error instanceof Error ? error.message : String(error)
+      if (!/does not exist in|exists on disk, but not in/.test(message)) {
+        throw error
+      }
       inspected.push({ tag, sha, excluded: 'protocol constant file absent' })
       continue
     }
@@ -129,12 +135,18 @@ for (const namespace of namespaces) {
   if (!floor || !atMinimum3) {
     throw new Error(`No compatible floor in ${namespace.name}`)
   }
+  const committed = async (evidence: unknown): Promise<string> =>
+    await git('log', '-1', '--format=%cI', `${(evidence as { sha: string }).sha}^{commit}`)
   floors.push({
     namespace: namespace.name,
     consideredTags: candidates,
+    consideredCount: candidates.length,
+    inspectedCount: inspected.length,
     minimum: namespace.minimum,
     floor,
+    floorCommitted: await committed(floor),
     atMinimum3,
+    atMinimum3Committed: await committed(atMinimum3),
     inspected
   })
 }
@@ -153,6 +165,7 @@ emit('support-floor', {
     runtimeClientToServer:
       'server protocol >= MIN_COMPATIBLE_RUNTIME_SERVER_VERSION AND client protocol >= server minimum accepted client'
   },
-  selection: 'version-sorted tags within each namespace; both compatibility directions must hold',
+  selection:
+    'The lowest version-named tag in each namespace satisfying both compatibility directions. The walk stops at the first match, so inspectedCount is usually far below consideredCount and nothing beyond the match was examined. Version-name order is not release order: the desktop-rc floor v0.0.1-rc.0 is a version-slot tag whose commit is newer than the desktop-stable floor v1.3.51. Read each floor as the lowest-named compatible tag, never as the oldest supported release.',
   floors
 })

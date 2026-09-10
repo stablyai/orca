@@ -52,6 +52,32 @@ describe('RPC access symbol resolution', () => {
     const raw = resolver.calls.find((call) => resolver.resolveKind(call.expression) === 'request')!
     expect(resolver.methods(raw.arguments[0])).toEqual(['git.fetch', 'git.status'])
   })
+  it('includes callers reached only through a function-type alias', () => {
+    const resolver = fixture(`
+      declare const client: { sendRequest(method: string): void }
+      type RunHook = (method: string) => void
+      const send = (method: string) => { client.sendRequest(method) }
+      send('resolved.direct')
+      const run: RunHook = send
+      run('hidden.viaTypeAlias')
+    `)
+    const raw = resolver.calls.find((call) => resolver.resolveKind(call.expression) === 'request')!
+    expect(resolver.methods(raw.arguments[0])).toEqual(['hidden.viaTypeAlias', 'resolved.direct'])
+  })
+  it('carries the alias through a shorthand property handed to another function', () => {
+    const resolver = fixture(`
+      declare const client: { sendRequest(method: string): void }
+      type RunHook = (method: string) => void
+      declare function useThing(args: { run: RunHook }): void
+      const send = (method: string) => { client.sendRequest(method) }
+      send('resolved.direct')
+      useThing({ run: send })
+      declare const args: { run: RunHook }
+      args.run('hidden.viaShorthand')
+    `)
+    const raw = resolver.calls.find((call) => resolver.resolveKind(call.expression) === 'request')!
+    expect(resolver.methods(raw.arguments[0])).toEqual(['hidden.viaShorthand', 'resolved.direct'])
+  })
   it('does not hide an unresolved caller behind an object binding', () => {
     const resolver = fixture(`
       declare const client: { sendRequest(method: string): void }

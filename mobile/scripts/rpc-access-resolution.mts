@@ -55,34 +55,68 @@ export function createRpcAccessResolver(program: ts.Program, paths: string[]) {
     }
   }
   const calls: ts.CallExpression[] = []
+  /** Symbol of the binding a function value is stored in, mapped to every function-type alias it
+   *  is contextually assigned to. A call through such an alias resolves to the alias signature,
+   *  not to the function, so without this the caller set is silently partial. */
+  const aliasCarriers = new Map<ts.Symbol, Set<ts.Declaration>>()
+  function recordAliasCarrier(symbol: ts.Symbol | undefined, context: ts.Type | undefined): void {
+    const alias = context?.aliasSymbol?.declarations?.[0]
+    if (!alias || !symbol || !ts.isTypeAliasDeclaration(alias)) {
+      return
+    }
+    const carried = aliasCarriers.get(symbol) ?? new Set<ts.Declaration>()
+    carried.add(alias)
+    aliasCarriers.set(symbol, carried)
+  }
   for (const file of paths) {
     const walk = (node: ts.Node): void => {
       if (ts.isCallExpression(node)) {
         calls.push(node)
       }
+      if (ts.isShorthandPropertyAssignment(node)) {
+        // The symbol at a shorthand name is the object's property, not the value it carries.
+        recordAliasCarrier(
+          checker.getShorthandAssignmentValueSymbol(node),
+          checker.getContextualType(node.name)
+        )
+      } else if (ts.isIdentifier(node)) {
+        recordAliasCarrier(checker.getSymbolAtLocation(node), checker.getContextualType(node))
+      }
       ts.forEachChild(node, walk)
     }
     walk(program.getSourceFile(file)!)
   }
+  /** The binding a function expression is assigned to, through wrappers such as `useCallback`. */
+  function ownerBinding(owner: ts.SignatureDeclaration): ts.Symbol | undefined {
+    let node: ts.Node = owner
+    while (
+      node.parent &&
+      (ts.isCallExpression(node.parent) ||
+        ts.isParenthesizedExpression(node.parent) ||
+        ts.isAsExpression(node.parent))
+    ) {
+      node = node.parent
+    }
+    const declaration = node.parent
+    if (declaration && ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name)) {
+      return checker.getSymbolAtLocation(declaration.name)
+    }
+    return owner.name && ts.isIdentifier(owner.name)
+      ? checker.getSymbolAtLocation(owner.name)
+      : undefined
+  }
   function callers(owner: ts.SignatureDeclaration): ts.CallExpression[] {
     const direct = calls.filter((call) => checker.getResolvedSignature(call)?.declaration === owner)
-    if (direct.length) {
+    const binding = ownerBinding(owner)
+    const aliases = binding && aliasCarriers.get(binding)
+    if (!aliases?.size) {
       return direct
     }
-    if (
-      owner.getSourceFile().fileName.endsWith('use-mobile-structured-agent-session.ts') &&
-      owner.parameters[0]?.name.getText() === 'method'
-    ) {
-      return calls.filter((call) => {
-        const declaration = checker.getResolvedSignature(call)?.declaration
-        return (
-          declaration?.parent &&
-          ts.isTypeAliasDeclaration(declaration.parent) &&
-          declaration.parent.name.text === 'StructuredAgentSessionMutate'
-        )
-      })
-    }
-    return []
+    const aliased = calls.filter((call) => {
+      const declaration = checker.getResolvedSignature(call)?.declaration
+      return Boolean(declaration?.parent && aliases.has(declaration.parent))
+    })
+    return [...direct, ...aliased.filter((call) => !direct.includes(call))]
   }
   function methods(node: ts.Expression | undefined, seen = new Set<ts.Node>()): string[] {
     if (!node) {

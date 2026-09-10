@@ -158,10 +158,26 @@ if (process.argv.includes('--require-no-dynamic-calls')) {
     )
   }
 }
+const callEntries = entries.filter((entry) => entry.role === 'call')
 emit('access-inventory', {
   schemaVersion: 1,
   scope: ['mobile/src', 'mobile/app'],
   excludes: [],
+  summary: {
+    total: entries.length,
+    referencesAutoExempt: entries.length - callEntries.length,
+    callsSingleLiteralMethod: callEntries.filter((entry) => entry.method !== 'dynamic').length,
+    callsDynamicWithResolvedFamily: callEntries.filter(
+      (entry) => entry.method === 'dynamic' && Boolean(entry.descriptor)
+    ).length,
+    callsDynamicUnresolved: callEntries.filter(
+      (entry) => entry.method === 'dynamic' && !entry.descriptor
+    ).length,
+    referenceNote:
+      "role 'reference' entries receive an empty access-reference descriptor unconditionally, before any family logic runs, so --require-no-dynamic-calls exempts every one of them by construction. They are occurrences of the token, not resolved call sites; only callsDynamicWithResolvedFamily counts resolution work.",
+    transportExceptionNote:
+      "descriptor.kind 'transport-exception' records the union of every method literal resolvable anywhere in the mobile tree. It is a sound over-approximation of what a transport port may forward, not the method set of that call site."
+  },
   entries
 })
 console.log(

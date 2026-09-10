@@ -2,6 +2,15 @@
   "schemaVersion": 1,
   "scope": ["mobile/src", "mobile/app"],
   "excludes": [],
+  "summary": {
+    "total": 1614,
+    "referencesAutoExempt": 1183,
+    "callsSingleLiteralMethod": 387,
+    "callsDynamicWithResolvedFamily": 44,
+    "callsDynamicUnresolved": 0,
+    "referenceNote": "role 'reference' entries receive an empty access-reference descriptor unconditionally, before any family logic runs, so --require-no-dynamic-calls exempts every one of them by construction. They are occurrences of the token, not resolved call sites; only callsDynamicWithResolvedFamily counts resolution work.",
+    "transportExceptionNote": "descriptor.kind 'transport-exception' records the union of every method literal resolvable anywhere in the mobile tree. It is a sound over-approximation of what a transport port may forward, not the method set of that call site."
+  },
   "entries": [
     {
       "file": "mobile/app/connection-log.tsx",
@@ -16623,8 +16632,8 @@
     },
     {
       "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.test.ts",
-      "line": 12,
-      "column": 11,
+      "line": 20,
+      "column": 5,
       "symbol": "sendRequest",
       "method": "dynamic",
       "kind": "request",
@@ -16637,8 +16646,8 @@
     },
     {
       "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.test.ts",
-      "line": 18,
-      "column": 17,
+      "line": 27,
+      "column": 15,
       "symbol": "sendRequest",
       "method": "dynamic",
       "kind": "request",
@@ -16651,9 +16660,23 @@
     },
     {
       "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.test.ts",
-      "line": 33,
-      "column": 12,
-      "symbol": "sendRequest",
+      "line": 27,
+      "column": 28,
+      "symbol": "spies.sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.test.ts",
+      "line": 40,
+      "column": 10,
+      "symbol": "spies.sendRequest",
       "method": "dynamic",
       "kind": "request",
       "policy": "unclassified",

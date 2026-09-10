@@ -7,7 +7,9 @@ const RPC_ENTRY_POINT =
 
 const MOBILE_ROOT = join(__dirname, '../..')
 
-const NOT_SOURCE = /\.test\.tsx?$|test-support|\.generated\./
+// Anchored to a path segment or the `.test-support` suffix: a bare substring left any product
+// file whose path merely contained `test-support` permanently unwatched.
+const NOT_SOURCE = /\.test\.tsx?$|(^|\/)test-support\/|\.test-support\.tsx?$|\.generated\./
 
 const INLINE_RPC_BY_FILE: Record<string, number> = {
   'app/h/[hostId]/accounts.tsx': 3,
@@ -217,6 +219,9 @@ describe('screen RPC ratchet', () => {
     }
   })
 
+  // Lexical by construction: a stream subscription through a receiver that does not end in
+  // `client`, with a non-literal method, is invisible here. The acceptance census resolves that
+  // shape through the type checker, so the two mechanisms are complementary, not redundant.
   it('pins every remaining inline RPC site so none can be added unnoticed', () => {
     const actual: Record<string, number> = {}
     for (const path of sourceFiles()) {

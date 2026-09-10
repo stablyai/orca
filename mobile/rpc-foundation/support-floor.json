@@ -32,7 +32,7 @@
     "hostToMobile": "mobile protocol >= host MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION AND host protocol >= mobile minimum accepted desktop",
     "runtimeClientToServer": "server protocol >= MIN_COMPATIBLE_RUNTIME_SERVER_VERSION AND client protocol >= server minimum accepted client"
   },
-  "selection": "version-sorted tags within each namespace; both compatibility directions must hold",
+  "selection": "The lowest version-named tag in each namespace satisfying both compatibility directions. The walk stops at the first match, so inspectedCount is usually far below consideredCount and nothing beyond the match was examined. Version-name order is not release order: the desktop-rc floor v0.0.1-rc.0 is a version-slot tag whose commit is newer than the desktop-stable floor v1.3.51. Read each floor as the lowest-named compatible tag, never as the oldest supported release.",
   "floors": [
     {
       "namespace": "desktop-stable",
@@ -423,6 +423,8 @@
         "v1.4.198",
         "v1.4.199"
       ],
+      "consideredCount": 385,
+      "inspectedCount": 195,
       "minimum": 2,
       "floor": {
         "tag": "v1.3.51",
@@ -431,6 +433,7 @@
         "peerMinimum": 2,
         "protocolConstant": "DESKTOP_PROTOCOL_VERSION"
       },
+      "floorCommitted": "2026-05-13T17:46:15Z",
       "atMinimum3": {
         "tag": "v1.4.5",
         "sha": "74876aebbc10c893751d36ee29c016e66c18fb29",
@@ -438,6 +441,7 @@
         "peerMinimum": 2,
         "protocolConstant": "RUNTIME_PROTOCOL_VERSION"
       },
+      "atMinimum3Committed": "2026-05-18T07:12:54Z",
       "inspected": [
         {
           "tag": "v0.0.1",
@@ -2118,6 +2122,8 @@
         "v1.4.192-rc.0",
         "v1.4.192-rc.1"
       ],
+      "consideredCount": 654,
+      "inspectedCount": 1,
       "minimum": 2,
       "floor": {
         "tag": "v0.0.1-rc.0",
@@ -2126,6 +2132,7 @@
         "peerMinimum": 2,
         "protocolConstant": "RUNTIME_PROTOCOL_VERSION"
       },
+      "floorCommitted": "2026-05-26T22:27:14Z",
       "atMinimum3": {
         "tag": "v0.0.1-rc.0",
         "sha": "11526e8ffa7ea785a472adc2cfa363acfdadc504",
@@ -2133,6 +2140,7 @@
         "peerMinimum": 2,
         "protocolConstant": "RUNTIME_PROTOCOL_VERSION"
       },
+      "atMinimum3Committed": "2026-05-26T22:27:14Z",
       "inspected": [
         {
           "tag": "v0.0.1-rc.0",
@@ -2159,6 +2167,8 @@
         "mobile-v0.0.12",
         "mobile-v0.0.13"
       ],
+      "consideredCount": 12,
+      "inspectedCount": 7,
       "minimum": 2,
       "floor": {
         "tag": "mobile-v0.0.7",
@@ -2167,6 +2177,7 @@
         "peerMinimum": 2,
         "protocolConstant": "MOBILE_PROTOCOL_VERSION"
       },
+      "floorCommitted": "2026-05-12T01:24:10-04:00",
       "atMinimum3": {
         "tag": "mobile-v0.0.8",
         "sha": "8b9340dcb793d5f7265135470627c2bdcb71e99e",
@@ -2174,6 +2185,7 @@
         "peerMinimum": 2,
         "protocolConstant": "MOBILE_PROTOCOL_VERSION"
       },
+      "atMinimum3Committed": "2026-05-17T23:33:28-07:00",
       "inspected": [
         {
           "tag": "mobile-v0.0.1",
@@ -2223,6 +2235,8 @@
     {
       "namespace": "mobile-ios-v*",
       "consideredTags": ["mobile-ios-v0.0.15", "mobile-ios-v0.0.26", "mobile-ios-v0.0.27"],
+      "consideredCount": 3,
+      "inspectedCount": 1,
       "minimum": 2,
       "floor": {
         "tag": "mobile-ios-v0.0.15",
@@ -2231,6 +2245,7 @@
         "peerMinimum": 2,
         "protocolConstant": "MOBILE_PROTOCOL_VERSION"
       },
+      "floorCommitted": "2026-06-20T18:16:50-07:00",
       "atMinimum3": {
         "tag": "mobile-ios-v0.0.15",
         "sha": "26493072c1c39dc4690d31d7663d80d2794e6768",
@@ -2238,6 +2253,7 @@
         "peerMinimum": 2,
         "protocolConstant": "MOBILE_PROTOCOL_VERSION"
       },
+      "atMinimum3Committed": "2026-06-20T18:16:50-07:00",
       "inspected": [
         {
           "tag": "mobile-ios-v0.0.15",
@@ -2276,6 +2292,8 @@
         "mobile-android-v0.0.47",
         "mobile-android-v0.0.48"
       ],
+      "consideredCount": 24,
+      "inspectedCount": 1,
       "minimum": 2,
       "floor": {
         "tag": "mobile-android-v0.0.14",
@@ -2284,6 +2302,7 @@
         "peerMinimum": 2,
         "protocolConstant": "MOBILE_PROTOCOL_VERSION"
       },
+      "floorCommitted": "2026-06-16T16:55:17-07:00",
       "atMinimum3": {
         "tag": "mobile-android-v0.0.14",
         "sha": "0ed63216c6f2ae2404357ac3d869a8d3b9766e08",
@@ -2291,6 +2310,7 @@
         "peerMinimum": 2,
         "protocolConstant": "MOBILE_PROTOCOL_VERSION"
       },
+      "atMinimum3Committed": "2026-06-16T16:55:17-07:00",
       "inspected": [
         {
           "tag": "mobile-android-v0.0.14",
