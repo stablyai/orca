@@ -189,9 +189,12 @@ export class RelayAuthCoordinator {
       if (!context || !context.relayEntitled) {
         this.cancelLinger()
         this.retry.reset()
-        // Why only the null case: readContext throws on transient failures and
-        // returns null solely when the cloud session is gone (absent, or cleared
-        // by a 401). A present-but-unentitled context is still a signed-in
+        // Why only the null case: null must mean the cloud session is gone (absent, or cleared
+        // by a 401), and every other read outcome must throw so it lands in auth_unavailable.
+        // That is a contract readRelayAuthContext owes this branch, not something this branch
+        // can verify — it held for a refresh failure but not for a session file the process
+        // could not read, which spent SIGNED_OUT on transient I/O until relay-auth-context.ts
+        // started throwing for it. A present-but-unentitled context is still a signed-in
         // desktop, and "sign in to reconnect" would be wrong advice for it.
         this.invalidateOwnership(context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
         this.publish('offline', context ? 'not_entitled' : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
