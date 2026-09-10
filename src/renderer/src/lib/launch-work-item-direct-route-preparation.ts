@@ -10,7 +10,7 @@ import {
   type AgentLaunchRoute,
   type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import {
   buildDirectWorkItemStartup,
@@ -97,7 +97,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
       agent: effectiveAgent,
       settings: args.settings,
       executionHostId: getExecutionHostIdForWorktree(args.latestStore, args.worktreeId),
-      hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
+      hostCapabilities: await ensureLocalRuntimeCapabilities(),
       workspaceKind: 'git-worktree',
       projectRuntime: getLocalProjectExecutionRuntimeContext(
         args.latestStore,
