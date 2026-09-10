@@ -96,7 +96,9 @@ describe('nativeChatModelPillLabel', () => {
 
   it('falls back to the raw id when the list no longer offers it', () => {
     // A discovered list can drop an id the record still tracks; showing the id beats
-    // showing "Model" while a real model is running.
+    // showing "Model" while a real model is running. Not a hand-fed shape: this is
+    // exactly what the builder emits for a reported-but-unlisted model — the test
+    // above drives the same descriptor through `buildNativeChatSessionOptionSnapshot`.
     expect(nativeChatModelPillLabel(modelDescriptor('reported', 'grok-build'))).toBe('grok-build')
   })
 })

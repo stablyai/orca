@@ -231,8 +231,12 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const listedModel = models.find((candidate) => candidate.id === effectiveModelId)
   // Why: an id the picker cannot offer is still nameable when the agent itself reported
   // it — a custom model, or one newer than this catalog, is what the session is actually
-  // running. Only an unconfirmed id (a launch flag, a typed value) is withheld, so the
-  // pill never echoes back input no agent has stood behind.
+  // running. Only an unconfirmed id (a launch flag lands `applied`, a typed pick
+  // `dispatched`) is withheld, so the pill never echoes back input no agent stood behind.
+  // `reported` proves only that we read the value off the agent, not that the agent
+  // acknowledged a write of ours: the PTY path omits `confirmed` entirely, which makes
+  // every scraped value `reported`. That is the right reading for a header scrape — the
+  // CLI renders what it is running — but it is not an acknowledgement.
   const nameableModelId =
     listedModel || modelTracked?.source === 'reported' ? effectiveModelId : null
   const modelAction = actionForApply(catalog.modelApply, modelTracked, mode, liveTransport)

@@ -97,6 +97,11 @@ describe('structured agent session options', () => {
       { models: [], current: { model: 'gpt-5.9-secret' } }
     )
 
+    // Codex's reader emits no `confirmed` ids, so even a model the thread genuinely runs
+    // records as `dispatched`, not `reported` — which is why the name stays withheld here
+    // while the equivalent Claude case is named. Pinned so that when the reader starts
+    // confirming, this reddens and the name can be turned on deliberately.
+    expect(state.record.model).toEqual({ value: 'gpt-5.9-secret', source: 'dispatched' })
     const snapshot = structuredAgentSessionOptionSnapshot(state)
     expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
     const model = snapshot[0]
