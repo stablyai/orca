@@ -1,6 +1,7 @@
 import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration-compatibility-evidence'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { resolveCallerPrincipal } from '../caller-principal'
 import type { RunRow } from '../../../../orchestration/types'
 import type {
   OrcaRuntimeService,
@@ -11,6 +12,8 @@ export type RunScopeParams = {
   runId?: string
   callerTerminalHandle?: string
   callerPaneKey?: string
+  callerAgentSessionId?: string
+  callerRuntimeFence?: number
   requireCurrentConsumer: boolean
   legacyCoordinatorRunId?: string
   // Why: the caller's declared handle is a user param; this is the attested one to check it against.
@@ -97,18 +100,24 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
       orchestrationSkillRecoveryData()
     )
   }
-  assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence)
+  // Why: attestation must stay ahead of the legacy early-return; the bindability throw follows it.
+  const caller = resolveCallerPrincipal(runtime, {
+    from: params.callerTerminalHandle,
+    paneKey: params.callerPaneKey,
+    agentSessionId: params.callerAgentSessionId,
+    runtimeFence: params.callerRuntimeFence,
+    evidence: params.callerEvidence
+  })
   if (explicit && params.legacyCoordinatorRunId === explicit.id) {
     return explicit
   }
-  const paneKey = params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle)
-  if (!paneKey) {
+  if (!caller) {
     throw new OrchestrationError(
       'stable_pane_required',
       'The coordinator terminal has no stable pane identity.'
     )
   }
-  const current = db.getCurrentRunForPane(paneKey)
+  const current = db.getCurrentRunForPrincipal(caller.principalId)
   if (!current) {
     if (explicit) {
       throw new OrchestrationError(
