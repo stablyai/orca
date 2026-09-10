@@ -9,7 +9,8 @@ import {
   cancelClaudeTurn,
   stopClaudeBackgroundTasks
 } from './claude-structured-control-actions'
-import { dispatchClaudeTurn } from './claude-structured-dispatch'
+import { DISPATCH_ACK_TIMEOUT_MS } from './claude-structured-dispatch'
+import { ClaudeConversationNaming } from './claude-structured-conversation-naming'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
@@ -40,8 +41,6 @@ export type {
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
 
-const DISPATCH_ACK_TIMEOUT_MS = 10_000
-
 function backgroundTaskState(session: ClaudeSession): AgentSessionBackgroundTaskState | null {
   const state = session.backgroundTasks.state
   return state ? { ...state, supportsTaskStop: true } : null
@@ -49,6 +48,7 @@ function backgroundTaskState(session: ClaudeSession): AgentSessionBackgroundTask
 
 export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly compactions = new StructuredSessionCompaction()
+  private readonly naming = new ClaudeConversationNaming()
   private readonly sessions = new Map<string, ClaudeSession>()
   private readonly acquisitions = new ClaudeAcquisitionRegistry()
   private readonly exits = new Map<string, ClaudeSessionExit>()
@@ -219,11 +219,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
-    dispatchClaudeTurn(
-      this.session(input.sessionId),
-      input,
-      this.deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
-    )
+    this.naming.dispatchTurn(this.deps, this.session(input.sessionId), input)
+
+  /** Resolves once every naming attempt started so far has settled. */
+  drainConversationNaming = (): Promise<void> => this.naming.drain()
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
     compactClaudeSession(
