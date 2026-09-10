@@ -50,6 +50,11 @@ export type SyntheticSession = {
   /** Rows of `text` to write; one session with many rows is one hit. */
   rows?: number
   role?: TranscriptMessageRole
+  /**
+   * Written into `tool_text` alongside `text`, which is the one row shape the
+   * conversation scope has to exclude while the `all` scope keeps it.
+   */
+  toolText?: string
   agent?: string
   updatedAt?: string
   messageCount?: number
@@ -67,6 +72,7 @@ export function addSyntheticSession(db: SyncDatabase, session: SyntheticSession)
     text = 'needle',
     rows = 1,
     role = 'user',
+    toolText = '',
     agent = 'claude',
     updatedAt = `2026-09-${String((id % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
     messageCount = rows,
@@ -90,17 +96,10 @@ export function addSyntheticSession(db: SyncDatabase, session: SyntheticSession)
     )
     const user = role === 'user' ? text : ''
     const assistant = role === 'assistant' ? text : ''
-    const tool = role === 'tool' ? text : ''
+    const tool = role === 'tool' ? `${text} ${toolText}`.trim() : toolText
     db.prepare(
       'INSERT INTO messages_fts(rowid,user_text,assistant_text,tool_text,identifiers) VALUES (?,?,?,?,?)'
-    ).run(messageId, user, assistant, tool, identifierShadowText(text))
-    if (role !== 'tool') {
-      db.prepare('INSERT INTO conversation_fts(rowid,user_text,assistant_text) VALUES (?,?,?)').run(
-        messageId,
-        user,
-        assistant
-      )
-    }
+    ).run(messageId, user, assistant, tool, identifierShadowText(`${text} ${toolText}`))
   }
 }
 

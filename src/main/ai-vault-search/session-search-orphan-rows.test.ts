@@ -45,11 +45,6 @@ function plantOrphans(db: SyncDatabase): number[] {
     db.prepare(
       'INSERT INTO messages_fts(rowid,user_text,assistant_text,tool_text,identifiers) VALUES (?,?,?,?,?)'
     ).run(rowid, ORPHAN_TEXT, '', '', identifierShadowText(ORPHAN_TEXT))
-    db.prepare('INSERT INTO conversation_fts(rowid,user_text,assistant_text) VALUES (?,?,?)').run(
-      rowid,
-      ORPHAN_TEXT,
-      ''
-    )
     rowids.push(rowid)
   }
   return rowids
@@ -98,8 +93,8 @@ it('never repairs a term onto a spelling only orphaned rows carry', async () => 
 it('snippets nothing for an orphaned row, even asked for it by rowid', async () => {
   const { harness: open, rowids } = await withOrphans()
   const plan = planSessionSearchQuery('marmoset')
-  for (const table of ['messages_fts', 'conversation_fts'] as const) {
-    expect(sessionSearchSnippet(open.db, table, rowids[0]!, plan)).toEqual({
+  for (const scope of ['all', 'conversation'] as const) {
+    expect(sessionSearchSnippet(open.db, scope, rowids[0]!, plan)).toEqual({
       text: '',
       truncated: false
     })

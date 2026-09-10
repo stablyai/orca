@@ -12,6 +12,7 @@ import {
   type SessionSearchHit,
   type SessionSearchRequest,
   type SessionSearchResponse,
+  type SessionSearchScope,
   type SessionSearchSourcePresence
 } from './session-search-engine-types'
 import { readIndexGeneration } from './session-search-index-generation'
@@ -29,7 +30,6 @@ import {
 import { planSessionSearchQuery } from './session-search-query-planner'
 import { logSessionSearchQuery } from './session-search-query-log'
 import {
-  ftsTableFor,
   SessionSearchRetrieval,
   type RetrievalScope,
   type Retrieved
@@ -149,7 +149,7 @@ export class SessionSearchEngine {
 
     const limit = resolveSessionSearchLimit(request.limit)
     const page = ranked.slice(offset, offset + limit)
-    const hits = this.hits(page, ftsTableFor(scope), retrieved)
+    const hits = this.hits(page, scope, retrieved)
     const hasMore = ranked.length > offset + limit
     const response: SessionSearchResponse = {
       hits,
@@ -264,26 +264,26 @@ export class SessionSearchEngine {
   /** Snippets and source presence are paid for by the page, never by the list. */
   private hits(
     page: readonly RankedSession[],
-    table: 'messages_fts' | 'conversation_fts',
+    scope: SessionSearchScope,
     retrieved: Retrieved | null
   ): SessionSearchHit[] {
     const presence = sessionSourcePresence(
       this.db,
       page.map((entry) => entry.session.id)
     )
-    return page.map((entry) => this.hit(entry, table, retrieved, presence))
+    return page.map((entry) => this.hit(entry, scope, retrieved, presence))
   }
 
   private hit(
     entry: RankedSession,
-    table: 'messages_fts' | 'conversation_fts',
+    scope: SessionSearchScope,
     retrieved: Retrieved | null,
     presence: ReadonlyMap<number, SessionSearchSourcePresence>
   ): SessionSearchHit {
     const { session, message } = entry
     const snippet =
       message && retrieved
-        ? sessionSearchSnippet(this.db, table, message.rowid, retrieved.plan)
+        ? sessionSearchSnippet(this.db, scope, message.rowid, retrieved.plan)
         : EMPTY_SNIPPET
     return {
       ...sessionFields(session),

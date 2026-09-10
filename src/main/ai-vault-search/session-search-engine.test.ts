@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { SESSION_SEARCH_QUERY_MAX_LENGTH } from './session-search-engine-types'
 import type { SessionSearchRequest, SessionSearchResponse } from './session-search-engine-types'
+import { planSessionSearchQuery } from './session-search-query-planner'
+import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
+import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'
 import {
   addSyntheticSession,
   markFork,
@@ -129,6 +132,60 @@ describe('scope picks the corpus and never switches it', () => {
     // The identifier shadow column lives in messages_fts alone.
     expect(ids(engine.search({ query: 'terminal path' }))).toEqual(['1'])
     expect(engine.search({ query: 'terminal path', scope: 'conversation' }).hits).toEqual([])
+  })
+})
+
+describe('the conversation scope is a column filter, and it binds the whole query', () => {
+  it('refuses an AND whose second term lives only in tool output', async () => {
+    // The filter binds to the expression it prefixes. `{cols}: (a AND b)`
+    // filters both terms; `{cols}: a AND b` filters only `a` and searches tool
+    // output for the rest, which is a conversation search answering from a
+    // column it promised not to read.
+    const { db, engine } = await open('ss-engine-scope-binding')
+    addSyntheticSession(db, { id: 1, text: 'alpha gamma beta' })
+    addSyntheticSession(db, { id: 2, text: 'alpha gamma', toolText: 'beta' })
+    // Quoted, so the query is literal; not adjacent, so the phrase rung misses
+    // and the AND rung is the one that answers.
+    const query = '"alpha" beta'
+
+    const wide = engine.search({ query, scope: 'all' })
+    expect(wide.planner.route).toBe('and')
+    expect(ids(wide).sort()).toEqual(['1', '2'])
+
+    const narrowed = engine.search({ query, scope: 'conversation' })
+    expect(narrowed.planner.route).toBe('and')
+    expect(ids(narrowed)).toEqual(['1'])
+  })
+
+  it('ranks a conversation hit down for tool output it will not show', async () => {
+    // The one behavioural difference the column filter carries, pinned rather
+    // than wished away. FTS5's bm25 normalises by the whole row's length and
+    // has no per-column length, so two rows with identical prose do not score
+    // identically when one of them also holds tool output. A dedicated
+    // two-column table scored them the same. The rowid set is unchanged, which
+    // is what the decision was measured on; the order within it can move.
+    const { db, engine } = await open('ss-engine-scope-weights')
+    addSyntheticSession(db, { id: 1, text: 'harbor pilot' })
+    addSyntheticSession(db, { id: 2, text: 'harbor pilot', toolText: 'unrelated '.repeat(40) })
+    const narrowed = engine.search({ query: 'harbor', scope: 'conversation' })
+    expect(ids(narrowed)).toEqual(['1', '2'])
+    expect(narrowed.hits[0]!.score).toBeGreaterThan(narrowed.hits[1]!.score)
+  })
+
+  it('never snippets a conversation hit out of tool output', async () => {
+    const { db, engine } = await open('ss-engine-scope-snippet')
+    addSyntheticSession(db, { id: 1, text: 'harbor pilot', toolText: 'harbor tool output line' })
+    const [hit] = engine.search({ query: 'harbor', scope: 'conversation' }).hits
+    expect(hit?.evidence?.snippet).toContain('pilot')
+    expect(hit?.evidence?.snippet).not.toContain('output')
+    // And asked for a tool-only row directly, it has nothing to show.
+    addSyntheticSession(db, { id: 2, text: 'harbor tool output line', role: 'tool' })
+    const rowid = Number(
+      (db.prepare('SELECT max(id) AS id FROM messages').get() as { id: number }).id
+    )
+    const plan = planSessionSearchQuery('harbor')
+    expect(sessionSearchSnippet(db, 'conversation', rowid, plan)).toEqual(EMPTY_SNIPPET)
+    expect(sessionSearchSnippet(db, 'all', rowid, plan).text).toContain('output')
   })
 })
 
@@ -295,23 +352,22 @@ describe('the engine carries its own schema and puts it back', () => {
   })
 
   it('names the feature it cannot serve when the vocabulary has no source left', async () => {
-    // What an index being rebuilt by another handle looks like from here: the
+    // What an index being rebuilt by another handle looks like from here. The
     // vocabulary can be created over a missing `messages_fts` and every query
-    // against it then fails, so the engine reads the source, not the view.
-    // The conversation scope has its own table and keeps answering.
+    // against it then fails, so the probe reads the source, not the view.
+    //
+    // With one FTS table there is no scope left to answer from, so this is now
+    // the boundary of the degrade: the engine names the feature and the search
+    // fails loudly on the table it cannot read, rather than returning an empty
+    // page that looks like an answer.
     const { db, engine } = await open('ss-engine-vocab-source-gone')
     addSyntheticSession(db, { id: 1, text: 'coalesces here now', role: 'user' })
-    addSyntheticSession(db, { id: 2, text: 'coalesces again here', role: 'user' })
     db.exec('DROP TABLE messages_vocab; DROP TABLE messages_fts')
 
-    const result = engine.search({ query: 'coalescs', scope: 'conversation' })
-    expect(result.unavailable).toEqual(['typo-repair'])
-    expect(result.planner.route).toBe('or')
-    expect(result.hits).toEqual([])
-    expect(ids(engine.search({ query: 'coalesces', scope: 'conversation' })).sort()).toEqual([
-      '1',
-      '2'
-    ])
+    expect(ensureSessionSearchQuerySchema(db)).toEqual(['typo-repair'])
+    for (const scope of ['all', 'conversation'] as const) {
+      expect(() => engine.search({ query: 'coalesces', scope })).toThrow(/no such (fts5 )?table/i)
+    }
   })
 
   it('picks the feature back up when the source comes back', async () => {
@@ -324,9 +380,7 @@ describe('the engine carries its own schema and puts it back', () => {
       }
     ).sql
     db.exec('DROP TABLE messages_vocab; DROP TABLE messages_fts')
-    expect(engine.search({ query: 'coalescs', scope: 'conversation' }).unavailable).toEqual([
-      'typo-repair'
-    ])
+    expect(ensureSessionSearchQuerySchema(db)).toEqual(['typo-repair'])
 
     db.exec(fts)
     // Two, because the vocabulary only offers a term at least two rows carry.

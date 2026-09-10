@@ -20,7 +20,8 @@ export const SESSION_SEARCH_SNIPPET_MARK_CLOSE = ']]'
 /**
  * Which corpus answers the query.
  *
- * - `conversation`: user and assistant turns only, from `conversation_fts`.
+ * - `conversation`: user and assistant turns only, as a column filter over
+ *   `messages_fts` (see `scopedExpression`).
  * - `all`: those turns plus tool calls and tool output, and the identifier
  *   shadow column, from `messages_fts`.
  *

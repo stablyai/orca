@@ -18,7 +18,13 @@ const RECENT_SCAN_FACTOR = 20
 
 // Measured: user 3 / assistant 2 / tool 1 / identifiers 1 (MRR 0.503 vs 0.475 flat).
 const FULL_WEIGHTS = '3.0, 2.0, 1.0, 1.0'
-const CONVERSATION_WEIGHTS = '3.0, 2.0'
+// The conversation scope zeroes the two columns its filter already excludes.
+// Measured, and stated because it is easy to over-read: these zeros change no
+// score. FTS5's bm25 sums over the columns the query matched, and the filter
+// has already kept the match out of those two, so the same rows come back with
+// `1.0, 1.0` here. They are a statement of what the scope means, not the fence
+// that enforces it — `scopedExpression` is the fence.
+const CONVERSATION_WEIGHTS = '3.0, 2.0, 0.0, 0.0'
 
 export type RetrievalScope = {
   scope: SessionSearchScope
@@ -46,8 +52,27 @@ export type Retrieved = {
   repairedTerms?: string[]
 }
 
-export function ftsTableFor(scope: SessionSearchScope): 'messages_fts' | 'conversation_fts' {
-  return scope === 'all' ? 'messages_fts' : 'conversation_fts'
+/**
+ * What a scope is, now that there is one FTS table.
+ *
+ * `conversation` used to be a second table holding a copy of the two prose
+ * columns. It is a column filter instead: PR 2 measured the filter at
+ * 1.16-1.36x the p95 of the dedicated table on a 105 MB corpus, against a 2x
+ * bar, and the table cost a tenth of the index to maintain.
+ *
+ * The filter binds to the whole expression, so it is applied here and nowhere
+ * else — `{cols}: (a AND b)` filters both terms, while a prefix pasted in front
+ * of a bare `a AND b` would filter only `a` and quietly search tool output for
+ * the rest.
+ */
+const CONVERSATION_COLUMNS = '{user_text assistant_text}'
+
+export function scopedWeights(scope: SessionSearchScope): string {
+  return scope === 'all' ? FULL_WEIGHTS : CONVERSATION_WEIGHTS
+}
+
+export function scopedExpression(scope: SessionSearchScope, expression: string): string {
+  return scope === 'all' ? expression : `${CONVERSATION_COLUMNS}: (${expression})`
 }
 
 /** The FTS half of a search: the route ladder and the SQL each rung runs. */
@@ -193,12 +218,11 @@ export class SessionSearchRetrieval {
     const eligible = filter.conditions.length
       ? ` AND m.session_row_id IN (SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')})`
       : ''
-    const table = ftsTableFor(scope.scope)
-    const weights = scope.scope === 'all' ? FULL_WEIGHTS : CONVERSATION_WEIGHTS
-    const matched = `SELECT ${table}.rowid AS rowid, -bm25(${table}, ${weights}) AS score,
+    const matched = `SELECT messages_fts.rowid AS rowid,
+      -bm25(messages_fts, ${scopedWeights(scope.scope)}) AS score,
       m.session_row_id, m.role, m.ts, s.updated_at
-      FROM ${table} JOIN messages m ON m.id = ${table}.rowid
-      JOIN sessions s ON s.id = m.session_row_id WHERE ${table} MATCH ?${eligible}`
+      FROM messages_fts JOIN messages m ON m.id = messages_fts.rowid
+      JOIN sessions s ON s.id = m.session_row_id WHERE messages_fts MATCH ?${eligible}`
     // Why: collapse to one row per session BEFORE the candidate limit, on both
     // sort orders, so a single long session cannot occupy the whole page.
     // `max(score)` makes SQLite pick that session's best row for the bare columns.
@@ -210,6 +234,8 @@ export class SessionSearchRetrieval {
     const sql = `WITH matched AS MATERIALIZED (${matched})
       SELECT rowid, max(score) AS score, session_row_id, role, ts FROM matched
       GROUP BY session_row_id ORDER BY ${order} LIMIT ${candidateLimit}`
-    return this.db.prepare(sql).all(expression, ...filter.values) as MessageRow[]
+    return this.db
+      .prepare(sql)
+      .all(scopedExpression(scope.scope, expression), ...filter.values) as MessageRow[]
   }
 }
