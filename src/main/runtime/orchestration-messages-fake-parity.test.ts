@@ -16,6 +16,11 @@ type PointerStore = {
   }): { id: string }
   stageMailboxPointerEnter(ids: string[], target: PointerTarget): boolean
   markMailboxPointerWriteAttempted(ids: string[], target: PointerTarget): boolean
+  getMailboxPointerReservationsForPty(ptyId: string): {
+    id: string
+    read: number
+    pointer_enter_pending: number
+  }[]
   getUndeliveredUnreadMessages(
     toHandle: string,
     types?: MessageType[],
@@ -33,6 +38,30 @@ const STORES: [string, () => PointerStore][] = [
 describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) => {
   const rival = { ptyId: 'pty-rival', processIncarnation: 'rival:1' }
   const mine = { ptyId: 'pty-mine', processIncarnation: 'mine:1' }
+
+  // Why: recovery reads reservations from this query, so a fake that answers differently makes
+  // every fake-driven runtime test blind to the mechanism it is supposed to exercise.
+  it("reports one PTY's reservations, every phase, including already-read rows", () => {
+    const store = createStore()
+    const message = store.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_sender',
+      to: 'term_mine',
+      subject: 'mail'
+    })
+    expect(store.stageMailboxPointerEnter([message.id], mine)).toBe(true)
+    expect(
+      store.getMailboxPointerReservationsForPty(mine.ptyId).map((row) => ({
+        id: row.id,
+        pending: row.pointer_enter_pending
+      }))
+    ).toEqual([{ id: message.id, pending: 1 }])
+    expect(store.getMailboxPointerReservationsForPty(rival.ptyId)).toEqual([])
+    expect(store.markMailboxPointerWriteAttempted([message.id], mine)).toBe(true)
+    expect(
+      store.getMailboxPointerReservationsForPty(mine.ptyId).map((row) => row.pointer_enter_pending)
+    ).toEqual([2])
+  })
 
   it('refuses a claim another flight already holds', () => {
     const store = createStore()

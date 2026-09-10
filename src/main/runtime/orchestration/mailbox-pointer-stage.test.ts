@@ -5,6 +5,7 @@ import { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
 import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 import {
   WRITE_ACCEPTED,
+  writeUnverifiable,
   writeRefused,
   type WriteSettlement
 } from '../../../shared/pty-write-settlement'
@@ -19,7 +20,10 @@ const LEAF = {
   lastOscTitle: null
 }
 
-function pointerDeps(db: OrchestrationDb, writePty: () => WriteSettlement) {
+function pointerDeps(
+  db: OrchestrationDb,
+  writePty: () => WriteSettlement | Promise<WriteSettlement>
+) {
   return {
     mailboxOwner: { resolve: () => 'run:run-1' },
     deliveryTarget: { resolveTerminalHandle: () => 'term-1', deferForAbsenceProbe: () => false },
@@ -57,6 +61,200 @@ function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState)
 }
 
 describe('mailbox pointer staging watermark', () => {
+  it('reconciles an uncertain Enter from working evidence retained by its flight', async () => {
+    vi.useFakeTimers()
+    const db = new OrchestrationDb(':memory:')
+    let finish!: (settlement: WriteSettlement) => void
+    const writePty = vi
+      .fn<() => WriteSettlement | Promise<WriteSettlement>>()
+      .mockReturnValueOnce(WRITE_ACCEPTED)
+      .mockImplementationOnce(
+        () =>
+          new Promise<WriteSettlement>((resolve) => {
+            finish = resolve
+          })
+      )
+    const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)
+    try {
+      const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
+      delivery.deliver(LEAF, { mailboxHandle: 'run:run-1' })
+      await vi.advanceTimersByTimeAsync(1000)
+      delivery.observeAgentWorking('pty-1')
+      expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(3)
+      finish(writeUnverifiable('transport_settlement_lost', true))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(db.getMessageById(message.id)).toMatchObject({
+        pointer_enter_pending: 0,
+        read: 0,
+        delivered_at: expect.any(String)
+      })
+      expect(writePty).toHaveBeenCalledTimes(2)
+    } finally {
+      delivery.retirePty('pty-1')
+      db.close()
+      vi.useRealTimers()
+    }
+  })
+  it.each(['accepted', 'unverifiable'] as const)(
+    'fences %s Enter settlement after database replacement',
+    async (outcome) => {
+      vi.useFakeTimers()
+      const original = new OrchestrationDb(':memory:')
+      const replacement = new OrchestrationDb(':memory:')
+      let current = original
+      let finish!: (settlement: WriteSettlement) => void
+      const writePty = vi
+        .fn<() => WriteSettlement | Promise<WriteSettlement>>()
+        .mockReturnValueOnce(WRITE_ACCEPTED)
+        .mockImplementationOnce(
+          () =>
+            new Promise<WriteSettlement>((resolve) => {
+              finish = resolve
+            })
+        )
+      const delivery = new OrchestrationMailboxPointerDelivery({
+        ...pointerDeps(original, writePty),
+        getDb: () => current
+      } as never)
+      try {
+        const old = original.insertMessage({ from: 'a', to: 'run:run-1', subject: 'old' })
+        const message = replacement.insertMessage({ from: 'a', to: 'run:run-1', subject: 'new' })
+        replacement.stageMailboxPointerEnter([message.id], {
+          ptyId: 'pty-1',
+          processIncarnation: 'inc-1'
+        })
+        delivery.deliver(LEAF, { mailboxHandle: 'run:run-1' })
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(original.getMessageById(old.id)?.pointer_enter_pending).toBe(3)
+        delivery.observeAgentWorking('pty-1')
+        current = replacement
+        const prepare = vi.spyOn(replacement.db, 'prepare')
+        finish(
+          outcome === 'accepted'
+            ? WRITE_ACCEPTED
+            : writeUnverifiable('transport_settlement_lost', true)
+        )
+        await vi.advanceTimersByTimeAsync(0)
+        expect(prepare).not.toHaveBeenCalled()
+        prepare.mockRestore()
+        delivery.observeAgentWorking('pty-1')
+        expect(replacement.getMessageById(message.id)?.pointer_enter_pending).toBe(0)
+        expect(writePty).toHaveBeenCalledTimes(2)
+      } finally {
+        delivery.retirePty('pty-1')
+        original.close()
+        replacement.close()
+        vi.useRealTimers()
+      }
+    }
+  )
+  it('reconciles working observed during an uncertain paste without another title', async () => {
+    const db = new OrchestrationDb(':memory:')
+    let finish!: (settlement: WriteSettlement) => void
+    const writePty = vi.fn(
+      () =>
+        new Promise<WriteSettlement>((resolve) => {
+          finish = resolve
+        })
+    )
+    const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)
+    try {
+      const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'first' })
+      delivery.deliver(LEAF, { mailboxHandle: 'run:run-1' })
+      delivery.observeAgentWorking('pty-1')
+      expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(2)
+      finish(writeUnverifiable('transport_settlement_lost', true))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(db.getMessageById(message.id)).toMatchObject({
+        pointer_enter_pending: 0,
+        read: 0,
+        delivered_at: expect.any(String)
+      })
+      expect(writePty).toHaveBeenCalledTimes(1)
+      delivery.observeAgentWorking('pty-1')
+      const prepare = vi.spyOn(db.db, 'prepare')
+      for (let i = 0; i < 5000; i++) {
+        delivery.observeAgentWorking(`inactive-${i}`)
+      }
+      // A pane holding no reservation reads the partial index and must never write.
+      expect(
+        prepare.mock.calls
+          .map(([sql]) => String(sql).trimStart().toUpperCase())
+          .filter((sql) => !sql.startsWith('SELECT'))
+      ).toEqual([])
+    } finally {
+      delivery.retirePty('pty-1')
+      db.close()
+    }
+  })
+
+  it('recovers a reservation created after an earlier same-status observation', () => {
+    const db = new OrchestrationDb(':memory:')
+    const delivery = new OrchestrationMailboxPointerDelivery(
+      pointerDeps(db, () => WRITE_ACCEPTED) as never
+    )
+    try {
+      delivery.observeAgentWorking('pty-1')
+      const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
+      db.stageMailboxPointerEnter([message.id], { ptyId: 'pty-1', processIncarnation: 'inc-1' })
+      delivery.observeAgentWorking('pty-1')
+      expect(db.getMessageById(message.id)).toMatchObject({
+        pointer_enter_pending: 0,
+        delivered_at: null,
+        read: 0
+      })
+    } finally {
+      db.close()
+    }
+  })
+
+  it.each(['accepted', 'unverifiable'] as const)(
+    'retires a %s paste flight across database replacement',
+    async (outcome) => {
+      const original = new OrchestrationDb(':memory:')
+      const replacement = new OrchestrationDb(':memory:')
+      let current = original
+      let finish!: (settlement: WriteSettlement) => void
+      const writePty = vi.fn(
+        () =>
+          new Promise<WriteSettlement>((resolve) => {
+            finish = resolve
+          })
+      )
+      const delivery = new OrchestrationMailboxPointerDelivery({
+        ...pointerDeps(original, writePty),
+        getDb: () => current
+      } as never)
+      try {
+        original.insertMessage({ from: 'a', to: 'run:run-1', subject: 'old' })
+        const message = replacement.insertMessage({ from: 'a', to: 'run:run-1', subject: 'new' })
+        replacement.stageMailboxPointerEnter([message.id], {
+          ptyId: 'pty-1',
+          processIncarnation: 'inc-1'
+        })
+        delivery.deliver(LEAF, { mailboxHandle: 'run:run-1' })
+        delivery.observeAgentWorking('pty-1')
+        current = replacement
+        const prepare = vi.spyOn(replacement.db, 'prepare')
+        finish(
+          outcome === 'accepted'
+            ? WRITE_ACCEPTED
+            : writeUnverifiable('transport_settlement_lost', true)
+        )
+        await new Promise((resolve) => setImmediate(resolve))
+        expect(prepare).not.toHaveBeenCalled()
+        prepare.mockRestore()
+        expect(replacement.getMessageById(message.id)?.pointer_enter_pending).toBe(1)
+        delivery.observeAgentWorking('pty-1')
+        expect(replacement.getMessageById(message.id)?.pointer_enter_pending).toBe(0)
+        expect(writePty).toHaveBeenCalledTimes(1)
+      } finally {
+        delivery.retirePty('pty-1')
+        original.close()
+        replacement.close()
+      }
+    }
+  )
   it('leaves no watermark when the reservation claim is lost', () => {
     const db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({

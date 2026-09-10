@@ -11,6 +11,37 @@ export type MailboxPointerReservationTarget = {
   processIncarnation: string
 }
 
+export type MailboxPointerReservation = {
+  id: string
+  read: number
+  pointer_pty_id: string
+  pointer_process_incarnation: string
+  pointer_enter_pending: number
+  to_handle: string
+}
+
+const RESERVATION_COLUMNS =
+  'id, read, pointer_pty_id, pointer_process_incarnation, pointer_enter_pending, to_handle'
+
+// Served by idx_messages_pending_pointer_pty; named columns keep the statement cacheable.
+export function getMailboxPointerReservationsForPty(
+  this: OrchestrationDb,
+  ptyId: string
+): MailboxPointerReservation[] {
+  return this.db
+    .prepare(
+      `SELECT ${RESERVATION_COLUMNS} FROM messages
+       WHERE pointer_pty_id = ? AND pointer_enter_pending > 0`
+    )
+    .all(ptyId) as MailboxPointerReservation[]
+}
+
+export function getMailboxPointerReservations(this: OrchestrationDb): MailboxPointerReservation[] {
+  return this.db
+    .prepare(`SELECT ${RESERVATION_COLUMNS} FROM messages WHERE pointer_enter_pending > 0`)
+    .all() as MailboxPointerReservation[]
+}
+
 export function getPendingMailboxPointerMessages(
   this: OrchestrationDb,
   mailboxHandle: string
@@ -154,22 +185,6 @@ export function releaseMailboxPointerEnter(
   }))
 }
 
-export function releasePendingMailboxPointerForPty(this: OrchestrationDb, ptyId: string): void {
-  this.db
-    .prepare(
-      `UPDATE messages
-       SET delivered_at = CASE
-             WHEN read = 0 AND pointer_enter_pending = ? THEN NULL
-             WHEN read = 0 THEN COALESCE(delivered_at, datetime('now'))
-             ELSE delivered_at
-           END,
-           pointer_enter_pending = 0, pointer_pty_id = NULL,
-           pointer_process_incarnation = NULL
-       WHERE pointer_enter_pending > 0 AND pointer_pty_id = ?`
-    )
-    .run(MAILBOX_POINTER_RESERVED, ptyId)
-}
-
 function mutatePointerMessages(
   db: OrchestrationDb,
   ids: string[],
@@ -204,6 +219,8 @@ function mutatePointerMessages(
 }
 
 export type MailboxPointerEnterStateMethods = {
+  getMailboxPointerReservations: typeof getMailboxPointerReservations
+  getMailboxPointerReservationsForPty: typeof getMailboxPointerReservationsForPty
   getPendingMailboxPointerMessages: typeof getPendingMailboxPointerMessages
   getPendingMailboxPointerHandles: typeof getPendingMailboxPointerHandles
   stageMailboxPointerEnter: typeof stageMailboxPointerEnter
@@ -211,18 +228,18 @@ export type MailboxPointerEnterStateMethods = {
   markMailboxPointerEnterAttempted: typeof markMailboxPointerEnterAttempted
   settleMailboxPointerEnter: typeof settleMailboxPointerEnter
   releaseMailboxPointerEnter: typeof releaseMailboxPointerEnter
-  releasePendingMailboxPointerForPty: typeof releasePendingMailboxPointerForPty
 }
 
 export function attachMailboxPointerEnterState(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
+    getMailboxPointerReservations,
+    getMailboxPointerReservationsForPty,
     getPendingMailboxPointerMessages,
     getPendingMailboxPointerHandles,
     stageMailboxPointerEnter,
     markMailboxPointerWriteAttempted,
     markMailboxPointerEnterAttempted,
     settleMailboxPointerEnter,
-    releaseMailboxPointerEnter,
-    releasePendingMailboxPointerForPty
+    releaseMailboxPointerEnter
   })
 }

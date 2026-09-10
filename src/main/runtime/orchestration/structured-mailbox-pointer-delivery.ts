@@ -1,7 +1,7 @@
 /**
  * The pointer-delivery lane for workers that ARE a structured agent session.
  *
- * The PTY lane types the nudge into a live pane and reads the idle edge off the terminal title.
+ * The PTY lane types the nudge into a live pane and consumes the shared live agent-status edge.
  * Neither exists here, so this is a sibling of `OrchestrationMailboxPointerDelivery` rather than a
  * branch inside it: batch selection is literally shared (`selectOrchestrationPointerBatch`), and
  * everything below it is different — the nudge is a session turn, the idle edge is the journal,

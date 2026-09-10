@@ -153,6 +153,7 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     if (!this._orchestrationDb) {
       const dbPath = join(getAppEnvironment().getPath('userData'), 'orchestration.db')
       this._orchestrationDb = new OrchestrationDb(dbPath)
+      this.orchestrationMailboxPointerDelivery.attachDatabase(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
     }
@@ -163,6 +164,7 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     this.orchestrationFederation.resetForDatabaseChange()
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
+    this.orchestrationMailboxPointerDelivery.attachDatabase(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
   }

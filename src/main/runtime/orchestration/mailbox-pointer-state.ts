@@ -1,4 +1,5 @@
 import type { OrchestrationMailboxLeaf } from './mailbox-owner'
+import type { OrchestrationDb } from './db'
 
 export type OrchestrationMailboxDeliveryFlight = {
   enterTimer: ReturnType<typeof setTimeout> | null
@@ -6,6 +7,24 @@ export type OrchestrationMailboxDeliveryFlight = {
   submitEnter: (() => void) | null
   deferredUntilIdle: boolean
   idleObservedWhileDeferred: boolean
+  workingObserved?: boolean
+  reservation?: {
+    db: OrchestrationDb
+    connection: OrchestrationDb['db']
+    processIncarnation: string
+  }
+}
+
+export function getMailboxPointerFlightDb(
+  flight: OrchestrationMailboxDeliveryFlight,
+  getDb: () => OrchestrationDb | null
+): OrchestrationDb | null {
+  const db = getDb()
+  const owner = flight.reservation
+  // Connection identity is the fence: a swapped database invalidates every airborne reservation.
+  // No shipping path swaps it today — `setOrchestrationDb` is test-only — so this currently
+  // guards the test swap path and any future reconnect, not a reachable production case.
+  return !owner || (owner.db === db && owner.connection === db?.db) ? db : null
 }
 
 export type ParkedOrchestrationMailboxDelivery = {
@@ -14,6 +33,18 @@ export type ParkedOrchestrationMailboxDelivery = {
 }
 
 export class OrchestrationMailboxPointerState {
+  clear(): void {
+    for (const flight of this.flightsByPtyId.values()) {
+      if (flight.enterTimer !== null) {
+        clearTimeout(flight.enterTimer)
+      }
+    }
+    this.flightsByPtyId.clear()
+    this.parkedDeliveriesByPtyId.clear()
+    this.watermarkByMailbox.clear()
+    this.watermarkMailboxesByPtyId.clear()
+    this.parkedTypesByMailbox.clear()
+  }
   private readonly flightsByPtyId = new Map<string, OrchestrationMailboxDeliveryFlight>()
   private readonly parkedDeliveriesByPtyId = new Map<
     string,
@@ -28,6 +59,15 @@ export class OrchestrationMailboxPointerState {
 
   hasFlight(ptyId: string): boolean {
     return this.flightsByPtyId.has(ptyId)
+  }
+
+  observeWorkingFlight(ptyId: string): boolean {
+    const flight = this.flightsByPtyId.get(ptyId)
+    if (!flight) {
+      return false
+    }
+    flight.workingObserved = true
+    return true
   }
 
   beginFlight(ptyId: string): OrchestrationMailboxDeliveryFlight {

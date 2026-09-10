@@ -170,31 +170,6 @@ export class InMemoryOrchestrationMessages {
     this.clearMailboxPointerEnter(released)
   }
 
-  releasePendingMailboxPointerForPty(ptyId: string): void {
-    const reservedIds = new Set(
-      this.messages
-        .filter(
-          (message) => message.pointer_enter_pending === 1 && message.pointer_pty_id === ptyId
-        )
-        .map((message) => message.id)
-    )
-    const pendingIds = new Set(
-      this.messages
-        .filter(
-          (message) => (message.pointer_enter_pending ?? 0) > 0 && message.pointer_pty_id === ptyId
-        )
-        .map((message) => message.id)
-    )
-    for (const message of this.messages) {
-      if (reservedIds.has(message.id) && message.read === 0) {
-        message.delivered_at = null
-      } else if (pendingIds.has(message.id) && message.read === 0) {
-        message.delivered_at ??= '1970-01-01 00:00:00'
-      }
-    }
-    this.clearMailboxPointerEnter(pendingIds)
-  }
-
   setActiveCoordinatorRun(run: { coordinator_handle: string } | null): void {
     this.activeCoordinatorRun = run
   }
@@ -275,6 +250,43 @@ export class InMemoryOrchestrationMessages {
       }
     }
     this.clearMailboxPointerEnter(deliveredIds)
+  }
+
+  // Recovery fences on connection identity; the real OrchestrationDb exposes `.db`.
+  db = { connection: 'in-memory-fake' }
+
+  private reservations(ptyId?: string): {
+    id: string
+    read: number
+    pointer_pty_id: string
+    pointer_process_incarnation: string
+    pointer_enter_pending: number
+    to_handle: string
+  }[] {
+    return this.messages
+      .filter(
+        (message) =>
+          (message.pointer_enter_pending ?? 0) > 0 &&
+          (ptyId === undefined || message.pointer_pty_id === ptyId)
+      )
+      .map((message) => ({
+        id: message.id,
+        read: message.read,
+        pointer_pty_id: message.pointer_pty_id as string,
+        pointer_process_incarnation: message.pointer_process_incarnation as string,
+        pointer_enter_pending: message.pointer_enter_pending ?? 0,
+        to_handle: message.to_handle
+      }))
+  }
+
+  getMailboxPointerReservations(): ReturnType<InMemoryOrchestrationMessages['reservations']> {
+    return this.reservations()
+  }
+
+  getMailboxPointerReservationsForPty(
+    ptyId: string
+  ): ReturnType<InMemoryOrchestrationMessages['reservations']> {
+    return this.reservations(ptyId)
   }
 
   markAsUndelivered(ids: string[]): void {

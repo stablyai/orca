@@ -8,9 +8,10 @@ import {
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mailbox-owner'
-import type {
-  OrchestrationMailboxDeliveryFlight,
-  OrchestrationMailboxPointerState
+import {
+  getMailboxPointerFlightDb,
+  type OrchestrationMailboxDeliveryFlight,
+  type OrchestrationMailboxPointerState
 } from './mailbox-pointer-state'
 import type { WriteSettlement } from '../../../shared/pty-write-settlement'
 
@@ -56,6 +57,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
   let deferredUntilIdle = false
   let expectedPhase = MAILBOX_POINTER_WRITE_ATTEMPTED
   const messageIds = input.messages.map((message) => message.id)
+  const getDb = (): OrchestrationDb | null => getMailboxPointerFlightDb(input.flight, deps.getDb)
   const reservationTarget = {
     ptyId: input.ptyId,
     processIncarnation: input.expectedTarget.processIncarnation
@@ -67,7 +69,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
         clearAndRedrive = true
         return
       }
-      if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
+      if (!deps.state.isCurrentFlight(input.ptyId, input.flight) || !getDb()) {
         finalizeReservation = false
         return
       }
@@ -101,7 +103,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       } else {
         if (
           shouldReleaseOrchestrationPointer(
-            deps.getDb(),
+            getDb(),
             input.mailboxHandle,
             input.messages,
             deps.getMessageWaiters(input.mailboxHandle)
@@ -110,7 +112,7 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
           releaseWithoutRedrive = true
         } else {
           preserveAmbiguousDelivery = true
-          const db = deps.getDb()
+          const db = getDb()
           if (!db?.markMailboxPointerEnterAttempted(messageIds, reservationTarget)) {
             return
           }
@@ -141,17 +143,17 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
       }
       let released = false
       let rollbackPersisted = true
-      if (finalizeReservation) {
+      if (finalizeReservation && deps.state.isCurrentFlight(input.ptyId, input.flight)) {
         if (clearAndRedrive) {
           try {
-            deps.getDb()?.releaseMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
+            getDb()?.releaseMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
           } catch {
             // Runtime teardown can close the DB while this delayed submit is settling.
             rollbackPersisted = false
           }
         } else if (submitted || releaseWithoutRedrive) {
           try {
-            deps.getDb()?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
+            getDb()?.settleMailboxPointerEnter(messageIds, reservationTarget, [expectedPhase])
           } catch {
             // A surviving pending row is revalidated against live agent state after restart.
           }

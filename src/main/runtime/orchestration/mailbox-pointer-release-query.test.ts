@@ -6,20 +6,22 @@ import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 
 function assertTargetedRelease(db: OrchestrationDb): void {
+  const message = db.insertMessage({ from: 'sender', to: 'recipient', subject: 'plan probe' })
+  db.stageMailboxPointerEnter([message.id], { ptyId: 'absent-pty', processIncarnation: 'probe' })
   const prepare = vi.spyOn(db.db, 'prepare')
-  db.releasePendingMailboxPointerForPty('absent-pty')
-  const sql = prepare.mock.calls.find(([query]) => query.startsWith('UPDATE messages'))?.[0]
+  db.getMailboxPointerReservationsForPty('absent-pty')
+  const sql = prepare.mock.calls.find(([query]) => query.startsWith('SELECT'))?.[0]
   prepare.mockRestore()
   expect(sql).toBeDefined()
-  const plan = db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(1, 'absent-pty') as {
+  const plan = db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all('absent-pty') as {
     detail: string
   }[]
   expect(plan.some(({ detail }) => detail.includes('SCAN messages'))).toBe(false)
   expect(plan.some(({ detail }) => detail.includes('idx_messages_pending_pointer_pty'))).toBe(true)
 }
 
-describe('PTY mailbox reservation cleanup', () => {
-  it('uses a PTY lookup and preserves reservation settlement semantics', () => {
+describe('PTY mailbox reservation lookup', () => {
+  it("reads one PTY's reservations through the partial index, never a scan", () => {
     const db = new OrchestrationDb(':memory:')
     try {
       const seed = db.db.prepare(`INSERT INTO messages
@@ -37,21 +39,13 @@ describe('PTY mailbox reservation cleanup', () => {
       seed.run('other', 0, 1, 'other-pty', null)
       db.db.exec('COMMIT')
       assertTargetedRelease(db)
-      db.releasePendingMailboxPointerForPty('target')
-      const read = (id: string) => db.db.prepare('SELECT * FROM messages WHERE id = ?').get(id)
-      for (const id of ['reserved', 'written', 'entered', 'read']) {
-        expect(read(id)).toMatchObject({
-          pointer_enter_pending: 0,
-          pointer_pty_id: null,
-          pointer_process_incarnation: null
-        })
-      }
-      expect(read('reserved')).toMatchObject({ delivered_at: null, read: 0 })
-      expect(read('written')).toMatchObject({ delivered_at: expect.any(String), read: 0 })
-      expect(read('entered')).toMatchObject({ delivered_at: expect.any(String), read: 0 })
-      expect(read('read')).toMatchObject({ delivered_at: '2026-01-01 00:00:00', read: 1 })
-      expect(read('other')).toMatchObject({ pointer_enter_pending: 1, pointer_pty_id: 'other-pty' })
-      expect(read('history-0')).toMatchObject({ read: 1, delivered_at: null })
+      // Every phase for the PTY, already-read rows included, and nothing from another PTY.
+      expect(
+        db
+          .getMailboxPointerReservationsForPty('target')
+          .map((row) => row.id)
+          .sort()
+      ).toEqual(['entered', 'read', 'reserved', 'written'])
     } finally {
       db.close()
     }
