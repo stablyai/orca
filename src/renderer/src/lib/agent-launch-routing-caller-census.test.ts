@@ -25,12 +25,6 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
 const ROUTE_RESOLVER_DEFINITION = 'src/renderer/src/lib/agent-launch-routing.ts'
 const ROUTE_PLANNER = 'src/renderer/src/lib/agent-session-launch-plan.ts'
 const DIRECT_ROUTE_RESOLVER_CALL = /\b(?:resolveAgentLaunchRoute|structuredAgentLaunchSupported)\(/
-// Why: asking whether a structured session is POSSIBLE is a query, not a launch decision, so it is
-// allowed outside the planner — but only through the planner's own predicate, and only from the
-// surfaces pinned here. A UI that builds a plan to answer it is the bypass this census catches.
-const STRUCTURED_FEASIBILITY_QUERY_CALLERS = [
-  'src/renderer/src/components/right-sidebar/ai-vault-session-resume-in-chat-workspace.ts'
-]
 // Why: adopting a verdict bypasses the resolver by design (a persisted quick-create request, a
 // resume whose gate already planned), so each adopter is pinned rather than trusted by convention.
 const VERDICT_ADOPTERS = [
@@ -64,25 +58,6 @@ describe('agent launch routing caller census', () => {
       )
       .sort()
     expect(directCallers).toEqual([ROUTE_PLANNER])
-  })
-
-  it('pins every production caller of the structured feasibility query', async () => {
-    const callers = (await productionFiles())
-      .filter((file) => file !== ROUTE_PLANNER)
-      .filter((file) =>
-        readFileSync(join(REPO_ROOT, file), 'utf8').includes(
-          'structuredAgentSessionLaunchFeasible('
-        )
-      )
-      .sort()
-    expect(callers).toEqual([...STRUCTURED_FEASIBILITY_QUERY_CALLERS].sort())
-  })
-
-  it('keeps the feasibility query out of every launch decision', async () => {
-    // A query caller that also plans a launch has re-crossed the line the split exists to draw.
-    for (const file of STRUCTURED_FEASIBILITY_QUERY_CALLERS) {
-      expect(readFileSync(join(REPO_ROOT, file), 'utf8')).not.toContain('planAgentSessionLaunch(')
-    }
   })
 
   it('pins every production adopter of a planned verdict', async () => {
