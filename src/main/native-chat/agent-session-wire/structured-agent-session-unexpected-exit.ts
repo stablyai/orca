@@ -113,6 +113,7 @@ export async function settleUnexpectedStructuredAgentSessionExit(
           expectedAcquisitionGeneration: unexpectedEvent.acquisitionGeneration,
           acquisitionGeneration: session.acquisitionGeneration,
           now: context.now(),
+          exitObservedAt: observedAt,
           ...(settlementFailed
             ? {
                 settlementRetry: {
