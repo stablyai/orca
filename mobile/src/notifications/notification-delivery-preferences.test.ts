@@ -67,13 +67,17 @@ it('suppresses only the workspace being viewed on this phone, and never while ba
   const event = { source: 'terminal-bell', worktreeId: 'folder-id' }
   setNotificationViewingWorkspace({ hostId: 'ssh-host', worktreeId: 'folder-id' })
   AppState.currentState = 'active'
-  expect(await shouldSuppressNotificationWhileViewing(event, 'ssh-host')).toBe(true)
-  expect(await shouldSuppressNotificationWhileViewing(event, 'another-host')).toBe(false)
+  expect(await shouldSuppressNotificationWhileViewing(event, 'ssh-host', true)).toBe(true)
+  expect(await shouldSuppressNotificationWhileViewing(event, 'another-host', true)).toBe(false)
   expect(
-    await shouldSuppressNotificationWhileViewing({ ...event, worktreeId: 'other' }, 'ssh-host')
+    await shouldSuppressNotificationWhileViewing(
+      { ...event, worktreeId: 'other' },
+      'ssh-host',
+      true
+    )
   ).toBe(false)
   AppState.currentState = 'background'
-  expect(await shouldSuppressNotificationWhileViewing(event, 'ssh-host')).toBe(false)
+  expect(await shouldSuppressNotificationWhileViewing(event, 'ssh-host', true)).toBe(false)
 })
 
 it('recovers defaults from malformed stored preferences', async () => {

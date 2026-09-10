@@ -35,6 +35,7 @@ async function registered() {
   const row = await devices.upsert(input)
   if (!row.ok) throw new Error('registration failed')
   const delivery = buildPushDelivery({
+    expiresAt: Date.now() + 300_000,
     registrationId: row.registrationId,
     hostFingerprint: input.hostFingerprint,
     notification: note

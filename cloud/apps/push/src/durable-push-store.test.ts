@@ -1,11 +1,13 @@
+import { randomUUID } from 'node:crypto'
+import pg from 'pg'
 import { afterEach, describe, expect, it } from 'vitest'
 import { openInMemoryPushDatabase, openPushDatabase, type PushDatabase } from './push-database.js'
 import { DurablePushStore, DELIVERY_LEASE_MS } from './durable-push-store.js'
 import type { PushNotification } from '@orca-cloud/push-contract'
 
-const databases: PushDatabase[] = []
+const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => {
-  await Promise.all(databases.splice(0).map((db) => db.close()))
+  await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
 })
 const notification = (seq: number, kind: 'alert' | 'dismiss' = 'alert'): PushNotification => ({
   notificationId: `notification-${seq}`,
@@ -22,17 +24,31 @@ async function fixture() {
     process.env.ORCA_PUSH_DURABLE_TEST_POSTGRES_URL ?? process.env.ORCA_PUSH_TEST_DATABASE_URL
   if (databaseUrl && !process.env.CI && new URL(databaseUrl).port !== '55440')
     throw new Error('isolated_postgres_port_required')
-  const db = databaseUrl
-    ? await openPushDatabase({ databaseUrl, dataDir: '', poolMax: 4 })
-    : await openInMemoryPushDatabase()
-  databases.push(db)
-  for (const table of [
-    'push_dismissed_events',
-    'push_event_recipients',
-    'push_delivery_batches',
-    'push_events'
-  ])
-    await db.query(`DELETE FROM ${table}`)
+  let db: PushDatabase
+  if (databaseUrl) {
+    const admin = new pg.Client({ connectionString: databaseUrl })
+    await admin.connect()
+    const schema = `durable_${randomUUID().replaceAll('-', '')}`
+    let scoped: PushDatabase | undefined
+    cleanups.push(async () => {
+      try {
+        await scoped?.close()
+      } finally {
+        try {
+          await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`)
+        } finally {
+          await admin.end()
+        }
+      }
+    })
+    await admin.query(`CREATE SCHEMA ${schema}`)
+    const url = new URL(databaseUrl)
+    url.searchParams.set('options', `-c search_path=${schema}`)
+    db = scoped = await openPushDatabase({ databaseUrl: url.toString(), dataDir: '', poolMax: 4 })
+  } else {
+    db = await openInMemoryPushDatabase()
+    cleanups.push(() => db.close())
+  }
   let now = 1_000_000
   const clock = () => now
   return {
@@ -147,10 +163,27 @@ describe('durable push acceptance', () => {
   it('rolls quota and payload back together if persistence fails', async () => {
     const { db, store } = await fixture()
     await db.query('ALTER TABLE push_delivery_batches RENAME TO push_delivery_batches_unavailable')
-    await expect(store.accept('host', 'phone', notification(1))).rejects.toThrow()
-    expect(await db.query('SELECT * FROM push_events')).toEqual([])
-    expect(await db.query('SELECT * FROM push_event_recipients')).toEqual([])
-    await db.query('ALTER TABLE push_delivery_batches_unavailable RENAME TO push_delivery_batches')
+    try {
+      const databaseUrl =
+        process.env.ORCA_PUSH_DURABLE_TEST_POSTGRES_URL ?? process.env.ORCA_PUSH_TEST_DATABASE_URL
+      if (databaseUrl) {
+        const concurrent = await openPushDatabase({ databaseUrl, dataDir: '' })
+        try {
+          await expect(
+            concurrent.query('SELECT COUNT(*) FROM push_delivery_batches')
+          ).resolves.toHaveLength(1)
+        } finally {
+          await concurrent.close()
+        }
+      }
+      await expect(store.accept('host', 'phone', notification(1))).rejects.toThrow()
+      expect(await db.query('SELECT * FROM push_events')).toEqual([])
+      expect(await db.query('SELECT * FROM push_event_recipients')).toEqual([])
+    } finally {
+      await db.query(
+        'ALTER TABLE push_delivery_batches_unavailable RENAME TO push_delivery_batches'
+      )
+    }
   })
 })
 

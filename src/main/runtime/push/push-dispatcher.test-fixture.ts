@@ -11,7 +11,6 @@ export function registration(
     registrationId: 'reg-1',
     platform: 'ios',
     filter: {},
-    registeredAt: 1,
     expiresAt: Date.now() + 7 * 86400_000,
     ...overrides
   }

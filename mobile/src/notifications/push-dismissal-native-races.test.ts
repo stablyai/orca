@@ -2,7 +2,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { nativePushDismissal } from './native-push-dismissal'
 import { rememberPushDismissal, wasPushDismissed } from './push-dismissal-watermarks'
-import { foregroundNotificationBehavior, shouldSuppressForegroundPush } from './push-receive'
+import { foregroundNotificationBehavior } from './push-receive'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
 
 const memory = vi.hoisted(() => new Map<string, string>())
@@ -44,7 +44,7 @@ vi.mock('../storage/preferences', () => ({
   loadPushNotificationsEnabled: async () => true
 }))
 vi.mock('./notification-viewing-policy', () => ({
-  shouldSuppressNotificationWhileViewing: async () => false
+  shouldSuppressNotificationWhileViewing: () => false
 }))
 vi.mock('./notification-delivery-preferences', () => ({
   loadNotificationDeliveryPreferences: vi.fn(async () => ({ sound: true }))
@@ -114,7 +114,9 @@ it('suppresses presentation when dismissal completes during the handler sound re
     }
   })
   await vi.waitFor(() => expect(finish).toBeDefined())
-  await shouldSuppressForegroundPush({ orca: { ...fence, kind: 'dismiss' } })
+  await foregroundNotificationBehavior({
+    request: { content: { data: { orca: { ...fence, kind: 'dismiss' } } } }
+  })
   expect(await wasPushDismissed(payload)).toBe(true)
   finish()
   expect(await pending).toEqual({

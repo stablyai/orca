@@ -10,7 +10,6 @@ const REGISTRATION: MobilePushRegistration = {
   registrationId: 'reg-1',
   platform: 'ios',
   filter: {},
-  registeredAt: 1_770_000_000_000,
   expiresAt: Date.now() + 7 * 86400_000
 }
 
@@ -45,6 +44,23 @@ describe('DeviceRegistry push registrations', () => {
     expect(registry.setPushRegistration(device.deviceId, null)).toBe(true)
     expect(new DeviceRegistry(dir).getDevice(device.deviceId)?.pushRegistration).toBeUndefined()
   })
+
+  it.each([1_770_000_000_000, 'unused'])(
+    'ignores the obsolete registeredAt field (%s)',
+    (registeredAt) => {
+      const dir = userDataDir()
+      const device = new DeviceRegistry(dir).addDevice('phone', 'mobile')
+      rewriteRegistry(dir, (devices) => {
+        for (const entry of devices) {
+          entry.pushRegistration = { ...REGISTRATION, registeredAt }
+        }
+      })
+
+      expect(new DeviceRegistry(dir).getDevice(device.deviceId)?.pushRegistration).toEqual(
+        REGISTRATION
+      )
+    }
+  )
 
   it('refuses to register a runtime-scoped device', () => {
     const dir = userDataDir()

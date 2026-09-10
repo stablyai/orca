@@ -132,7 +132,6 @@ describe('revokeMobileDevice', () => {
       registrationId: 'reg-1',
       platform: 'android',
       filter: {},
-      registeredAt: 1,
       expiresAt: Date.now() + 7 * 86400_000
     })
 

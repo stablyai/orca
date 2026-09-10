@@ -71,13 +71,7 @@ export class PushDeviceRegistryStore {
            SET platform = ?, token = ?, apns_environment = ?,
                dead_at = NULL, updated_at = ?
            WHERE registration_id = ?`,
-          [
-            input.platform,
-            input.token,
-            input.apnsEnvironment ?? null,
-            now,
-            registrationId
-          ]
+          [input.platform, input.token, input.apnsEnvironment ?? null, now, registrationId]
         )
         return { ok: true, registrationId }
       }
@@ -167,16 +161,16 @@ export class PushDeviceRegistryStore {
     return row ? toRegistration(row) : null
   }
 
-  async markDead(registrationId: string, observed?: PushDeviceRegistration): Promise<void> {
+  async markDead(observed: PushDeviceRegistration): Promise<void> {
     await this.database.query(
-      `UPDATE push_devices SET dead_at = ?, updated_at = ? WHERE registration_id = ?${
-        observed ? " AND token = ? AND platform = ? AND COALESCE(apns_environment, '') = ?" : ''
-      }`,
+      `UPDATE push_devices SET dead_at = ?, updated_at = ? WHERE registration_id = ? AND token = ? AND platform = ? AND COALESCE(apns_environment, '') = ?`,
       [
         this.now(),
         this.now(),
-        registrationId,
-        ...(observed ? [observed.token, observed.platform, observed.apnsEnvironment ?? ''] : [])
+        observed.registrationId,
+        observed.token,
+        observed.platform,
+        observed.apnsEnvironment ?? ''
       ]
     )
   }

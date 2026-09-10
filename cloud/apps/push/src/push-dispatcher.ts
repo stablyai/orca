@@ -34,7 +34,7 @@ export class PushDispatcher {
     }
     this.options.onOutcome?.(outcome.status)
     if (outcome.status === 'dead') {
-      await this.options.devices.markDead(delivery.registrationId, device)
+      await this.options.devices.markDead(device)
     }
     if (outcome.status !== 'sent') {
       console.warn(

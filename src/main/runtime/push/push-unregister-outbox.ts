@@ -53,6 +53,10 @@ export class PushUnregisterOutbox {
     return item
   }
 
+  isUnreadable(): boolean {
+    return this.outboxUnreadable
+  }
+
   pending(): readonly PushUnregisterOutboxItem[] {
     return this.items
   }

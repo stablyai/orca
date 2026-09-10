@@ -69,7 +69,7 @@ describe('push device registry store', () => {
       platform: 'android',
       token: 'token-one'
     })
-    await devices.markDead(registrationId)
+    await devices.markDead((await devices.findById(registrationId))!)
     expect((await devices.findById(registrationId))?.dead).toBe(true)
     await upsertOk({
       hostFingerprint: OWNER,

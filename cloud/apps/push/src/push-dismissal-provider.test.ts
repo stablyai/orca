@@ -5,6 +5,7 @@ import { buildPushDelivery } from './push-delivery-message.js'
 
 it('dismissal provider payloads cannot display a new alert or play a sound', () => {
   const delivery = buildPushDelivery({
+    expiresAt: Date.now() + 300_000,
     registrationId: 'reg',
     hostFingerprint: 'host',
     notification: {

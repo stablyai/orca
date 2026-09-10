@@ -31,7 +31,7 @@ type PushDispatcherOptions = {
   scheduleRetry?: (run: () => void, delayMs: number) => void
 }
 
-type PushTarget = { deviceId: string; registrationId: string; registration: MobilePushRegistration }
+type PushTarget = { deviceId: string; registration: MobilePushRegistration }
 
 function clip(value: string, maxLength: number): string {
   const normalized = value.replace(/\s+/g, ' ').trim()
@@ -126,9 +126,7 @@ export class PushDispatcher {
       const targets = this.registry
         .listDevices()
         .flatMap(({ deviceId, pushRegistration: registration }) =>
-          registration && registration.expiresAt > Date.now()
-            ? [{ deviceId, registrationId: registration.registrationId, registration }]
-            : []
+          registration && registration.expiresAt > Date.now() ? [{ deviceId, registration }] : []
         )
       return {
         targets,
@@ -173,9 +171,7 @@ export class PushDispatcher {
       ) {
         return []
       }
-      return [
-        { deviceId: device.deviceId, registrationId: registration.registrationId, registration }
-      ]
+      return [{ deviceId: device.deviceId, registration }]
     })
     if (targets.length === 0) {
       return null
@@ -219,7 +215,7 @@ export class PushDispatcher {
     }
     try {
       const result = await this.client.send({
-        registrationIds: currentTargets.map((target) => target.registrationId),
+        registrationIds: currentTargets.map((target) => target.registration.registrationId),
         notification
       })
       if (this.stopped) {
@@ -255,7 +251,9 @@ export class PushDispatcher {
       if (result.status !== 'dead') {
         continue
       }
-      const target = targets.find((entry) => entry.registrationId === result.registrationId)
+      const target = targets.find(
+        (entry) => entry.registration.registrationId === result.registrationId
+      )
       if (
         !target ||
         this.registry.listDevices().find((device) => device.deviceId === target.deviceId)

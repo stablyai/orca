@@ -19,7 +19,7 @@ async function dismissMatchingPresentedPushes(
 
 export function dismissRememberedPushNotifications(
   hostFingerprint: string,
-  confirmed: readonly OrcaPushPayload[] = []
+  confirmed: readonly OrcaPushPayload[]
 ): Promise<void> {
   return dismissMatchingPresentedPushes(async (payload) => {
     if (payload.hostFingerprint !== hostFingerprint) {

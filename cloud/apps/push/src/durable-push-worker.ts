@@ -48,11 +48,11 @@ export class DurablePushWorker {
       const queued = await this.store.claim()
       if (!queued) return
       const delivery = buildPushDelivery({
+        expiresAt: queued.expiresAt,
         registrationId: queued.registrationId,
         hostFingerprint: queued.hostFingerprint,
         notification: queued.notification
       })
-      delivery.expiresAt = queued.expiresAt
       if ((this.options.now ?? Date.now)() >= queued.expiresAt) {
         await this.store.finish(queued)
         continue

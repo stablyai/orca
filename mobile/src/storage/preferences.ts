@@ -1,10 +1,5 @@
 import { notifyNotificationConsentChanged } from '../notifications/notification-consent-events'
-import {
-  loadNotificationDeliveryPreferences,
-  notificationPreferencesFilter
-} from '../notifications/notification-delivery-preferences'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { MobilePushFilter } from '../../../src/shared/mobile-push-contract'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
@@ -38,12 +33,6 @@ export async function savePushNotificationsEnabled(enabled: boolean): Promise<vo
 }
 
 const REMOTE_PUSH_HOST_REGISTRATIONS_KEY = 'orca:remotePushHostRegistrations'
-
-export type RemotePushFilter = MobilePushFilter
-
-export async function loadRemotePushFilter(): Promise<RemotePushFilter> {
-  return notificationPreferencesFilter(await loadNotificationDeliveryPreferences())
-}
 
 // Why persisted: switching off while a host is offline leaves a token the gateway
 // would still push to. The pending list is the phone's side of the desktop's

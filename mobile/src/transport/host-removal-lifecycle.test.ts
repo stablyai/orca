@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
-const unregisterPushMock = vi.hoisted(() => vi.fn(async () => {}))
+const unregisterPushMock = vi.hoisted(() => vi.fn(async () => vi.fn()))
 
 vi.mock('./host-store', () => ({
   removeHost: (hostId: string) => removeHostMock(hostId)
@@ -46,13 +46,5 @@ describe('host removal lifecycle', () => {
     expect(unregisterPushMock.mock.invocationCallOrder[0]).toBeLessThan(
       removeHostMock.mock.invocationCallOrder[0]
     )
-  })
-
-  it('still removes the host when the push unregister cannot land', async () => {
-    removeHostMock.mockResolvedValue(undefined)
-    unregisterPushMock.mockRejectedValueOnce(new Error('socket closed'))
-    const closeHostClient = vi.fn()
-    await removeHostAndCloseClient('host-1', closeHostClient)
-    expect(closeHostClient).toHaveBeenCalledWith('host-1')
   })
 })

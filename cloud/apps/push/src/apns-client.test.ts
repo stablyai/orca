@@ -17,8 +17,9 @@ function credentials(): ApnsCredentials {
   return { keyPem: privateKey, keyId: 'ABCDE12345', teamId: 'TEAM123456' }
 }
 
-function delivery() {
+function delivery(now = Date.now()) {
   return buildPushDelivery({
+    expiresAt: now + 300_000,
     registrationId: 'reg-1',
     hostFingerprint: HOST,
     notification: {
@@ -79,7 +80,7 @@ describe('apns client', () => {
       now: () => clock
     })
     await expect(
-      client.send(delivery(), { token: 'a'.repeat(64), apnsEnvironment: 'production' })
+      client.send(delivery(clock), { token: 'a'.repeat(64), apnsEnvironment: 'production' })
     ).resolves.toEqual({ status: 'sent' })
     const request = fake.requests[0]!
     expect(request.host).toBe('api.push.apple.com')
@@ -190,4 +191,30 @@ it('does not collapse background dismissals with visible alerts', async () => {
     'apns-priority': '5'
   })
   expect(JSON.parse(fake.requests[0]!.body).aps).toEqual({ 'content-available': 1 })
+})
+
+it('keeps the absolute deadline across retries and refuses expired delivery', async () => {
+  let now = 1_700_000_000_000
+  const fake = fakeTransport({ status: 503, body: '{}' })
+  const client = new ApnsClient({
+    topic: 'test',
+    credentials: credentials(),
+    now: () => now,
+    transport: fake.transport
+  })
+  const pending = delivery(now)
+  const device = { token: 'test', apnsEnvironment: 'sandbox' as const }
+  await client.send(pending, device)
+  now += 60_000
+  await client.send(pending, device)
+  expect(fake.requests.map((request) => request.headers['apns-expiration'])).toEqual([
+    String(pending.expiresAt / 1000),
+    String(pending.expiresAt / 1000)
+  ])
+  now = pending.expiresAt
+  await expect(client.send(pending, device)).resolves.toEqual({
+    status: 'error',
+    reason: 'expired'
+  })
+  expect(fake.requests).toHaveLength(2)
 })

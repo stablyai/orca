@@ -150,7 +150,7 @@ iOS tokens are variable-length, hex-encoded byte strings; Android tokens are FCM
   a fresh forgery on every request, which would hand a flood a new bucket each time.
   `ORCA_PUSH_TRUSTED_PROXY_HOPS` (default 0) says how many appenders sit between the platform and the
   client, so a future load balancer sets it to 1. A header with fewer hops than that depth is not
-  trusted at all. Falls back to `x-real-ip` and then to a single shared bucket. The bucket is per
+  trusted at all and falls back to a single shared bucket. The bucket is per
   instance and in memory, so the effective cap scales with the instance count; it exists to blunt a
   flood, not to meter.
 - Authenticated routes use a per-host bucket of 600 requests/minute per instance, so normal usage by
@@ -274,9 +274,11 @@ Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-ke
   phone could otherwise loop it. The unregister RPC is not throttled, since with nothing registered it
   is a lookup and with something registered it can only run once per successful register. The params
   schema is strict, so a caller-supplied `deviceId` is an error, not a key silently dropped. Persists
-  `pushRegistration: { registrationId, platform, filter, registeredAt, expiresAt }` on `DeviceEntry` in
+  `pushRegistration: { registrationId, platform, filter, expiresAt }` on `DeviceEntry` in
   `device-registry.ts` (new
-  optional field, tolerated by old registries). When the gateway accepted the token but the host could
+  optional field, tolerated by old registries). Unreadable unregister history refuses new registration
+  with `registration_storage_failed` until a readable restart can settle prior cleanup.
+  When the gateway accepted the token but the host could
   not store it — the device left mobile scope mid-call (`not_mobile`) or the registry write threw
   (`registration_storage_failed`) — the host queues the gateway delete in the unregister outbox rather
   than leaking a registration nothing will ever push to. Registration, unregister, and outbox deletes
@@ -294,14 +296,14 @@ Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-ke
 - Push client `src/main/runtime/push/push-gateway-client.ts`: challenge/proof/session with token cache,
   register, delete, send. Node `fetch`. Gateway URL from `profile-cloud-auth-config.ts`
   (`pushGatewayUrl`, default `https://push.onorca.dev`, env override `ORCA_PUSH_GATEWAY_URL`).
-- Host proof answering: new `src/main/runtime/push/push-host-proof.ts`, a copy of the relay's
-  `answerRelayHostChallenge` with the push transcript fields. Shared code with the relay proof is
-  welcome if it stays a pure refactor.
+- Host proof answering: `src/main/runtime/push/push-host-proof.ts` reuses the relay's
+  `host-challenge-envelope` primitives with push-specific domains and transcript validation.
 - Dispatch hook: in `RuntimeMobileNotificationController.dispatch`, after the socket fan-out, call
   `pushDispatcher.enqueue(eventWithSeq)`. The dispatcher requires desktop category eligibility, applies
-  each device's phone-specific away-only and sound preferences, skips `dismiss` events, maps `agentState`
-  to `needs-input | finished` (blocked/waiting → needs-input, else finished),
-  batches matching registrationIds into `POST /v1/send` requests of at most 20 registrations each (the
+  each device's away-only and sound preferences, and sends silent `dismiss` events independently of
+  alert eligibility. Agent alerts map blocked/waiting/needs-input to `needs-input` and
+  done/finished or omitted states to `finished`; other agent states are rejected. It batches
+  matching registrationIds into `POST /v1/send` requests of at most 20 registrations each (the
   gateway's per-request cap; extra devices get their own request rather than being dropped), and drops
   unchanged registrations the gateway reports `dead`. Failure categories are counted without payload
   values and logged at most once per minute (with a final flush on shutdown). Fire-and-forget with

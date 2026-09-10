@@ -122,6 +122,9 @@ export class DesktopPushService {
   private async registerAfterCleanup(
     input: MobilePushRegisterInput
   ): Promise<MobilePushRegisterResult> {
+    if (this.outbox.isUnreadable()) {
+      return { registered: false, reason: 'registration_storage_failed' }
+    }
     // A stable gateway ID must not inherit a delete from an earlier registration.
     for (const item of this.outbox.pending().filter((entry) => entry.deviceId === input.deviceId)) {
       if (!(await this.deleteQueued(item.reqId, item.registrationId))) {
@@ -209,7 +212,6 @@ export class DesktopPushService {
         registrationId,
         platform: input.platform,
         filter: input.filter,
-        registeredAt: Date.now(),
         expiresAt: Date.now() + 7 * 24 * 60 * 60_000
       })
       // False means the device was removed or left mobile scope while the gateway

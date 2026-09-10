@@ -1,3 +1,6 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { AppState } from 'react-native'
+import { setNotificationViewingWorkspace } from './notification-viewing-policy'
 vi.mock('./push-tray-dismissal', () => ({ dismissPresentedPushNotification: vi.fn() }))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sha256 } from '@noble/hashes/sha256'
@@ -8,9 +11,13 @@ import {
   foregroundNotificationBehavior,
   isRemotePushTrigger,
   pushNotificationRouteData,
-  resetForegroundPushClaimsForTests,
-  shouldSuppressForegroundPush
+  resetForegroundPushClaimsForTests
 } from './push-receive'
+
+async function shouldSuppressForegroundPush(data: unknown): Promise<boolean> {
+  return !(await foregroundNotificationBehavior({ request: { content: { data } } }))
+    .shouldShowBanner
+}
 
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: vi.fn() }))
@@ -41,6 +48,8 @@ function fcmData(orca: Record<string, unknown>): unknown {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  AppState.currentState = 'background'
+  setNotificationViewingWorkspace(null)
   storage.clear()
   storage.set('orca:pushNotificationsEnabled', 'true')
   resetForegroundPushClaimsForTests()
@@ -128,18 +137,14 @@ describe('shouldSuppressForegroundPush', () => {
   })
 
   it('fails closed for recognized pushes when suppression checks throw', async () => {
-    const preferences = await import('./notification-delivery-preferences')
     const dismissals = await import('./push-dismissal-watermarks')
-    const preferenceSpy = vi
-      .spyOn(preferences, 'loadNotificationDeliveryPreferences')
-      .mockResolvedValueOnce({ sound: true } as never)
-      .mockRejectedValueOnce(new Error('preference read failed'))
-    const dismissalSpy = vi.spyOn(dismissals, 'wasPushDismissed')
+    const dismissalSpy = vi
+      .spyOn(dismissals, 'wasPushDismissed')
+      .mockRejectedValueOnce(new Error('dismissal read failed'))
     await expect(
       foregroundNotificationBehavior({ request: { content: { data: push() } } })
     ).resolves.toMatchObject({ shouldShowBanner: false, shouldShowList: false })
-    expect(dismissalSpy).not.toHaveBeenCalled()
-    preferenceSpy.mockRestore()
+    dismissalSpy.mockRestore()
   })
 
   it('keeps unrelated notifications visible when suppression checks throw', async () => {
@@ -195,4 +200,44 @@ describe('pushNotificationRouteData', () => {
     expect(isRemotePushTrigger({ type: 'push' })).toBe(true)
     expect(isRemotePushTrigger({ type: 'timeInterval' })).toBe(false)
   })
+})
+
+it('uses one delivery snapshot for sound and viewing even when settings change during host lookup', async () => {
+  AppState.currentState = 'active'
+  setNotificationViewingWorkspace({ hostId: 'host-1', worktreeId: 'folder' })
+  storage.set(
+    'orca:notificationDeliveryPreferences',
+    JSON.stringify({
+      sound: false,
+      suppressWhileViewing: false
+    })
+  )
+  vi.mocked(loadHostCatalog).mockImplementationOnce(async () => {
+    storage.set(
+      'orca:notificationDeliveryPreferences',
+      JSON.stringify({
+        sound: true,
+        suppressWhileViewing: true
+      })
+    )
+    return hosts
+  })
+  const behavior = await foregroundNotificationBehavior({
+    request: {
+      content: {
+        data: apnsData({
+          hostFingerprint,
+          worktreeId: 'folder',
+          notificationEpoch: 'snapshot',
+          notificationSeq: 1
+        })
+      }
+    }
+  })
+  expect(behavior).toMatchObject({ shouldShowBanner: true, shouldPlaySound: false })
+  expect(
+    vi
+      .mocked(AsyncStorage.getItem)
+      .mock.calls.filter(([key]) => key === 'orca:notificationDeliveryPreferences')
+  ).toHaveLength(1)
 })

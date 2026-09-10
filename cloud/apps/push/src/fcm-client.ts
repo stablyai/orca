@@ -1,6 +1,6 @@
 import { providerRetryAfter } from './provider-retry-delay.js'
 import { createHash } from 'node:crypto'
-import { PUSH_DEFAULTS, PUSH_LIMITS } from '@orca-cloud/push-contract'
+import { PUSH_DEFAULTS } from '@orca-cloud/push-contract'
 import { orcaDataStrings, type PushDelivery } from './push-delivery-message.js'
 import type { PushProviderOutcome } from './push-provider-outcome.js'
 
@@ -32,13 +32,11 @@ export function fcmMessageBody(input: {
   delivery: PushDelivery
   token: string
   channelId: string
-  validateOnly?: boolean
   now?: number
 }): string {
   const { delivery } = input
   const now = input.now ?? Date.now()
   return JSON.stringify({
-    ...(input.validateOnly ? { validate_only: true } : {}),
     message: {
       token: input.token,
       ...(delivery.orca.kind === 'dismiss'
@@ -46,7 +44,7 @@ export function fcmMessageBody(input: {
         : { notification: { title: delivery.title, body: delivery.body } }),
       android: {
         priority: 'HIGH',
-        ttl: `${Math.max(0, Math.ceil(((delivery.expiresAt ?? now + PUSH_LIMITS.notificationTtlSeconds * 1000) - now) / 1000))}s`,
+        ttl: `${Math.max(0, Math.ceil((delivery.expiresAt - now) / 1000))}s`,
         collapse_key: fcmCollapseKey(delivery.collapseId),
         ...(delivery.orca.kind === 'dismiss'
           ? {}
@@ -85,19 +83,14 @@ export class FcmClient {
     this.channelId = options.channelId ?? PUSH_DEFAULTS.androidChannelId
   }
 
-  async send(
-    delivery: PushDelivery,
-    device: { token: string },
-    options: { validateOnly?: boolean } = {}
-  ): Promise<PushProviderOutcome> {
-    if (delivery.expiresAt !== undefined && delivery.expiresAt <= (this.options.now ?? Date.now)())
+  async send(delivery: PushDelivery, device: { token: string }): Promise<PushProviderOutcome> {
+    if (delivery.expiresAt <= (this.options.now ?? Date.now)())
       return { status: 'error', reason: 'expired' }
     let response: FcmResponse
     try {
       const accessToken = await this.options.accessToken()
       const now = (this.options.now ?? Date.now)()
-      if (delivery.expiresAt !== undefined && delivery.expiresAt <= now)
-        return { status: 'error', reason: 'expired' }
+      if (delivery.expiresAt <= now) return { status: 'error', reason: 'expired' }
       response = await this.options.transport({
         url: `https://fcm.googleapis.com/v1/projects/${this.options.projectId}/messages:send`,
         accessToken,
@@ -105,8 +98,7 @@ export class FcmClient {
           delivery,
           token: device.token,
           channelId: this.channelId,
-          now,
-          ...(options.validateOnly === undefined ? {} : { validateOnly: options.validateOnly })
+          now
         })
       })
     } catch (error) {

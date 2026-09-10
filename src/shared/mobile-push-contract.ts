@@ -25,7 +25,6 @@ export type MobilePushRegistration = {
   registrationId: string
   platform: MobilePushPlatform
   filter: MobilePushFilter
-  registeredAt: number
   expiresAt: number
 }
 
@@ -41,10 +40,7 @@ export type MobilePushRegisterResult =
   | { registered: true; registrationId: string }
   | {
       registered: false
-      // `registration_storage_failed`: the gateway accepted the token but the host
-      // could not persist it, so the phone must register again rather than believe
-      // a push route that does not exist. `throttled`: this device registered too
-      // often in the last minute; whatever it registered before still stands.
+      // Storage failures require registration to be retried; throttling leaves the prior route intact.
       reason:
         | 'gateway_unreachable'
         | 'gateway_rejected'
@@ -87,9 +83,7 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
     !isStringMember(registration.platform, MOBILE_PUSH_PLATFORMS) ||
     !filter ||
     typeof registration.expiresAt !== 'number' ||
-    !Number.isFinite(registration.expiresAt) ||
-    typeof registration.registeredAt !== 'number' ||
-    !Number.isFinite(registration.registeredAt)
+    !Number.isFinite(registration.expiresAt)
   ) {
     return undefined
   }
@@ -97,7 +91,6 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
     registrationId: registration.registrationId,
     platform: registration.platform,
     filter,
-    registeredAt: registration.registeredAt,
     expiresAt: registration.expiresAt
   }
 }

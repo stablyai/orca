@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { fcmCollapseKey, FcmClient, type FcmRequest, type FcmResponse } from './fcm-client.js'
 import { buildPushDelivery } from './push-delivery-message.js'
 
+const NOW = 1_700_000_000_000
 const HOST = 'abcdefghijklmnop'
 const TOKEN = 'cQ1abcDEF_gh:APA91bZZ-zz0123456789abcdefghijklmnopqrstuvwxyz'
 
 function delivery(agentState: 'needs-input' | null = 'needs-input') {
   return buildPushDelivery({
+    expiresAt: NOW + 300_000,
     registrationId: 'reg-1',
     hostFingerprint: HOST,
     notification: {
@@ -40,6 +42,7 @@ function client(response: FcmResponse) {
     fake,
     client: new FcmClient({
       projectId: 'onorca-cloud',
+      now: () => NOW,
       accessToken: async () => 'access-token',
       transport: fake.transport
     })
@@ -110,12 +113,6 @@ describe('fcm client', () => {
     expect(message.message.android.collapse_key).toHaveLength(32)
   })
 
-  it('passes validate_only through for the deploy probe', async () => {
-    const { fake, client: fcm } = client({ status: 200, body: '{}' })
-    await fcm.send(delivery(), { token: TOKEN }, { validateOnly: true })
-    expect(JSON.parse(fake.requests[0]!.body)).toMatchObject({ validate_only: true })
-  })
-
   it('marks an unregistered token dead from the status or the error detail', async () => {
     const byStatus = client({
       status: 404,
@@ -179,6 +176,7 @@ describe('fcm client', () => {
     })
     const broken = new FcmClient({
       projectId: 'onorca-cloud',
+      now: () => NOW,
       accessToken: async () => 'access-token',
       transport: async () => {
         throw new Error('ECONNRESET')
@@ -209,4 +207,34 @@ it('does not send when credential refresh crosses the absolute expiry', async ()
     reason: 'expired'
   })
   expect(fake.requests).toHaveLength(0)
+})
+
+it('decreases retry TTL and refuses expired delivery before refreshing credentials', async () => {
+  let now = NOW
+  let refreshes = 0
+  const fake = fakeTransport({ status: 503, body: '{}' })
+  const fcm = new FcmClient({
+    projectId: 'test',
+    now: () => now,
+    accessToken: async () => {
+      refreshes++
+      return 'test-token'
+    },
+    transport: fake.transport
+  })
+  const pending = delivery()
+  await fcm.send(pending, { token: TOKEN })
+  now += 60_000
+  await fcm.send(pending, { token: TOKEN })
+  expect(fake.requests.map((request) => JSON.parse(request.body).message.android.ttl)).toEqual([
+    '300s',
+    '240s'
+  ])
+  now = pending.expiresAt
+  await expect(fcm.send(pending, { token: TOKEN })).resolves.toEqual({
+    status: 'error',
+    reason: 'expired'
+  })
+  expect(fake.requests).toHaveLength(2)
+  expect(refreshes).toBe(2)
 })

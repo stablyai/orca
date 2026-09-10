@@ -1,4 +1,4 @@
-import { PUSH_LIMITS, type ApnsEnvironment } from '@orca-cloud/push-contract'
+import type { ApnsEnvironment } from '@orca-cloud/push-contract'
 import { ApnsAuthenticationToken } from './apns-authentication-token.js'
 import type { ApnsTransport } from './apns-http2-transport.js'
 import type { ApnsCredentials } from './config.js'
@@ -55,9 +55,7 @@ export class ApnsClient {
     delivery: PushDelivery,
     device: { token: string; apnsEnvironment: ApnsEnvironment }
   ): Promise<PushProviderOutcome> {
-    const expiration = Math.floor(
-      (delivery.expiresAt ?? this.now() + PUSH_LIMITS.notificationTtlSeconds * 1000) / 1000
-    )
+    const expiration = Math.floor(delivery.expiresAt / 1000)
     if (expiration * 1000 <= this.now()) return { status: 'error', reason: 'expired' }
     let response
     try {

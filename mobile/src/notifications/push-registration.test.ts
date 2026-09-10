@@ -1,3 +1,6 @@
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: vi.fn(async () => null) }
+}))
 vi.mock('./desktop-notification-channel', () => ({
   ensureDesktopNotificationChannel: vi.fn(async () => {})
 }))
@@ -7,7 +10,6 @@ import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
   loadPushNotificationsEnabled,
-  loadRemotePushFilter,
   loadRemotePushHostRegistrations,
   savePushNotificationsEnabled,
   saveRemotePushHostRegistrations,
@@ -26,7 +28,6 @@ import {
 vi.mock('../storage/preferences', () => ({
   loadPushNotificationsEnabled: vi.fn(),
   savePushNotificationsEnabled: vi.fn(),
-  loadRemotePushFilter: vi.fn(),
   loadRemotePushHostRegistrations: vi.fn(),
   saveRemotePushHostRegistrations: vi.fn()
 }))
@@ -99,7 +100,6 @@ beforeEach(() => {
   vi.mocked(savePushNotificationsEnabled).mockImplementation(async (value) => {
     enabled = value
   })
-  vi.mocked(loadRemotePushFilter).mockImplementation(async () => ({}))
   vi.mocked(loadRemotePushHostRegistrations).mockImplementation(async () => stored)
   vi.mocked(saveRemotePushHostRegistrations).mockImplementation(async (value) => {
     stored = value
@@ -120,7 +120,7 @@ describe('push registration capability gating', () => {
       platform: 'ios',
       token: IOS_TOKEN.token,
       apnsEnvironment: 'production',
-      filter: {}
+      filter: { onlyWhenDesktopAway: true, sound: true }
     })
     expect(stored.registeredHostIds).toEqual(['host-1'])
   })

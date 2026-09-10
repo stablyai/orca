@@ -15,6 +15,7 @@ it('carries a silent preference through validation to APNs and Android payloads'
     sound: false
   })
   const delivery = buildPushDelivery({
+    expiresAt: Date.now() + 300_000,
     registrationId: 'reg',
     hostFingerprint: 'host',
     notification

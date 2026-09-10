@@ -49,11 +49,14 @@ export async function foregroundNotificationBehavior(
   notification: Pick<Notification, 'request'>
 ): Promise<NotificationBehavior> {
   const data = readNativeNotificationData(notification.request)
-  const recognizedPush = readOrcaPushPayload(data) !== null
+  const payload = readOrcaPushPayload(data)
   const preferences = await loadNotificationDeliveryPreferences()
   // Unrecognized notifications retain normal behavior; recognized pushes fail closed
   // when consent, host, viewing, or dismissal checks cannot complete.
-  const suppressed = await shouldSuppressForegroundPush(data).catch(() => recognizedPush)
+  const suppressed = await shouldSuppressForegroundPush(
+    payload,
+    preferences.suppressWhileViewing
+  ).catch(() => payload !== null)
   return {
     shouldShowBanner: !suppressed,
     shouldShowList: !suppressed,
@@ -67,8 +70,10 @@ async function resolvePushHostId(payload: OrcaPushPayload): Promise<string | nul
   return resolveHostIdForFingerprint(payload.hostFingerprint, hosts)
 }
 
-export async function shouldSuppressForegroundPush(data: unknown): Promise<boolean> {
-  const payload = readOrcaPushPayload(data)
+async function shouldSuppressForegroundPush(
+  payload: OrcaPushPayload | null,
+  suppressWhileViewing: boolean
+): Promise<boolean> {
   if (!payload) {
     return false
   }
@@ -93,7 +98,7 @@ export async function shouldSuppressForegroundPush(data: unknown): Promise<boole
   if (!(await loadPushNotificationsEnabled())) {
     return true
   }
-  if (await shouldSuppressNotificationWhileViewing(payload, hostId)) {
+  if (shouldSuppressNotificationWhileViewing(payload, hostId, suppressWhileViewing)) {
     return true
   }
   // Keep this last: a socket/native dismissal may land during any preference or host read.
@@ -135,8 +140,6 @@ export function pushNotificationRouteData(
   }
   return {
     hostId,
-    ...(payload.source ? { source: payload.source } : {}),
-    ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {}),
-    ...(payload.notificationId ? { notificationId: payload.notificationId } : {})
+    ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {})
   }
 }

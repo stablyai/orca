@@ -13,7 +13,7 @@ export type PushOrcaData = {
 }
 
 export type PushDelivery = {
-  expiresAt?: number
+  expiresAt: number
   sound?: boolean
   registrationId: string
   hostFingerprint: string
@@ -34,6 +34,7 @@ export function collapseIdFor(notification: PushNotification, hostFingerprint: s
 }
 
 export function buildPushDelivery(input: {
+  expiresAt: number
   registrationId: string
   hostFingerprint: string
   notification: PushNotification
@@ -41,6 +42,7 @@ export function buildPushDelivery(input: {
   const { notification, hostFingerprint } = input
   return {
     ...(notification.sound === false ? { sound: false } : {}),
+    expiresAt: input.expiresAt,
     registrationId: input.registrationId,
     hostFingerprint,
     title: notification.title,
