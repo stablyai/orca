@@ -32,7 +32,7 @@ export function evictStaleEntries<T>(
   const keys = Object.keys(cache)
   const live = keys.filter((key) => now - (cache[key]?.fetchedAt ?? 0) < maxAgeMs)
   if (live.length === keys.length && keys.length <= maxEntries) {
-    return cache // identity preserved so a no-op eviction does not re-render subscribers
+    return cache // no allocation when nothing ages out; callers already pass a fresh object
   }
   const sorted = live.sort((a, b) => (cache[a]?.fetchedAt ?? 0) - (cache[b]?.fetchedAt ?? 0))
   const pruned: Record<string, CacheEntry<T>> = {}
