@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   monitoringBackgroundTasks: false,
   showBackgroundTasks: false,
   isWorking: false,
+  turnId: null as string | null,
   supportsBackgroundTaskStop: false,
   supportsBackgroundTaskStopAll: true,
   backgroundTasks: [] as AgentSessionBackgroundTask[],
@@ -87,7 +88,7 @@ vi.mock('./use-structured-agent-session', async () => {
           supportsStop: mocks.supportsBackgroundTaskStop,
           supportsStopAll: mocks.supportsBackgroundTaskStopAll
         },
-        turnId: null,
+        turnId: mocks.turnId,
         cancel: vi.fn(),
         stopBackgroundTask: (taskId?: string) => mocks.stopBackgroundTask(props.sessionId, taskId),
         respond: mocks.respond,
@@ -179,6 +180,7 @@ describe('NativeChatStructuredSession', () => {
     mocks.monitoringBackgroundTasks = false
     mocks.supportsBackgroundTaskStop = false
     mocks.supportsBackgroundTaskStopAll = true
+    mocks.turnId = null
     mocks.stopBackgroundTask.mockReset()
     mocks.backgroundTasks = []
     mocks.settledBackgroundTasks = []
@@ -294,6 +296,7 @@ describe('NativeChatStructuredSession', () => {
     mocks.showBackgroundTasks = true
     mocks.monitoringBackgroundTasks = false
     mocks.isWorking = true
+    mocks.turnId = 'turn-midturn'
     mocks.backgroundTasks = [{ id: 'task-monitor', kind: 'monitor', description: 'watcher' }]
 
     render(claudeSessionView('structured-tab-midturn', 'session-midturn'))
