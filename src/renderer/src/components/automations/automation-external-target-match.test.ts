@@ -2,10 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ExternalAutomationTarget } from '../../../../shared/automations-types'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import {
-  repoMatchesExternalAutomationTarget,
-  getExternalAutomationTargetForRepo
-} from './automation-external-target-match'
+import { repoMatchesExternalAutomationTarget } from './automation-external-target-match'
 
 function repo(
   overrides: Partial<Pick<Repo, 'connectionId' | 'executionHostId'>> = {}
@@ -49,36 +46,5 @@ describe('repoMatchesExternalAutomationTarget', () => {
     expect(
       repoMatchesExternalAutomationTarget(repo({ executionHostId: 'runtime:env-1' }), localTarget)
     ).toBe(false)
-  })
-})
-
-describe('getExternalAutomationTargetForRepo', () => {
-  it('prefers an explicit executionHostId over a disagreeing connectionId', () => {
-    expect(
-      getExternalAutomationTargetForRepo(
-        repo({ connectionId: 'conn-1', executionHostId: toSshExecutionHostId('conn-2') })
-      )
-    ).toEqual({ type: 'ssh', connectionId: 'conn-2' })
-  })
-
-  it('derives the ssh target from connectionId when executionHostId is unset', () => {
-    expect(getExternalAutomationTargetForRepo(repo({ connectionId: 'conn-1' }))).toEqual({
-      type: 'ssh',
-      connectionId: 'conn-1'
-    })
-  })
-
-  it('round-trips connection ids that need host-id encoding', () => {
-    expect(getExternalAutomationTargetForRepo(repo({ connectionId: 'user@host:22' }))).toEqual({
-      type: 'ssh',
-      connectionId: 'user@host:22'
-    })
-  })
-
-  it('returns the local target for a plain local repo and for non-ssh hosts', () => {
-    expect(getExternalAutomationTargetForRepo(repo())).toEqual({ type: 'local' })
-    expect(getExternalAutomationTargetForRepo(repo({ executionHostId: 'runtime:env-1' }))).toEqual({
-      type: 'local'
-    })
   })
 })

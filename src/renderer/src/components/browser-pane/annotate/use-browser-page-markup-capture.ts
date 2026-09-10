@@ -7,17 +7,15 @@ import {
 } from './useMarkupMode'
 
 export function useBrowserPageMarkupCapture(
-  webviewRef: MutableRefObject<Electron.WebviewTag | null>,
-  containerRef: MutableRefObject<HTMLDivElement | null>
+  webviewRef: MutableRefObject<Electron.WebviewTag | null>
 ): MarkupModeController {
   return useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const webview = webviewRef.current
-      const container = containerRef.current
-      if (!webview || !container) {
+      if (!webview) {
         return null
       }
-      const rect = container.getBoundingClientRect()
+      const rect = webview.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
@@ -27,7 +25,7 @@ export function useBrowserPageMarkupCapture(
         cssHeight: rect.height,
         outputScale: window.devicePixelRatio || 1
       }
-    }, [containerRef, webviewRef]),
+    }, [webviewRef]),
     onDeliver: deliverMarkupToClipboard
   })
 }

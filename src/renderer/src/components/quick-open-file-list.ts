@@ -5,6 +5,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { isQuickOpenRemoteQueryTooLarge } from '@/components/quick-open-search'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
 import {
   cancelRuntimeFileList,
   listRuntimeFiles,
@@ -261,8 +262,15 @@ export function useRuntimeFileListForWorktree({
           rootPath: worktreePath,
           excludePaths,
           requestToken,
+          maxResults: QUICK_OPEN_LISTING_MAX_RESULTS,
           signal: requestAbortController.signal
-        }).then((files) => ({ files, truncated: false }))
+        }).then((files) => ({
+          // #12547: naming the cap is what makes a full page readable as "there is more". Reporting
+          // false unconditionally is what made the truncation silent — the host bounds the scan to
+          // the cap it is given, so a full page means there are more paths behind it.
+          files,
+          truncated: files.length >= QUICK_OPEN_LISTING_MAX_RESULTS
+        }))
 
     void request
       .then((result) => {

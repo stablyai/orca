@@ -1,3 +1,5 @@
+import { CapabilityProbeCache } from '../../shared/capability-probe-cache'
+
 // Why: suppress a known-missing RPC surface without pinning it forever — an
 // in-place codex upgrade during a long Orca session self-heals after the
 // interval, mirroring GitCapabilityCache's rationale.
@@ -14,70 +16,14 @@ export function getCodexAppServerHostKey(
 }
 
 /**
- * Capability cache for the codex app-server trust-grant RPC pair, modeled on
- * GitCapabilityCache but with a synchronous runner: the grant client blocks
- * the main thread by design (launch prep), so probes cannot overlap — the
- * unsupported mark alone is what keeps later installs off the dead probe.
+ * Capability cache for the codex app-server trust-grant RPC pair. The grant
+ * client runs off the main thread's critical path, so two pane launches can
+ * probe the same host at once; the shared probe dedupe is what keeps a cold
+ * host to one app-server session instead of one per concurrent launch.
  */
-export class CodexAppServerCapabilityCache {
-  private readonly retryAfterByHost = new Map<CodexAppServerHostKey, number>()
-  private readonly supportedHosts = new Set<CodexAppServerHostKey>()
-
-  shouldTry(hostKey: CodexAppServerHostKey, nowMs = Date.now()): boolean {
-    const retryAfterMs = this.retryAfterByHost.get(hostKey)
-    if (retryAfterMs === undefined) {
-      return true
-    }
-    if (nowMs < retryAfterMs) {
-      return false
-    }
-    this.retryAfterByHost.delete(hostKey)
-    return true
-  }
-
-  isKnownSupported(hostKey: CodexAppServerHostKey): boolean {
-    return this.supportedHosts.has(hostKey)
-  }
-
-  rememberUnsupported(hostKey: CodexAppServerHostKey, nowMs = Date.now()): void {
-    this.supportedHosts.delete(hostKey)
-    this.retryAfterByHost.set(hostKey, nowMs + CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS)
-  }
-
-  rememberSupported(hostKey: CodexAppServerHostKey): void {
-    this.retryAfterByHost.delete(hostKey)
-    this.supportedHosts.add(hostKey)
-  }
-
-  runWithFallbackSync<T>(
-    hostKey: CodexAppServerHostKey,
-    runPreferred: () => T,
-    runFallback: () => T,
-    isUnsupportedError: (error: unknown) => boolean,
-    nowMs = Date.now()
-  ): T {
-    if (!this.supportedHosts.has(hostKey) && !this.shouldTry(hostKey, nowMs)) {
-      return runFallback()
-    }
-    try {
-      const result = runPreferred()
-      this.rememberSupported(hostKey)
-      return result
-    } catch (error) {
-      // Why: only a positive absence signal (unknown method / missing
-      // subcommand) marks unsupported. Transient spawn failures, timeouts,
-      // and RPC errors fall back once without poisoning the capability.
-      if (!isUnsupportedError(error)) {
-        throw error
-      }
-      this.rememberUnsupported(hostKey, nowMs)
-      return runFallback()
-    }
-  }
-
-  clear(): void {
-    this.retryAfterByHost.clear()
-    this.supportedHosts.clear()
+export class CodexAppServerCapabilityCache extends CapabilityProbeCache<CodexAppServerHostKey> {
+  constructor() {
+    super(CODEX_APP_SERVER_CAPABILITY_RETRY_INTERVAL_MS)
   }
 }
 

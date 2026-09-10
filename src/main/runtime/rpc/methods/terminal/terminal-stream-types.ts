@@ -27,6 +27,8 @@ export type SnapshotFrameOptions = {
   pendingEscapeTailAnsi?: string
   /** Effective kitty flags proven at this frame's own `seq`. */
   kittyKeyboardFlags?: number
+  alternateScreen?: boolean
+  terminalOwner?: 'shell'
 }
 
 export type SerializedSnapshot = {
@@ -42,6 +44,8 @@ export type SerializedSnapshot = {
   truncatedByByteBudget: boolean
   pendingEscapeTailAnsi?: string
   kittyKeyboardFlags?: number
+  alternateScreen?: boolean
+  terminalOwner?: 'shell'
 } | null
 
 export type TerminalViewportClient = {

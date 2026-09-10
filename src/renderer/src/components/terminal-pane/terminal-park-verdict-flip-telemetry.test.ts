@@ -7,6 +7,7 @@ import {
   TERMINAL_TAB_PARK_FLIP_WINDOW_MS,
   getParkVerdictUnparkPinUntilMs,
   recordParkVerdictFlips,
+  selectParkVerdictPinnedTabIds,
   type ParkVerdictFlipRecord
 } from './terminal-park-verdict-flip-telemetry'
 
@@ -335,5 +336,29 @@ describe('expired pins stop gating breadcrumbs', () => {
       'terminal_park_verdict_churn',
       expect.objectContaining({ trigger: 'window' })
     )
+  })
+
+  // Why: the pin is set from flips on the rendered verdict, so it has to be
+  // readable — and expirable — for any live tab, not only cold-park candidates
+  // (issue #15136: the driver was the worktree-level park prop).
+  it('selects and expires pins for tabs the cold-park selector never proposed', () => {
+    const records = new Map<string, ParkVerdictFlipRecord>()
+    for (let i = 0; i < 40; i += 1) {
+      observe({ records, parked: i % 2 === 0, nowMs: 1_000 + i * 10 })
+    }
+
+    const pinned = selectParkVerdictPinnedTabIds({ records, tabIds: [TAB], nowMs: 1_500 })
+    expect(pinned.pinnedTabIds).toEqual(new Set([TAB]))
+    expect(pinned.earliestPinExpiryMs).toBe(records.get(TAB)?.pinnedUntilMs)
+
+    // Past the deadline the pin lapses in place, so damping never latches on.
+    const lapsed = selectParkVerdictPinnedTabIds({
+      records,
+      tabIds: [TAB],
+      nowMs: 1_000 + TERMINAL_TAB_PARK_FLIP_WINDOW_MS * 3
+    })
+    expect(lapsed.pinnedTabIds.size).toBe(0)
+    expect(lapsed.earliestPinExpiryMs).toBeNull()
+    expect(records.get(TAB)?.pinnedUntilMs).toBeNull()
   })
 })

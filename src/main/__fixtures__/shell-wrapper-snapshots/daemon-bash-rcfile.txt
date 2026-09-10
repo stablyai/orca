@@ -44,9 +44,20 @@ __orca_omp_should_skip_extension() {
   esac
   return 1
 }
-__orca_omp() {
-  local __orca_use_extension=1
-  __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+__orca_omp_cwd_is_usable() {
+  local __orca_physical_cwd
+  [[ -x . ]] || return 1
+  if [[ -n "${PWD:-}" && -d "${PWD:-}" ]]; then
+    [[ "${PWD}" -ef . ]]
+  else
+    # Why compare the path: shell builtins can print a cached path for a deleted cwd.
+    __orca_physical_cwd="$(builtin pwd -P 2>/dev/null)" || return 1
+    [[ -d "$__orca_physical_cwd" && "$__orca_physical_cwd" -ef . ]]
+  fi
+}
+__orca_omp_invoke() {
+  local __orca_use_extension="$1"
+  shift
   if [[ $__orca_use_extension -eq 1 && -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
     if [[ "${1:-}" == "launch" ]]; then
       shift
@@ -56,6 +67,27 @@ __orca_omp() {
     fi
   else
     command omp "$@"
+  fi
+}
+__orca_omp() {
+  local __orca_use_extension=1
+  __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+  if ! __orca_omp_cwd_is_usable; then
+    local __orca_logical_cwd="${PWD:-${ORCA_WORKTREE_PATH:-${ORCA_ROOT_PATH:-}}}"
+    # Why: a restored shell can retain the deleted directory inode after its path is recreated.
+    (
+      if [[ -z "$__orca_logical_cwd" ]]; then
+        printf 'Orca: OMP cannot start because no terminal working directory is available. Open a new terminal in an existing directory.\n' >&2
+        return 1
+      fi
+      if ! builtin cd -P -- "$__orca_logical_cwd" 2>/dev/null; then
+        printf 'Orca: OMP cannot access the terminal working directory "%s". Open a new terminal in an existing directory.\n' "$__orca_logical_cwd" >&2
+        return 1
+      fi
+      __orca_omp_invoke "$__orca_use_extension" "$@"
+    )
+  else
+    __orca_omp_invoke "$__orca_use_extension" "$@"
   fi
 }
 if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
@@ -72,7 +104,7 @@ fi
 # Why || : twice — zsh alone aborts inside the substitution, but every shell's
 # assignment adopts its exit status, so an absent codex trips set -e in bash too.
 __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
+if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" && -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
@@ -95,10 +127,6 @@ __orca_osc133_precmd() {
     unset __orca_in_command
   fi
   printf "\033]133;A\007"
-  # Why: emit the shell-ready marker here (not a trailing PROMPT_COMMAND entry)
-  # so a framework that must be last in PROMPT_COMMAND — bash-preexec — is not
-  # displaced by one of Orca's own hooks.
-  [[ -n "$__orca_ready_marker" ]] && printf "\033]777;orca-shell-ready\007"
   return "$exit_code"
 }
 __orca_osc133_preexec() {
@@ -156,6 +184,11 @@ __orca_osc133_epilogue() {
   unset __orca_in_prompt_command
   __orca_adopt_outer_debug_trap
   trap '__orca_osc133_preexec' DEBUG
+  # Readline renders PS1 after entering raw mode; prompt hooks still run in cooked mode.
+  if [[ -n "$__orca_ready_marker" ]]; then
+    PS1="${PS1-}"'\[\e]777;orca-shell-ready\a\]'
+    __orca_ready_marker=""
+  fi
 }
 __orca_normalize_prompt_command_part() {
   local __orca_value="$1" __orca_output_name="$2" __orca_character __orca_chunk

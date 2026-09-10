@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
@@ -99,6 +99,27 @@ describe('runProcessSync', () => {
   })
 })
 
+describe('bounded output', () => {
+  it('reports a clipped answer instead of passing it off as the whole one', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(64))'],
+      maxOutputBytes: 8
+    })
+    expect(result.stdout).toBe('xxxxxxxx')
+    expect(result.outputTruncated).toBe(true)
+  })
+
+  it('does not call output that exactly fills the cap truncated', async () => {
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(8))'],
+      maxOutputBytes: 8
+    })
+    expect(result.outputTruncated).toBe(false)
+  })
+})
+
 describe('unkillable children', () => {
   it('settles after the grace period rather than outliving its own deadline', async () => {
     // `close` only fires once the child is gone, so a child that ignores the
@@ -189,12 +210,15 @@ describe('a signal that is already aborted', () => {
     const controller = new AbortController()
     controller.abort()
     const startedAt = Date.now()
+    const onChildTerminated = vi.fn()
     const result = await runProcess({
       program: path.join(tmpdir(), 'orca-must-not-spawn'),
       timeoutMs: 30_000,
-      signal: controller.signal
+      signal: controller.signal,
+      onChildTerminated
     })
     expect(result.timedOut).toBe(false)
+    expect(onChildTerminated).toHaveBeenCalledOnce()
     expect(Date.now() - startedAt).toBeLessThan(10_000)
   }, 20_000)
 })

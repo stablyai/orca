@@ -40,8 +40,8 @@ export type PtyRuntimeControllerDeps = {
   noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
   reconcileSharedRuntimeResumeHome: (
     resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
-    resolveCurrent: () => string | null
-  ) => string
+    resolveCurrent: () => string | null | Promise<string | null>
+  ) => Promise<string>
   stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
     env: T,
     launch: CodexResumeLaunch
@@ -54,7 +54,7 @@ export type PtyRuntimeControllerDeps = {
   ) => string | undefined
   requestSerializedBuffer: (
     ptyId: string,
-    opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
+    opts?: { scrollbackRows?: number }
   ) => Promise<{
     data: string
     cols: number

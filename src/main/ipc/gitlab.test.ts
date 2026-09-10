@@ -353,7 +353,7 @@ describe('GitLab IPC handlers', () => {
     ]
     listMergeRequestsMock.mockResolvedValue({ items: [] })
     listWorkItemsMock.mockResolvedValue({ items: [] })
-    listIssuesMock.mockResolvedValue({ items: [] })
+    listIssuesMock.mockResolvedValue({ items: [], totalPages: 3 })
     getIssueMock.mockResolvedValue(null)
     createIssueMock.mockResolvedValue({ ok: true, number: 1, url: 'https://gitlab.example/1' })
     updateIssueMock.mockResolvedValue({ ok: true })
@@ -385,10 +385,11 @@ describe('GitLab IPC handlers', () => {
       page: 1,
       perPage: 20
     })
-    await ipcHandlers.get('gitlab:listIssues')?.(null, {
+    const issueListResult = await ipcHandlers.get('gitlab:listIssues')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
-      limit: 20
+      limit: 20,
+      page: 3
     })
     await ipcHandlers.get('gitlab:issue')?.(null, { repoPath: '/local/orca', number: 7 })
     await ipcHandlers.get('gitlab:createIssue')?.(null, {
@@ -430,6 +431,7 @@ describe('GitLab IPC handlers', () => {
       null,
       localGitOptions
     )
+    expect(issueListResult).toMatchObject({ totalPages: 3 })
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
@@ -447,7 +449,8 @@ describe('GitLab IPC handlers', () => {
       'opened',
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      3
     )
     expect(getIssueMock).toHaveBeenCalledWith('/local/orca', 7, null, localGitOptions)
     expect(createIssueMock).toHaveBeenCalledWith(

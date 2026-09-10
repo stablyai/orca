@@ -65,10 +65,3 @@ export function getGeneratedWorktreeCreateRetryCandidate(
 export function isRetryableWorktreeCreateConflict(message: string): boolean {
   return RETRYABLE_WORKTREE_CREATE_CONFLICT_PATTERNS.some((pattern) => pattern.test(message))
 }
-
-// Why: the host drops a *settled* worktree.create dedupe record this long after it
-// resolves, so a client replaying an idempotent create must land inside the window
-// or the replay misses the record and the host's suffix loop builds a second
-// worktree. Shared so the client's replay budget can be asserted against it instead
-// of assuming a value that lives in another process.
-export const WORKTREE_CREATE_DEDUPE_TTL_MS = 60_000

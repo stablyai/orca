@@ -3,6 +3,7 @@
 // (states, entries, normalization) and the transport envelopes live next to each
 // other. Re-exported from agent-status-types, so existing import sites are unchanged.
 
+import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
@@ -34,6 +35,11 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   connectionId: string | null
   /** Timestamp (ms) when the hook server received this latest status event. */
   receivedAt: number
+  /** When the reported evidence was first observed, as distinct from `receivedAt` (delivery
+   *  order). A relay reconnect replays cached rows, and `receivedAt` must restamp to stay
+   *  monotonic past the transient-clear watermark — so only this clock can measure staleness.
+   *  Optional: absent from old hosts, where consumers fall back to `receivedAt`. */
+  evidenceObservedAt?: number
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
@@ -44,7 +50,20 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   promptInteractionKey?: string
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** Present on rows the structured session host projects; `owned` keeps them fresh past the
+   *  staleness window because the host still runs the provider child. */
+  structuredHost?: StructuredHostStatus
 } & WithAgentStatusObservation
+
+/** Identity used by UI-only cleanup to evict exactly the status it cleared.
+ *  Deliberately minimal — receivedAt + stateStartedAt pin the exact event instance
+ *  (the same baseline the interrupt-inference guard uses). Renderer-enriched fields
+ *  (connectionId, worktreeId) diverge from main's cache and must not participate. */
+export type AgentStatusCacheIdentity = {
+  paneKey: string
+  receivedAt: number
+  stateStartedAt: number
+}
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
 export type AgentStatusClearIpcPayload =

@@ -7,7 +7,7 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
-import { BULK_CHUNK_SIZE, isTrackedPathSpec, literalPathspec } from './git-pathspec'
+import { bulkPathspecCommands, isTrackedPathSpec, literalPathspec } from './git-pathspec'
 
 /**
  * Discard working tree changes for a file.
@@ -62,14 +62,15 @@ async function listTrackedPathSpecs(
   options: GitRuntimeOptions = {}
 ): Promise<string[]> {
   const trackedPaths: string[] = []
-  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
-    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    const { stdout } = await gitExecFileAsync(
-      ['ls-files', '-z', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
-      {
-        ...gitOptionsForWorktree(worktreePath, options)
-      }
-    )
+  const commands = bulkPathspecCommands(['ls-files', '-z', '--'], filePaths, worktreePath, options)
+  for (const args of commands) {
+    const { stdout } = await gitExecFileAsync(args, {
+      ...gitOptionsForWorktree(worktreePath, options),
+      // Why: this buffers rather than streams, so it must fence -- an unfenced WSL
+      // login shell glues its rc banner onto the first NUL record, and a tracked
+      // path that fails to match is silently reclassified as untracked.
+      captureWslLoginShellOutput: true
+    })
     // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
     for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {
@@ -85,17 +86,11 @@ async function cleanUntrackedPaths(
   filePaths: readonly string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
-    const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    if (chunk.length > 0) {
-      // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
-      await gitExecFileAsync(
-        ['clean', '-ffdx', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
-        {
-          ...gitOptionsForWorktree(worktreePath, options)
-        }
-      )
-    }
+  // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
+  // A pathspec-free `clean -ffdx` would sweep the whole worktree; the chunker emits no empty chunk.
+  const commands = bulkPathspecCommands(['clean', '-ffdx', '--'], filePaths, worktreePath, options)
+  for (const args of commands) {
+    await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
   }
 }
 
@@ -133,20 +128,14 @@ export async function bulkDiscardChanges(
       untrackedPaths,
       (targetPaths) => cleanUntrackedPaths(worktreePath, targetPaths, options),
       async () => {
-        for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
-          const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
-          await gitExecFileAsync(
-            [
-              'restore',
-              '--worktree',
-              '--source=HEAD',
-              '--',
-              ...chunk.map((filePath) => literalPathspec(filePath, options))
-            ],
-            {
-              ...gitOptionsForWorktree(worktreePath, options)
-            }
-          )
+        const commands = bulkPathspecCommands(
+          ['restore', '--worktree', '--source=HEAD', '--'],
+          trackedPaths,
+          worktreePath,
+          options
+        )
+        for (const args of commands) {
+          await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
         }
       }
     )

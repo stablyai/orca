@@ -21,7 +21,7 @@ const linearMocks = vi.hoisted(() => ({
 const runtimeMocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 const githubMocks = vi.hoisted(() => ({ listLabels: vi.fn() }))
 
-vi.mock('@/runtime/runtime-linear-client', () => ({
+vi.mock('@/runtime/runtime-linear-project-client', () => ({
   linearTeamStates: linearMocks.linearTeamStates,
   linearTeamLabels: linearMocks.linearTeamLabels,
   linearTeamMembers: linearMocks.linearTeamMembers

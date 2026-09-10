@@ -18,13 +18,18 @@ import {
 import { rememberPaneKeyForPty } from '../pane/key-state'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
-import { admitRendererAgentLaunchAuthority } from '../pane/launch-authority'
+import {
+  admitProviderReattachLaunchIdentity,
+  admitRendererAgentLaunchAuthority
+} from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
+import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-size'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
-  const { rendererPreSignaled, rendererAlreadyRegistered } = await persistPtyIpcSpawnCommit(ctx)
+  const { rendererPreSignaled, rendererAlreadyRegistered, committedSize } =
+    await persistPtyIpcSpawnCommit(ctx)
 
   // Why: seed the headless emulator before registerPty so concurrent live PTY data lands on top of the seed, not replacing it (mobile keeps the daemon-restored scrollback).
   // Skip when the renderer will be authoritative — its xterm buffer is richer than the daemon snapshot.
@@ -35,14 +40,14 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         : undefined
     if (typeof ctx.result.snapshot === 'string' && ctx.result.snapshot.length > 0) {
       // Why kitty flags ride seed metadata: the snapshot omits them, but the re-seeded emulator must answer hidden `CSI ? u` with the running app's flags (terminal-query-authority.md).
-      ctx.deps.runtime.seedHeadlessTerminal(
-        ctx.result.id,
-        ctx.result.snapshot,
-        snapshotSeedSize,
-        typeof ctx.result.snapshotKittyKeyboardFlags === 'number'
+      ctx.deps.runtime.seedHeadlessTerminal(ctx.result.id, ctx.result.snapshot, snapshotSeedSize, {
+        ...(typeof ctx.result.snapshotKittyKeyboardFlags === 'number'
           ? { kittyKeyboardFlags: ctx.result.snapshotKittyKeyboardFlags }
-          : {}
-      )
+          : {}),
+        ...(ctx.result.snapshotTerminalOwner
+          ? { terminalOwner: ctx.result.snapshotTerminalOwner }
+          : {})
+      })
     } else if (
       ctx.result.coldRestore &&
       typeof ctx.result.coldRestore.scrollback === 'string' &&
@@ -68,6 +73,15 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ctx.deps.runtime.seedHeadlessTerminal(ctx.result.id, ctx.result.replay)
     }
   }
+  // Why after the seed: a seed skips an existing model, and live bytes may have lazily created
+  // one at the 80x24 default before the spawn reply revealed the session's real grid.
+  reflowHeadlessTerminalToCommittedGrid({
+    result: ctx.result,
+    committedSize,
+    reflowHeadlessTerminalToPtyGrid: ctx.deps.runtime?.reflowHeadlessTerminalToPtyGrid?.bind(
+      ctx.deps.runtime
+    )
+  })
   if (
     typeof args.worktreeId === 'string' &&
     args.worktreeId.length > 0 &&
@@ -82,6 +96,11 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       hasStablePaneOwner: ctx.stablePaneOwner !== null,
       incarnationId: ctx.result.incarnationId
     })
+    const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity({
+      isReattach: ctx.result.isReattach === true,
+      launchAgent: ctx.result.launchAgent,
+      incarnationId: ctx.result.incarnationId
+    })
     ctx.deps.runtime?.registerPty(
       ctx.result.id,
       args.worktreeId,
@@ -94,8 +113,10 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         ? {
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
+            ...(ctx.preAllocatedHandle ? { terminalHandle: ctx.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-            ...(agentLaunchAuthority ? { agentLaunchAuthority } : {})
+            ...(agentLaunchAuthority ? { agentLaunchAuthority } : {}),
+            ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
           }
         : undefined,
       !args.connectionId
@@ -138,6 +159,15 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       { authorityVerified: true }
     )
     clearMigrationUnsupportedPtysForPaneKey(ctx.migrationUnsupportedPaneKey)
+  } else if (ctx.opaqueRemintedSpawnPaneKey && ctx.validatedPaneKey) {
+    // Reminted $$ tokens are spawn-physical; alias them to the metadata-proven tab:leaf key.
+    agentHookServer.registerPaneKeyAlias(
+      ctx.opaqueRemintedSpawnPaneKey,
+      ctx.validatedPaneKey,
+      ctx.result.id,
+      Date.now(),
+      { authorityVerified: true }
+    )
   } else if (ctx.validatedPaneKey) {
     if (!ctx.result.isReattach) {
       clearMigrationUnsupportedPtysForPaneKey(ctx.validatedPaneKey)

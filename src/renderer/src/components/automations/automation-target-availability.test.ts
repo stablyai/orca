@@ -5,7 +5,6 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAutomationTargetAvailability } from './automation-target-availability'
-import { getAutomationCreateAvailability } from './automation-create-admission'
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
@@ -88,21 +87,6 @@ function makeRuntimeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatu
 }
 
 describe('automation target availability', () => {
-  it('blocks create admission for a missing or degraded runtime', () => {
-    const target = { kind: 'environment' as const, environmentId: 'env-1' }
-    expect(getAutomationCreateAvailability({ automationHostTarget: target }).reason).toBe(
-      'runtime-checking'
-    )
-    expect(
-      getAutomationCreateAvailability({
-        automationHostTarget: target,
-        runtimeStatusByEnvironmentId: new Map([
-          ['env-1', { status: makeRuntimeStatus({ graphStatus: 'unavailable' }), checkedAt: 1 }]
-        ])
-      }).reason
-    ).toBe('runtime-unavailable')
-  })
-
   it('allows local automations with an available existing workspace', () => {
     expect(
       getAutomationTargetAvailability({

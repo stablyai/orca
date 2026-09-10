@@ -4,6 +4,7 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { SESSION_TAB_METHODS } from './session-tabs'
+import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -628,33 +629,41 @@ describe('session tab RPC methods', () => {
 
   it('streams all known session tab snapshots and later updates', async () => {
     const unsubscribe = vi.fn()
-    const listeners: ((snapshot: unknown) => void)[] = []
+    const listeners: ((snapshot: unknown, changeSequence: number) => void)[] = []
+    const snapshots = [
+      {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      },
+      {
+        worktree: 'wt-2',
+        publicationEpoch: 'epoch-2',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }
+    ]
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listAllMobileSessionTabs: vi.fn(() => [
-        {
-          worktree: 'wt-1',
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        },
-        {
-          worktree: 'wt-2',
-          publicationEpoch: 'epoch-2',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
+      listAllMobileSessionTabs: vi.fn(() => snapshots),
+      listAllMobileSessionTabsWithChangeSequence: vi.fn(() => ({
+        snapshots,
+        changeSequence: 0
+      })),
+      supportsAuthoritativeSessionTabsInventory: vi.fn(() => false),
+      onMobileSessionTabsChanged: vi.fn(
+        (listener: (snapshot: unknown, changeSequence: number) => void) => {
+          listeners.push(listener)
+          return unsubscribe
         }
-      ]),
-      onMobileSessionTabsChanged: vi.fn((listener: (snapshot: unknown) => void) => {
-        listeners.push(listener)
-        return unsubscribe
-      }),
+      ),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -665,15 +674,18 @@ describe('session tab RPC methods', () => {
       (message) => messages.push(message),
       { connectionId: 'conn-1' }
     )
-    listeners[0]?.({
-      worktree: 'wt-1',
-      publicationEpoch: 'epoch-3',
-      snapshotVersion: 2,
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null,
-      tabs: []
-    })
+    listeners[0]?.(
+      {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-3',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      },
+      1
+    )
 
     expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
       'session.tabs:conn-1:*:req-1',
@@ -697,6 +709,11 @@ describe('session tab RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listAllMobileSessionTabs: vi.fn(() => []),
+      listAllMobileSessionTabsWithChangeSequence: vi.fn(() => ({
+        snapshots: [],
+        changeSequence: 0
+      })),
+      supportsAuthoritativeSessionTabsInventory: vi.fn(() => false),
       onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
@@ -800,27 +817,3 @@ describe('session tab RPC methods', () => {
     )
   })
 })
-
-function visibleSnapshot() {
-  return {
-    worktree: 'wt-1',
-    publicationEpoch: 'epoch-1',
-    snapshotVersion: 1,
-    activeGroupId: 'group-1',
-    activeTabId: 'tab-1::leaf-1',
-    activeTabType: 'terminal' as const,
-    tabGroups: [{ id: 'group-1', activeTabId: 'tab-1', tabOrder: ['tab-1'] }],
-    tabs: [
-      {
-        type: 'terminal' as const,
-        id: 'tab-1::leaf-1',
-        parentTabId: 'tab-1',
-        leafId: 'leaf-1',
-        title: 'Terminal',
-        status: 'ready' as const,
-        terminal: 'pty-1',
-        isActive: true
-      }
-    ]
-  }
-}

@@ -1,13 +1,26 @@
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import {
+  getActiveAutomationListSearchQuery,
+  resolveAutomationListSearchQuery
+} from './automation-list-search-query'
 
-/** Pasted queries above this are rejected so filtering never runs on unbounded input. */
-export const AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+export {
+  AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES,
+  clampAutomationListSearchQueryInput,
+  getActiveAutomationListSearchQuery,
+  isAutomationListSearchQueryTooLarge,
+  resolveAutomationListSearchQuery,
+  type AutomationListSearchQueryResolution
+} from './automation-list-search-query'
 
 // Why: prompts can be multi-MB agent instructions. Index only a fixed prefix so
 // lowercasing/includes stay O(bound) per automation rather than O(prompt size).
 export const AUTOMATION_LIST_SEARCH_NAME_MAX_CODE_UNITS = 512
 export const AUTOMATION_LIST_SEARCH_PROJECT_MAX_CODE_UNITS = 1_024
-export const AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS = 8 * 1024
+export const AUTOMATION_LIST_SEARCH_WORKSPACE_MAX_CODE_UNITS = 512
+export const AUTOMATION_LIST_SEARCH_AGENT_MAX_CODE_UNITS = 128
+export const AUTOMATION_LIST_SEARCH_HOST_MAX_CODE_UNITS = 256
+/** Design doc: at most the first 2,048 prompt characters are searchable. */
+export const AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS = 2_048
 
 /** Indexed when a local automation has no resolved project so "unknown" still matches. */
 export const AUTOMATION_LIST_SEARCH_UNKNOWN_PROJECT = 'unknown project'
@@ -16,66 +29,30 @@ export type AutomationListSearchFields = {
   name: string
   project: string
   prompt: string
+  workspace?: string | null
+  agent?: string | null
+  host?: string | null
 }
 
 /** Lowercased, length-capped fields ready for substring match. */
 export type AutomationListSearchIndex = {
   name: string
   project: string
+  workspace: string
+  agent: string
+  host: string
   prompt: string
 }
 
-export type AutomationListSearchQueryResolution =
-  | { status: 'inactive' }
-  | { status: 'too_large' }
-  | { status: 'active'; query: string }
-
-export function isAutomationListSearchQueryTooLarge(
-  rawQuery: string,
-  maxBytes = AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES
-): boolean {
-  return isClipboardTextByteLengthOverLimit(rawQuery, maxBytes)
-}
-
-/**
- * Caps the controlled input value so a multi-MB paste cannot pin renderer
- * memory. Keeping maxBytes+1 code units is enough for the over-limit check
- * (`length > maxBytes`) while discarding the rest of the paste.
- */
-export function clampAutomationListSearchQueryInput(
-  rawQuery: string,
-  maxBytes = AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES
-): string {
-  const maxStoredCodeUnits = maxBytes + 1
-  if (rawQuery.length <= maxStoredCodeUnits) {
-    return rawQuery
-  }
-  return rawQuery.slice(0, maxStoredCodeUnits)
-}
-
-export function resolveAutomationListSearchQuery(
-  rawQuery: string,
-  maxBytes = AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES
-): AutomationListSearchQueryResolution {
-  // Why: length pre-check short-circuits multi-MB pastes before UTF-8 scan.
-  if (isClipboardTextByteLengthOverLimit(rawQuery, maxBytes)) {
-    return { status: 'too_large' }
-  }
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) {
-    return { status: 'inactive' }
-  }
-  return { status: 'active', query }
-}
-
-/** Active lowercase query, or null when search must not run. */
-export function getActiveAutomationListSearchQuery(
-  rawQuery: string,
-  maxBytes = AUTOMATION_LIST_SEARCH_QUERY_MAX_BYTES
-): string | null {
-  const resolved = resolveAutomationListSearchQuery(rawQuery, maxBytes)
-  return resolved.status === 'active' ? resolved.query : null
-}
+/** Cheapest field first so the prompt prefix is scanned least often. */
+const SEARCH_FIELD_CAPS: readonly (readonly [keyof AutomationListSearchIndex, number])[] = [
+  ['name', AUTOMATION_LIST_SEARCH_NAME_MAX_CODE_UNITS],
+  ['agent', AUTOMATION_LIST_SEARCH_AGENT_MAX_CODE_UNITS],
+  ['host', AUTOMATION_LIST_SEARCH_HOST_MAX_CODE_UNITS],
+  ['workspace', AUTOMATION_LIST_SEARCH_WORKSPACE_MAX_CODE_UNITS],
+  ['project', AUTOMATION_LIST_SEARCH_PROJECT_MAX_CODE_UNITS],
+  ['prompt', AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS]
+]
 
 /** Avoid splitting a surrogate pair at the cap boundary. */
 export function truncateAutomationListSearchField(value: string, maxCodeUnits: number): string {
@@ -104,20 +81,11 @@ export function normalizeAutomationListSearchField(
 export function buildAutomationListSearchIndex(
   fields: AutomationListSearchFields
 ): AutomationListSearchIndex {
-  return {
-    name: normalizeAutomationListSearchField(
-      fields.name,
-      AUTOMATION_LIST_SEARCH_NAME_MAX_CODE_UNITS
-    ),
-    project: normalizeAutomationListSearchField(
-      fields.project,
-      AUTOMATION_LIST_SEARCH_PROJECT_MAX_CODE_UNITS
-    ),
-    prompt: normalizeAutomationListSearchField(
-      fields.prompt,
-      AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS
-    )
+  const index = {} as AutomationListSearchIndex
+  for (const [field, maxCodeUnits] of SEARCH_FIELD_CAPS) {
+    index[field] = normalizeAutomationListSearchField(fields[field], maxCodeUnits)
   }
+  return index
 }
 
 export function buildAutomationProjectSearchText(parts: {
@@ -135,12 +103,12 @@ export function automationListSearchIndexMatches(
   index: AutomationListSearchIndex,
   activeQuery: string
 ): boolean {
-  // Why: check short fields first so huge-prompt includes rarely run.
-  return (
-    index.name.includes(activeQuery) ||
-    index.project.includes(activeQuery) ||
-    index.prompt.includes(activeQuery)
-  )
+  for (const [field] of SEARCH_FIELD_CAPS) {
+    if (index[field].includes(activeQuery)) {
+      return true
+    }
+  }
+  return false
 }
 
 export function automationListSearchFieldsMatch(
@@ -221,14 +189,13 @@ export function filterByAutomationListSearch<T>(
 /**
  * Content fingerprint for search-relevant fields only. Used so list refresh
  * ticks that replace arrays with equivalent search content do not rebuild
- * indexes or re-run filtering.
+ * indexes or re-run filtering. Fields are capped first so fingerprinting a
+ * multi-MB prompt costs the same as indexing it.
  */
 export function buildAutomationListSearchFingerprint(
-  sources: readonly AutomationListSearchFields[]
+  sources: readonly AutomationListSearchFields[],
+  keys?: readonly string[]
 ): string {
-  if (sources.length === 0) {
-    return ''
-  }
   let fingerprint = ''
   for (let i = 0; i < sources.length; i += 1) {
     if (i > 0) {
@@ -238,7 +205,10 @@ export function buildAutomationListSearchFingerprint(
     if (!source) {
       continue
     }
-    fingerprint += `${source.name}\u0001${source.project}\u0001${source.prompt}`
+    fingerprint += keys?.[i] ?? ''
+    for (const [field, maxCodeUnits] of SEARCH_FIELD_CAPS) {
+      fingerprint += `\u0001${truncateAutomationListSearchField(source[field] ?? '', maxCodeUnits)}`
+    }
   }
   return fingerprint
 }

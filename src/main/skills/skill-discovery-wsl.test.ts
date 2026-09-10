@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SkillScanRoot } from './skill-discovery-sources'
 import { buildWslSkillDiscoveryCommand, parseWslSkillDiscoveryOutput } from './skill-discovery-wsl'
 
@@ -87,4 +87,30 @@ describe('WSL skill discovery', () => {
       'unknown source'
     )
   })
+})
+
+it('reuses one source collator while preserving locale, lexical numbers, and stable ties', () => {
+  const labels = Array.from(
+    { length: 200 },
+    (_, index) =>
+      ['éclair', 'Eclair', 'item2', 'item10', 'Ångström', 'zebra', 'İstanbul'][index % 7]
+  )
+  const roots = labels.map((label, index) => ({ ...homeRoot, id: String(index), label }))
+  const expected = [...roots].sort((a, b) =>
+    // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
+    a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
+  )
+  const NativeCollator = Intl.Collator
+  const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
+    return new NativeCollator(locales, options)
+  })
+  const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+  try {
+    const result = parseWslSkillDiscoveryOutput('', roots, 42)
+    expect(result.sources.map((source) => source.id)).toEqual(expected.map((root) => root.id))
+    expect(construct).toHaveBeenCalledExactlyOnceWith(undefined, { sensitivity: 'base' })
+    expect(localeCompare).not.toHaveBeenCalled()
+  } finally {
+    vi.restoreAllMocks()
+  }
 })

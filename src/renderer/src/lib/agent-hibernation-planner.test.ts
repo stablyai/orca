@@ -87,7 +87,7 @@ function plannedPaneKeys(input: AgentHibernationPlannerSnapshot): string[] {
 }
 
 describe('agent sleep planner', () => {
-  it('selects nothing when disabled, active, or foreground', () => {
+  it('selects nothing when disabled or foreground', () => {
     expect(
       plannedWorktrees(
         snapshot({
@@ -98,7 +98,6 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([])
-    expect(plannedWorktrees(snapshot({ activeWorktreeId: 'wt-bg' }))).toEqual([])
     expect(plannedWorktrees(snapshot({ foregroundTerminalTabIds: ['tab-1'] }))).toEqual([])
   })
 
@@ -359,6 +358,9 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
+  // Why: `activeWorktreeId` is the worktree under test, so this also pins #16211 — the planner
+  // used to skip the active tree wholesale and this case would return []. Lever from @sanshengai's
+  // #16214; it fails against the pre-fix planner, where a standalone background-worktree case does not.
   it('does not let one foreground terminal tab reset a sibling tab in the same worktree', () => {
     const siblingEntry = entry({
       paneKey: `tab-2:${OTHER_LEAF}`,
@@ -369,6 +371,7 @@ describe('agent sleep planner', () => {
     expect(
       plannedPaneKeys(
         snapshot({
+          activeWorktreeId: 'wt-bg',
           foregroundTerminalTabIds: ['tab-1'],
           foregroundTerminalLastSeenAtByTabId: {
             'tab-1': NOW
@@ -744,37 +747,6 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
           agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
           sleepingAgentSessionsByPaneKey: {
             [agentEntry.paneKey]: liveAnchor(agent, providerSession) as never
-          },
-          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
-        })
-      )
-    ).toEqual([agentEntry.paneKey])
-  })
-
-  it('still refuses a pane fenced against automatic resume', () => {
-    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
-    const agentEntry = entry({ agentType: 'claude', providerSession })
-    const fenced = {
-      ...liveAnchor('claude', providerSession),
-      automaticResumeBlockedBy: 'legacy-orchestration-worker'
-    }
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
-          sleepingAgentSessionsByPaneKey: { [agentEntry.paneKey]: fenced as never },
-          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
-        })
-      )
-    ).toEqual([])
-    // Control: the identical pane IS planned once the fence is gone, so the rejection
-    // above isolates the fence rather than some other guard.
-    expect(
-      plannedPaneKeys(
-        snapshot({
-          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
-          sleepingAgentSessionsByPaneKey: {
-            [agentEntry.paneKey]: liveAnchor('claude', providerSession) as never
           },
           ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
         })

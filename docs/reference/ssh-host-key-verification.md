@@ -28,11 +28,11 @@ Three corrections to the first draft:
   verified. The ssh2 proxy-spawn at `:697` is effectively unreachable. Good news for migration, and
   the first draft's motivating example was simply wrong.
 - **Agent forwarding was overstated.** `agentForward` is gated on the user's `ForwardAgent yes`
-  (`ssh-connection-utils.ts:203-205`). `config.agent` is always set, but that is agent *auth*, whose
+  (`ssh-connection-utils.ts:203-205`). `config.agent` is always set, but that is agent _auth_, whose
   signatures bind the session id and cannot be replayed onward. The risk applies to users who opted
   into `ForwardAgent`, not everyone.
 - **Credential theft was understated, and the relay claim was backwards.** `isAgentFallbackError`
-  treats *any* auth error as agent fallback (`ssh-connection-utils.ts:59-61`), so a MITM that rejects
+  treats _any_ auth error as agent fallback (`ssh-connection-utils.ts:59-61`), so a MITM that rejects
   publickey walks the user to the password prompt (`ssh-connection.ts:844`) and the private-key
   **passphrase** prompt (`:834`), and `cachedPassword` is replayed without prompting on every
   reconnect (`:709`). Meanwhile the relay upload matters less than assumed — the attacker already
@@ -65,7 +65,7 @@ Two consequences to own rather than discover:
 
   There is no `ssh`-only way out of this: `-F /dev/null` does NOT invert the exclusion, it reports
   built-in defaults, so a probe built on it looks permissive on every machine. Verified against
-  OpenSSH 10.2p1. So the file is read directly, answering a deliberately weaker question — *could*
+  OpenSSH 10.2p1. So the file is read directly, answering a deliberately weaker question — _could_
   the site config be restricting host keys — where anything ambiguous (unreadable, an unresolvable
   `Include`, the directive present at all) keeps the refusal. Only a site config that demonstrably
   says nothing about host keys clears it, which is what stops the rule punishing every devcontainer,
@@ -130,16 +130,16 @@ connect, training them to dismiss the one warning that matters.
 
 > **Corrected against a live client.** The premise above is wrong about OpenSSH, though the
 > conclusion survives. `check_key_in_hostkeys` is not type-scoped at all: ANY non-marker entry for
-> the host that is not byte-equal produces `HOST_CHANGED`. Verified on 127.0.0.1:2223 — known_hosts
+> the host that is not byte-equal produces `HOST_CHANGED`. Verified on 127.0.0.1:2223 — `known_hosts`
 > holding only `ssh-rsa` against an ed25519-only server prints `IDENTIFICATION HAS CHANGED` and
-> refuses. So ssh does not avoid the false alarm by scoping; it avoids the *situation* via
+> refuses. So ssh does not avoid the false alarm by scoping; it avoids the _situation_ via
 > `order_hostkeyalgs`, and hard-fails when the situation arises anyway. Our split into `mismatch`
 > and `unknown-type-known-host` therefore only chooses the wording — both refuse, which is ssh's
 > action. What the ordering below buys us is what it buys ssh: the situation mostly never arises.
 
 **But scoping alone is a downgrade vector, and this is the correction that most changes the design.**
 OpenSSH is safe here only because `order_hostkeyalgs()` reorders the client's proposed host-key
-algorithms to put the types already in `known_hosts` first, and RFC 4253 gives the *client's* order
+algorithms to put the types already in `known_hosts` first, and RFC 4253 gives the _client's_ order
 priority — so a server cannot choose a type the client deprioritised. ssh2 negotiates ed25519 first
 regardless. An attacker who cannot forge the RSA key on file simply presents ed25519 and receives a
 friendly first-contact prompt instead of a hard failure.
@@ -147,7 +147,7 @@ friendly first-contact prompt instead of a hard failure.
 Therefore: **set ssh2's `algorithms.serverHostKey` to lead with the key types already known for that
 host.** Type scoping without algorithm ordering is not a safe design.
 
-And when the presented type is unknown *while other types are known for this host*, that is
+And when the presented type is unknown _while other types are known for this host_, that is
 `unknown-type-known-host` — never a plain TOFU prompt. It must say we already hold a different key
 for this host.
 
@@ -193,7 +193,7 @@ means nothing is known.
 
 ### D5. Recovery must not live in the failure dialog
 
-A "forget this host key" button *in* the mismatch dialog is D4's rejected "trust anyway" with one
+A "forget this host key" button _in_ the mismatch dialog is D4's rejected "trust anyway" with one
 extra click. Recovery lives in target settings: a separate, deliberate surface, no auto-retry, and it
 shows the stored fingerprint so the user is choosing knowingly.
 
@@ -201,7 +201,7 @@ Offer it only when **our** store is what disagreed; when `known_hosts` disagrees
 record cannot unblock the connect. Messages, written to avoid naming internals:
 
 > **Ours disagreed** — "The host key for `build-01` changed since you last connected from Orca. If you
-> rebuilt or reprovisioned this machine, this is expected." → *Forget the saved key* / *Cancel*
+> rebuilt or reprovisioned this machine, this is expected." → _Forget the saved key_ / _Cancel_
 
 > **`known_hosts` disagreed** — "The host key for `build-01` does not match the entry in
 > `~/.ssh/known_hosts`. `ssh` and `git` will refuse this host too. Run `ssh-keygen -R build-01`." →
@@ -239,7 +239,7 @@ machines, two targets can name one machine, and a re-created target must not los
 The store is a **dedicated file**, not the main persistence blob (`persistence.ts:7088`): a settings
 restore or rollback must not silently reset trust. Accept and mismatch events are logged.
 
-`hostKeyFingerprint` is now security-relevant *and* wire-relevant — it is an isolation namespace sent
+`hostKeyFingerprint` is now security-relevant _and_ wire-relevant — it is an isolation namespace sent
 to the host (`ssh-relay-session.ts:1298`, `managed-hook-owner-identity.ts:187`). It is `undefined` on
 the system transport, so **no trust logic may key off it**, and its format must not change (see
 Traps).
@@ -247,11 +247,11 @@ Traps).
 ## Phasing — ship the defence before the dialog
 
 Review made the case that the riskiest part of this change is not the security model but the modal.
-Startup restore fires eager connects for *all* previously-active targets in parallel (`App.tsx:1041`)
+Startup restore fires eager connects for _all_ previously-active targets in parallel (`App.tsx:1041`)
 with a 15s timeout, while a prompt would live 120s — N unknown hosts means N stacked dialogs
 outliving the timeout that already deferred them. Runtime-owned ephemeral VMs
 (`ephemeral-vm-runtime-ssh.ts:31`) dial a freshly provisioned host with a brand-new key on every
-launch. Paired-web connects run on the *host desktop* (`runtime/rpc/methods/ssh.ts:32`), so the
+launch. Paired-web connects run on the _host desktop_ (`runtime/rpc/methods/ssh.ts:32`), so the
 dialog would open on someone else's screen while the web user watches a spinner.
 
 **Phase 1 — no new modal.** Consult `known_hosts` + our store. `match` connects. `unknown` persists
@@ -301,10 +301,11 @@ Each of these makes the fix silently do nothing. All confirmed in our tree.
 ## Scope
 
 **In scope, corrected:** IPv6 literals and `[host]:port` bracket parsing. Review was right that this
-is a *parser* requirement, not a scope call — getting it wrong means hosts `ssh` knows come back
+is a _parser_ requirement, not a scope call — getting it wrong means hosts `ssh` knows come back
 `unknown`, which is the prompt-training harm D3 exists to avoid.
 
 **Out of scope, with consequences stated:**
+
 - **`CheckHostIP`** — OpenSSH defaults it off; we form candidates from the hostname only.
 - **WSL** — `src/main/ssh/` has no WSL awareness; a distro's `known_hosts` is unreachable, so WSL
   users get first-contact treatment for hosts they already verified.
@@ -337,7 +338,7 @@ verified by running an OpenSSH 10.2p1 client against a real `sshd` on `127.0.0.1
 its verdict:
 
 - **The bare-host fallback pass never reports a change.** With `StrictHostKeyChecking=accept-new`, a
-  bare line holding a *different* key, dialed on a non-default port, made ssh connect and append a
+  bare line holding a _different_ key, dialed on a non-default port, made ssh connect and append a
   new `[127.0.0.1]:2222` line — first contact, no `IDENTIFICATION HAS CHANGED`. Reporting `mismatch`
   on that pass would refuse hosts ssh connects to happily, and would have looked like the cautious
   choice.
@@ -355,16 +356,16 @@ subtly wrong.**
 Fixed after review:
 
 1. **Our own store was type-downgradable.** The inline lookup filtered by key type first and could
-   only answer match/mismatch/unknown, so a record of a *different* type read as `unknown`. D3's
+   only answer match/mismatch/unknown, so a record of a _different_ type read as `unknown`. D3's
    downgrade, applied to the records we create ourselves. Stored types now also feed the algorithm
    ordering — without that the guard is only half present.
 2. **We keyed on the Orca label.** `ssh -G` echoes its own argument back as `hostname` when no Host
-   block matches, so for a manual target `resolved.hostname` *is* the label — the one name D2
+   block matches, so for a manual target `resolved.hostname` _is_ the label — the one name D2
    forbids. We consulted no entries at all.
 3. **A refused key still walked the credential ladder.** ssh2 reports a denial as a generic auth
    failure, so we went on to prompt for the passphrase and hand it to the host we had just refused.
    Rejections are now a typed error recognised before any fallback.
-4. **Fail-closed nearly became fail-always.** "No readable known_hosts" counted a *missing* file the
+4. **Fail-closed nearly became fail-always.** "No readable `known_hosts`" counted a _missing_ file the
    same as an unreadable one, so a profile that had never connected — everyone's first run — would
    have been refused, and the suite passed only because dev machines have a `known_hosts`.
 5. **Ephemeral runtimes were refused for a policy they cannot satisfy.** The carve-out sat below the
@@ -404,7 +405,7 @@ tooltip, and the terminal reconnect overlay never asked for it at all. Still ope
   `getPublicSshState`, so a paired-web client always sees exactly `SSH connection unavailable`.
   Pre-existing, but it makes the Phase 2 dialog message unreachable there without a change. Note the
   redaction is not web-only: any target owned by a paired runtime environment is redacted, so a
-  *desktop* user viewing a remote-Orca-server-owned host gets the same generic string.
+  _desktop_ user viewing a remote-Orca-server-owned host gets the same generic string.
 - **RPC fail-fast** becomes load-bearing the moment the dialog exists (see Phasing).
 
 **Known gaps that Phase 1 accepts, listed so they are choices and not surprises:**

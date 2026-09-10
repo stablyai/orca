@@ -18,12 +18,3 @@ export function repoMatchesExternalAutomationTarget(
   }
   return repoHostId === toSshExecutionHostId(target.connectionId)
 }
-
-// Why: the manager target must name the repo's authoritative execution host,
-// not a possibly-stale connectionId.
-export function getExternalAutomationTargetForRepo(
-  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
-): ExternalAutomationTarget {
-  const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
-  return parsed?.kind === 'ssh' ? { type: 'ssh', connectionId: parsed.targetId } : { type: 'local' }
-}

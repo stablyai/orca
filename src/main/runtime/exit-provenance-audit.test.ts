@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import type { DispatchContextRow } from './orchestration/types'
+import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 
 const TAB_ID = '11111111-1111-4111-8111-111111111111'
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -71,7 +72,10 @@ function dispatchOnHandle(
     coordinatorPaneKey: '99999999-9999-4999-8999-999999999999:88888888-8888-4888-8888-888888888888'
   })
   const task = db.createTask({ spec, runId: run.id })
-  return { ...db.createDispatchContext(task.id, HANDLE, PANE_KEY), runId: run.id }
+  return {
+    ...createRootDispatch(db, task.id, HANDLE, PANE_KEY),
+    runId: run.id
+  }
 }
 
 /** Where a lightweight Run's coordinator actually reads its mail (STA-4604). */

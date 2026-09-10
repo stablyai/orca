@@ -141,6 +141,22 @@ function bindsWslBinaryToASpawnedIdentifier(source: string): boolean {
   return false
 }
 
+function passesComparedWslShellPathToSpawnSpec(source: string): boolean {
+  for (const match of source.matchAll(
+    /\bbasename\(\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\)\.toLowerCase\(\)\s*===\s*['"`]wsl\.exe['"`]/g
+  )) {
+    const shellPath = match[1]!.replace(/[.$]/g, '\\$&')
+    const spawnCall = new RegExp(
+      `\\b\\w*(?:spawn|exec|run)\\w*\\s*\\(\\s*(?:${shellPath}\\b|\\{[\\s\\S]{0,2000}?\\bshellPath\\s*:\\s*${shellPath}\\b)`,
+      'i'
+    )
+    if (spawnCall.test(source)) {
+      return true
+    }
+  }
+  return false
+}
+
 function findSpawnSites(): string[] {
   const offenders = new Set<string>()
   for (const path of collectSourceFiles(SOURCE_ROOT)) {
@@ -157,7 +173,10 @@ function findSpawnSites(): string[] {
         offenders.add(relativePath)
       }
     }
-    if (bindsWslBinaryToASpawnedIdentifier(source)) {
+    if (
+      bindsWslBinaryToASpawnedIdentifier(source) ||
+      passesComparedWslShellPathToSpawnSpec(source)
+    ) {
       offenders.add(relativePath)
     }
   }
@@ -346,6 +365,7 @@ describe('wsl.exe is spawned through one runner', () => {
     // so it passed even for a scanner that found nothing. This fails the moment
     // detection stops seeing a call that is definitely there.
     expect(offenders).toContain('main/git/command-runner/wsl-command-resolution.ts')
+    expect(offenders).toContain('main/providers/local-pty-spawn.ts')
   })
 
   it('adds no new direct wsl.exe spawn', () => {

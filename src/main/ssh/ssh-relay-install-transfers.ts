@@ -13,6 +13,11 @@ import {
   type SftpNamespacePathMapping
 } from './sftp-namespace-resolution'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import {
+  describeSandboxedSftpFailure,
+  isSandboxedSftpNamespaceError,
+  latchLateSftpSessionErrors
+} from './sftp-stream-late-error'
 
 export type RelayTransferOptions = {
   signal?: AbortSignal
@@ -20,6 +25,18 @@ export type RelayTransferOptions = {
 }
 
 export async function uploadRelayDirectory(
+  conn: SshConnection,
+  localRelayDir: string,
+  shellRemoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  options?: RelayTransferOptions
+): Promise<void> {
+  await withSandboxedSftpDiagnosis(shellRemoteDir, () =>
+    uploadRelayDirectoryTransfer(conn, localRelayDir, shellRemoteDir, hostPlatform, options)
+  )
+}
+
+async function uploadRelayDirectoryTransfer(
   conn: SshConnection,
   localRelayDir: string,
   shellRemoteDir: string,
@@ -53,6 +70,18 @@ export async function writeRelayFile(
   contents: string,
   options?: RelayTransferOptions
 ): Promise<void> {
+  await withSandboxedSftpDiagnosis(shellRemotePath, () =>
+    writeRelayFileTransfer(conn, hostPlatform, shellRemotePath, contents, options)
+  )
+}
+
+async function writeRelayFileTransfer(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  shellRemotePath: string,
+  contents: string,
+  options?: RelayTransferOptions
+): Promise<void> {
   if (typeof conn.writeFile === 'function') {
     await conn.writeFile(shellRemotePath, contents, {
       hostPlatform,
@@ -77,7 +106,6 @@ async function runSftpFallbackTransfer(
   transfer: (sftp: SFTPWrapper) => Promise<void>
 ): Promise<void> {
   const sftp = await conn.sftp(options?.signal)
-  const swallowLateSftpError = (): void => {}
   let sftpEndRequested = false
   const endSftp = (): void => {
     if (!sftpEndRequested) {
@@ -85,9 +113,7 @@ async function runSftpFallbackTransfer(
       sftp.end()
     }
   }
-  // A late session 'error' after settle would otherwise be unhandled and crash main.
-  sftp.on('error', swallowLateSftpError)
-  sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
+  latchLateSftpSessionErrors(sftp)
   try {
     await raceSftpFileTransferWithAbort(
       transfer(sftp),
@@ -100,5 +126,25 @@ async function runSftpFallbackTransfer(
     )
   } finally {
     endSftp()
+  }
+}
+
+/**
+ * A jump host whose SFTP subsystem is chrooted answers a home path with
+ * SSH_FX_NO_SUCH_FILE even though the shell channel resolves it (#15479). SFTP is the
+ * only install route on the bundled-ssh2 transport, so say what the host did rather
+ * than surfacing a bare "file does not exist".
+ */
+async function withSandboxedSftpDiagnosis<T>(
+  remotePath: string,
+  transfer: () => Promise<T>
+): Promise<T> {
+  try {
+    return await transfer()
+  } catch (error) {
+    if (isSandboxedSftpNamespaceError(error)) {
+      throw describeSandboxedSftpFailure(error, remotePath)
+    }
+    throw error
   }
 }

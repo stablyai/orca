@@ -5,7 +5,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { useAppStore } from '../../store'
 import { OrchestrationPane } from './OrchestrationPane'
+import { getOrchestrationPaneSearchEntries } from './orchestration-search'
+import { matchesSettingsSearch } from './settings-search'
 
 const INSTALL_COMMAND =
   'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
@@ -16,7 +21,8 @@ const WINDOWS_INSTALL_COMMAND =
 const mocks = vi.hoisted(() => ({
   dialogProps: [] as Record<string, unknown>[],
   panelProps: [] as Record<string, unknown>[],
-  skillInstalled: true
+  skillInstalled: true,
+  updateSettings: vi.fn()
 }))
 
 vi.mock('./AgentSkillSetupPanel', () => ({
@@ -98,18 +104,32 @@ vi.mock('@/hooks/useDetectedAgents', () => ({
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-async function renderPane(): Promise<HTMLDivElement> {
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+function setNativeValue(input: HTMLInputElement, text: string): void {
+  const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+  setValue?.call(input, text)
+}
+
+function getPaneProps(settings: GlobalSettings = getDefaultSettings('/tmp')) {
+  return { settings, updateSettings: mocks.updateSettings }
+}
+
+async function renderPane(
+  settings: GlobalSettings = getDefaultSettings('/tmp')
+): Promise<HTMLDivElement> {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<OrchestrationPane />)
+    root?.render(<OrchestrationPane {...getPaneProps(settings)} />)
   })
   return container
 }
 
 describe('OrchestrationPane', () => {
   beforeEach(() => {
+    useAppStore.setState({ settingsSearchQuery: '' })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -146,10 +166,12 @@ describe('OrchestrationPane', () => {
     mocks.dialogProps.length = 0
     mocks.panelProps.length = 0
     mocks.skillInstalled = true
+    mocks.updateSettings.mockReset()
+    delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   })
 
   it('keeps skill setup visible after install and shows agent coverage plus examples', () => {
-    const markup = renderToStaticMarkup(<OrchestrationPane />)
+    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
 
     expect(markup).toContain('Orchestration skill')
     expect(markup).toContain('Installed')
@@ -168,6 +190,69 @@ describe('OrchestrationPane', () => {
     }
     expect(markup).toMatch(/<button\b[^>]*>[\s\S]*?Update[\s\S]*?<\/button>/)
     expect(markup).toContain('Re-check')
+  })
+
+  it('renders nested worker depth as an unbounded positive whole-number input', () => {
+    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
+
+    expect(markup).toContain('Nested worker depth')
+    expect(markup).toContain('type="number"')
+    expect(markup).toContain('aria-label="Nested worker depth"')
+    expect(markup).toContain('min="1"')
+    expect(markup).not.toContain('max=')
+    expect(markup).not.toContain('Default:')
+    expect(markup.indexOf('Nested worker depth')).toBeGreaterThan(
+      markup.indexOf('Orchestration skill')
+    )
+    expect(matchesSettingsSearch('nested worker', getOrchestrationPaneSearchEntries())).toBe(true)
+  })
+
+  it('keeps the nested depth row visible when settings search routes to Orchestration', () => {
+    useAppStore.setState({ settingsSearchQuery: 'Nested worker' })
+
+    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
+
+    expect(markup).toContain('Nested worker depth')
+    expect(markup).toContain('aria-label="Nested worker depth"')
+  })
+
+  it('commits a whole-number depth and rejects fractional values', async () => {
+    const rendered = await renderPane()
+    const input = rendered.querySelector<HTMLInputElement>(
+      'input[aria-label="Nested worker depth"]'
+    )
+    if (!input) {
+      throw new Error('Nested worker depth input was not rendered')
+    }
+
+    await act(async () => {
+      setNativeValue(input, '5')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    })
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ nestedWorkerMaxDepth: 5 })
+
+    mocks.updateSettings.mockClear()
+    await act(async () => {
+      setNativeValue(input, '2.5')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+    })
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+    expect(input.value).toBe('1')
+  })
+
+  it('keeps host-only nested depth out of paired web clients', () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    const markup = renderToStaticMarkup(<OrchestrationPane {...getPaneProps()} />)
+
+    expect(markup).not.toContain('Nested worker depth')
+    expect(
+      matchesSettingsSearch(
+        'nested worker',
+        getOrchestrationPaneSearchEntries({ includeNestedWorkerDepth: false })
+      )
+    ).toBe(false)
   })
 
   it('passes update commands to the main panel without an installed manual-copy path', async () => {

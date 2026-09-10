@@ -1,0 +1,217 @@
+name: Deploy Relay Production Candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source-cell-id:
+        description: Existing Terraform cell ID to evacuate
+        required: true
+        type: string
+      target-cell-id:
+        description: Distinct Terraform candidate cell ID
+        required: true
+        type: string
+      mode:
+        description: Audit/preflight are read-only; recover/continue resume committed work; disable/enable/reset/execute mutate admission
+        required: true
+        default: preflight
+        type: choice
+        options:
+          - audit
+          - preflight
+          - recover-forward
+          - continue-evacuation
+          - disable-cell
+          - enable-empty-cell
+          - reset-empty-candidate
+          - execute
+      confirmation:
+        description: Enter RECOVER_FORWARD, CONTINUE_EVACUATION, DISABLE_CELL, ENABLE_CELL, RESET_CANDIDATE, or EVACUATE for the matching mutation
+        required: false
+        type: string
+      monitor-run-id:
+        description: Successful fresh dry-run monitor workflow run ID
+        required: false
+        type: string
+      monitor-run-attempt:
+        description: Exact dry-run monitor workflow attempt
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-cloud-sql-rollout
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  candidate:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: production
+    env:
+      GCP_PROJECT_ID: onorca-cloud
+      DIRECTOR_ORIGIN: https://relay.onorca.dev
+      ADMIN_AUDIENCE: https://relay.onorca.dev/v1/admin/drain
+      SOURCE_CELL_ID: ${{ inputs.source-cell-id }}
+      TARGET_CELL_ID: ${{ inputs.target-cell-id }}
+      DEPLOY_MODE: ${{ inputs.mode }}
+      MONITOR_RUN_ID: ${{ inputs.monitor-run-id }}
+      MONITOR_RUN_ATTEMPT: ${{ inputs.monitor-run-attempt }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require fresh dry-run evidence reference
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        run: |
+          [[ "${MONITOR_RUN_ID}" =~ ^[0-9]+$ ]]
+          [[ "${MONITOR_RUN_ATTEMPT}" =~ ^[1-9][0-9]*$ ]]
+
+      - name: Download private dry-run evidence
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: relay-monitor-dry-run-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-monitor-evidence
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.monitor-run-id }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Verify dry-run artifact before cloud authentication
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        run: |
+          node dev/scripts/relay-monitor-evidence.mjs verify-restore \
+            --directory "${RUNNER_TEMP}/relay-monitor-evidence" \
+            --incident-id "relay-${MONITOR_RUN_ID}-dry-run" \
+            --run-id "${MONITOR_RUN_ID}" \
+            --run-attempt "${MONITOR_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --mode dry-run
+
+      - name: Reject previously consumed dry-run evidence
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          MARKER_NAME="relay-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          COUNT="$(gh api \
+            "/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${MARKER_NAME}&per_page=1" \
+            --jq '.total_count')"
+          test "${COUNT}" = "0"
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PRODUCTION_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-terraform-state
+          object: terraform/state/cloud-sql-rollout/production.lock
+
+      - name: Require explicit mutation confirmation
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "${DEPLOY_MODE}" = "execute" ]]; then
+            test "${CONFIRMATION}" = "EVACUATE"
+          elif [[ "${DEPLOY_MODE}" = "recover-forward" ]]; then
+            test "${CONFIRMATION}" = "RECOVER_FORWARD"
+          elif [[ "${DEPLOY_MODE}" = "continue-evacuation" ]]; then
+            test "${CONFIRMATION}" = "CONTINUE_EVACUATION"
+          elif [[ "${DEPLOY_MODE}" = "disable-cell" ]]; then
+            test "${CONFIRMATION}" = "DISABLE_CELL"
+          elif [[ "${DEPLOY_MODE}" = "enable-empty-cell" ]]; then
+            test "${CONFIRMATION}" = "ENABLE_CELL"
+          else
+            test "${CONFIRMATION}" = "RESET_CANDIDATE"
+          fi
+
+      - name: Read reviewed Terraform topology
+        run: |
+          node dev/scripts/infra.mjs init --env production
+          terraform -chdir=infra/terraform output -json relay_gce_cell_deployments > "${RUNNER_TEMP}/relay-gce-topology.json"
+          RUNTIME_SERVICE_ACCOUNT="$(terraform -chdir=infra/terraform output -raw relay_runtime_service_account)"
+          echo "RUNTIME_SERVICE_ACCOUNT=${RUNTIME_SERVICE_ACCOUNT}" >> "${GITHUB_ENV}"
+
+      - name: Verify fresh dry-run evidence against live selector
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/relay-monitor-evidence.mjs verify-mutation \
+            --directory "${RUNNER_TEMP}/relay-monitor-evidence" \
+            --incident-id "relay-${MONITOR_RUN_ID}-dry-run" \
+            --run-id "${MONITOR_RUN_ID}" \
+            --run-attempt "${MONITOR_RUN_ATTEMPT}" \
+            --commit-sha "${GITHUB_SHA}" \
+            --mode dry-run \
+            --mutation-mode "${DEPLOY_MODE}" \
+            --source-cell-id "${SOURCE_CELL_ID}" \
+            --director-origin "${DIRECTOR_ORIGIN}"
+
+      - name: Recheck all live safety signals
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          pnpm incident:relay-preflight -- \
+            --state-file "${RUNNER_TEMP}/relay-monitor-evidence/relay-${MONITOR_RUN_ID}-dry-run.state.json"
+
+      - name: Create single-use dry-run marker
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        run: |
+          MARKER_NAME="relay-monitor-consumed-${MONITOR_RUN_ID}-${MONITOR_RUN_ATTEMPT}"
+          mkdir -p "${RUNNER_TEMP}/relay-monitor-consumption"
+          printf '%s\n' "${GITHUB_RUN_ID}" \
+            > "${RUNNER_TEMP}/relay-monitor-consumption/${MARKER_NAME}"
+
+      - name: Consume dry-run evidence
+        if: ${{ inputs.mode != 'audit' && inputs.mode != 'preflight' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: relay-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          path: ${{ runner.temp }}/relay-monitor-consumption/relay-monitor-consumed-${{ inputs.monitor-run-id }}-${{ inputs.monitor-run-attempt }}
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Preflight or evacuate exact GCE candidate
+        env:
+          ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.google-auth.outputs.id_token }}
+        run: |
+          node dev/scripts/deploy-relay-gce-candidate.mjs \
+            --project "${GCP_PROJECT_ID}" \
+            --director-origin "${DIRECTOR_ORIGIN}" \
+            --admin-audience "${ADMIN_AUDIENCE}" \
+            --topology-file "${RUNNER_TEMP}/relay-gce-topology.json" \
+            --source-cell-id "${SOURCE_CELL_ID}" \
+            --target-cell-id "${TARGET_CELL_ID}" \
+            --runtime-service-account "${RUNTIME_SERVICE_ACCOUNT}" \
+            --mode "${DEPLOY_MODE}"

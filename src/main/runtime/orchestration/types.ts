@@ -57,6 +57,7 @@ export type DeliveryStatus = 'outstanding' | 'acknowledged' | 'fenced'
 export type DeliveryRow = {
   id: string
   run_id: string
+  mailbox_handle: string | null
   consumer_generation: number
   message_ids: string
   status: DeliveryStatus
@@ -189,6 +190,7 @@ export type FederatedDispatchRow = {
 }
 
 export type RemoteDispatchAttachmentRow = {
+  home_run_id: string
   dispatch_id: string
   task_id: string
   home_peer_fingerprint: string
@@ -205,6 +207,10 @@ export type RemoteDispatchAttachmentRow = {
   effects: string
   residual_resources: string
   to_worker_imported_sequence: number
+  /** Nesting depth propagated from the Run home; 1 when an old client omitted it. */
+  depth: number
+  /** Worker-host mailbox generation; the home's dispatch_contexts row is not visible here. */
+  consumer_generation: number
   last_error: string | null
   created_at: string
   updated_at: string
@@ -241,6 +247,9 @@ export type MessageRow = {
   created_at: string
   delivered_at: string | null
   sender_pane_key: string | null
+  pointer_enter_pending?: number
+  pointer_pty_id?: string | null
+  pointer_process_incarnation?: string | null
 }
 
 export type TaskRow = {
@@ -272,12 +281,23 @@ export type DispatchContextRow = {
   capability_hash: string | null
   process_incarnation: string | null
   capability_revoked_at: string | null
+  /** Dispatch ID is the Attempt identity; retries point to the prior Attempt. */
+  retry_of_dispatch_id: string | null
+  creator_dispatch_id: string | null
+  /** Creator identity; equal to the assignee means a self-dispatch, which adds no nesting depth. */
+  creator_handle: string | null
+  creator_pane_key: string | null
+  host_scope: string | null
   status: DispatchStatus
   failure_count: number
   last_failure: string | null
   /** Why the dispatch ended, when Orca could establish it — `operator_close`,
    *  `signaled`, `exited`, `unknown`. Null on rows written before STA-4603. */
   termination_reason: TerminalExitCause['kind'] | null
+  /** Nesting depth; a root coordinator's worker is 1. Never 0 on a persisted row. */
+  depth: number
+  /** Bumped on every re-attach; fences the prior consumer's `dispatch:<id>` Delivery. */
+  consumer_generation: number
   dispatched_at: string | null
   completed_at: string | null
   created_at: string

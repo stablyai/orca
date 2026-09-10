@@ -97,7 +97,9 @@ describe('OrcaRuntimeService automation methods', () => {
         workspaceMode: 'new_per_run',
         workspaceId: null,
         setupDecision: 'skip'
-      })
+      }),
+      // Owner options are absent on an unfenced RPC create; the arg still rides.
+      undefined
     )
     expect(automation.id).toBe('auto-1')
   })
@@ -187,14 +189,14 @@ describe('OrcaRuntimeService automation methods', () => {
     const updated = await runtime.updateAutomation('auto-1', { enabled: false })
     const removed = runtime.deleteAutomation('auto-1')
 
-    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { enabled: false })
+    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { enabled: false }, undefined)
     expect(updated).toMatchObject({
       prompt: existingAutomation.prompt,
       baseBranch: existingAutomation.baseBranch,
       workspaceMode: existingAutomation.workspaceMode,
       enabled: false
     })
-    expect(store.deleteAutomation).toHaveBeenCalledWith('auto-1')
+    expect(store.deleteAutomation).toHaveBeenCalledWith('auto-1', undefined)
     expect(removed).toEqual({ removed: true, id: 'auto-1' })
   })
 
@@ -204,7 +206,7 @@ describe('OrcaRuntimeService automation methods', () => {
 
     await runtime.updateAutomation('auto-1', { baseBranch: null })
 
-    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { baseBranch: null })
+    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { baseBranch: null }, undefined)
   })
 
   it('passes setup decision updates through the shared store', async () => {
@@ -213,7 +215,11 @@ describe('OrcaRuntimeService automation methods', () => {
 
     await runtime.updateAutomation('auto-1', { setupDecision: 'run' })
 
-    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { setupDecision: 'run' })
+    expect(store.updateAutomation).toHaveBeenCalledWith(
+      'auto-1',
+      { setupDecision: 'run' },
+      undefined
+    )
   })
 
   it('passes session reuse updates for existing-workspace automations', async () => {
@@ -228,7 +234,7 @@ describe('OrcaRuntimeService automation methods', () => {
 
     await runtime.updateAutomation('auto-1', { reuseSession: true })
 
-    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { reuseSession: true })
+    expect(store.updateAutomation).toHaveBeenCalledWith('auto-1', { reuseSession: true }, undefined)
   })
 
   it('clears session reuse when retargeting to new-per-run', async () => {
@@ -254,7 +260,8 @@ describe('OrcaRuntimeService automation methods', () => {
         workspaceMode: 'new_per_run',
         workspaceId: null,
         reuseSession: false
-      })
+      }),
+      undefined
     )
   })
 

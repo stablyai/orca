@@ -28,8 +28,17 @@ function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    // An inaccessible process is still alive; only a missing pid proves exit.
+    return (error as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
+// Teardown is asynchronous; poll instead of guessing how long the job takes.
+async function waitUntilDead(pid: number, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (isAlive(pid) && Date.now() < deadline) {
+    await sleep(50)
   }
 }
 
@@ -71,7 +80,7 @@ describeOnWindows('ConPTY job ownership', () => {
     const script = [
       "const{spawn}=require('child_process');",
       "const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],",
-      "{detached:true,stdio:'ignore'});",
+      "{detached:true,windowsHide:true,stdio:'ignore'});",
       "c.unref();console.log('ORCA_GC='+c.pid);"
     ].join('')
     proc.write(`node -e "${script}"\r`)
@@ -107,7 +116,8 @@ describeOnWindows('ConPTY job ownership', () => {
     expect(isAlive(grandchildPid)).toBe(true)
 
     expect(terminatePtyJob(proc)).toBe('terminated')
-    await sleep(1_500)
+    await waitUntilDead(proc.pid)
+    await waitUntilDead(grandchildPid)
 
     expect(isAlive(proc.pid)).toBe(false)
     expect(isAlive(grandchildPid)).toBe(false)

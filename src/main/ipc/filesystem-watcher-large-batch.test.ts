@@ -73,10 +73,10 @@ describe('local filesystem watcher large batches', () => {
       { worktreePath }
     )
 
-    const events = Array.from(
-      { length: 200_000 },
-      (_, index): WatcherEvent => ({ type: 'delete', path: join(worktreePath, `file-${index}`) })
-    )
+    const events = Array.from({ length: 200_000 }, (_, index): WatcherEvent => ({
+      type: 'delete',
+      path: join(worktreePath, `file-${index}`)
+    }))
 
     expect(() => watcherCallback?.(null, events)).not.toThrow()
     await closeAllWatchers()
@@ -97,13 +97,10 @@ describe('local filesystem watcher large batches', () => {
     await handlers['fs:watchWorktree']({ sender }, { worktreePath })
     watcherCallback?.(
       null,
-      Array.from(
-        { length: 5_001 },
-        (_, index): WatcherEvent => ({
-          type: 'update',
-          path: join(worktreePath, `file-${index}.txt`)
-        })
-      )
+      Array.from({ length: 5_001 }, (_, index): WatcherEvent => ({
+        type: 'update',
+        path: join(worktreePath, `file-${index}.txt`)
+      }))
     )
 
     await vi.advanceTimersByTimeAsync(150)

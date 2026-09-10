@@ -105,13 +105,26 @@ export class DaemonRequestRouter {
         return {
           foregroundProcess: this.options.host.getForegroundProcess(request.payload.sessionId)
         }
-      case 'inspectProcess':
-        return this.options.host.inspectProcess(request.payload.sessionId)
+      case 'inspectProcess': {
+        const options = {
+          ...(request.payload.expectedIncarnationId
+            ? { expectedIncarnationId: request.payload.expectedIncarnationId }
+            : {}),
+          ...(request.payload.steadyState === true ? { steadyState: true } : {})
+        }
+        return Object.keys(options).length > 0
+          ? this.options.host.inspectProcess(request.payload.sessionId, options)
+          : this.options.host.inspectProcess(request.payload.sessionId)
+      }
       case 'confirmForegroundProcess':
         return {
           foregroundProcess: await this.options.host.confirmForegroundProcess(
             request.payload.sessionId
           )
+        }
+      case 'confirmShellForeground':
+        return {
+          confirmed: await this.options.host.confirmShellForeground(request.payload.sessionId)
         }
       case 'clearScrollback':
         this.options.host.clearScrollback(request.payload.sessionId)
@@ -190,7 +203,11 @@ export class DaemonRequestRouter {
       await this.options.host.kill(sessionId, { immediate })
     } catch (error) {
       if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
-        this.options.log.log('session-kill-failed', attribution)
+        this.options.log.log('session-kill-failed', {
+          ...attribution,
+          errorName: error instanceof Error ? error.name : typeof error,
+          error: error instanceof Error ? error.message : String(error)
+        })
         throw error
       }
     }
@@ -213,13 +230,13 @@ export class DaemonRequestRouter {
     return { retiring }
   }
 
-  private getSnapshot(sessionId: string, requestedRows: unknown): unknown {
+  private async getSnapshot(sessionId: string, requestedRows: unknown): Promise<unknown> {
     const startedAt = performance.now()
     const scrollbackRows =
       typeof requestedRows === 'number' && Number.isFinite(requestedRows)
         ? Math.max(0, Math.min(50_000, Math.floor(requestedRows)))
         : undefined
-    const snapshot = this.options.host.getSnapshot(sessionId, { scrollbackRows })
+    const snapshot = await this.options.host.getSettledSnapshot(sessionId, { scrollbackRows })
     const snapshotMs = performance.now() - startedAt
     if (snapshotMs >= 25) {
       recordDaemonStreamBacklogEvent('slowGetSnapshot', {

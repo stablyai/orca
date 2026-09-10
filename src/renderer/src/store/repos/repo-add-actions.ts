@@ -5,7 +5,6 @@ import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getRepoHostIdentity } from '../slices/repo-host-identity'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
-import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
@@ -24,6 +23,7 @@ import {
 } from './owner-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
 import { warnIfProjectKnownInAnotherProfile } from '../projects/project-profile-presence'
+import { warnIfProjectCrossesWslFilesystemBoundary } from '../projects/project-wsl-filesystem-boundary-advisory'
 
 export function createRepoAddActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -33,10 +33,15 @@ export function createRepoAddActions(
     addRepoPath: async (path, kind = 'git', options) => {
       try {
         const target = getActiveRuntimeTarget(getAddRepoPathRouteSettings(options, get().settings))
+        const displayName = options?.displayName?.trim() || undefined
         let repo: Repo
         try {
           if (target.kind === 'local') {
-            const result = await window.api.repos.add({ path, kind })
+            const result = await window.api.repos.add({
+              path,
+              kind,
+              ...(displayName ? { displayName } : {})
+            })
             if ('error' in result) {
               throw new Error(result.error)
             }
@@ -46,7 +51,7 @@ export function createRepoAddActions(
               await callRuntimeRpc<{ repo: Repo }>(
                 target,
                 'repo.add',
-                { path, kind },
+                { path, kind, ...(displayName ? { displayName } : {}) },
                 { timeoutMs: 15_000 }
               )
             ).repo
@@ -81,6 +86,7 @@ export function createRepoAddActions(
           const { openModal } = get()
           openModal('confirm-non-git-folder', {
             folderPath: path,
+            ...(displayName ? { displayName } : {}),
             ...(target.kind === 'environment' ? { runtimeEnvironmentId: target.environmentId } : {})
           })
           return null
@@ -122,6 +128,8 @@ export function createRepoAddActions(
           )
           // Why: the cross-profile advisory applies to SSH-added projects too; the presence lookup already keys on connection/host.
           await warnIfProjectKnownInAnotherProfile(repo, get().activeOrcaProfileId)
+          // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
+          warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
         }
         return repo
       } catch (err) {
@@ -175,19 +183,26 @@ export function createRepoAddActions(
           (worktree) => executionHostId === undefined || worktree.hostId === executionHostId
         )
         if (folderWorktree) {
-          const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
           const onboarding = await window.api.onboarding.get().catch(() => null)
+          // Why: lazy-import to avoid a circular module load (the launch graph imports the store root).
+          const {
+            resolveDismissedOnboardingFolderAgentLaunch,
+            revealOnboardingFolderWithAgentLaunch
+          } = await import('@/lib/onboarding-folder-agent-launch')
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
-          const startup = buildDismissedOnboardingFolderAgentStartup(
-            get().settings,
+          const launch = resolveDismissedOnboardingFolderAgentLaunch({
+            store: get(),
             onboarding,
-            hadProjectBeforeAdd,
-            isNativeChatTranscriptLocalReadable(repo.connectionId)
-          )
-          activateAndRevealWorktree(folderWorktree.id, {
-            sidebarRevealBehavior: 'auto',
-            ...(executionHostId ? { executionHostId } : {}),
-            ...(startup ? { startup } : {})
+            hasExistingProject: hadProjectBeforeAdd,
+            executionHostId: executionHostId ?? LOCAL_EXECUTION_HOST_ID,
+            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+              repo.connectionId
+            )
+          })
+          await revealOnboardingFolderWithAgentLaunch({
+            worktreeId: folderWorktree.id,
+            executionHostId,
+            launch
           })
         }
         return repo

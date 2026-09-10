@@ -10,6 +10,7 @@ import { enqueueWrite } from './primary-state-writes'
 type WriteFlushBarrierOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
+  | 'automationListProjectionCache'
   | 'dataFile'
   | 'firstPendingSaveAt'
   | 'githubCacheDirty'
@@ -39,6 +40,7 @@ export class WriteFlushBarrierOperations {
   }
 
   flush(): void {
+    this[writeFlushBarrierOperationsContext].runtime.automationListProjectionCache = null
     if (this[writeFlushBarrierOperationsContext].runtime.quitFlushStarted) {
       return
     }

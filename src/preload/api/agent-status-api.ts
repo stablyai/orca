@@ -1,4 +1,5 @@
 import type {
+  AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   MigrationUnsupportedPtyEntry
@@ -30,6 +31,10 @@ export type AgentStatusApi = {
   getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
   /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */
   drop: (paneKey: string) => void
+  /** Evict a previously-cleared status only when its identity still matches the main-process cache. */
+  dropPersisted: (identity: AgentStatusCacheIdentity) => void
+  /** Same as dropPersisted for many identities in one IPC message and one listener notification. */
+  dropPersistedBatch?: (identities: readonly AgentStatusCacheIdentity[]) => void
   /** Retire a pane whose agent process is proven gone — clears the row AND the per-pane caches a
    *  dismissal deliberately keeps. Not `drop`: that one is a user dismissal of a live pane's row. */
   reconcileEndedProcess: (paneKey: string) => void

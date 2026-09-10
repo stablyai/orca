@@ -99,6 +99,23 @@ test.describe('SSH terminal hidden view parking', () => {
           message: 'SSH pad output did not finish before parking'
         })
         .toBe(true)
+      // The renderer can paint a chunk before the main-owned model ingests it.
+      // Wait for that model before parking, which is the source this test verifies.
+      await expect
+        .poll(
+          () =>
+            orcaPage.evaluate(async (ptyId) => {
+              const snapshot = await window.api.pty.getMainBufferSnapshot(ptyId, {
+                scrollbackRows: 5_000
+              })
+              return snapshot?.data ?? ''
+            }, sshPtyId),
+          {
+            timeout: 60_000,
+            message: 'SSH headless model did not ingest the pad before parking'
+          }
+        )
+        .toContain(`${marker}_PAD_DONE:`)
 
       await parkHiddenTabBehindDecoy(orcaPage, remote.worktreeId, sshTabId, {
         parkDelayMs: PARKING_DELAY_MS

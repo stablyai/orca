@@ -8,13 +8,19 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const { spawnMock, isPwshAvailableMock, resolveAgentForegroundProcessMock, readConptyMock } =
-  vi.hoisted(() => ({
-    spawnMock: vi.fn(),
-    isPwshAvailableMock: vi.fn(),
-    resolveAgentForegroundProcessMock: vi.fn(),
-    readConptyMock: vi.fn()
-  }))
+const {
+  spawnMock,
+  isPwshAvailableMock,
+  resolveAgentForegroundProcessMock,
+  readConptyMock,
+  jobReadableMock
+} = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  isPwshAvailableMock: vi.fn(),
+  resolveAgentForegroundProcessMock: vi.fn(),
+  readConptyMock: vi.fn(),
+  jobReadableMock: vi.fn()
+}))
 
 vi.mock('node-pty', () => ({ spawn: spawnMock }))
 vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
@@ -38,7 +44,8 @@ vi.mock('../providers/agent-foreground-process', () => ({
 }))
 
 vi.mock('../providers/windows-pty-job-membership', () => ({
-  readWindowsPtyJobProcessIds: (...args: unknown[]) => readConptyMock(...args)
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readConptyMock(...args),
+  isWindowsPtyJobReadable: () => jobReadableMock()
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
@@ -85,6 +92,8 @@ describe('daemon pty foreground degraded-scan handling', () => {
     resolveAgentForegroundProcessMock.mockReset()
     readConptyMock.mockReset()
     readConptyMock.mockReturnValue(null)
+    jobReadableMock.mockReset()
+    jobReadableMock.mockReturnValue(true)
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-degraded-scan-test-'))
     process.env.ORCA_USER_DATA_PATH = userDataPath
@@ -262,6 +271,22 @@ describe('daemon pty foreground degraded-scan handling', () => {
 
     await readForegroundAt(handle, 0)
     await readForegroundAt(handle, 1_000) // refresh sees the foreign anchor and clears
+    expect(await readForegroundAt(handle, 1_100)).toBe('powershell.exe')
+  })
+
+  it('retires on a shipped build whose node-pty cannot answer job queries', async () => {
+    // The real Windows fleet today: no job exports (#16059), so the read is null
+    // for every user. Treating that as unverifiable held a dead agent forever.
+    // With nothing to ask, the available scan that already found no agent decides.
+    jobReadableMock.mockReturnValue(false)
+    readConptyMock.mockReturnValue(null)
+    resolveAgentForegroundProcessMock
+      .mockResolvedValueOnce({ available: true, processName: 'claude' })
+      .mockResolvedValue({ available: true, processName: null })
+    const { handle } = await spawnWindowsShell()
+
+    await readForegroundAt(handle, 0)
+    await readForegroundAt(handle, 1_000) // this refresh retires it
     expect(await readForegroundAt(handle, 1_100)).toBe('powershell.exe')
   })
 

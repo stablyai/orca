@@ -197,7 +197,8 @@ export function planColdActivationTabDeferral(opts: {
   deferredMountTabIdsByWorktree: Map<string, ReadonlySet<string>>
   worktreeId: string
   allTabIds: readonly string[]
-  isTabLive: (tabId: string) => boolean
+  /** Worktree is passed so duplicate legacy tab ids fail closed by owner. */
+  isTabLive: (tabId: string, worktreeId?: string) => boolean
   /** Safe to leave unmounted: parked byte watchers can cover it and no spawn
    *  is pending. Non-deferrable tabs mount immediately. */
   isTabDeferrable: (tabId: string) => boolean
@@ -218,7 +219,7 @@ export function planColdActivationTabDeferral(opts: {
     // Why live/previously-allowed tabs stay in: narrowing would unmount
     // panes that are already up (or background mounts still registering).
     if (
-      isTabLive(tabId) ||
+      isTabLive(tabId, worktreeId) ||
       immediateTabIds.has(tabId) ||
       previouslyAllowed?.has(tabId) ||
       !isTabDeferrable(tabId)

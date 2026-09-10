@@ -1,3 +1,4 @@
+import type * as SyncRuntimeGraphModule from '@/runtime/sync-runtime-graph'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const focusTerminalTabSurfaceMock = vi.hoisted(() => vi.fn())
@@ -19,6 +20,8 @@ vi.mock('@/store', () => ({
 }))
 
 import { queueWorkspaceActivationTerminalFocus } from './workspace-activation-terminal-focus'
+
+const CHAT_VIEW_LEAF_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
 type FocusState = {
   activeWorktreeId: string | null
@@ -63,7 +66,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
     expect(focusRuntimeTerminalSurfaceMock).not.toHaveBeenCalled()
     flushFrame()
 
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1')
+    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1', null, 'wt-1')
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-1')
   })
 
@@ -78,7 +81,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
     queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: null })
     flushFrame()
 
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-adopted')
+    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-adopted', null, 'wt-1')
     expect(focusTerminalTabSurfaceMock).toHaveBeenCalledWith('tab-adopted')
   })
 
@@ -94,8 +97,59 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
     queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
     flushFrame()
 
-    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1')
+    expect(focusRuntimeTerminalSurfaceMock).toHaveBeenCalledWith('tab-1', null, 'wt-1')
     expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+  })
+
+  // Why: a legacy native chat is a terminal tab whose xterm stays mounted under the chat portal.
+  // Activation must leave the caret in the composer, so neither the runtime path's xterm focus
+  // nor the DOM fallback may fire. Runs the real runtime surface, not the module mock.
+  it('leaves a chat-view terminal tab unfocused on both the runtime and DOM paths', async () => {
+    const runtime = await vi.importActual<typeof SyncRuntimeGraphModule>(
+      '@/runtime/sync-runtime-graph'
+    )
+    focusRuntimeTerminalSurfaceMock.mockImplementation(runtime.focusRuntimeTerminalSurface)
+    const focus = vi.fn()
+    const pane = {
+      id: 1,
+      leafId: CHAT_VIEW_LEAF_ID,
+      container: {
+        querySelector: (selector: string) =>
+          selector === '.native-chat-pane-shell' ? ({} as Element) : null
+      },
+      terminal: { focus }
+    }
+    const manager = {
+      getPanes: () => [pane],
+      getActivePane: () => pane,
+      getLeafId: () => CHAT_VIEW_LEAF_ID,
+      getNumericIdForLeaf: () => pane.id,
+      setActivePane: vi.fn()
+    }
+    const unregister = runtime.registerRuntimeTerminalTab({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      getManager: () => manager as never,
+      getContainer: () => null,
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
+    })
+    try {
+      setFocusState({
+        activeWorktreeId: 'wt-1',
+        activeView: 'terminal',
+        activeTabType: 'terminal',
+        activeTabId: 'tab-1'
+      })
+
+      queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })
+      flushFrame()
+
+      expect(focus).not.toHaveBeenCalled()
+      expect(focusTerminalTabSurfaceMock).not.toHaveBeenCalled()
+    } finally {
+      unregister()
+    }
   })
 
   // Why: #9939 — the return value is what stops the palette from running its whole-document

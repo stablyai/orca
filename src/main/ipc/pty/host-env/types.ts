@@ -29,6 +29,8 @@ export type BuildPtyHostEnvOptions = {
   agentStatusHooksEnabled: boolean
   codexStatusHooksEnabled?: boolean
   networkProxySettings?: NetworkProxySettings
+  /** Headless paired runtimes hand browser launches to the client-hosted Orca browser. */
+  routeBrowserOpensToClient?: boolean
   /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
   deferGitConfigGuardToDaemon?: boolean
 }
@@ -39,11 +41,14 @@ export type CodexHomeLaunchContext = {
   unavailableManagedHomePath?: string
 }
 
+// Why (#16441): Codex launch prep grants hook trust through a codex app-server
+// session. It resolves asynchronously so the Electron main thread stays
+// responsive; every consumer already runs inside an async spawn path.
 export type GetSelectedCodexHomePath = (
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: CodexHomeLaunchContext
-) => string | null
+) => string | null | Promise<string | null>
 
 export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata

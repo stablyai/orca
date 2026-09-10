@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CheckStatus } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { ParentPrChecksRow, ParentPrChecksRowStatus } from './parent-pr-checks-rows'
+import type { ParentPrChecksRow, ParentPrChecksRowStatus } from './parent-pr-checks-row-types'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, unknown>) =>

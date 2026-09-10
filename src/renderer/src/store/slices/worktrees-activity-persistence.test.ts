@@ -102,7 +102,7 @@ describe('worktree remote runtime mutations', () => {
     [
       'updateWorktreesMeta',
       (store: ReturnType<typeof createTestStore>, worktreeId: string) =>
-        store.getState().updateWorktreesMeta(new Map([[worktreeId, { isUnread: true }]]))
+        store.getState().updateWorktreesMeta([{ worktreeId, updates: { isUnread: true } }])
     ],
     [
       'markWorktreeUnread',

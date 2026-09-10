@@ -48,14 +48,18 @@ export function normalizeGitLabIssueListArgs(args: {
   state?: unknown
   assignee?: unknown
   limit?: unknown
+  page?: unknown
 }): {
   state: GitLabIssueListState
   assignee: '@me' | undefined
   limit: number
+  page: number
 } {
   return {
     state: normalizeGitLabIssueListState(args.state),
     assignee: normalizeGitLabIssueAssignee(args.assignee),
-    limit: normalizeGitLabPositiveInteger(args.limit, 20, 100)
+    limit: normalizeGitLabPositiveInteger(args.limit, 20, 100),
+    // Why: GitLab is 1-based; TaskPage maps 0-based UI pages onto this (#13357).
+    page: normalizeGitLabPositiveInteger(args.page, 1, 10_000)
   }
 }

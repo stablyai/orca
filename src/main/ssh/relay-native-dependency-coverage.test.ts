@@ -25,11 +25,15 @@ const REPO_ROOT = resolve(import.meta.dirname, '..', '..', '..')
  */
 const DEGRADES_WITHOUT_INSTALL: Record<string, string> = {
   '@vscode/windows-process-tree':
-    'Windows-only and ships no prebuilds, so installing it would put a from-source ' +
-    'node-gyp build (MSVC + SDK + Spectre-mitigated libs) on the critical path of ' +
-    'every Windows relay deploy — and pnpm patches do not cross SSH, so the remote ' +
-    'would get the unpatched 1024-process cap anyway. windows-process-table.ts ' +
-    'falls back to a Get-CimInstance scan when the binding is absent.'
+    'Windows-only, and both ways of installing it fail. A normal install rebuilds ' +
+    'from source because the tarball carries a binding.gyp, and that build fails ' +
+    'with MSB8040 (Spectre-mitigated libraries) even on a host that already has ' +
+    'MSVC Build Tools — our patch drops that requirement, and pnpm patches do not ' +
+    'cross SSH. Skipping the build keeps the tarball binary, which predates the ' +
+    'patch and still caps enumeration at 1024 processes, so a busy host gets a ' +
+    'truncated table missing its own pid. windows-process-table.ts falls back to a ' +
+    'Get-CimInstance scan when the binding is absent. See ' +
+    'docs/reference/windows-process-enumeration.md.'
 }
 
 /** Addons are the packages npm has to build or unpack a binary for. */

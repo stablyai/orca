@@ -71,8 +71,11 @@ export abstract class SpeechModelHttpDownload {
         request = null
       }
       const resetIdleTimeout = (): void => {
-        clearIdleTimeout()
-        idleTimeout = setTimeout(onRequestTimeout, DOWNLOAD_IDLE_TIMEOUT_MS)
+        if (idleTimeout) {
+          idleTimeout.refresh()
+        } else {
+          idleTimeout = setTimeout(onRequestTimeout, DOWNLOAD_IDLE_TIMEOUT_MS)
+        }
       }
       const resolveOnce = (): void => {
         if (settled) {

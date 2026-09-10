@@ -9,6 +9,11 @@ import type { GitWorktreeInfo, DetectedWorktree, Worktree } from '../../../../sh
 import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
+  readWorktreeMetaForRepo,
+  writeWorktreeMetaForHost
+} from '../../../persistence/host-qualified-worktree-meta'
+import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
+import {
   buildKnownOrcaWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
@@ -110,7 +115,7 @@ export function listDisconnectedSshWorktrees(
         ? { ...candidate.meta, ...ownershipUpdates }
         : candidate.meta
     if (Object.keys(ownershipUpdates).length > 0) {
-      store.setWorktreeMeta(candidate.id, ownershipUpdates)
+      writeWorktreeMetaForHost(store, candidate.id, expectedHostId, ownershipUpdates)
     }
     // Why: synthesized rows carry no branch, so the title would fall through to the DESKTOP's basename()
     // applied to a REMOTE path — a Windows remote then renders its whole C:\... path as the name. Rows must
@@ -131,7 +136,8 @@ export function listDisconnectedSshWorktrees(
 export function buildDetectedGitWorktrees(
   store: Store,
   repo: Repo,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  allMetaOverride?: Record<string, WorktreeMeta>
 ): DetectedWorktree[] {
   const settings = store.getSettings()
   const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
@@ -145,9 +151,16 @@ export function buildDetectedGitWorktrees(
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(repo)
   )
+  const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
+  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
-    let meta = store.getWorktreeMeta(worktreeId)
+    // Why: the locator-keyed row is only a stand-in for a missing host snapshot, so don't read it when we have one.
+    const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
+    const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
+    const meta =
+      readWorktreeMetaForRepo(store, worktreeId, repo) ??
+      getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
     const detected = toDetectedWorktree({
       repo,
@@ -162,11 +175,21 @@ export function buildDetectedGitWorktrees(
       return detected
     }
 
-    meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, worktreeId)
+    const backfilledMeta = resolveWorktreeMetaWithDiscoveryBackfill(
+      store,
+      repo,
+      worktreeId,
+      allMeta,
+      repoOwnerCount
+    )
+    // Why: backfill hands back the same object when it wrote nothing, and both builders are pure over it.
+    if (backfilledMeta === meta) {
+      return detected
+    }
     return toDetectedWorktree({
       repo,
-      worktree: mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-      meta,
+      worktree: mergeWorktree(repo.id, gitWorktree, backfilledMeta, repo.displayName),
+      meta: backfilledMeta,
       settings,
       knownOrcaLayouts,
       isLegacyRepoForVisibility,
@@ -179,8 +202,9 @@ export function buildDetectedGitWorktrees(
 export function stampAndMergeVisibleDetectedWorktree(
   store: Store,
   repo: Repo,
-  detected: DetectedWorktree
+  detected: DetectedWorktree,
+  allMetaOverride?: Record<string, WorktreeMeta>
 ) {
-  const meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, detected.id)
+  const meta = resolveWorktreeMetaWithDiscoveryBackfill(store, repo, detected.id, allMetaOverride)
   return mergeWorktree(repo.id, detected, meta, repo.displayName)
 }

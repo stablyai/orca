@@ -1,17 +1,19 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
+import { CODEX_SHELL_READY_TIMEOUT_MS } from './session-shell-ready-barrier'
 import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
+import { trackDaemonPtyCwdDeniedIfDiverged } from './daemon-adoption-telemetry-event'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import type { ColdRestoreInfo } from './history-reader'
 import { mintPtySessionId } from './pty-session-id'
-import { CODEX_SHELL_READY_TIMEOUT_MS } from './session-shell-ready-barrier'
-import { supportsPtyStartupBarrier } from './shell-ready'
+import { shellPathSupportsPtyStartupBarrier, resolvePtyShellPath } from './shell-ready'
+import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import { getRecoveredHistorySeedSegments } from './terminal-history-seed-segments'
 import { AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION, type CreateOrAttachResult } from './types'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
@@ -26,8 +28,8 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     const spawnOpts = this.withHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
-    const operation = {
-      exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
+    const operation: PendingDaemonSpawnOperation = {
+      exitsBySessionId: new Map(),
       ignoredExitIncarnationIds: new Set<string>(),
       ignoreNextExit: false
     }
@@ -211,22 +213,26 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     let effectiveCols = restoreInfo?.cols ?? opts.cols
     let effectiveRows = restoreInfo?.rows ?? opts.rows
 
-    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
-    const isCodexStartupCommand =
-      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
-    const shouldWaitForShellReady =
-      isCodexStartupCommand &&
-      shouldUseShellReadyStartupDelivery({
+    const effectiveShellPath =
+      process.platform !== 'win32' && opts.command
+        ? resolveUnixShellPath(opts.shellOverride || resolvePtyShellPath(opts.env ?? {}))
+        : ''
+    const shellReadySupported = shellPathSupportsPtyStartupBarrier(effectiveShellPath)
+    const immediateMarker = shellReadyMarkerComesFromLineEditor(effectiveShellPath)
+    const shellReadyTimeoutMs =
+      shellReadySupported &&
+      !immediateMarker &&
+      recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex' &&
+      !shouldUseShellReadyStartupDelivery({
         command: opts.command,
         startupCommandDelivery: opts.startupCommandDelivery
       })
-    const shellReadyTimeoutMs =
-      shellReadySupported && isCodexStartupCommand && !shouldWaitForShellReady
         ? CODEX_SHELL_READY_TIMEOUT_MS
         : undefined
-
     const context: DaemonPtySpawnContext = {
-      opts,
+      // Older daemons also need the existing hint to enable their ready marker.
+      opts:
+        opts.command && immediateMarker ? { ...opts, startupCommandDelivery: 'shell-ready' } : opts,
       operation,
       historyRecovery,
       requestedSessionId,
@@ -246,6 +252,9 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
     activeSpawnContext = context
     const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
+    if (result.isNew && !attachOnly) {
+      trackDaemonPtyCwdDeniedIfDiverged(effectiveCwd, result.cwdReadableByDaemon, this.pidPath)
+    }
     return this.finishSpawn(context, result)
   }
 
@@ -254,17 +263,25 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     result: CreateOrAttachResult,
     operation: PendingDaemonSpawnOperation
   ): PtySpawnResult | null {
-    const matchingExit = (operation.exitsBySessionId.get(sessionId) ?? []).some(
+    const knownIncarnationId = this.sessionIncarnations.get(sessionId)
+    const matchingExit = (operation.exitsBySessionId.get(sessionId) ?? []).find(
       (exit) =>
         !(exit.incarnationId && operation.ignoredExitIncarnationIds.has(exit.incarnationId)) &&
-        (!exit.incarnationId ||
-          !result.incarnationId ||
-          exit.incarnationId === result.incarnationId)
+        ((exit.incarnationId === undefined &&
+          result.incarnationId === undefined &&
+          knownIncarnationId === undefined) ||
+          (exit.incarnationId !== undefined &&
+            result.incarnationId !== undefined &&
+            exit.incarnationId === result.incarnationId))
     )
     if (!matchingExit) {
       return null
     }
-    // Why: stream exit can beat the control reply; return proof upward without republishing dead adapter state.
+    if (result.incarnationId) {
+      this.sessionIncarnations.set(sessionId, result.incarnationId)
+    }
+    this.clearExitedSessionState(sessionId, matchingExit.code, result.incarnationId)
+    // Why: stream exit can beat the control reply or post-reply recovery work; return proof without republishing dead state.
     const exitedResult: PtySpawnResult = {
       id: sessionId,
       exitedBeforeSpawnReply: true,

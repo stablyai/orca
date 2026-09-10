@@ -40,7 +40,9 @@ describe('sftp-upload', () => {
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
-    expect(writeStream.listenerCount('error')).toBe(0)
+    // One durable 'error' listener stays for the stream's whole life: a STATUS reply that
+    // lands after the transfer settles must not throw into ssh2's parser (#15479).
+    expect(writeStream.listenerCount('error')).toBe(1)
   })
 
   it('uses no-clobber writes for nested files during exclusive directory upload', async () => {
@@ -59,7 +61,9 @@ describe('sftp-upload', () => {
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
     expect(writeStream.listenerCount('close')).toBe(0)
-    expect(writeStream.listenerCount('error')).toBe(0)
+    // One durable 'error' listener stays for the stream's whole life: a STATUS reply that
+    // lands after the transfer settles must not throw into ssh2's parser (#15479).
+    expect(writeStream.listenerCount('error')).toBe(1)
   })
 
   it('uploads files from valid dot-dot-prefixed local directories', async () => {

@@ -202,7 +202,9 @@ function extractText(node: unknown): string {
   return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
-async function renderMenu(): Promise<unknown> {
+async function renderMenu(
+  overrides: { onActivate?: () => void; onOpenRenameInput?: () => void } = {}
+): Promise<unknown> {
   const module = await import('./EditorFileTabContextMenu')
   return module.EditorFileTabContextMenu({
     open: true,
@@ -238,7 +240,8 @@ async function renderMenu(): Promise<unknown> {
     onCloseAll: vi.fn(),
     onCloseToRight: vi.fn(),
     onCloseToLeft: vi.fn(),
-    onOpenMarkdownPreview: vi.fn()
+    onOpenMarkdownPreview: vi.fn(),
+    ...overrides
   })
 }
 
@@ -264,6 +267,27 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('opens rename only after menu close releases focus and consumes the request once', async () => {
+    const onActivate = vi.fn()
+    const onOpenRenameInput = vi.fn()
+    const tree = expandNode(await renderMenu({ onActivate, onOpenRenameInput }))
+    const rename = findElementsByType(tree, 'DropdownMenuItem').find((item) =>
+      extractText(item.props.children).includes('Rename')
+    )!
+    const content = findElementsByType(tree, 'DropdownMenuContent')[0]!
+    ;(rename.props.onSelect as () => void)()
+    expect(onActivate).not.toHaveBeenCalled()
+    expect(onOpenRenameInput).not.toHaveBeenCalled()
+    const preventDefault = vi.fn()
+    const close = content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void
+    close({ preventDefault })
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(onActivate).toHaveBeenCalledTimes(1)
+    expect(onOpenRenameInput).toHaveBeenCalledTimes(1)
+    close({ preventDefault })
+    expect(onOpenRenameInput).toHaveBeenCalledTimes(1)
   })
 
   it('renders assigned shortcuts next to Rename, Close, and Close All Editor Tabs', async () => {

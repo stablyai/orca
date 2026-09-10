@@ -65,9 +65,19 @@ export function mergeHostWebUIState(
   // Why `satisfies Record<...>` rather than a `Pick<...>` annotation: every member is optional in
   // PersistedUIState, so Pick would accept a literal that silently skipped a newly added member.
   const pinned = {
+    automationHostFilter: local.automationHostFilter,
     hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
     manualRepoOrder: local.manualRepoOrder,
-    workspaceHostOrder: local.workspaceHostOrder
+    workspaceHostOrder: local.workspaceHostOrder,
+    agentsVisibleHostIds: local.agentsVisibleHostIds,
+    agentsFilterRepoIds: local.agentsFilterRepoIds,
+    agentsShowChildAgents: local.agentsShowChildAgents,
+    agentsCompactMode: local.agentsCompactMode,
+    agentsShowSearch: local.agentsShowSearch,
+    agentsReadFilter: local.agentsReadFilter,
+    agentsGroupBy: local.agentsGroupBy,
+    activityClearedAtByPaneKey: local.activityClearedAtByPaneKey,
+    manuallyUnreadTurnsByPaneKey: local.manuallyUnreadTurnsByPaneKey
   } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
   return { ...mergeWebUIState(local, incoming), ...pinned }
 }

@@ -87,7 +87,8 @@ vi.mock('./agent-foreground-process', () => ({
 }))
 
 vi.mock('./windows-pty-job-membership', () => ({
-  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args)
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
+  isWindowsPtyJobReadable: () => true
 }))
 
 vi.mock('../wsl', () => ({
@@ -188,6 +189,22 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
+    })
+
+    it('re-reads buildSpawnEnv after a reentrant configuration change', async () => {
+      const initialBuildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      const configuredBuildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => env)
+      provider.configure({
+        get buildSpawnEnv() {
+          provider.configure({ buildSpawnEnv: configuredBuildSpawnEnv })
+          return initialBuildSpawnEnv
+        }
+      })
+
+      await provider.spawn({ cols: 80, rows: 24 })
+
+      expect(initialBuildSpawnEnv).not.toHaveBeenCalled()
+      expect(configuredBuildSpawnEnv).toHaveBeenCalledOnce()
     })
 
     it.each([

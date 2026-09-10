@@ -164,12 +164,46 @@ describe('recovering pairing relay candidate', () => {
     )
   })
 
-  it('does not retry a same-epoch move to a different cell', async () => {
+  it('retries the stored assignment when the director reports a non-newer different cell', async () => {
     const stale = client(Promise.reject(new RelayOuterError(1006)))
+    const target = client(Promise.resolve(success()))
+    const persistMove = vi.fn()
+    const sleep = vi.fn(async () => {})
     const resolveDirector = vi.fn(async (relay) => {
       throw new RelayDirectorMoveNotNewerError({
         cellUrl: 'https://relay-c2.onorca.dev',
         assignmentEpoch: relay.assignmentEpoch,
+        currentCellUrl: relay.cellUrl,
+        currentAssignmentEpoch: relay.assignmentEpoch
+      })
+    })
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: (relay) => {
+        expect(relay.cellUrl).toBe(journal.metadata.relay.cellUrl)
+        return connects++ === 0 ? stale : target
+      },
+      resolveDirector,
+      persistMove,
+      now: () => 1,
+      random: () => 0,
+      sleep
+    })
+
+    await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
+    expect(resolveDirector).toHaveBeenCalledOnce()
+    // Why: the non-newer move must never be adopted — the stored cell is redialed.
+    expect(persistMove).not.toHaveBeenCalled()
+    expect(sleep).toHaveBeenCalledWith(250)
+  })
+
+  it('gives up with the dial error once same-assignment retries exhaust the budget', async () => {
+    const stale = client(Promise.reject(new RelayOuterError(1006)))
+    const resolveDirector = vi.fn(async (relay) => {
+      throw new RelayDirectorMoveNotNewerError({
+        cellUrl: 'https://relay-c2.onorca.dev',
+        assignmentEpoch: relay.assignmentEpoch - 1,
         currentCellUrl: relay.cellUrl,
         currentAssignmentEpoch: relay.assignmentEpoch
       })
@@ -188,8 +222,30 @@ describe('recovering pairing relay candidate', () => {
       sleep: async () => {}
     })
 
-    await expect(candidate.sendRequest('status.get')).rejects.toThrow(/not strictly newer/)
+    await expect(candidate.sendRequest('status.get')).rejects.toEqual(new RelayOuterError(1006))
     expect(resolveDirector).toHaveBeenCalledTimes(3)
+    expect(connects).toBe(4)
+  })
+
+  it('keeps a cell load refusal out of director recovery', async () => {
+    const limited = client(Promise.reject(new RelayOuterError(4429)))
+    const resolveDirector = vi.fn()
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => {
+        connects++
+        return limited
+      },
+      resolveDirector,
+      persistMove: vi.fn(),
+      now: () => 1
+    })
+
+    // Why: 4429 is rejected after the cell reserves the invite credential, so a
+    // retry burns an attempt — and a director hop cannot relieve cell load.
+    await expect(candidate.sendRequest('status.get')).rejects.toEqual(new RelayOuterError(4429))
+    expect(resolveDirector).not.toHaveBeenCalled()
     expect(connects).toBe(1)
   })
 

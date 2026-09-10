@@ -15,6 +15,7 @@ export type ChecksPanelReviewStateInput = Pick<
   | 'linkedReviewNumber'
   | 'pr'
   | 'prCacheKey'
+  | 'prRefreshStateNow'
   | 'prCachedHasPR'
   | 'prNumber'
   | 'refreshContextKey'

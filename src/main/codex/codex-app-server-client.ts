@@ -1,4 +1,5 @@
-import { spawn } from 'node:child_process'
+import type { ChildProcessHandle, ProcessSpec } from '../../shared/child-process/process-spec'
+import { spawnProcess } from '../../shared/child-process/run-process'
 import { normalizeHookTrustKeyForLookup } from './config-toml-trust'
 import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
 
@@ -41,8 +42,8 @@ export type CodexGrantedHookTrust = {
   trustedHash: string
 }
 
-/** Closed verify-failure taxonomy — crosses the grant-bridge JSON envelope, so
- *  telemetry never has to parse the free-form `reason` diagnostics string. */
+/** Closed verify-failure taxonomy, so telemetry never has to parse the
+ *  free-form `reason` diagnostics string. */
 export type CodexTrustGrantSessionVerifyClass =
   | 'list-mismatch'
   | 'post-grant-untrusted'
@@ -105,7 +106,12 @@ function collectHookListings(result: unknown): CodexHookListing[] {
  */
 export async function runCodexHookTrustGrantSession(
   request: CodexHookTrustGrantRequest,
-  spawnImpl: typeof spawn = spawn
+  spawnImpl: (
+    program: string,
+    args: string[],
+    options: Record<string, unknown>
+  ) => ChildProcessHandle = (program, args, options) =>
+    spawnProcess({ program, args, ...options } as ProcessSpec)
 ): Promise<CodexHookTrustGrantSessionResult> {
   return runCodexAppServerSession(
     request.invocation,

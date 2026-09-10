@@ -43,9 +43,6 @@ export async function findSkillFiles(
     // indistinguishable from a genuinely small root, and a caller that cached it
     // would publish "these skills no longer exist".
     signal?.throwIfAborted()
-    if (!isWithinDepth(rootPath, dirPath, maxDepth)) {
-      return
-    }
     let resolvedDirPath: string
     try {
       resolvedDirPath = await realpath(dirPath)
@@ -61,6 +58,8 @@ export async function findSkillFiles(
     if (!entries) {
       return
     }
+    // Directory entry names add one segment, so siblings share the depth verdict.
+    let childrenWithinDepth: boolean | undefined
     for (const entry of entries) {
       signal?.throwIfAborted()
       // Why: a staged sibling sits directly in a scanned root, so without this a
@@ -86,10 +85,15 @@ export async function findSkillFiles(
         continue
       }
       if (entry.isDirectory()) {
-        await visit(entryPath)
+        if ((childrenWithinDepth ??= isWithinDepth(rootPath, entryPath, maxDepth))) {
+          await visit(entryPath)
+        }
         continue
       }
-      if (entry.isSymbolicLink()) {
+      if (
+        entry.isSymbolicLink() &&
+        (childrenWithinDepth ??= isWithinDepth(rootPath, entryPath, maxDepth))
+      ) {
         // Why: users commonly symlink agent skill dirs across providers; follow
         // directory links but guard by realpath so recursive links cannot loop.
         let linksToDirectory = false
