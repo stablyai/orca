@@ -225,13 +225,17 @@ it('keeps the paused re-read set when the retention window is reconfigured', asy
   await store.settled()
   expect(store.pendingFileCount).toBe(1)
 
-  // Retention is the only thing allowed to prune this set, and this candidate
-  // is inside the new window.
-  store.setRetentionCutoffMs(syntheticCandidate().file.mtimeMs - 1000)
+  // The set records what still has to be read, not what is worth keeping. A
+  // window that now excludes this file is enforced where the re-read is
+  // dispatched, so nothing is written and the file leaves the set there.
+  store.setRetentionCutoffMs(Date.now())
   expect(store.pendingFileCount).toBe(1)
 
-  // A cutoff that really does exclude it still prunes.
-  store.setRetentionCutoffMs(Date.now())
+  store.setAcceptingWrites(true)
+  expect(store.takeStale()).toHaveLength(1)
+  replayTranscriptRead({ messages: userMessages('outside the window now', 2) })
+  await store.settled()
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
   expect(store.pendingFileCount).toBe(0)
 })
 

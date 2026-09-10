@@ -66,13 +66,6 @@ export class SessionSearchStore {
   /** The oldest transcript mtime worth indexing; PR 3 derives it from the retention setting. */
   setRetentionCutoffMs(cutoffMs: number | null): void {
     this.retentionCutoffMs = cutoffMs
-    for (const [path, candidate] of this.stale) {
-      // Only retention prunes the re-read set. Pausing is a reason not to write
-      // now, never a reason to forget what still has to be read.
-      if (!this.withinRetention(candidate)) {
-        this.stale.delete(path)
-      }
-    }
   }
 
   /** Whether this candidate is new enough to be worth holding rows for at all. */
