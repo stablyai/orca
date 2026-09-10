@@ -19,7 +19,11 @@ vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   settleStructuredAgentLaunch: mocks.settleStructuredAgentLaunch
 }))
 
-import { adoptAgentSessionLaunchVerdict, planAgentSessionLaunch } from './agent-session-launch-plan'
+import {
+  adoptAgentSessionLaunchVerdict,
+  planAgentSessionLaunch,
+  structuredAgentSessionLaunchFeasible
+} from './agent-session-launch-plan'
 
 const store = { settings: {} } as unknown as AgentLaunchRouteStore
 const ROUTE_INPUT = { agent: 'codex', executionHostId: 'local' }
@@ -123,25 +127,6 @@ describe('planAgentSessionLaunch', () => {
     expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
   })
 
-  it.each([
-    [true, 'structured-native-chat'],
-    [false, 'legacy-native-chat']
-  ])(
-    'answers an explicit chat request from structured feasibility alone (supported=%s)',
-    (supported, route) => {
-      mocks.structuredAgentLaunchSupported.mockReturnValue(supported)
-      const plan = planAgentSessionLaunch(store, {
-        agent: 'codex',
-        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
-        explicitStructured: true
-      })
-
-      expect(plan.route).toBe(route)
-      expect(mocks.structuredAgentLaunchSupported).toHaveBeenCalledWith(ROUTE_INPUT)
-      expect(mocks.resolveAgentLaunchRoute).not.toHaveBeenCalled()
-    }
-  )
-
   it('launches into the workspace created after planning when the target names one', async () => {
     const plan = planAgentSessionLaunch(store, {
       agent: 'codex',
@@ -167,6 +152,43 @@ describe('planAgentSessionLaunch', () => {
 
     await expect(plan.launch(hooks)).rejects.toThrow(/workspace/)
     expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
+  })
+})
+
+describe('structuredAgentSessionLaunchFeasible', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.buildAgentLaunchRouteInput.mockReturnValue(ROUTE_INPUT)
+    mocks.structuredAgentLaunchSupported.mockReturnValue(true)
+  })
+
+  it.each([true, false])('answers from feasibility alone (supported=%s)', (supported) => {
+    mocks.structuredAgentLaunchSupported.mockReturnValue(supported)
+    const settings = { experimentalStructuredNativeChat: true } as never
+
+    expect(
+      structuredAgentSessionLaunchFeasible(store, {
+        agent: 'codex',
+        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+        settings
+      })
+    ).toBe(supported)
+    expect(mocks.resolveAgentLaunchRoute).not.toHaveBeenCalled()
+    expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
+  })
+
+  it('builds the input from the named settings, not the store copy', () => {
+    const settings = { experimentalStructuredNativeChat: true } as never
+    structuredAgentSessionLaunchFeasible(store, {
+      agent: 'codex',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
+      settings
+    })
+
+    expect(mocks.buildAgentLaunchRouteInput).toHaveBeenCalledWith(
+      expect.objectContaining({ settings }),
+      { agent: 'codex', workspace: { kind: 'git-worktree', worktreeId: 'wt-1' } }
+    )
   })
 })
 

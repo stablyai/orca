@@ -1,5 +1,8 @@
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
-import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import {
+  structuredAgentSessionLaunchFeasible,
+  type AgentSessionStructuredFeasibilityRequest
+} from '@/lib/agent-session-launch-plan'
 import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
@@ -20,6 +23,7 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   resumeState: AiVaultSessionResumeState
   activeWorkspaceId: string | null
   targetState: AiVaultSessionResumeTargetState
+  settings: AgentSessionStructuredFeasibilityRequest['settings']
 }): AiVaultResumeInChatEligibility {
   const targetWorkspaceId = args.resumeState.usesSessionWorktree
     ? args.resumeState.worktreeId
@@ -34,14 +38,14 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
     structuredRouteAvailable:
       isAgentSessionHandleProvider(args.session.agent) &&
       targetWorkspaceId !== null &&
-      planAgentSessionLaunch(useAppStore.getState(), {
+      structuredAgentSessionLaunchFeasible(useAppStore.getState(), {
         agent: args.session.agent,
         workspace: {
           kind: workspaceKindForWorktreeId(targetWorkspaceId),
           worktreeId: targetWorkspaceId
         },
-        explicitStructured: true
-      }).route === 'structured-native-chat' &&
+        settings: args.settings
+      }) &&
       readLocalRuntimeCapabilities().includes(
         STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
       )

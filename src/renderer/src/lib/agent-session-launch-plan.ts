@@ -9,7 +9,8 @@ import {
 import {
   resolveAgentLaunchRoute,
   structuredAgentLaunchSupported,
-  type AgentLaunchRoute
+  type AgentLaunchRoute,
+  type AgentLaunchRoutingInput
 } from '@/lib/agent-launch-routing'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-view-mode'
 import {
@@ -20,8 +21,6 @@ import {
 import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-session-launch'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
-  /** An explicit chat request (vault resume): structured feasibility without the default-view-mode gate. */
-  explicitStructured?: boolean
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
 }
@@ -39,6 +38,12 @@ export type AgentSessionLaunchVerdict = {
   promptDelivery?: NativeChatLaunchPromptDelivery
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
+}
+
+export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
+  /** Named explicitly rather than read off the store, so a React caller's memo depends on the
+   *  settings this answer actually turns on. */
+  settings: AgentLaunchRoutingInput['settings']
 }
 
 export type AgentSessionLaunchTarget = {
@@ -90,20 +95,26 @@ export function adoptAgentSessionLaunchVerdict(
   }
 }
 
+/**
+ * Can this pair open a structured session at all? A feasibility QUERY for enable/disable UI, not a
+ * launch decision: it resolves no route and builds no plan, so a list may ask it per row.
+ */
+export function structuredAgentSessionLaunchFeasible(
+  store: AgentLaunchRouteStore,
+  request: AgentSessionStructuredFeasibilityRequest
+): boolean {
+  const { settings, ...args } = request
+  return structuredAgentLaunchSupported(buildAgentLaunchRouteInput({ ...store, settings }, args))
+}
+
 /** The one place a launch route is decided. Delivery mode is fixed here too, so the settle loop
  *  later receives exactly the prompt and mode the route was decided on. */
 export function planAgentSessionLaunch(
   store: AgentLaunchRouteStore,
   request: AgentSessionLaunchRequest
 ): AgentSessionLaunchPlan {
-  const input = buildAgentLaunchRouteInput(store, request)
-  const route: AgentLaunchRoute = request.explicitStructured
-    ? structuredAgentLaunchSupported(input)
-      ? 'structured-native-chat'
-      : 'legacy-native-chat'
-    : resolveAgentLaunchRoute(input)
   return adoptAgentSessionLaunchVerdict({
-    route,
+    route: resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request)),
     agent: request.agent,
     ...(request.workspace.worktreeId ? { worktreeId: request.workspace.worktreeId } : {}),
     ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),

@@ -299,9 +299,9 @@ export default function AiVaultPanel(): React.JSX.Element {
         session,
         resumeState: getSessionResumeState(session),
         activeWorkspaceId: effectiveActiveWorktreeId,
-        targetState: resumeTargetState
+        targetState: resumeTargetState,
+        settings
       }),
-    // Why: the route reads settings from the store; recompute eligibility when they change.
     [effectiveActiveWorktreeId, getSessionResumeState, resumeTargetState, settings]
   )
 
