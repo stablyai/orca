@@ -184,8 +184,14 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   // — and a workspace the merged session has no tabs for is adopted rather than read as a
   // deletion (#12721). Routing sends the reunited rows back to the owning partition.
   let session = merged.session
+  // Why the contested keys travel with the slice: the split parks a co-claimant's rows so the
+  // primary's write cannot erase them, but ssh slices are kept out of that claimant set on purpose.
+  // Adoption is the one place an ssh row meets a bare id another host also claims, and it cannot
+  // ask — so the verdict the merge already reached is handed to it.
   for (const slice of sshSlices) {
-    session = adoptStrandedHostPartitionSession(session, slice)
+    session = adoptStrandedHostPartitionSession(session, slice, {
+      contestedSessionKeys: merged.contestedSessionKeys
+    })
   }
   return {
     session,
