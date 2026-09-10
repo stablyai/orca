@@ -191,6 +191,11 @@ const UiUpdateFields = z
       .optional(),
     browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
+    // Why the inner .optional(): the shared type is Partial<Record<…>>, so its values
+    // include undefined and the schema-parity guard rejects a narrower value domain.
+    defaultBrowserSessionProfileIdByHostId: z
+      .record(z.string(), NullableString.optional())
+      .optional(),
     windowBounds: z
       .object({
         x: z.number().finite(),
