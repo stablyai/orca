@@ -1,10 +1,7 @@
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
@@ -95,9 +92,7 @@ describe('worktree ps reports structured sessions', () => {
 
   it('reports the DERIVED pane key, never an orchestration credential', () => {
     const row = attach([summary()])
-    expect(row.agents[0]?.paneKey).toBe(
-      structuredAgentSessionPaneKey(structuredAgentSessionTabId(SESSION), SESSION)
-    )
+    expect(row.agents[0]?.paneKey).toBe(structuredAgentSessionPaneKey(SESSION))
   })
 
   // Null status means no turn has been persisted; the chat itself shows nothing, so neither does this.

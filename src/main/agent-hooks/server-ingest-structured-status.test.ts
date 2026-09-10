@@ -25,7 +25,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 const TAB = structuredAgentSessionTabId(SESSION)
-const STRUCTURED_PANE = structuredAgentSessionPaneKey(TAB, SESSION)
+const STRUCTURED_PANE = structuredAgentSessionPaneKey(SESSION)
 const OBSERVED_AT = 1_757_030_400_000
 
 function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
@@ -105,6 +105,21 @@ describe('AgentHookServer ingestStructuredStatus', () => {
 
     expect(server.getStatusSnapshot()[0]).toMatchObject({
       toolName: 'read',
+      evidenceObservedAt: OBSERVED_AT + 5_000,
+      stateStartedAt: OBSERVED_AT
+    })
+  })
+
+  // The renderer's bridge used to restamp a settled row on every republish while this writer held
+  // it. Both now share `resolveAgentStatusStateStartedAt`; `agentEntryCompletionAt` reads this
+  // field as the completion time, so a moving one would re-date a finished turn.
+  it('keeps a completed turn dated when a settled session is republished', () => {
+    const server = new AgentHookServer()
+    server.ingestStructuredStatus(summary({ status: 'idle' }))
+    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 5_000 }))
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
       evidenceObservedAt: OBSERVED_AT + 5_000,
       stateStartedAt: OBSERVED_AT
     })

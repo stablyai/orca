@@ -9,7 +9,8 @@ import {
   projectStructuredItemToNativeChat,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary,
-  structuredAgentSessionPaneKey
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
 } from './structured-agent-session-projection'
 
 function item(
@@ -376,10 +377,26 @@ describe('structured agent session status projection', () => {
   })
 
   it('creates a deterministic pane identity for status stores', () => {
-    const paneKey = structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')
+    const paneKey = structuredAgentSessionPaneKey('session-1')
 
-    expect(structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')).toBe(paneKey)
-    expect(parsePaneKey(paneKey)).toMatchObject({ tabId: 'structured-agent-session-1' })
+    expect(structuredAgentSessionPaneKey('session-1')).toBe(paneKey)
+    expect(parsePaneKey(paneKey)).toMatchObject({ tabId: 'structured-agent-session-session-1' })
+  })
+
+  it('admits no surface identity into a structured row key', () => {
+    // Two writers derive this key. A tab-id parameter is how they came apart: a mirrored session
+    // that collides with an occupied id is re-hosted at `${baseId}:history-N`, and the host never
+    // sees that suffix. Taking only the session id is what keeps them in agreement.
+    expect(structuredAgentSessionPaneKey.length).toBe(1)
+    const collidedSurfaceTabId = `${structuredAgentSessionTabId('session-1')}:history-1`
+
+    const paneKey = structuredAgentSessionPaneKey('session-1')
+
+    expect(paneKey.startsWith(`${collidedSurfaceTabId}:`)).toBe(false)
+    // A second `:` makes the key unparseable, which drops the row from every sidebar bucket.
+    expect(parsePaneKey(paneKey)).toMatchObject({
+      tabId: structuredAgentSessionTabId('session-1')
+    })
   })
 
   it('requires a persisted provider conversation turn before TUI resume', () => {

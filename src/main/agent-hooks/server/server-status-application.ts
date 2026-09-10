@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'
 import { isCommandCodeNewTurnWhileWorking } from '../../../shared/command-code-turn-boundary'
+import { resolveAgentStatusStateStartedAt } from '../../../shared/agent-status-state-start'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type {
@@ -39,10 +40,14 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
         previousPromptInteractionKey: previous.promptInteractionKey,
         incomingPromptInteractionKey: payload.promptInteractionKey
       })
-    const stateStartedAt =
-      previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
-        ? previous.stateStartedAt
-        : (observedAt ?? now)
+    const stateStartedAt = resolveAgentStatusStateStartedAt({
+      previous: previous
+        ? { state: previous.payload.state, stateStartedAt: previous.stateStartedAt }
+        : undefined,
+      nextState: payload.payload.state,
+      observedAt: observedAt ?? now,
+      newTurn: commandCodeNewTurn
+    })
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,

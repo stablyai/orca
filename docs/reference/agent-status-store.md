@@ -12,7 +12,7 @@ this order, each independently shippable:
 3. shared: one worktree-status rollup and one freshness rule for every reader.
 
 The PR that carries this document is PR 1a. Sections below are grouped under
-the step that delivers them; PR 1a and PR 1b have landed.
+the step that delivers them; PR 1a, PR 1b and PR 2a have landed.
 
 ## The problem this solves
 
@@ -92,14 +92,14 @@ The structured feed keeps its job of projecting a session's journal into a
 summary and streaming it to subscribers. On every publish it additionally
 ingests the summary into the hook server as a status row:
 
-| Row field                                           | From                                                                                                                                            |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it |
-| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                        |
-| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                  |
-| `state`                                             | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared                                                                  |
-| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it          |
-| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                            |
+| Row field         | From                                                          |
+| ----------------- | ------------------------------------------------------------- |
+| `paneKey`         | `structuredAgentSessionPaneKey(sessionId)`, the key the renderer also derives (PR 2a made it take the session id alone); its leaf is UUID-shaped so pane-key validation accepts it |
+| `tabId`           | `structuredAgentSessionTabId(sessionId)`                      |
+| `worktreeId`      | `summary.workspaceId` (a folder workspace id is a valid value) |
+| `state`           | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared |
+| `structuredHost`  | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it |
+| prompt, tool, last message, model, provider session | the summary's fields    |
 
 Sessions with no persisted turn (`status === null`) produce no row, matching
 what the chat shows. When the host revokes live ownership the row is re-set
@@ -264,49 +264,60 @@ registered alias, and numeric rows are never persisted.
 ## PR 2a: converge the two derivations before the filter comes off
 
 PR 1a left main and the renderer each deriving a structured row from the same
-host summary. That is safe only while the filter keeps them apart. Two
-concrete divergences have to close before PR 2b removes it, or one session
-renders twice and its elapsed clock jumps.
+host summary, which is safe only while the IPC filter keeps them apart. This
+step closed both divergences so PR 2b can remove the filter without one session
+rendering twice or its clock jumping. No filter came off here and no writer was
+retired.
 
-### The pane key
+### The pane key is derived from the session id alone
 
-Main keys on `structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)`
-(`server-ingest-structured.ts`). The renderer keys on
-`structuredAgentSessionPaneKey(tab.id, tab.entityId)`
-(`StructuredAgentSessionStatusBridge.tsx:63`).
+`structuredAgentSessionPaneKey` now takes the session id and nothing else, and
+builds `structuredAgentSessionTabId(sessionId)` itself. Main's key is unchanged;
+the renderer's three call sites (the status bridge's write and its unmount
+cleanup, and `NativeChatStructuredSession`'s read) stopped passing `tab.id`.
 
-`tab.id` is normally that same derived id, but `web-session-tabs-sync/terminal-surfaces.ts:103`
-assigns `${baseId}:history-${++suffix}` when a mirrored session collides with
-an occupied id. For that session the two keys differ, so removing the filter
-yields two rows for one chat. The suffix path is the mirrored/web-session
-lane, which is exactly the lane `worktree ps` and mobile read.
+The tab id was the wrong input. `web-session-tabs-sync/terminal-surfaces.ts`
+re-hosts a mirrored session at `${baseId}:history-N` when its derived id is
+already occupied, and the host never sees that suffix. Two things followed from
+keying on it, and both are fixed:
 
-Fix: derive the status pane key from the session id on both sides rather than
-from the surface's local tab id. The tab id is a surface identity and may be
-disambiguated; the session id is the durable one, and main already uses it.
+- the renderer and main wrote different keys for one session, so removing the
+  filter would have produced two rows for one chat;
+- the key held a second `:`, which `parsePaneKey` rejects. An unparseable key is
+  dropped by `buildWorktreeAgentRows` (both the `entriesByTabId` bucket and the
+  worktree-attributed fallback), so a `:history-N` session had **no** sidebar or
+  dashboard row at all. It gets one now.
 
-### `stateStartedAt`
+Nothing was stranded under an old key: main never wrote a suffixed key, and the
+renderer's `agentStatusByPaneKey` is in-memory, so a `:history-N` row only ever
+lived as long as the window that wrote it — and it was invisible while it did.
 
-Main preserves `previous.stateStartedAt` when the state is unchanged
-(`server-status-application.ts` `attachStatusTiming`). The renderer's
-`projectStatus` resets it to `summary.updatedAt`. Today the difference is
-invisible because the renderer writes the row it reads; once main writes it,
-the value changes under two live consumers:
+One surface behavior needed handling. Two tabs can transiently mirror one
+session (the collision that produces the suffix), and they now share one key, so
+the status bridge's unmount cleanup no longer clears the row while another
+surface still mirrors that session.
 
-- `NativeChatResolvedView.tsx:113` reads it as `hookWorkingEpoch`, which
-  clears Stop-suppression on a new working epoch;
-- `NativeChatWorkingStatus` renders elapsed time from a `startedAt` prop fed
-  by the same field.
+### `stateStartedAt`: one rule, the host's
 
-So this is not an internal mismatch — it is a visible change to the chat's
-"Working for Ns" and to when Stop re-arms. Fix: one shared rule, main's,
-with the renderer's reset behavior either adopted deliberately or dropped.
+`src/shared/agent-status-state-start.ts` holds it, and both writers call it:
+a row's `stateStartedAt` is the start of the state the row is in, so republished
+evidence never moves it and only a state change (or Command Code's same-state
+new turn) resets it. `attachStatusTiming` had this rule already; the renderer's
+`projectStatus` had an extra `desired.state !== 'done'` clause that restamped a
+settled row on every republish, and that clause is gone.
 
-### Scope
+`done` is not an exception, because `agentEntryCompletionAt` reads a settled
+row's `stateStartedAt` as its completion time. A moving one re-dates a turn that
+already finished, and `smart-attention` already documents the opposite
+expectation for hook rows: same-state `done` writes advance `updatedAt` without
+moving the completion.
 
-No filter is removed here and no writer is retired. This step only makes the
-two derivations agree, so PR 2b is a switch flip that can be reverted on its
-own if a surface regresses.
+The visible effect is narrower than this document first claimed. `stateStartedAt`
+reaches `NativeChatResolvedView`'s `hookWorkingEpoch` and
+`NativeChatWorkingStatus`'s elapsed time, but both are read only while the row is
+`working`, where the two rules already agreed. What changes is Class 2 ordering
+in the sidebar and dashboard: a settled structured session whose journal keeps
+moving now sorts by when it finished rather than by its latest journal write.
 
 ## PR 2b: the renderer subscribes
 

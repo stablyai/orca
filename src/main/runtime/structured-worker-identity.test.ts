@@ -80,9 +80,7 @@ describe('structured worker identity', () => {
     // because both dispatch lookups key on the leaf (exact match, then leaf-suffix equivalence).
     expect(parsePaneKey(first)!.leafId).not.toContain(SESSION_ID.slice(0, 8))
     // Specifically not the sha256-of-session-id helper the chat tab projection uses.
-    expect(first).not.toBe(
-      structuredAgentSessionPaneKey(`structured-agent-session-${SESSION_ID}`, SESSION_ID)
-    )
+    expect(first).not.toBe(structuredAgentSessionPaneKey(SESSION_ID))
   })
 
   it("accepts a persisted pane key for its own session and rejects another session's", () => {
