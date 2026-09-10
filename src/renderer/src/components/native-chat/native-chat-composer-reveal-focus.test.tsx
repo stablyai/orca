@@ -147,17 +147,59 @@ describe('useNativeChatComposerRevealFocus', () => {
     expect(focusCalls).toBe(1)
   })
 
-  // A button is neither inside-pane-focus nor an editable field, so only the latch can stop this.
-  it('does not chase focus the user moved to a control outside the pane', () => {
+  it('reclaims focus after delayed programmatic restoration', () => {
     render({ isVisible: true, isFocusedGroup: true, nonce: 1 })
-    drainFrames()
+    drainFrames(1)
     expect(focusCalls).toBe(1)
     const outside = document.createElement('button')
     document.body.appendChild(outside)
     act(() => {
       outside.focus()
     })
-    render({ isVisible: true, isFocusedGroup: true, nonce: 2 })
+    drainFrames()
+    expect(focusCalls).toBe(2)
+    expect(container.querySelector('textarea')).toBe(document.activeElement)
+    outside.remove()
+  })
+
+  it('does not chase focus after the user moves to a control outside the pane', () => {
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames(1)
+    expect(focusCalls).toBe(1)
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    act(() => {
+      outside.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      outside.focus()
+    })
+    drainFrames()
+    expect(focusCalls).toBe(1)
+    expect(document.activeElement).toBe(outside)
+    outside.remove()
+  })
+
+  it('does not cancel a scheduled claim when the user types immediately', () => {
+    render({ isVisible: true, isFocusedGroup: true })
+    act(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
+    })
+    drainFrames()
+    expect(focusCalls).toBe(1)
+    expect(container.querySelector('textarea')).toBe(document.activeElement)
+  })
+
+  it('does not chase focus after the user tabs away', () => {
+    render({ isVisible: true, isFocusedGroup: true })
+    drainFrames(1)
+    expect(focusCalls).toBe(1)
+    const outside = document.createElement('button')
+    document.body.appendChild(outside)
+    act(() => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })
+      )
+      outside.focus()
+    })
     drainFrames()
     expect(focusCalls).toBe(1)
     expect(document.activeElement).toBe(outside)

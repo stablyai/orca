@@ -4,7 +4,7 @@ import { shouldPreserveEditableFocus } from '@/components/terminal-pane/pane-hel
 import { scheduleNextFrame } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import type { NativeChatComposerHandle } from './NativeChatComposer'
 
-/** Frames a reveal keeps re-taking the composer before it gives up (~100ms). */
+/** Focus attempts per reveal, including recovery from delayed programmatic restoration. */
 const REVEAL_FOCUS_FRAMES = 6
 
 type NativeChatComposerRevealFocusArgs = {
@@ -44,21 +44,45 @@ export function useNativeChatComposerRevealFocus({
       return
     }
     let cancelled = false
+    let userInteracted = false
     let attempts = 0
+    const ownerDocument = rootRef.current?.ownerDocument
+    const cancelForPointer = (): void => {
+      userInteracted = true
+    }
+    const cancelForFocusNavigation = (event: KeyboardEvent): void => {
+      if (event.key === 'Tab') {
+        userInteracted = true
+      }
+    }
+    const stopWatchingUserIntent = (): void => {
+      ownerDocument?.removeEventListener('pointerdown', cancelForPointer, true)
+      ownerDocument?.removeEventListener('keydown', cancelForFocusNavigation, true)
+    }
+    const finish = (): void => {
+      claimedRef.current = true
+      stopWatchingUserIntent()
+    }
+    ownerDocument?.addEventListener('pointerdown', cancelForPointer, true)
+    ownerDocument?.addEventListener('keydown', cancelForFocusNavigation, true)
     const claim = (): void => {
       if (cancelled) {
+        return
+      }
+      if (userInteracted) {
+        finish()
         return
       }
       const active = rootRef.current?.ownerDocument.activeElement ?? null
       // Focus already inside this pane is our own take landing or the user's click; either ends it.
       if (rootRef.current?.contains(active) === true) {
-        claimedRef.current = true
+        finish()
         return
       }
       // Why: a live text field elsewhere is a user edit — a batch worktree-create keeps its
       // next name field open behind the pane we just revealed.
       if (shouldPreserveEditableFocus(active)) {
-        claimedRef.current = true
+        finish()
         return
       }
       composerRef.current?.focus()
@@ -67,13 +91,14 @@ export function useNativeChatComposerRevealFocus({
         scheduleFrame(claim)
         return
       }
-      claimedRef.current = true
+      finish()
     }
     // Why: Radix restores the dialog trigger in a setTimeout(0) on close, which beats a
     // same-tick take; a frame lands after it.
     scheduleFrame(claim)
     return () => {
       cancelled = true
+      stopWatchingUserIntent()
     }
   }, [composerReady, composerRef, revealed, rootRef, scheduleFrame])
 }
