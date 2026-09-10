@@ -243,7 +243,9 @@ describe('NativeChatStructuredSession', () => {
     }
   )
 
-  // Every background-task test mounts the same local Claude session; only the ids differ.
+  // Every background-task test mounts the same local Claude session; only the ids
+  // differ. A fresh element per call also matters for the rerenders below: React
+  // bails out of re-rendering an identical one.
   const claudeSessionView = (tabId: string, sessionId: string) => (
     <NativeChatStructuredSession
       isVisible
@@ -254,7 +256,7 @@ describe('NativeChatStructuredSession', () => {
     />
   )
 
-  it('places background monitoring above the usable composer and stops without an active turn', async () => {
+  it('places background monitoring above the usable composer, keeps its list open across a gap in live work, and stops without an active turn', async () => {
     mocks.monitoringBackgroundTasks = true
     mocks.supportsBackgroundTaskStop = true
     mocks.backgroundTasks = [
@@ -263,7 +265,9 @@ describe('NativeChatStructuredSession', () => {
     ]
     mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
 
-    render(claudeSessionView('structured-tab-background', 'session-background'))
+    const { rerender } = render(
+      claudeSessionView('structured-tab-background', 'session-background')
+    )
 
     const disclosure = screen.getByRole('button', { name: '1 agent · 1 shell' })
     const status = disclosure.closest('[data-native-chat-background-tasks="true"]')
@@ -288,6 +292,17 @@ describe('NativeChatStructuredSession', () => {
     await waitFor(() =>
       expect(mocks.stopBackgroundTask).toHaveBeenCalledWith('session-background', 'task-command')
     )
+
+    // The strip is mounted on live work, and settled rows are flushed the instant
+    // the last live one ends, so a sequential fan-out unmounts it between one
+    // subagent finishing and the next starting. The disclosure is not the
+    // strip's to forget in that gap.
+    mocks.monitoringBackgroundTasks = false
+    rerender(claudeSessionView('structured-tab-background', 'session-background'))
+    expect(document.querySelector('[data-native-chat-background-tasks="true"]')).toBeNull()
+    mocks.monitoringBackgroundTasks = true
+    rerender(claudeSessionView('structured-tab-background', 'session-background'))
+    expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy()
   })
 
   it('keeps the strip mounted through a running turn, with the turn owning the voice', () => {
@@ -373,6 +388,8 @@ describe('NativeChatStructuredSession', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop Shared task' }))
 
     rerender(claudeSessionView('structured-tab-stale-background', 'session-current'))
+    // The disclosure is keyed by session, so a new session opens collapsed.
+    fireEvent.click(screen.getByRole('button', { name: '1 shell command — working' }))
     const currentStop = screen.getByRole('button', { name: 'Stop Shared task' })
     expect((currentStop as HTMLButtonElement).disabled).toBe(false)
     fireEvent.click(currentStop)

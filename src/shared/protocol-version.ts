@@ -170,6 +170,13 @@ export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1'
 // Readers must understand a monitoring roster with no available stop control.
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
+// Why: the host now publishes rows for work that is live inside a turn, and such
+// a row carries `stoppable: false` because no targeted stop can reach it. A
+// reader that predates the field draws a per-row Stop on every row it is given,
+// so it must be told apart from one that honours the field — and NOT by the
+// stop capability above, which a client can advertise while predating this.
+export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
+  'agent-session.background-task-row-stop.v1' as const
 // Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
@@ -279,6 +286,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,

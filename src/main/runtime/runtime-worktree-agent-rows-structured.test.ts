@@ -1,5 +1,5 @@
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import {
   structuredAgentSessionPaneKey,
@@ -7,17 +7,24 @@ import {
 } from '../../shared/structured-agent-session-projection'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
+import { AgentHookServer, _internals } from '../agent-hooks/server'
+
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
+}))
 
 /**
- * A structured session has no PTY, so it reaches none of the hook or retained snapshots that every
- * other row comes from. Before this, `worktree ps` reported a worktree running one as idle while
- * the sidebar showed it working — the CLI, which is the agent-facing surface, was the blind one.
+ * A structured session has no PTY and no hook script, so the host publishes its projection into
+ * the agent-status store itself. This walks that store into `worktree ps` rows: before it, the CLI
+ * reported a worktree running one as idle while the sidebar showed it working.
  */
 const WORKTREE_ID = 'repo-1::/workspace/app'
+const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
 
 function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
   return {
-    sessionId: 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d',
+    sessionId: SESSION,
     workspaceId: WORKTREE_ID,
     agent: 'claude',
     status: 'working',
@@ -29,6 +36,10 @@ function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionSta
 }
 
 function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummary {
+  const store = new AgentHookServer()
+  for (const entry of summaries) {
+    store.ingestStructuredStatus(entry)
+  }
   const row = {
     worktreeId: WORKTREE_ID,
     status: 'inactive',
@@ -45,14 +56,17 @@ function attach(summaries: AgentSessionStatusSummary[]): RuntimeWorktreePsSummar
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: { tabIds: new Set(), paneKeys: new Set(), ptyIds: new Set() },
       retainedSnapshots: [],
-      hookSnapshots: [],
-      structuredSummaries: summaries
+      hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
     getSummary: (map, _p, _m, id) => map.get(id) ?? null
   })
   return row
 }
+
+beforeEach(() => {
+  _internals.resetCachesForTests()
+})
 
 describe('worktree ps reports structured sessions', () => {
   it('a busy structured session is not reported idle', () => {
@@ -61,6 +75,7 @@ describe('worktree ps reports structured sessions', () => {
     expect(row.agents[0]?.state).toBe('working')
     expect(row.agents[0]?.agentType).toBe('claude')
     expect(row.agents[0]?.prompt).toBe('ship the thing')
+    expect(row.status).toBe('working')
   })
 
   // The same projection the sidebar applies, so the two surfaces cannot disagree about one session.
@@ -77,15 +92,20 @@ describe('worktree ps reports structured sessions', () => {
 
   it('reports the DERIVED pane key, never an orchestration credential', () => {
     const row = attach([summary()])
-    const sessionId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
     expect(row.agents[0]?.paneKey).toBe(
-      structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
+      structuredAgentSessionPaneKey(structuredAgentSessionTabId(SESSION), SESSION)
     )
   })
 
   // Null status means no turn has been persisted; the chat itself shows nothing, so neither does this.
   it('omits a session with no projected status', () => {
     expect(attach([summary({ status: null })]).agents).toHaveLength(0)
+  })
+
+  it('keeps the journal clock on the row, so a restart republish is not new activity', () => {
+    const row = attach([summary()])
+    expect(row.agents[0]?.updatedAt).toBe(1_757_030_400_000)
+    expect(row.agents[0]?.stateStartedAt).toBe(1_757_030_400_000)
   })
 })
 
@@ -95,11 +115,10 @@ describe('worktree ps reports structured sessions', () => {
  * refresh check goes permanently true and pins shipped clients to a fast cadence with no exit, and
  * the plugin projection has no field that can carry `writable: false`. Every SAFE consumer of a
  * terminal summary checks `ptyId`; the breaking ones key off `connected` or mere row presence,
- * which no added field can qualify. A separate change publishes an honest partial-listing count
- * there instead. This pins that only `worktree ps` gained the enumerator.
+ * which no added field can qualify. This pins that the listing never reads the status store.
  */
 describe('terminal listing is deliberately left alone', () => {
-  it('only worktree ps consumes the structured status summaries', async () => {
+  it('never reads the agent-status store that now carries structured rows', async () => {
     const { readFile } = await import('node:fs/promises')
     // orca-runtime-subscribe-to-terminal-resize.ts owns listTerminals.
     const listing = await readFile(
@@ -108,13 +127,7 @@ describe('terminal listing is deliberately left alone', () => {
     )
     // Guard the guard: an empty read would make every assertion below vacuously true.
     expect(listing).toContain('async listTerminals(')
-    expect(listing).not.toContain('liveSessionStatusSummaries')
-    expect(listing).not.toContain('structuredSummaries')
-
-    const worktreePs = await readFile(
-      new URL('./orca-runtime-get-worktree-ps.ts', import.meta.url),
-      'utf8'
-    )
-    expect(worktreePs).toContain('liveSessionStatusSummaries')
+    expect(listing).not.toContain('getAgentStatusSnapshotFn')
+    expect(listing).not.toContain('structuredHost')
   })
 })

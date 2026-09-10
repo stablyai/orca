@@ -27,6 +27,11 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         continue
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
+      // Why: the session journal is the durable truth for a structured row and the host republishes
+      // it on restore; a persisted copy would hydrate unconfirmed and fight that republish.
+      if (enrichedPayload.structuredHost) {
+        continue
+      }
       const childOnlyBoundary = enrichedPayload.claudeLeadBoundaryChildOnly === true
       const {
         claudeRunningNonAgentTask: _claudeRunningNonAgentTask,

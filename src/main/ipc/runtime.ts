@@ -11,6 +11,7 @@ import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import {
+  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -84,6 +85,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           clientCapabilities: [
             AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
             AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+            AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
             STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
             CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
           ]
@@ -134,6 +136,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
             clientCapabilities: [
               AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
               AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+              AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
               STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
               CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
             ]
