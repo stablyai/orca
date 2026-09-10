@@ -4441,7 +4441,6 @@
           "a30e34eb5c": "关闭工作区板",
           "spaces": "空间",
           "views": "侧边栏视图",
-          "createMenu": "创建",
           "addProject": "添加项目"
         },
         "SidebarNav": {
@@ -14287,7 +14286,6 @@
           "filtersSection": "筛选",
           "viewSection": "视图"
         },
-
         "ActivityScopeFilterControls": {
           "resetScope": "显示所有主机和项目"
         },

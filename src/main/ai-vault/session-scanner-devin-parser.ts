@@ -2,6 +2,7 @@ import { wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { FileWithMtime } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   addPreviewContent,
   createAccumulator,
@@ -25,20 +26,34 @@ type ParserSessionOptions = {
 
 export async function parseDevinSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  return parseDevinSessionContent(
+  return parseDevinSessionRecord(
     file,
     await wslGatedReadFile(file.path, 'utf-8', 'scan'),
-    platform
+    platform,
+    {},
+    messages
   )
 }
 
+/** Remote transcript content, streamed from a host that has no reader attached. */
 export function parseDevinSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
   options: ParserSessionOptions = {}
+): AiVaultSession | null {
+  return parseDevinSessionRecord(file, content, platform, options)
+}
+
+function parseDevinSessionRecord(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: ParserSessionOptions,
+  messages?: TranscriptMessageSink
 ): AiVaultSession | null {
   const record = asRecord(JSON.parse(content) as unknown)
   if (!record) {
@@ -48,7 +63,7 @@ export function parseDevinSessionContent(
     extractString(record.session_id) ??
     extractString(record.sessionId) ??
     sessionIdFromFileName(file.path)
-  const accumulator = createAccumulator({ agent: 'devin', file, sessionId })
+  const accumulator = createAccumulator({ agent: 'devin', file, sessionId, messages })
   const agentRecord = asRecord(record.agent)
   accumulator.model =
     extractString(agentRecord?.model_name) ??

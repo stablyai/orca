@@ -355,7 +355,9 @@ export function NativeChatStructuredSession(
           targetPtyId={null}
           agent={props.agent}
           canSend={!prompt}
-          isWorking={controller.isWorking}
+          // Stop, not status: only a provider-minted turn can be interrupted, so the button
+          // must not flip while a dispatch is still unanswered.
+          isWorking={controller.turnId !== null}
           onStop={() => {
             if (controller.turnId) {
               void controller.cancel(controller.turnId)

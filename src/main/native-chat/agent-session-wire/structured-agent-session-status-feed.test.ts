@@ -59,9 +59,11 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
 function indexed(session: {
   journal: Awaited<ReturnType<typeof openJournal>>
   hasProviderChild?: boolean
+  fence?: number
 }) {
   return {
     journal: session.journal,
+    fence: session.fence ?? 1,
     ...(session.hasProviderChild !== undefined
       ? { hasProviderChild: session.hasProviderChild }
       : {}),
@@ -72,7 +74,7 @@ function indexed(session: {
 function feedFor(
   sessions: Map<
     string,
-    { journal: Awaited<ReturnType<typeof openJournal>>; hasProviderChild?: boolean }
+    { journal: Awaited<ReturnType<typeof openJournal>>; hasProviderChild?: boolean; fence?: number }
   >,
   record: Partial<AgentSessionRecord> | null = null,
   onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged'],
@@ -156,6 +158,59 @@ describe('StructuredAgentSessionStatusFeed', () => {
         ]
       }
     ])
+  })
+
+  it('stops projecting an old-host unknown submission after the owner fence advances', async () => {
+    const journal = await openJournal()
+    const session = { journal, fence: 1 }
+    const { feed, events } = feedFor(new Map([[SESSION, session]]))
+    await journal.appendSubmission({
+      clientMessageId: 'old-host',
+      payloadFingerprint: 'fp',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'slow' }] },
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'old-host',
+      state: 'unknown',
+      reason: 'ack timeout',
+      fence: 1
+    })
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ session: { status: 'working' } })
+    session.fence = 2
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ session: { status: 'idle' } })
+  })
+
+  it('publishes working from the pending submission, before the provider replays the turn', async () => {
+    const journal = await openJournal()
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
+    events.length = 0
+    await journal.appendSubmission({
+      clientMessageId: 'client-1',
+      payloadFingerprint: 'fingerprint-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
+      fence: 1
+    })
+
+    feed.publish(SESSION)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'working' })
+    })
+
+    await journal.resolveDispatch({
+      clientMessageId: 'client-1',
+      state: 'accepted',
+      providerIdentity: USER_IDENTITY,
+      fence: 1
+    })
+    feed.publish(SESSION)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'idle' })
+    })
   })
 
   it('publishes working, then idle once the running marker is tombstoned, and never a repeat', async () => {

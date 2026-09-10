@@ -49,7 +49,11 @@ describe('provider-exit recovery tickets', () => {
       hasProviderChild: true,
       fence: 7,
       acquisitionGeneration: GENERATION,
-      journal: { snapshot: () => ({ items: [] }), appendLifecycleBatch }
+      journal: {
+        snapshot: () => ({ items: [] }),
+        appendLifecycleBatch,
+        markPendingSubmissionsUnknown: vi.fn(async () => [])
+      }
     } as unknown as StructuredAgentSessionHostSession
     const store = {
       getRecord: () => ({
@@ -89,6 +93,10 @@ describe('provider-exit recovery tickets', () => {
 
     expect(result).toMatchObject({ settlementRetryRequired: false, releasedFence: 8 })
     expect(appendLifecycleBatch).toHaveBeenCalledOnce()
+    expect(session.journal.markPendingSubmissionsUnknown).toHaveBeenCalledWith(
+      7,
+      'provider_exited_before_acknowledgement'
+    )
     expect(session.hasProviderChild).toBe(false)
   })
 
@@ -98,6 +106,7 @@ describe('provider-exit recovery tickets', () => {
       fence: 7,
       acquisitionGeneration: GENERATION,
       journal: {
+        markPendingSubmissionsUnknown: vi.fn(async () => []),
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => {
           throw new Error('journal still unavailable')

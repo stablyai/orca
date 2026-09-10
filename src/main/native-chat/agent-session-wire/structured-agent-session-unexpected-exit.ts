@@ -81,6 +81,15 @@ export async function settleUnexpectedStructuredAgentSessionExit(
         settlementRetryRequired = true
         context.onBarrierError?.(unexpectedEvent.sessionId, error)
       }
+      try {
+        await session.journal.markPendingSubmissionsUnknown(
+          session.fence,
+          'provider_exited_before_acknowledgement'
+        )
+      } catch (error) {
+        settlementRetryRequired = true
+        context.onBarrierError?.(unexpectedEvent.sessionId, error)
+      }
       if (unexpectedEvent.settlementRetryRequired || settlementRetryRequired) {
         const retried = await retryUnexpectedExitSettlement({
           context,
@@ -170,6 +179,10 @@ export async function retryUnexpectedExitSettlement(input: {
   stableSettlementId: string
 }): Promise<boolean> {
   try {
+    await input.session.journal.markPendingSubmissionsUnknown(
+      input.session.fence,
+      'provider_exited_before_acknowledgement'
+    )
     const mutations = unexpectedExitFallbackMutations(
       input.event,
       input.session,

@@ -33,6 +33,7 @@ type StatusFeedSession = {
   journal: AgentSessionJournal
   params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] }
   hasProviderChild?: boolean
+  fence?: number
 }
 
 export type StructuredAgentSessionStatusFeedDeps = {
@@ -101,6 +102,7 @@ export class StructuredAgentSessionStatusFeed {
       epoch: string
       sequence: number
       readOnly: boolean
+      fence: number | undefined
       summary: ReturnType<typeof projectStructuredAgentSessionStatusSummary>
     }
   >()
@@ -196,18 +198,26 @@ export class StructuredAgentSessionStatusFeed {
     // An unreadable journal projects as "no turn": the chat itself shows the reset.
     const cursor = journal.cursor()
     const readOnly = journal.isReadOnly
+    const fence = session.fence
     let projection = this.journalProjections.get(journal)
     if (
       !projection ||
       projection.epoch !== cursor.epoch ||
       projection.sequence !== cursor.sequence ||
-      projection.readOnly !== readOnly
+      projection.readOnly !== readOnly ||
+      projection.fence !== fence
     ) {
+      // A journalled submission bumps `lastSequence`, so the send-time working
+      // signal reaches the cache; the lease fence does not, hence the extra key.
+      const snapshot = readOnly ? null : journal.snapshot()
       projection = {
         ...cursor,
         readOnly,
+        fence,
         summary: projectStructuredAgentSessionStatusSummary(
-          readOnly ? [] : journal.snapshot().items
+          snapshot?.items ?? [],
+          snapshot?.submissions ?? [],
+          fence
         )
       }
       this.journalProjections.set(journal, projection)
