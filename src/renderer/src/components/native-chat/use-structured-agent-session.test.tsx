@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 let fence = 3
 let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
 let items: AgentJournalRenderItem[] = []
+let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
@@ -26,7 +27,7 @@ vi.mock('./use-structured-agent-session-read', () => ({
       fence,
       commands: sessionCommands,
       items,
-      submissions: [],
+      submissions,
       status: 'ready',
       error: null,
       hasOlder: false,
@@ -48,6 +49,7 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   })
 }))
 
+import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
@@ -97,10 +99,72 @@ const OPTIONS = {
   current: { model: 'gpt-live', effort: 'medium' }
 }
 
+describe('useStructuredAgentSession working state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fence = 3
+    submissions = []
+    mocks.call.mockResolvedValue(null)
+  })
+
+  it('reports work from an unanswered dispatch, and keeps the turn id provider-minted', () => {
+    submissions = [
+      {
+        clientMessageId: 'client-1',
+        fence: 3,
+        payloadFingerprint: 'fingerprint-1',
+        dispatchState: 'pending',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null
+      }
+    ]
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+
+    expect(result.current.isWorking).toBe(true)
+    // Only the provider can mint a cancellable turn, so Stop stays unavailable here.
+    expect(result.current.turnId).toBeNull()
+  })
+
+  it('reports no work once the dispatch resolves and no turn is running', () => {
+    submissions = [
+      {
+        clientMessageId: 'client-1',
+        fence: 3,
+        payloadFingerprint: 'fingerprint-1',
+        dispatchState: 'accepted',
+        providerItemId: 'codex:thread-1:turn-1',
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: 2
+      }
+    ]
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+
+    expect(result.current.isWorking).toBe(false)
+  })
+})
+
 describe('useStructuredAgentSession options', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fence = 3
+    submissions = []
     mocks.operationId
       .mockReset()
       .mockReturnValueOnce('operation-1')

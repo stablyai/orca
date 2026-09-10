@@ -1,7 +1,6 @@
-import { memo, useEffect, useRef, useState } from 'react'
-import { Image, Pressable, Text, View } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
-import { ArrowUp, Copy } from 'lucide-react-native'
+import { MobileSelectableText as Text } from '../components/MobileSelectableText'
+import { memo } from 'react'
+import { Image, Text as NativeText, View } from 'react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
@@ -10,10 +9,8 @@ import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { ToolRun } from './MobileNativeChatToolRun'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
-import { colors } from '../theme/mobile-theme'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { styles, TEXT_SIZE } from './mobile-native-chat-message-styles'
-import { nativeChatMessageText } from './mobile-native-chat-message-text'
 
 function Prose({
   block,
@@ -37,7 +34,12 @@ function Prose({
       )
     }
     return (
-      <MobileMarkdown content={block.text} textScale={1.25 * fontScale} onOpenFile={onOpenFile} />
+      <MobileMarkdown
+        content={block.text}
+        rangeSelectable
+        textScale={1.25 * fontScale}
+        onOpenFile={onOpenFile}
+      />
     )
   }
   if (isImageRefBlock(block)) {
@@ -55,53 +57,18 @@ function Prose({
       )
     }
     return (
-      <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
+      <NativeText style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
         🖼 {block.alt ?? block.path ?? block.url ?? 'image'}
-      </Text>
+      </NativeText>
     )
   }
   return null
-}
-
-/** Subtle top-right controls for an agent message: copy its prose, or scroll so
- *  this message's top aligns to the top of the viewport. */
-function AgentControls({
-  onCopy,
-  onScrollToTop
-}: {
-  onCopy: () => void
-  onScrollToTop?: () => void
-}): React.JSX.Element {
-  return (
-    <View style={styles.controls}>
-      <Pressable
-        style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
-        onPress={onCopy}
-        hitSlop={8}
-        accessibilityLabel="Copy message"
-      >
-        <Copy size={14} color={colors.textMuted} strokeWidth={2} />
-      </Pressable>
-      {onScrollToTop ? (
-        <Pressable
-          style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
-          onPress={onScrollToTop}
-          hitSlop={8}
-          accessibilityLabel="Scroll this message to top"
-        >
-          <ArrowUp size={14} color={colors.textMuted} strokeWidth={2} />
-        </Pressable>
-      ) : null}
-    </View>
-  )
 }
 
 function MobileNativeChatMessageImpl({
   message,
   toolsExpanded = false,
   fontScale = 1,
-  messageIndex,
-  onScrollToMessage,
   onOpenFile,
   turnStatus,
   turnExpanded,
@@ -114,10 +81,6 @@ function MobileNativeChatMessageImpl({
   toolsExpanded?: boolean
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
-  /** This message's index in the list, paired with onScrollToMessage. */
-  messageIndex?: number
-  /** Ask the list to align this message's top to the top of the viewport. */
-  onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
   /** This turn's status row, rendered under a user message (desktop parity). */
   turnStatus?: NativeChatTurnStatus | null
@@ -134,18 +97,6 @@ function MobileNativeChatMessageImpl({
 }): React.JSX.Element {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
-  const isAgent = !isUser
-  // Briefly tint the bubble to confirm a copy landed.
-  const [copied, setCopied] = useState(false)
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (copyTimer.current) {
-        clearTimeout(copyTimer.current)
-      }
-    },
-    []
-  )
   // Separate the agent's words from its tool activity: prose renders first, the
   // tool calls fold into a collapsible run beneath. The user's own messages get
   // an inverted (filled accent) bubble so they stand apart from agent prose.
@@ -165,42 +116,11 @@ function MobileNativeChatMessageImpl({
     !toolsExpanded
   const showToolRun = tools.length > 0 && !settledToolsHidden
 
-  const handleCopy = (): void => {
-    const text = nativeChatMessageText(message.blocks)
-    if (!text) {
-      return
-    }
-    void Clipboard.setStringAsync(text)
-    setCopied(true)
-    if (copyTimer.current) {
-      clearTimeout(copyTimer.current)
-    }
-    copyTimer.current = setTimeout(() => setCopied(false), 700)
-  }
-
-  // Copy + scroll-to-top, shown inline with the first tool call (or after the
-  // prose when there are no tools).
-  const controls = isAgent ? (
-    <AgentControls
-      onCopy={handleCopy}
-      onScrollToTop={
-        onScrollToMessage && messageIndex !== undefined
-          ? () => onScrollToMessage(messageIndex)
-          : undefined
-      }
-    />
-  ) : null
-
   return (
     <>
       <View style={[styles.row, isUser && styles.rowUser]}>
         <View
-          style={[
-            styles.content,
-            isUser && styles.userBubble,
-            isReasoning && styles.reasoning,
-            copied && styles.copied
-          ]}
+          style={[styles.content, isUser && styles.userBubble, isReasoning && styles.reasoning]}
         >
           {prose.map((block, index) => (
             <Prose
@@ -220,11 +140,8 @@ function MobileNativeChatMessageImpl({
               defaultExpanded={turnExpanded || toolsExpanded}
               expandChildren={turnExpanded ? false : toolsExpanded}
               activeCall={activeCall}
-              trailing={controls}
               onOpenFile={onOpenFile}
             />
-          ) : controls ? (
-            <View style={styles.controlsRow}>{controls}</View>
           ) : null}
         </View>
       </View>

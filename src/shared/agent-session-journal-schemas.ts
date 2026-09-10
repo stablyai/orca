@@ -204,7 +204,8 @@ export const AgentJournalSubmissionSchema = z.object({
   providerItemId: z.string().nullable(),
   reason: z.string().nullable(),
   submittedAt: z.number(),
-  resolvedAt: z.number().nullable()
+  resolvedAt: z.number().nullable(),
+  recovered: z.literal(true).optional()
 })
 
 export function isAdmissibleAgentJournalItemBody(value: unknown): value is AgentJournalItemBody {

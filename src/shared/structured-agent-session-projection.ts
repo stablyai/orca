@@ -5,6 +5,7 @@ import {
 } from './agent-status-field-normalization'
 import type {
   AgentJournalRenderItem,
+  AgentJournalSubmission,
   AgentJournalToolCallItem
 } from './agent-session-journal-types'
 import {
@@ -178,6 +179,34 @@ export function hasPersistedStructuredAgentSessionTurn(
   )
 }
 
+/**
+ * A send the host has journaled that the provider has neither opened a turn for nor refused.
+ *
+ * Codex declares `turn/started` within ~150ms, but Claude's running row can only be written once
+ * the SDK echoes the user message back — a 3.4s median and 18s at p90 on real journals. Waiting
+ * on that echo to call a session working leaves the whole gap reading idle in the chat and in
+ * every session list, so the send itself is the evidence.
+ *
+ * `unknown` still counts: it only means the ack budget elapsed, which happens on 30% of Claude
+ * sends whose turn then arrives anyway, and delivery confidence is a separate question from
+ * whether work is owed. A recovered `unknown` does not — that one outlived the host generation
+ * that sent it, so there is nothing still running to report.
+ */
+export function hasUnansweredStructuredAgentSessionDispatch(
+  submissions: readonly AgentJournalSubmission[],
+  currentFence?: number | null
+): boolean {
+  return submissions.some(
+    (submission) =>
+      (currentFence == null || submission.fence >= currentFence) &&
+      (submission.dispatchState === 'pending' ||
+        (submission.dispatchState === 'unknown' &&
+          submission.recovered !== true &&
+          // Older hosts publish the recovery reason but omit the optional marker.
+          submission.reason !== 'host_restarted_before_acknowledgement'))
+  )
+}
+
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
 export function structuredAgentSessionTabId(sessionId: string): string {
@@ -185,7 +214,9 @@ export function structuredAgentSessionTabId(sessionId: string): string {
 }
 
 export function projectStructuredAgentSessionStatus(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = [],
+  currentFence?: number | null
 ): StructuredAgentSessionProjectedStatus {
   if (
     items.some(
@@ -196,7 +227,10 @@ export function projectStructuredAgentSessionStatus(
   ) {
     return 'attention'
   }
-  return activeStructuredAgentSessionTurnId(items) ? 'working' : 'idle'
+  return activeStructuredAgentSessionTurnId(items) ||
+    hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
+    ? 'working'
+    : 'idle'
 }
 
 function messageProse(blocks: readonly NativeChatBlock[]): string {
@@ -273,12 +307,19 @@ export type StructuredAgentSessionStatusProjection = {
  *  the 8 KB body): a streamed reply re-projects on every journal checkpoint, so the frame
  *  has to stay small even though the row only ever renders one line of it. */
 export function projectStructuredAgentSessionStatusSummary(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = [],
+  currentFence?: number | null
 ): StructuredAgentSessionStatusProjection {
-  if (!hasPersistedStructuredAgentSessionTurn(items)) {
+  // A first send has no journalled message until the provider replays it, so the pending
+  // dispatch is also what makes a brand-new session listable at all.
+  if (
+    !hasPersistedStructuredAgentSessionTurn(items) &&
+    !hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
+  ) {
     return { status: null, latestPrompt: '' }
   }
-  const status = projectStructuredAgentSessionStatus(items)
+  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
   const activeToolCall = status === 'working' ? activeStructuredAgentSessionToolCall(items) : null
   const toolName = activeToolCall
     ? normalizeOptionalField(activeToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)

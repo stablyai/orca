@@ -92,7 +92,8 @@ describe('provider-exit recovery tickets', () => {
         snapshot: () => ({
           items: [lifecycleItem('turn-1', 1, { state: 'running', startedAt: 1_000 })]
         }),
-        appendLifecycleBatch
+        appendLifecycleBatch,
+        markPendingSubmissionsUnknown: vi.fn(async () => [])
       }
     } as unknown as StructuredAgentSessionHostSession
 
@@ -157,7 +158,11 @@ describe('provider-exit recovery tickets', () => {
       hasProviderChild: true,
       fence: 7,
       acquisitionGeneration: GENERATION,
-      journal: { snapshot: () => ({ items }), appendLifecycleBatch }
+      journal: {
+        snapshot: () => ({ items }),
+        appendLifecycleBatch,
+        markPendingSubmissionsUnknown: vi.fn(async () => [])
+      }
     } as unknown as StructuredAgentSessionHostSession
     const store = {
       getRecord: () => ({
@@ -196,6 +201,10 @@ describe('provider-exit recovery tickets', () => {
     )
 
     expect(result).toMatchObject({ settlementRetryRequired: false, releasedFence: 8 })
+    expect(session.journal.markPendingSubmissionsUnknown).toHaveBeenCalledWith(
+      7,
+      'provider_exited_before_acknowledgement'
+    )
     expect(session.hasProviderChild).toBe(false)
     // The running row is revised to interrupted at exit receipt, never tombstoned.
     expect(appendLifecycleBatch).toHaveBeenCalledExactlyOnceWith({
@@ -232,6 +241,7 @@ describe('provider-exit recovery tickets', () => {
       fence: 7,
       acquisitionGeneration: GENERATION,
       journal: {
+        markPendingSubmissionsUnknown: vi.fn(async () => []),
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => {
           throw new Error('journal still unavailable')

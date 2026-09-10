@@ -49,6 +49,7 @@ type Props = {
   /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
   agent?: string | null
   agentWorking?: boolean
+  canStop?: boolean
   /** Structured lane: per-turn "Working for N" status plus live tool progress,
    *  replacing the bridge lane's static three-dot working row (desktop parity). */
   structuredActivityUi?: boolean
@@ -56,6 +57,7 @@ type Props = {
   workingStartedAt?: number | null
   settledTurns?: ReadonlyMap<string, NativeChatSettledTurn> | null
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
+  /** Interrupt a provider turn. */
   onStop?: () => void
   /** Live partial assistant text to show as an in-progress bubble, already gated
    *  by the overlay against the transcript catching up. */
@@ -132,6 +134,7 @@ export function MobileNativeChatView({
   error,
   agent,
   agentWorking,
+  canStop = agentWorking,
   structuredActivityUi = false,
   workingStartedAt,
   settledTurns,
@@ -256,11 +259,6 @@ export function MobileNativeChatView({
     [hasMore, loadingEarlier, onLoadEarlier]
   )
 
-  // Align a single message's top to the top of the viewport.
-  const onScrollToMessage = useCallback((index: number) => {
-    listRef.current?.scrollToIndex({ index, viewPosition: 0, animated: true })
-  }, [])
-
   // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
   // owns them; the bridge lane keeps its three-dot indicator.
   const turns = useMobileNativeChatTurnDisclosure({
@@ -278,15 +276,13 @@ export function MobileNativeChatView({
         message={item}
         toolsExpanded={toolsExpanded}
         fontScale={fontScale}
-        messageIndex={index}
-        onScrollToMessage={onScrollToMessage}
         onOpenFile={onOpenFile}
         structuredActivityUi={structuredActivityUi}
         onToggleTurn={turns.onToggleTurn}
         {...turns.resolveRow(index, item)}
       />
     ),
-    [toolsExpanded, fontScale, onScrollToMessage, onOpenFile, structuredActivityUi, turns]
+    [toolsExpanded, fontScale, onOpenFile, structuredActivityUi, turns]
   )
 
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
@@ -318,21 +314,6 @@ export function MobileNativeChatView({
                 if (data.length > 0 && atBottom) {
                   listRef.current?.scrollToEnd({ animated: false })
                 }
-              }}
-              // scrollToIndex can fail before an off-screen row is measured —
-              // fall back to an estimated offset, then retry once it's laid out.
-              onScrollToIndexFailed={(info) => {
-                listRef.current?.scrollToOffset({
-                  offset: info.averageItemLength * info.index,
-                  animated: true
-                })
-                setTimeout(() => {
-                  listRef.current?.scrollToIndex({
-                    index: info.index,
-                    viewPosition: 0,
-                    animated: true
-                  })
-                }, 120)
               }}
               ListHeaderComponent={
                 hasMore ? (
@@ -368,8 +349,7 @@ export function MobileNativeChatView({
               }
             />
           </GestureDetector>
-          {/* Jump-to-latest control. The scroll-to-top affordance now lives
-              per-message (the up-arrow in each agent message's controls). */}
+          {/* Jump-to-latest control. */}
           {!atBottom ? (
             <Pressable
               accessibilityLabel="Scroll to latest"
@@ -392,8 +372,6 @@ export function MobileNativeChatView({
         question={question}
         onAnswerQuestion={onAnswerQuestion}
       />
-      {/* Chrome row above the composer: the working indicator and the global
-          tool-calls expand/collapse toggle on the left, Stop in the far corner. */}
       <View style={styles.chromeRow}>
         <View style={styles.chromeLeft}>
           {agentWorking && !structuredActivityUi ? <MobileAgentWorkingIndicator /> : null}
@@ -410,7 +388,7 @@ export function MobileNativeChatView({
             <Text style={styles.chromeToggleLabel}>{toolsExpanded ? 'Collapse' : 'Tools'}</Text>
           </Pressable>
         </View>
-        {agentWorking ? (
+        {canStop ? (
           <Pressable
             style={({ pressed }) => [styles.stopButton, pressed && styles.pressed]}
             onPress={onStop}

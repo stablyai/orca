@@ -32,6 +32,7 @@ export type MobileNativeChatController = {
   /** Structured lane: host-recorded turn timing for the per-turn status rows. */
   nativeChatWorkingStartedAt: number | null
   nativeChatSettledTurns: ReadonlyMap<string, NativeChatSettledTurn> | null
+  nativeChatCanStop: boolean
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean

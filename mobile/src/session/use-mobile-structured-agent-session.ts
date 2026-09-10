@@ -11,7 +11,10 @@ import {
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  hasUnansweredStructuredAgentSessionDispatch
+} from '../../../src/shared/structured-agent-session-projection'
 import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
@@ -118,15 +121,7 @@ export function useMobileStructuredAgentSession(args: {
     [client, enabled, onSendError, sessionId, sessionKey]
   )
 
-  const {
-    conversationCommands,
-    optionPickerRequest,
-    invokeStructuredOption,
-    optionSnapshot,
-    optionSurface,
-    pendingOptionId,
-    setStructuredOption
-  } = useMobileStructuredAgentOptions({
+  const options = useMobileStructuredAgentOptions({
     agent,
     client,
     sessionId,
@@ -134,6 +129,8 @@ export function useMobileStructuredAgentSession(args: {
     fence: state.fence,
     mutate
   })
+  const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
+    options
 
   const sendWithOutcome = useCallback(
     async (
@@ -284,8 +281,7 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   return {
-    conversationCommands,
-    optionPickerRequest,
+    ...options,
     session: {
       messages,
       status,
@@ -295,19 +291,17 @@ export function useMobileStructuredAgentSession(args: {
       loadingEarlier: loadingOlder,
       loadEarlier
     },
-    isWorking: turnId !== null,
+    // A dispatch the provider has not answered yet is already work — see the desktop hook.
+    isWorking:
+      turnId !== null ||
+      hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
     turnId,
     ...turnTiming,
     sendWithOutcome,
     cancel,
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
-    optionSnapshot,
-    optionSurface,
-    pendingOptionId,
     respondPermission,
-    respondQuestion,
-    setStructuredOption,
-    invokeStructuredOption
+    respondQuestion
   }
 }

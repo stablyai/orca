@@ -74,6 +74,7 @@ type Overrides = {
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
   structuredActivityUi?: boolean
   agentWorking?: boolean
+  canStop?: boolean
   sendSurfaceId?: string
 }
 
@@ -118,6 +119,18 @@ describe('MobileNativeChatView', () => {
   }
 
   /** Ids of the rows the list is currently rendering. */
+  it('keeps Stop hidden during a structured dispatch until a provider turn can be cancelled', async () => {
+    const props = { structuredActivityUi: true, agentWorking: true, canStop: false }
+    await render(props)
+    const stops = () =>
+      renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop the agent')
+    expect(stops()).toHaveLength(0)
+    await update({ ...props, canStop: true })
+    expect(stops()).toHaveLength(1)
+    await update({ agentWorking: true })
+    expect(stops()).toHaveLength(1)
+  })
+
   function listIds(): string[] {
     const list = renderer!.root.find((node) => node.type === 'FlatList')
     return (list.props.data as { id: string }[]).map((row) => row.id)
