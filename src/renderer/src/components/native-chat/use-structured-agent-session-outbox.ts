@@ -104,6 +104,9 @@ export function useStructuredAgentSessionOutbox(args: {
       setOutbox(next)
       writeOutbox(sessionId, next)
       if (acceptedHead) {
+        dispatchGenerationRef.current += 1
+        dispatchingRef.current = false
+        blockedIdRef.current = null
         setError(null)
       }
     }

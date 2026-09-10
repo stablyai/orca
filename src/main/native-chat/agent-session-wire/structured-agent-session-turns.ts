@@ -17,6 +17,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   DISPATCH_DOUBT_PERSISTENCE_FAILED,
+  DISPATCH_DOUBT_RETRY_IN_PROGRESS,
   dispatchDoubtProvesUndelivered
 } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -120,7 +121,7 @@ export async function performSend(
     await ctx.journal.resolveDispatch({
       clientMessageId: input.clientMessageId,
       state: 'unknown',
-      reason: 'dispatch_retry_in_progress',
+      reason: DISPATCH_DOUBT_RETRY_IN_PROGRESS,
       fence: ctx.fence
     })
     ctx.publish()

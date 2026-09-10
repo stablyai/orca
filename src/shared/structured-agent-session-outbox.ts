@@ -94,6 +94,9 @@ export function reconcileStructuredAgentSessionOutbox(
     if (submission?.dispatchState === 'accepted') {
       return []
     }
+    if (submission?.dispatchState === 'pending') {
+      return entry.state === 'dispatching' ? [entry] : [{ ...entry, state: 'dispatching' as const }]
+    }
     if (
       submission?.dispatchState === 'unknown' &&
       entry.retryAfterUnknownSubmittedAt !== -1 &&

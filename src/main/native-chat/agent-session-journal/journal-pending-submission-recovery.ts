@@ -1,4 +1,7 @@
-import { DISPATCH_DOUBT_HOST_RESTARTED } from './journal-dispatch-doubt-reasons'
+import {
+  DISPATCH_DOUBT_HOST_RESTARTED,
+  DISPATCH_DOUBT_RETRY_IN_PROGRESS
+} from './journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from './journal-store'
 
 /** Settles every submission a process fact left unanswerable. The retry policy
@@ -8,22 +11,27 @@ export async function markJournalPendingSubmissionsUnknown(
   fence: number,
   reason: string = DISPATCH_DOUBT_HOST_RESTARTED
 ): Promise<string[]> {
-  const pending = journal
+  const unresolved = journal
     .submissions()
     .filter(
       (entry) =>
         entry.dispatchState === 'pending' ||
         (entry.dispatchState === 'unknown' && entry.recovered !== true)
     )
-    .map((entry) => entry.clientMessageId)
-  for (const clientMessageId of pending) {
+  for (const entry of unresolved) {
+    const resolvedReason =
+      entry.dispatchState === 'unknown' &&
+      entry.reason !== null &&
+      entry.reason !== DISPATCH_DOUBT_RETRY_IN_PROGRESS
+        ? entry.reason
+        : reason
     await journal.resolveDispatch({
-      clientMessageId,
+      clientMessageId: entry.clientMessageId,
       state: 'unknown',
-      reason,
+      reason: resolvedReason,
       fence,
       recovered: true
     })
   }
-  return pending
+  return unresolved.map((entry) => entry.clientMessageId)
 }

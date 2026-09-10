@@ -20,6 +20,9 @@ export const DISPATCH_DOUBT_PROVIDER_EXITED = 'provider_exited_before_acknowledg
 /** The adapter took the message and only the journal write failed after it. */
 export const DISPATCH_DOUBT_PERSISTENCE_FAILED = 'dispatch_result_persistence_failed'
 
+/** A retry was durably armed but had not yet recorded its dispatch outcome. */
+export const DISPATCH_DOUBT_RETRY_IN_PROGRESS = 'dispatch_retry_in_progress'
+
 /** Codex owns a turn it started but did not name, because its turn-start still
  *  settles on a deadline. Delete this once Codex settles on the app-server's
  *  turn-start response instead; until then this reason is never re-delivered,

@@ -21,10 +21,12 @@ const LOCAL_TARGET = { kind: 'local' } as const
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((next) => {
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((next, fail) => {
     resolve = next
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, reject, resolve }
 }
 
 function acceptedResult(fence: number) {
@@ -260,6 +262,68 @@ describe('useStructuredAgentSessionOutbox', () => {
     })
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
     expect(result.current.error).toBeNull()
+  })
+
+  it('ignores a transport failure after the journal already settled the send', async () => {
+    const inFlight = deferred<ReturnType<typeof acceptedResult>>()
+    mocks.call.mockReturnValueOnce(inFlight.promise)
+    const { result, rerender } = renderHook(
+      ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence: 1,
+          submissions
+        }),
+      { initialProps: { submissions: [] as readonly AgentJournalSubmission[] } }
+    )
+
+    act(() => expect(result.current.send('settled before the RPC')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
+    const id = result.current.outbox[0]!.clientMessageId
+    rerender({
+      submissions: [
+        { ...pendingResultFor(id, 10).value.submission, dispatchState: 'accepted' as const }
+      ]
+    })
+    await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+
+    await act(async () => inFlight.reject(new Error('socket closed')))
+    expect(result.current.outbox).toHaveLength(0)
+    expect(result.current.error).toBeNull()
+  })
+
+  it('restores a persisted admitted send from host pending state', async () => {
+    mocks.call.mockImplementationOnce(async (_target, _method, params) => {
+      const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
+        .clientOperationId
+      return pendingResultFor(clientMessageId, 10)
+    })
+    const first = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: []
+      })
+    )
+
+    act(() => expect(first.result.current.send('still waiting behind a turn')).toBe(true))
+    await waitFor(() => expect(first.result.current.outbox[0]?.state).toBe('dispatching'))
+    const id = first.result.current.outbox[0]!.clientMessageId
+    first.unmount()
+
+    const restored = renderHook(() =>
+      useStructuredAgentSessionOutbox({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        fence: 1,
+        submissions: [pendingResultFor(id, 10).value.submission]
+      })
+    )
+    await waitFor(() => expect(restored.result.current.outbox[0]?.state).toBe('dispatching'))
+    expect(restored.result.current.error).toBeNull()
+    expect(mocks.call).toHaveBeenCalledOnce()
   })
 
   it('drains a head the host refuses to redeliver so the queue behind it advances', async () => {
