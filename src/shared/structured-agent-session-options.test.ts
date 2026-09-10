@@ -97,15 +97,28 @@ describe('structured agent session options', () => {
       { models: [], current: { model: 'gpt-5.9-secret' } }
     )
 
-    // Codex's reader emits no `confirmed` ids, so even a model the thread genuinely runs
-    // records as `dispatched`, not `reported` — which is why the name stays withheld here
-    // while the equivalent Claude case is named. Pinned so that when the reader starts
-    // confirming, this reddens and the name can be turned on deliberately.
+    // Unconfirmed: a pick restored from a previous session, which the thread has not
+    // echoed. An empty list must not promote it to a name it was never owed.
     expect(state.record.model).toEqual({ value: 'gpt-5.9-secret', source: 'dispatched' })
     const snapshot = structuredAgentSessionOptionSnapshot(state)
     expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
     const model = snapshot[0]
     expect(model).toMatchObject({ valueSource: 'unknown' })
+    expect(model.kind.type === 'select' ? model.kind.choices : null).toEqual([])
+  })
+
+  it('names the model an empty-listing provider reported, without offering it', () => {
+    // The regression this rule exists to prevent: a thread whose `model/list` came back
+    // empty still runs a model and says so, so the pill must name it rather than blank.
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      { models: [], current: { model: 'gpt-5.9-secret', confirmed: ['model'] } }
+    )
+
+    const model = structuredAgentSessionOptionSnapshot(state)[0]
+    expect(model).toMatchObject({ valueSource: 'reported' })
+    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('gpt-5.9-secret')
     expect(model.kind.type === 'select' ? model.kind.choices : null).toEqual([])
   })
 

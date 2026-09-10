@@ -78,6 +78,9 @@ function modelOption(value: unknown): AgentSessionModelOption | null {
 export async function readCodexStructuredSessionOptions(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
   current: { model?: string; effort?: string }
+  /** Ids in `current` that came from the thread's own state rather than from a value we
+   *  wrote. Only the caller knows which answered, so it must say. */
+  confirmed?: readonly string[]
   timeoutMs?: number
 }): Promise<AgentSessionOptionsResult> {
   const models: AgentSessionModelOption[] = []
@@ -108,9 +111,15 @@ export async function readCodexStructuredSessionOptions(input: {
   if (!model) {
     throw new Error('codex app-server returned no available models')
   }
+  // Never pass on a confirmation for a model this function substituted rather than read.
+  const confirmed = input.confirmed?.filter((id) => id !== 'model' || model === input.current.model)
   return {
     models,
-    current: { model, ...(input.current.effort ? { effort: input.current.effort } : {}) }
+    current: {
+      model,
+      ...(input.current.effort ? { effort: input.current.effort } : {}),
+      ...(confirmed?.length ? { confirmed } : {})
+    }
   }
 }
 
@@ -127,11 +136,21 @@ export function readLiveCodexSessionOptions(
   session: CodexSession,
   timeoutMs: number | undefined
 ): Promise<AgentSessionOptionsResult> {
-  const model = session.options.get('model') ?? session.reportedOptions.model
-  const effort = session.options.get('effort') ?? session.reportedOptions.effort
+  const pendingModel = session.options.get('model')
+  const pendingEffort = session.options.get('effort')
+  const model = pendingModel ?? session.reportedOptions.model
+  const effort = pendingEffort ?? session.reportedOptions.effort
+  // Why: `session.options` holds a restored pick or a write of ours the thread has not
+  // echoed — neither is the agent speaking. A value that fell through to the opened
+  // thread's own state is, which is what lets an unlisted model still be named.
+  const confirmed = [
+    ...(!pendingModel && model ? ['model'] : []),
+    ...(!pendingEffort && effort ? ['effort'] : [])
+  ]
   return readCodexStructuredSessionOptions({
     connection: session.connection,
     current: { ...(model ? { model } : {}), ...(effort ? { effort } : {}) },
+    ...(confirmed.length > 0 ? { confirmed } : {}),
     timeoutMs
   })
 }

@@ -4,6 +4,7 @@ import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import {
   applyCodexStructuredSessionOption,
   readCodexStructuredSessionOptions,
+  readLiveCodexSessionOptions,
   reportedCodexThreadOptions,
   restoredCodexSessionOptions
 } from './codex-structured-session-options'
@@ -139,6 +140,51 @@ describe('structured Codex session options', () => {
     ).resolves.toEqual({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
       current: { model: 'gpt-unlisted' }
+    })
+  })
+
+  it('confirms a model the thread reported, but not a pick we restored', async () => {
+    // The display rule names an unlisted model only when the agent reported it, so the
+    // reader has to say which of the two answered. `session.options` is a restored pick
+    // or an unechoed write of ours; `reportedOptions` is the opened thread's own state.
+    const request = vi.fn(async () => ({
+      data: [{ model: 'gpt-live', displayName: 'GPT Live', isDefault: true }],
+      nextCursor: null
+    }))
+    const session = (
+      options: Map<string, string>,
+      reported: Record<string, string>
+    ): CodexSession =>
+      ({ connection: { request }, options, reportedOptions: reported }) as unknown as CodexSession
+
+    await expect(
+      readLiveCodexSessionOptions(session(new Map(), { model: 'gpt-unlisted' }), undefined)
+    ).resolves.toMatchObject({ current: { model: 'gpt-unlisted', confirmed: ['model'] } })
+
+    const restored = await readLiveCodexSessionOptions(
+      session(new Map([['model', 'gpt-stale']]), {}),
+      undefined
+    )
+    expect(restored.current).toEqual({ model: 'gpt-stale' })
+    expect(restored.current.confirmed).toBeUndefined()
+  })
+
+  it('does not confirm a model it substituted rather than read', async () => {
+    // With nothing current the reader picks the default; that is our choice, not a report.
+    const request = vi.fn(async () => ({
+      data: [{ model: 'gpt-live', displayName: 'GPT Live', isDefault: true }],
+      nextCursor: null
+    }))
+
+    await expect(
+      readCodexStructuredSessionOptions({
+        connection: { request } as never,
+        current: {},
+        confirmed: ['model']
+      })
+    ).resolves.toEqual({
+      models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
+      current: { model: 'gpt-live' }
     })
   })
 
