@@ -344,25 +344,16 @@ it('stops a chunked read whose file was removed between its chunks', () => {
   for (const message of messages.slice(4)) {
     write.add(message)
   }
-  expect(
-    write.commit({
-      session: syntheticSession(),
-      byteOffset: 4096,
-      incomplete: false
-    })
-  ).toBe(false)
+  expect(write.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })).toBe(
+    false
+  )
   vi.restoreAllMocks()
 
   // Not one row of the removed source came back. The read stopped at the first
   // refusal rather than reopening a transaction it already knows will roll back,
   // once for every message left in a file that may be a hundred megabytes.
   expect(opened).toBe(1)
-  expect(counts(index.db)).toMatchObject({
-    sessions: 0,
-    messages: 0,
-    files: 0,
-    full: 0
-  })
+  expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
 })
 
 it('fences a first-ever read whose file was removed before it committed', () => {
@@ -376,19 +367,10 @@ it('fences a first-ever read whose file was removed before it committed', () => 
   // budget and never wrote, while the registered consumer is fed concurrently.
   store.removeFile('/never-indexed.jsonl')
 
-  expect(
-    write.commit({
-      session: syntheticSession(),
-      byteOffset: 300,
-      incomplete: false
-    })
-  ).toBe(false)
-  expect(counts(index.db)).toMatchObject({
-    sessions: 0,
-    messages: 0,
-    files: 0,
-    full: 0
-  })
+  expect(write.commit({ session: syntheticSession(), byteOffset: 300, incomplete: false })).toBe(
+    false
+  )
+  expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
 })
 
 it('replaces the previous generation without ever showing both', () => {
