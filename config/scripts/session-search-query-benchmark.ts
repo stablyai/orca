@@ -12,7 +12,9 @@ import type {
   SessionSearchScope
 } from '../../src/main/ai-vault-search/session-search-engine-types'
 import { registerSessionSearchIndexConsumer } from '../../src/main/ai-vault-search/session-search-index-consumer'
+import { openSessionSearchDatabase } from '../../src/main/ai-vault-search/session-search-schema'
 import { SessionSearchStore } from '../../src/main/ai-vault-search/session-search-store'
+import type SyncDatabase from '../../src/main/sqlite/sync-database'
 import {
   writeSyntheticTranscriptCorpus,
   type SyntheticCorpus,
@@ -59,10 +61,11 @@ function time(engine: SessionSearchEngine, request: SessionSearchRequest): numbe
 
 async function indexCorpus(
   options: SyntheticCorpusOptions
-): Promise<{ corpus: SyntheticCorpus; store: SessionSearchStore; release: () => void }> {
+): Promise<{ corpus: SyntheticCorpus; db: SyncDatabase; release: () => void }> {
   resetSessionParseCacheForTests()
   const corpus = await writeSyntheticTranscriptCorpus(options)
-  const store = new SessionSearchStore(join(corpus.root, 'index.sqlite'), (error) => {
+  const indexPath = join(corpus.root, 'index.sqlite')
+  const store = new SessionSearchStore(indexPath, (error) => {
     throw error
   })
   const unregister = registerSessionSearchIndexConsumer(store)
@@ -74,26 +77,25 @@ async function indexCorpus(
       stats
     )
   }
-  await store.settled()
-  await store.warm()
+  // The reader's own handle: the store keeps its connection private, and every
+  // read here is a single statement, so a second one pins no WAL snapshot.
+  const db = openSessionSearchDatabase(indexPath)
   return {
     corpus,
-    store,
+    db,
     release: () => {
       unregister()
       resetTranscriptConsumersForTests()
       resetSessionParseCacheForTests()
+      db.close()
       store.close()
     }
   }
 }
 
 /** Per-query and overall latency for one scope. */
-function scopeReport(
-  store: SessionSearchStore,
-  scope: SessionSearchScope
-): Record<string, unknown> {
-  const engine = new SessionSearchEngine(store)
+function scopeReport(db: SyncDatabase, scope: SessionSearchScope): Record<string, unknown> {
+  const engine = new SessionSearchEngine(db)
   const everything: number[] = []
   const perQuery: Record<string, Timing & { hits: number; route: string }> = {}
   for (const { name, request } of QUERIES) {
@@ -116,13 +118,10 @@ function scopeReport(
  * first configuration pays for every page the OS cache had not seen yet and the
  * ordering alone moves p95 by more than the limit does.
  */
-function candidateSweep(
-  store: SessionSearchStore,
-  limits: readonly number[]
-): Record<string, unknown> {
+function candidateSweep(db: SyncDatabase, limits: readonly number[]): Record<string, unknown> {
   const request: SessionSearchRequest = { query: 'index', limit: 20 }
   const engines = new Map(
-    limits.map((limit) => [limit, new SessionSearchEngine(store, { sessionCandidateLimit: limit })])
+    limits.map((limit) => [limit, new SessionSearchEngine(db, { sessionCandidateLimit: limit })])
   )
   const samples = new Map(limits.map((limit) => [limit, [] as number[]]))
   for (let run = 0; run < WARMUP; run++) {
@@ -152,8 +151,8 @@ const wide = await indexCorpus({ sessions: Number(process.env.SESSIONS ?? 40) })
 let report: string
 try {
   const scope = {
-    all: scopeReport(wide.store, 'all'),
-    conversation: scopeReport(wide.store, 'conversation')
+    all: scopeReport(wide.db, 'all'),
+    conversation: scopeReport(wide.db, 'conversation')
   }
   wide.release()
   await rm(wide.corpus.root, { recursive: true, force: true })
@@ -174,7 +173,7 @@ try {
           sessions: many.corpus.files.length,
           transcriptMb: Math.round((many.corpus.transcriptBytes / 1024 / 1024) * 100) / 100
         },
-        candidateSweep: candidateSweep(many.store, [200, 600, 1200, 2400])
+        candidateSweep: candidateSweep(many.db, [200, 600, 1200, 2400])
       },
       null,
       2

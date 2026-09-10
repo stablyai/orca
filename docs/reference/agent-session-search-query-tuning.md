@@ -2,9 +2,11 @@
 
 What a search costs, and what the knobs in `src/main/ai-vault-search/session-search-engine.ts`
 buy. Every number here comes from `config/scripts/session-search-query-benchmark.ts`
-over the synthetic corpus in `session-search-synthetic-corpus.ts`. Nothing in this
-file was measured against a real transcript, and the benchmark must never be
-pointed at one.
+over the synthetic corpus in `session-search-synthetic-corpus.ts`, except the
+`conversation_fts` shoot-out, which writes its own corpus because the answer
+turns on how much of a transcript is tool output. Nothing in this file was
+measured against a real transcript, and neither benchmark must ever be pointed
+at one.
 
 ## Running it
 
@@ -14,13 +16,20 @@ extensionless path, so it needs a bundler-backed runner rather than bare `node`:
 ```sh
 cat > src/main/ai-vault-search/zz-bench.test.ts <<'EOF'
 import { it } from 'vitest'
-it('runs', { timeout: 600_000 }, async () => {
+it('runs', { timeout: 1_800_000 }, async () => {
   await import('../../../config/scripts/session-search-query-benchmark')
 })
 EOF
 BENCH_OUT=/tmp/ss-query-bench.json pnpm test src/main/ai-vault-search/zz-bench.test.ts
 rm src/main/ai-vault-search/zz-bench.test.ts
 ```
+
+The `conversation_fts` shoot-out below runs the same way, importing
+`config/scripts/session-search-conversation-fts-benchmark` instead, with
+`CORPUS_MB` and `TOOL_SHARE` to size and shape its corpus. `config/scripts` is
+not inside any typecheck project, so while that throwaway test exists `tsc`
+reports TS6307 for each script it pulls in; delete it and the run is clean
+again.
 
 `BENCH_OUT` exists because vitest intercepts `console.log`; the report is written
 to that path as well as printed.
@@ -35,21 +44,21 @@ several milliseconds run to run if anything else is competing for the disk.
 
 | Scope          | p50  | p95  |
 | -------------- | ---- | ---- |
-| `all`          | 6.08 | 8.82 |
-| `conversation` | 3.74 | 5.09 |
+| `all`          | 6.13 | 8.50 |
+| `conversation` | 3.88 | 5.18 |
 
 Per query, `all` then `conversation` (p50 / p95):
 
-| Query                                            | `all`       | `conversation` |
-| ------------------------------------------------ | ----------- | -------------- |
-| `"terminal reattach"` (phrase)                    | 3.61 / 3.76 | 1.94 / 2.09    |
-| `resolveTerminalPath` (identifier)                | 6.16 / 6.40 | 3.81 / 3.97    |
-| `src/main/…/session-transcript-reader.ts` (path)  | 8.76 / 11.14| 3.95 / 3.98    |
-| `why is the daemon snapshot stale` (prose)        | 7.61 / 7.81 | 5.07 / 5.19    |
-| `reattahc worktre` (typo repair)                  | 7.32 / 7.51 | 4.93 / 5.09    |
-| `index` (common term)                             | 5.34 / 5.58 | 3.54 / 3.61    |
-| `repo:app-3` (operator only)                      | 0.13 / 0.16 | 0.12 / 0.13    |
-| `worktree` scoped to one cwd                      | 1.48 / 1.52 | 1.05 / 1.13    |
+| Query | `all` | `conversation` |
+| --- | --- | --- |
+| `"terminal reattach"` (phrase) | 3.78 / 4.00 | 2.36 / 2.46 |
+| `resolveTerminalPath` (identifier) | 6.73 / 6.86 | 4.23 / 4.38 |
+| `src/main/…/session-transcript-reader.ts` (path) | 8.35 / 9.88 | 4.29 / 4.42 |
+| `why is the daemon snapshot stale` (prose) | 7.27 / 8.20 | 4.98 / 5.37 |
+| `reattahc worktre` (typo repair) | 7.42 / 7.82 | 5.07 / 5.18 |
+| `index` (common term) | 4.70 / 5.53 | 3.28 / 3.66 |
+| `repo:app-3` (operator only) | 0.11 / 0.13 | 0.10 / 0.14 |
+| `worktree` scoped to one cwd | 1.34 / 1.40 | 1.02 / 1.06 |
 
 Reading it:
 
@@ -67,6 +76,50 @@ Reading it:
   which is one page of that walk; an index where few sessions match the operator
   will read up to the ceiling in `session-search-retrieval` instead.
 
+## Two FTS tables, or one with a column filter
+
+The stack's open decision 3. `conversation_fts` is a second copy of the two prose
+columns, and a column filter over `messages_fts` returns **the identical rowid
+set** — checked here per query, not assumed. So the table exists for latency
+alone, and this is what that latency is.
+
+Corpus: Claude transcripts written by
+`config/scripts/session-search-conversation-fts-benchmark.ts`, 105 MB, indexed
+through the real store, at two points in the band a real transcript tree sits in.
+Half the tokens in tool output are words the conversation also uses, which is
+deliberately generous to the table under question: the more of a query term lives
+in `tool_text`, the more the column filter has to read and throw away. Both arms
+run the engine's own retrieval SQL, differing only in the table, the BM25 weights
+and the `{user_text assistant_text} :` prefix. Twenty queries per route,
+interleaved arm by arm, warm cache; two runs.
+
+| Tool share of message text | Route  | `conversation_fts` p50 / p95 | Column-filtered p50 / p95 | Ratio p95 |
+| -------------------------- | ------ | ---------------------------- | ------------------------- | --------- |
+| 86%                        | phrase | 9.46 / 10.35                 | 11.98 / 12.88             | 1.24      |
+| 86%                        | and    | 16.65 / 17.10                | 19.20 / 19.88             | 1.16      |
+| 93%                        | phrase | 4.85 / 5.10                  | 6.65 / 6.96               | 1.36      |
+| 93%                        | and    | 8.39 / 8.86                  | 10.23 / 10.67             | 1.20      |
+
+The second run agreed on every p50 to within 0.2 ms; its one outlier was a 36 ms
+p95 on the `and` route that hit both arms, which is what 20 samples buys.
+
+**Verdict: delete it.** The bar was 2x at p95 on the conversation scope, and the
+column filter comes in at 1.16–1.42x across both shares and both runs, while
+reading roughly twice the rows to do it (283k unfiltered against 147k filtered on
+the phrase route at 86%). Deleting it is a schema bump and a rebuild in PR 2, and
+about ten lines here: `ftsTableFor` returns `messages_fts` for both scopes, the
+conversation weights become `3.0, 2.0, 0.0, 0.0`, and the expression gains the
+column prefix. Nothing else depends on the table.
+
+One number argues the other way and is worth stating rather than burying. PR 2
+priced `conversation_fts` at about a quarter of the index, measured on a corpus
+whose tool output is 56% of its message text. On a tool-heavy corpus it is **6.7%
+of the index at 93% tool output and 11% at 86%**, because `messages_fts` grows
+with the tool text and the second table does not. So the saving is smaller than
+the decision was framed around, and it is bought with 1.2–1.4x on the latency of
+the scope a keystroke uses. The threshold says delete; the numbers for keeping it
+are here so that call can be re-made on sight rather than on memory.
+
 ## `sessionCandidateLimit`
 
 The reviewer's F13: this is a tunable default, not a constant. It bounds how many
@@ -79,14 +132,14 @@ one of them matching the query. Limits are interleaved sample by sample, because
 run back to back the first configuration pays for every page the OS cache had not
 seen and the ordering alone moves p95 further than the limit does.
 
-| Limit | p50   | p95   | Pages of 20 a caller can reach |
-| ----- | ----- | ----- | ------------------------------ |
-| 200   | 7.08  | 7.23  | 10                             |
-| 600   | 8.18  | 8.73  | 30                             |
-| 1200  | 9.72  | 10.44 | 60                             |
-| 2400  | 12.60 | 13.68 | 120                            |
+| Limit | p50 | p95 | Pages of 20 a caller can reach |
+| --- | --- | --- | --- |
+| 200 | 5.82 | 6.12 | 10 |
+| 600 | 6.92 | 7.39 | 30 |
+| 1200 | 8.43 | 9.18 | 60 |
+| 2400 | 11.30 | 12.18 | 120 |
 
-600 is the default: it costs about 16% over 200 at p50 and buys three times the
+600 is the default: it costs about 19% over 200 at p50 and buys three times the
 reachable depth, and the curve only turns steep past 1200. A host with a much
 larger index can raise it; the result's `truncated.candidates` says when the limit
 was the thing that cut the answer, so a caller never has to guess.
@@ -98,12 +151,30 @@ not what it retrieves. The MRR figures quoted in the BM25 weights
 on real transcripts and are not reproducible from this repository. Any change to
 the limit justified on relevance grounds needs an eval set, not this benchmark.
 
+## Page warmup, dropped
+
+PR 2 deferred `warm()` — a sliced read of `messages` that pulls its pages into
+the OS cache before the first query — to whoever knew which pages a read
+touches. It is not re-added here, for two reasons. The measurement that
+justified it (first query 1.3 s to 0.45 s) was on a 4 GB index, and neither
+corpus in this file is within an order of magnitude of that, so PR 4 cannot
+show a win: removing the call moved the 10.5 MB corpus's p50 by less than the
+run-to-run spread. And it is a cancellable background pass, which needs an owner
+with a lifecycle; a query library that holds no timers has nothing to hang the
+`stopped()` on, and a fire-and-forget async read from a synchronous `search` is
+a rejection nothing can supervise. It belongs with the indexer in PR 3b, which
+already owns starting and stopping work.
+
 ## Not settled here
 
 Which process may open, unlink and rebuild the index is PR 3b's decision. A
 second handle that finds an older schema version replaces the file while a live
 store keeps answering from the unlinked inode, and this PR is what first makes
 that reachable, because it is the first thing that reads. What PR 4 does is
-refuse to make it worse: an engine over an index it does not fully recognise
-answers from the tables that are there and names the feature it cannot serve,
-rather than throwing on the first query that reaches for one.
+refuse to make it worse. The engine carries its own schema — the vocabulary, the
+query log and the generation triggers — and re-creates whatever of it is missing
+on every search, so a dropped object heals rather than degrading. The one it
+cannot re-create is the vocabulary's source, because `messages_fts` is the
+store's; an index in the middle of a rebuild is named as unable to serve typo
+repair and still answers from the conversation table, rather than throwing on
+the first query that reaches for one.
