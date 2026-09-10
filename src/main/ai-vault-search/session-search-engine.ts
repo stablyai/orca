@@ -1,5 +1,6 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
+import { sliceAtCodeUnitLimit } from '../ai-vault/session-scanner-text-normalization'
 import {
   hasAiVaultSearchQueryOperators,
   splitAiVaultSearchQuery,
@@ -124,7 +125,9 @@ export class SessionSearchEngine {
     const generation = readIndexGeneration(this.db)
     const scope = request.scope ?? 'all'
     const sort = request.filters?.sort ?? 'relevance'
-    const capped = request.query.slice(0, SESSION_SEARCH_QUERY_MAX_LENGTH)
+    // Not a bare `slice`: cutting between a surrogate pair leaves a lone half
+    // that no tokenizer can match and that a caller cannot echo back.
+    const capped = sliceAtCodeUnitLimit(request.query, SESSION_SEARCH_QUERY_MAX_LENGTH)
     const split = splitAiVaultSearchQuery(capped)
     const retrievalScope: RetrievalScope = {
       scope,

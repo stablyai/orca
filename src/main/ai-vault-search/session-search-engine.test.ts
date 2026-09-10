@@ -395,6 +395,34 @@ describe('the engine carries its own schema and puts it back', () => {
 })
 
 describe('a query the engine had to cut says so', () => {
+  it('cuts the query on a whole code point, never through a surrogate pair', async () => {
+    // A bare slice at 512 can land between the two halves of an astral
+    // character, and the lone half matches nothing and cannot be echoed back.
+    const { db, engine } = await open('ss-engine-surrogate-cap')
+    addSyntheticSession(db, { id: 1, text: 'needle' })
+    const query = `${'x'.repeat(SESSION_SEARCH_QUERY_MAX_LENGTH - 1)}😀 needle`
+    const result = engine.search({ query })
+    expect(result.truncated.query).toBe(true)
+    // The emoji straddles the cap, so the cut has to fall before it.
+    expect(query.slice(0, SESSION_SEARCH_QUERY_MAX_LENGTH).at(-1)).toBe('\ud83d')
+    expect(result.hits).toEqual([])
+  })
+
+  it('loads more candidate sessions than SQLite will bind in one statement', async () => {
+    // The id list is as long as the candidate limit and every id is a bound
+    // parameter, so one statement is a raised limit away from `too many SQL
+    // variables` on a host whose SQLite caps at 999.
+    const { db, engine } = await open('ss-engine-id-batching', {
+      sessionCandidateLimit: 1200
+    })
+    for (let id = 1; id <= 1100; id++) {
+      addSyntheticSession(db, { id, text: 'needle' })
+    }
+    const result = engine.search({ query: 'needle', limit: 5 })
+    expect(result.hits).toHaveLength(5)
+    expect(result.truncated.candidates).toBe(false)
+  })
+
   it('reports truncation when the planner drops terms past its cap', async () => {
     // The 56th term is the only one that matches. Without the flag this is a
     // confident empty answer to a query the engine never finished reading.
