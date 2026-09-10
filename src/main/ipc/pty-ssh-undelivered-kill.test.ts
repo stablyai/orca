@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { SSH_SESSION_EXPIRED_ERROR } from '../providers/ssh-pty-errors'
+import { exitedPtyStopReceipt } from './pty-ipc-test-constants'
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -64,7 +66,7 @@ function createKillStore() {
   }
 }
 
-function sshProviderStub(shutdown: () => Promise<void>) {
+function sshProviderStub(shutdown: () => Promise<PtyStopReceipt>) {
   return {
     shutdown: vi.fn(shutdown),
     onExit: vi.fn(() => () => {}),
@@ -90,7 +92,7 @@ describe('undelivered SSH stops', () => {
 
   function install(store: ReturnType<typeof createKillStore>): {
     kill: (ptyId: string) => boolean
-    stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
+    stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<PtyStopReceipt | null>
     markReversibleStops: (ptyIds: readonly string[]) => () => void
     runtime: ReturnType<typeof installController>['runtime']
   } {
@@ -105,7 +107,10 @@ describe('undelivered SSH stops', () => {
     )
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       kill: (ptyId: string) => boolean
-      stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
+      stopAndWait: (
+        ptyId: string,
+        opts?: { keepHistory?: boolean }
+      ) => Promise<PtyStopReceipt | null>
       markReversibleStops: (ptyIds: readonly string[]) => () => void
     }
     return {
@@ -172,7 +177,9 @@ describe('undelivered SSH stops', () => {
     const store = createKillStore()
     registerSshPtyProvider(
       'ssh-1',
-      sshProviderStub(async () => {})
+      sshProviderStub(async () =>
+        exitedPtyStopReceipt(SCOPED_PTY_ID, { expectedIncarnationId: 'inc-c' })
+      )
     )
     setPtyOwnership(SCOPED_PTY_ID, 'ssh-1')
     restorePtyIncarnation(SCOPED_PTY_ID, 'inc-c')
@@ -182,10 +189,7 @@ describe('undelivered SSH stops', () => {
       expect(kill(SCOPED_PTY_ID)).toBe(true)
       await vi.waitFor(() => expect(store.markSshRemotePtyLease).toHaveBeenCalled())
       expect(store.recordSshRemotePtyKillIntent).not.toHaveBeenCalled()
-      // And it does not retire one either. A resolved RPC is not a death certificate — the relay
-      // answers identically for a PTY it never had — so retirement is left to the replay, which
-      // only acts on a live inventory. Clearing here would be the mechanism by which a still-valid
-      // order is destroyed on an unconfirmed success.
+      // The exact process-tree receipt is the death certificate; a bare resolved RPC is not.
       expect(store.clearSshRemotePtyKillIntent).not.toHaveBeenCalled()
     } finally {
       unregisterSshPtyProvider('ssh-1')
@@ -209,7 +213,7 @@ describe('undelivered SSH stops', () => {
     const { stopAndWait } = install(store)
 
     try {
-      await expect(stopAndWait(SCOPED_PTY_ID, { keepHistory: true })).resolves.toBe(false)
+      await expect(stopAndWait(SCOPED_PTY_ID, { keepHistory: true })).resolves.toBeNull()
       expect(store.recordSshRemotePtyKillIntent).not.toHaveBeenCalled()
     } finally {
       unregisterSshPtyProvider('ssh-1')

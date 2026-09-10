@@ -2,6 +2,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { isFederationEffectUnknown } from './federation-effects'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from '../worker/worker-launch-preferences'
+import { boundedRedactedDiagnostic } from '../worker/worker-start-receipt'
 
 export function failFederatedAttachmentWithReceipt(args: {
   db: OrchestrationDb
@@ -12,7 +13,8 @@ export function failFederatedAttachmentWithReceipt(args: {
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
 }): unknown {
-  const reason = args.error instanceof Error ? args.error.message : String(args.error)
+  const rawReason = args.error instanceof Error ? args.error.message : String(args.error)
+  const reason = boundedRedactedDiagnostic(rawReason)
   const unknown = isFederationEffectUnknown(args.error, args.failedStage)
   const attachment = args.db.failRemoteAttachment(
     args.dispatchId,

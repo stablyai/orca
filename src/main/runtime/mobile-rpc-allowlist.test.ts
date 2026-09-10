@@ -151,6 +151,23 @@ describe('mobile RPC allowlist', () => {
     ).toEqual([])
   })
 
+  it('allows the workspace-first Maestro authority without orchestration control', () => {
+    const allowed = mobileRpcAllowlist()
+    expect(
+      [
+        'maestro.list',
+        'maestro.humanReview.list',
+        'maestro.humanReview.transition',
+        'maestro.projection.get',
+        'maestro.workspaceCanvas.get',
+        'maestro.workspaceCanvas.readContent',
+        'maestro.workspaceCanvas.mutate'
+      ].every((method) => allowed.has(method))
+    ).toBe(true)
+    expect(allowed.has('orchestration.browserSurface.focus')).toBe(true)
+    expect(allowed.has('orchestration.run')).toBe(false)
+  })
+
   it('exposes only the mobile structured agent-session surface', () => {
     expect(
       [...mobileRpcAllowlist()].filter((method) => method.startsWith('agentSession.'))

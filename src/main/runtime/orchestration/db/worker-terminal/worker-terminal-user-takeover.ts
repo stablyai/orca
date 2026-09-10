@@ -9,7 +9,7 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
       .prepare(
         `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
           WHERE pane_key = ? AND ownership_state = 'owned'
-            AND release_state IN ('not_requested', 'retained', 'requested')
+            AND release_state IN ('not_requested', 'retained', 'retained_for_review', 'requested')
             AND NOT EXISTS (
               SELECT 1 FROM worker_dispatches w
                WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'
@@ -24,7 +24,7 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
               .prepare(
                 `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
                 WHERE ownership_state = 'owned'
-                  AND release_state IN ('not_requested', 'retained', 'requested')
+                  AND release_state IN ('not_requested', 'retained', 'retained_for_review', 'requested')
                   AND NOT EXISTS (
                     SELECT 1 FROM worker_dispatches w
                      WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'
@@ -36,9 +36,10 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
     const update = this.db.prepare(
       `UPDATE worker_terminal_resources
        SET ownership_state = 'user_owned', release_state = 'retained',
-           retained_reason = 'user_takeover', updated_at = datetime('now')
+           retained_reason = 'user_takeover', retention_owner = NULL,
+           retention_expires_at = NULL, review_id = NULL, updated_at = datetime('now')
        WHERE id = ? AND ownership_state = 'owned'
-         AND release_state IN ('not_requested', 'retained', 'requested')
+         AND release_state IN ('not_requested', 'retained', 'retained_for_review', 'requested')
          AND NOT EXISTS (
            SELECT 1 FROM worker_dispatches w
             WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'

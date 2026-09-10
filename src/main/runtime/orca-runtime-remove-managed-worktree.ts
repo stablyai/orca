@@ -25,6 +25,7 @@ import { removeRuntimeRegisteredRemoteWorktree } from './runtime-registered-remo
 import { removeRuntimeRegisteredLocalWorktree } from './runtime-registered-local-worktree-removal'
 import { removeOrphanOrFolderWorktree } from './orca-runtime-remove-orphan-or-folder-worktree'
 import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
+import { assertRuntimeWorktreeRemovalInstance } from './runtime-worktree-removal-instance-fence'
 
 export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateManagedRemoteWorktree {
   async removeManagedWorktree(
@@ -32,7 +33,8 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
     force = false,
     runHooks = false,
     allowUnverifiedPtyStop = false,
-    hostId?: string
+    hostId?: string,
+    expectedInstanceId?: string
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -44,7 +46,12 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, allowUnverifiedPtyStop)
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(
+      force,
+      runHooks,
+      allowUnverifiedPtyStop,
+      expectedInstanceId
+    )
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
@@ -67,6 +74,18 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
         }
         const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
         const removalHostId = repo ? (cleanupHostId ?? getRepoExecutionHostId(repo)) : cleanupHostId
+        if (expectedInstanceId && !removalHostId) {
+          throw new Error('Checkout execution host is unavailable before worktree removal.')
+        }
+        if (removalHostId) {
+          assertRuntimeWorktreeRemovalInstance({
+            store,
+            repoId: removalTarget.repoId,
+            worktreeId: removalTarget.id,
+            hostId: removalHostId,
+            expectedInstanceId
+          })
+        }
         const orphanOrFolderResult = await removeOrphanOrFolderWorktree({
           runtime: this,
           store,

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
+import { createManagedCliContext } from '../../../../../../shared/managed-cli-context'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 
 // Why: a federated worker terminal is created from an agent id. Passing that id
@@ -42,6 +43,23 @@ describe('federated worker agent launch', () => {
       'runtime_test:term_remote_worker:1'
     )
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'preflightWorktreeManagedCliExecutable').mockReturnValue('orca')
+    vi.spyOn(runtime, 'assertTerminalManagedCliAvailable').mockImplementation(() => {})
+    vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
+      handle: 'term_remote_worker',
+      tabId: 'tab_remote'
+    } as never)
+    // Why: the attach path proves the worker's managed-CLI identity from a live pty
+    // record, which a spied createTerminal never registers.
+    vi.spyOn(runtime, 'buildTerminalManagedCliContext').mockImplementation((handle) =>
+      createManagedCliContext({
+        executable: 'orca',
+        runtimeId: runtime.getRuntimeId(),
+        executionHostId: 'local',
+        workspaceKey: 'folder:remote-workspace',
+        terminalHandle: handle
+      })
+    )
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_remote_worker',
       accepted: true,
@@ -56,12 +74,14 @@ describe('federated worker agent launch', () => {
 
     const result = (await method.handler(
       method.params!.parse({
-        runId: 'run-home',
         dispatchId: 'ctx_remote',
         taskId: 'task_remote',
+        attemptId: 'attempt_ctx_remote',
+        runId: 'run_ctx_remote',
+        coordinatorGeneration: 1,
         taskSpec: 'remote cursor worker',
         depth: 2,
-        protocolVersion: 3,
+        protocolVersion: 4,
         worktree: 'folder:remote-workspace',
         agent: 'cursor',
         model: 'gpt-5.3-codex',
@@ -85,6 +105,10 @@ describe('federated worker agent launch', () => {
 
     // Why: assert the worker actually reached ready — a spy-only assertion would
     // stay green even if every stage after terminal_create regressed.
+    expect({ failedStage: result.failedStage, lastError: result.lastError }).toEqual({
+      failedStage: undefined,
+      lastError: undefined
+    })
     expect(result).toMatchObject({
       state: 'ready',
       launch: {
@@ -97,7 +121,7 @@ describe('federated worker agent launch', () => {
       'id:folder:remote-workspace',
       expect.objectContaining({
         startupAgent: 'cursor',
-        launchPreferences: { model: 'gpt-5.3-codex', effort: 'high' }
+        launchPreferences: expect.objectContaining({ model: 'gpt-5.3-codex', effort: 'high' })
       })
     )
     expect(createTerminal).toHaveBeenCalledWith(

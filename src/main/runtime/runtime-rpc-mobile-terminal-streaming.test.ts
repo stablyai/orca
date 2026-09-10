@@ -2,8 +2,9 @@ import { mkdtempSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, onTestFinished } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { OrchestrationDb } from './orchestration/db'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
@@ -44,6 +45,10 @@ describe('OrcaRuntimeRpcServer', () => {
   it('mirrors laptop-created remote runtime terminals into phone session tabs over RPC', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService(makeStore() as never)
+    // Why: terminal.send now asks whether the handle carries a managed lease.
+    const orchestrationDb = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(orchestrationDb)
+    onTestFinished(() => orchestrationDb.close())
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     runtime.setPtyController({
       spawn,
@@ -155,6 +160,10 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(makeStore() as never)
+    // Why: terminal.send now asks whether the handle carries a managed lease.
+    const orchestrationDb = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(orchestrationDb)
+    onTestFinished(() => orchestrationDb.close())
     const spawn = vi.fn().mockResolvedValue({ id: 'paired-laptop-pty' })
     runtime.setPtyController({
       spawn,
@@ -297,6 +306,10 @@ describe('OrcaRuntimeRpcServer', () => {
   it('authorizes a mobile artifact tap after first-connect backfill even once the raw window scrolls', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService(makeStore() as never)
+    // Why: terminal.send now asks whether the handle carries a managed lease.
+    const orchestrationDb = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(orchestrationDb)
+    onTestFinished(() => orchestrationDb.close())
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -454,6 +467,10 @@ describe('OrcaRuntimeRpcServer', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const writes: { terminal: string; text: string }[] = []
     const runtime = new OrcaRuntimeService(makeStore() as never)
+    // Why: terminal.send now asks whether the handle carries a managed lease.
+    const orchestrationDb = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(orchestrationDb)
+    onTestFinished(() => orchestrationDb.close())
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'multiplex-background-pty' })

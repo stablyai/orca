@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
   existsSync,
@@ -29,6 +29,7 @@ import {
   getDevBundlePlistPatches,
   getDevHelperPlistPatches
 } from './dev-electron-bundle-identity.mjs'
+import { runElectronViteDevSupervisor } from './electron-vite-dev-supervisor.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -39,6 +40,7 @@ delete process.env.ELECTRON_RUN_AS_NODE
 const require = createRequire(import.meta.url)
 const repoRoot = path.resolve(import.meta.dirname, '../..')
 const STABLE_NAME_FLAG = '--stable-name'
+const LINUX_DEV_WINDOW_CLASS = 'orca-dev'
 const rawForwardedArgs = process.argv.slice(2)
 // Why: keep an escape hatch for tools that key off Electron's stock app name.
 // The flag is runner-only and must not leak into Chromium/electron-vite.
@@ -610,6 +612,14 @@ const userPassedPort = forwardedRaw.some(
 // Why: --help/--version exit immediately; binding a probe socket and printing
 // a debug-port line would be noise.
 const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
+const electronArgumentSeparatorIndex = forwardedRaw.indexOf('--')
+const forwardedElectronArgs =
+  electronArgumentSeparatorIndex === -1
+    ? []
+    : forwardedRaw.slice(electronArgumentSeparatorIndex + 1)
+const userPassedWindowClass = forwardedElectronArgs.some(
+  (arg) => arg === '--class' || arg.startsWith('--class=')
+)
 if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
   console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}`)
 }
@@ -618,7 +628,10 @@ if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
 if (!isHelpOrVersion && process.env.ORCA_BACKGROUND_LAUNCH === '1') {
   console.error('[orca-dev] Background launch: window stays off screen; automate through CDP')
 }
-let forwardedExtras = []
+let forwardedExtras =
+  process.platform === 'linux' && !isHelpOrVersion && !userPassedWindowClass
+    ? [`--class=${LINUX_DEV_WINDOW_CLASS}`]
+    : []
 if (!userPassedPort && !isHelpOrVersion) {
   const envPortRaw = process.env.REMOTE_DEBUGGING_PORT
   let port = null
@@ -634,7 +647,7 @@ if (!userPassedPort && !isHelpOrVersion) {
     port = await pickDebugPort()
   }
   if (port !== null) {
-    forwardedExtras = [`--remote-debugging-port=${port}`]
+    forwardedExtras.push(`--remote-debugging-port=${port}`)
     // Why: stderr keeps stdout clean for downstream parsing; log uses
     // 127.0.0.1 to match the interface we actually probed (localhost may
     // resolve to ::1 on IPv6-first hosts).
@@ -646,95 +659,15 @@ if (!userPassedPort && !isHelpOrVersion) {
   }
 }
 prepareDevWebClient()
-const forwardedArgs = ['dev', ...forwardedRaw, ...forwardedExtras]
-const child = spawn(process.execPath, [electronViteCli, ...forwardedArgs], {
-  stdio: 'inherit',
-  env: process.env,
-  // Why: electron-vite launches Electron as a descendant process. Giving the
-  // dev runner its own process group lets Ctrl+C kill the whole tree on macOS
-  // instead of leaving the Electron app alive after the terminal exits.
-  detached: process.platform !== 'win32'
-})
-
-let isShuttingDown = false
-let forcedKillTimer = null
-
-function signalExitCode(signal) {
-  if (signal === 'SIGINT') {
-    return 130
-  }
-  if (signal === 'SIGTERM') {
-    return 143
-  }
-  return 1
-}
-
-function terminateChild(signal) {
-  if (!child.pid) {
-    return
-  }
-
-  if (process.platform === 'win32') {
-    const taskkill = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
-    taskkill.unref()
-    return
-  }
-
-  try {
-    process.kill(-child.pid, signal)
-  } catch (error) {
-    const code = error && typeof error === 'object' && 'code' in error ? error.code : null
-    if (code !== 'ESRCH') {
-      throw error
-    }
-  }
-}
-
-function beginShutdown(signal) {
-  if (isShuttingDown) {
-    return
-  }
-  isShuttingDown = true
-
-  terminateChild(signal)
-  forcedKillTimer = setTimeout(() => {
-    terminateChild('SIGKILL')
-  }, 5000)
-}
-
-process.on('SIGINT', () => {
-  beginShutdown('SIGINT')
-})
-
-process.on('SIGTERM', () => {
-  beginShutdown('SIGTERM')
-})
-
-child.on('error', (error) => {
-  if (forcedKillTimer) {
-    clearTimeout(forcedKillTimer)
-  }
-  console.error(error)
-  process.exit(1)
-})
-
-child.on('exit', (code, signal) => {
-  if (forcedKillTimer) {
-    clearTimeout(forcedKillTimer)
-  }
-
-  if (isShuttingDown) {
-    process.exit(signalExitCode(signal ?? 'SIGINT'))
-    return
-  }
-
-  if (signal) {
-    process.exit(signalExitCode(signal))
-    return
-  }
-
-  process.exit(code ?? 1)
+const forwardedArgs = [
+  'dev',
+  ...forwardedRaw,
+  ...(forwardedExtras.length > 0 && electronArgumentSeparatorIndex === -1 ? ['--'] : []),
+  ...forwardedExtras
+]
+runElectronViteDevSupervisor({
+  nodePath: process.execPath,
+  electronViteCli,
+  args: forwardedArgs,
+  env: process.env
 })

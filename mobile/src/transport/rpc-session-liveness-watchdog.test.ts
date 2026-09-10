@@ -110,6 +110,24 @@ describe('RpcSessionLivenessWatchdog', () => {
     expect(setTimer).toHaveBeenCalledTimes(2)
   })
 
+  it('uses the platform receiver when authentication arms browser timers', () => {
+    const setTimer = vi.fn(function (this: unknown) {
+      expect(this).toBe(globalThis)
+      return 1 as unknown as ReturnType<typeof setTimeout>
+    })
+    const watchdog = new RpcSessionLivenessWatchdog({
+      transport: 'direct',
+      sendProbe: () => true,
+      terminate: vi.fn(),
+      setTimer,
+      clearTimer: () => {}
+    })
+
+    watchdog.start({})
+
+    expect(setTimer).toHaveBeenCalledOnce()
+  })
+
   it('does not charge a scheduler-stalled probe window', () => {
     let now = 0
     let callback: (() => void) | null = null

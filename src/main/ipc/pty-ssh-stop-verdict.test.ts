@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import {
+  TEST_PTY_INCARNATION,
+  exitedPtyStopReceipt,
+  livePtyStopReceipt
+} from './pty-ipc-test-constants'
 import {
   registerPtyHandlers,
   deletePtyOwnership,
+  restorePtyIncarnation,
   setPtyOwnership,
   getLocalPtyProvider,
   registerSshPtyProvider,
@@ -64,7 +71,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
       kill: (ptyId: string) => boolean
       listProcesses: (connectionId?: string | null) => Promise<{ id: string }[]>
       retireRejectedPty: (ptyId: string, stopConfirmed: boolean) => void
-      stopAndWait: (ptyId: string, opts?: { deadlineMs?: number }) => Promise<boolean>
+      stopAndWait: (ptyId: string, opts?: { deadlineMs?: number }) => Promise<PtyStopReceipt | null>
     }
     runtime: {
       setPtyController: ReturnType<typeof vi.fn>
@@ -105,7 +112,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     setPtyOwnership('ssh-detached-stop', 'ssh-dropped')
     const { controller, runtime } = installController()
 
-    await expect(controller.stopAndWait('ssh-detached-stop')).resolves.toBe(false)
+    await expect(controller.stopAndWait('ssh-detached-stop')).resolves.toBeNull()
     expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh-detached-stop', -1, undefined)
     expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
       'ssh-detached-stop',
@@ -151,10 +158,17 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
 
   it('still confirms a stop the owning provider actually performed', async () => {
     const daemon = installObservableDaemonTestProvider()
+    daemon.shutdown.mockImplementation(
+      async (id: string, opts: { expectedIncarnationId: string }) => exitedPtyStopReceipt(id, opts)
+    )
+    restorePtyIncarnation('wt-1@@local-session', TEST_PTY_INCARNATION)
     vi.spyOn(getLocalPtyProvider(), 'listProcesses').mockResolvedValue([])
     const { controller, runtime } = installController()
 
-    await expect(controller.stopAndWait('wt-1@@local-session')).resolves.toBe(true)
+    await expect(controller.stopAndWait('wt-1@@local-session')).resolves.toMatchObject({
+      verdict: 'exited',
+      processTreeVerified: true
+    })
     expect(daemon.shutdown).toHaveBeenCalledWith(
       'wt-1@@local-session',
       expect.objectContaining({ immediate: true })
@@ -167,16 +181,22 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     const ptyId = 'ssh-confirmed-absent-pty'
     const provider = {
       onExit: vi.fn(() => () => {}),
-      shutdown: vi.fn(async () => {}),
+      shutdown: vi.fn(async (id: string, opts: { expectedIncarnationId: string }) =>
+        exitedPtyStopReceipt(id, opts)
+      ),
       listProcesses: vi.fn(async () => [])
     }
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
+    restorePtyIncarnation(ptyId, TEST_PTY_INCARNATION)
     try {
       const { controller, runtime } = installController()
 
-      await expect(controller.stopAndWait(ptyId)).resolves.toBe(true)
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, 0, undefined)
+      await expect(controller.stopAndWait(ptyId)).resolves.toMatchObject({
+        verdict: 'exited',
+        processTreeVerified: true
+      })
+      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, 0, TEST_PTY_INCARNATION)
       expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
     } finally {
       deletePtyOwnership(ptyId)
@@ -195,10 +215,11 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     }
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
+    restorePtyIncarnation(ptyId, TEST_PTY_INCARNATION)
     try {
       const { controller, runtime } = installController()
 
-      await expect(controller.stopAndWait(ptyId)).resolves.toBe(false)
+      await expect(controller.stopAndWait(ptyId)).resolves.toBeNull()
       expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
         ptyId,
         'relay disconnected during stop'
@@ -220,6 +241,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     }
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
+    restorePtyIncarnation(ptyId, TEST_PTY_INCARNATION)
     try {
       const { controller, runtime } = installController()
 
@@ -230,7 +252,7 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
           'relay disconnected during kill'
         )
       )
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, undefined)
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
     } finally {
       deletePtyOwnership(ptyId)
       unregisterSshPtyProvider(connectionId)
@@ -279,15 +301,18 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     const ptyId = 'ssh-still-live-pty'
     const provider = {
       onExit: vi.fn(() => () => {}),
-      shutdown: vi.fn(async () => {}),
+      shutdown: vi.fn(async (id: string, opts: { expectedIncarnationId: string }) =>
+        livePtyStopReceipt(id, opts)
+      ),
       listProcesses: vi.fn(async () => [{ id: ptyId }])
     }
     registerSshPtyProvider(connectionId, provider as never)
     setPtyOwnership(ptyId, connectionId)
+    restorePtyIncarnation(ptyId, TEST_PTY_INCARNATION)
     try {
       const { controller, runtime } = installController()
 
-      await expect(controller.stopAndWait(ptyId)).resolves.toBe(false)
+      await expect(controller.stopAndWait(ptyId)).resolves.toMatchObject({ verdict: 'live' })
       expect(runtime.markPtyLivenessLive).toHaveBeenCalledWith(ptyId)
     } finally {
       deletePtyOwnership(ptyId)

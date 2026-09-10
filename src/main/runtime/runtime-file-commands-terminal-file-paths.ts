@@ -14,6 +14,7 @@ import {
 } from './runtime-file-commands-mobile-file-list-limit'
 import type { FileHandle } from 'node:fs/promises'
 import {
+  assertTerminalFileGrantContentFresh,
   assertTerminalFileGrantFresh,
   canonicalPathForArtifactComparison,
   localTerminalArtifactRoots,
@@ -84,6 +85,7 @@ export async function readLocalTerminalArtifactFileFromHandle(
   }
   assertTerminalFileGrantFresh(grant, fileStat)
   const buffer = await readFileHandleBufferBounded(handle, MOBILE_FILE_READ_MAX_BYTES + 1)
+  assertTerminalFileGrantContentFresh(grant, buffer)
   if (isBinaryBuffer(buffer)) {
     throw new Error('binary_file')
   }
@@ -113,6 +115,7 @@ export async function readLocalTerminalArtifactPreviewFromHandle(
     if (buffer.byteLength > binaryMaxBytes) {
       throw new Error('file_too_large')
     }
+    assertTerminalFileGrantContentFresh(grant, buffer)
     return {
       content: buffer.toString('base64'),
       isBinary: true,

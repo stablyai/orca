@@ -44,6 +44,17 @@ pnpm start
 
 Scan the Expo QR code with your phone's camera on iOS, or Expo Go on Android.
 
+Before opening Expo Go or an emulator, verify the URL that Metro printed:
+
+```bash
+node scripts/mobile-runtime-preflight.mjs --url http://192.168.0.179:8081 --target physical
+node scripts/mobile-runtime-preflight.mjs --url http://localhost:8081 --target android-emulator
+```
+
+The physical-device check rejects loopback URLs. The Android check installs an `adb reverse`
+mapping and returns the device URL. A failed check prints its `bundle_readiness` code, the
+bounded Metro response, and an exact recovery command. Do not open the app until it passes.
+
 For a native dev-client build:
 
 ```bash
@@ -62,6 +73,10 @@ pnpm start --dev-client
 For the Android emulator, use `ws://10.0.2.2:6768`. For a physical phone, use the desktop LAN IP, for example `ws://192.168.0.179:6768`.
 
 If the phone has a stale host entry, remove it from the app and pair again.
+
+Pairing completes only after the app persists the host, refreshes its cached client, and
+commits the destination route. The visible pairing log identifies failures as bundle,
+transport, authentication, relay, persistence, refresh, or route stages.
 
 ## Development Paths
 

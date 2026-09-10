@@ -29,6 +29,7 @@ export class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRuntimeWithC
       clientNavigationId?: string
       navigation?: RuntimeNavigationTarget
       clientMutationId?: string
+      runtimeOwned?: boolean
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {

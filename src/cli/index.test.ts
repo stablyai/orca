@@ -240,7 +240,18 @@ describe('unknown command surfaces a suggestion', () => {
     )
 
     await main(
-      ['orchestration', 'worker-start', '--task', 't1', '--worktree', 'repo-1', '--agent', 'codex'],
+      [
+        'orchestration',
+        'worker-start',
+        '--task',
+        't1',
+        '--attempt-id',
+        'attempt_1',
+        '--worktree',
+        'repo-1',
+        '--agent',
+        'codex'
+      ],
       '/tmp/repo'
     )
 

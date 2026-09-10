@@ -6,7 +6,7 @@
  * Signals readiness to parent via IPC: { type: 'ready' }
  * Shuts down cleanly on SIGTERM.
  */
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'
@@ -325,7 +325,6 @@ async function main(): Promise<void> {
 const isDirectExecution = !process.env.VITEST && !process.env.ORCA_DAEMON_ENTRY_LOAD_CHECK
 if (isDirectExecution) {
   main().catch((err) => {
-    console.error('[daemon] Fatal:', err)
     if (err instanceof DaemonEndpointUnavailableError && err.reason === 'occupied') {
       // Why an exit code and not the IPC message: process.send only proves the write left this
       // process, not that the parent dispatched 'message' before it observed the exit — and the
@@ -333,6 +332,12 @@ if (isDirectExecution) {
       // cannot lose that race. The message is still sent best-effort for log detail.
       process.send?.({ type: 'endpoint-unavailable', reason: err.reason })
       process.exit(DAEMON_EXIT_ENDPOINT_OCCUPIED)
+    }
+    const fatalMessage = err instanceof Error ? (err.stack ?? err.message) : String(err)
+    try {
+      writeSync(2, `[daemon] Fatal: ${fatalMessage}\n`)
+    } catch {
+      // Stderr is diagnostic only.
     }
     process.exit(1)
   })

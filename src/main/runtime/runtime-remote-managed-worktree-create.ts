@@ -109,6 +109,7 @@ export async function createRuntimeRemoteManagedWorktree(
         await deps.markTrusted(startupTrustAgent, repo.connectionId!, result.worktree.path)
       }
       const terminal = await deps.createTerminal(`path:${result.worktree.path}`, {
+        ...(args.startupTerminalTitle ? { title: args.startupTerminalTitle } : {}),
         command: sequencedStartup.command,
         ...(result.setup && args.startup
           ? { claudeAgentTeamsSourceCommand: args.startup.command }
@@ -119,6 +120,7 @@ export async function createRuntimeRemoteManagedWorktree(
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
+        orchestrationManagedLaunch: args.orchestrationManagedLaunch,
         ...ownerSurfacing(shouldActivate)
       })
       if (args.startupDraftPaste) {

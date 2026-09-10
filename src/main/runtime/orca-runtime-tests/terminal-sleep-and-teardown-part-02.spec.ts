@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { exitedPtyStopReceipt } from '../../ipc/pty-ipc-test-constants'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -39,7 +40,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const stopAndWait = vi.fn(async () => true)
+    const stopAndWait = vi.fn(async (ptyId: string) => exitedPtyStopReceipt(ptyId))
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -99,7 +100,7 @@ describe('OrcaRuntimeService', () => {
       }
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const stopAndWait = vi.fn(async () => true)
+    const stopAndWait = vi.fn(async (ptyId: string) => exitedPtyStopReceipt(ptyId))
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -127,7 +128,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
-      stopAndWait: vi.fn(async () => true),
+      stopAndWait: vi.fn(async (ptyId: string) => exitedPtyStopReceipt(ptyId)),
       getForegroundProcess: async () => null,
       listProcesses: async () => [liveProcess]
     })
@@ -154,7 +155,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => {
@@ -203,7 +204,7 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce([])
     const stopAndWait = vi.fn(async (ptyId: string) => {
       runtime.onPtyExit(ptyId, -1)
-      return true
+      return exitedPtyStopReceipt(ptyId)
     })
     runtime.setPtyController({
       write: () => true,
@@ -225,7 +226,7 @@ describe('OrcaRuntimeService', () => {
 
   it('serializes a new terminal spawn behind physical sleep convergence', async () => {
     const runtime = new OrcaRuntimeService(store)
-    const stop = deferred<boolean>()
+    const stop = deferred<ReturnType<typeof exitedPtyStopReceipt>>()
     const events: RuntimeClientEvent[] = []
     runtime.onClientEvent((event) => events.push(event))
     const listProcesses = vi
@@ -257,7 +258,7 @@ describe('OrcaRuntimeService', () => {
     await Promise.resolve()
     expect(spawnLeaseAcquired).toBe(false)
 
-    stop.resolve(true)
+    stop.resolve(exitedPtyStopReceipt('pty-before-sleep'))
     await expect(sleep).resolves.toMatchObject({ postStopVerified: true })
     const releaseSpawn = await spawnLease
     expect(spawnLeaseAcquired).toBe(true)
@@ -276,7 +277,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
-      stopAndWait: vi.fn(async () => true),
+      stopAndWait: vi.fn(async (ptyId: string) => exitedPtyStopReceipt(ptyId)),
       getForegroundProcess: async () => null,
       listProcesses
     })
@@ -296,7 +297,7 @@ describe('OrcaRuntimeService', () => {
     try {
       const runtime = new OrcaRuntimeService(store)
       const listProcesses = vi.fn().mockResolvedValue([])
-      const stopAndWait = vi.fn(async () => true)
+      const stopAndWait = vi.fn(async (ptyId: string) => exitedPtyStopReceipt(ptyId))
       runtime.setPtyController({
         write: () => true,
         kill: () => false,
@@ -340,7 +341,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => processLists.shift() ?? []
@@ -407,7 +408,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => processLists.shift() ?? []
@@ -432,7 +433,7 @@ describe('OrcaRuntimeService', () => {
     for (const events of clientEvents) {
       runtime.onClientEvent((event) => events.push(event))
     }
-    const secondStop = deferred<boolean>()
+    const secondStop = deferred<ReturnType<typeof exitedPtyStopReceipt>>()
     const failedPty = { id: 'pty-fails', cwd: TEST_WORKTREE_PATH, title: 'Claude' }
     const listProcesses = vi
       .fn()
@@ -451,7 +452,7 @@ describe('OrcaRuntimeService', () => {
           throw new Error('stop failed')
         }
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       }
       const stopped = await secondStop.promise
       runtime.onPtyExit(ptyId, -1)
@@ -468,7 +469,7 @@ describe('OrcaRuntimeService', () => {
     const first = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     await vi.waitFor(() => expect(stopAndWait).toHaveBeenCalledTimes(2))
     const concurrent = runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
-    secondStop.resolve(true)
+    secondStop.resolve(exitedPtyStopReceipt('pty-slow'))
 
     await expect(first).rejects.toThrow('terminal_worktree_sleep_failed')
     await expect(concurrent).rejects.toThrow('terminal_worktree_sleep_failed')
@@ -510,7 +511,7 @@ describe('OrcaRuntimeService', () => {
         stopped.push(ptyId)
         expect(opts).toEqual({ keepHistory: true })
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => processLists.shift() ?? []
@@ -564,7 +565,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => {

@@ -6,15 +6,15 @@ import { deliverWorkerDispatchPreamble } from './deliver-worker-dispatch-preambl
 import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
 import {
   describeUnobservedWorkerTurnStart,
-  observeWorkerTurnStart,
-  type WorkerTurnStartObservation
+  observeWorkerTurnStart
 } from './worker-start-turn-observation'
-import {
-  monitorWorkerSetup,
-  type createStructuredWorkerSessionForWorktree,
-  type WorkerEffect,
-  type WorkerSetupReceipt
+import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
+import type {
+  createStructuredWorkerSessionForWorktree,
+  WorkerEffect,
+  WorkerSetupReceipt
 } from './worker-topology'
+import { monitorWorkerSetup } from './worker-setup-monitor'
 
 /**
  * Delivers the dispatch preamble and settles the worker's start state on the strongest

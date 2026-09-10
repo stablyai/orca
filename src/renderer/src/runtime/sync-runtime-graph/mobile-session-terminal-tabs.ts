@@ -3,6 +3,7 @@ import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sani
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/runtime-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
+import type { Tab } from '../../../../shared/tab-types'
 import {
   isNativeChatTabWideFallbackSafe,
   nativeChatLaunchAgentForLeaf
@@ -23,8 +24,10 @@ import { resolveTerminalLayoutRoot } from '../remote-terminal-layout-resolution'
 export function buildMobileTerminalSurfaceTabs(
   inputs: MobileSessionWorktreeInputs,
   terminal: NonNullable<AppState['tabsByWorktree'][string]>[number],
-  unifiedTabId?: string
+  unifiedTab?: Tab
 ): RuntimeMobileSessionSnapshotTab[] {
+  const unifiedTabId = unifiedTab?.id
+  const customTitle = unifiedTab?.customLabel?.trim() || terminal.customTitle?.trim() || null
   const capture = inputs.mountedSurfaceCaptureByTabId.get(terminal.id)
   const isDesktopTabActive = unifiedTabId
     ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
@@ -78,10 +81,13 @@ export function buildMobileTerminalSurfaceTabs(
     const tabWideFallbackSafe =
       isNativeChatTabWideFallbackSafe(parentLayout) && launchAgentLeafId === leafId
     const title = tabWideFallbackSafe
-      ? resolveRuntimeTerminalTitle(
-          terminal,
-          inputs.generatedTitlesEnabled,
-          leafTitle ?? terminal.title ?? 'Terminal'
+      ? resolveUnifiedTabTitle(
+          unifiedTab,
+          resolveRuntimeTerminalTitle(
+            terminal,
+            inputs.generatedTitlesEnabled,
+            leafTitle ?? terminal.title ?? 'Terminal'
+          )
         )
       : (leafTitle ?? 'Terminal')
     const agentStatusTitle = leafTitle ?? (tabWideFallbackSafe ? terminal.title : '') ?? ''
@@ -104,6 +110,7 @@ export function buildMobileTerminalSurfaceTabs(
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),
       title,
+      ...(tabWideFallbackSafe && customTitle ? { customTitle } : {}),
       ...(tabWideFallbackSafe && terminal.quickCommandLabel?.trim()
         ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
         : {}),
@@ -123,4 +130,8 @@ export function buildMobileTerminalSurfaceTabs(
       isActive: isDesktopTabActive && leafId === activeLeafId
     }
   })
+}
+
+function resolveUnifiedTabTitle(unifiedTab: Tab | undefined, fallback: string): string {
+  return unifiedTab?.customLabel?.trim() || fallback
 }

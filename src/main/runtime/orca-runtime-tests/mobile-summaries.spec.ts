@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService, listWorktrees } from '../orca-runtime-test-mocks.spec'
+import { exitedPtyStopReceipt } from '../../ipc/pty-ipc-test-constants'
 import {
   HEADLESS_LEAF_ID,
   TEST_FOLDER_PROJECT_GROUP_ID,
@@ -251,7 +252,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => processLists.shift() ?? []

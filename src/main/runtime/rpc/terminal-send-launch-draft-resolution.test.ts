@@ -13,6 +13,8 @@ function makeRequest(params: unknown): RpcRequest {
 function makeRuntime(accepted: boolean): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'runtime',
+    // Why: every send now asks whether the handle carries a managed lease before writing.
+    getOrchestrationDb: () => ({ getMaestroTerminalLeaseByHandle: () => undefined }),
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
     beginMobileInputFloor: vi.fn().mockReturnValue({ commit: vi.fn(), rollback: vi.fn() }),

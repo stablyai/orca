@@ -1,8 +1,20 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type * as AgentStatusModule from '@/lib/agent-status'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import { parseWorkspaceSessionSalvaging } from '../../../../shared/workspace-session-salvage'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildHydratedTabState } from './tabs-hydration'
+import { createTabsSliceMockApi } from './tabs-slice-test-harness'
+import { createTestStore } from './store-test-helpers'
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
+vi.mock('@/lib/agent-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof AgentStatusModule>()
+  return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
+})
 
 vi.stubGlobal('crypto', { randomUUID: () => `uuid-${Math.random().toString(36).slice(2, 8)}` })
+createTabsSliceMockApi()
 
 function makeBaseSession(): WorkspaceSessionState {
   return {
@@ -283,6 +295,156 @@ describe('buildHydratedTabState – unified format', () => {
       second: { type: 'leaf', groupId: 'g2' },
       ratio: 0.5
     })
+  })
+})
+
+describe('buildHydratedTabState – Maestro tabs', () => {
+  it('keeps a pinned Maestro tab without an editor entity', () => {
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      unifiedTabs: {
+        w1: [
+          {
+            id: 'maestro-1',
+            entityId: 'maestro-1',
+            groupId: 'g1',
+            worktreeId: 'w1',
+            contentType: 'maestro',
+            label: 'Maestro',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            maestroExecutionHostId: 'local',
+            maestroWorkspaceKey: 'worktree:w1'
+          }
+        ]
+      },
+      tabGroups: {
+        w1: [{ id: 'g1', worktreeId: 'w1', activeTabId: 'maestro-1', tabOrder: ['maestro-1'] }]
+      }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1']))
+
+    expect(result.unifiedTabsByWorktree.w1).toEqual([
+      expect.objectContaining({
+        id: 'maestro-1',
+        contentType: 'maestro',
+        maestroExecutionHostId: 'local',
+        maestroWorkspaceKey: 'worktree:w1'
+      })
+    ])
+  })
+
+  it('salvages a Maestro tab beside a corrupt persisted neighbor', () => {
+    const parsed = parseWorkspaceSessionSalvaging({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        w1: [
+          {
+            id: 'maestro-1',
+            entityId: 'maestro-1',
+            groupId: 'g1',
+            worktreeId: 'w1',
+            contentType: 'maestro',
+            label: 'Maestro',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            maestroExecutionHostId: 'ssh:build-host',
+            maestroWorkspaceKey: 'worktree:w1'
+          },
+          { id: 'corrupt-maestro-neighbor' }
+        ]
+      },
+      tabGroups: {
+        w1: [{ id: 'g1', worktreeId: 'w1', activeTabId: 'maestro-1', tabOrder: ['maestro-1'] }]
+      }
+    })
+
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) {
+      return
+    }
+    expect(parsed.droppedPaths).toEqual(['unifiedTabs.w1.1'])
+
+    const hydrated = buildHydratedTabState(parsed.value, new Set(['w1']))
+
+    expect(hydrated.unifiedTabsByWorktree.w1).toEqual([
+      expect.objectContaining({
+        contentType: 'maestro',
+        maestroExecutionHostId: 'ssh:build-host',
+        maestroWorkspaceKey: 'worktree:w1'
+      })
+    ])
+  })
+
+  it('keeps the Maestro system tab singleton and immutable across lifecycle operations', () => {
+    const store = createTestStore()
+    const workspaceA = 'repo-1::/workspace-a'
+    const workspaceB = 'repo-2::/workspace-b'
+    store.setState({
+      activeFileId: 'editor-a',
+      activeFileIdByWorktree: { [workspaceA]: 'editor-a', [workspaceB]: 'editor-b' },
+      activeWorktreeId: workspaceA
+    })
+
+    const first = store.getState().createUnifiedTab(workspaceA, 'maestro', {
+      label: 'Maestro',
+      maestroExecutionHostId: 'local',
+      maestroWorkspaceKey: worktreeWorkspaceKey(workspaceA)
+    })
+    const duplicate = store.getState().createUnifiedTab(workspaceA, 'maestro', {
+      label: 'Maestro',
+      maestroExecutionHostId: 'ssh:build-host',
+      maestroWorkspaceKey: worktreeWorkspaceKey(workspaceA)
+    })
+    const sourceGroupId = store.getState().groupsByWorktree[workspaceA][0].id
+    store.getState().focusGroup(workspaceA, sourceGroupId)
+    store.getState().createUnifiedTab(workspaceB, 'maestro', {
+      label: 'Maestro',
+      maestroExecutionHostId: 'runtime:remote',
+      maestroWorkspaceKey: worktreeWorkspaceKey(workspaceB)
+    })
+    const targetGroupId = store.getState().createEmptySplitGroup(workspaceA, sourceGroupId, 'right')
+    if (!targetGroupId) {
+      throw new Error('expected a target group')
+    }
+
+    expect(duplicate.id).toBe(first.id)
+    expect(store.getState().moveUnifiedTabToGroup(first.id, targetGroupId)).toBe(false)
+    expect(store.getState().copyUnifiedTabToGroup(first.id, targetGroupId)).toBeNull()
+    expect(store.getState().closeUnifiedTab(first.id)).toBeNull()
+    store.getState().reorderUnifiedTabs(sourceGroupId, [first.id])
+    expect(store.getState().reconcileWorktreeTabModel(workspaceA).renderableTabCount).toBe(0)
+    expect(store.getState().tabsByWorktree[workspaceA] ?? []).toEqual([])
+    expect(store.getState().activeFileId).toBeNull()
+    expect(store.getState().activeFileIdByWorktree).toEqual({
+      [workspaceA]: null,
+      [workspaceB]: 'editor-b'
+    })
+    expect(store.getState().unifiedTabsByWorktree[workspaceB]).toHaveLength(1)
+
+    expect(store.getState().unifiedTabsByWorktree[workspaceA]).toEqual([
+      expect.objectContaining({
+        id: first.id,
+        groupId: sourceGroupId,
+        contentType: 'maestro',
+        systemRole: 'workspace-maestro'
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree[workspaceB]).toEqual([
+      expect.objectContaining({
+        contentType: 'maestro',
+        maestroWorkspaceKey: worktreeWorkspaceKey(workspaceB)
+      })
+    ])
   })
 })
 

@@ -7,10 +7,47 @@ import {
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 import type { TuiAgent } from '../../shared/tui-agent'
+import type * as PtyDescendantTermination from '../pty-descendant-termination'
 
-const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
-vi.mock('../pty-descendant-termination', () => ({
-  killWithDescendantSweep: killWithDescendantSweepMock
+const { killWithDescendantSweepMock, readProcessTableMock } = vi.hoisted(() => ({
+  killWithDescendantSweepMock: vi.fn(),
+  readProcessTableMock: vi.fn()
+}))
+
+const rootRow = { pid: 99999, ppid: 1, pgid: 99999, startedAt: 'captured' }
+
+const processTable = (rows: (typeof rootRow)[] = [rootRow]) => ({ rows, capturedAtMs: Date.now() })
+
+function queueExitedTreeObservation(): void {
+  readProcessTableMock
+    .mockResolvedValueOnce(processTable())
+    .mockResolvedValueOnce(processTable([]))
+    .mockResolvedValueOnce(processTable([]))
+}
+
+function deferDescendantSweep(signalRootBeforeRelease = false): () => void {
+  let finishSweep!: () => void
+  killWithDescendantSweepMock.mockImplementation(
+    (_pid: number, finish: () => void) =>
+      new Promise<void>((resolve) => {
+        if (signalRootBeforeRelease) {
+          finish()
+        }
+        finishSweep = () => {
+          if (!signalRootBeforeRelease) {
+            finish()
+          }
+          resolve()
+        }
+      })
+  )
+  return () => finishSweep()
+}
+vi.mock('../pty-descendant-termination', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyDescendantTermination>()),
+  DESCENDANT_KILL_GRACE_MS: 0,
+  killWithDescendantSweep: killWithDescendantSweepMock,
+  readProcessTable: readProcessTableMock
 }))
 
 function createMockSubprocess(
@@ -75,6 +112,11 @@ describe('TerminalHost', () => {
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     killWithDescendantSweepMock.mockReset()
+    readProcessTableMock.mockReset()
+    readProcessTableMock.mockImplementation(async () => processTable())
+    killWithDescendantSweepMock.mockImplementation(async (_pid: number, signalRoot: () => void) =>
+      signalRoot()
+    )
     spawnFn = vi.fn(() => {
       const sub = createMockSubprocess() as ReturnType<typeof createMockSubprocess> & {
         _onDataCb: ((data: string) => void) | null
@@ -85,7 +127,6 @@ describe('TerminalHost', () => {
     })
     host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
   })
-
   afterEach(async () => {
     await host.dispose()
     if (platformDescriptor) {
@@ -388,31 +429,33 @@ describe('TerminalHost', () => {
   })
 
   describe('kill', () => {
-    it('kills the session and tombstones it', async () => {
+    async function createSession(sessionId = 'session-1'): Promise<void> {
       await host.createOrAttach({
-        sessionId: 'session-1',
+        sessionId,
         cols: 80,
         rows: 24,
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
+    }
 
-      host.kill('session-1')
-      expect(lastSubprocess.kill).toHaveBeenCalled()
+    it('kills the session and records the stop request', async () => {
+      await createSession()
+      queueExitedTreeObservation()
+
+      const killing = host.kill('session-1')
+
       expect(host.isKilled('session-1')).toBe(true)
+      const receipt = await killing
+      expect(receipt).toMatchObject({ verdict: 'exited', processTreeVerified: true })
     })
 
-    it('does not tombstone a session when graceful kill admission fails', async () => {
-      await host.createOrAttach({
-        sessionId: 'session-1',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
+    it('does not retain a tombstone when graceful kill admission fails', async () => {
+      await createSession()
       lastSubprocess.kill = vi.fn(() => {
         throw new Error('signal rejected')
       })
 
-      expect(() => host.kill('session-1')).toThrow('signal rejected')
+      await expect(host.kill('session-1')).rejects.toThrow('signal rejected')
       expect(host.isKilled('session-1')).toBe(false)
       await expect(
         host.createOrAttach({
@@ -424,66 +467,204 @@ describe('TerminalHost', () => {
       ).resolves.toMatchObject({ isNew: false })
     })
 
-    // Plain-shell immediate force-kill (POSIX no-sweep + Windows taskkill tree) is covered in
-    // terminal-host-session-reaping-leak.test.ts and terminal-session-teardown.test.ts.
+    it('returns the execution-owner receipt for the exact incarnation', async () => {
+      await createSession()
+      const [{ incarnationId }] = host.listSessions()
+      queueExitedTreeObservation()
 
-    it('escalates an already-graceful termination and joins its physical exit', async () => {
-      await host.createOrAttach({
-        sessionId: 'session-1',
+      const receipt = await host.kill('session-1', {
+        immediate: true,
+        expectedIncarnationId: incarnationId
+      })
+
+      expect(receipt).toMatchObject({
+        executionHostId: 'local',
+        ptyId: 'session-1',
+        ptyIncarnation: incarnationId,
+        verdict: 'exited',
+        processTreeVerified: true
+      })
+    })
+
+    it('replays the immutable receipt for the same incarnation', async () => {
+      await createSession()
+      const [{ incarnationId }] = host.listSessions()
+      queueExitedTreeObservation()
+
+      const first = await host.kill('session-1', {
+        immediate: true,
+        expectedIncarnationId: incarnationId
+      })
+      const retry = await host.kill('session-1', {
+        immediate: true,
+        expectedIncarnationId: incarnationId
+      })
+
+      expect(retry).toBe(first)
+      expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
+    })
+
+    it('rejects a stop request for a different incarnation before signaling', async () => {
+      await createSession()
+
+      await expect(
+        host.kill('session-1', {
+          immediate: true,
+          expectedIncarnationId: '22222222-2222-4222-8222-222222222222'
+        })
+      ).rejects.toThrow('pty_stop_receipt_identity_mismatch')
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+    })
+
+    it('returns live without treating physical root state as process-tree proof', async () => {
+      await createSession()
+      lastSubprocess.kill = vi.fn()
+
+      const receipt = await host.kill('session-1')
+
+      expect(receipt).toMatchObject({ verdict: 'live', processTreeVerified: false })
+      expect(host.listSessions()).toHaveLength(1)
+    })
+
+    it('defers a respawn until teardown releases the previous incarnation', async () => {
+      queueExitedTreeObservation()
+      const finishSweep = deferDescendantSweep()
+      await createSession('agent-reattach')
+      const retiredSubprocess = lastSubprocess
+
+      const killing = host.kill('agent-reattach', { immediate: true })
+      await vi.waitFor(() => expect(killWithDescendantSweepMock).toHaveBeenCalledOnce())
+      const respawn = host.createOrAttach({
+        sessionId: 'agent-reattach',
         cols: 80,
         rows: 24,
+        launchAgent: 'claude',
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
-      lastSubprocess.forceKill = vi.fn()
+      expect(spawnFn).toHaveBeenCalledOnce()
+      expect(retiredSubprocess.forceKill).not.toHaveBeenCalled()
 
-      await host.kill('session-1')
-      const immediate = host.kill('session-1', { immediate: true })
-      let settled = false
-      void immediate.then(() => {
-        settled = true
+      finishSweep()
+      await expect(killing).resolves.toMatchObject({ verdict: 'exited' })
+      await expect(respawn).resolves.toMatchObject({ isNew: true })
+      expect(retiredSubprocess.forceKill).toHaveBeenCalledOnce()
+    })
+
+    it('coalesces duplicate immediate kills while descendant capture is pending', async () => {
+      queueExitedTreeObservation()
+      const finishSweep = deferDescendantSweep()
+      await createSession('agent-duplicate-kill')
+
+      const first = host.kill('agent-duplicate-kill', { immediate: true })
+      await vi.waitFor(() => expect(killWithDescendantSweepMock).toHaveBeenCalledOnce())
+      lastSubprocess._onExitCb?.(0)
+      const second = host.kill('agent-duplicate-kill', { immediate: true })
+
+      expect(second).toBe(first)
+      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
+      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+      finishSweep()
+      await expect(first).resolves.toMatchObject({ verdict: 'exited' })
+    })
+
+    it('reserves a naturally exited id until teardown finishes without re-killing a reused PID', async () => {
+      queueExitedTreeObservation()
+      const finishSweep = deferDescendantSweep()
+      await createSession('agent-natural-exit')
+      const retiredSubprocess = lastSubprocess
+
+      const killing = host.kill('agent-natural-exit', { immediate: true })
+      await vi.waitFor(() => expect(killWithDescendantSweepMock).toHaveBeenCalledOnce())
+      retiredSubprocess._onExitCb?.(0)
+      const respawn = host.createOrAttach({
+        sessionId: 'agent-natural-exit',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude',
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
-      await Promise.resolve()
+      expect(spawnFn).toHaveBeenCalledOnce()
 
-      expect(lastSubprocess.kill).toHaveBeenCalledTimes(1)
-      expect(lastSubprocess.forceKill).toHaveBeenCalledTimes(1)
-      expect(settled).toBe(false)
-      expect(host.listSessions()).toHaveLength(1)
+      finishSweep()
+      await killing
+      expect(retiredSubprocess.forceKill).not.toHaveBeenCalled()
+      await expect(respawn).resolves.toMatchObject({ isNew: true })
+      expect(spawnFn).toHaveBeenCalledTimes(2)
+    })
 
+    it('upgrades a pending graceful teardown when immediate kill arrives', async () => {
+      queueExitedTreeObservation()
+      const finishSweep = deferDescendantSweep()
+      await createSession('agent-upgrade-kill')
+
+      const graceful = host.kill('agent-upgrade-kill')
+      await vi.waitFor(() => expect(killWithDescendantSweepMock).toHaveBeenCalledOnce())
+      const immediate = host.kill('agent-upgrade-kill', { immediate: true })
+
+      expect(immediate).toBe(graceful)
+      expect(lastSubprocess.kill).not.toHaveBeenCalled()
+      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
+      finishSweep()
+      await expect(immediate).resolves.toMatchObject({ verdict: 'exited' })
+      expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
+    })
+
+    it('escalates an already-signaled graceful teardown and joins physical exit', async () => {
+      queueExitedTreeObservation()
+      const finishSweep = deferDescendantSweep(true)
+      await createSession('already-graceful')
+      Object.assign(lastSubprocess, { kill: vi.fn(), forceKill: vi.fn() })
+      const graceful = host.kill('already-graceful')
+      await vi.waitFor(() => expect(lastSubprocess.kill).toHaveBeenCalledOnce())
+      const immediate = host.kill('already-graceful', { immediate: true })
+      expect(immediate).toBe(graceful)
+      expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
+      finishSweep()
+      expect(lastSubprocess.dispose).not.toHaveBeenCalled()
       lastSubprocess._onExitCb?.(137)
-      await immediate
+      await expect(immediate).resolves.toMatchObject({ verdict: 'exited' })
       expect(host.listSessions()).toHaveLength(0)
     })
 
-    it('retains an immediate-kill session when physical exit times out', async () => {
+    it('force-kills after a completed graceful snapshot and returns upgraded proof', async () => {
+      await createSession('completed-graceful')
+      lastSubprocess.kill = vi.fn()
+      const gracefulReceipt = await host.kill('completed-graceful')
+      expect(gracefulReceipt).toMatchObject({ verdict: 'live', processTreeVerified: false })
+      queueExitedTreeObservation()
+      lastSubprocess.forceKill = vi.fn()
+      const immediate = host.kill('completed-graceful', { immediate: true })
+      await vi.waitFor(() => expect(lastSubprocess.forceKill).toHaveBeenCalledOnce())
+      expect(lastSubprocess.dispose).not.toHaveBeenCalled()
+      lastSubprocess._onExitCb?.(137)
+      const receipt = await immediate
+      expect(receipt).toMatchObject({ verdict: 'exited', processTreeVerified: true })
+      expect(lastSubprocess.dispose).toHaveBeenCalledOnce()
+    })
+
+    it('retains ownership and reports live when native physical exit times out', async () => {
       vi.useFakeTimers()
       try {
-        await host.createOrAttach({
-          sessionId: 'session-1',
-          cols: 80,
-          rows: 24,
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
+        await createSession('session-timeout')
         lastSubprocess.forceKill = vi.fn()
 
-        const killed = host.kill('session-1', { immediate: true })
-        const rejected = expect(killed).rejects.toThrow('Timed out waiting for PTY process exit')
-        await vi.advanceTimersByTimeAsync(IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS)
-        await rejected
+        const killing = host.kill('session-timeout', { immediate: true })
+        await vi.advanceTimersByTimeAsync(IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS + 100)
+        const receipt = await killing
 
-        expect(lastSubprocess.forceKill).toHaveBeenCalledTimes(1)
+        expect(receipt).toMatchObject({ verdict: 'live', processTreeVerified: false })
+        expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
         expect(lastSubprocess.dispose).not.toHaveBeenCalled()
         expect(host.listSessions()).toHaveLength(1)
-        // An unkillable child never releases the id: the create waits out its own budget and
-        // then reports absence rather than publishing a session teardown still owns.
-        const recreate = host.createOrAttach({
-          sessionId: 'session-1',
-          cols: 80,
-          rows: 24,
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-        const refused = expect(recreate).rejects.toThrow('Session not found')
-        await vi.advanceTimersByTimeAsync(IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS)
-        await refused
+        await expect(
+          host.createOrAttach({
+            sessionId: 'session-timeout',
+            cols: 80,
+            rows: 24,
+            streamClient: { onData: vi.fn(), onExit: vi.fn() }
+          })
+        ).rejects.toThrow('Session not found')
 
         lastSubprocess._onExitCb?.(137)
         expect(host.listSessions()).toHaveLength(0)
@@ -492,224 +673,29 @@ describe('TerminalHost', () => {
       }
     })
 
-    it('throws for non-existent session', () => {
-      expect(() => host.kill('missing')).toThrow('Session not found')
-    })
+    it('captures descendants before signaling the agent root', async () => {
+      queueExitedTreeObservation()
+      const finishSweep = deferDescendantSweep()
+      await createSession('agent-sweep-order')
 
-    it('agent immediate kill routes through the descendant sweep and defers the force-kill to it', async () => {
-      await host.createOrAttach({
-        sessionId: 'agent-1',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'claude',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      lastSubprocess.forceKill = vi.fn()
+      const killing = host.kill('agent-sweep-order', { immediate: true })
+      await vi.waitFor(() => expect(killWithDescendantSweepMock).toHaveBeenCalledOnce())
 
-      const killing = host.kill('agent-1', { immediate: true })
-
-      // Why order matters: force-killing first would let orphans reparent to
-      // pid 1 and escape the sweep's ppid walk entirely.
       expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
         99999,
         expect.any(Function),
         expect.objectContaining({ ownsRoot: expect.any(Function) })
       )
       expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
-      expect(host.isKilled('agent-1')).toBe(true)
-
-      const finish = killWithDescendantSweepMock.mock.calls[0][1] as () => void
-      finish()
-      expect(lastSubprocess.forceKill).toHaveBeenCalled()
-      expect(lastSubprocess.dispose).not.toHaveBeenCalled()
-
-      lastSubprocess._onExitCb?.(137)
-      await killing
-      expect(lastSubprocess.dispose).toHaveBeenCalled()
-    })
-
-    it('defers a respawn until the agent immediate-kill snapshot completes', async () => {
-      let finishSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
-        (_pid: number, finish: () => void) =>
-          new Promise<void>((resolve) => {
-            finishSweep = () => {
-              finish()
-              resolve()
-            }
-          })
-      )
-      await host.createOrAttach({
-        sessionId: 'agent-reattach',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'claude',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      const retiredSubprocess = lastSubprocess
-      const killing = host.kill('agent-reattach', { immediate: true })
-      let respawned = false
-      const respawn = host
-        .createOrAttach({
-          sessionId: 'agent-reattach',
-          cols: 80,
-          rows: 24,
-          launchAgent: 'claude',
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-        .then((result) => {
-          respawned = true
-          return result
-        })
-      await Promise.resolve()
-      await Promise.resolve()
-
-      // Why it must not resolve yet: capture still owns the process, so publishing here would
-      // hand the caller a session teardown is about to kill.
-      expect(respawned).toBe(false)
-      expect(spawnFn).toHaveBeenCalledTimes(1)
-      expect(retiredSubprocess.forceKill).not.toHaveBeenCalled()
-
       finishSweep()
-      retiredSubprocess._onExitCb?.(137)
-      await killing
-      await expect(respawn).resolves.toMatchObject({ isNew: true })
-      expect(retiredSubprocess.forceKill).toHaveBeenCalledOnce()
-    })
-
-    it('coalesces duplicate immediate kill while descendant capture is pending', async () => {
-      const sweep = new Promise<void>(() => {})
-      killWithDescendantSweepMock.mockReturnValue(sweep)
-      await host.createOrAttach({
-        sessionId: 'agent-duplicate-kill',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'claude',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      const first = host.kill('agent-duplicate-kill', { immediate: true })
-      // The root can exit while the descendant scan is pending. Duplicate RPCs
-      // still own the original completion even after the session was reaped.
-      lastSubprocess._onExitCb?.(0)
-      const second = host.kill('agent-duplicate-kill', { immediate: true })
-
-      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
-      expect(second).toBe(first)
-      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
-    })
-
-    it('keeps a naturally-exited id reserved until teardown finishes without re-killing its pid', async () => {
-      let completeSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
-        (_pid: number, finish: () => void) =>
-          new Promise<void>((resolve) => {
-            completeSweep = () => {
-              finish()
-              resolve()
-            }
-          })
-      )
-      await host.createOrAttach({
-        sessionId: 'agent-natural-exit',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'claude',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      const retiredSubprocess = lastSubprocess
-
-      const killing = host.kill('agent-natural-exit', { immediate: true })
-      retiredSubprocess._onExitCb?.(0)
-      let respawned = false
-      const respawn = host
-        .createOrAttach({
-          sessionId: 'agent-natural-exit',
-          cols: 80,
-          rows: 24,
-          launchAgent: 'claude',
-          streamClient: { onData: vi.fn(), onExit: vi.fn() }
-        })
-        .then((result) => {
-          respawned = true
-          return result
-        })
-      await Promise.resolve()
-      await Promise.resolve()
-
-      // The root is already reaped, but the scan still holds the id.
-      expect(respawned).toBe(false)
-      expect(spawnFn).toHaveBeenCalledTimes(1)
-
-      completeSweep()
-      await killing
-      expect(retiredSubprocess.forceKill).not.toHaveBeenCalled()
-
-      await expect(respawn).resolves.toEqual(expect.objectContaining({ isNew: true }))
-      expect(spawnFn).toHaveBeenCalledTimes(2)
-    })
-
-    it('upgrades a pending graceful agent teardown when immediate kill arrives', async () => {
-      let completeSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
-        (_pid: number, finish: () => void) =>
-          new Promise<void>((resolve) => {
-            completeSweep = () => {
-              finish()
-              resolve()
-            }
-          })
-      )
-      await host.createOrAttach({
-        sessionId: 'agent-upgrade-kill',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'claude',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      const graceful = host.kill('agent-upgrade-kill')
-      const immediate = host.kill('agent-upgrade-kill', { immediate: true })
-      expect(immediate).toBe(graceful)
-      expect(lastSubprocess.kill).not.toHaveBeenCalled()
-      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
-
-      completeSweep()
-      lastSubprocess._onExitCb?.(137)
-      await Promise.all([graceful, immediate])
-      expect(lastSubprocess.kill).not.toHaveBeenCalled()
       expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
-      expect(lastSubprocess.dispose).toHaveBeenCalledOnce()
+      await expect(killing).resolves.toMatchObject({ verdict: 'exited' })
     })
 
-    it('force-kills when immediate teardown follows a completed graceful snapshot', async () => {
-      killWithDescendantSweepMock.mockImplementation(async (_pid: number, finish: () => void) =>
-        finish()
-      )
-      await host.createOrAttach({
-        sessionId: 'agent-post-snapshot-upgrade',
-        cols: 80,
-        rows: 24,
-        launchAgent: 'claude',
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-
-      await host.kill('agent-post-snapshot-upgrade')
-      expect(lastSubprocess.kill).toHaveBeenCalledOnce()
-      expect(lastSubprocess.forceKill).not.toHaveBeenCalled()
-      lastSubprocess.forceKill = vi.fn()
-
-      const immediate = host.kill('agent-post-snapshot-upgrade', { immediate: true })
-      expect(lastSubprocess.forceKill).toHaveBeenCalledOnce()
-      expect(lastSubprocess.dispose).not.toHaveBeenCalled()
-
-      lastSubprocess._onExitCb?.(137)
-      await immediate
-      expect(lastSubprocess.dispose).toHaveBeenCalledOnce()
+    it('throws for a non-existent session without inventing a receipt', () => {
+      expect(() => host.kill('missing')).toThrow('Session not found')
     })
   })
-
   describe('signal', () => {
     it('sends signal without entering kill state', async () => {
       await host.createOrAttach({

@@ -57,6 +57,7 @@ export async function createWorkerWorktree(args: {
     setupDecision,
     awaitTerminalProvisioning: true,
     observeSetupCompletion: true,
+    orchestrationManagedLaunch: true,
     createdWithAgent: args.agent,
     ...(args.withAgentTerminal
       ? {
@@ -75,7 +76,9 @@ export async function createWorkerWorktree(args: {
   effects.push({
     kind: 'worktree',
     action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
-    id: created.worktree.id
+    id: created.worktree.id,
+    ...(created.worktree.hostId ? { executionHostId: created.worktree.hostId } : {}),
+    ...(created.worktree.instanceId ? { worktreeInstanceId: created.worktree.instanceId } : {})
   })
   db.recordWorkerStage({
     dispatchId,

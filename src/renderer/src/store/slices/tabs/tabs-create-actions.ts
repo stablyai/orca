@@ -20,14 +20,27 @@ export function createTabsCreateActions(
 ): Pick<TabsSlice, 'createUnifiedTab' | 'createUnifiedTabInSplit'> {
   return {
     createUnifiedTab: (worktreeId, contentType, init) => {
-      const id = init?.id ?? createBrowserUuid()
+      if (contentType === 'maestro') {
+        const existing = (get().unifiedTabsByWorktree[worktreeId] ?? []).find(
+          (tab) => tab.systemRole === 'workspace-maestro' || tab.contentType === 'maestro'
+        )
+        if (existing) {
+          return existing
+        }
+      }
+      const id =
+        contentType === 'maestro' && init?.maestroExecutionHostId && init.maestroWorkspaceKey
+          ? `workspace-maestro:${encodeURIComponent(init.maestroExecutionHostId)}:${encodeURIComponent(init.maestroWorkspaceKey)}`
+          : (init?.id ?? createBrowserUuid())
       let created!: Tab
       set((state) => {
         const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
           state.groupsByWorktree,
           state.activeGroupIdByWorktree,
           worktreeId,
-          init?.targetGroupId ?? state.activeGroupIdByWorktree[worktreeId]
+          contentType === 'maestro'
+            ? state.groupsByWorktree[worktreeId]?.[0]?.id
+            : (init?.targetGroupId ?? state.activeGroupIdByWorktree[worktreeId])
         )
         const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
 
@@ -58,23 +71,33 @@ export function createTabsCreateActions(
           ...(executionHostId ? { executionHostId } : {}),
           contentType,
           label:
-            init?.label ??
-            (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
+            contentType === 'maestro'
+              ? 'Maestro'
+              : (init?.label ??
+                (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id)),
           ...(init?.generatedLabel !== undefined ? { generatedLabel: init.generatedLabel } : {}),
           ...(init?.quickCommandLabel !== undefined
             ? { quickCommandLabel: init.quickCommandLabel }
             : {}),
-          customLabel: init?.customLabel ?? null,
-          color: init?.color ?? null,
-          sortOrder: nextOrder.length,
+          customLabel: contentType === 'maestro' ? null : (init?.customLabel ?? null),
+          color: contentType === 'maestro' ? null : (init?.color ?? null),
+          sortOrder: contentType === 'maestro' ? 0 : nextOrder.length,
           createdAt,
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
           ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
-          isPreview: init?.isPreview,
-          isPinned: init?.isPinned
+          isPreview: contentType === 'maestro' ? false : init?.isPreview,
+          isPinned: contentType === 'maestro' ? true : init?.isPinned,
+          ...(contentType === 'maestro' ? { systemRole: 'workspace-maestro' as const } : {}),
+          ...(init?.maestroExecutionHostId
+            ? { maestroExecutionHostId: init.maestroExecutionHostId }
+            : {}),
+          ...(init?.maestroWorkspaceKey ? { maestroWorkspaceKey: init.maestroWorkspaceKey } : {})
         }
 
-        nextOrder = dedupeTabOrder([...nextOrder, created.id])
+        nextOrder =
+          contentType === 'maestro'
+            ? [created.id, ...nextOrder.filter((tabId) => tabId !== created.id)]
+            : dedupeTabOrder([...nextOrder, created.id])
         const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
         // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
@@ -109,6 +132,9 @@ export function createTabsCreateActions(
     },
 
     createUnifiedTabInSplit: (worktreeId, contentType, target, init) => {
+      if (contentType === 'maestro') {
+        return null
+      }
       const id = init?.id ?? createBrowserUuid()
       const newGroupId = createBrowserUuid()
       let created: Tab | null = null
@@ -152,7 +178,11 @@ export function createTabsCreateActions(
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
           ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
           isPreview: init?.isPreview,
-          isPinned: init?.isPinned
+          isPinned: init?.isPinned,
+          ...(init?.maestroExecutionHostId
+            ? { maestroExecutionHostId: init.maestroExecutionHostId }
+            : {}),
+          ...(init?.maestroWorkspaceKey ? { maestroWorkspaceKey: init.maestroWorkspaceKey } : {})
         }
         const newGroup: TabGroup = {
           id: newGroupId,

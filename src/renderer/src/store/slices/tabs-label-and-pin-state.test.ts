@@ -3,6 +3,9 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
 
+const scheduleRuntimeGraphSync = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
@@ -23,6 +26,7 @@ describe('TabsSlice', () => {
   let store: ReturnType<typeof createTestStore>
 
   beforeEach(() => {
+    scheduleRuntimeGraphSync.mockClear()
     store = createTestStore()
   })
 
@@ -49,6 +53,7 @@ describe('TabsSlice', () => {
       const tab = store.getState().createUnifiedTab(WT, 'terminal')
       store.getState().setTabCustomLabel(tab.id, 'my-term')
       expect(store.getState().unifiedTabsByWorktree[WT][0].customLabel).toBe('my-term')
+      expect(scheduleRuntimeGraphSync).toHaveBeenCalledOnce()
     })
 
     it('setTabCustomLabel clears customLabel with null', () => {

@@ -29,6 +29,9 @@ export function createTabsDropActions(
         }
 
         const { tab, worktreeId } = foundTab
+        if (tab.systemRole === 'workspace-maestro') {
+          return {}
+        }
         const sourceGroup = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
         const targetGroup = foundTarget.group
         if (!sourceGroup) {
@@ -98,8 +101,15 @@ export function createTabsDropActions(
           nextGroups.find((group) => group.id === resolvedTargetGroupId) ?? targetGroup
         // Why: target order may already hold this tab id (racey write / same-group split); dedupe first or React hits a duplicate key.
         const targetOrder = dedupeTabOrder(destinationGroup.tabOrder.filter((id) => id !== tabId))
+        const minimumTargetIndex = targetOrder.some((id) =>
+          (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+            (candidate) => candidate.id === id && candidate.systemRole === 'workspace-maestro'
+          )
+        )
+          ? 1
+          : 0
         const targetIndex = Math.max(
-          0,
+          minimumTargetIndex,
           Math.min(target.index ?? targetOrder.length, targetOrder.length)
         )
         targetOrder.splice(targetIndex, 0, tabId)

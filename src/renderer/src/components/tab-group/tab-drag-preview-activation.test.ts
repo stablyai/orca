@@ -80,4 +80,51 @@ describe('restoreTabDragActivationSnapshot', () => {
     expect(state.activeTabId).toBe('terminal-1')
     expect(state.activeTabIdByWorktree[WT]).toBe('terminal-1')
   })
+
+  it('activates Maestro without selecting an editor file', () => {
+    useAppStore.setState((state) => ({
+      activeFileId: 'editor-1',
+      activeFileIdByWorktree: {
+        ...state.activeFileIdByWorktree,
+        [WT]: 'editor-1',
+        other: 'other-editor'
+      },
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        [WT]: [
+          ...state.unifiedTabsByWorktree[WT],
+          {
+            id: 'maestro-1',
+            entityId: 'maestro-1',
+            groupId: 'group-1',
+            worktreeId: WT,
+            contentType: 'maestro',
+            label: 'Maestro',
+            customLabel: null,
+            color: null,
+            sortOrder: 2,
+            createdAt: 2,
+            maestroExecutionHostId: 'local',
+            maestroWorkspaceKey: `worktree:${WT}`
+          }
+        ]
+      },
+      groupsByWorktree: {
+        ...state.groupsByWorktree,
+        [WT]: [{ ...state.groupsByWorktree[WT][0], tabOrder: ['tab-1', 'tab-2', 'maestro-1'] }]
+      }
+    }))
+    applyDragPreviewTab({
+      worktreeId: WT,
+      groupId: 'group-1',
+      tabId: 'maestro-1',
+      activeGroupId: 'group-1'
+    })
+    expect(useAppStore.getState().groupsByWorktree[WT][0].activeTabId).toBe('maestro-1')
+    expect(useAppStore.getState().activeFileId).toBeNull()
+    expect(useAppStore.getState().activeFileIdByWorktree).toEqual({
+      [WT]: null,
+      other: 'other-editor'
+    })
+  })
 })

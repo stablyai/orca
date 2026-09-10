@@ -1,162 +1,323 @@
-import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import {
+  createPtyStopReceipt,
+  type PtyStopProcessIdentity,
+  type PtyStopProcessObservation,
+  type PtyStopReceipt
+} from '../../shared/pty-stop-receipt'
+import {
+  collectDescendantRows,
+  DESCENDANT_KILL_GRACE_MS,
+  DESCENDANT_SNAPSHOT_TIMEOUT_MS,
+  killWithDescendantSweep,
+  readProcessTable,
+  readProcessTableBeforeDeadline,
+  type KillSweepDeps,
+  type ProcessTableRow
+} from '../pty-descendant-termination'
 import type { Session } from './session'
 
-type TeardownOperation = {
-  promise: Promise<void>
+type SessionTeardownOperation = {
+  promise: Promise<PtyStopReceipt>
   immediate: boolean
   rootSignalled: boolean
   rootCompletion: Promise<void>
   session: Session
 }
 
-/** Owns teardown by session id until descendant capture and root signalling
- * finish, even when the root exits and its Session is reaped. */
+type SettledSessionTeardown = { receipt: PtyStopReceipt; immediate: boolean }
+const WINDOWS_TREE_LIMIT_REASON = 'Windows tree verification is capability-limited.'
+
+export type PtyProcessTreeStopEvidence = {
+  root: PtyStopProcessIdentity
+  descendants: PtyStopProcessIdentity[]
+  observations: PtyStopProcessObservation[]
+  verdict: 'exited' | 'live' | 'unverifiable' | 'capability_limited'
+  processTreeVerified: boolean
+  reason?: string
+}
+
+/** Stops and verifies the exact process identities captured before root signalling. */
+export async function stopPtyProcessTree(
+  rootPid: number,
+  killRoot: () => void,
+  deps: KillSweepDeps = {}
+): Promise<PtyProcessTreeStopEvidence> {
+  if ((deps.platform ?? process.platform) === 'win32') {
+    await killWithDescendantSweep(rootPid, killRoot, deps)
+    return unresolvedTree(rootPid, WINDOWS_TREE_LIMIT_REASON, 'capability_limited')
+  }
+  const readTable = deps.readTable ?? readProcessTable
+  const timeoutMs = deps.timeoutMs ?? DESCENDANT_SNAPSHOT_TIMEOUT_MS
+  const capture = await readProcessTableBeforeDeadline(readTable, timeoutMs)
+  if (!capture) {
+    killRoot()
+    return unresolvedTree(rootPid, 'The pre-stop process snapshot was unavailable.')
+  }
+  const rootRow = capture.rows.find(({ pid }) => pid === rootPid)
+  if (!rootRow || !(deps.ownsRoot?.() ?? true)) {
+    killRoot()
+    return unresolvedTree(rootPid, 'The PTY root identity could not be proven before stop.')
+  }
+  const snapshot = collectDescendantRows(rootPid, capture.rows, capture.capturedAtMs)
+  const root = toIdentity(rootRow)
+  const descendants = snapshot.descendants.map(toIdentity)
+  const sendSignal = deps.sendSignal ?? sendProcessSignal
+  await killWithDescendantSweep(rootPid, killRoot, {
+    ...deps,
+    readTable: async () => capture,
+    sendSignal
+  })
+  const graceMs = deps.graceMs ?? DESCENDANT_KILL_GRACE_MS
+  if (graceMs > 0) {
+    await waitInterval(graceMs)
+  }
+  const escalationCapture = await readProcessTableBeforeDeadline(readTable, timeoutMs)
+  if (!escalationCapture) {
+    return capturedTreeUnverifiable(root, descendants, 'The post-stop snapshot failed.')
+  }
+  const escalation = observeIdentities([root, ...descendants], escalationCapture.rows)
+  const liveDescendants = escalation.filter(
+    ({ identity, status }) => status === 'live' && identity.pid !== rootPid && identity.pid !== null
+  )
+  liveDescendants.forEach(({ identity }) => sendSignal(identity.pid!, 'SIGKILL'))
+  if (liveDescendants.length > 0 && graceMs > 0) {
+    await waitInterval(50)
+  }
+  const finalCapture = await readProcessTableBeforeDeadline(readTable, timeoutMs)
+  if (!finalCapture) {
+    return capturedTreeUnverifiable(root, descendants, 'The final observation failed.')
+  }
+  const observations = observeIdentities([root, ...descendants], finalCapture.rows)
+  if (observations.some(({ status }) => status === 'unverifiable')) {
+    return stoppedTreeResult(
+      root,
+      descendants,
+      observations,
+      'unverifiable',
+      'A captured identity could not be observed unambiguously.'
+    )
+  }
+  if (observations.some(({ status }) => status === 'live')) {
+    return stoppedTreeResult(
+      root,
+      descendants,
+      observations,
+      'live',
+      'One or more captured process identities remain live.'
+    )
+  }
+  return { root, descendants, observations, verdict: 'exited', processTreeVerified: true }
+}
+
+/** Owns exact-session teardown until the root and every captured descendant have a verdict. */
 export class TerminalSessionTeardown {
-  private operations = new Map<string, TeardownOperation>()
+  private operations = new Map<string, SessionTeardownOperation>()
+  private receipts = new Map<string, SettledSessionTeardown>()
 
   constructor(private sessions: ReadonlyMap<string, Session>) {}
 
-  get(sessionId: string): Promise<void> | undefined {
+  get(sessionId: string): Promise<PtyStopReceipt> | undefined {
     return this.operations.get(sessionId)?.promise
   }
 
-  /** Resolves once this id's tracked teardown has released the process — a rejected teardown
-   *  released it too. Callers re-read session state afterwards and decide for themselves. */
+  /** Waits until the teardown for this id releases its exact process incarnation. */
   async settle(sessionId: string): Promise<void> {
-    await this.operations.get(sessionId)?.promise.catch(() => {})
+    await this.operations.get(sessionId)?.promise.catch(() => undefined)
   }
 
-  requestImmediate(sessionId: string): Promise<void> | undefined {
+  getReceipt(
+    sessionId: string,
+    opts: { expectedIncarnationId?: string; immediate?: boolean } = {}
+  ): PtyStopReceipt | undefined {
+    const settled = this.receipts.get(sessionId)
+    if (
+      !settled ||
+      (opts.expectedIncarnationId &&
+        settled.receipt.ptyIncarnation !== opts.expectedIncarnationId) ||
+      (opts.immediate && !settled.immediate && this.sessions.get(sessionId)?.isAlive)
+    ) {
+      return undefined
+    }
+    return settled.receipt
+  }
+
+  clearReceipt(sessionId: string): void {
+    this.receipts.delete(sessionId)
+  }
+
+  requestImmediate(sessionId: string): Promise<PtyStopReceipt> | undefined {
     const pending = this.operations.get(sessionId)
     if (pending) {
       pending.immediate = true
       if (pending.rootSignalled && pending.session.isAlive) {
-        // Why: the snapshot callback may have already sent the graceful root
-        // signal in this turn; an immediate join must still escalate and wait.
         pending.rootCompletion = pending.session.forceKillAndWaitForExit()
       }
     }
     return pending?.promise
   }
 
-  killSession(sessionId: string, session: Session, immediate: boolean): void | Promise<void> {
-    if (session.launchAgent) {
-      return this.killAgentSession(sessionId, session, immediate)
-    }
-    if (immediate) {
-      // Why tracked like the agent path: this claims termination on the Session and then awaits
-      // an OS probe and taskkill, and a create landing inside that window must be able to wait it
-      // out rather than be told the id is absent (#18046).
-      return this.track(sessionId, session, immediate, () =>
-        this.forceKillPlainShellSession(sessionId, session)
-      )
-    }
-    session.kill()
-  }
-
-  /** Publishes an operation for `sessionId` and retires it once the teardown settles. */
-  private track(
-    sessionId: string,
-    session: Session,
-    immediate: boolean,
-    run: (entry: TeardownOperation) => Promise<void>
-  ): Promise<void> {
-    const entry: TeardownOperation = {
-      promise: Promise.resolve(),
-      immediate,
-      rootSignalled: false,
-      rootCompletion: Promise.resolve(),
-      session
-    }
-    const operation = run(entry)
-    entry.promise = operation
-    this.operations.set(sessionId, entry)
-    const clearOperation = (): void => {
-      if (this.operations.get(sessionId) === entry) {
-        this.operations.delete(sessionId)
-      }
-    }
-    void operation.then(clearOperation, clearOperation)
-    return operation
-  }
-
-  /**
-   * Immediate teardown of a non-agent shell. On Windows, closing the ConPTY does not
-   * reap orphaned children (node-pty `useConptyDll` skips the console-process reap), so a
-   * live `pnpm i`/`node` survives shell exit, keeps the ConPTY console non-empty, and holds
-   * the worktree cwd — failing destructive worktree removal with "Failed to physically stop
-   * every PTY". Tree-kill only when the OS identity probe returns `own`; `unknown`/`foreign`/
-   * `absent` skip taskkill and rely on root close alone. Mirrors the agent path
-   * (#10004/#10100). POSIX shells already reach their child pgroup on forceKill, so they
-   * stay on the plain force-kill path.
-   */
-  private async forceKillPlainShellSession(sessionId: string, session: Session): Promise<void> {
-    if (process.platform === 'win32') {
-      // Why: forceKillAndWaitForExit claims termination synchronously; awaiting the sweep
-      // ahead of it would leave attach open on a doomed session for the taskkill's duration.
-      session.beginTermination()
-      await killWithDescendantSweep(session.pid, () => {}, {
-        // Why: the descendant tree is only ours while this Session still owns the live root PID.
-        ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
-        terminateOwnedTree: () => session.terminateOwnedTree()
-      })
-    }
-    await session.forceKillAndWaitForExit()
-  }
-
-  private killAgentSession(
-    sessionId: string,
-    session: Session,
-    immediate: boolean
-  ): void | Promise<void> {
+  killSession(sessionId: string, session: Session, immediate: boolean): Promise<PtyStopReceipt> {
     const pending = this.operations.get(sessionId)
     if (pending) {
-      // Why: an immediate caller is a stronger teardown request and must not
-      // acknowledge a still-graceful root kill while capture is pending.
       pending.immediate ||= immediate
       return pending.promise
     }
-
     if (!session.beginTermination()) {
-      // A completed graceful sweep can leave the root alive during its grace
-      // window. Immediate teardown may safely escalate once no scan is pending.
-      if (immediate && session.isAlive && session.isTerminating) {
-        return session.forceKillAndWaitForExit()
+      const settled = this.receipts.get(sessionId)
+      const canUpgrade = settled && immediate && !settled.immediate && session.isAlive
+      if (!canUpgrade) {
+        if (settled?.receipt.ptyIncarnation === session.incarnationId) {
+          return Promise.resolve(settled.receipt)
+        }
+        throw new Error(`Session "${sessionId}" stop identity is unavailable`)
       }
-      return
     }
     if (!immediate) {
       session.scheduleForceDisposeFallback()
     }
 
-    return this.track(sessionId, session, immediate, (entry) => {
-      const sweep = Promise.resolve(
-        killWithDescendantSweep(
-          session.pid,
-          () => {
-            // Why: natural exit reaps the PID while ps is running. Never signal that
-            // stale numeric PID after the Session no longer represents a live root.
-            if (!session.isAlive) {
-              return
-            }
-            entry.rootSignalled = true
-            if (entry.immediate) {
-              entry.rootCompletion = session.forceKillAndWaitForExit()
-            } else {
-              session.signalTerminationRoot()
-            }
-          },
-          {
-            // Why: the descendant rows are only authoritative while this exact
-            // Session still owns the root PID captured by ps.
-            ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
-            terminateOwnedTree: () => session.terminateOwnedTree()
-          }
-        )
-      )
-      // Why: descendant capture completion only proves signals were requested;
-      // destructive callers must retain the native owner until OS-confirmed exit.
-      return sweep.then(() => entry.rootCompletion)
+    const entry: SessionTeardownOperation = {
+      promise: Promise.resolve(undefined as never),
+      immediate,
+      rootSignalled: false,
+      rootCompletion: Promise.resolve(),
+      session
+    }
+    entry.promise = this.stopSession(sessionId, entry)
+    this.operations.set(sessionId, entry)
+    const finish = (receipt: PtyStopReceipt): PtyStopReceipt => {
+      if (this.operations.get(sessionId) === entry) {
+        this.operations.delete(sessionId)
+      }
+      this.receipts.set(sessionId, { receipt, immediate: entry.immediate })
+      return receipt
+    }
+    const fail = (error: unknown): never => {
+      if (this.operations.get(sessionId) === entry) {
+        this.operations.delete(sessionId)
+      }
+      throw error
+    }
+    entry.promise = entry.promise.then(finish, fail)
+    return entry.promise
+  }
+
+  private async stopSession(
+    sessionId: string,
+    entry: SessionTeardownOperation
+  ): Promise<PtyStopReceipt> {
+    const session = entry.session
+    const evidence = await stopPtyProcessTree(
+      session.pid,
+      () => {
+        if (!session.isAlive) {
+          return
+        }
+        entry.rootSignalled = true
+        if (entry.immediate) {
+          entry.rootCompletion = session.forceKillAndWaitForExit()
+        } else {
+          session.signalTerminationRoot()
+        }
+      },
+      {
+        ownsRoot: () => this.sessions.get(sessionId) === session && session.isAlive,
+        terminateOwnedTree: () => session.terminateOwnedTree()
+      }
+    )
+    await entry.rootCompletion.catch(() => undefined)
+    return createPtyStopReceipt({
+      executionHostId: LOCAL_EXECUTION_HOST_ID,
+      terminalHandle: session.terminalHandle ?? sessionId,
+      ptyId: sessionId,
+      ptyIncarnation: session.incarnationId,
+      root: evidence.root,
+      descendants: evidence.descendants,
+      observations: evidence.observations,
+      verdict: evidence.verdict,
+      processTreeVerified: evidence.processTreeVerified,
+      ...(evidence.reason ? { reason: evidence.reason } : {})
     })
   }
+}
+
+function toIdentity(row: ProcessTableRow): PtyStopProcessIdentity {
+  return { pid: row.pid, parentPid: row.ppid, processGroupId: row.pgid, startedAt: row.startedAt }
+}
+
+function observeIdentities(
+  identities: readonly PtyStopProcessIdentity[],
+  rows: readonly ProcessTableRow[]
+): PtyStopProcessObservation[] {
+  const rowsByPid = new Map<number, ProcessTableRow | null>()
+  rows.forEach((row) => rowsByPid.set(row.pid, rowsByPid.has(row.pid) ? null : row))
+  const observedAt = new Date().toISOString()
+  return identities.map((identity) => {
+    const current = identity.pid === null ? null : rowsByPid.get(identity.pid)
+    const status =
+      current === null
+        ? 'unverifiable'
+        : current &&
+            current.ppid === identity.parentPid &&
+            current.pgid === identity.processGroupId &&
+            current.startedAt === identity.startedAt
+          ? 'live'
+          : 'absent'
+    return { identity, status, observedAt }
+  })
+}
+
+function unresolvedTree(
+  rootPid: number,
+  reason: string,
+  verdict: 'unverifiable' | 'capability_limited' = 'unverifiable'
+): PtyProcessTreeStopEvidence {
+  const root = { pid: rootPid, parentPid: null, processGroupId: null, startedAt: null }
+  return stoppedTreeResult(
+    root,
+    [],
+    [{ identity: root, status: 'unverifiable', observedAt: new Date().toISOString() }],
+    verdict,
+    reason
+  )
+}
+
+function capturedTreeUnverifiable(
+  root: PtyStopProcessIdentity,
+  descendants: PtyStopProcessIdentity[],
+  reason: string
+): PtyProcessTreeStopEvidence {
+  const observedAt = new Date().toISOString()
+  const observations: PtyStopProcessObservation[] = [root, ...descendants].map((identity) => ({
+    identity,
+    status: 'unverifiable',
+    observedAt
+  }))
+  return stoppedTreeResult(root, descendants, observations, 'unverifiable', reason)
+}
+
+function stoppedTreeResult(
+  root: PtyStopProcessIdentity,
+  descendants: PtyStopProcessIdentity[],
+  observations: PtyStopProcessObservation[],
+  verdict: 'live' | 'unverifiable' | 'capability_limited',
+  reason: string
+): PtyProcessTreeStopEvidence {
+  return { root, descendants, observations, verdict, processTreeVerified: false, reason }
+}
+
+function sendProcessSignal(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(pid, signal)
+  } catch {
+    // The exact identity is already absent.
+  }
+}
+
+function waitInterval(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, timeoutMs)
+    timer.unref?.()
+  })
 }

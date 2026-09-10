@@ -11,6 +11,8 @@ import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
 import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-harness'
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
+import { exitedPtyStopReceipt } from '../ipc/pty-ipc-test-constants'
 
 const confirmForegroundProcessMock = vi.fn(async () => 'droid')
 
@@ -54,7 +56,7 @@ type DaemonServerPrivate = {
   lifecycle: { server: Server | null }
   preparations: { pending: Map<string, Set<unknown>> }
   host: {
-    kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
+    kill: (sessionId: string, opts?: { immediate?: boolean }) => Promise<PtyStopReceipt>
     dispose: () => Promise<void>
   }
   connections: { clients: Map<string, ConnectedDaemonClient> }
@@ -475,8 +477,9 @@ describe('DaemonServer', () => {
     it('does not acknowledge kill until asynchronous teardown completes', async () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate
-      let finishKill!: () => void
-      const teardown = new Promise<void>((resolve) => {
+      const receipt = exitedPtyStopReceipt('agent-session')
+      let finishKill!: (value: PtyStopReceipt) => void
+      const teardown = new Promise<PtyStopReceipt>((resolve) => {
         finishKill = resolve
       })
       const kill = vi.spyOn(daemon.host, 'kill').mockReturnValue(teardown)
@@ -497,8 +500,8 @@ describe('DaemonServer', () => {
       expect(kill).toHaveBeenCalledWith('agent-session', { immediate: true })
       expect(acknowledged).toBe(false)
 
-      finishKill()
-      await expect(routed).resolves.toEqual({})
+      finishKill(receipt)
+      await expect(routed).resolves.toEqual(receipt)
       expect(acknowledged).toBe(true)
     })
 

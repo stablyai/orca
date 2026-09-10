@@ -40,6 +40,7 @@ export type TabBarItem =
       isPinned: boolean
       data: Tab
     }
+  | { type: 'maestro'; id: string; unifiedTabId: string; isPinned: boolean; data: Tab }
   | {
       type: 'agent-session'
       id: string
@@ -55,7 +56,13 @@ export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolea
   if (item.type === 'browser') {
     return getBrowserTabLabel(item.data)
   }
-  if (item.type === 'simulator' || item.type === 'agent-session') {
+  if (item.type === 'maestro') {
+    return item.data.label || 'Maestro'
+  }
+  if (item.type === 'agent-session') {
+    return item.data.label || 'Codex Chat'
+  }
+  if (item.type === 'simulator') {
     return item.data.label || 'Mobile Emulator'
   }
   return getEditorDisplayLabel(item.data)
@@ -106,6 +113,7 @@ export function buildOrderedTabItems({
   editorFileIds,
   browserTabIds,
   simulatorTabIds,
+  maestroTabIds,
   agentSessionTabIds,
   terminalMap,
   editorMap,
@@ -118,6 +126,7 @@ export function buildOrderedTabItems({
   editorFileIds: string[]
   browserTabIds: string[]
   simulatorTabIds: string[]
+  maestroTabIds: string[]
   agentSessionTabIds: string[]
   terminalMap: Map<string, TerminalTab & { unifiedTabId?: string }>
   editorMap: Map<string, OpenFile & { tabId?: string }>
@@ -128,7 +137,7 @@ export function buildOrderedTabItems({
   const ids = reconcileTabOrder(
     tabBarOrder,
     terminalIds,
-    editorFileIds,
+    [...editorFileIds, ...maestroTabIds],
     browserTabIds,
     simulatorTabIds,
     agentSessionTabIds
@@ -171,14 +180,24 @@ export function buildOrderedTabItems({
       })
       continue
     }
-    const simulatorTab = unifiedTabByVisibleId.get(id)
-    if (simulatorTab?.contentType === 'simulator') {
+    const nativeTab = unifiedTabByVisibleId.get(id)
+    if (nativeTab?.contentType === 'simulator') {
       items.push({
         type: 'simulator',
         id,
-        unifiedTabId: simulatorTab.id,
-        isPinned: simulatorTab.isPinned === true,
-        data: simulatorTab
+        unifiedTabId: nativeTab.id,
+        isPinned: nativeTab.isPinned === true,
+        data: nativeTab
+      })
+      continue
+    }
+    if (nativeTab?.contentType === 'maestro') {
+      items.push({
+        type: 'maestro',
+        id,
+        unifiedTabId: nativeTab.id,
+        isPinned: nativeTab.isPinned === true,
+        data: nativeTab
       })
       continue
     }
@@ -217,6 +236,7 @@ export function findActiveVisibleTabId(
     activeFileId?: string | null
     activeBrowserTabId?: string | null
     activeSimulatorTabId?: string | null
+    activeMaestroTabId?: string | null
     activeTabType?: WorkspaceVisibleTabType
   }
 ): string | null {
@@ -232,6 +252,9 @@ export function findActiveVisibleTabId(
     }
     if (item.type === 'simulator') {
       return active.activeTabType === 'simulator' && item.id === active.activeSimulatorTabId
+    }
+    if (item.type === 'maestro') {
+      return active.activeTabType === 'editor' && item.id === active.activeMaestroTabId
     }
     if (item.type === 'agent-session') {
       // Reachable only from TabGroupPanel, which passes the structured tab's own id; the store's

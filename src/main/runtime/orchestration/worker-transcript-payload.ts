@@ -5,6 +5,7 @@ import type {
   NativeChatMessage,
   NativeChatSubagentState
 } from '../../../shared/native-chat-types'
+import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
 import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
@@ -42,15 +43,13 @@ export function redactWorkerTerminalLines(lines: readonly string[]): {
   lines: string[]
   warnings: string[]
 } {
-  let redacted = false
+  const warnings = new Set<string>()
   const bounded = lines.map((line) => {
-    const result = replaceDispatchCapabilities(line)
-    redacted ||= result.redacted
-    return result.value
+    return redactSensitiveText(line, warnings, 'terminal output')
   })
   return {
     lines: bounded,
-    warnings: redacted ? ['Dispatch capability tokens were redacted from terminal output.'] : []
+    warnings: [...warnings]
   }
 }
 
@@ -299,12 +298,22 @@ function markClipped(state: TranscriptBoundState, warning: string): void {
   state.warnings.add(warning)
 }
 
-function redactSensitiveText(value: string, warnings: Set<string>): string {
-  const result = replaceDispatchCapabilities(value)
-  if (!result.redacted) {
-    return result.value
+function redactSensitiveText(
+  value: string,
+  warnings: Set<string>,
+  outputKind = 'transcript output'
+): string {
+  const sanitized = sanitizeCrashReportString(value, Number.POSITIVE_INFINITY)
+  const result = replaceDispatchCapabilities(sanitized)
+  if (result.value === value) {
+    return value
   }
-  warnings.add('Dispatch capability tokens were redacted from transcript output.')
+  if (sanitized !== value) {
+    warnings.add(`Secret-shaped terminal and error text was redacted from ${outputKind}.`)
+  }
+  if (result.redacted) {
+    warnings.add(`Dispatch capability tokens were redacted from ${outputKind}.`)
+  }
   return result.value
 }
 

@@ -168,7 +168,7 @@ export class OrcaRuntimeWithResolveWorktreeRemovalTarget extends OrcaRuntimeWith
       if (!store) {
         throw new Error('runtime_unavailable')
       }
-    } else if (callerSuppliedLaunch || !store || !opts.command || !workspace.repo) {
+    } else if (callerSuppliedLaunch || !store || !opts.command) {
       return opts
     }
 

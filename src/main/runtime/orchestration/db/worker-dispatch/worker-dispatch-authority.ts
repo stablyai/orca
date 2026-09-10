@@ -19,6 +19,7 @@ export function prepareStartingWorkerAuthority(
     // creation included; its pre-rename effects rows said 'reused_agent_terminal'). 'external':
     // an explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
+    deferExternalTerminalTransfer?: boolean
   }
 ): string {
   this.db.exec('BEGIN IMMEDIATE')
@@ -126,7 +127,7 @@ export function prepareStartingWorkerAuthority(
           processIncarnation: params.processIncarnation,
           hostScope: params.hostScope ?? null
         })
-        if (transferable) {
+        if (transferable && !params.deferExternalTerminalTransfer) {
           this.transferWorkerTerminalResourceStatement({
             resourceId: transferable.id,
             toDispatchId: params.dispatchId,
@@ -137,7 +138,7 @@ export function prepareStartingWorkerAuthority(
             endpointIncarnation: params.processIncarnation,
             hostScope: params.hostScope ?? null
           })
-        } else {
+        } else if (!transferable) {
           this.createWorkerTerminalResourceStatement({
             dispatchId: params.dispatchId,
             worktreeId: params.worktreeId,

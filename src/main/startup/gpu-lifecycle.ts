@@ -6,6 +6,7 @@ import {
   clearGpuFallbackMarker,
   readActiveGpuFallbackMarker,
   writeGpuFallbackMarker,
+  type LinuxGpuFallbackEnvironment,
   type WindowsGpuFallbackEnvironment
 } from './gpu-fallback-marker'
 import {
@@ -42,6 +43,25 @@ function getWindowsGpuFallbackEnvironment(): WindowsGpuFallbackEnvironment | nul
   return environment.platform === 'win32' ? { ...environment, platform: 'win32' } : null
 }
 
+function getLinuxDevGpuFallbackEnvironment(): LinuxGpuFallbackEnvironment | null {
+  if (process.platform !== 'linux' || !state.devInstanceIdentity?.isDev || state.isServeMode) {
+    return null
+  }
+  return { ...gpuFallbackEnvironment(), platform: 'linux' }
+}
+
+function applyGpuFallbackSwitchesForThisLaunch(crashesInWindow?: number): void {
+  app.disableHardwareAcceleration()
+  const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform, {
+    linuxDevFallback: process.platform === 'linux'
+  })
+  state.gpuFallbackActiveThisLaunch = true
+  recordCrashBreadcrumb('gpu_fallback_applied', {
+    ...(crashesInWindow === undefined ? {} : { crashesInWindow }),
+    switches: appliedSwitches.join(',')
+  })
+}
+
 // Writes both crash-time and post-recovery consent states through one build-scoped path.
 function persistGpuFallbackMarker(
   userDataPath: string,
@@ -60,8 +80,26 @@ function persistGpuFallbackMarker(
   }
 }
 
-// Read before app.whenReady() so app.disableHardwareAcceleration() takes effect. Windows desktop only.
+// Read before app.whenReady() so app.disableHardwareAcceleration() takes effect.
 export function maybeApplyGpuFallbackForThisLaunch(): void {
+  if (process.platform === 'linux' && state.devInstanceIdentity?.isDev && !state.isServeMode) {
+    if (process.env.ORCA_DEV_GPU_FALLBACK === '1') {
+      console.warn('[gpu-fallback] hardware acceleration disabled for the automatic dev retry.')
+      applyGpuFallbackSwitchesForThisLaunch()
+      return
+    }
+    const environment = getLinuxDevGpuFallbackEnvironment()
+    const marker = environment
+      ? readActiveGpuFallbackMarker(app.getPath('userData'), environment)
+      : null
+    if (marker) {
+      console.warn(
+        '[gpu-fallback] hardware acceleration disabled for this dev launch after a fatal GPU child-launch burst.'
+      )
+      applyGpuFallbackSwitchesForThisLaunch(marker.crashesInWindow)
+    }
+    return
+  }
   if (state.isServeMode || process.platform !== 'win32') {
     return
   }
@@ -70,16 +108,10 @@ export function maybeApplyGpuFallbackForThisLaunch(): void {
     return
   }
   state.activeGpuFallbackMarker = marker
-  app.disableHardwareAcceleration()
-  const appliedSwitches = applyGpuFallbackCommandLineSwitches(app.commandLine, process.platform)
-  state.gpuFallbackActiveThisLaunch = true
-  // Why: with no GPU child left, child-process-gone can't report a GPU fault, so
-  // name the applied switches in the trail any later crash report carries.
-  recordCrashBreadcrumb('gpu_fallback_applied', {
-    crashesInWindow: marker.crashesInWindow,
-    switches: appliedSwitches.join(',')
-  })
+  applyGpuFallbackSwitchesForThisLaunch(marker.crashesInWindow)
 }
+
+export { getLinuxDevGpuFallbackEnvironment }
 
 export async function presentGpuFallbackRecoveredLaunchPrompt(
   window: BrowserWindow

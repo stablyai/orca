@@ -1,4 +1,10 @@
-import { lazy, type ComponentType, type LazyExoticComponent } from 'react'
+import {
+  createElement,
+  forwardRef,
+  lazy,
+  type ComponentType,
+  type LazyExoticComponent
+} from 'react'
 
 import {
   requestLazyChunkRecoveryReload,
@@ -34,11 +40,13 @@ export type LazyWithRetryOptions = {
 export class LazyChunkLoadError extends Error {
   /** Which lazy call site failed; carried on the error so reports name it without a breadcrumb. */
   readonly reloadKey: string
+  readonly retryLoader?: () => void
 
-  constructor(cause: unknown, reloadKey = 'unknown') {
+  constructor(cause: unknown, reloadKey = 'unknown', retryLoader?: () => void) {
     super('Lazy chunk load failed after reload recovery was exhausted')
     this.name = 'LazyChunkLoadError'
     this.reloadKey = reloadKey
+    this.retryLoader = retryLoader
     ;(this as { cause?: unknown }).cause = cause
   }
 }
@@ -131,9 +139,13 @@ function recordReloadBreadcrumb(
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** Recovery is spent, so name the failure in the one way the boundary can contain. */
-function containedChunkFailure(lastError: unknown, reloadKey: string): unknown {
+function containedChunkFailure(
+  lastError: unknown,
+  reloadKey: string,
+  retryLoader?: () => void
+): unknown {
   return isKnownDynamicImportFailure(lastError)
-    ? new LazyChunkLoadError(lastError, reloadKey)
+    ? new LazyChunkLoadError(lastError, reloadKey, retryLoader)
     : lastError
 }
 
@@ -172,7 +184,8 @@ function isKnownDynamicImportFailure(error: unknown): boolean {
 
 export async function loadLazyWithRetry<T extends AnyComponent>(
   factory: LazyFactory<T>,
-  options: LazyWithRetryOptions = {}
+  options: LazyWithRetryOptions = {},
+  retryLoader?: () => void
 ): Promise<{ default: T }> {
   const retries = options.retries ?? DEFAULT_RETRIES
   const baseDelayMs = options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS
@@ -217,11 +230,11 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
     }
     // The reload was this document's last recovery step for this chunk, whether it
     // was refused outright or simply never navigated.
-    throw containedChunkFailure(lastError, reloadKey)
+    throw containedChunkFailure(lastError, reloadKey, retryLoader)
   }
 
   if (reloadGuardState === 'reload-landed') {
-    throw containedChunkFailure(lastError, reloadKey)
+    throw containedChunkFailure(lastError, reloadKey, retryLoader)
   }
 
   if (reloadGuardState === 'reload-not-landed') {
@@ -237,12 +250,12 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
         'guard-not-landed'
       )
     }
-    throw containedChunkFailure(lastError, reloadKey)
+    throw containedChunkFailure(lastError, reloadKey, retryLoader)
   }
 
   if (reloadGuardState === 'not-attempted') {
     // The per-document reload cap is spent; further failures cannot recover.
-    throw containedChunkFailure(lastError, reloadKey)
+    throw containedChunkFailure(lastError, reloadKey, retryLoader)
   }
 
   // No window or no usable storage: recovery was never attempted, so preserve
@@ -254,5 +267,18 @@ export function lazyWithRetry<T extends AnyComponent>(
   factory: LazyFactory<T>,
   options?: LazyWithRetryOptions
 ): LazyExoticComponent<T> {
-  return lazy(() => loadLazyWithRetry(factory, options))
+  let activeLazy: LazyExoticComponent<T>
+  const retryLoader = (): void => {
+    clearChunkReloadGuard()
+    replaceLoader()
+  }
+  const replaceLoader = (): void => {
+    activeLazy = lazy(() => loadLazyWithRetry(factory, options, retryLoader))
+  }
+  replaceLoader()
+  const RetriableLazy = forwardRef<unknown, Record<string, unknown>>((props, ref) => {
+    const ActiveLazy = activeLazy as unknown as ComponentType<Record<string, unknown>>
+    return createElement(ActiveLazy, { ...props, ref })
+  })
+  return RetriableLazy as unknown as LazyExoticComponent<T>
 }

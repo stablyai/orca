@@ -48,8 +48,11 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
         : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+      const { actorAttestation: _actorAttestation, ...persistedStatusPayload } =
+        persistedPayload.payload
       entries[paneKey] = {
         ...persistedPayload,
+        payload: persistedStatusPayload,
         ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
         ...(launchTokenHash ? { launchTokenHash } : {})
       }

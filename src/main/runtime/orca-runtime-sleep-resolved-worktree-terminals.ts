@@ -8,6 +8,7 @@ import {
   runtimeWorktreeIdentityKey
 } from './runtime-worktree-path-identity'
 import { teardownRpcDeadline } from './worktree-teardown'
+import { ptyStopReceiptProvesExit } from '../../shared/pty-stop-receipt'
 
 export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWithStopTerminalsForWorktree {
   protected async sleepResolvedWorktreeTerminals(
@@ -153,10 +154,12 @@ export class OrcaRuntimeWithSleepResolvedWorktreeTerminals extends OrcaRuntimeWi
       const stopResults = await Promise.allSettled(
         orderedLivePtyIds.map(async (ptyId) => ({
           ptyId,
-          stopped: await stopAndWait(ptyId, {
-            keepHistory: true,
-            deadlineMs: teardownRpcDeadline(sleepDeadline)
-          })
+          stopped: ptyStopReceiptProvesExit(
+            await stopAndWait(ptyId, {
+              keepHistory: true,
+              deadlineMs: teardownRpcDeadline(sleepDeadline)
+            })
+          )
         }))
       )
       const successfulStopPtyIds = orderedLivePtyIds.filter((_, index) => {

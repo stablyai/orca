@@ -9,6 +9,7 @@ import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-ci
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
+import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
 
 export function listLegacyWorkerTerminalRecoveryRows(
   this: OrchestrationDb
@@ -22,9 +23,18 @@ export function listLegacyWorkerTerminalRecoveryRows(
        FROM dispatch_contexts dc
        INNER JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
        WHERE wd.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+          -- A settled worker whose terminal orchestration still owns keeps a resumable agent
+          -- session; it needs the resume fence until release or retain retires the pane.
+          OR (wd.state IN (${WORKER_SETTLED_STATES.map(() => '?').join(', ')})
+              AND EXISTS (
+                SELECT 1 FROM worker_terminal_resources wtr
+                 WHERE wtr.owner_dispatch_id = dc.id
+                   AND wtr.ownership_state = 'owned'
+                   AND wtr.release_state NOT IN ('released', 'retained')
+              ))
        ORDER BY dc.rowid`
     )
-    .all() as LegacyWorkerTerminalRecoveryRow[]
+    .all(...WORKER_SETTLED_STATES) as LegacyWorkerTerminalRecoveryRow[]
 }
 
 export function reconcileMissingWorkerTerminal(

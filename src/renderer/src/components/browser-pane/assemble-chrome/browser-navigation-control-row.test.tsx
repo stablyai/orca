@@ -89,10 +89,11 @@ describe('BrowserNavigationControlRow', () => {
     expect(controls.reload).toHaveBeenCalledTimes(1)
   })
 
-  it('disables history buttons from the backend-reported history depth', () => {
-    renderRow({ canGoBack: false, canGoForward: false })
+  it('disables unavailable navigation controls', () => {
+    renderRow({ canGoBack: false, canGoForward: false, canReload: false })
     expect(screen.getByLabelText<HTMLButtonElement>('Back').disabled).toBe(true)
     expect(screen.getByLabelText<HTMLButtonElement>('Forward').disabled).toBe(true)
+    expect(screen.getByLabelText<HTMLButtonElement>('Reload').disabled).toBe(true)
   })
 
   it('routes an address-bar suggestion pick into the backend navigate', () => {

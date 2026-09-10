@@ -744,7 +744,16 @@ describe('browser tab-switch placement census', () => {
 
       await expect(
         commands.browserTabSwitch({ worktree: 'id:wt-1', page: 'page-b', focus: true })
-      ).resolves.toEqual({ switched: 1, browserPageId: 'page-b' })
+      ).resolves.toEqual({
+        switched: 1,
+        browserPageId: 'page-b',
+        focusReceipt: {
+          requested: true,
+          exactPageSelected: true,
+          nativePanePaint: 'unobserved',
+          observedAt: null
+        }
+      })
       expect(registry.getPage('page-b')?.active).toBe(true)
       expect(markHeadlessBrowserSessionTabActive).toHaveBeenCalledWith('wt-1', 'page-b', {
         focusesHost: true
@@ -764,6 +773,7 @@ describe('browser tab-switch placement census', () => {
       const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
       const markHeadlessBrowserSessionTabActive = vi.fn()
       const bridge = {
+        getActivePageId: vi.fn(() => 'page-server'),
         getRegisteredTabs: vi.fn(() => new Map([['page-server', 100]])),
         tabList: vi.fn(() => ({
           tabs: [

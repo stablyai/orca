@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { findTabAndWorktree, patchTab, updateGroup, dedupeTabOrder } from '../tab-group-state'
 import { applyTabOrderSortValues, partitionPinnedTabOrder } from './tabs-tab-order'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import {
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,
@@ -33,7 +34,13 @@ export function createTabsLabelActions(
             continue
           }
           // Why: dedupe at the store boundary so each tab keeps one canonical position and later group ops don't branch on duplicate ids.
-          const nextTabOrder = dedupeTabOrder(tabIds)
+          const systemTabId = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+            (tab) => tab.groupId === groupId && tab.systemRole === 'workspace-maestro'
+          )?.id
+          const deduped = dedupeTabOrder(tabIds)
+          const nextTabOrder = systemTabId
+            ? [systemTabId, ...deduped.filter((id) => id !== systemTabId)]
+            : deduped
           reordered = true
           const orderMap = new Map(nextTabOrder.map((id, index) => [id, index]))
           return {
@@ -58,7 +65,12 @@ export function createTabsLabelActions(
     },
 
     setTabLabel: (tabId, label) => {
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
+      set((state) => {
+        const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+        return found?.tab.systemRole === 'workspace-maestro'
+          ? {}
+          : (patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
+      })
     },
 
     setTabViewMode: (tabId, mode) => {
@@ -101,15 +113,24 @@ export function createTabsLabelActions(
     },
 
     setTabCustomLabel: (tabId, label, opts) => {
-      const exists = get().getTab(tabId) !== null
+      const tab = get().getTab(tabId)
+      const exists = tab !== null && tab.systemRole !== 'workspace-maestro'
+      if (!exists || tab.customLabel === label) {
+        return
+      }
       set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? {})
+      scheduleRuntimeGraphSync()
       if (exists && opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
     },
 
     setUnifiedTabColor: (tabId, color) => {
-      const exists = get().getTab(tabId) !== null
+      const tab = get().getTab(tabId)
+      const exists = tab !== null && tab.systemRole !== 'workspace-maestro'
+      if (!exists) {
+        return
+      }
       set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { color }) ?? {})
       if (exists) {
         get().recordFeatureInteraction?.('terminal-tabs')
@@ -124,6 +145,9 @@ export function createTabsLabelActions(
           return {}
         }
         const { tab, worktreeId } = found
+        if (tab.systemRole === 'workspace-maestro') {
+          return {}
+        }
         const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
           candidate.id === tabId ? { ...candidate, isPinned: true, isPreview: false } : candidate
         )
@@ -155,7 +179,11 @@ export function createTabsLabelActions(
     },
 
     unpinTab: (tabId) => {
-      const exists = get().getTab(tabId) !== null
+      const existingTab = get().getTab(tabId)
+      const exists = existingTab !== null && existingTab.systemRole !== 'workspace-maestro'
+      if (!exists) {
+        return
+      }
       set((state) => {
         const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
         if (!found) {

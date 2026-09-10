@@ -158,7 +158,7 @@ describe('orchestration worker release inventory', () => {
     })
   })
 
-  it('reports abandoned workers as retained instead of reclaimable', async () => {
+  it('releases an abandoned worker whose exact terminal remains live', async () => {
     h.setup()
     const { dispatchId } = await h.startWorker()
     await h.call('orchestration.workerAbandon', { dispatch: dispatchId })
@@ -172,12 +172,8 @@ describe('orchestration worker release inventory', () => {
     )
     await expect(
       h.call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none'
-    })
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
+    ).resolves.toMatchObject({ state: 'released', processAction: 'closed_agent_terminal' })
+    expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
   })
 
   it('worker-show exposes the terminal resource', async () => {

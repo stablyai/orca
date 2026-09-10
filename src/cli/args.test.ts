@@ -177,6 +177,28 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('label')).toBe(`Bug${REPEATED_FLAG_SEPARATOR}Regression`)
   })
 
+  it('preserves repeated Run completion evidence and waivers', () => {
+    const parsed = parseArgs([
+      'orchestration',
+      'run-complete',
+      '--evidence',
+      'tests passed',
+      '--evidence',
+      'typecheck passed',
+      '--waive-task',
+      'task_1=deferred',
+      '--waive-task',
+      'task_2=external'
+    ])
+
+    expect(parsed.flags.get('evidence')).toBe(
+      `tests passed${REPEATED_FLAG_SEPARATOR}typecheck passed`
+    )
+    expect(parsed.flags.get('waive-task')).toBe(
+      `task_1=deferred${REPEATED_FLAG_SEPARATOR}task_2=external`
+    )
+  })
+
   it('does not apply repeated flag encoding to ordinary string flags', () => {
     const parsed = parseArgs(['linear', 'list', '--workspace', 'old', '--workspace', 'new'])
 

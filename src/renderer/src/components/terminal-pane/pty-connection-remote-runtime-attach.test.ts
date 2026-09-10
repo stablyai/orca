@@ -368,11 +368,11 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalledTimes(1)
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
-        command: "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'",
+        command: "codex '--yolo' 'resume' 'codex-session-1'",
         launchAgent: 'codex',
         launchConfig: {
-          agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-          agentArgs: '--dangerously-bypass-approvals-and-sandbox',
+          agentCommand: "codex '--yolo'",
+          agentArgs: '--yolo',
           agentEnv: {}
         },
         launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),

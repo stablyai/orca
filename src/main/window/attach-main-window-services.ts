@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, net } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
 import {
@@ -45,6 +45,16 @@ let appReloadHandlerTokenCounter = 0
 let activeAppReloadHandlerToken: number | null = null
 let tccPromptHandlerTokenCounter = 0
 let activeTccPromptHandlerToken: number | null = null
+const RENDERER_ORIGIN_PROBE_TIMEOUT_MS = 2_000
+
+function getHttpOrigin(documentUrl: string): string | null {
+  try {
+    const url = new URL(documentUrl)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.origin : null
+  } catch {
+    return null
+  }
+}
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -219,13 +229,33 @@ function registerAppReloadHandler(
   activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
   ipcMain.removeHandler('app:reload')
-  ipcMain.handle('app:reload', (event) => {
-    if (
-      mainWindow.isDestroyed() ||
-      mainWebContents.isDestroyed() ||
-      event.sender !== mainWebContents
-    ) {
+  ipcMain.handle('app:reload', async (event) => {
+    const ownsReloadRequest = (): boolean =>
+      activeAppReloadHandlerToken === handlerToken &&
+      !mainWindow.isDestroyed() &&
+      !mainWebContents.isDestroyed() &&
+      event.sender === mainWebContents
+    if (!ownsReloadRequest()) {
       return
+    }
+    const currentDocumentOrigin = getHttpOrigin(mainWebContents.getURL())
+    if (currentDocumentOrigin) {
+      try {
+        const response = await net.fetch(currentDocumentOrigin, {
+          method: 'HEAD',
+          signal: AbortSignal.timeout(RENDERER_ORIGIN_PROBE_TIMEOUT_MS)
+        })
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+      } catch (error) {
+        throw new Error(`Renderer origin is unavailable: ${currentDocumentOrigin}`, {
+          cause: error
+        })
+      }
+      if (!ownsReloadRequest()) {
+        return
+      }
     }
     onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
     mainWebContents.reload()

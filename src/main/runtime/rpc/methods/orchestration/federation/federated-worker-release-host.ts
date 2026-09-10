@@ -9,7 +9,10 @@ import {
   summarizeWorkerOutputArchive
 } from '../../../../orchestration/worker-output-archive'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { readArchivedWorkerOutput } from '../worker/worker-archive-read'
+import {
+  projectArchivedOutputLiveness,
+  readRemoteAttachmentArchive
+} from './federated-worker-output-archive'
 import {
   archiveSummary,
   releaseUnknownRecovery,
@@ -21,37 +24,9 @@ import {
   classifyWorkerTerminalCloseError,
   TRANSIENT_WORKER_RELEASE_RECOVERY
 } from '../worker/worker-release-close-error'
+import { workerTerminalCloseReceiptProvesExit } from '../../../../orchestration/worker-terminal-release-proof'
 
-export async function readRemoteAttachmentArchive(args: {
-  runtime: OrcaRuntimeService
-  attachment: RemoteDispatchAttachmentRow
-  source?: 'auto' | 'transcript' | 'terminal'
-  cursor?: string | number
-  limit?: number
-  liveness?: 'live' | 'unverifiable' | 'exited'
-}) {
-  const archive = args.runtime
-    .getOrchestrationDb()
-    .getWorkerTerminalArchive(args.attachment.dispatch_id)
-  if (!archive || !args.attachment.terminal_handle) {
-    return null
-  }
-  return readArchivedWorkerOutput({
-    db: args.runtime.getOrchestrationDb(),
-    dispatchId: args.attachment.dispatch_id,
-    workerState: args.attachment.state,
-    resource: {
-      id: `remote-attachment:${args.attachment.dispatch_id}`,
-      terminal_handle: args.attachment.terminal_handle,
-      release_state: args.attachment.stage === 'released' ? 'released' : 'releasing'
-    },
-    source: args.source,
-    cursor: args.cursor,
-    limit: args.limit,
-    liveness: args.liveness
-  })
-}
-
+export { readRemoteAttachmentArchive } from './federated-worker-output-archive'
 export async function releaseRemoteAttachment(args: {
   runtime: OrcaRuntimeService
   attachment: RemoteDispatchAttachmentRow
@@ -207,13 +182,19 @@ export async function releaseRemoteAttachment(args: {
       output
     }
   }
-  // An exited worker still owns a terminal record and tab on the host; close it before
-  // reporting `closed_exited_terminal`, exactly as the local release path does.
   try {
     const close = await runtime.closeTerminal(observation.terminal.handle)
-    // A host-certified exit already proved the process is gone, so a kill that stops nothing
-    // is not new doubt; anything else that survives the close still is.
-    if (!close.ptyKilled && observation.status !== 'exited') {
+    const receiptProvesExit = workerTerminalCloseReceiptProvesExit(close, resource)
+    const exactProcessVerdict =
+      observation.status === 'exited' || receiptProvesExit
+        ? 'exited'
+        : await runtime
+            .inspectTerminalProcessIncarnationLiveness(
+              resource.process_incarnation ?? '',
+              resource.host_scope
+            )
+            .catch(() => 'unverifiable' as const)
+    if (exactProcessVerdict !== 'exited') {
       const reason = describeUnconfirmedAgentStop(close)
       return {
         dispatchId: attachment.dispatch_id,
@@ -251,7 +232,27 @@ export async function releaseRemoteAttachment(args: {
       }
     }
   }
-  const released = db.settleWorkerTerminalRelease(resource.id)
+  const released = db.settleWorkerTerminalRelease({
+    resourceId: resource.id,
+    ownerDispatchId: attachment.dispatch_id,
+    processIncarnation: resource.process_incarnation ?? ''
+  })
+  if (
+    released.release_state !== 'released' ||
+    released.owner_dispatch_id !== attachment.dispatch_id ||
+    released.process_incarnation !== resource.process_incarnation
+  ) {
+    return {
+      dispatchId: attachment.dispatch_id,
+      state: 'release_unknown',
+      processAction: 'none',
+      lastError:
+        'The exact process exited, but the worker release identity changed before settlement.',
+      recovery: releaseUnknownRecovery(attachment.dispatch_id),
+      archive: archiveSummary(released),
+      output: projectArchivedOutputLiveness(output, 'unverifiable')
+    }
+  }
   db.recordRemoteAttachmentStage({
     dispatchId: attachment.dispatch_id,
     stage: 'released'
@@ -296,17 +297,4 @@ function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalReta
     return 'user_takeover'
   }
   return 'identity_unproven'
-}
-
-function projectArchivedOutputLiveness<
-  T extends { status: { terminal: string; liveness: string } }
->(output: T, liveness: 'live' | 'unverifiable' | 'exited'): T {
-  return {
-    ...output,
-    status: {
-      ...output.status,
-      terminal: liveness === 'live' ? 'running' : liveness === 'exited' ? 'exited' : 'unknown',
-      liveness
-    }
-  }
 }

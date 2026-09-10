@@ -27,7 +27,10 @@ export function buildMobileMarkdownTab(
       ? (inputs.openFilesById?.get(file.markdownPreviewSourceFileId) ?? file)
       : file
   const draftVersion = inputs.editorDraftVersionByFileId.get(sourceFile.id)
-  const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'Markdown'
+  const title = resolveUnifiedTabTitle(
+    unifiedTab,
+    file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'Markdown'
+  )
   const unifiedTabId = unifiedTab?.id
   return {
     type: 'markdown',
@@ -55,7 +58,10 @@ export function buildMobileFileTab(
   file: AppState['openFiles'][number],
   unifiedTab?: Tab
 ): RuntimeMobileSessionFileTab {
-  const title = file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File'
+  const title = resolveUnifiedTabTitle(
+    unifiedTab,
+    file.relativePath.split(/[\\/]/).pop() || file.relativePath || 'File'
+  )
   const diffSource = isMobileFileDiffSource(file.diffSource) ? file.diffSource : undefined
   const unifiedTabId = unifiedTab?.id
   return {
@@ -74,4 +80,8 @@ export function buildMobileFileTab(
       ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
       : isFileActiveEditorSurface(inputs, file)
   }
+}
+
+function resolveUnifiedTabTitle(unifiedTab: Tab | undefined, fallback: string): string {
+  return unifiedTab?.customLabel?.trim() || fallback
 }

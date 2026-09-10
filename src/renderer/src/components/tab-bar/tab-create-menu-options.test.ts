@@ -53,6 +53,18 @@ describe('tab create menu options', () => {
     ).toEqual(['new-browser'])
   })
 
+  it('omits the fixed Maestro system tab from create actions', () => {
+    const options = buildTabCreateMenuOptions({
+      terminalOnly: false,
+      hasNewBrowser: false,
+      hasNewMarkdown: false,
+      hasOpenMarkdown: false,
+      hasSimulator: false,
+      simulatorIsGoTo: false
+    })
+    expect(findMatchingTabCreateMenuOptions('canvas', options)).toEqual([])
+  })
+
   it('keeps terminal and markdown results when client-impossible actions are omitted', () => {
     const options = buildTabCreateMenuOptions({
       terminalOnly: false,

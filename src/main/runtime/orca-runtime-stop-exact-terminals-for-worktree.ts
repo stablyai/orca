@@ -2,6 +2,7 @@
 import { OrcaRuntimeWithSleepResolvedWorktreeTerminals } from './orca-runtime-sleep-resolved-worktree-terminals'
 import { setsEqual } from './runtime-worktree-binding-index'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { ptyStopReceiptProvesExit } from '../../shared/pty-stop-receipt'
 
 export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithSleepResolvedWorktreeTerminals {
   async stopExactTerminalsForWorktree(
@@ -54,7 +55,10 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
         )
       }
       try {
-        if (!(await this.ptyController.stopAndWait(ptyId, { keepHistory: opts.keepHistory }))) {
+        const receipt = await this.ptyController.stopAndWait(ptyId, {
+          keepHistory: opts.keepHistory
+        })
+        if (!ptyStopReceiptProvesExit(receipt)) {
           throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
         }
       } finally {

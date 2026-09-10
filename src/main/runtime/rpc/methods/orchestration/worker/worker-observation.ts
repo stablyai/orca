@@ -282,6 +282,8 @@ export async function callFederatedWorkerShow(
     last_error: string | null
     worktree_id: string | null
     terminal_handle: string | null
+    pane_key?: string | null
+    process_incarnation?: string | null
     setup_state: string
     effects: unknown[]
     residualResources: unknown[]

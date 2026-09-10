@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { REPEATED_FLAG_SEPARATOR } from '../args'
 
 const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
@@ -98,6 +99,36 @@ describe('lightweight Run CLI handlers', () => {
     })
   })
 
+  it('prints the persisted completion receipt in run-show output', async () => {
+    const run = {
+      id: 'run_1',
+      objective: 'Ready for review',
+      consumer_generation: 4,
+      legacy: 0,
+      created_at: '2026-09-08T11:00:00.000Z',
+      completion: {
+        summary: 'All required work passed.',
+        evidence: ['Focused suite passed.'],
+        waivers: [{ task_id: 'task_2', reason: 'Deferred by owner.' }],
+        completed_by_handle: 'term_coord',
+        completed_by_generation: 4,
+        completed_at: '2026-09-08T12:00:00.000Z'
+      }
+    }
+    callMock.mockResolvedValue({ result: { run } })
+
+    await ORCHESTRATION_HANDLERS['orchestration run-show']({
+      flags: new Map([['id', 'run_1']]),
+      client: { call: callMock },
+      json: false
+    } as never)
+
+    const format = vi.mocked(printResult).mock.calls.at(-1)?.[2]
+    expect(format?.({ run })).toContain('completed 2026-09-08T12:00:00.000Z')
+    expect(format?.({ run })).toContain('Focused suite passed.')
+    expect(format?.({ run })).toContain('task_2: Deferred by owner.')
+  })
+
   it('passes explicit legacy takeover only when requested', async () => {
     callMock.mockResolvedValue({
       result: { run: { id: 'run_adopted', objective: 'Recovered work' } }
@@ -117,6 +148,77 @@ describe('lightweight Run CLI handlers', () => {
       id: 'run_adopted',
       from: 'term_current',
       takeoverLegacy: true
+    })
+  })
+
+  it('settles the explicit Run through the resolved coordinator identity', async () => {
+    const settlement = {
+      runId: 'run_1',
+      state: 'pending' as const,
+      worktrees: [
+        {
+          worktreeId: 'repo::child',
+          executionHostId: 'local',
+          disposition: 'pending' as const,
+          cause: 'dirty',
+          action: 'Commit changes and retry.'
+        }
+      ],
+      warnings: ['repo::child: dirty']
+    }
+    callMock.mockResolvedValue({ result: settlement })
+
+    await ORCHESTRATION_HANDLERS['orchestration run-settle']({
+      flags: new Map([
+        ['id', 'run_1'],
+        ['from', 'term_coord']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.runSettle', {
+      id: 'run_1',
+      from: 'term_coord'
+    })
+    const format = vi.mocked(printResult).mock.calls.at(-1)?.[2]
+    expect(format?.(settlement)).toContain('Commit changes and retry.')
+  })
+
+  it('completes a Run with repeatable evidence and reasoned Task waivers', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        completion: {
+          run_id: 'run_1',
+          summary: 'Ready for review.',
+          evidence: ['tests passed', 'typecheck passed'],
+          waivers: [{ task_id: 'task_2', reason: 'Deferred by owner.' }],
+          completed_at: '2026-09-08T12:00:00.000Z'
+        },
+        duplicate: false
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration run-complete']({
+      flags: new Map([
+        ['id', 'run_1'],
+        ['from', 'term_coord'],
+        ['summary', 'Ready for review.'],
+        ['evidence', `tests passed${REPEATED_FLAG_SEPARATOR}typecheck passed`],
+        ['waive-task', 'task_2=Deferred by owner.']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.runComplete', {
+      id: 'run_1',
+      from: 'term_coord',
+      summary: 'Ready for review.',
+      evidence: ['tests passed', 'typecheck passed'],
+      waivers: [{ task_id: 'task_2', reason: 'Deferred by owner.' }]
     })
   })
 })

@@ -284,7 +284,7 @@ describe('replayPendingSshPtyKills', () => {
   it('keeps the order when the host still lists the PTY after a resolved shutdown', async () => {
     const { store, cleared, terminated } = createStoreStub([entry('pty-1', 'inc-a')])
     const { provider } = createProviderStub([{ relayPtyId: 'pty-1', incarnationId: 'inc-a' }], {
-      shutdown: vi.fn(async () => {})
+      shutdown: vi.fn(async () => {}) as never
     })
     await replayPendingSshPtyKills({
       targetId: TARGET,

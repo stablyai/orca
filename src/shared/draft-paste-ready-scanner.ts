@@ -5,6 +5,7 @@ import type { DraftPasteReadySignal } from './tui-agent-config'
 // "input is ready" moment per agent instead of guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const CODEX_COMPOSER_PROMPT = '›'
+const OPENCODE_COMPOSER_PROMPT = 'Ask anything'
 // Why: opencode emits the DECTCEM show-cursor only once the composer row is
 // mounted and the text cursor is placed in it — a "composer ready" signal,
 // analogous to Codex's prompt glyph. It fires ~2s after bracketed paste is
@@ -23,12 +24,12 @@ const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
 type DraftPasteReadySignalSpec = {
-  /** Bytes that must precede `marker` for it to count; null when there is no marker. */
+  /** Bytes that must precede a marker for it to count; null when there is no marker. */
   markerAnchor: string | null
   /** Bytes that revoke `markerAnchor` again, for anchors that describe a mode the agent can leave. */
   markerAnchorEnd: string | null
-  /** Composer-ready marker, or null for signals that only use the quiet window. */
-  marker: string | null
+  /** Composer-ready markers, or null for signals that only use the quiet window. */
+  markers: readonly string[] | null
   /** Bytes that arm the quiet-window fallback, or null when the signal has none. */
   quietAnchor: string | null
 }
@@ -37,13 +38,19 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
   'codex-composer-prompt': {
     markerAnchor: DECSET_BRACKETED_PASTE,
     markerAnchorEnd: null,
-    marker: CODEX_COMPOSER_PROMPT,
+    markers: [CODEX_COMPOSER_PROMPT],
+    quietAnchor: null
+  },
+  'opencode-composer-prompt': {
+    markerAnchor: DECSET_BRACKETED_PASTE,
+    markerAnchorEnd: null,
+    markers: [OPENCODE_COMPOSER_PROMPT, DECTCEM_SHOW_CURSOR],
     quietAnchor: null
   },
   'render-cursor-after-bracketed-paste': {
     markerAnchor: DECSET_BRACKETED_PASTE,
     markerAnchorEnd: null,
-    marker: DECTCEM_SHOW_CURSOR,
+    markers: [DECTCEM_SHOW_CURSOR],
     quietAnchor: null
   },
   'grok-composer-prompt': {
@@ -53,7 +60,7 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
     // screen and then died — or a pager run from the user's shell rc before grok even
     // launched — would leave the glyph armed forever and paste into the shell.
     markerAnchorEnd: DECRST_ALT_SCREEN,
-    marker: GROK_COMPOSER_PROMPT,
+    markers: [GROK_COMPOSER_PROMPT],
     // Why: the quiet window stays on DECSET 2004, independent of the alt-screen
     // marker anchor. grok can be configured to render inline (`--no-alt-screen`,
     // `[ui] screen_mode = "minimal"`), where 1049h never arrives — anchoring the
@@ -64,7 +71,7 @@ const DRAFT_PASTE_READY_SIGNALS: Record<DraftPasteReadySignal, DraftPasteReadySi
   'render-quiet-after-bracketed-paste': {
     markerAnchor: null,
     markerAnchorEnd: null,
-    marker: null,
+    markers: null,
     quietAnchor: DECSET_BRACKETED_PASTE
   }
 }
@@ -79,6 +86,16 @@ export type DraftPasteReadyScanResult = {
   armQuietTimer: boolean
 }
 
+export function isVisibleDraftComposerReady(
+  readySignal: DraftPasteReadySignal,
+  preview: string | null | undefined
+): boolean {
+  return (
+    readySignal === 'opencode-composer-prompt' &&
+    preview?.includes(OPENCODE_COMPOSER_PROMPT) === true
+  )
+}
+
 /**
  * Pure, incremental scanner shared by the renderer and main-process draft-paste
  * readiness waiters so the two delivery paths (desktop-local vs runtime/SSH/
@@ -90,6 +107,8 @@ export type DraftPasteReadyScanResult = {
  *   - `codex-composer-prompt`: ready when the `›` glyph renders after DECSET
  *     2004, or when DECSET follows a glyph rendered while Codex owns the
  *     alternate screen; never arms the quiet window.
+ *   - `opencode-composer-prompt`: ready when OpenCode's visible `Ask anything`
+ *     composer or its post-mount show-cursor renders after DECSET 2004.
  *   - `render-cursor-after-bracketed-paste`: ready when DECTCEM show-cursor
  *     (`\x1b[?25h`) renders after DECSET 2004. Like Codex it does NOT arm the
  *     quiet window: opencode stays silent for ~1.5-2s between enabling
@@ -132,9 +151,12 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
   const {
     markerAnchor,
     markerAnchorEnd,
-    marker: signalMarker,
+    markers: signalMarkers,
     quietAnchor
   } = DRAFT_PASTE_READY_SIGNALS[readySignal]
+
+  const containsSignalMarker = (value: string): boolean =>
+    signalMarkers?.some((marker) => value.includes(marker)) === true
 
   /**
    * Why: an anchor the agent can leave (the alternate screen) has to be tracked in
@@ -157,7 +179,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
       }
       const leaveIndex = window.indexOf(end, cursor)
       const segment = leaveIndex === -1 ? window.slice(cursor) : window.slice(cursor, leaveIndex)
-      if ((postAnchorRecent + segment).includes(signalMarker ?? '')) {
+      if (containsSignalMarker(postAnchorRecent + segment)) {
         return true
       }
       if (leaveIndex === -1) {
@@ -212,7 +234,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
       if (readySignal === 'codex-composer-prompt' && !sawMarkerAnchor) {
         scanCodexPreAnchorPrompt(data)
       }
-      if (signalMarker !== null && markerAnchor !== null) {
+      if (signalMarkers !== null && markerAnchor !== null) {
         if (markerAnchorEnd !== null) {
           // Why: carry only the bytes an anchor could straddle, so already-scanned
           // output is never re-walked into a second enter/leave transition.
@@ -229,13 +251,13 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
               return { ready: true, armQuietTimer: false }
             }
             const postAnchorChunk = combined.slice(anchorIndex + markerAnchor.length)
-            if (postAnchorChunk.includes(signalMarker)) {
+            if (containsSignalMarker(postAnchorChunk)) {
               return { ready: true, armQuietTimer: false }
             }
             postAnchorRecent = postAnchorChunk.slice(-512)
           }
         } else {
-          if (data.includes(signalMarker) || (postAnchorRecent + data).includes(signalMarker)) {
+          if (containsSignalMarker(data) || containsSignalMarker(postAnchorRecent + data)) {
             return { ready: true, armQuietTimer: false }
           }
           postAnchorRecent = (postAnchorRecent + data).slice(-512)

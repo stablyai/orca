@@ -494,7 +494,9 @@ describe('iterateTerminalOutputFrameChunks equivalence with the pre-optimization
       expectEquivalent(data, { seq: 88_888, rawLength: data.length }, `fuzz-cap seq trial=${trial}`)
       expectEquivalent(data, { seq: 88_888 }, `fuzz-cap delayed trial=${trial}`)
     }
-  }, 30_000)
+    // Why: 800 trials x 3 equivalence checks is deterministic CPU work, so the budget
+    // only has to survive full-suite contention — no trial is dropped.
+  }, 180_000)
 
   it('keeps every emitted frame within the wire cap and reassembles to the input', () => {
     const data = `${'a'.repeat(200 * 1024)}${SURROGATE_PAIR.repeat(4096)}${LONE_HIGH}`

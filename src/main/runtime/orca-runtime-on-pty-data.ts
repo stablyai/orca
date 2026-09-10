@@ -211,6 +211,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     }
     titleTrackerEntry.applyingChunk = true
     titleTrackerEntry.chunkTouchedSessionTabs = false
+    titleTrackerEntry.launchAuthorityRetirementPending = false
     let retainedAgentStatusChanged = false
     try {
       for (const payload of agentStatusChunk.payloads) {
@@ -219,6 +220,10 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput
       })
+      if (titleTrackerEntry.launchAuthorityRetirementPending) {
+        this.retirePtyAgentLaunchAuthority(ptyId)
+        titleTrackerEntry.launchAuthorityRetirementPending = false
+      }
       // Why: the Command Code scrape rides the same per-chunk batch (its facts
       // trail the tracker's). cleanData keeps OSC 9999 payloads out of the
       // detector's bounded recent-text window; the detector strips remaining

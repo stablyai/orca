@@ -136,10 +136,13 @@ function reconcileFederatedAttachment(args: {
     db.reconcileFederatedWorkerStart({
       dispatchId,
       state: attachment.state as 'ready' | 'failed' | 'stopped' | 'start_unknown',
+      remoteRuntimeEpoch: remote.runtimeEpoch,
       stage: attachment.stage,
       lastError: attachment.last_error,
       worktreeId: attachment.worktree_id,
       terminalHandle: attachment.terminal_handle,
+      paneKey: attachment.pane_key,
+      processIncarnation: attachment.process_incarnation,
       setupState: attachment.setup_state,
       effects: attachment.effects,
       residualResources: attachment.residualResources

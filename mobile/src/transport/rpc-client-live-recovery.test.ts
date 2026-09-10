@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket as ServerSocket } from 'ws'
+import { MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { connect, type RpcClient } from './rpc-client'
 
 // Why: expo-crypto only exists inside a React Native runtime; Node's CSPRNG
@@ -80,9 +81,18 @@ function startServer(port = 0): Promise<WebSocketServer> {
       if (!plaintext) {
         return
       }
-      const request = JSON.parse(plaintext) as { id?: string; type?: string; deviceToken?: string }
+      const request = JSON.parse(plaintext) as {
+        id?: string
+        type?: string
+        deviceToken?: string
+        clientCapabilities?: string[]
+      }
       if (!authenticated) {
-        if (request.type === 'e2ee_auth' && request.deviceToken === AUTH_TOKEN) {
+        if (
+          request.type === 'e2ee_auth' &&
+          request.deviceToken === AUTH_TOKEN &&
+          request.clientCapabilities?.includes(MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY)
+        ) {
           authenticated = true
           ws.send(e2eeEncrypt(JSON.stringify({ type: 'e2ee_authenticated' }), sharedKey))
         }

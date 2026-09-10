@@ -156,6 +156,19 @@ export function fenceOutstandingDelivery(this: OrchestrationDb, runId: string): 
   this.fenceOutstandingMailboxDelivery(`run:${runId}`)
 }
 
+export function migrateOutstandingDelivery(
+  this: OrchestrationDb,
+  runId: string,
+  consumerGeneration: number
+): void {
+  this.db
+    .prepare(
+      `UPDATE deliveries SET consumer_generation = ?
+       WHERE run_id = ? AND mailbox_handle = ? AND status = 'outstanding'`
+    )
+    .run(consumerGeneration, runId, `run:${runId}`)
+}
+
 export type RunLookupMethods = {
   getRun: typeof getRun
   getLegacyAdoptedRunMailboxOwner: typeof getLegacyAdoptedRunMailboxOwner
@@ -167,6 +180,7 @@ export type RunLookupMethods = {
   unbindOtherRunsForPane: typeof unbindOtherRunsForPane
   requireRun: typeof requireRun
   fenceOutstandingDelivery: typeof fenceOutstandingDelivery
+  migrateOutstandingDelivery: typeof migrateOutstandingDelivery
 }
 
 export function attachRunLookup(ctor: { prototype: object }): void {
@@ -180,6 +194,7 @@ export function attachRunLookup(ctor: { prototype: object }): void {
     getRunRaw,
     unbindOtherRunsForPane,
     requireRun,
-    fenceOutstandingDelivery
+    fenceOutstandingDelivery,
+    migrateOutstandingDelivery
   })
 }

@@ -118,11 +118,9 @@ export function bindRun(
       this.rememberRunCoordinatorHandle(params.runId, handle)
       this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, handle)
     }
-    if (
-      (params.takeoverLegacy && !takeoverAlreadyApplied) ||
-      !sameBinding ||
-      run.coordinator_handle !== params.coordinatorHandle
-    ) {
+    const advancesConsumer = (params.takeoverLegacy && !takeoverAlreadyApplied) || !sameBinding
+    const changesHandle = run.coordinator_handle !== params.coordinatorHandle
+    if (advancesConsumer || changesHandle) {
       if (adoptedRun && (params.takeoverLegacy || !activeLegacyAssignment)) {
         if (
           coordinatorPrincipal?.status === 'committed' &&
@@ -133,16 +131,30 @@ export function bindRun(
           this.setLegacyCompatibilityPrincipalStatus(coordinatorPrincipal.id, 'revoked')
         }
       }
-      this.db
-        .prepare(
-          `UPDATE runs
-           SET coordinator_handle = ?, coordinator_pane_key = ?,
-               consumer_generation = consumer_generation + 1,
-               updated_at = datetime('now')
-           WHERE id = ?`
-        )
-        .run(params.coordinatorHandle, params.coordinatorPaneKey, params.runId)
-      this.fenceOutstandingDelivery(params.runId)
+      if (advancesConsumer) {
+        const consumerGeneration = run.consumer_generation + 1
+        this.db
+          .prepare(
+            `UPDATE runs
+             SET coordinator_handle = ?, coordinator_pane_key = ?,
+                 consumer_generation = ?, updated_at = datetime('now')
+             WHERE id = ?`
+          )
+          .run(
+            params.coordinatorHandle,
+            params.coordinatorPaneKey,
+            consumerGeneration,
+            params.runId
+          )
+        this.migrateOutstandingDelivery(params.runId, consumerGeneration)
+      } else {
+        this.db
+          .prepare(
+            `UPDATE runs SET coordinator_handle = ?, coordinator_pane_key = ?,
+             updated_at = datetime('now') WHERE id = ?`
+          )
+          .run(params.coordinatorHandle, params.coordinatorPaneKey, params.runId)
+      }
       if (params.takeoverLegacy || replacesLegacyCoordinator) {
         this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)
       }

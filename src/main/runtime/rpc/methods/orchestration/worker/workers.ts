@@ -20,7 +20,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
     params: WorkerStartParams,
     handler: async (
       params,
-      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
+      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence, recordMutationReceipt }
     ) => {
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
@@ -54,8 +54,6 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         settings: readWorkerStartModeSettings(runtime)
       })
       if (params.on) {
-        // A remote worker is always a terminal agent; the mode receipt rides along so the
-        // coordinator still learns why its structured default did not apply.
         const receipt = await startFederatedWorker({
           params,
           runtime,
@@ -74,7 +72,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         coordinatorPane,
         existingTask,
         orchestrationMutation,
-        mode
+        mode,
+        recordMutationReceipt
       })
     }
   })

@@ -20,6 +20,7 @@ import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import type { LegacyWorkerTerminalRecoveryPlan } from './orchestration/orchestration-legacy-worker-terminal-recovery'
 import type { LegacyWorkerTerminalRecoveryResult } from './runtime-legacy-worker-terminal-recovery-types'
+import type { ExitedWorkerTerminalRetirement } from './exited-worker-terminal-retirement-persistence'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
 
@@ -165,6 +166,20 @@ export class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWithPtyForeg
     this._orchestrationDb = db
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
+  }
+
+  prepareLegacyWorkerTerminalRecovery(): LegacyWorkerTerminalRecoveryPlan {
+    return this.legacyWorkerRecoveryPersistence.prepare()
+  }
+
+  persistExitedWorkerTerminalRetirement(
+    retirement: ExitedWorkerTerminalRetirement
+  ): Promise<boolean> {
+    return this.legacyWorkerRecoveryPersistence.persistExitedWorkerTerminalRetirement(retirement)
+  }
+
+  notifyExitedWorkerTerminalRetirement(paneKey: string): void {
+    this.notifier?.resolveLegacyWorkerTerminalRecovery?.(paneKey, 'exited')
   }
 
   protected async flushWorkspaceSessionOrThrowAsync(): Promise<void> {

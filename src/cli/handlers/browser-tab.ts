@@ -1,5 +1,6 @@
 import type {
   BrowserTabCurrentResult,
+  BrowserTabCreateResult,
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
@@ -70,12 +71,30 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     const url = getOptionalStringFlag(flags, 'url')
     const profileId = getOptionalStringFlag(flags, 'profile')
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
-    const result = await client.call<{ browserPageId: string }>(
+    const focus = flags.has('focus')
+    const result = await client.call<BrowserTabCreateResult>(
       'browser.tabCreate',
-      { url, worktree, profileId },
+      {
+        url,
+        worktree,
+        profileId,
+        ...(focus ? { activate: true, focus: true } : {})
+      },
       { timeoutMs: 60_000 }
     )
-    printResult(result, json, (v) => `Created tab ${v.browserPageId}`)
+    printResult(result, json, (value) => {
+      if (!focus) {
+        return `Created tab ${value.browserPageId}`
+      }
+      // Why: paint has three answers. Not-yet-observed must not be reported as a blank pane.
+      const paint = value.focusReceipt?.nativePanePaint ?? 'unobserved'
+      if (paint === 'painted') {
+        return `Created and focused tab ${value.browserPageId}`
+      }
+      return paint === 'unpainted'
+        ? `Created and focused tab ${value.browserPageId}; the native pane produced no paint`
+        : `Created tab ${value.browserPageId}; native pane paint was not observed`
+    })
   },
   'tab close': async ({ flags, client, cwd, json }) => {
     const index = getOptionalNonNegativeIntegerFlag(flags, 'index')

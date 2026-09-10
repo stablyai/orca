@@ -39,7 +39,29 @@ export async function stopStructuredWorkerForRelease(args: {
       recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request.`
     }
   }
-  const settled = db.settleWorkerTerminalRelease(resource.id)
+  const settled = db.settleWorkerTerminalRelease({
+    resourceId: resource.id,
+    ownerDispatchId: dispatchId,
+    processIncarnation: resource.process_incarnation ?? ''
+  })
+  if (
+    settled.release_state !== 'released' ||
+    settled.owner_dispatch_id !== dispatchId ||
+    settled.process_incarnation !== resource.process_incarnation
+  ) {
+    const unknown = db.markWorkerTerminalReleaseUnknown(
+      resource.id,
+      'The structured session stopped, but the worker release identity changed before settlement.'
+    )
+    return {
+      dispatchId,
+      state: 'release_unknown',
+      processAction: 'closed_agent_terminal',
+      archive: { source: args.archiveSource, status: args.archiveStatus },
+      lastError: unknown.release_error ?? undefined,
+      recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request.`
+    }
+  }
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
   return {
     dispatchId,

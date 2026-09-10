@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from './orca-runtime-get-orchestration-dispatch-authority'
+import { OrcaRuntimeWithManagedCliContext } from './orca-runtime-managed-cli-context'
 import {
   recentTerminalOutputIncludesPath,
   recentTerminalPathCandidatesIncludePath
@@ -7,7 +7,7 @@ import {
 import type { ApplyLayoutResult, DriverState } from './orca-runtime-core'
 import { clampTerminalViewport } from './terminal-viewport'
 
-export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithGetOrchestrationDispatchAuthority {
+export class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithManagedCliContext {
   hasRecentTerminalOutputPath(handle: string, pathText: string, absolutePath: string): boolean {
     // Why: safety net for any query path that never saw a mobile onReady —
     // lazily backfill so the answer matches pre-gate behavior.

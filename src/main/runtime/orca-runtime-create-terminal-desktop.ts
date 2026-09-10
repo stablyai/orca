@@ -2,6 +2,7 @@
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import type { OrcaRuntimeWithCreateTerminal } from './orca-runtime-create-terminal'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-types'
+import { stripManagedCliContextEnvKeys } from './runtime-managed-cli-environment'
 
 export async function createDesktopTerminal(
   runtime: OrcaRuntimeWithCreateTerminal,
@@ -54,7 +55,7 @@ export async function createDesktopTerminal(
       worktreeId,
       command: launchOpts.command,
       cwd,
-      ...(launchOpts.env ? { env: launchOpts.env } : {}),
+      ...(launchOpts.env ? { env: stripManagedCliContextEnvKeys(launchOpts.env) } : {}),
       ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
       ...(launchOpts.resumeProviderSession
         ? { resumeProviderSession: launchOpts.resumeProviderSession }

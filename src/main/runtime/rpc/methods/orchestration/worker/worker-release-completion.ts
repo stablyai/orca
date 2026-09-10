@@ -1,39 +1,33 @@
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type {
-  WorkerTerminalArchiveKind,
   WorkerTerminalArchiveStatus,
-  WorkerTerminalResourceRow,
-  WorkerTerminalRetainedReason
+  WorkerTerminalArchiveKind,
+  WorkerTerminalResourceRow
 } from '../../../../orchestration/worker-terminal-ownership'
+import { captureWorkerOutputArchive } from '../../../../orchestration/worker-output-archive'
 import {
-  captureWorkerOutputArchive,
-  summarizeWorkerOutputArchive
-} from '../../../../orchestration/worker-output-archive'
+  reconcileExitedWorkerTerminalRelease,
+  workerTerminalWorkspaceIsCurrent
+} from '../../../../orchestration/worker-terminal-exited-release-reconciliation'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import { inspectWorkerTerminal } from './worker-observation'
 import { orchestrationTimestampToMs } from './worker-output'
-import { archiveSummary } from './worker-terminal-resource-presentation'
-import { classifyWorkerTerminalCloseError } from './worker-release-close-error'
-import { workerTerminalLeaseIsCurrent } from './worker-terminal-release-lease'
-import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
-import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
-import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
+import {
+  retainedWorkerTerminalReason,
+  summarizeWorkerTerminalArchive,
+  workerTerminalLeaseIsCurrent
+} from '../../../../orchestration/db/worker-terminal/worker-terminal-release-identity'
+import {
+  identityMismatchReceipt,
+  releaseUnknown
+} from '../../orchestration-worker-release-receipts'
+import {
+  closeWorkerTerminalOnOwningHost,
+  reconcileMissingWorkerTerminalRelease,
+  type WorkerReleaseReceipt
+} from '../../orchestration-worker-release-owning-host'
 
-export {
-  archiveSummary,
-  exposeWorkerTerminalResource
-} from './worker-terminal-resource-presentation'
-
-export type WorkerReleaseReceipt = {
-  dispatchId: string
-  state: 'released' | 'already_released' | 'retained' | 'release_pending' | 'release_unknown'
-  reason?: WorkerTerminalRetainedReason
-  processAction: 'closed_agent_terminal' | 'closed_exited_terminal' | 'none'
-  archive: { source: string | null; status: string | null } | null
-  recovery?: string
-  lastError?: string
-}
+export type { WorkerReleaseReceipt } from '../../orchestration-worker-release-owning-host'
 
 type WorkerTerminalReleaseArgs = {
   runtime: OrcaRuntimeService
@@ -43,18 +37,21 @@ type WorkerTerminalReleaseArgs = {
   mode?: 'interactive' | 'recovery'
 }
 
-type ActiveWorkerTerminalRelease = {
-  promise: Promise<WorkerReleaseReceipt>
-  recoveryRequested: boolean
+type ActiveWorkerRelease = { promise: Promise<WorkerReleaseReceipt>; recoveryRequested: boolean }
+type ActiveWorkerReleases = Map<string, ActiveWorkerRelease>
+export function releaseUnknownRecovery(dispatchId: string): string {
+  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json, then retry worker-release after exact host evidence is available. Never substitute a broad terminal close.`
 }
+const activeReleaseByRuntime = new WeakMap<OrcaRuntimeService, ActiveWorkerReleases>()
 
-const activeReleaseByRuntime = new WeakMap<
-  OrcaRuntimeService,
-  Map<string, ActiveWorkerTerminalRelease>
->()
+import { archiveSummary } from '../../orchestration-worker-terminal-resource-view'
 
-// Completes a durably requested release: re-prove exact identity, freeze output, close only the
-// exact agent terminal, settle. Shared between the RPC method and the startup reconciler.
+export {
+  archiveSummary,
+  exposeWorkerTerminalResource
+} from '../../orchestration-worker-terminal-resource-view'
+
+// Re-prove exact identity, freeze output, and settle one durably requested release.
 export function completeWorkerTerminalRelease(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
@@ -68,23 +65,21 @@ export function completeWorkerTerminalRelease(
     active.recoveryRequested ||= args.mode === 'recovery'
     return active.promise
   }
-  const activeRelease = {
-    recoveryRequested: args.mode === 'recovery'
-  } as ActiveWorkerTerminalRelease
+  const entry = { recoveryRequested: args.mode === 'recovery' } as ActiveWorkerRelease
   const release = completeWorkerTerminalReleaseOnce(args)
     .then((receipt) => {
-      if (activeRelease.recoveryRequested) {
+      if (entry.recoveryRequested) {
         args.db.recordWorkerTerminalRecoveryAttempt(args.resource.id)
       }
       return receipt
     })
     .finally(() => {
-      if (activeByResource?.get(args.resource.id) === activeRelease) {
+      if (activeByResource?.get(args.resource.id) === entry) {
         activeByResource.delete(args.resource.id)
       }
     })
-  activeRelease.promise = release
-  activeByResource.set(args.resource.id, activeRelease)
+  entry.promise = release
+  activeByResource.set(args.resource.id, entry)
   return release
 }
 
@@ -92,231 +87,193 @@ async function completeWorkerTerminalReleaseOnce(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
   const { runtime, db, dispatchId, resource } = args
-  if (isStructuredWorkerHandle(resource.terminal_handle)) {
-    // Observation and archive capture both read the structured host, and after a restart nothing
-    // has installed it yet — the startup recovery reconciler runs exactly this path. Installing it
-    // here is what lets the release see the session instead of reporting it unreadable.
-    //
-    // NOT yet handled, and deliberately follow-up: rebinding a restarted runtime to a structured
-    // worker's hold and redrive subscription. Until that exists, a worker that survives a restart
-    // keeps no hold, so its child is evictable and its parked mail waits for the next arrival
-    // rather than a settle edge.
-    await runtime.ensureStructuredAgentSessionHost().catch((error: unknown) => {
-      console.warn(
-        '[orchestration] structured host install failed before release',
-        dispatchId,
-        error
-      )
-    })
-  }
   const worker = db.getWorkerDispatch(dispatchId)
   if (!worker || worker.agent_terminal_handle !== resource.terminal_handle) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
+    return identityMismatchReceipt(
+      db,
       dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+      resource,
+      'The worker assignment no longer matches the recorded terminal; worker release remains unknown.'
+    )
   }
   const observation = await inspectWorkerTerminal(runtime, db, dispatchId)
   if (observation.status === 'identity_changed') {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
+    return identityMismatchReceipt(
+      db,
       dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
+      resource,
+      'The recorded terminal now identifies a different process; worker release remains unknown.'
+    )
+  }
+  if (observation.status === 'unverifiable') {
+    if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, observation)) {
+      return identityMismatchReceipt(
+        db,
+        dispatchId,
+        resource,
+        'The exact worker release identity is unproven.'
+      )
+    }
+    return {
+      ...releaseUnknown(
+        db,
+        dispatchId,
+        resource,
+        `The exact worker process is unverifiable: ${observation.reason ?? 'the owning host did not return a liveness verdict'}.`
+      ),
+      processVerdict: 'unverifiable'
     }
   }
   if (observation.status === 'missing' || observation.status === 'unattached') {
-    if (args.mode === 'recovery') {
-      // A close can succeed before the process crashes, leaving `releasing` durable state while
-      // terminal inventory no longer resolves the handle. Only a positive host liveness verdict
-      // may settle that exact incarnation; contact loss remains pending/unverifiable.
-      if (resource.process_incarnation) {
-        const processLiveness = await runtime.inspectTerminalProcessIncarnationLiveness(
-          resource.process_incarnation,
-          resource.host_scope
-        )
-        if (processLiveness === 'exited') {
-          const reconciled = db.settleDeadWorkerTerminalRelease({
-            requestingDispatchId: dispatchId,
-            resourceId: resource.id,
-            processIncarnation: resource.process_incarnation
-          })
-          if (reconciled.disposition === 'released') {
-            runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-            return {
-              dispatchId,
-              state: 'released',
-              processAction: 'closed_exited_terminal',
-              archive: archiveSummary(reconciled.resource)
-            }
-          }
-        }
-      }
-      // Inventory may still be incomplete during startup/reconnect discovery; defer.
-      return {
-        dispatchId,
-        state: 'release_pending',
-        processAction: 'none',
-        archive: archiveSummary(resource),
-        recovery:
-          'The recorded terminal has not been rediscovered yet; recovery will retry after the next terminal inventory.'
-      }
-    }
-    // Why: the handle resolves nowhere, but the PTY could have been re-homed after a restart —
-    // claiming released would hide a live process; only an exact observation may settle it.
-    const unknown = db.markWorkerTerminalReleaseUnknown(
-      resource.id,
-      'The recorded terminal no longer resolves; whether its process is gone cannot be proven.'
+    return reconcileMissingWorkerTerminalRelease(args)
+  }
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, observation)) {
+    return identityMismatchReceipt(
+      db,
+      dispatchId,
+      resource,
+      'The recorded worker lease no longer matches its exact terminal identity; worker release remains unknown.'
     )
-    return {
-      dispatchId,
-      state: 'release_unknown',
-      processAction: 'none',
-      archive: archiveSummary(unknown),
-      lastError: unknown.release_error ?? undefined,
-      recovery: releaseUnknownRecovery(dispatchId)
-    }
   }
-
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource)) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
-    return {
+  if (!workerTerminalWorkspaceIsCurrent(resource, observation)) {
+    return identityMismatchReceipt(
+      db,
       dispatchId,
-      state: 'retained',
-      reason: 'identity_unproven',
-      processAction: 'none',
-      archive: archiveSummary(retained)
-    }
+      resource,
+      'The recorded worker workspace no longer matches the exact terminal; worker release remains unknown.'
+    )
   }
+  const providerSessionBeforeArchive = runtime.getExactWorkerProviderSession(
+    resource.terminal_handle,
+    orchestrationTimestampToMs(worker.created_at)
+  )
   const archive = db.getWorkerTerminalArchive(dispatchId)
+  if (archive && archive.resource_id !== resource.id) {
+    return identityMismatchReceipt(
+      db,
+      dispatchId,
+      resource,
+      'The archived release receipt belongs to a different worker resource.'
+    )
+  }
   let archiveSource = resource.archive_source as 'transcript' | 'terminal' | null
   let archiveStatus: WorkerTerminalArchiveStatus | null = resource.archive_status
   let capturedArchive: { kind: WorkerTerminalArchiveKind; content: string } | undefined
-  const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
   if (!archive) {
     const captured = await captureWorkerOutputArchive({
       runtime,
       dispatchId,
       terminalHandle: resource.terminal_handle,
-      attachedAtMs: orchestrationTimestampToMs(worker.created_at),
-      structuredWorker: structured
+      attachedAtMs: orchestrationTimestampToMs(worker.created_at)
     })
     capturedArchive = { kind: captured.kind, content: JSON.stringify(captured.content) }
-    archiveSource = captured.kind === 'terminal_tail' ? 'terminal' : 'transcript'
+    archiveSource = captured.kind === 'transcript_pin' ? 'transcript' : 'terminal'
     archiveStatus = captured.status
   } else {
-    const stored = summarizeWorkerOutputArchive(archive)
+    const stored = summarizeWorkerTerminalArchive(archive)
     archiveSource ??= stored.source
     archiveStatus ??= stored.status
   }
-  const releasing = db.commitWorkerTerminalArchiveForRelease({
-    dispatchId,
-    resourceId: resource.id,
-    ...capturedArchive,
-    archiveSource,
-    archiveStatus: archiveStatus === 'empty' ? 'empty' : 'captured'
-  })
-  if (releasing.ownership_state !== 'owned' || releasing.release_state !== 'releasing') {
+  const reusesArchivedUnknown =
+    resource.release_state === 'unknown' && archive?.resource_id === resource.id
+  const releasing = reusesArchivedUnknown
+    ? resource
+    : db.commitWorkerTerminalArchiveForRelease({
+        dispatchId,
+        resourceId: resource.id,
+        ...capturedArchive,
+        archiveSource,
+        archiveStatus: archiveStatus === 'empty' ? 'empty' : 'captured'
+      })
+  const canReconcile =
+    releasing.release_state === 'releasing' ||
+    (reusesArchivedUnknown && releasing.release_state === 'unknown')
+  if (releasing.ownership_state !== 'owned') {
     return {
       dispatchId,
       state: 'retained',
-      reason: retainedReason(releasing),
+      reason: retainedWorkerTerminalReason(releasing),
       processAction: 'none',
       archive: archiveSummary(releasing)
     }
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing)) {
-    const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+  if (releasing.release_state === 'retained') {
     return {
       dispatchId,
       state: 'retained',
-      reason: 'identity_unproven',
+      reason: retainedWorkerTerminalReason(releasing),
       processAction: 'none',
-      archive: archiveSummary(retained)
+      archive: archiveSummary(releasing)
     }
   }
-
-  try {
-    if (structured) {
-      return await stopStructuredWorkerForRelease({
-        structured,
+  if (!canReconcile) {
+    return releaseUnknown(
+      db,
+      dispatchId,
+      releasing,
+      'The archived release receipt does not match this worker resource; worker release remains unknown.'
+    )
+  }
+  const observationAfterArchive = await inspectWorkerTerminal(runtime, db, dispatchId)
+  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing, observationAfterArchive)) {
+    return identityMismatchReceipt(
+      db,
+      dispatchId,
+      resource,
+      'The recorded worker lease changed while output was archived; worker release remains unknown.'
+    )
+  }
+  if (
+    !['live', 'exited'].includes(observationAfterArchive.status) ||
+    !workerTerminalWorkspaceIsCurrent(releasing, observationAfterArchive)
+  ) {
+    if (
+      observationAfterArchive.status === 'identity_changed' ||
+      (['live', 'exited'].includes(observationAfterArchive.status) &&
+        !workerTerminalWorkspaceIsCurrent(releasing, observationAfterArchive))
+    ) {
+      return identityMismatchReceipt(
+        db,
         dispatchId,
         resource,
-        runtime,
-        db,
-        archiveSource,
-        archiveStatus
-      })
+        `The exact worker evidence became ${observationAfterArchive.status} while output was archived; worker release remains unknown.`
+      )
     }
-    const close = await runtime.closeTerminal(resource.terminal_handle)
-    if (!close.ptyKilled) {
-      const reason = describeUnconfirmedAgentStop(close)
-      const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
-      return {
-        dispatchId,
-        state: 'release_unknown',
-        processAction: 'closed_agent_terminal',
-        archive: { source: archiveSource, status: archiveStatus },
-        lastError: unknown.release_error ?? reason,
-        recovery: releaseUnknownRecovery(dispatchId)
-      }
-    }
-  } catch (error) {
-    const closeError = classifyWorkerTerminalCloseError(error)
-    const reason = closeError.reason
-    // A close that finds nothing to close is this release's goal once the host certified the
-    // exit; anything else keeps the record open for recovery.
-    if (!(closeError.alreadyGone && observation.status === 'exited')) {
-      if (closeError.transient) {
-        // Durable intent exists; the owning endpoint is temporarily unreachable. Recovery retries.
-        return {
-          dispatchId,
-          state: 'release_pending',
-          processAction: 'none',
-          archive: { source: archiveSource, status: archiveStatus },
-          lastError: reason,
-          recovery:
-            'The owning endpoint is temporarily unavailable; recovery will retry this release after reconnect without another coordinator decision.'
-        }
-      }
-      const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
-      return {
-        dispatchId,
-        state: 'release_unknown',
-        processAction: 'none',
-        archive: { source: archiveSource, status: archiveStatus },
-        lastError: unknown.release_error ?? reason,
-        recovery: releaseUnknownRecovery(dispatchId)
-      }
-    }
+    return releaseUnknown(
+      db,
+      dispatchId,
+      releasing,
+      `The exact worker evidence became ${observationAfterArchive.status} while output was archived; worker release remains unknown.`
+    )
   }
-  const released = db.settleWorkerTerminalRelease(resource.id)
-  runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-  return {
+
+  const exited = await reconcileExitedWorkerTerminalRelease({
+    runtime,
+    db,
     dispatchId,
-    state: 'released',
-    processAction:
-      observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
-    archive: archiveSummary(released)
+    resource: releasing,
+    observation: observationAfterArchive,
+    providerSessionBeforeArchive,
+    attachedAtMs: orchestrationTimestampToMs(worker.created_at)
+  })
+  if (exited.state === 'release_unknown') {
+    return releaseUnknown(db, dispatchId, releasing, exited.reason)
   }
-}
-
-export function releaseUnknownRecovery(dispatchId: string): string {
-  return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then retry worker-release with a fresh request ID (omit --retry-request to let the CLI generate one). Reusing the prior request ID only replays this release_unknown receipt. Never substitute a broad terminal close.`
-}
-
-function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {
-  if (resource.retained_reason) {
-    return resource.retained_reason as WorkerTerminalRetainedReason
+  if (exited.state === 'released') {
+    return {
+      dispatchId,
+      state: 'released',
+      processAction: 'closed_exited_terminal',
+      archive: archiveSummary(exited.resource)
+    }
   }
-  if (resource.ownership_state === 'user_owned') {
-    return 'user_takeover'
-  }
-  return 'identity_unproven'
+  return closeWorkerTerminalOnOwningHost({
+    runtime,
+    db,
+    dispatchId,
+    resource,
+    releasing,
+    archiveSource,
+    archiveStatus
+  })
 }

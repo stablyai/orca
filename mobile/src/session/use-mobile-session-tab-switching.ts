@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { triggerSelection } from '../platform/haptics'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import type { MobileSessionTab } from './mobile-session-route-types'
@@ -7,6 +7,7 @@ import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keybo
 export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateModel) {
   const {
     worktreeId,
+    requestedTabId,
     client,
     sessionTabs,
     defaultTerminalHandlesToLiveInput,
@@ -150,6 +151,18 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
   )
   // Ref to latest switchSessionTab so fetchSessionTabs can activate a synced browser tab without a dependency cycle.
   switchSessionTabRef.current = switchSessionTab
+  const requestedTabHandledRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!requestedTabId || requestedTabHandledRef.current === requestedTabId) {
+      return
+    }
+    const requested = sessionTabs.find((tab) => tab.id === requestedTabId)
+    if (!requested) {
+      return
+    }
+    requestedTabHandledRef.current = requestedTabId
+    switchSessionTab(requested)
+  }, [requestedTabId, sessionTabs, switchSessionTab])
   return {
     switchTab,
     switchSessionTab

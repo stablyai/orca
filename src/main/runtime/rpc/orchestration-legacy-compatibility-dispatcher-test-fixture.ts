@@ -92,8 +92,22 @@ export function createHarness(): LegacyCompatibilityDispatcherHarness {
     }
     return null
   })
-  vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-    [WORKER_HANDLE, CURRENT_WORKER_HANDLE].includes(handle) ? 'process-1' : null
+  vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('process-1')
+  vi.spyOn(runtime, 'showTerminal').mockImplementation(
+    async (handle) =>
+      ({
+        handle,
+        tabId: runtime.getTerminalPaneKey(handle)?.split(':')[0],
+        ptyId: 'legacy-pty'
+      }) as never
+  )
+  vi.spyOn(runtime, 'buildTerminalManagedCliContext').mockImplementation(
+    (handle) =>
+      ({
+        executionHostId: 'local',
+        workspaceKey: 'worktree:legacy-dispatcher',
+        terminalHandle: handle
+      }) as never
   )
   const verify = vi
     .spyOn(runtime, 'verifyOrchestrationCompatibilityCaller')

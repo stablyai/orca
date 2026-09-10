@@ -4,6 +4,7 @@ import type {
   RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/runtime-types'
+import type { Tab } from '../../../../shared/tab-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
@@ -122,13 +123,19 @@ export function buildMobileSessionTabSnapshots(
         ) {
           continue
         }
-        tabs.push(...buildMobileTerminalSurfaceTabs(inputs, terminal, item.tabId))
+        tabs.push(
+          ...buildMobileTerminalSurfaceTabs(
+            inputs,
+            terminal,
+            resolveVisibleUnifiedTab(item, unifiedTabById, inputs.unifiedTabs)
+          )
+        )
       } else if (item.type === 'editor') {
         const file = openFilesForWorktree?.get(item.id)
         if (!file || !isMobilePublishableOpenFile(file)) {
           continue
         }
-        const unifiedTab = item.tabId ? unifiedTabById.get(item.tabId) : undefined
+        const unifiedTab = resolveVisibleUnifiedTab(item, unifiedTabById, inputs.unifiedTabs)
         tabs.push(
           buildMobileMarkdownTab(inputs, file, unifiedTab) ??
             buildMobileFileTab(inputs, file, unifiedTab)
@@ -144,7 +151,7 @@ export function buildMobileSessionTabSnapshots(
           buildMobileBrowserTab(
             inputs,
             workspace,
-            item.tabId ? unifiedTabById.get(item.tabId) : undefined
+            resolveVisibleUnifiedTab(item, unifiedTabById, inputs.unifiedTabs)
           )
         )
       }
@@ -244,4 +251,15 @@ export function buildMobileSessionTabSnapshots(
     }
   }
   return snapshots
+}
+
+function resolveVisibleUnifiedTab(
+  item: { type: string; id: string; tabId?: string },
+  unifiedTabById: ReadonlyMap<string, Tab>,
+  unifiedTabs: readonly Tab[]
+): Tab | undefined {
+  if (item.tabId) {
+    return unifiedTabById.get(item.tabId)
+  }
+  return unifiedTabs.find((tab) => tab.contentType === item.type && tab.entityId === item.id)
 }

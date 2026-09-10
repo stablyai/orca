@@ -44,6 +44,8 @@ export type AppMemory = UsageValues & {
   main: UsageValues
   renderer: UsageValues
   other: UsageValues
+  /** Exact renderer/tab process count when published by a capable host. */
+  rendererProcessCount?: number
   /** Oldest-first memory samples (bytes) for the whole Orca app; empty before the first snapshot. */
   history: number[]
 }
@@ -102,4 +104,41 @@ export type MemorySnapshot = {
    */
   totalPrivateMemory?: number
   collectedAt: number
+}
+
+export type ResourceHealthState = 'normal' | 'pressure' | 'unverifiable'
+
+export type DaemonGenerationResource = {
+  generationId: string
+  protocolGeneration: number | null
+  canonical: boolean
+  occupied: boolean
+  attached: boolean
+  owned: boolean
+  unverifiable: boolean
+  retirementEligible: boolean
+  clientCount: number | null
+  sessionIds: string[]
+  processRootPid: number | null
+}
+
+export type MaestroResourceInventory = {
+  daemonGenerations: DaemonGenerationResource[]
+  workerIds: string[]
+  browserSurfaceIds: string[]
+  processRootPids: number[]
+  rendererCount: number | null
+  aggregateCpu: number | null
+  aggregateMemory: number | null
+}
+
+export type RuntimeResourceHealth = {
+  schemaVersion: 1
+  executionHostId: string
+  workspaceKey: string
+  state: ResourceHealthState
+  reason: string | null
+  collectedAt: number | null
+  hostMemoryUsagePercent: number | null
+  inventory: MaestroResourceInventory
 }

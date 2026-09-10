@@ -8,6 +8,8 @@ import {
   assertTerminalArtifactNotHardLinked,
   canonicalPathForArtifactComparison,
   isTerminalArtifactHardLinked,
+  readFileHandleBufferBounded,
+  terminalFileContentIdentity,
   terminalFileStatIdentity
 } from './runtime-file-commands-terminal-artifact-access'
 import {
@@ -15,11 +17,12 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { open } from 'node:fs/promises'
-import type {
-  RuntimeFileStatLike,
-  TerminalFileGrant
+import {
+  LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,
+  TERMINAL_FILE_GRANT_TTL_MS,
+  type RuntimeFileStatLike,
+  type TerminalFileGrant
 } from './runtime-file-commands-mobile-file-list-limit'
-import { TERMINAL_FILE_GRANT_TTL_MS } from './runtime-file-commands-mobile-file-list-limit'
 import type { RuntimeTerminalPathResolution } from '../../shared/runtime-types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { randomUUID } from 'node:crypto'
@@ -63,9 +66,12 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     readOnly?: boolean
     provenance?: TerminalFileGrant['provenance']
   }): Promise<RuntimeTerminalPathResolution> {
+    const localInspection = args.connectionId
+      ? null
+      : await this.inspectLocalTerminalPath(args.artifactPath)
     const stats = args.connectionId
       ? await this.statRemoteTerminalPath(args.artifactPath, args.connectionId)
-      : await this.statLocalTerminalPath(args.artifactPath)
+      : localInspection!.stats
     const isDirectory = stats.isDirectory()
     if (!isDirectory && isTerminalArtifactHardLinked(stats)) {
       return {
@@ -86,7 +92,8 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
           clientId: args.clientId,
           readOnly: args.readOnly === true,
           provenance: args.provenance ?? 'terminal-output',
-          stats
+          stats,
+          contentIdentity: localInspection?.contentIdentity ?? null
         })
     return {
       worktree: args.worktreeId,
@@ -144,6 +151,26 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     }
   }
 
+  protected async inspectLocalTerminalPath(absolutePath: string): Promise<{
+    stats: RuntimeFileStatLike & { isDirectory: () => boolean }
+    contentIdentity: string | null
+  }> {
+    await assertLocalTerminalArtifactPathStillCanonical(absolutePath)
+    const handle = await open(absolutePath, 'r')
+    try {
+      const stats = await handle.stat()
+      const contentIdentity =
+        !stats.isDirectory() && stats.size <= LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
+          ? terminalFileContentIdentity(
+              await readFileHandleBufferBounded(handle, LOCAL_PREVIEWABLE_BINARY_MAX_BYTES + 1)
+            )
+          : null
+      return { stats, contentIdentity }
+    } finally {
+      await handle.close()
+    }
+  }
+
   protected createTerminalFileGrant(args: {
     worktreeId: string
     absolutePath: string
@@ -153,6 +180,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
     readOnly?: boolean
     provenance: TerminalFileGrant['provenance']
     stats: RuntimeFileStatLike
+    contentIdentity: string | null
   }): TerminalFileGrant {
     assertTerminalArtifactNotHardLinked(args.stats)
     const grant: TerminalFileGrant = {
@@ -164,6 +192,7 @@ export class RuntimeFileCommandsWithResolveAllowedTerminalArtifactPath extends R
       ...(args.clientId ? { clientId: args.clientId } : {}),
       expiresAt: Date.now() + TERMINAL_FILE_GRANT_TTL_MS,
       statIdentity: terminalFileStatIdentity(args.stats),
+      contentIdentity: args.contentIdentity,
       readOnly: args.readOnly === true,
       provenance: args.provenance
     }

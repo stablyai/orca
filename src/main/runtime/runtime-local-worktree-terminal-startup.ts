@@ -98,6 +98,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         await ports.markTrusted(trustAgent, worktree.path)
       }
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
+        ...(request.startupTerminalTitle ? { title: request.startupTerminalTitle } : {}),
         command: sequencedStartup.command,
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
         env: sequencedStartup.env,
@@ -106,6 +107,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
+        orchestrationManagedLaunch: request.orchestrationManagedLaunch,
         ...ownerSurfacing(shouldActivate)
       })
       if (args.draftPaste) {

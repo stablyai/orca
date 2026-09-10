@@ -36,7 +36,8 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       count: number
     }>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getOptionalStringFlag(flags, 'terminal')
+      terminal: getOptionalStringFlag(flags, 'terminal'),
+      run: getOptionalStringFlag(flags, 'run')
     })
     printResult(result, json, (value) => {
       if (value.count === 0) {

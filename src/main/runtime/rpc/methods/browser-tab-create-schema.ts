@@ -13,6 +13,7 @@ export const BrowserTabCreateParams = z.object({
   // Why: `activate` says the caller wants the new tab selected; `navigation` says on whose screens.
   // Absent, a paired caller means 'caller' — one device's create must not steer every other UI.
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
+  focus: z.boolean().optional(),
   targetGroupId: OptionalString,
   placement: BrowserPageCreationPlacement.optional()
 })

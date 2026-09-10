@@ -22,4 +22,29 @@ describe('GPU fallback command-line switches', () => {
     ])
     expect(appendSwitch.mock.calls.map(([name]) => name)).toEqual(appliedSwitches)
   })
+
+  // Why: only an explicitly requested Linux dev session may apply the fallback — packaged Linux
+  // keeps hardware acceleration and macOS is untouched.
+  it('applies the same set to a Linux dev session but not plain Linux', () => {
+    const devAppend = vi.fn()
+    const applied = applyGpuFallbackCommandLineSwitches({ appendSwitch: devAppend }, 'linux', {
+      linuxDevFallback: true
+    })
+    expect(applied).toEqual(['disable-gpu', 'disable-software-rasterizer', 'in-process-gpu'])
+    expect(devAppend.mock.calls.map(([name]) => name)).toEqual(applied)
+
+    const packagedAppend = vi.fn()
+    expect(applyGpuFallbackCommandLineSwitches({ appendSwitch: packagedAppend }, 'linux')).toEqual(
+      []
+    )
+    expect(packagedAppend).not.toHaveBeenCalled()
+
+    const macAppend = vi.fn()
+    expect(
+      applyGpuFallbackCommandLineSwitches({ appendSwitch: macAppend }, 'darwin', {
+        linuxDevFallback: true
+      })
+    ).toEqual([])
+    expect(macAppend).not.toHaveBeenCalled()
+  })
 })

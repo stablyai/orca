@@ -5,6 +5,7 @@ import {
   Pressable,
   ActivityIndicator,
   Linking,
+  Keyboard,
   type LayoutChangeEvent
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -16,7 +17,7 @@ import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
 } from '../src/transport/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
+import type { ConnectionLogEntry, PairingOffer, PairingStage } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/client-context'
 import { colors, spacing } from '../src/theme/mobile-theme'
 import { TextInputModal } from '../src/components/TextInputModal'
@@ -26,6 +27,12 @@ import {
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
 import { pairScanStyles as styles } from '../src/pair-scan-styles'
+import {
+  appendBoundedPairingLog,
+  pairingFailureMessage,
+  PAIRING_STAGE_LABELS
+} from '../src/transport/pairing-stage'
+import { BOTTOM_DRAWER_HIDE_DURATION_MS } from '../src/components/bottom-drawer-constants'
 
 // Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
 // route surfaces as a real error with the log visible instead of a
@@ -33,6 +40,7 @@ import { pairScanStyles as styles } from '../src/pair-scan-styles'
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 const SCAN_RETICLE_SCALE = 0.62
 const SCAN_RETICLE_MAX_SIZE = 360
+const PASTE_FOCUS_RESTORE_DELAY_MS = BOTTOM_DRAWER_HIDE_DURATION_MS + 50
 
 function Step({ number, text }: { number: number; text: string }) {
   return (
@@ -52,11 +60,13 @@ export default function PairScanScreen() {
   const [permission, requestPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
+  const [pairingStage, setPairingStage] = useState<PairingStage>('bundle_readiness')
   const [pasteVisible, setPasteVisible] = useState(false)
   const [cameraBounds, setCameraBounds] = useState({ width: 0, height: 0 })
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
   const logsRef = useRef<ConnectionLogEntry[]>([])
   const processingRef = useRef(false)
+  const pasteButtonRef = useRef<View>(null)
   const mountedRef = useRef(true)
   const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
 
@@ -93,6 +103,7 @@ export default function PairScanScreen() {
   )
 
   const handlePasteSubmit = useCallback((input: string) => {
+    Keyboard.dismiss()
     setPasteVisible(false)
     if (processingRef.current) {
       return
@@ -110,6 +121,12 @@ export default function PairScanScreen() {
     void testAndSave(offer)
   }, [])
 
+  const dismissPaste = useCallback(() => {
+    Keyboard.dismiss()
+    setPasteVisible(false)
+    setTimeout(() => pasteButtonRef.current?.focus(), PASTE_FOCUS_RESTORE_DELAY_MS)
+  }, [])
+
   const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
     const nextBounds = {
@@ -125,26 +142,42 @@ export default function PairScanScreen() {
 
   async function testAndSave(offer: PairingOffer) {
     setStatus('connecting')
+    setPairingStage('bundle_readiness')
     logsRef.current = []
     setLogs([])
     activePairingAttemptRef.current?.dispose()
 
-    const attempt = startPreProfilePairing({
+    let attempt: PreProfilePairingAttempt | undefined
+    attempt = startPreProfilePairing({
       offer,
       timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+      clientCommit: {
+        refreshClient: refreshHostClient,
+        commitRoute: async (hostId) => {
+          const onboardingSteps = await loadMobileOnboardingSteps()
+          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
+            throw new Error('pairing route source is no longer active')
+          }
+          router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
+        }
+      },
+      onStageChange: setPairingStage,
       connectOptions: {
         onLog: (entry) => {
-          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
+          if (
+            !mountedRef.current ||
+            (attempt !== undefined && activePairingAttemptRef.current !== attempt)
+          ) {
             return
           }
-          logsRef.current = [...logsRef.current, entry]
+          logsRef.current = appendBoundedPairingLog(logsRef.current, entry)
           setLogs(logsRef.current)
         }
       }
     })
     activePairingAttemptRef.current = attempt
     try {
-      const { hostId } = await attempt.result
+      await attempt.result
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
       if (activePairingAttemptRef.current === attempt) {
@@ -153,16 +186,6 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      // Why: re-pairing the same desktop now reuses its existing host id
-      // (STA-1840 dedup), so a client cached under that id from an earlier
-      // pairing would keep the stale endpoint/relay. Close it so the
-      // Refresh any cached client from the newly persisted pairing profile.
-      refreshHostClient(hostId)
-      const onboardingSteps = await loadMobileOnboardingSteps()
-      if (!mountedRef.current) {
-        return
-      }
-      router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
@@ -175,11 +198,7 @@ export default function PairScanScreen() {
       }
       console.warn('[pair] connect failed', err)
       setStatus('error')
-      setErrorMessage(
-        timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
-      )
+      setErrorMessage(pairingFailureMessage(err, timedOut))
       processingRef.current = false
     }
   }
@@ -187,6 +206,7 @@ export default function PairScanScreen() {
   function retry() {
     setStatus('scanning')
     setErrorMessage('')
+    setPairingStage('bundle_readiness')
     logsRef.current = []
     setLogs([])
     processingRef.current = false
@@ -240,6 +260,7 @@ export default function PairScanScreen() {
             </Text>
           </Pressable>
           <Pressable
+            ref={pasteButtonRef}
             style={({ pressed }) => [styles.pasteButton, pressed && styles.pasteButtonPressed]}
             onPress={() => setPasteVisible(true)}
           >
@@ -253,7 +274,7 @@ export default function PairScanScreen() {
           message="Copy the code shown under the QR on your computer."
           placeholder="orca://pair?code=... or paste the code"
           onSubmit={handlePasteSubmit}
-          onCancel={() => setPasteVisible(false)}
+          onCancel={dismissPaste}
         />
       </View>
     )
@@ -298,6 +319,7 @@ export default function PairScanScreen() {
           )}
           {pasteVisible && <View style={styles.cameraPlaceholder} />}
           <Pressable
+            ref={pasteButtonRef}
             style={({ pressed }) => [styles.pasteButton, pressed && styles.pasteButtonPressed]}
             onPress={() => setPasteVisible(true)}
           >
@@ -310,7 +332,7 @@ export default function PairScanScreen() {
       {status === 'connecting' && (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={colors.textSecondary} />
-          <Text style={styles.connectingText}>Connecting…</Text>
+          <Text style={styles.connectingText}>{PAIRING_STAGE_LABELS[pairingStage]}…</Text>
           <View style={styles.logSlot}>
             <ConnectionLog entries={logs} title="Pairing log" />
           </View>
@@ -351,7 +373,7 @@ export default function PairScanScreen() {
         message="Copy the code shown under the QR on your computer."
         placeholder="orca://pair?code=... or paste the code"
         onSubmit={handlePasteSubmit}
-        onCancel={() => setPasteVisible(false)}
+        onCancel={dismissPaste}
       />
     </View>
   )

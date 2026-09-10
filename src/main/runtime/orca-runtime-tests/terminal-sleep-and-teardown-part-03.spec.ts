@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { exitedPtyStopReceipt } from '../../ipc/pty-ipc-test-constants'
 import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from '../orca-runtime-test-fixtures.spec'
 
@@ -12,7 +13,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId, opts) => {
         stopped.push(ptyId)
         expect(opts).toEqual({ keepHistory: true })
-        return false
+        return null
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => [{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }]
@@ -57,7 +58,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => [
@@ -125,7 +126,7 @@ describe('OrcaRuntimeService', () => {
         stopped.push(ptyId)
         expect(opts).toEqual({ keepHistory: true })
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => processLists.shift() ?? []
@@ -191,7 +192,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => [
@@ -245,7 +246,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
         runtime.onPtyExit(ptyId, -1)
-        return true
+        return exitedPtyStopReceipt(ptyId)
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => processLists.shift() ?? []

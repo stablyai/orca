@@ -15,6 +15,7 @@ import { BROWSER_NETWORK_TUNNEL_METHODS } from './browser-network-tunnel'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
+import { RUNTIME_RESOURCE_HEALTH_METHODS } from './runtime-resource-health'
 import { DIAGNOSTICS_METHODS } from './diagnostics'
 import { ACCOUNT_METHODS } from './accounts'
 import { PREFLIGHT_METHODS } from './preflight'
@@ -46,6 +47,14 @@ import { AGENT_SESSION_METHODS } from './agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { ARTIFACT_METHODS } from './artifacts'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
+import { MAESTRO_METHODS } from './maestro'
+import { MAESTRO_LIST_METHODS } from './maestro-list'
+import { MAESTRO_PROJECTION_METHODS } from './maestro-projection'
+import { MAESTRO_RUN_PROGRESS_METHODS } from './maestro-run-progress'
+import { MAESTRO_INTENT_METHODS } from './maestro-intents'
+import { ORCHESTRATION_BROWSER_SURFACE_METHODS } from './orchestration-browser-surface'
+import { ORCHESTRATION_HUMAN_REVIEW_METHODS } from './orchestration-human-review'
+import { MAESTRO_WORKSPACE_CANVAS_METHODS } from './maestro-workspace-canvas'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -69,8 +78,17 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
   ...BROWSER_NETWORK_TUNNEL_METHODS,
   ...ORCHESTRATION_METHODS,
+  ...MAESTRO_METHODS,
+  ...MAESTRO_LIST_METHODS,
+  ...MAESTRO_PROJECTION_METHODS,
+  ...MAESTRO_RUN_PROGRESS_METHODS,
+  ...MAESTRO_INTENT_METHODS,
+  ...ORCHESTRATION_BROWSER_SURFACE_METHODS,
+  ...ORCHESTRATION_HUMAN_REVIEW_METHODS,
+  ...MAESTRO_WORKSPACE_CANVAS_METHODS,
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,
+  ...RUNTIME_RESOURCE_HEALTH_METHODS,
   ...DIAGNOSTICS_METHODS,
   ...ACCOUNT_METHODS,
   ...PREFLIGHT_METHODS,

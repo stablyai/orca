@@ -20,9 +20,7 @@ describe('orchestration worker release archive', () => {
   it('records an explicitly empty archive for an already-exited worker process', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
-    vi.mocked(h.runtime.showTerminal).mockImplementation(
-      async (handle) => ({ handle, worktreeId: 'repo::worktree', connected: false }) as never
-    )
+    h.observeWorkerAsExited()
     vi.mocked(h.runtime.readTerminal).mockResolvedValue({
       handle: 'term_worker',
       status: 'exited',

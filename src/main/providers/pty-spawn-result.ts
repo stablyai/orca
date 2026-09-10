@@ -12,6 +12,11 @@ export type PtySpawnResult = {
   id: string
   /** Opaque provider-owned identity for this process behind a reusable PTY id. */
   incarnationId?: PtyIncarnationId
+  /** Present only when this native Windows spawn was assigned before resume. */
+  windowsPtyJobObject?: {
+    version: 1
+    assigned: true
+  }
   /** Relay source identity installed before adjacent source frames are decoded. */
   sourceActivation?: PtySourceReceivingActivation
   /** The provider observed this exact spawn exit before returning its spawn result. */

@@ -8,6 +8,43 @@ Your task ID is: task_SNAP
 You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
 
+=== VALIDATION LOOP BREAKER ===
+
+Every validation command must have an explicit deadline. Record the normalized
+failure signature and how many times it has occurred. After the first occurrence,
+do not repeat an equivalent validation unchanged: change the methodology, reduce
+to a focused reproduction/test, or split the journey. A focused checkpoint or
+journey may be invoked at most three times in total, even when its failure
+signatures differ. After the third invocation, accept only honest composed focal
+evidence or mark the checkpoint blocked; never rerun it to peel another tail.
+The same failure signature may occur at most twice across equivalent validations.
+Validate a localized correction with its focused checkpoint, never by rerunning
+the entire suite.
+
+=== ORCA-NATIVE BROWSER ===
+
+When the task needs a website or web app, read the installed \`orca-cli\` skill
+and use Orca's built-in Browser before launching agent-browser, Playwright, a
+standalone Chromium, or another external browser process. This is a supervised
+Harness Dispatch, so start with \`orca agent-context --json\`, read the
+\`maestro browser-surface open\` payload contract, and open a harness-owned
+surface for this exact Task and Dispatch. Use task_SNAP as \`task_id\`,
+ctx_SNAP as \`attempt_id\`, and the managed executionHostId/workspaceKey
+above. Keep the returned \`surface_id\` and \`browser_page_id\`; pass the page
+through \`--page <id>\` for every snapshot, navigation, and interaction, then use
+the typed focus, capture, retain, or release command for its lifecycle.
+
+Do not replace a managed Harness surface with \`orca tab create\`. Direct
+\`tab list/create\` is only the bounded compatibility fallback when the running
+Orca does not advertise \`maestro.browser-surface.v1\`; record that exact
+capability failure before using it.
+
+External browser automation is a fallback only when the Orca Browser lacks a
+required capability or the task explicitly depends on an external authenticated
+profile. Before falling back, make one bounded Orca attempt and record the exact
+blocker in your next heartbeat and final worker_done body. Never silently open a
+second Chromium after an Orca page already exists.
+
 === CLI COMMANDS ===
 
 \`\`\`sh
@@ -25,6 +62,8 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
+  # Native provider subagents cannot send worker_done for this parent Dispatch.
+  # Wait until every native child is settled or absent before reporting completion.
   orca orchestration send --from term_WORKER --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id task_SNAP --dispatch-id ctx_SNAP --outcome succeeded
 
   # BEHAVIOR RULE: send a heartbeat every 5 minutes

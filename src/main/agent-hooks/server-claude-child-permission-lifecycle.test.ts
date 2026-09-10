@@ -59,6 +59,12 @@ describe('Claude child permission lifecycle', () => {
       expect(server.getStatusSnapshot()[0]).toMatchObject({
         state: 'waiting',
         toolName: 'Bash',
+        actorAttestation: {
+          provider: 'claude',
+          role: 'child',
+          providerActorId: 'a-other',
+          eventName: 'SubagentStop'
+        },
         subagents: [expect.objectContaining({ id: 'a-blocked', state: 'working' })]
       })
       await postClaudeHook({ hook_event_name: 'SubagentStop', agent_id: 'a-blocked' })
@@ -69,6 +75,46 @@ describe('Claude child permission lifecycle', () => {
       expect(status?.toolInput).toBeUndefined()
       expect(status?.interactivePrompt).toBeUndefined()
       expect(status?.subagents).toBeUndefined()
+      expect(status?.actorAttestation).toMatchObject({
+        provider: 'claude',
+        role: 'child',
+        providerActorId: 'a-blocked'
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('distinguishes lead and child tool actors on the same provider session', async () => {
+    const { server, postClaudeHook } = await createServer()
+    try {
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        session_id: 'session-parent',
+        tool_use_id: 'tool-lead',
+        tool_name: 'Bash'
+      })
+      expect(server.getStatusSnapshot()[0]?.actorAttestation).toMatchObject({
+        provider: 'claude',
+        role: 'lead',
+        eventName: 'PreToolUse',
+        toolUseId: 'tool-lead'
+      })
+
+      await postClaudeHook({
+        hook_event_name: 'PreToolUse',
+        session_id: 'session-parent',
+        agent_id: 'child-reviewer',
+        tool_use_id: 'tool-child',
+        tool_name: 'Bash'
+      })
+      expect(server.getStatusSnapshot()[0]?.actorAttestation).toMatchObject({
+        provider: 'claude',
+        role: 'child',
+        providerActorId: 'child-reviewer',
+        eventName: 'PreToolUse',
+        toolUseId: 'tool-child'
+      })
     } finally {
       server.stop()
     }

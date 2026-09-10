@@ -9,6 +9,8 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import type { PtyProcessInspection } from '../providers/pty-process-inspection'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
@@ -116,11 +118,17 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: PtyIncarnationId
+    }
+  ): Promise<PtyStopReceipt> {
     const adapter = this.adapterFor(id)
     const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)
-    await adapter.shutdown(id, opts)
+    // The receipt is the only proof of descendant termination, so it travels back verbatim.
+    const receipt = await adapter.shutdown(id, opts)
     if (!opts.keepHistory || migrateHistory) {
       if (migrateHistory) {
         adapter.ackColdRestore(id)
@@ -129,6 +137,7 @@ export class DaemonPtyRouter implements IPtyProvider {
         this.ownerResolver.forgetRoute(id, adapter)
       }
     }
+    return receipt
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {

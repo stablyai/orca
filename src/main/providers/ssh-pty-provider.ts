@@ -10,6 +10,7 @@ import type {
   SshPtyExitCallback,
   SshPtyReplayCallback
 } from './ssh-pty-provider-contract'
+import { SshPtyStopCoordinator } from './ssh-pty-provider-contract'
 import { SshPtyProviderOutputState } from './ssh-pty-provider-output-state'
 import { spawnFreshSshPty } from './ssh-agent-session-create-operation'
 import { mapSshPtyProcessList } from './ssh-agent-session-process-list'
@@ -23,6 +24,7 @@ import { buildSshPtySpawnRequest } from './ssh-pty-spawn-request'
 import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import { spawnWithTerminalRuntimeRepair, type TerminalRepairHook } from './ssh-pty-spawn-repair'
 import { createSshPtyProviderRpcOperations } from './ssh-pty-provider-rpc-operations'
 
@@ -36,6 +38,7 @@ export class SshPtyProvider implements IPtyProvider {
   private mux: SshChannelMultiplexer
   private connectionId: string
   private livePtyIds = new Set<string>()
+  private stopCoordinator = new SshPtyStopCoordinator()
   readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
@@ -102,6 +105,7 @@ export class SshPtyProvider implements IPtyProvider {
   dispose(): void {
     this.outputState.dispose()
     this.livePtyIds.clear()
+    this.stopCoordinator.clearAll()
   }
 
   getConnectionId = (): string => this.connectionId
@@ -143,7 +147,7 @@ export class SshPtyProvider implements IPtyProvider {
       }
     }
     if (opts.sessionId) {
-      return await reattachSshPtySessionForSpawn({
+      const result = await reattachSshPtySessionForSpawn({
         mux: this.mux,
         connectionId: this.connectionId,
         sessionId: opts.sessionId,
@@ -155,6 +159,8 @@ export class SshPtyProvider implements IPtyProvider {
           this.outputState.rememberPtyIncarnation(relayPtyId, incarnationId),
         acceptLivePty: (relayPtyId) => this.livePtyIds.add(relayPtyId)
       })
+      this.stopCoordinator.clear(result.id)
+      return result
     }
 
     const supportsCreateOperation = opts.agentSessionCreateOperationId
@@ -167,7 +173,7 @@ export class SshPtyProvider implements IPtyProvider {
       // Why: host routing owns legacy selection; a changed relay must not downgrade after dispatch.
       throw new Error('execution_owner_unavailable')
     }
-    return await spawnFreshSshPty({
+    const result = await spawnFreshSshPty({
       mux: this.mux,
       options: opts,
       params: buildSshPtySpawnRequest({
@@ -183,6 +189,8 @@ export class SshPtyProvider implements IPtyProvider {
       acceptLivePty: (id) => this.livePtyIds.add(id),
       toAppPtyId: this.toAppPtyId
     })
+    this.stopCoordinator.clear(result.id)
+    return result
   }
 
   async supportsAgentSessionClaims(options: { signal?: AbortSignal } = {}): Promise<boolean> {
@@ -217,6 +225,7 @@ export class SshPtyProvider implements IPtyProvider {
       rememberPtyIncarnation: (ptyId, incarnationId) =>
         this.outputState.rememberPtyIncarnation(ptyId, incarnationId)
     })
+    this.stopCoordinator.clear(id)
   }
 
   async attachForReconnect(
@@ -248,22 +257,26 @@ export class SshPtyProvider implements IPtyProvider {
     })
   }
 
-  async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
-    // Both fences are omitted rather than sent undefined: a host that predates either must see no
-    // key at all, and the owner fence in particular must never reach it as a falsy claim.
-    const { expectedIncarnationId, expectedOwnerClientInstanceId } = opts
-    await this.mux.request(
-      'pty.shutdown',
-      {
-        id: this.toRelayPtyId(id),
-        immediate: opts.immediate ?? false,
-        keepHistory: opts.keepHistory ?? false,
-        ...(expectedIncarnationId === undefined ? {} : { expectedIncarnationId }),
-        ...(expectedOwnerClientInstanceId === undefined ? {} : { expectedOwnerClientInstanceId })
-      },
-      relayTimeoutOptions(opts.deadlineMs)
-    )
-    this.livePtyIds.delete(id)
+  async shutdown(
+    id: string,
+    opts: Parameters<IPtyProvider['shutdown']>[1]
+  ): Promise<PtyStopReceipt> {
+    const relayPtyId = this.toRelayPtyId(id)
+    const receipt = await this.stopCoordinator.request({
+      mux: this.mux,
+      connectionId: this.connectionId,
+      appPtyId: id,
+      relayPtyId,
+      resolveSession: async () =>
+        (await this.listProcesses({ deadlineMs: opts.deadlineMs })).find(
+          (candidate) => candidate.id === id
+        ),
+      opts
+    })
+    if (receipt.verdict === 'exited') {
+      this.livePtyIds.delete(id)
+    }
+    return receipt
   }
 
   async listProcesses(opts?: {

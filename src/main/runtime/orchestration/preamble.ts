@@ -1,4 +1,5 @@
 import type { OrchestrationCliCommand } from './cli-command'
+import type { ManagedCliContext } from '../../../shared/managed-cli-context'
 
 export type PreambleParams = {
   taskId: string
@@ -16,6 +17,14 @@ export type PreambleParams = {
   // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
   // other execution hosts keep their existing bare `orca` bridge.
   cliCommand?: OrchestrationCliCommand
+  managedCliContext?: ManagedCliContext
+  // Why: every dispatched (managed) worker — native, WSL, SSH, dev,
+  // installed, or unpacked — must receive an authoritative ManagedCliContext;
+  // only a manual, non-dispatched session has none. Callers building a
+  // dispatch preamble (worker-start, federation attach) always set this true
+  // so a missing managedCliContext is a build-time contract violation, never
+  // a silent bare-`orca` guess. Not set by any non-dispatch preamble caller.
+  requiresManagedCliContext?: boolean
   // Why: populated by the coordinator's dispatch pre-flight (§3.1) only
   // when the target worktree is behind its tracking remote. When absent
   // or when `behind === 0`, the preamble emits no drift section. Callers
@@ -47,16 +56,41 @@ const HEARTBEAT_INTERVAL_MIN = 5
 // not as a separate prose block — LLM readers anchor on examples and skim
 // trailing prose, so rules must land at the point of use.
 export function buildDispatchPreamble(params: PreambleParams): string {
+  // Why: fails closed for every managed dispatch, dev mode included — dev
+  // mode changes which CLI text the worker is told to run, never whether an
+  // authoritative ManagedCliContext had to be resolved first. Only a manual,
+  // non-dispatched session may omit this.
+  if (params.requiresManagedCliContext && !params.managedCliContext) {
+    throw new Error(
+      'managed_cli_context_required: managed dispatch preamble requires an authoritative ManagedCliContext, not a bare orca fallback.'
+    )
+  }
   // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
-  const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  const cli = params.devMode
+    ? 'orca-dev'
+    : (params.managedCliContext?.executable ?? params.cliCommand ?? 'orca')
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent'
   })
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
+    : ''
+  // Why: bounded, deterministic, field-by-field so a worker (or a test) can
+  // verify the exact identity it was dispatched under without parsing prose.
+  // Fixed key order and no derived/free-text values keep it reproducible.
+  const contextSection = params.managedCliContext
+    ? `
+
+=== MANAGED CLI CONTEXT ===
+executable: ${params.managedCliContext.executable}
+runtimeId: ${params.managedCliContext.runtimeId}
+executionHostId: ${params.managedCliContext.executionHostId}
+workspaceKey: ${params.managedCliContext.workspaceKey}
+terminalHandle: ${params.managedCliContext.terminalHandle}
+capability: ${params.managedCliContext.protocolCapability}`
     : ''
 
   // Why: one-line recipes paste unchanged in POSIX shells, PowerShell, and cmd.exe.
@@ -67,6 +101,43 @@ Your task ID is: ${params.taskId}
 
 You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
+
+=== VALIDATION LOOP BREAKER ===
+
+Every validation command must have an explicit deadline. Record the normalized
+failure signature and how many times it has occurred. After the first occurrence,
+do not repeat an equivalent validation unchanged: change the methodology, reduce
+to a focused reproduction/test, or split the journey. A focused checkpoint or
+journey may be invoked at most three times in total, even when its failure
+signatures differ. After the third invocation, accept only honest composed focal
+evidence or mark the checkpoint blocked; never rerun it to peel another tail.
+The same failure signature may occur at most twice across equivalent validations.
+Validate a localized correction with its focused checkpoint, never by rerunning
+the entire suite.
+
+=== ORCA-NATIVE BROWSER ===
+
+When the task needs a website or web app, read the installed \`orca-cli\` skill
+and use Orca's built-in Browser before launching agent-browser, Playwright, a
+standalone Chromium, or another external browser process. This is a supervised
+Harness Dispatch, so start with \`${cli} agent-context --json\`, read the
+\`maestro browser-surface open\` payload contract, and open a harness-owned
+surface for this exact Task and Dispatch. Use ${params.taskId} as \`task_id\`,
+${params.dispatchId} as \`attempt_id\`, and the managed executionHostId/workspaceKey
+above. Keep the returned \`surface_id\` and \`browser_page_id\`; pass the page
+through \`--page <id>\` for every snapshot, navigation, and interaction, then use
+the typed focus, capture, retain, or release command for its lifecycle.
+
+Do not replace a managed Harness surface with \`${cli} tab create\`. Direct
+\`tab list/create\` is only the bounded compatibility fallback when the running
+Orca does not advertise \`maestro.browser-surface.v1\`; record that exact
+capability failure before using it.
+
+External browser automation is a fallback only when the Orca Browser lacks a
+required capability or the task explicitly depends on an external authenticated
+profile. Before falling back, make one bounded Orca attempt and record the exact
+blocker in your next heartbeat and final worker_done body. Never silently open a
+second Chromium after an Orca page already exists.
 
 === CLI COMMANDS ===
 
@@ -85,6 +156,8 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Never encode failure only in prose and never silently exit.
   # Include BOTH taskId and dispatchId in the payload so a late completion
   # from a failed retry cannot complete the current dispatch.
+  # Native provider subagents cannot send worker_done for this parent Dispatch.
+  # Wait until every native child is settled or absent before reporting completion.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 
   # BEHAVIOR RULE: send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
@@ -136,7 +209,7 @@ ${postDoneInstructions}`
 
   const subDispatch = params.canDispatchSubWorkers ? buildSubDispatchSection(cli) : ''
 
-  return `${header}${drift}${subDispatch}
+  return `${header}${contextSection}${drift}${subDispatch}
 
 === TASK ===
 ${params.taskSpec}`

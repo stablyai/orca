@@ -275,6 +275,8 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
 
     agentDashboardDrawerOpen: false,
     setAgentDashboardDrawerOpen: (open) => set({ agentDashboardDrawerOpen: open }),
+    maestroNavigatorOpen: false,
+    setMaestroNavigatorOpen: (open) => set({ maestroNavigatorOpen: open }),
     statusBarVisible: true,
     setStatusBarVisible: (v) => {
       window.api.ui.set({ statusBarVisible: v }).catch(console.error)

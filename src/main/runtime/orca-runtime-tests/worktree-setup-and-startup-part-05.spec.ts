@@ -225,7 +225,7 @@ describe('OrcaRuntimeService', () => {
       expect(spawn).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/remote/mobile-codex-draft',
-          command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+          command: "codex '--yolo'",
           connectionId: 'ssh-1',
           worktreeId: result.worktree.id
         })

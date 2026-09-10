@@ -1,7 +1,13 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
-const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
+const {
+  mockPtySpawn,
+  mockPtyInstance,
+  mockCreateShellPromptReadinessProbe,
+  stopPtyProcessTreeMock
+} = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
+  stopPtyProcessTreeMock: vi.fn(),
   mockCreateShellPromptReadinessProbe: vi.fn(),
   mockPtyInstance: {
     pid: process.pid,
@@ -26,6 +32,10 @@ vi.mock('../main/pty/posix-pty-process-groups', () => ({
 
 vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
+}))
+
+vi.mock('../main/daemon/terminal-session-teardown', () => ({
+  stopPtyProcessTree: stopPtyProcessTreeMock
 }))
 
 import * as ptyShellUtils from './pty-shell-utils'
@@ -90,6 +100,17 @@ describe('PtyHandler retires a closed pane surface', () => {
   }
 
   beforeEach(() => {
+    stopPtyProcessTreeMock.mockImplementation(async (pid: number, killRoot: () => void) => {
+      killRoot()
+      const root = { pid, parentPid: 1, processGroupId: pid, startedAt: 'captured' }
+      return {
+        root,
+        descendants: [],
+        observations: [{ identity: root, status: 'absent', observedAt: new Date().toISOString() }],
+        verdict: 'exited',
+        processTreeVerified: true
+      }
+    })
     ;({ dispatcher, handler, originalPlatform } = beginPtyHandlerTest({
       mockPtySpawn,
       mockPtyInstance,
@@ -124,7 +145,7 @@ describe('PtyHandler retires a closed pane surface', () => {
         id,
         expectedIncarnationId: 'different-incarnation'
       })
-    ).rejects.toThrow('PTY incarnation mismatch')
+    ).rejects.toThrow('pty_stop_receipt_identity_mismatch')
 
     expect(term.kill).not.toHaveBeenCalled()
     expect(handler.isPaneSurfaceRetired(PANE_KEY)).toBe(false)
@@ -181,9 +202,9 @@ describe('PtyHandler retires a closed pane surface', () => {
 
     // The immediate path is the one that reaches ConPTY's kill without setting gracefulKillSent.
     const shutdown = dispatcher.callRequest('pty.shutdown', { id, immediate: true })
-    const rejected = expect(shutdown).rejects.toThrow('Timed out waiting for PTY process exit')
+    const completed = expect(shutdown).resolves.toMatchObject({ verdict: 'exited' })
     await vi.advanceTimersByTimeAsync(IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
-    await rejected
+    await completed
     await vi.advanceTimersByTimeAsync(
       SHUTDOWN_REAP_VERIFY_DELAY_MS * (SHUTDOWN_REAP_MAX_SWEEPS + 2)
     )

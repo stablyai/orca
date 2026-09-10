@@ -19,6 +19,16 @@ const TEST_PROJECT_PATH = path.join('tmp', 'project')
 
 afterEach(closeSharedControlTestServers)
 
+// Why: every wait here settles a real WebSocket handshake or server round trip, and
+// vitest's 1s waitFor default is routinely exceeded under full-suite CPU contention.
+// The predicates are unchanged; only the budget is.
+function waitForShared<T>(
+  check: () => T | Promise<T>,
+  options?: { timeout?: number; interval?: number }
+): Promise<T> {
+  return vi.waitFor(check, { timeout: 20_000, ...options })
+}
+
 describe('RemoteRuntimeSharedControlConnection', () => {
   it('routes multiple one-shot RPCs over one authenticated WebSocket', async () => {
     const server = await createServer()
@@ -149,7 +159,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
 
     const response = connection.request('worktree.ps', undefined, 1000)
-    await vi.waitFor(() => expect(server.connectionCount()).toBe(1))
+    await waitForShared(() => expect(server.connectionCount()).toBe(1))
 
     connection.reconnectNow()
 
@@ -204,10 +214,10 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onError: vi.fn()
     })
 
-    await vi.waitFor(() => expect(onAccounts).toHaveBeenCalled())
-    await vi.waitFor(() => expect(onEvents).toHaveBeenCalled())
+    await waitForShared(() => expect(onAccounts).toHaveBeenCalled())
+    await waitForShared(() => expect(onEvents).toHaveBeenCalled())
     accounts.close()
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map((request) => request.method)).toContain('accounts.unsubscribe')
     )
 
@@ -228,7 +238,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse: vi.fn(),
       onError: vi.fn()
     })
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map((request) => request.method)).toEqual([
         'session.tabs.subscribeAll'
       ])
@@ -237,7 +247,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
 
     subscription.close()
 
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map((request) => request.method)).toEqual([
         'session.tabs.subscribeAll',
         'session.tabs.unsubscribeAll'
@@ -261,7 +271,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       )
     )
 
-    await vi.waitFor(() => expect(server.requests).toHaveLength(35))
+    await waitForShared(() => expect(server.requests).toHaveLength(35))
 
     expect(server.connectionCount()).toBe(1)
     expect(
@@ -284,8 +294,8 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onClose
     })
 
-    await vi.waitFor(() => expect(server.connectionCount()).toBe(2))
-    await vi.waitFor(() =>
+    await waitForShared(() => expect(server.connectionCount()).toBe(2))
+    await waitForShared(() =>
       expect(server.requests.map((request) => request.method)).toEqual([
         'runtime.clientEvents.subscribe',
         'runtime.clientEvents.subscribe'
@@ -349,7 +359,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     })
     ;(connection as unknown as { reconnect: { attempt: number } }).reconnect.attempt = 3
 
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(connection.getDiagnostics()).toMatchObject({ reconnectAttempt: 0 })
     )
     connection.close()
@@ -365,7 +375,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
 
     await expect(connection.request('worktree.ps', undefined, 25)).rejects.toThrow('Timed out')
 
-    await vi.waitFor(() => expect(unsafe.readyWaiters).toHaveLength(0))
+    await waitForShared(() => expect(unsafe.readyWaiters).toHaveLength(0))
     expect(unsafe.pendingRequests.size).toBe(0)
     connection.close()
   })
@@ -379,14 +389,14 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse: onAccounts,
       onError: vi.fn()
     })
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map((request) => request.method)).toEqual(['accounts.subscribe'])
     )
 
     accounts.close()
     server.flushDelayedResponses()
 
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map((request) => request.method)).toEqual([
         'accounts.subscribe',
         'accounts.unsubscribe'
@@ -410,11 +420,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse,
       onError: vi.fn()
     })
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+    await waitForShared(() => expect(onResponse).toHaveBeenCalled())
 
     subscription.close()
 
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map((request) => request.method)).toContain(cleanupMethod)
     )
     connection.close()
@@ -434,12 +444,12 @@ describe('RemoteRuntimeSharedControlConnection', () => {
         onError: vi.fn()
       }
     )
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+    await waitForShared(() => expect(onResponse).toHaveBeenCalled())
 
     subscription.close()
     subscription.close()
 
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.filter((request) => request.method === 'files.unwatch')).toHaveLength(
         1
       )
@@ -484,11 +494,11 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse,
       onError: vi.fn()
     })
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+    await waitForShared(() => expect(onResponse).toHaveBeenCalled())
 
     connection.close()
 
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map((request) => request.method)).toContain(
         'runtime.clientEvents.unsubscribe'
       )
@@ -514,7 +524,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onResponse: vi.fn(),
       onError: vi.fn()
     })
-    await vi.waitFor(() => expect(server.requests).toHaveLength(1))
+    await waitForShared(() => expect(server.requests).toHaveLength(1))
 
     expect(subscription.sendBinary(new Uint8Array([1, 2, 3]))).toBe(false)
     connection.close()
@@ -537,15 +547,15 @@ describe('RemoteRuntimeSharedControlConnection', () => {
       onError: vi.fn(),
       onClose
     })
-    await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
+    await waitForShared(() => expect(onResponse).toHaveBeenCalled())
     expect(isRuntimeSubscriptionReplayResponse(onResponse.mock.calls[0]?.[0])).toBe(false)
 
     // Liveness terminates the silent socket and the reconnect path replays
     // the subscription on a fresh connection.
-    await vi.waitFor(() => expect(server.connectionCount()).toBeGreaterThanOrEqual(2), {
+    await waitForShared(() => expect(server.connectionCount()).toBeGreaterThanOrEqual(2), {
       timeout: 5000
     })
-    await vi.waitFor(
+    await waitForShared(
       () =>
         expect(
           server.requests.filter((request) => request.method === 'runtime.clientEvents.subscribe')
@@ -555,7 +565,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     )
     // The first response after the reconnect replay carries the replay tag so
     // snapshot freshness gates can accept the re-emitted snapshot.
-    await vi.waitFor(
+    await waitForShared(
       () =>
         expect(
           onResponse.mock.calls.some(([response]) => isRuntimeSubscriptionReplayResponse(response))
@@ -585,14 +595,14 @@ describe('RemoteRuntimeSharedControlConnection', () => {
 
     const timedOut = connection.request('worktree.hang', undefined, 250)
     void timedOut.catch(() => undefined)
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map(({ method }) => method)).toContain('worktree.hang')
     )
     const survivor = connection.request('worktree.ps', undefined, 1000).then(
       (response) => ({ ok: true as const, response }),
       (error: unknown) => ({ ok: false as const, error })
     )
-    await vi.waitFor(() =>
+    await waitForShared(() =>
       expect(server.requests.map(({ method }) => method)).toContain('worktree.ps')
     )
     expect(
@@ -649,7 +659,7 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     const requests = Array.from({ length: admittedCount }, () =>
       connection.request('worktree.large', params, 60_000).catch(() => undefined)
     )
-    await vi.waitFor(() => expect(server.requests).toHaveLength(admittedCount))
+    await waitForShared(() => expect(server.requests).toHaveLength(admittedCount))
 
     expect(
       Array.from(pendingRequests.values()).every(

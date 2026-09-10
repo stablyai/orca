@@ -1,6 +1,11 @@
+import {
+  attestFederationLeadProvider,
+  lifecycleResult
+} from './federation-lead-provider.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
+  ORCHESTRATION_FEDERATION_ATTEMPT_BOUND_WORKER_LEASE_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
@@ -10,6 +15,7 @@ import { OrchestrationDb } from '../../../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/environment-transport'
 import { waitForFederatedLifecycleSettlement } from '../../../../orchestration/federation-lifecycle-settlement'
 import { RpcDispatcher } from '../../../dispatcher'
+import { createManagedCliContext } from '../../../../../../shared/managed-cli-context'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
 
@@ -85,6 +91,7 @@ describe('orchestration federation lifecycle settlement', () => {
   })
 
   function configureWorkerRuntime(): void {
+    attestFederationLeadProvider(workerRuntime)
     vi.spyOn(workerRuntime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     vi.spyOn(workerRuntime, 'showRepo').mockResolvedValue({
       id: 'windows-repo',
@@ -119,6 +126,23 @@ describe('orchestration federation lifecycle settlement', () => {
       'windows_runtime:pty:1'
     )
     vi.spyOn(workerRuntime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(workerRuntime, 'preflightWorktreeManagedCliExecutable').mockReturnValue('orca')
+    vi.spyOn(workerRuntime, 'assertTerminalManagedCliAvailable').mockImplementation(() => {})
+    // Why: the attach path proves the worker's managed-CLI identity from a live pty
+    // record, which a spied createManagedWorktree never registers.
+    vi.spyOn(workerRuntime, 'buildTerminalManagedCliContext').mockImplementation((handle) =>
+      createManagedCliContext({
+        executable: 'orca',
+        runtimeId: workerRuntime.getRuntimeId(),
+        executionHostId: 'local',
+        workspaceKey: 'worktree:repo::windows-worktree',
+        terminalHandle: handle
+      })
+    )
+    vi.spyOn(workerRuntime, 'showTerminal').mockResolvedValue({
+      handle: 'term_windows_worker',
+      tabId: 'tab_worker'
+    } as never)
     vi.spyOn(workerRuntime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_windows_worker',
       accepted: true,
@@ -213,17 +237,13 @@ describe('orchestration federation lifecycle settlement', () => {
     )
   }
 
-  function lifecycleResult(response: RuntimeRpcResponse<unknown>): string {
-    if (!response.ok) {
-      return `error:${response.error.code}`
-    }
-    const result = response.result as { lifecycle?: { action?: string } }
-    return result.lifecycle?.action ?? 'missing'
-  }
-
+  // Why: a server old enough to lack lifecycle settlement also predates the
+  // attempt-bound worker lease; advertising the newer capability would model a
+  // peer that cannot exist.
   function legacyWorkerCapabilities(protocolVersion: 1 | 2): string[] {
     return workerCapabilities.filter(
       (capability) =>
+        capability !== ORCHESTRATION_FEDERATION_ATTEMPT_BOUND_WORKER_LEASE_RUNTIME_CAPABILITY &&
         capability !== ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY &&
         (protocolVersion === 2 ||
           capability !== ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY)

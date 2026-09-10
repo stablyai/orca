@@ -7,8 +7,10 @@ import type { SendParams } from '../schemas'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
+import { sweepSettledWorkerResumeFences } from '../../settled-worker-resume-fence-sweep'
 import type { SendRecipientWarning } from './recipient-routing'
 import type { z } from 'zod'
+import { verifyWorkerSettlementActor } from '../../orchestration-worker-settlement-authority'
 
 type SendParamsInput = z.infer<typeof SendParams>
 type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipientWarning[] }
@@ -106,6 +108,22 @@ export function sendPointToPointMessage(args: {
       }
     }
 
+    if (msg.type === 'worker_done' && dispatch?.capability_hash) {
+      const actor = verifyWorkerSettlementActor({ runtime, terminalHandle: from, dispatch })
+      if (!actor.valid) {
+        db.convertLifecycleMessageToRejection(msg.id, actor.code, actor.reason)
+        db.db.prepare("UPDATE messages SET type = 'status' WHERE id = ?").run(msg.id)
+        const rejection = db.getMessageById(msg.id) ?? msg
+        return recordReceiptForPostCommitNudge(
+          recordMutationReceipt,
+          withSendWarnings({
+            message: exposeMessage(rejection),
+            lifecycle: { action: 'rejected', code: actor.code, reason: actor.reason }
+          }),
+          () => runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
+        )
+      }
+    }
     if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
       const reconciled = reconcileLifecycleMessage(db, msg)
       // Why: a suppressed message is already read, so skip waking a check waiter to an empty result.
@@ -149,6 +167,9 @@ export function sendPointToPointMessage(args: {
       ? db.commitWorkerDoneMessageMutation(commitMessage)
       : commitMessage()
   committed.nudge()
+  if (messageType === 'worker_done') {
+    sweepSettledWorkerResumeFences(runtime)
+  }
   return committed.receipt
 }
 

@@ -21,6 +21,7 @@ export function createPreviewClipboardPaster(deps: {
   container: HTMLElement
   getTerminal: () => Terminal | null
   getTerminalInput: () => DashboardCardTerminalInput | null
+  isInputEnabled: () => boolean
   isDisposed: () => boolean
 }): (activeElementAtDispatch: Element | null, source: PreviewTerminalPasteSource) => Promise<void> {
   return async (activeElementAtDispatch, source) => {
@@ -36,6 +37,7 @@ export function createPreviewClipboardPaster(deps: {
     }
     const targetIsCurrent = (): boolean =>
       !deps.isDisposed() &&
+      deps.isInputEnabled() &&
       deps.getTerminal() === pasteTerminal &&
       activeElementAtDispatch !== null &&
       document.activeElement === activeElementAtDispatch &&

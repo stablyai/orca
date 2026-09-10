@@ -265,6 +265,7 @@ describe('setActiveWorktree', () => {
       refreshGitHubForWorktreeIfStale: vi.fn()
     })
 
+    store.getState().reconcileWorktreeTabModel(wt)
     const before = store.getState()
     const listener = vi.fn()
     const unsubscribe = store.subscribe(listener)
@@ -469,7 +470,9 @@ describe('setActiveWorktree', () => {
     expect(s.activeTabType).toBe('terminal')
     expect(s.activeBrowserTabId).toBe(browserTabId)
     expect(s.activeTabId).toBeNull()
-    expect(s.unifiedTabsByWorktree[wt]).toEqual([])
-    expect(s.groupsByWorktree[wt][0].activeTabId).toBeNull()
+    expect(s.unifiedTabsByWorktree[wt]).toEqual([
+      expect.objectContaining({ contentType: 'maestro', systemRole: 'workspace-maestro' })
+    ])
+    expect(s.groupsByWorktree[wt][0].activeTabId).toBe(s.unifiedTabsByWorktree[wt][0].id)
   })
 })

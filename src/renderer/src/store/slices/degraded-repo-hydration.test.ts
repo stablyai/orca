@@ -168,11 +168,11 @@ it('keeps tab, editor, and browser chrome through degraded hydration and persist
   hydrateWithRepoScan(restoredStore, persisted)
 
   const restored = restoredStore.getState()
-  expect(restored.unifiedTabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([
-    TERMINAL_ID,
-    EDITOR_FILE_ID,
-    BROWSER_ID
-  ])
+  expect(
+    restored.unifiedTabsByWorktree[WORKTREE_ID]
+      ?.filter((tab) => tab.contentType !== 'maestro')
+      .map((tab) => tab.id)
+  ).toEqual([TERMINAL_ID, EDITOR_FILE_ID, BROWSER_ID])
   expect(restored.openFiles.map((file) => file.id)).toEqual([EDITOR_FILE_ID])
   expect(restored.browserTabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([BROWSER_ID])
 })
@@ -193,10 +193,11 @@ it('keeps a terminal-free degraded workspace selected through hydration and pers
 
   const restored = restoredStore.getState()
   expect(restored.activeWorktreeId).toBe(WORKTREE_ID)
-  expect(restored.unifiedTabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)).toEqual([
-    EDITOR_FILE_ID,
-    BROWSER_ID
-  ])
+  expect(
+    restored.unifiedTabsByWorktree[WORKTREE_ID]
+      ?.filter((tab) => tab.contentType !== 'maestro')
+      .map((tab) => tab.id)
+  ).toEqual([EDITOR_FILE_ID, BROWSER_ID])
   expect(restored.activeTabType).toBe('browser')
 })
 

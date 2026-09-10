@@ -195,6 +195,7 @@ type PendingPtyReattach = {
 type RemoteCliBridgeEnv = {
   remoteHome: string
   binDir: string
+  launcherPath?: string
   relayDir: string
   nodePath: string
   sockPath: string
@@ -308,6 +309,31 @@ async function settleSshSessionTeardown(
 // Why: dispose is strictly more destructive than detach, so the mode records which teardown a
 // session has already committed to and lets dispose supersede an in-flight detach.
 type SshRelaySessionTeardownMode = 'detach' | 'dispose'
+
+/** Whether an SSH target's remote `orca` launcher shim is installed and safe to rely on. */
+export type ManagedCliLauncherStatus =
+  | { state: 'installed'; launcherPath: string }
+  | { state: 'unavailable'; reason: string }
+
+const managedCliLauncherStatusByTarget = new Map<string, ManagedCliLauncherStatus>()
+
+/** Record whether RemoteCliInstallPlan actually installed the launcher for this SSH target. */
+export function setManagedCliLauncherStatus(
+  connectionId: string,
+  status: ManagedCliLauncherStatus
+): void {
+  managedCliLauncherStatusByTarget.set(connectionId, status)
+}
+
+/** Clear the recorded launcher status when an SSH target's connection tears down. */
+export function clearManagedCliLauncherStatus(connectionId: string): void {
+  managedCliLauncherStatusByTarget.delete(connectionId)
+}
+
+/** Read the recorded launcher status for an SSH target; absent means never established. */
+export function getManagedCliLauncherStatus(connectionId: string): ManagedCliLauncherStatus | null {
+  return managedCliLauncherStatusByTarget.get(connectionId) ?? null
+}
 
 export class SshRelaySession {
   private _state: RelaySessionState = 'idle'
@@ -1067,11 +1093,14 @@ export class SshRelaySession {
       await this.installRemoteOrcaCliLauncher()
     } catch (error) {
       // Why: on MaxSessions=1 remotes the relay holds the only slot, so this raw-connection install can fail — don't fail the whole connection.
+      const reason = error instanceof Error ? error.message : String(error)
       console.warn(
-        `[ssh-relay-session] remote orca CLI launcher install failed for ${this.targetId}: ${
-          error instanceof Error ? error.message : String(error)
-        }`
+        `[ssh-relay-session] remote orca CLI launcher install failed for ${this.targetId}: ${reason}`
       )
+      // Why: a managed worker must never fall back to bare `orca` PATH resolution when the
+      // shim it depends on failed to install — record typed unavailability so worker-start
+      // gating (OrcaRuntimeService.assertTerminalManagedCliAvailable) can refuse creation.
+      setManagedCliLauncherStatus(this.targetId, { state: 'unavailable', reason })
     }
     if (shouldContinue && !shouldContinue()) {
       return false
@@ -1430,6 +1459,11 @@ export class SshRelaySession {
     for (const command of plan.postWriteCommands) {
       await execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(hostPlatform) })
     }
+    this.remoteCliBridgeEnv = { ...this.remoteCliBridgeEnv, launcherPath: plan.launcherPath }
+    setManagedCliLauncherStatus(this.targetId, {
+      state: 'installed',
+      launcherPath: plan.launcherPath
+    })
   }
 
   private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer, connectionIncarnation: string): void {
@@ -1696,6 +1730,7 @@ export class SshRelaySession {
     unregisterSshPtyProvider(this.targetId)
     unregisterSshFilesystemProvider(this.targetId)
     unregisterSshGitProvider(this.targetId)
+    clearManagedCliLauncherStatus(this.targetId)
     this.sourceIdentityByRelayPtyId.clear()
     this.retiredSourceDeliveries.clear()
     this.rejectedPtyRecoveryAttempts.clear()

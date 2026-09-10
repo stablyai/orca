@@ -4,6 +4,7 @@ import {
   createTerminalStreamFixtures,
   type MultiplexSubscriptionCallbacks
 } from './remote-runtime-pty-transport-stream-fixtures'
+import { translate } from '@/i18n/i18n'
 
 export type { MultiplexSubscriptionCallbacks }
 
@@ -37,7 +38,10 @@ export function readyHostSessionInventoryResponse(
           id: `${hostTabId}::pane:1`,
           parentTabId: hostTabId,
           leafId: 'pane:1',
-          title: 'Terminal',
+          title: translate(
+            'auto.components.terminal.pane.remote.runtime.pty.transport.test.harness.34e5ecd501',
+            'Terminal'
+          ),
           isActive: true,
           status: 'ready',
           terminal
@@ -100,7 +104,10 @@ export function createRemoteRuntimeTransportMocks(
                 id: `${params.tabId}::${resolvedLeafId}`,
                 parentTabId: params.tabId,
                 leafId: resolvedLeafId,
-                title: 'Terminal',
+                title: translate(
+                  'auto.components.terminal.pane.remote.runtime.pty.transport.test.harness.34e5ecd501',
+                  'Terminal'
+                ),
                 isActive: true,
                 status: 'ready',
                 terminal: bindings.getResolvedPaneHandle()

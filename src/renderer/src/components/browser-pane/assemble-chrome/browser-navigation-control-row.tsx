@@ -15,6 +15,7 @@ import {
 export type BrowserNavigationControls = {
   canGoBack: boolean
   canGoForward: boolean
+  canReload?: boolean
   loading: boolean
   goBack: () => void
   goForward: () => void
@@ -79,6 +80,7 @@ export function BrowserNavigationControlRow({
           variant="ghost"
           className="h-7 w-7"
           onClick={controls.reload}
+          disabled={controls.canReload === false}
           aria-label={reloadLabel ?? translate('browser.navigation.reload', 'Reload')}
         >
           {controls.loading ? (

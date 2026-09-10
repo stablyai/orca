@@ -104,6 +104,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       pty.launchToken = agentLaunchAuthority.launchToken
       pty.launchIncarnationId = binding.incarnationId
       pty.launchAgent = agentLaunchAuthority.launchAgent
+      this.resetPtyLaunchAuthorityCommandFence(ptyId)
     }
     const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
     if (

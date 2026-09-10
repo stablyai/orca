@@ -131,6 +131,9 @@ export async function checkRunMailbox(args: {
   }
   let current = params.peek ? undefined : readDelivery(params.wait ? typeFilter : undefined)
   if (current) {
+    const pendingAttentionMessages = current.replayed
+      ? db.getRunDeliveryAttention(run.id, current.delivery)
+      : []
     return {
       runId: run.id,
       deliveryId: current.delivery.id,
@@ -141,6 +144,12 @@ export async function checkRunMailbox(args: {
       timedOut: false,
       cancelled: false,
       connectionLost: false,
+      ...(pendingAttentionMessages.length > 0
+        ? {
+            pendingAttentionMessages: exposeMessages(pendingAttentionMessages),
+            pendingAttentionCount: pendingAttentionMessages.length
+          }
+        : {}),
       ...(params.format || params.inject
         ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
         : {})

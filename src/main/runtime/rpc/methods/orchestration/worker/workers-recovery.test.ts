@@ -319,6 +319,7 @@ describe('orchestration worker recovery', () => {
       dispatchId: started.dispatch.id,
       state: 'ready',
       stage: 'remote_input_accepted',
+      remoteRuntimeEpoch: 'windows_epoch_old',
       worktreeId: 'repo::windows-worktree',
       terminalHandle: 'term_windows_worker'
     })

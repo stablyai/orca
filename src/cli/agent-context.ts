@@ -1,5 +1,9 @@
 import type { CommandSpec } from './args'
 import { effectiveAllowedFlags } from './args'
+import {
+  MAESTRO_AGENT_PAYLOAD_CONTRACTS,
+  type MaestroAgentPayloadContracts
+} from './maestro-command-contracts'
 
 // Why: serialize the live spec table so agent discovery cannot drift from the
 // command surface it describes.
@@ -23,6 +27,7 @@ export type AgentContextSchema = {
   schemaVersion: number
   commandCount: number
   commands: AgentContextCommand[]
+  payloadContracts: MaestroAgentPayloadContracts
 }
 
 export function buildAgentContext(specs: CommandSpec[]): AgentContextSchema {
@@ -46,7 +51,8 @@ export function buildAgentContext(specs: CommandSpec[]): AgentContextSchema {
   return {
     schemaVersion: SCHEMA_VERSION,
     commandCount: commands.length,
-    commands
+    commands,
+    payloadContracts: MAESTRO_AGENT_PAYLOAD_CONTRACTS
   }
 }
 

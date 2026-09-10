@@ -477,11 +477,13 @@ describe('LocalPtyProvider', () => {
       )
       const shutdown = new Promise<void>((resolve, reject) => {
         queueMicrotask(() => {
-          provider.shutdown('probe-shutdown-session', { immediate: true }).then(resolve, reject)
+          provider
+            .shutdown('probe-shutdown-session', { immediate: true })
+            .then(() => resolve(), reject)
         })
       })
 
-      await shutdown
+      await expect(shutdown).rejects.toThrow('pty_stop_receipt_unavailable')
       await canceledSpawn
       expect(spawnMock).toHaveBeenCalledTimes(callsBeforeSpawn)
     })

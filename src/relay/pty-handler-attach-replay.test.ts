@@ -133,12 +133,15 @@ describe('PtyHandler', () => {
       await expect(dispatcher.callRequest('pty.attach', { id: PTY_1 })).rejects.toThrow(
         `PTY "${PTY_1}" not found`
       )
-      await expect(shutdown).resolves.toBeUndefined()
+      // The relay now answers a shutdown with its process-tree stop receipt.
+      await expect(shutdown).resolves.toMatchObject({ ptyId: PTY_1 })
     } finally {
       aliveSpy.mockRestore()
     }
 
-    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    // The shell had already exited, so the stop settles on that evidence instead of
+    // signalling a process that is gone.
+    expect(mockKill).not.toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })

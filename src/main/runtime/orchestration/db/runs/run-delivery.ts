@@ -114,6 +114,35 @@ export function getUnreadRunMailbox(
   )
 }
 
+export function getRunDeliveryAttention(
+  this: OrchestrationDb,
+  runId: string,
+  delivery: DeliveryRow,
+  limit = 20
+): MessageRow[] {
+  const delivered = this.getDeliveryMessages(delivery)
+  const newestDeliveredSequence = delivered.reduce(
+    (newest, message) => Math.max(newest, message.sequence),
+    0
+  )
+  return exposeMessageListTimestamps(
+    this.db
+      .prepare(
+        `SELECT * FROM messages
+         WHERE run_id = ? AND to_handle = ? AND read = 0
+           AND delivery_contract = 'current_delivery' AND sequence > ?
+           AND (type = 'question' OR priority IN ('high', 'urgent'))
+         ORDER BY sequence ASC LIMIT ?`
+      )
+      .all(
+        runId,
+        `run:${runId}`,
+        newestDeliveredSequence,
+        Math.max(1, Math.min(Math.floor(limit), 20))
+      ) as MessageRow[]
+  )
+}
+
 export function hasOutstandingRunDelivery(this: OrchestrationDb, runId: string): boolean {
   return this.hasOutstandingMailboxDelivery(`run:${runId}`)
 }
@@ -124,6 +153,7 @@ export type RunDeliveryMethods = {
   acknowledgeRunDelivery: typeof acknowledgeRunDelivery
   getRunMailboxHistory: typeof getRunMailboxHistory
   getUnreadRunMailbox: typeof getUnreadRunMailbox
+  getRunDeliveryAttention: typeof getRunDeliveryAttention
   hasOutstandingRunDelivery: typeof hasOutstandingRunDelivery
 }
 
@@ -134,6 +164,7 @@ export function attachRunDelivery(ctor: { prototype: object }): void {
     acknowledgeRunDelivery,
     getRunMailboxHistory,
     getUnreadRunMailbox,
+    getRunDeliveryAttention,
     hasOutstandingRunDelivery
   })
 }

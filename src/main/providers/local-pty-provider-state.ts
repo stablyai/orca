@@ -2,13 +2,16 @@ import type * as pty from 'node-pty'
 import type { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import { normalizeLocalCallerSessionId } from './local-pty-launch-helpers'
 
 export type PtyShutdownOperation = {
-  promise: Promise<void>
+  promise: Promise<PtyStopReceipt>
   immediate: boolean
   rootSignalled: boolean
   proc: pty.IPty
+  incarnationId: string
+  terminalHandle: string
 }
 
 export type PendingLocalPtySpawn = {
@@ -37,6 +40,7 @@ export const ptyIncarnations = new Map<string, string>()
 export const ptyAgentSessionIds = new Set<string>()
 // Why: descendant capture is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.
 export const ptyShutdownOperations = new Map<string, PtyShutdownOperation>()
+export const ptyStopReceipts = new Map<string, PtyStopReceipt>()
 export const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 export const ptyShellName = new Map<string, string>()
 export const ptyAgentForegroundContextPaths = new Map<string, string[]>()
@@ -142,12 +146,14 @@ export function clearPtyState(id: string): void {
 export function allocatePtyId(sessionId: string | undefined): string {
   const requested = normalizeLocalCallerSessionId(sessionId)
   if (requested) {
+    ptyStopReceipts.delete(requested)
     return requested
   }
   let id: string
   do {
     id = String(++ptyCounter)
   } while (ptyProcesses.has(id))
+  ptyStopReceipts.delete(id)
   return id
 }
 

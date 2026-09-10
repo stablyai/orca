@@ -5,6 +5,7 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-type
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
+import { exitedPtyStopReceipt } from '../ipc/pty-ipc-test-constants'
 
 const CONNECTION_ID = 'conn-1'
 const SSH_HOST_ID: ExecutionHostId = `ssh:${CONNECTION_ID}`
@@ -300,7 +301,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       persistPtyBinding: vi.fn()
     } as never
     const runtime = new OrcaRuntimeService(store)
-    const stopAndWait = vi.fn(async () => true)
+    const stopAndWait = vi.fn(async (ptyId: string) => exitedPtyStopReceipt(ptyId))
     runtime.setPtyController({
       write: () => true,
       kill: vi.fn(() => true),
@@ -352,7 +353,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
     runtime.setPtyController({
       write: () => true,
       kill: vi.fn(() => true),
-      stopAndWait: vi.fn(async () => true),
+      stopAndWait: vi.fn(async (ptyId: string) => exitedPtyStopReceipt(ptyId)),
       getForegroundProcess: async () => null
     })
     runtime.attachWindow(1)
@@ -413,9 +414,9 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
     const runtime = new OrcaRuntimeService(harness.store)
     const physicalStop = makeDeferred()
     const kill = vi.fn(() => true)
-    const stopAndWait = vi.fn(async () => {
+    const stopAndWait = vi.fn(async (ptyId: string) => {
       await physicalStop.promise
-      return true
+      return exitedPtyStopReceipt(ptyId)
     })
     runtime.setPtyController({
       write: () => true,
@@ -452,7 +453,7 @@ describe('OrcaRuntimeService terminal retirement host partitioning (STA-3463)', 
       if (ptyId === SSH_PTY_LEFT) {
         throw new Error('relay_unavailable')
       }
-      return true
+      return exitedPtyStopReceipt(ptyId)
     })
     runtime.setPtyController({
       write: () => true,

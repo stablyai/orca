@@ -363,7 +363,12 @@
             "36761d9604": "Unknown keybinding action \"{{value0}}\" was ignored.",
             "d2e43e426a": "{{value0}} must be an object.",
             "fb290366b2": "Unavailable on web.",
-            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}"
+            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}",
+            "test": {
+              "harness": {
+                "225db77b97": "WebSocket"
+              }
+            }
           }
         },
         "runtime": {
@@ -396,7 +401,14 @@
           "f963485d37": "Row not found",
           "a967f23983": "Project view not loaded",
           "87020f6605": "Row has no owner/repo/number — cannot patch underlying item",
-          "d49ef4b944": "Failed to save issue-source preference"
+          "d49ef4b944": "Failed to save issue-source preference",
+          "slice": {
+            "test": {
+              "harness": {
+                "28fd2d1802": "Test PR"
+              }
+            }
+          }
         },
         "sparse": {
           "presets": {
@@ -476,7 +488,14 @@
           },
           "createdWithoutParentNesting": "Created without nesting under \"{{value0}}\"",
           "createdWithoutParentNestingUnnamed": "Created without nesting under the selected parent",
-          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu."
+          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu.",
+          "slice": {
+            "test": {
+              "fixtures": {
+                "e851268bd6": "Terminal"
+              }
+            }
+          }
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -597,6 +616,15 @@
               "15cbedc3e3": "Install the Orca CLI before running agent skill setup.",
               "windowsPathUnknown": "Orca could not check your Windows user PATH",
               "refreshCliRegistration": "Refresh CLI registration status and try again."
+            }
+          }
+        },
+        "background": {
+          "session": {
+            "test": {
+              "state": {
+                "d9fa6e0979": "Terminal 1"
+              }
             }
           }
         }
@@ -3308,6 +3336,19 @@
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "Host unavailable",
             "54f29b7c0d": "Loading host…"
+          },
+          "remote": {
+            "runtime": {
+              "pty": {
+                "transport": {
+                  "test": {
+                    "harness": {
+                      "34e5ecd501": "Terminal"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -9121,7 +9162,12 @@
               "close": "close",
               "notification": "notification area",
               "background": "background"
-            }
+            },
+            "b6035a3def": "语言",
+            "ab96f8a4b9": "語言",
+            "0b03f507c2": "언어",
+            "5f4779d525": "言語",
+            "3a0e3a9fdc": "Idioma"
           }
         },
         "auto": {
@@ -10536,6 +10582,22 @@
               "7c7056940a": "shell",
               "713c4a2f92": "Choose the default shell for new terminal panes on Windows.",
               "13715f9d23": "Default Shell"
+            }
+          },
+          "advanced": {
+            "platform": {
+              "search": {
+                "77faf8be39": "Ghostty",
+                "7d383cc610": "ghostty"
+              }
+            }
+          },
+          "pane": {
+            "appearance": {
+              "search": {
+                "e0cc1b7b47": "Ghostty",
+                "1f4decdd74": "ghostty"
+              }
             }
           }
         },
@@ -13950,6 +14012,17 @@
             "109870e023": "Maximize",
             "b5686fee1e": "Restore",
             "1e502f1284": "Open"
+          },
+          "floating": {
+            "terminal": {
+              "panel": {
+                "test": {
+                  "fixtures": {
+                    "00cde6717e": "Mobile Emulator"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -15641,6 +15714,23 @@
                 }
               }
             }
+          },
+          "stream": {
+            "remote": {
+              "remote": {
+                "browser": {
+                  "stream": {
+                    "lifecycle": {
+                      "test": {
+                        "harness": {
+                          "471387f8f8": "Example"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "profile": {
@@ -16249,6 +16339,11 @@
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
           "activityOptions": "Activity options",
+          "test": {
+            "fixtures": {
+              "43a827f6a7": "Claude"
+            }
+          },
           "threadListOptionsFiltered": "Thread list options, filters active",
           "showSearch": "Show search",
           "interrupted": "Interrupted",
@@ -16885,6 +16980,225 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "maestro": {
+        "MaestroRunProgressSections": {
+          "noTasks": "No tasks in this Run",
+          "taskProgress": "{{value0}} of {{value1}} tasks complete, {{value2}} percent",
+          "technicalDetails": "Technical details",
+          "copyTechnicalValue": "Copy {{value0}}"
+        },
+        "MaestroSurface": {
+          "ee4d1c1e27": "Workspace Canvas scope is unavailable."
+        },
+        "MaestroWorkspaceBrowserPreview": {
+          "pageUnavailable": "This Browser page is no longer available.",
+          "controlsUpdateRequired": "Browser controls require a newer peer.",
+          "controlsUnavailable": "Browser controls are temporarily unavailable. The last confirmed frame remains visible.",
+          "address": "Browser address",
+          "0b65d32766": "Interactive Browser page {{value0}}",
+          "3e7cc4bc3a": "Attaching the interactive Browser page…",
+          "reconnecting": "Reconnecting the interactive Browser page…",
+          "controlsChecking": "Checking this exact Browser page…"
+        },
+        "MaestroWorkspaceCanvas": {
+          "0e5b5d9947": "Loading workspace resources…",
+          "a45c57a610": "Workspace Canvas unavailable",
+          "1dd7a6a069": "Update the remote Orca host to view this workspace.",
+          "799110bdc4": "The workspace authority is unreachable. No resource was treated as exited.",
+          "48149211a4": "Retry",
+          "ac3e558e63": "Authority unavailable. Last-known resources remain unverifiable.",
+          "d4d2b3932b": "The action was cancelled. The window remains open.",
+          "d4bfd06870": "The outcome is unknown. The window remains until authority confirms it.",
+          "5036690f36": "This action is unavailable from the workspace authority.",
+          "402ed16622": "No workspace resources yet",
+          "1605610d90": "Right-click the board to add a Terminal, Browser, or annotation. A Harness Run is optional.",
+          "3fbda457b1": "Terminal",
+          "85e5a5ca61": "Browser",
+          "5d7ccb0d24": "Zoom out",
+          "954805c1ea": "Zoom in",
+          "4a1926ece1": "Fit resources",
+          "0299b5276f": "Reset viewport"
+        },
+        "MaestroWorkspaceContentPreview": {
+          "6ecef4bd09": "· revision",
+          "803e2cdc3b": "Exact content preview is unavailable.",
+          "caadff40f7": "Loading exact content…"
+        },
+        "MaestroWorkspaceContextMenu": {
+          "35cc43ca9a": "Add to canvas",
+          "7c32f9bd91": "Normal shell",
+          "82a26e299b": "No enabled CLIs detected",
+          "5efde7c17e": "Detecting installed CLIs…",
+          "c27dd0d722b": "New annotation"
+        },
+        "MaestroHumanReview": {
+          "stateStaged": "Staged",
+          "stateNeedsInput": "Needs input",
+          "stateApprovedForSubmit": "Approved for submit",
+          "stateSubmitted": "Submitted",
+          "stateRejected": "Rejected",
+          "stateExpired": "Approval expired",
+          "review": "Review",
+          "task": "Task",
+          "dispatch": "Dispatch",
+          "document": "Document",
+          "field": "Field",
+          "surface": "Surface",
+          "page": "Page",
+          "applicationReview": "Application review",
+          "loadingReviewItems": "Loading review items…",
+          "reviewItemsUnavailable": "Review items are unavailable.",
+          "retry": "Retry",
+          "noApplicationsNeedReview": "No applications need review.",
+          "actionFailed": "Review action failed.",
+          "submissionReceiptReference": "Submission receipt reference",
+          "submissionReceiptPlaceholder": "Receipt or confirmation reference…",
+          "rejectionReason": "Rejection reason",
+          "rejectionReasonPlaceholder": "Why this application cannot proceed…",
+          "browserFocus": "Browser Focus",
+          "reject": "Reject",
+          "decisionsRequired": "Decisions required",
+          "decisionPlaceholder": "Record the human decision…",
+          "reviewScope": "Review scope",
+          "browserSurfaceAttached": "Exact Browser surface attached",
+          "approveForSubmit": "Approve for submit",
+          "recordSubmission": "Record submission",
+          "submissionRecorded": "Submission recorded {{value0}}.",
+          "approvalRecorded": "Human approval recorded. Valid until {{value0}}.",
+          "rejectedWithReason": "Rejected: {{value0}}",
+          "approvalExpiredBeforeSubmission": "The human approval expired before submission."
+        },
+        "MaestroWorkspaceHarnessOverlay": {
+          "legacyRunTitle": "Run progress",
+          "restoreRunPanel": "Restore Run progress panel",
+          "runProgress": "Run progress",
+          "3c305a1143": "Run progress is unavailable for this peer.",
+          "expandRunPanel": "Expand Run panel",
+          "hideRunPanel": "Hide Run panel",
+          "compactRunPanel": "Compact Run panel",
+          "completedTasks": "{{value0}} of {{value1}} tasks",
+          "runResources": "Run resources",
+          "currentWork": "Current work",
+          "recentOutcomes": "Recent outcomes",
+          "blockers": "Blocked",
+          "nextSteps": "Next steps",
+          "nestedActivity": "Native child activity",
+          "projectionWarning": "Projection",
+          "projectionNeedsAttention": "Run projection needs attention.",
+          "cleanupWarning": "Cleanup",
+          "cleanupNeedsAttention": "{{value0}} worker resources need attention.",
+          "stateActive": "Running",
+          "stateInputRequired": "Input required",
+          "stateBlocked": "Blocked",
+          "stateCompleted": "Completed",
+          "stateCompletedWithFailures": "Completed with failures",
+          "stateCancelled": "Cancelled",
+          "stateOutcomeUnknown": "Outcome unknown",
+          "stateInProgress": "In progress",
+          "stateFailed": "Failed",
+          "nativeChildActivity": "Native child activity",
+          "browserUnavailableAction": "The owning host cannot verify this managed Browser page. Open a new Browser page from the Canvas to continue.",
+          "legacyTaskDetail": "This older host does not publish a human task summary.",
+          "legacyBlockedTask": "Blocked task",
+          "legacyBlockedDetail": "This older host does not publish a human blocker summary.",
+          "legacyProgress": "Current work",
+          "reviewItems": "{{value0}} review",
+          "run": "Run",
+          "host": "Host",
+          "workspace": "Workspace",
+          "revision": "Revision",
+          "reference": "Reference",
+          "deliverableReadiness": "Deliverable readiness",
+          "reliability": "Reliability",
+          "reliabilitySummary": "{{value0}} successful · {{value1}} failed · {{value2}} superseded · {{value3}} unverifiable",
+          "runCompletion": "Run completion",
+          "completionAuthority": "Completed by {{value0}}, coordinator generation {{value1}}",
+          "completionEvidence": "Evidence",
+          "completionWaivers": "Explicit waivers",
+          "resourceCoordinator": "Coordinator",
+          "resourceTask": "Task",
+          "resourceAttempt": "Attempt",
+          "resourceDispatch": "Dispatch",
+          "resourceProvider": "Provider",
+          "resourceTerminal": "Terminal",
+          "resourceBrowser": "Browser",
+          "resourceCleanup": "Cleanup",
+          "resourceLoading": "Loading",
+          "resourceActive": "Active",
+          "resourceInputRequired": "Input required",
+          "resourceBlocked": "Blocked",
+          "resourceRecovered": "Recovered",
+          "resourceUnverifiable": "Unverifiable",
+          "resourceCompleted": "Completed",
+          "resourceError": "Error"
+        },
+        "MaestroWorkspaceMiniMarkdownEditor": {
+          "editAnnotation": "Edit annotation",
+          "annotationFormatting": "Annotation formatting",
+          "heading": "Heading",
+          "bold": "Bold",
+          "italic": "Italic",
+          "inlineCode": "Inline code",
+          "bulletList": "Bullet list",
+          "taskList": "Task list",
+          "quote": "Quote"
+        },
+        "MaestroWorkspaceWindow": {
+          "inlineTitle": "Tab title",
+          "previewIdentity": "Live preview hidden at this zoom",
+          "previewSuspended": "Preview paused outside the viewport",
+          "coordinator": "Orchestrator",
+          "worker": "Worker",
+          "52cce7f247": "Terminal output could not attach.",
+          "c6b6befac1": "The exact terminal remains available in its own tab.",
+          "1ac69faf69": "The live terminal preview is reconnecting.",
+          "37f9e2104d": "Terminal output is {{value0}}.",
+          "97d6f5fe39": "Rename tab",
+          "e825702fbf": "Focus exact tab",
+          "7f9b469dba": "Close exact tab",
+          "39b239dd72": "Drag a link from {{value0}}",
+          "c8d0b36e56": "Drag to another window to link",
+          "14b6f795aa": "Resize {{value0}}",
+          "rename": "Rename tab"
+        },
+        "links": {
+          "remove": "Remove link",
+          "delegates": "Delegates",
+          "dependsOn": "Depends on",
+          "reportsTo": "Reports to",
+          "contextFor": "Context",
+          "group": "Workspace links",
+          "manualAccessibleLabel": "Manual link from {{value0}} to {{value1}}",
+          "deleteShortcut": "Delete",
+          "coordinates": "Coordinates"
+        },
+        "maestro": {
+          "annotation": {
+            "tone": {
+              "39ef8efa3f": "Observation",
+              "observationHint": "Context worth keeping, nothing pending",
+              "c87ad9fa13": "Post-it",
+              "highlightHint": "Pinned for attention",
+              "2af310a116": "Decision",
+              "decisionHint": "Settled, act on it",
+              "d052036308": "Warning",
+              "warningHint": "Needs a human before it moves",
+              "b4f98f49a1": "Blocker",
+              "blockerHint": "Work is stopped here"
+            }
+          }
+        },
+        "MaestroWorkspaceInspector": {
+          "812d58dbea": "Manual",
+          "07e9ddcb64": "Automatic"
+        },
+        "navigator": {
+          "title": "Maestro"
+        },
+        "tab": {
+          "title": "Maestro"
+        }
       }
     },
     "i18n": {

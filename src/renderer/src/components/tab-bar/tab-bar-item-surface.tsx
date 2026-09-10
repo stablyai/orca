@@ -1,4 +1,5 @@
 import React from 'react'
+import { Network } from 'lucide-react'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -15,6 +16,38 @@ import { getTabDragLabel, type TabBarItem } from './tab-bar-item-model'
 import type { TabBarProps } from './tab-bar-props'
 import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import { clearClientHostedBrowserRowSelection } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { translate } from '@/i18n/i18n'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+
+function MaestroTabItem({
+  item,
+  active,
+  onActivate
+}: {
+  item: Extract<TabBarItem, { type: 'maestro' }>
+  active: boolean
+  onActivate: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          data-tab-id={item.id}
+          data-pinned="true"
+          aria-label={translate('auto.components.maestro.tab.title', 'Maestro')}
+          className={`flex h-full w-9 shrink-0 items-center justify-center border-l border-border ${active ? 'bg-background text-foreground' : 'bg-card text-muted-foreground hover:bg-accent'}`}
+          onClick={onActivate}
+        >
+          <Network className="size-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {translate('auto.components.maestro.tab.title', 'Maestro')}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 export function renderTabBarItems({
   items,
@@ -39,6 +72,7 @@ export function renderTabBarItems({
     activeFileId,
     activeBrowserTabId,
     activeSimulatorTabId,
+    activeMaestroTabId,
     activeTabType,
     expandedPaneByTabId,
     onActivate,
@@ -52,6 +86,7 @@ export function renderTabBarItems({
     onActivateFile,
     onCloseFile,
     onActivateBrowserTab,
+    onActivateMaestro,
     onActivateAgentSession,
     onCloseBrowserTab,
     onDuplicateBrowserTab,
@@ -224,6 +259,16 @@ export function renderTabBarItems({
           dragData={dragData}
           dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
           includeTopTabBorder={includeTopTabBorder}
+        />
+      )
+    }
+    if (item.type === 'maestro') {
+      return (
+        <MaestroTabItem
+          key={item.id}
+          item={item}
+          active={activeTabType === 'editor' && activeMaestroTabId === item.id}
+          onActivate={() => activateRealTab(onActivateMaestro)(item.id)}
         />
       )
     }

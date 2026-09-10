@@ -32,6 +32,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
       activate?: boolean
       clientNavigationId?: string
       clientMutationId?: string
+      runtimeOwned?: boolean
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
@@ -55,7 +56,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
     }
-    const win = this.getAvailableAuthoritativeWindow()
+    const win = opts.runtimeOwned ? null : this.getAvailableAuthoritativeWindow()
     if (!win) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,

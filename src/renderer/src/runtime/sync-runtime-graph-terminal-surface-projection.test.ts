@@ -46,6 +46,49 @@ function registerMobileTestSurface(args: {
 }
 
 describe('buildMobileSessionTabSnapshots', () => {
+  it('publishes a renamed terminal tab through the workspace snapshot', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Terminal 1' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as unknown as AppState['terminalLayoutsByTabId'],
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'terminal-tab',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'terminal',
+            entityId: 'term-1',
+            label: 'Terminal 1',
+            customLabel: 'Renamed terminal',
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs).toMatchObject([
+      {
+        type: 'terminal',
+        parentTabId: 'term-1',
+        title: 'Renamed terminal',
+        customTitle: 'Renamed terminal'
+      }
+    ])
+  })
+
   it('publishes the native-chat launch draft on terminal surface tabs', () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const state = makeState({

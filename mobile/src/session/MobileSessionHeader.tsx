@@ -7,6 +7,7 @@ import {
   FileText,
   GitBranch,
   Globe,
+  Workflow,
   MoreHorizontal,
   Plus
 } from 'lucide-react-native'
@@ -22,10 +23,14 @@ import { colors } from '../theme/mobile-theme'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../src/shared/workspace-scope'
 
 export function MobileSessionHeader({ controller }: { controller: MobileSessionController }) {
   const {
     hostId,
+    executionHostId,
+    worktreeId,
+    router,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     connState,
@@ -117,7 +122,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         ) : null}
       </View>
 
-      {visibleTabs.length > 0 && (
+      {!isFloatingWorkspaceRoute && (
         <View style={styles.tabBar}>
           {/* Why: tab taps must register on first press with the keyboard open instead of being eaten by dismissal (#5106). */}
           <ScrollView
@@ -140,6 +145,28 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
               scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
             }}
           >
+            <Pressable
+              accessibilityLabel="Maestro workspace Canvas"
+              accessibilityRole="tab"
+              accessibilityState={{ selected: false }}
+              style={[styles.tab, styles.maestroTab]}
+              onPress={() =>
+                router.push({
+                  pathname: '/h/[hostId]/maestro/[workspaceKey]',
+                  params: {
+                    hostId,
+                    executionHostId,
+                    workspaceKey: isWorkspaceKey(worktreeId)
+                      ? worktreeId
+                      : worktreeWorkspaceKey(worktreeId),
+                    name: worktreeName
+                  }
+                })
+              }
+              testID="mobile-maestro-system-tab"
+            >
+              <Workflow size={16} color={colors.textSecondary} strokeWidth={2} />
+            </Pressable>
             {visibleTabs.map((t) => (
               <Pressable
                 key={t.id}

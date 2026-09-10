@@ -15,13 +15,18 @@ export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => voi
 export type OrchestrationWorkerReleaseHarness = {
   setup: () => void
   cleanup: () => void
-  call: (name: string, params: Record<string, unknown>) => Promise<unknown>
+  call: (
+    name: string,
+    params: Record<string, unknown>,
+    context?: Partial<RpcContext>
+  ) => Promise<unknown>
   startWorker: (options?: { terminal?: string }) => Promise<{ taskId: string; dispatchId: string }>
   settle: (taskId: string, dispatchId: string, outcome: 'succeeded' | 'failed') => void
   startSettledWorker: (
     outcome?: 'succeeded' | 'failed',
     options?: { terminal?: string }
   ) => Promise<{ taskId: string; dispatchId: string }>
+  observeWorkerAsExited: () => void
   deferred: typeof deferred
   coordinatorPaneKey: string
   workerPaneKey: string
@@ -47,7 +52,9 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     dbOpen = true
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
-    inspectProcessLiveness = vi.fn().mockResolvedValue('live')
+    // A positive exact host observation is the fixture's process-exit proof. The close boolean
+    // alone is intentionally not enough for production release settlement.
+    inspectProcessLiveness = vi.fn().mockResolvedValue('exited')
     ;(
       runtime as unknown as {
         inspectTerminalProcessIncarnationLiveness: typeof inspectProcessLiveness
@@ -67,6 +74,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
       handle === 'term_worker' || handle === 'term_reminted'
         ? ({
             terminalHandle: handle,
+            worktreeId: 'repo::worktree',
             paneKey: workerPaneKey,
             processIncarnation: 'runtime_test:term_worker:1',
             hostScope: { kind: 'local', hostId: 'local' }
@@ -93,6 +101,19 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
       exitCode: null
     })
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue(null)
+    vi.spyOn(runtime, 'preflightWorktreeManagedCliExecutable').mockReturnValue('orca')
+    vi.spyOn(runtime, 'assertTerminalManagedCliAvailable').mockImplementation(() => {})
+    vi.spyOn(runtime, 'buildTerminalManagedCliContext').mockImplementation(
+      (handle) =>
+        ({
+          executable: 'orca',
+          runtimeId: runtime.getRuntimeId(),
+          executionHostId: 'local',
+          workspaceKey: 'worktree:repo::worktree',
+          terminalHandle: handle
+        }) as never
+    )
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
       accepted: true,
@@ -137,10 +158,14 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     return method
   }
 
-  async function call(name: string, params: Record<string, unknown>) {
+  async function call(
+    name: string,
+    params: Record<string, unknown>,
+    context?: Partial<RpcContext>
+  ) {
     const method = findMethod(name)
     const parsed = method.params ? method.params.parse(params) : undefined
-    return method.handler(parsed, ctx)
+    return method.handler(parsed, { ...ctx, ...context })
   }
 
   async function startWorker(options: { terminal?: string } = {}): Promise<{
@@ -153,7 +178,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
       from: 'term_coord',
       ...(options.terminal ? { terminal: options.terminal } : { agent: 'codex' })
     })) as { dispatchId: string; state: string }
-    expect(result.state).toBe('ready')
+    expect(result.state, JSON.stringify(result)).toBe('ready')
     return { taskId: task.id, dispatchId: result.dispatchId }
   }
 
@@ -165,6 +190,23 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
       result: `worker ${outcome}`
     })
     expect(settlement.action).toBe('settled')
+  }
+
+  function observeWorkerAsExited(): void {
+    vi.mocked(runtime.showTerminal).mockImplementation(
+      async (handle) =>
+        ({
+          handle,
+          worktreeId: 'repo::worktree',
+          connected: false,
+          status: 'exited',
+          ptyId: 'runtime_test:term_worker',
+          incarnationId: '1',
+          executionHostId: 'local'
+        }) as never
+    )
+    vi.mocked(runtime.getTerminalLivenessVerdict).mockReturnValue({ status: 'exited' })
+    inspectProcessLiveness.mockResolvedValue('exited')
   }
 
   async function startSettledWorker(
@@ -183,6 +225,7 @@ export function createOrchestrationWorkerReleaseHarness(): OrchestrationWorkerRe
     startWorker,
     settle,
     startSettledWorker,
+    observeWorkerAsExited,
     deferred,
     coordinatorPaneKey,
     workerPaneKey,

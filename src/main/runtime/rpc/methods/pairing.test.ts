@@ -72,4 +72,29 @@ describe('pairing RPC methods', () => {
     expect(pairing.provisionRelay).not.toHaveBeenCalled()
     expect(pairing.getEndpoints).not.toHaveBeenCalled()
   })
+
+  it('preserves a bounded provider error code for mobile stage diagnostics', async () => {
+    const providerError = new Error('No returned query result; deviceToken=secret')
+    Object.assign(providerError, { code: 'UnexpectedServerData' })
+    const pairing = {
+      getEndpoints: vi.fn().mockRejectedValue(providerError),
+      provisionRelay: vi.fn()
+    }
+
+    await expect(
+      dispatchPairing('pairing.getEndpoints', { installReqId: 'status-1' }, pairing)
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: expect.stringContaining('UnexpectedServerData: No returned query result')
+      }
+    })
+    const response = await dispatchPairing(
+      'pairing.getEndpoints',
+      { installReqId: 'status-2' },
+      pairing
+    )
+    expect(JSON.stringify(response)).not.toContain('secret')
+  })
 })

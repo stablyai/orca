@@ -436,11 +436,11 @@ describe('restored folder workspace hydration', () => {
     expect(state.activeWorktreeId).toBe(folderKey)
     expect(state.activeWorkspaceKey).toBe(folderKey)
     expect(state.tabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual(['terminal-folder'])
-    expect(state.unifiedTabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual([
-      'terminal-folder',
-      editorFileId,
-      'browser-folder'
-    ])
+    expect(
+      state.unifiedTabsByWorktree[folderKey]
+        ?.filter((tab) => tab.contentType !== 'maestro')
+        .map((tab) => tab.id)
+    ).toEqual(['terminal-folder', editorFileId, 'browser-folder'])
     expect(state.openFiles.map((file) => file.worktreeId)).toEqual([folderKey])
     expect(state.activeFileIdByWorktree[folderKey]).toBe(editorFileId)
     expect(state.browserTabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual(['browser-folder'])

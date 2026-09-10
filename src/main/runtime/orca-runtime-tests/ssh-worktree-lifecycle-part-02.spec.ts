@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { exitedPtyStopReceipt } from '../../ipc/pty-ipc-test-constants'
 import {
   OrcaRuntimeService,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV,
@@ -388,7 +389,12 @@ describe('OrcaRuntimeService', () => {
           worktreeId: `${TEST_REPO_ID}::/remote/feature`
         }
       ]),
-      shutdown: vi.fn().mockResolvedValue(undefined),
+      shutdown: vi.fn(async (id: string, opts: { expectedIncarnationId?: string }) =>
+        exitedPtyStopReceipt(id, {
+          ...opts,
+          executionHostId: 'ssh:ssh-1'
+        })
+      ),
       deleteWorktreeHistory: vi.fn().mockResolvedValue(undefined)
     }
     const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
@@ -460,7 +466,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(remoteStore as never, undefined, {
       getSshProvider: () => ptyProvider as never
     })
-    const stopAndWait = vi.fn(async () => true)
+    const stopAndWait = vi.fn(async (ptyId: string) => exitedPtyStopReceipt(ptyId))
     runtime.setPtyController({
       write: () => true,
       kill: vi.fn(() => true),

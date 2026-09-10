@@ -739,6 +739,9 @@ describe('PtyHandler', () => {
 
     expect(handler.retainedStartupCommandCount).toBe(0)
     expect(term.write).not.toHaveBeenCalled()
-    expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+    // The shell reported its exit before the stop reached the root signal, so the
+    // receipt path settles on that evidence rather than signalling a dead process.
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(0)
   })
 })

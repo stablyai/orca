@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,
@@ -16,12 +16,83 @@ import {
   WORKER_PANE
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
 
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()
 })
 
 describe('current orchestration authority precedence', () => {
+  it('re-adopts an authenticated current Run lease through the real dispatcher', async () => {
+    const harness = createHarness()
+    const run = harness.db.createRun({
+      objective: 'current work after restart',
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
+    })
+    vi.spyOn(harness.runtime, 'showTerminal').mockResolvedValue({
+      handle: CURRENT_COORDINATOR_HANDLE,
+      ptyId: 'current-coordinator-pty',
+      tabId: 'tab_current_coord',
+      agentIdentity: 'codex'
+    } as never)
+    vi.spyOn(harness.runtime, 'getTerminalProcessIncarnation').mockReturnValue('process-1')
+    vi.spyOn(harness.runtime, 'buildTerminalManagedCliContext').mockReturnValue({
+      executionHostId: 'local',
+      workspaceKey: 'folder:current'
+    } as never)
+
+    const response = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.runUse',
+        { id: run.id, from: CURRENT_COORDINATOR_HANDLE },
+        currentEvidence('coordinator'),
+        'current-run-use-restart'
+      )
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        run: { consumer_generation: 1 },
+        mutation: { replayed: false, requestId: 'current-run-use-restart' }
+      }
+    })
+    expect(harness.db.getCoordinatorLease(run.id, 1)).toMatchObject({
+      terminalHandle: CURRENT_COORDINATOR_HANDLE,
+      paneKey: CURRENT_COORDINATOR_PANE,
+      ptyIncarnation: 'process-1',
+      lifecycleState: 'retained'
+    })
+  })
+
+  it('authenticates composed coordinator handoff claims before dispatch', async () => {
+    const harness = createHarness()
+    const params = {
+      operation: 'claim',
+      requestId: 'handoff-1',
+      from: CURRENT_COORDINATOR_HANDLE
+    }
+
+    const route = await new OrchestrationLegacyCompatibility(harness.runtime).tryHandle(
+      request(
+        'orchestration.coordinatorHandoff',
+        params,
+        currentEvidence('coordinator'),
+        'current-coordinator-handoff'
+      ),
+      params
+    )
+
+    expect(route).toMatchObject({
+      handled: false,
+      orchestrationCompatibilityCallerAuthority: {
+        terminalHandle: CURRENT_COORDINATOR_HANDLE,
+        paneKey: CURRENT_COORDINATOR_PANE
+      }
+    })
+  })
+
   it.each(['dispatch', 'websocket'] as const)(
     '%s uses an attested current coordinator binding before legacy fallback',
     async (transport) => {
@@ -135,6 +206,28 @@ describe('current orchestration authority precedence', () => {
         dispatchId,
         ...(outcome ? { outcome } : {})
       })
+      if (type === 'worker_done') {
+        vi.spyOn(harness.runtime, 'getExactWorkerProviderSession').mockReturnValue({
+          paneKey: CURRENT_WORKER_PANE,
+          processIncarnation: 'process-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'current-worker-session' },
+          observedAt: Date.now(),
+          statusObservedAt: Date.now(),
+          subagents: [],
+          actorAttestation: {
+            authorityId: 'agent-hook-main:test',
+            incarnation: 1,
+            revision: 1,
+            observedAt: Date.now(),
+            provider: 'codex',
+            role: 'lead',
+            eventName: 'PreToolUse',
+            providerSessionId: 'current-worker-session',
+            toolUseId: 'current-worker-tool'
+          }
+        } as never)
+      }
       const response = await harness.dispatcher.dispatch({
         ...request(
           'orchestration.send',

@@ -15,6 +15,7 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
 } from '../../../../shared/github/pull-request-refresh-types'
+import { translate } from '@/i18n/i18n'
 
 /** Bare `vi.fn()` infers @vitest/spy's un-nameable `Procedure`, which breaks declaration emit. */
 export type StubMock<TArgs extends unknown[] = never[]> = Mock<(...args: TArgs) => unknown>
@@ -128,7 +129,7 @@ export function createTestStore() {
 export function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
   return {
     number: 12,
-    title: 'Test PR',
+    title: translate('auto.store.slices.github.slice.test.harness.28fd2d1802', 'Test PR'),
     state: 'open',
     url: 'https://example.com/pr/12',
     checksStatus: 'pending',

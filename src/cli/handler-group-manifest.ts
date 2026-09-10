@@ -108,6 +108,8 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration run-current',
       'orchestration run-list',
       'orchestration run-show',
+      'orchestration run-settle',
+      'orchestration run-complete',
       'orchestration send',
       'orchestration check',
       'orchestration reply',
@@ -116,6 +118,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration task-list',
       'orchestration task-update',
       'orchestration worker-start',
+      'orchestration replace-worker',
       'orchestration worker-show',
       'orchestration worker-read',
       'orchestration worker-stop',
@@ -135,6 +138,32 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration reset'
     ],
     load: async () => (await import('./handlers/orchestration.js')).ORCHESTRATION_HANDLERS
+  },
+  {
+    name: 'maestro',
+    keys: [
+      'maestro show',
+      'maestro watch',
+      'maestro apply',
+      'maestro author',
+      'maestro index',
+      'maestro open',
+      'maestro projection show',
+      'maestro projection apply',
+      'maestro bootstrap',
+      'maestro workspace-bootstrap-receipt',
+      'maestro coordinator-handoff',
+      'maestro browser-surface open',
+      'maestro browser-surface focus',
+      'maestro browser-surface capture',
+      'maestro browser-surface retain',
+      'maestro browser-surface release',
+      'maestro delegate',
+      'maestro list',
+      'maestro take',
+      'maestro settle'
+    ],
+    load: async () => (await import('./handlers/maestro.js')).MAESTRO_HANDLERS
   },
   {
     name: 'emulator',

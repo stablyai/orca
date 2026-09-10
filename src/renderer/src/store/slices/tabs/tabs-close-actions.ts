@@ -21,6 +21,9 @@ export function createTabsCloseActions(
         return null
       }
       const { tab, worktreeId } = found
+      if (tab.systemRole === 'workspace-maestro') {
+        return null
+      }
       const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
       if (!group) {
         return null

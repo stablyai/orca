@@ -8,12 +8,15 @@ import type { z } from 'zod'
 import { parseRemoteWorkerPayload } from '../schemas'
 import type { SendParams } from '../schemas'
 import { rejectFederatedExplicitTarget } from '../routing'
+import { verifyWorkerSettlementActor } from '../../orchestration-worker-settlement-authority'
 
 type SendParamsInput = z.infer<typeof SendParams>
 
 type RemoteAttachment = {
   dispatch_id: string
+  task_id: string
   protocol_version: number
+  created_at: string
 }
 
 export async function sendRemoteMessage(args: {
@@ -63,6 +66,54 @@ export async function sendRemoteMessage(args: {
       'invalid_argument',
       'Remote worker_done requires outcome=succeeded|failed.'
     )
+  }
+  if (type === 'worker_done') {
+    const actorAuthority = verifyWorkerSettlementActor({
+      runtime,
+      terminalHandle: from,
+      dispatch: {
+        id: remoteAttachment.dispatch_id,
+        created_at: remoteAttachment.created_at,
+        dispatched_at: null
+      }
+    })
+    if (!actorAuthority.valid) {
+      const relay = db.enqueueFederationRelay({
+        dispatchId: remoteAttachment.dispatch_id,
+        direction: 'to_home',
+        kind: 'status',
+        payload: JSON.stringify({
+          from,
+          subject: `Rejected worker_done: ${params.subject}`,
+          body: actorAuthority.reason,
+          type: 'status',
+          priority: 'high',
+          threadId: params.threadId ?? null,
+          payload: JSON.stringify({
+            taskId: remoteAttachment.task_id,
+            dispatchId: remoteAttachment.dispatch_id,
+            actorSettlementReview: {
+              code: actorAuthority.code,
+              reason: actorAuthority.reason
+            }
+          })
+        })
+      })
+      return {
+        relay: {
+          messageId: relay.message_id,
+          sequence: relay.sequence,
+          dispatchId: relay.dispatch_id,
+          destination: 'run_home',
+          accepted: false
+        },
+        lifecycle: {
+          action: 'rejected',
+          code: actorAuthority.code,
+          reason: actorAuthority.reason
+        }
+      }
+    }
   }
 
   const supportsLifecycleSettlement =

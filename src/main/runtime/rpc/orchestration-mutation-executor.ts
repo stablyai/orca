@@ -1,3 +1,9 @@
+import {
+  isResumableOrchestrationMutation,
+  isRetryableFederatedRelease,
+  isRetryableFederatedReleaseResult,
+  attestFederatedReleaseReplay
+} from './orchestration-release-mutation-replay'
 import { createHash } from 'node:crypto'
 import {
   isDurableMutation,
@@ -5,12 +11,14 @@ import {
 } from '../../../shared/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'
+import { reconcileMaestroWorkerLeaseTransfer } from '../orchestration/maestro-terminal-lease-reconciliation'
 import type { RpcRequest } from './core'
 import {
   attachMutationReceipt,
   EFFECT_FREE_WORKER_DONE_CHECKPOINT,
   getPendingWorkerStartRecovery,
   hashCanonical,
+  readTerminalPromptBindingHash,
   isResumablePendingWorkerDone,
   markReplayedPromptIncarnationReplaced,
   readPromptBasePayloadHash,
@@ -87,7 +95,7 @@ export class OrchestrationMutationExecutor {
     const promptBindingChanged =
       recordedPromptBindingHash !== null &&
       recordedPromptBindingHash !==
-        this.readTerminalPromptBindingHash((params as { terminal: string }).terminal)
+        readTerminalPromptBindingHash(this.runtime, (params as { terminal: string }).terminal)
     const payloadHash = existingPromptReceipt
       ? existingPromptReceipt.payload_hash
       : isPromptMutation
@@ -96,6 +104,7 @@ export class OrchestrationMutationExecutor {
           )}`
         : basePayloadHash
     const identity = { callerFingerprint, requestId, method: request.method, payloadHash }
+    const retryableFederatedRelease = isRetryableFederatedRelease(request.method, params, db)
     const atomicWorkerAcceptance =
       request.method === 'orchestration.workerStart' ||
       request.method === 'orchestration.federationAttachStart'
@@ -130,19 +139,23 @@ export class OrchestrationMutationExecutor {
             return { disposition: row.state, row }
           })()
         : db.beginMutationReceipt(identity)
+    const resumableMutation = isResumableOrchestrationMutation(request.method)
     const resumedPendingWorkerDone =
       begun.disposition === 'pending' &&
       isResumablePendingWorkerDone(request.method, params, begun.row.receipt)
     const resumedPendingMutation =
-      begun.disposition === 'pending' &&
-      (request.method === 'orchestration.workerRelease' || resumedPendingWorkerDone)
+      begun.disposition === 'pending' && (resumableMutation || resumedPendingWorkerDone)
 
     if (begun.disposition === 'completed') {
       const active = this.inFlight.get(key)
       if (active) {
         return attachMutationReceipt(await active.promise, requestId, true)
       }
-      const receipt = JSON.parse(begun.row.receipt ?? 'null')
+      const receipt = attestFederatedReleaseReplay(
+        request.method,
+        JSON.parse(begun.row.receipt ?? 'null'),
+        this.runtime.getRuntimeId()
+      )
       if (promptBindingChanged) {
         return attachMutationReceipt(
           markReplayedPromptIncarnationReplaced(receipt),
@@ -193,8 +206,30 @@ export class OrchestrationMutationExecutor {
           { requestId }
         )
       }
-      if (request.method !== 'orchestration.workerRelease' && !resumedPendingWorkerDone) {
+      if (!resumableMutation && !resumedPendingWorkerDone) {
         const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
+        if (recovery?.transferRequestId) {
+          const transfer = db.getMaestroWorkerLeaseTransferReceiptByMutationRequest(identity)
+          if (!transfer || transfer.requestId !== recovery.transferRequestId) {
+            throw new OrchestrationError(
+              'operation_unknown',
+              `Worker start ${requestId} has an incomplete transfer recovery receipt.`,
+              { requestId, dispatchId: recovery.dispatchId }
+            )
+          }
+          const reconciled = reconcileMaestroWorkerLeaseTransfer({
+            db,
+            requestId: recovery.transferRequestId
+          })
+          const recovered = {
+            dispatchId: recovery.dispatchId,
+            state: 'outcome_unknown',
+            leaseTransfer: reconciled
+          }
+          const receipted = attachMutationReceipt(recovered, requestId, true)
+          db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
+          return receipted
+        }
         throw new OrchestrationError(
           'operation_unknown',
           recovery
@@ -239,6 +274,9 @@ export class OrchestrationMutationExecutor {
     try {
       const result = await active
       const receipted = attachMutationReceipt(result, requestId, resumedPendingMutation)
+      if (isRetryableFederatedReleaseResult(retryableFederatedRelease, result)) {
+        return receipted
+      }
       db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
       return receipted
     } catch (error) {
@@ -251,15 +289,6 @@ export class OrchestrationMutationExecutor {
       throw error
     } finally {
       this.inFlight.delete(key)
-    }
-  }
-
-  // A replayed prompt may name a terminal that is gone; an unreadable binding is a changed one.
-  private readTerminalPromptBindingHash(handle: string): string | null {
-    try {
-      return hashCanonical(this.runtime.getTerminalPromptRequestBinding(handle))
-    } catch {
-      return null
     }
   }
 

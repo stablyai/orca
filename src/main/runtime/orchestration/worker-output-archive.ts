@@ -1,4 +1,5 @@
 import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
+import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
 import type { OrchestrationWorkerReadFallbackReason } from '../../../shared/orchestration-worker-output'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
@@ -150,7 +151,9 @@ export async function captureWorkerOutputArchive(args: {
   } catch (error) {
     throw new OrchestrationError(
       'archive_failed',
-      `Output could not be preserved for Dispatch ${args.dispatchId}; the terminal was retained. ${error instanceof Error ? error.message : String(error)}`
+      sanitizeCrashReportString(
+        `Output could not be preserved for Dispatch ${args.dispatchId}; the terminal was retained. ${error instanceof Error ? error.message : String(error)}`
+      )
     )
   }
   const redacted = redactWorkerTerminalLines([

@@ -1,16 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { Session } from './session'
+import type * as PtyDescendantTermination from '../pty-descendant-termination'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
-vi.mock('../pty-descendant-termination', () => ({
-  killWithDescendantSweep: killWithDescendantSweepMock
+const readProcessTableMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-termination', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyDescendantTermination>()),
+  DESCENDANT_KILL_GRACE_MS: 0,
+  killWithDescendantSweep: killWithDescendantSweepMock,
+  readProcessTable: readProcessTableMock
 }))
+
+const TEST_PTY_INCARNATION = '11111111-1111-4111-8111-111111111111'
+const ROOT_PROCESS_ROW = {
+  pid: 4242,
+  ppid: 1,
+  pgid: 4242,
+  startedAt: 'Fri Aug 28 12:00:00 2026'
+}
 
 function createPlainShellSession(overrides: Partial<Session> = {}): Session {
   return {
     launchAgent: undefined,
     pid: 4242,
+    incarnationId: TEST_PTY_INCARNATION,
     isAlive: true,
     forceKillAndWaitForExit: vi.fn(async () => {}),
     beginTermination: vi.fn(() => true),
@@ -28,7 +42,13 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
   beforeEach(() => {
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     killWithDescendantSweepMock.mockReset()
-    killWithDescendantSweepMock.mockResolvedValue(undefined)
+    killWithDescendantSweepMock.mockImplementation(async (_pid, killRoot: () => void) => {
+      killRoot()
+    })
+    readProcessTableMock.mockReset()
+    readProcessTableMock
+      .mockResolvedValueOnce({ rows: [ROOT_PROCESS_ROW], capturedAtMs: Date.now() })
+      .mockResolvedValue({ rows: [], capturedAtMs: Date.now() })
   })
 
   afterEach(() => {
@@ -97,27 +117,27 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     expect(ownsRoot()).toBe(false)
   })
 
-  it('non-win32 immediate kill skips the tree kill (pgroup force-kill suffices)', async () => {
+  it('non-win32 immediate kill verifies the tree before pgroup force-kill', async () => {
     setPlatform('linux')
     const session = createPlainShellSession()
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
     await teardown.killSession('s1', session, true)
 
-    expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    expect(killWithDescendantSweepMock).toHaveBeenCalled()
     expect(session.forceKillAndWaitForExit).toHaveBeenCalled()
   })
 
-  it('non-immediate (graceful) kill uses the plain kill path without a sweep', async () => {
+  it('non-immediate kill verifies the tree and signals the root gracefully', async () => {
     setPlatform('win32')
     const session = createPlainShellSession()
     const teardown = new TerminalSessionTeardown(new Map([['s1', session]]))
 
     await teardown.killSession('s1', session, false)
 
-    expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    expect(killWithDescendantSweepMock).toHaveBeenCalled()
     expect(session.forceKillAndWaitForExit).not.toHaveBeenCalled()
-    expect(session.kill).toHaveBeenCalled()
+    expect(session.signalTerminationRoot).toHaveBeenCalled()
   })
 })
 
@@ -131,7 +151,9 @@ describe('pty job ownership reaches the daemon teardown path', () => {
     platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     killWithDescendantSweepMock.mockReset()
-    killWithDescendantSweepMock.mockResolvedValue(undefined)
+    killWithDescendantSweepMock.mockImplementation(async (_pid, killRoot: () => void) => {
+      killRoot()
+    })
   })
 
   afterEach(() => {

@@ -150,7 +150,11 @@ describe('closeTerminalTab unified close contract', () => {
     expect(state.activeWorktreeId).toBe(GIT_WT)
     expect(state.activeTabType).toBe('agent-session')
     expect(group(GIT_WT)?.activeTabId).toBe('chat-1')
-    expect(state.unifiedTabsByWorktree[GIT_WT]?.map((tab) => tab.id)).toEqual(['chat-1'])
+    expect(
+      state.unifiedTabsByWorktree[GIT_WT]
+        ?.filter((tab) => tab.contentType !== 'maestro')
+        .map((tab) => tab.id)
+    ).toEqual(['chat-1'])
   })
 
   it('keeps the folder workspace active and focuses the chat tab when the last terminal closes', () => {
@@ -193,7 +197,7 @@ describe('closeTerminalTab unified close contract', () => {
     expect(group(GIT_WT)?.tabOrder).toEqual(['chat-1', 'u-term-2'])
   })
 
-  it('still deactivates the worktree when the last renderable tab closes', () => {
+  it('keeps the worktree on its Maestro tab when the last user tab closes', () => {
     seedWorktreeWithTabs(GIT_WT, {
       terminalIds: ['term-1'],
       groupOrder: ['u-term-1'],
@@ -202,10 +206,17 @@ describe('closeTerminalTab unified close contract', () => {
       activeTerminalId: 'term-1',
       includeChatTab: false
     })
+    store.getState().reconcileWorktreeTabModel(GIT_WT)
 
     closeTerminalTab('term-1')
 
-    expect(store.getState().activeWorktreeId).toBeNull()
+    const state = store.getState()
+    const maestro = state.unifiedTabsByWorktree[GIT_WT]?.find(
+      (tab) => tab.systemRole === 'workspace-maestro'
+    )
+    expect(state.activeWorktreeId).toBe(GIT_WT)
+    expect(maestro).toBeDefined()
+    expect(group(GIT_WT)?.activeTabId).toBe(maestro?.id)
   })
 
   it('lands on an open editor tab instead of deactivating when the last terminal closes', () => {

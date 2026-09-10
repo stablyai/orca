@@ -64,6 +64,21 @@ function simulatorTab(id: string, groupId: string, sortOrder: number): Tab {
   }
 }
 
+function maestroTab(id: string, groupId: string, sortOrder: number): Tab {
+  return {
+    id,
+    entityId: id,
+    groupId,
+    worktreeId: 'wt',
+    contentType: 'maestro',
+    label: 'Maestro',
+    customLabel: null,
+    color: null,
+    sortOrder,
+    createdAt: sortOrder
+  }
+}
+
 function agentSessionTab(id: string, groupId: string, sessionId: string, sortOrder: number): Tab {
   return {
     id,
@@ -225,6 +240,36 @@ describe('getGroupVisibleTabOrder', () => {
     ])
   })
 
+  it('includes Maestro tabs keyed by unified tab id in the declared group order', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-m1',
+      tabOrder: ['tab-t1', 'tab-m1', 'tab-e1']
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      maestroTab('tab-m1', 'g1', 1),
+      editorTab('tab-e1', 'g1', '/repo/file.md', 2)
+    ]
+
+    expect(
+      getGroupVisibleTabOrder(
+        group,
+        tabs,
+        new Set(['term-1']),
+        new Set(['/repo/file.md']),
+        new Set(),
+        new Set(),
+        new Set(['tab-m1'])
+      )
+    ).toEqual([
+      { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
+      { type: 'editor', id: 'tab-m1', tabId: 'tab-m1', activation: 'maestro' },
+      { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' }
+    ])
+  })
+
   it('matches the strip lookup when duplicate entities resolve to the last tab copy', () => {
     const group: TabGroup = {
       id: 'g1',
@@ -284,6 +329,7 @@ describe('getGroupVisibleTabOrder', () => {
         new Set(['collision']),
         new Set(),
         new Set(['collision']),
+        new Set(),
         new Set(),
         true
       )
@@ -433,6 +479,7 @@ describe('group order matches the rendered tab strip', () => {
       editorFileIds: [],
       browserTabIds: [],
       simulatorTabIds: [],
+      maestroTabIds: [],
       agentSessionTabIds: [],
       terminalMap: terminalMap as never,
       editorMap: new Map(),

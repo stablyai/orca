@@ -359,6 +359,19 @@ describe('collectMemorySnapshot', () => {
     expect(snap.totalMemory).toBe((111 + 222 + 333) * 1024)
   })
 
+  it('counts every renderer and tab process even when its memory sample is zero', async () => {
+    mockPsResponse(['20 1 0 0', '30 1 0 0'].join('\n'))
+    appMetricsMock.mockReturnValue([
+      { pid: 20, type: 'Renderer', cpu: { percentCPUUsage: 0 }, memory: { workingSetSize: 0 } },
+      { pid: 30, type: 'Tab', cpu: { percentCPUUsage: 0 }, memory: { workingSetSize: 0 } }
+    ])
+
+    const { collectMemorySnapshot } = await loadCollector()
+    const snapshot = await collectMemorySnapshot(emptyStore)
+
+    expect(snapshot.app.rendererProcessCount).toBe(2)
+  })
+
   it('falls back to Electron working set when a host process row is missing', async () => {
     mockPsResponse('10 1 1.5 111')
     appMetricsMock.mockReturnValue([

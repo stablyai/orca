@@ -1,6 +1,8 @@
 import type * as pty from 'node-pty'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
-import { killWithDescendantSweep } from '../pty-descendant-termination'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { createPtyStopReceipt, type PtyStopReceipt } from '../../shared/pty-stop-receipt'
+import { stopPtyProcessTree } from '../daemon/terminal-session-teardown'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { terminatePtyJob } from '../windows/windows-pty-job'
 import {
@@ -8,11 +10,13 @@ import {
   clearPtyState,
   disposePtyExitListener,
   disposePtyListeners,
-  ptyAgentSessionIds,
+  ptyIncarnations,
   ptyForceKillTimers,
   ptyPhysicalExits,
   ptyProcesses,
   ptyShutdownOperations,
+  ptyStopReceipts,
+  ptyTerminalHandle,
   ptyTerminationMode,
   ptyLoadGeneration,
   runPtyCleanup,
@@ -22,6 +26,7 @@ import {
   cancelAllPendingLocalPtySpawns,
   cancelPendingLocalPtySpawns
 } from './local-pty-spawn-state'
+import { upgradeWindowsPtyJobObjectStopReceipt } from './windows-pty-job-object'
 
 export const LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
 export const LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS = 5_000
@@ -163,7 +168,7 @@ async function shutdownTrackedPty(
   id: string,
   proc: pty.IPty,
   operation: PtyShutdownOperation
-): Promise<void> {
+): Promise<PtyStopReceipt> {
   const physicalExit = ptyPhysicalExits.get(id)
   const signalRoot = (): void => {
     // Why: natural exit can race the sweep — never signal after this PTY loses ownership.
@@ -175,59 +180,81 @@ async function shutdownTrackedPty(
     operation.rootSignalled = true
     requestTrackedPtyShutdown(id, proc, operation.immediate)
   }
-  if (ptyAgentSessionIds.has(id)) {
-    // Why: POSIX needs a pre-kill descendant snapshot; Windows tree-kills only when the
-    // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
-    // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
-    await killWithDescendantSweep(proc.pid, signalRoot, {
-      ownsRoot: () => ptyProcesses.get(id) === proc,
-      terminateOwnedTree: () => terminatePtyJob(proc)
-    })
-  } else if (process.platform === 'win32' && operation.immediate) {
-    // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
-    // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
-    // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
-    // otherwise root close alone, and detached children may block physical stop (#10004).
-    await killWithDescendantSweep(proc.pid, signalRoot, {
-      ownsRoot: () => ptyProcesses.get(id) === proc,
-      terminateOwnedTree: () => terminatePtyJob(proc)
-    })
-  } else {
-    signalRoot()
-  }
-  await waitForPtyPhysicalExit(id, physicalExit)
+  const evidence = await stopPtyProcessTree(proc.pid, signalRoot, {
+    ownsRoot: () => ptyProcesses.get(id) === proc,
+    terminateOwnedTree: () => terminatePtyJob(proc)
+  })
+  await waitForPtyPhysicalExit(id, physicalExit).catch(() => undefined)
+  const fallbackReceipt = createPtyStopReceipt({
+    executionHostId: LOCAL_EXECUTION_HOST_ID,
+    terminalHandle: operation.terminalHandle,
+    ptyId: id,
+    ptyIncarnation: operation.incarnationId,
+    root: evidence.root,
+    descendants: evidence.descendants,
+    observations: evidence.observations,
+    verdict: evidence.verdict,
+    processTreeVerified: evidence.processTreeVerified,
+    ...(evidence.reason ? { reason: evidence.reason } : {})
+  })
+  return upgradeWindowsPtyJobObjectStopReceipt(id, fallbackReceipt)
 }
 
 export async function shutdownLocalPty(
   id: string,
-  opts: { immediate?: boolean; keepHistory?: boolean }
-): Promise<void> {
+  opts: {
+    immediate?: boolean
+    keepHistory?: boolean
+    expectedIncarnationId?: string
+    deadlineMs?: number
+  }
+): Promise<PtyStopReceipt> {
   cancelPendingLocalPtySpawns(id)
   const pending = ptyShutdownOperations.get(id)
   if (pending) {
+    if (opts.expectedIncarnationId && opts.expectedIncarnationId !== pending.incarnationId) {
+      throw new Error('pty_stop_receipt_identity_mismatch')
+    }
     if (opts.immediate === true) {
       pending.immediate = true
       if (pending.rootSignalled && ptyProcesses.get(id) === pending.proc) {
         requestTrackedPtyShutdown(id, pending.proc, true)
       }
     }
-    await pending.promise
-    return
+    return await pending.promise
+  }
+  const cached = ptyStopReceipts.get(id)
+  if (cached) {
+    if (!opts.expectedIncarnationId || cached.ptyIncarnation === opts.expectedIncarnationId) {
+      return cached
+    }
+    throw new Error('pty_stop_receipt_identity_mismatch')
   }
   const proc = ptyProcesses.get(id)
   if (!proc) {
-    return
+    throw new Error('pty_stop_receipt_unavailable')
+  }
+  const incarnationId = ptyIncarnations.get(id)
+  if (
+    !incarnationId ||
+    (opts.expectedIncarnationId && opts.expectedIncarnationId !== incarnationId)
+  ) {
+    throw new Error('pty_stop_receipt_identity_mismatch')
   }
   const entry: PtyShutdownOperation = {
-    promise: Promise.resolve(),
+    promise: Promise.resolve(undefined as never),
     immediate: opts.immediate === true,
     rootSignalled: false,
-    proc
+    proc,
+    incarnationId,
+    terminalHandle: ptyTerminalHandle.get(id) ?? id
   }
   entry.promise = shutdownTrackedPty(id, proc, entry)
   ptyShutdownOperations.set(id, entry)
   try {
-    await entry.promise
+    const receipt = await entry.promise
+    ptyStopReceipts.set(id, receipt)
+    return receipt
   } finally {
     if (ptyShutdownOperations.get(id) === entry) {
       ptyShutdownOperations.delete(id)

@@ -15,7 +15,7 @@
 // missing) so `pnpm test` works on a fresh checkout without requiring a prior
 // `pnpm run build:cli`. The verification gate explicitly builds the CLI
 // before running this file.
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -30,6 +30,14 @@ import { OrcaRuntimeRpcServer } from './runtime-rpc'
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
 
 const describeIfBuilt = existsSync(CLI_PATH) ? describe : describe.skip
+
+// Why: a Python-orchestrated coordinator (the reported real-world failure)
+// spawns the CLI with shell=False, so no login shell ever runs and no shell
+// alias for `orca` is ever read. This suite proves the built CLI is reachable
+// that way directly — by absolute path to out/cli/index.js — rather than by
+// depending on `orca` resolving through a shell alias or an interactive shim.
+const PYTHON_BIN = ['python3', 'python'].find((bin) => spawnSync(bin, ['--version']).status === 0)
+const describeIfPythonAvailable = PYTHON_BIN && existsSync(CLI_PATH) ? describe : describe.skip
 
 async function runBuiltCli(
   userDataPath: string,
@@ -405,6 +413,85 @@ describeIfBuilt('orca orchestration task readiness subprocess', () => {
       } finally {
         persisted.close()
       }
+    } finally {
+      db.close()
+      await server.stop()
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  }, 30_000)
+})
+
+describeIfPythonAvailable('orca CLI reached from a non-interactive Python subprocess', () => {
+  it('runs the built CLI to completion with no shell, TTY, or PATH alias involved', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-python-'))
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    const coordinatorPaneKey = 'tab_cli:44444444-4444-4444-8444-444444444444'
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_cli' ? coordinatorPaneKey : null
+    )
+    db.createRun({
+      objective: 'CLI Python subprocess fixture',
+      coordinatorHandle: 'term_cli',
+      coordinatorPaneKey
+    })
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    await server.start()
+
+    try {
+      // Why: subprocess.run(..., shell=False) never launches a login shell,
+      // so an `orca` PATH alias — or GNOME Orca's screen reader binary of
+      // the same name — is never in play. The Python child names the built
+      // CLI by its exact absolute path and the Node interpreter by
+      // process.execPath, matching how a Python-orchestrated coordinator
+      // must invoke it.
+      const script = [
+        'import subprocess, sys',
+        'result = subprocess.run(',
+        '  [sys.argv[1], sys.argv[2], "orchestration", "task-create",',
+        '   "--spec", "python subprocess fixture", "--from", "term_cli", "--json"],',
+        '  capture_output=True, text=True, shell=False, stdin=subprocess.DEVNULL',
+        ')',
+        'sys.stdout.write(result.stdout)',
+        'sys.stderr.write(result.stderr)',
+        'sys.exit(result.returncode)'
+      ].join('\n')
+
+      // Why: the RPC server the CLI must reach runs in-process on this same
+      // event loop, so a synchronous spawn (spawnSync) would block that loop
+      // and starve the server of the chance to answer — the child would then
+      // time out from its own side. Use the async spawn, like every other
+      // subprocess test in this file.
+      const pythonChild = spawn(PYTHON_BIN!, ['-c', script, process.execPath, CLI_PATH], {
+        env: {
+          ...process.env,
+          ORCA_USER_DATA_PATH: userDataPath,
+          ORCA_TERMINAL_HANDLE: 'term_cli'
+        },
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      const stdoutChunks: string[] = []
+      const stderrChunks: string[] = []
+      pythonChild.stdout.setEncoding('utf8')
+      pythonChild.stderr.setEncoding('utf8')
+      pythonChild.stdout.on('data', (d) => stdoutChunks.push(d))
+      pythonChild.stderr.on('data', (d) => stderrChunks.push(d))
+      const exitCode = await new Promise<number>((resolveExit, rejectExit) => {
+        pythonChild.once('exit', (code) => resolveExit(code ?? 1))
+        pythonChild.once('error', rejectExit)
+      })
+      const child = {
+        status: exitCode,
+        stdout: stdoutChunks.join(''),
+        stderr: stderrChunks.join('')
+      }
+
+      expect(child.status, child.stderr).toBe(0)
+      const payload = JSON.parse(child.stdout) as { ok: boolean; result: { task: { id: string } } }
+      expect(payload.ok).toBe(true)
+      expect(db.listTasks()).toHaveLength(1)
+      expect(db.getTask(payload.result.task.id)).toBeTruthy()
     } finally {
       db.close()
       await server.stop()

@@ -42,19 +42,19 @@ index 67893b7966eb095db4459b8837de9766921f36c5..0abf7ecac1aa108f7caf711d0a5c610a
 +      }
 +    }));
      this._helperContainer.appendChild(this._compositionView);
- 
+
      this._mouseCoordsService = this._instantiationService.createInstance(MouseCoordsService);
 @@ -1009,7 +1028,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
- 
+
      this._onKey.fire({ key, domEvent: ev });
      this._showCursor();
 -    this.coreService.triggerDataEvent(key, true);
 +    if (!this._compositionHelper!.keypress?.(key)) {
 +      this.coreService.triggerDataEvent(key, true);
 +    }
- 
+
      this._keyPressHandled = true;
- 
+
 @@ -1027,6 +1048,15 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
     * @param ev The input event to be handled.
     */
@@ -85,7 +85,7 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
    keydown(ev: KeyboardEvent): boolean;
 +  keypress?(text: string): boolean;
  }
- 
+
  export interface IBrowser {
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
 index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe0c516b06 100644
@@ -94,18 +94,18 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 @@ -3,8 +3,9 @@
   * @license MIT
   */
- 
+
 -import { IRenderService } from '../services/Services';
 +import { IRenderService, IThemeService } from '../services/Services';
  import { IBufferService, ICoreService, IOptionsService } from '../../common/services/Services';
 +import { color } from '../../common/Color';
  import { C0 } from '../../common/data/EscapeSequences';
- 
+
  interface IPosition {
 @@ -12,6 +13,27 @@ interface IPosition {
    end: number;
  }
- 
+
 +interface IPendingComposition {
 +  transactionId: number;
 +  finalizerTimer?: ReturnType<typeof setTimeout>;
@@ -143,13 +143,13 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +  public get _pendingKeypressData(): string {
 +    return this._pendingComposition?.keypressData ?? '';
 +  }
- 
+
    /**
     * The position within the input textarea's value of the current composition.
 @@ -36,52 +67,144 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
- 
+
 -  /**
 -   * Whether a composition is in the process of being sent, setting this to false will cancel any
 -   * in-progress composition.
@@ -160,7 +160,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
     * Data already sent due to keydown event.
     */
    private _dataAlreadySent: string;
- 
+
 +  private _pendingComposition?: IPendingComposition;
 +
 +  private _isAwaitingCompositionEnd: boolean;
@@ -181,7 +181,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
     * The pending textarea change timer, if any.
     */
    private _textareaChangeTimer?: number;
- 
+
 +  /**
 +   * Whether the IME consumed the last keydown and still owes the commit it produced. Nothing is
 +   * forwarded for such a keydown, so the commit is claimed by whichever observes it first.
@@ -254,7 +254,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +    this._compositionTimers = new Set();
 +    this._imeKeydownAwaitingCommit = false;
    }
- 
+
    /**
     * Handles the compositionstart event, activating the composition view.
     */
@@ -299,7 +299,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +      detail: { id: this._compositionTransactionId }
 +    }));
    }
- 
+
    /**
 @@ -89,22 +212,93 @@ export class CompositionHelper {
     * @param ev The event.
@@ -336,7 +336,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +      }
 +    });
    }
- 
+
    /**
     * Handles the compositionend event, hiding the composition view and sending the composition to
     * the handler.
@@ -402,7 +402,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +    this._compositionView.classList.remove('active');
 +    this._resetCompositionView();
    }
- 
+
    /**
 @@ -113,7 +307,19 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
@@ -428,7 +428,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 @@ -128,6 +334,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
- 
+
 +    // Nothing is forwarded for a keydown the IME consumed, so it is left owing its commit; any
 +    // other keydown either forwards its own text or produces none, and clears the debt.
 +    this._imeKeydownAwaitingCommit = ev.keyCode === 229;
@@ -439,7 +439,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 @@ -138,6 +348,74 @@ export class CompositionHelper {
      return true;
    }
- 
+
 +  /**
 +   * Defers keypress text while a composition finalizer is pending so all input is emitted once
 +   * after reconciliation with the final textarea candidate.
@@ -526,7 +526,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +    if (waitForPropagation && !wasComposing) {
 +      return;
 +    }
- 
+
      if (!waitForPropagation) {
 -      // Cancel any delayed composition send requests and send the input immediately.
 -      this._isSendingComposition = false;
@@ -572,7 +572,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 -      const currentCompositionSuffix = this._compositionSuffix;
 +      this._updatePostCompositionInputExpectation(pending);
 +      this._pendingComposition = pending;
- 
+
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
 @@ -172,37 +479,315 @@ export class CompositionHelper {
@@ -617,7 +617,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +      });
      }
    }
- 
+
 +  private _sendPendingComposition(
 +    pending: IPendingComposition,
 +    includeFollowingInput: boolean = false
@@ -919,19 +919,19 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
     * Apply any changes made to the textarea after the current event chain is allowed to complete.
     * This should be called when not currently composing but a keydown event with the "composition
 @@ -222,6 +807,9 @@ export class CompositionHelper {
- 
+
          const diff = newValue.replace(oldValue, '');
- 
+
 +        if (newValue !== oldValue) {
 +          this._imeKeydownAwaitingCommit = false;
 +        }
          this._dataAlreadySent = diff;
- 
+
          if (newValue.length > oldValue.length) {
 @@ -236,6 +824,101 @@ export class CompositionHelper {
      }, 0);
    }
- 
+
 +  /**
 +   * Renders the preedit into the view and, when the cursor sits mid-line, the rest of the row
 +   * after it, so a composition reads as inserted text pushing the tail right rather than an opaque
@@ -1039,7 +1039,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +    if (!this._compositionView.classList.contains('active')) {
        return;
      }
- 
+
 +    // A TUI can repaint the row under an open composition (spinners, streamed output), and this
 +    // already runs on every render — so keep the rendered tail current with the buffer. A string
 +    // compare adds no layout read.
@@ -1054,7 +1054,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
- 
+
 @@ -265,20 +961,38 @@ export class CompositionHelper {
        const maxWidth = this._bufferService.cols * this._renderService.dimensions.css.cell.width - cursorLeft;
        this._compositionView.style.maxWidth = maxWidth + 'px';
@@ -1095,7 +1095,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..d4d5106d8dd723eceed87310c193ccfe
 +      this._textarea.style.height = Math.max(anchorBounds.height, 1) + 'px';
 +      this._textarea.style.lineHeight = anchorBounds.height + 'px';
      }
- 
+
      if (!dontRecurse) {
 -      setTimeout(() => this.updateCompositionElements(true), 0);
 +      this._cancelDeferredTimer(this._compositionViewTimer);
@@ -1110,15 +1110,15 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
 @@ -22,7 +22,8 @@ export class SortedList<T> {
    private readonly _flushInsertedTask: InstanceType<typeof IdleTaskQueue>;
    private _isFlushingInserted = false;
- 
+
 -  private readonly _deletedIndices: number[] = [];
 +  private readonly _deletedIndices = new Set<number>();
 +  private readonly _indicesByValue = new Map<T, number | number[]>();
    private readonly _flushDeletedTask: InstanceType<typeof IdleTaskQueue>;
    private _isFlushingDeleted = false;
- 
+
 @@ -36,10 +37,11 @@ export class SortedList<T> {
- 
+
    public clear(): void {
      this._array.length = 0;
 +    this._indicesByValue.clear();
@@ -1132,16 +1132,16 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
    }
 @@ -69,6 +71,7 @@ export class SortedList<T> {
      }
- 
+
      this._array = newArray;
 +    this._rebuildIdentityIndex();
      this._insertedValues.length = 0;
    }
- 
+
 @@ -78,54 +81,60 @@ export class SortedList<T> {
      }
    }
- 
+
 +  private _rebuildIdentityIndex(): void {
 +    this._indicesByValue.clear();
 +    // Reverse indices let duplicate identities remove their first occurrence in O(1).
@@ -1196,7 +1196,7 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
 +    this._deletedIndices.add(index);
 +    return true;
    }
- 
+
    private _flushDeleted(): void {
      this._isFlushingDeleted = true;
 -    const sortedDeletedIndices = this._deletedIndices.sort((a, b) => a - b);
@@ -1218,7 +1218,7 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
 +    this._deletedIndices.clear();
      this._isFlushingDeleted = false;
    }
- 
+
    private _flushCleanupDeleted(): void {
 -    if (!this._isFlushingDeleted && this._deletedIndices.length > 0) {
 +    if (!this._isFlushingDeleted && this._deletedIndices.size > 0) {

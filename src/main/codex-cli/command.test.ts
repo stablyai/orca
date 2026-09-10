@@ -158,7 +158,7 @@ describe('resolveCodexCommand', () => {
   it('returns the bare command when no filesystem candidate exists', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-codex-command-'))
 
-    expect(resolveCodexCommand({ platform: 'linux', pathEnv: '', homePath: root })).toBe('codex')
+    expect(resolveCodexCommand({ platform: 'win32', pathEnv: '', homePath: root })).toBe('codex')
   })
 })
 
@@ -226,7 +226,7 @@ describe('resolveClaudeCommand', () => {
   it('returns the bare command when no filesystem candidate exists', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-claude-command-'))
 
-    expect(resolveClaudeCommand({ platform: 'linux', pathEnv: '', homePath: root })).toBe('claude')
+    expect(resolveClaudeCommand({ platform: 'win32', pathEnv: '', homePath: root })).toBe('claude')
   })
 })
 

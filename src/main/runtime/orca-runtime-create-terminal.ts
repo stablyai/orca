@@ -4,6 +4,7 @@ import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
+import { buildManagedTerminalSpawnEnvironment } from './runtime-managed-terminal-spawn-environment'
 
 export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
@@ -104,18 +105,17 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           releaseStablePaneCreate?.()
           throw error
         }
-        const env = this.buildTerminalWorkspaceEnv(
+        const env = buildManagedTerminalSpawnEnvironment({
+          runtime: this,
           workspace,
-          {
-            ...baseEnv,
-            ...(sequencedStartupCommand
-              ? { [dependencies.SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: sequencedStartupCommand }
-              : {})
-          },
+          baseEnv,
+          sequencedStartupCommand,
           paneKey,
           tabId,
-          agentTeamsPlan?.env
-        )
+          agentTeamsEnv: agentTeamsPlan?.env,
+          orchestrationManagedLaunch: launchOpts.orchestrationManagedLaunch,
+          terminalHandle: preAllocatedHandle
+        })
         const terminalColorQueryReplies =
           launchOpts.terminalColorQueryReplies ??
           dependencies.getTerminalViewColorQueryReplyColors()
@@ -234,6 +234,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             pty.launchToken = launchToken ?? null
             pty.launchIncarnationId = launchToken ? pty.incarnationId : null
             pty.launchAgent = launchOpts.launchAgent ?? null
+            this.resetPtyLaunchAuthorityCommandFence(result.id)
           }
           pty.tabId = tabId
           pty.paneKey = paneKey

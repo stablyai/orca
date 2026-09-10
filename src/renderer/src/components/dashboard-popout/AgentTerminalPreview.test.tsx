@@ -9,6 +9,7 @@ const terminalHarness = vi.hoisted(() => ({
     write: ReturnType<typeof vi.fn>
     writeCallbacks: (() => void)[]
     onDataListener: ((data: string) => void) | null
+    focus: ReturnType<typeof vi.fn>
     dispose: ReturnType<typeof vi.fn>
     resize: ReturnType<typeof vi.fn>
     reset: ReturnType<typeof vi.fn>
@@ -17,6 +18,7 @@ const terminalHarness = vi.hoisted(() => ({
     scrollToTop: ReturnType<typeof vi.fn>
     scrollToBottom: ReturnType<typeof vi.fn>
     selectAll: ReturnType<typeof vi.fn>
+    options: { disableStdin?: boolean }
     modes: { bracketedPasteMode: boolean }
     selectionText: string
     customKeyHandler: ((event: KeyboardEvent) => boolean) | null
@@ -77,6 +79,7 @@ vi.mock('@xterm/xterm', () => ({
     scrollToTop = vi.fn()
     scrollToBottom = vi.fn()
     selectAll = vi.fn()
+    options: { disableStdin?: boolean }
     getSelection = vi.fn(() => this.selectionText)
     attachCustomKeyEventHandler = vi.fn((handler: (event: KeyboardEvent) => boolean) => {
       this.customKeyHandler = handler
@@ -86,7 +89,8 @@ vi.mock('@xterm/xterm', () => ({
       return { dispose: vi.fn() }
     })
 
-    constructor() {
+    constructor(options: { disableStdin?: boolean } = {}) {
+      this.options = options
       terminalHarness.instances.push(this)
     }
   }
@@ -212,7 +216,7 @@ describe('AgentTerminalPreview', () => {
     expect(input).toHaveBeenCalledWith('pty-1', 'k')
 
     act(() => terminal.writeCallbacks.shift()?.())
-    expect(ack).toHaveBeenCalledWith('pty-1', 4)
+    await waitFor(() => expect(ack).toHaveBeenCalledWith('pty-1', 4))
   })
 
   it('installs the macOS IME native-text forwarder and lets its claims bypass chord handling', async () => {
@@ -635,9 +639,9 @@ describe('AgentTerminalPreview', () => {
     expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
   })
 
-  it('claims a grid sized to the dialog box and never re-requests an unchanged target', async () => {
+  it('claims a Canvas grid sized to its window and never re-requests an unchanged target', async () => {
     vi.useFakeTimers()
-    const view = render(<AgentTerminalPreview ptyId="pty-1" />)
+    const view = render(<AgentTerminalPreview ptyId="pty-1" mode="canvas" autoFocus={false} />)
     await vi.waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
 
     const host = view.container.querySelector<HTMLElement>('.origin-bottom-left')!

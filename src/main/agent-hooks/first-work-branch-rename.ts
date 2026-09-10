@@ -1,7 +1,7 @@
 // On first agent work in a fresh workspace, replace the auto-generated creature branch (e.g. `you/Nautilus`) with a short work-derived name.
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { Repo } from '../../shared/repo-types'
 import { isFolderRepo } from '../../shared/repo-kind'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -11,16 +11,17 @@ import {
   stripConfiguredBranchPrefix
 } from '../../shared/branch-name-from-work'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
-import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
-import { gitExecFileAsync } from '../git/runner'
-import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   probeBranchUpstream,
   renameCurrentBranch,
   resolveUniqueBranchName,
   type GitExec
 } from '../git/branch-rename'
+import { extractExecError } from '../git/exec-error'
+import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
+import { gitExecFileAsync } from '../git/runner'
+import { computeBranchName, getConfiguredBranchPrefix } from '../ipc/worktree-logic'
+import { getSshGitProvider } from '../providers/ssh-git-dispatch'
 import {
   generateBranchNameFromContext,
   resolveTextGenerationParams
@@ -78,6 +79,11 @@ export const FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT = 500
 export function resetFirstWorkBranchRenameState(): void {
   inFlightWorktreeIds.clear()
   settledWorktreeIds.clear()
+}
+
+function isNotGitWorkspaceError(error: unknown): boolean {
+  const { stderr, stdout } = extractExecError(error)
+  return /not a git (?:repository|worktree)/i.test(`${stderr}\n${stdout}`)
 }
 
 function rememberSettledWorktreeId(worktreeId: string): void {
@@ -172,7 +178,10 @@ async function runAutoRename(
     return stop('unresolved repo or worktree id')
   }
   if (isFolderRepo(repo)) {
-    return stop('folder project has no branch to rename', true)
+    return stop('repo is a folder workspace', true)
+  }
+  if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
+    return stop(`worktree is not eligible for auto-rename`, true)
   }
   const worktreePath = parsed.worktreePath
 
@@ -184,12 +193,17 @@ async function runAutoRename(
     ? (args) => provider.exec(args, worktreePath)
     : (args) => gitExecFileAsync(args, { cwd: worktreePath })
 
-  const currentBranch = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+  let currentBranch: string
+  try {
+    currentBranch = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+  } catch (error) {
+    if (isNotGitWorkspaceError(error)) {
+      return stop('workspace path is not a Git worktree', true)
+    }
+    throw error
+  }
   if (!currentBranch || currentBranch === 'HEAD') {
     return retry(`no checked-out branch (${currentBranch || 'empty'})`)
-  }
-  if (!deps.canRenameOrcaCreatedBranch(worktreeId)) {
-    return stop(`worktree is not eligible for auto-rename`, true)
   }
   // Only rename a branch Orca auto-named — never one the user chose.
   const leaf = currentBranch.slice(currentBranch.lastIndexOf('/') + 1)

@@ -139,7 +139,7 @@ export abstract class DaemonPtyRuntimeState {
   protected nonFinalGlobalAdmissionWarningActive = false
   protected overlayDeadlineWarnedSessionIds = new Set<string>()
   protected periodicDeadlineWarnedSessionIds = new Set<string>()
-  protected keepHistoryShutdowns = new Set<Promise<void>>()
+  protected keepHistoryShutdowns = new Set<Promise<unknown>>()
   protected disconnectOnlyPromise: Promise<void> | null = null
   protected supportsCheckpoints: boolean
   protected supportsIncrementalCheckpoints: boolean

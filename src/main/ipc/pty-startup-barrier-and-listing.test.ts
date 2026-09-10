@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
-import { makeDeferred } from './pty-ipc-test-constants'
+import { exitedPtyStopReceipt, makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import {
   registerPtyHandlers,
@@ -148,7 +148,7 @@ describe('registerPtyHandlers', () => {
     const barrier = makeDeferred()
     const awaitLocalPtyStartup = vi.fn(() => barrier.promise)
     const sshSpawn = vi.fn(async () => ({ id: 'remote-pty' }))
-    const sshShutdown = vi.fn()
+    const sshShutdown = vi.fn(async (id: string) => exitedPtyStopReceipt(id))
     registerSshPtyProvider('ssh-1', {
       spawn: sshSpawn,
       write: vi.fn(),
@@ -193,17 +193,17 @@ describe('registerPtyHandlers', () => {
 
     expect(awaitLocalPtyStartup).not.toHaveBeenCalled()
     expect(sshSpawn).toHaveBeenCalledTimes(1)
-    expect(sshShutdown).toHaveBeenCalledWith('remote-pty', {
-      immediate: true,
-      keepHistory: false
-    })
+    expect(sshShutdown).toHaveBeenCalledWith(
+      'remote-pty',
+      expect.objectContaining({ immediate: true, keepHistory: false })
+    )
   })
   it('lists sessions from both local and SSH providers', async () => {
     registerPtyHandlers(mainWindow as never)
     const sshListProcesses = vi.fn(async () => [
       { id: 'remote-pty', cwd: '/remote', title: 'ssh-shell' }
     ])
-    const sshShutdown = vi.fn(async () => undefined)
+    const sshShutdown = vi.fn(async (id: string) => exitedPtyStopReceipt(id))
     registerSshPtyProvider('ssh-1', {
       spawn: vi.fn(),
       write: vi.fn(),
@@ -239,10 +239,10 @@ describe('registerPtyHandlers', () => {
     )
 
     await handlers.get('pty:kill')!(null, { id: 'remote-pty' })
-    expect(sshShutdown).toHaveBeenCalledWith('remote-pty', {
-      immediate: true,
-      keepHistory: false
-    })
+    expect(sshShutdown).toHaveBeenCalledWith(
+      'remote-pty',
+      expect.objectContaining({ immediate: true, keepHistory: false })
+    )
   })
   it('starts local and SSH session inventories concurrently', async () => {
     let resolveLocal!: (sessions: { id: string; cwd: string; title: string }[]) => void
@@ -261,7 +261,7 @@ describe('registerPtyHandlers', () => {
       spawn: vi.fn(),
       write: vi.fn(),
       resize: vi.fn(),
-      shutdown: vi.fn(),
+      shutdown: vi.fn(async (id: string) => exitedPtyStopReceipt(id)),
       sendSignal: vi.fn(),
       getCwd: vi.fn(),
       getInitialCwd: vi.fn(),
@@ -379,7 +379,7 @@ describe('registerPtyHandlers', () => {
       spawn: vi.fn(),
       write: vi.fn(),
       resize: vi.fn(),
-      shutdown: vi.fn(),
+      shutdown: vi.fn(async (id: string) => exitedPtyStopReceipt(id)),
       sendSignal: vi.fn(),
       getCwd: vi.fn(),
       getInitialCwd: vi.fn(),
@@ -412,7 +412,7 @@ describe('registerPtyHandlers', () => {
       spawn: vi.fn(),
       write: vi.fn(),
       resize: vi.fn(),
-      shutdown: vi.fn(),
+      shutdown: vi.fn(async (id: string) => exitedPtyStopReceipt(id)),
       sendSignal: vi.fn(),
       getCwd: vi.fn(),
       getInitialCwd: vi.fn(),
@@ -441,7 +441,7 @@ describe('registerPtyHandlers', () => {
       spawn: vi.fn(),
       write: vi.fn(),
       resize: vi.fn(),
-      shutdown: vi.fn(),
+      shutdown: vi.fn(async (id: string) => exitedPtyStopReceipt(id)),
       sendSignal: vi.fn(),
       getCwd: vi.fn(),
       getInitialCwd: vi.fn(),

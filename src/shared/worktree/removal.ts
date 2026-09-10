@@ -1,4 +1,11 @@
-import type { ExecutionHostId } from '../execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../execution-host'
+import type { PtyIncarnationId } from '../pty-incarnation'
+import { parsePtyStopReceipt } from '../pty-stop-receipt'
 import type { GitWorktreeInfo, Worktree } from './types'
 
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
@@ -56,6 +63,58 @@ export function isProvenLivePtyRemovalError(error: string): boolean {
     isUnstoppedPtyRemovalError(error) &&
     error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${UNSTOPPED_PTY_LIVE_DETAIL_PREFIX}`)
   )
+}
+
+export function getWorktreeTeardownExecutionHostId(params: {
+  resolvedConnectionId?: string
+  resolvedRuntimeEnvironmentId?: string
+}): ExecutionHostId {
+  return params.resolvedConnectionId
+    ? toSshExecutionHostId(params.resolvedConnectionId)
+    : params.resolvedRuntimeEnvironmentId
+      ? toRuntimeExecutionHostId(params.resolvedRuntimeEnvironmentId)
+      : LOCAL_EXECUTION_HOST_ID
+}
+
+export async function stopPtyForWorktreeRemoval(
+  provider: {
+    shutdown: (
+      id: string,
+      options: { immediate: true; deadlineMs: number; expectedIncarnationId?: PtyIncarnationId }
+    ) => Promise<unknown>
+  },
+  params: {
+    ptyId: string
+    executionHostId: ExecutionHostId
+    deadline: number
+    rpcDeadline: number
+    terminalHandle?: string
+    incarnationId?: PtyIncarnationId
+  }
+): Promise<boolean> {
+  if (Date.now() >= params.deadline) {
+    return false
+  }
+  try {
+    const receipt = parsePtyStopReceipt(
+      await provider.shutdown(params.ptyId, {
+        immediate: true,
+        deadlineMs: params.rpcDeadline,
+        ...(params.incarnationId ? { expectedIncarnationId: params.incarnationId } : {})
+      }),
+      {
+        ptyId: params.ptyId,
+        executionHostId: params.executionHostId,
+        ...(params.terminalHandle ? { terminalHandle: params.terminalHandle } : {}),
+        ...(params.incarnationId ? { ptyIncarnation: params.incarnationId } : {})
+      }
+    )
+    return (
+      Date.now() < params.deadline && receipt.verdict === 'exited' && receipt.processTreeVerified
+    )
+  } catch {
+    return false
+  }
 }
 
 export function createLockedWorktreeRemovalError(lockReason?: string): Error {
@@ -164,6 +223,53 @@ export function classifyWorktreeForceDeleteReason(
 export type WorktreeRemovalTarget = {
   id: string
   executionHostId: ExecutionHostId | null
+}
+
+export type WorktreeRetirementResourceSettlement = {
+  workerResourceIds: string[]
+  retainedWorkerResourceIds: string[]
+  releasedBrowserSurfaceIds: string[]
+  browserSurfaceIdsOutsideRetirement: string[]
+}
+
+export type WorktreeRetirementReceipt = {
+  schemaVersion: 1
+  worktreeId: string
+  executionHostId: ExecutionHostId
+  workspaceKey: string
+  workersSettled: true
+  processesSettled: true
+  stoppedProcessCount: number
+  ownedBrowserSurfacesSettled: true
+  releasedBrowserSurfaceIds: string[]
+  browserSurfaceIdsOutsideRetirement: string[]
+  worktreeAbsent: true
+  parentPortalsArchiveSafe: true
+}
+
+export function createWorktreeRetirementReceipt(params: {
+  worktreeId: string
+  executionHostId: ExecutionHostId
+  workspaceKey: string
+  stoppedProcessCount: number
+  resources: WorktreeRetirementResourceSettlement
+}): WorktreeRetirementReceipt {
+  return {
+    schemaVersion: 1,
+    worktreeId: params.worktreeId,
+    executionHostId: params.executionHostId,
+    workspaceKey: params.workspaceKey,
+    workersSettled: true,
+    processesSettled: true,
+    stoppedProcessCount: params.stoppedProcessCount,
+    ownedBrowserSurfacesSettled: true,
+    releasedBrowserSurfaceIds: [...params.resources.releasedBrowserSurfaceIds].sort(),
+    browserSurfaceIdsOutsideRetirement: [
+      ...params.resources.browserSurfaceIdsOutsideRetirement
+    ].sort(),
+    worktreeAbsent: true,
+    parentPortalsArchiveSafe: true
+  }
 }
 
 export function toWorktreeRemovalTarget(

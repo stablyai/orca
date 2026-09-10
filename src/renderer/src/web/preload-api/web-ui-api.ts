@@ -222,6 +222,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSessionTabCloseRequest: () => noopUnsubscribe,
     respondSessionTabClose: () => {},
     onMoveSessionTab: () => noopUnsubscribe,
+    onMaestroWorkspaceTabCommand: () => noopUnsubscribe,
+    respondMaestroWorkspaceTabCommand: () => {},
     onOpenFileFromMobile: () => noopUnsubscribe,
     onOpenDiffFromMobile: () => noopUnsubscribe,
     onMobileMarkdownRequest: () => noopUnsubscribe,

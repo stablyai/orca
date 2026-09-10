@@ -101,6 +101,21 @@ export type AgentSubagentSnapshot = {
   startedAt: number
 }
 
+/** Runtime-issued lineage for the provider event that produced this status row.
+ *  Live hook observations only: persisted/replayed rows intentionally carry none. */
+export type AgentActorAttestation = {
+  authorityId: string
+  incarnation: number
+  revision: number
+  observedAt: number
+  provider: 'claude' | 'codex' | 'opencode'
+  role: 'lead' | 'child'
+  eventName: string
+  providerSessionId?: string
+  providerActorId?: string
+  toolUseId?: string
+}
+
 export type AgentStatusEntry = {
   /** Renderer-local status-feed confirmation for children; absent on hook rows. */
   subagentObservation?: 'live' | 'unverifiable'
@@ -167,6 +182,8 @@ export type AgentStatusEntry = {
   /** Live in-process subagents/teammates of this pane's session. Absent when
    *  none are tracked; the sidebar derives indented child rows from it. */
   subagents?: AgentSubagentSnapshot[]
+  /** Main-runtime proof of which provider actor emitted the latest live hook event. */
+  actorAttestation?: AgentActorAttestation
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
@@ -210,6 +227,8 @@ export type AgentStatusPayload = {
   turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  /** Main-runtime proof; hook and OSC payload bodies cannot supply this field. */
+  actorAttestation?: AgentActorAttestation
 }
 
 /**
@@ -246,7 +265,8 @@ export function pickParsedAgentStatusPayload(
     ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
-    ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
+    ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
+    ...(row.actorAttestation !== undefined ? { actorAttestation: row.actorAttestation } : {})
   }
 }
 
@@ -378,15 +398,12 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   }
   const obj = parsed as Record<string, unknown>
   // Why: explicit typeof guard rejects non-string values instead of leaning on Set.has to return false for mismatched types.
-  if (typeof obj.state !== 'string') {
+  if (typeof obj.state !== 'string' || !VALID_STATES.has(obj.state)) {
     return null
   }
-  const state = obj.state
-  if (!VALID_STATES.has(state)) {
-    return null
-  }
+  const state = obj.state as AgentStatusState
   return {
-    state: state as AgentStatusState,
+    state,
     workingMode: state === 'working' && obj.workingMode === 'monitoring' ? 'monitoring' : undefined,
     prompt: normalizePromptField(obj.prompt),
     // Why: normalize like the other single-line fields so embedded newlines (e.g. `agentType: "claude\nrogue"`) can't break single-line UI and equality checks.

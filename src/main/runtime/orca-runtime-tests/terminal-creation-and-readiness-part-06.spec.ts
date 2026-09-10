@@ -407,6 +407,29 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('does not treat an OpenCode native title as idle while live status is working', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'remote:pty-1', {
+      tabTitle: 'repo terminal',
+      paneTitle: '⠋ OC | Running command'
+    })
+    runtime.onPtyData(
+      'remote:pty-1',
+      '\x1b]9999;{"state":"working","prompt":"run the command","agentType":"opencode"}\x07',
+      Date.now()
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 25 })
+    ).rejects.toThrow('timeout')
+  })
+
   it('does not treat a Codex launch title as tui-idle readiness', async () => {
     vi.useFakeTimers()
     try {

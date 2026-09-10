@@ -12,6 +12,13 @@ import {
 import type { resolvePinnedFederatedServer } from '../worker/worker-observation'
 
 type RemoteReleaseReceipt = Omit<WorkerReleaseReceipt, 'archive'> & {
+  runtimeEpoch: string
+  servingRuntimeEpoch?: string
+  attachment: {
+    terminalHandle: string
+    paneKey: string
+    processIncarnation: string
+  }
   archive?: WorkerReleaseReceipt['archive']
   output?: { source?: string }
 }
@@ -19,6 +26,8 @@ type RemoteReleaseReceipt = Omit<WorkerReleaseReceipt, 'archive'> & {
 const RemoteReleaseReceiptSchema = z
   .object({
     dispatchId: z.string().min(1),
+    runtimeEpoch: z.string().min(1),
+    servingRuntimeEpoch: z.string().min(1).optional(),
     state: z.enum([
       'released',
       'already_released',
@@ -34,7 +43,12 @@ const RemoteReleaseReceiptSchema = z
       .optional(),
     recovery: z.string().optional(),
     lastError: z.string().optional(),
-    output: z.unknown().optional()
+    output: z.unknown().optional(),
+    attachment: z.object({
+      terminalHandle: z.string().min(1),
+      paneKey: z.string().min(1),
+      processIncarnation: z.string().min(1)
+    })
   })
   .passthrough()
 
@@ -48,28 +62,37 @@ export async function releaseFederatedWorker(args: {
   const cache = getOrchestrationPeerCapabilityCache(args.runtime)
   // This capability states that the host writes a durable archive before it closes anything;
   // `method_not_found` cannot express that, so release still asks the advertisement.
-  const capability = await cache.resolve({
-    peerFingerprint: args.federated.peer_fingerprint,
-    expectedRuntimeEpoch: args.federated.remote_runtime_epoch,
-    capability: ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
-    probe: () =>
-      args.runtime.callOrchestrationWorkerServer(
-        args.server.environmentId,
-        'status.get',
-        undefined,
-        15_000,
-        undefined,
-        { expectedEnvironmentPairingRevision: args.server.pairingRevision }
-      ) as Promise<RuntimeStatus>
-  })
-  args.runtime
-    .getOrchestrationDb()
-    .updateFederatedDispatchRuntimeEpoch(args.dispatchId, capability.runtimeEpoch)
-  if (!capability.supported) {
-    return unsupported(args.dispatchId)
-  }
+  let capability: { runtimeEpoch: string; supported: boolean } | undefined
   let remote: RemoteReleaseReceipt
   try {
+    const status = (await args.runtime.callOrchestrationWorkerServer(
+      args.server.environmentId,
+      'status.get',
+      undefined,
+      15_000,
+      undefined,
+      { expectedEnvironmentPairingRevision: args.server.pairingRevision }
+    )) as RuntimeStatus
+    capability = {
+      runtimeEpoch: status.runtimeId,
+      supported:
+        status.capabilities?.includes(
+          ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY
+        ) === true
+    }
+    cache.remember(
+      args.federated.peer_fingerprint,
+      capability.runtimeEpoch,
+      ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
+      capability.supported,
+      args.federated.remote_runtime_epoch
+    )
+    args.runtime
+      .getOrchestrationDb()
+      .updateFederatedDispatchRuntimeEpoch(args.dispatchId, capability.runtimeEpoch)
+    if (!capability.supported) {
+      return unsupported(args.dispatchId)
+    }
     remote = parseRemoteReleaseReceipt(
       await args.runtime.callOrchestrationWorkerServer(
         args.server.environmentId,
@@ -82,7 +105,7 @@ export async function releaseFederatedWorker(args: {
       args.dispatchId
     )
   } catch (error) {
-    if (error instanceof OrchestrationError && error.code === 'method_not_found') {
+    if (capability && error instanceof OrchestrationError && error.code === 'method_not_found') {
       cache.remember(
         args.federated.peer_fingerprint,
         capability.runtimeEpoch,
@@ -113,6 +136,16 @@ export async function releaseFederatedWorker(args: {
   if (remote.state !== 'released' && remote.state !== 'already_released') {
     return receipt
   }
+  if (!matchesReleaseTarget(args, remote, capability.runtimeEpoch)) {
+    return {
+      dispatchId: args.dispatchId,
+      state: 'release_unknown',
+      processAction: 'none',
+      archive: remote.archive ?? null,
+      lastError: 'The execution host returned a release receipt for a different worker process.',
+      recovery: releaseUnknownRecovery(args.dispatchId)
+    }
+  }
   try {
     // Keep this idempotent so a fresh request converges the home projection without
     // issuing another terminal close after the execution host confirmed release.
@@ -126,6 +159,48 @@ export async function releaseFederatedWorker(args: {
       recovery: confirmedReleaseProjectionRecovery(args.dispatchId)
     }
   }
+}
+
+function matchesReleaseTarget(
+  args: Parameters<typeof releaseFederatedWorker>[0],
+  receipt: RemoteReleaseReceipt,
+  servingRuntimeEpoch: string
+): boolean {
+  const db = args.runtime.getOrchestrationDb()
+  const dispatch = db.getDispatchContextById(args.dispatchId)
+  const worker = db.getWorkerDispatch(args.dispatchId)
+  const exactDispatchIdentity = Boolean(
+    (receipt.servingRuntimeEpoch ?? receipt.runtimeEpoch) === servingRuntimeEpoch &&
+    dispatch?.assignee_handle &&
+    dispatch.assignee_pane_key &&
+    dispatch.process_incarnation &&
+    receipt.attachment.terminalHandle === dispatch.assignee_handle &&
+    receipt.attachment.paneKey === dispatch.assignee_pane_key &&
+    receipt.attachment.processIncarnation === dispatch.process_incarnation
+  )
+  if (!exactDispatchIdentity) {
+    return false
+  }
+  if (receipt.state === 'already_released') {
+    return (
+      (worker?.stage === 'released' && args.federated.remote_terminal_handle === null) ||
+      matchesActiveReleaseBinding(args, receipt)
+    )
+  }
+  return matchesActiveReleaseBinding(args, receipt)
+}
+
+function matchesActiveReleaseBinding(
+  args: Parameters<typeof releaseFederatedWorker>[0],
+  receipt: RemoteReleaseReceipt
+): boolean {
+  const worker = args.runtime.getOrchestrationDb().getWorkerDispatch(args.dispatchId)
+  return Boolean(
+    args.federated.remote_terminal_handle &&
+    worker?.agent_terminal_handle &&
+    receipt.attachment.terminalHandle === args.federated.remote_terminal_handle &&
+    receipt.attachment.terminalHandle === worker.agent_terminal_handle
+  )
 }
 
 export function parseRemoteReleaseReceipt(

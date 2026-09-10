@@ -85,6 +85,23 @@ async function createPromptContractHarness(
     }
   }, 'codex')
   const { runtime, handle } = fixture
+  const sendTerminalAgentPrompt = runtime.sendTerminalAgentPrompt.bind(runtime)
+  vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockImplementation(async (...args) => {
+    const result = await sendTerminalAgentPrompt(...args)
+    return result.prompt
+      ? {
+          ...result,
+          prompt: { ...result.prompt, provider: 'codex', observation: 'supported' }
+        }
+      : result
+  })
+  // This contract exercises the legacy PTY preamble/turn-observation path explicitly. Keep the
+  // settings-driven structured-worker default out of this transport regression fixture.
+  vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
+    experimentalNativeChat: false,
+    openAgentTabsInChatByDefault: false,
+    experimentalStructuredNativeChat: false
+  } as never)
   runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
 
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'orca-worker-prompt-contract-'))

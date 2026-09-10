@@ -2,6 +2,8 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session-resume'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { createManagedCliContext } from '../../src/shared/managed-cli-context'
+import { worktreeWorkspaceKey } from '../../src/shared/workspace-scope'
 import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
 import type { TerminalTab } from '../../src/shared/terminal-tab-types'
 import type { Worktree } from '../../src/shared/worktree/types'
@@ -157,7 +159,7 @@ function seedWorkspace(options: { helper?: boolean } = {}): void {
     settings: {
       ...initialAppStoreState.settings,
       agentCmdOverrides: {},
-      agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' },
+      agentDefaultArgs: { codex: '--yolo' },
       setupScriptLaunchMode: 'new-tab'
     },
     markWorktreeVisited: vi.fn(),
@@ -238,6 +240,13 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
   const db = new OrchestrationDb(':memory:')
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
+  runtime.setNotifier({
+    resolveLegacyWorkerTerminalRecovery: (paneKey, resolution) => {
+      if (resolution === 'exited') {
+        useAppStore.getState().clearSleepingAgentSession(paneKey)
+      }
+    }
+  } as never)
   const coordinatorPaneKey = 'coordinator-tab:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const run = db.createRun({
     objective: 'Completed worker retirement reproduction',
@@ -255,14 +264,20 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     handle === 'terminal-coordinator' ? coordinatorPaneKey : ORIGINAL_PANE_KEY
   )
   vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-    handle === TERMINAL_HANDLE ? 'runtime:test:worker:1' : null
+    handle === TERMINAL_HANDLE ? `${ORIGINAL_PTY_ID}:incarnation-1` : null
   )
   vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
     handle === TERMINAL_HANDLE
       ? ({
+          runtimeId: runtime.getRuntimeId(),
           terminalHandle: TERMINAL_HANDLE,
+          ptyId: 'pty-background-worker',
+          // Why: release proves identity against the whole authority, so the fixture
+          // seeds every field the resource records — worktree, pane, incarnation, host.
+          worktreeId: WORKTREE_ID,
           paneKey: ORIGINAL_PANE_KEY,
-          processIncarnation: 'runtime:test:worker:1',
+          processIncarnation: `${ORIGINAL_PTY_ID}:incarnation-1`,
+          launchTokenHash: null,
           hostScope: { kind: 'local', hostId: 'local' }
         } as never)
       : null
@@ -282,6 +297,19 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     exitCode: null
   })
   vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+  vi.spyOn(runtime, 'preflightWorktreeManagedCliExecutable').mockReturnValue('orca')
+  vi.spyOn(runtime, 'assertTerminalManagedCliAvailable').mockImplementation(() => {})
+  // Why: the worker start proves the terminal's managed-CLI identity from a live pty
+  // record, which a spied terminal creation never registers.
+  vi.spyOn(runtime, 'buildTerminalManagedCliContext').mockImplementation((handle) =>
+    createManagedCliContext({
+      executable: 'orca',
+      runtimeId: runtime.getRuntimeId(),
+      executionHostId: 'local',
+      workspaceKey: worktreeWorkspaceKey(WORKTREE_ID),
+      terminalHandle: handle
+    })
+  )
   vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
     handle: TERMINAL_HANDLE,
     accepted: true,
@@ -289,9 +317,17 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
   })
   vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
   vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue(null)
+  vi.spyOn(runtime, 'inspectTerminalProcessIncarnationLiveness').mockResolvedValue(
+    terminalState === 'exited' ? 'exited' : 'live'
+  )
   vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
     handle: TERMINAL_HANDLE,
     worktreeId: WORKTREE_ID,
+    tabId: ORIGINAL_TAB_ID,
+    leafId: ORIGINAL_LEAF_ID,
+    ptyId: ORIGINAL_PTY_ID,
+    incarnationId: 'incarnation-1',
+    executionHostId: 'local',
     ...(terminalState === 'exited' ? { connected: false } : { status: 'running' })
   } as never)
   vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
@@ -316,7 +352,9 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
     const started = (await call('orchestration.workerStart', {
       task: task.id,
       from: 'terminal-coordinator',
-      agent: 'codex'
+      agent: 'codex',
+      // Why: a worker lease is bound to the attempt it was issued for.
+      attemptId: 'attempt_release_completed_worker'
     })) as { dispatchId: string; state: string }
     expect(started.state).toBe('ready')
     expect(db.getWorkerDispatch(started.dispatchId)?.state).toBe('ready')
@@ -344,7 +382,7 @@ async function releaseCompletedWorker(terminalState: 'running' | 'exited'): Prom
       pane_key: ORIGINAL_PANE_KEY,
       terminal_handle: TERMINAL_HANDLE
     })
-    expect(closeTerminal).toHaveBeenCalledOnce()
+    expect(closeTerminal).toHaveBeenCalledTimes(terminalState === 'exited' ? 0 : 1)
   } finally {
     db.close()
   }
@@ -555,7 +593,7 @@ describe('completed background-worker retirement resume matrix', () => {
     const restartAfterRetirement = persistAndParseCurrentSession()
     await hydrateSession(restartAfterRetirement)
 
-    // Case 8: first activation hands back a bare terminal and cannot resurrect authority.
+    // Case 8: first activation keeps the already materialized Canvas and cannot resurrect authority.
     const beforeActivation = useAppStore.getState()
     expect(beforeActivation.everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
     expect(beforeActivation.agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
@@ -570,7 +608,9 @@ describe('completed background-worker retirement resume matrix', () => {
 
     const replacementTabs = activated.tabsByWorktree[WORKTREE_ID] ?? []
     expect(replacementTabs).toHaveLength(1)
+    expect(replacementTabs[0]).toMatchObject({ ptyId: null, pendingActivationSpawn: true })
     expect(replacementTabs[0]?.id).not.toBe(ORIGINAL_TAB_ID)
+    expect(activated.reconcileWorktreeTabModel(WORKTREE_ID).renderableTabCount).toBe(1)
     expect(activated.terminalLayoutsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expect(activated.ptyIdsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expectCanaryUnchanged()

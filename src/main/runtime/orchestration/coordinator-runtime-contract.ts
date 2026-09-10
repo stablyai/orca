@@ -24,7 +24,7 @@ export type CoordinatorRuntime = {
   }>
   createTerminal(
     worktreeSelector?: string,
-    opts?: { command?: string; title?: string }
+    opts?: { command?: string; title?: string; orchestrationManagedLaunch?: boolean }
   ): Promise<{ handle: string; worktreeId: string }>
   waitForTerminal(
     handle: string,

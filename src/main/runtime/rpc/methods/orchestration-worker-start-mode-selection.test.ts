@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { createManagedCliContext } from '../../../../shared/managed-cli-context'
 
 const STRUCTURED_HANDLE = 'structworker_abc'
 const TERMINAL_HANDLE = 'term_worker'
@@ -86,6 +87,17 @@ describe('worker-start honours the settings default', () => {
       exitCode: null
     })
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'preflightWorktreeManagedCliExecutable').mockReturnValue('orca')
+    vi.spyOn(runtime, 'assertTerminalManagedCliAvailable').mockImplementation(() => {})
+    vi.spyOn(runtime, 'buildTerminalManagedCliContext').mockImplementation((handle) =>
+      createManagedCliContext({
+        executable: 'orca',
+        runtimeId: runtime.getRuntimeId(),
+        executionHostId: 'local',
+        workspaceKey: 'worktree:repo::wt',
+        terminalHandle: handle
+      })
+    )
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: TERMINAL_HANDLE,
       accepted: true,

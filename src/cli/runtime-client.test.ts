@@ -75,7 +75,7 @@ function findUnusedPid(seed = 200_000): number {
 // Windows does not support Unix domain sockets in the same way, causing
 // EACCES errors on listen(), so the suite is skipped on that platform.
 describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
-  it('adds an opaque durable request ID only to orchestration mutations', async () => {
+  it('adds durable mutation IDs and authority only to methods that require them', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')
     const requests: Record<string, unknown>[] = []
@@ -117,6 +117,8 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
       await client.call('orchestration.taskList', {})
       const secondClient = new RuntimeClient(userDataPath, 500)
       await secondClient.call('orchestration.taskList', {})
+      await client.call('maestro.bootstrap', {})
+      await client.call('maestro.runProgress.get', {})
     } finally {
       if (priorLaunchToken === undefined) {
         delete process.env.ORCA_AGENT_LAUNCH_TOKEN
@@ -137,6 +139,15 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(requests[2]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
     expect(requests[3]?.method).toBe('orchestration.taskList')
     expect(requests[3]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
+    expect(requests[4]?.method).toBe('maestro.bootstrap')
+    expect(requests[4]?.compatibilityInvocationId).not.toBe(requests[3]?.compatibilityInvocationId)
+    expect(requests[4]?.orchestrationCompatibilityEvidence).toMatchObject({
+      launchToken: 'launch-secret'
+    })
+    expect(requests[4]?.orchestrationContractVersion).toBeUndefined()
+    expect(requests[5]?.method).toBe('maestro.runProgress.get')
+    expect(requests[5]?.compatibilityInvocationId).toBeUndefined()
+    expect(requests[5]?.orchestrationCompatibilityEvidence).toBeUndefined()
   })
 
   it('rejects an old local runtime before sending an orchestration mutation', async () => {

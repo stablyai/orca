@@ -110,6 +110,7 @@ docs/**
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md
+!docs/reference/maestro-canvas-testing.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/windows-cmd-shim-resolution.md
 !docs/reference/windows-daemon-host-relocation.md
@@ -138,6 +139,17 @@ validation-screenshots/
 # Local scratch notes and PR evidence screenshots (not part of the product).
 /notes/
 /pr-evidence/
+/.visual-evidence/
+
+# Machine-local agent planning, run state, and workspace annotations.
+/.claude/sessions/
+/.claude/state/
+/.orca/
+/openspec/
+/research/
+
+# Accidental root-level Electron bundle output; the real build lives under out/.
+/index.js
 
 # Playwright
 test-results/

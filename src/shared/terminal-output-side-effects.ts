@@ -63,6 +63,8 @@ export type TerminalTitleTrackerCallbacks = {
    * mirrors renderer command-lifecycle semantics so the fact path drops stale agent rows like byte mode.
    */
   onCommandFinished?: (bestEffortExitCode: number | null) => void
+  /** Fired per OSC 133;C before the corresponding command output. */
+  onCommandStarted?: () => void
   /** Fired once per newly observed GitHub PR URL (chunk-boundary-safe, deduplicated per tracker). */
   onPrLink?: (link: TerminalGitHubPRLink) => void
   /**
@@ -119,6 +121,7 @@ export function createTerminalTitleTracker(
     onAgentExited,
     onBell,
     onCommandFinished,
+    onCommandStarted,
     onPrLink,
     onMode2031Subscribe,
     onMode2031Unsubscribe
@@ -126,7 +129,7 @@ export function createTerminalTitleTracker(
   let bellDetector = onBell ? createBellDetector() : null
   // Why: created only when a consumer exists so headless serve never pays the per-chunk 133/URL scans.
   const commandFinishedScanner = onCommandFinished
-    ? createOsc133CommandFinishedScanner(onCommandFinished)
+    ? createOsc133CommandFinishedScanner(onCommandFinished, onCommandStarted)
     : null
   let prLinkDetector = onPrLink ? createTerminalGitHubPRLinkDetector() : null
   let transientSideEffectScanningEnabled = true

@@ -9,6 +9,7 @@ describe('orchestration RPC contract', () => {
   it.each([
     ['orchestration.runCreate', {}],
     ['orchestration.runUse', {}],
+    ['orchestration.runComplete', {}],
     ['orchestration.send', {}],
     ['orchestration.reply', {}],
     ['orchestration.taskCreate', {}],
@@ -25,6 +26,7 @@ describe('orchestration RPC contract', () => {
     ['orchestration.federationAck', {}],
     ['orchestration.federationImport', {}],
     ['orchestration.federationStop', {}],
+    ['orchestration.federationRelease', {}],
     ['orchestration.check', {}],
     ['orchestration.check', { wait: true }],
     ['orchestration.check', { unread: true }],

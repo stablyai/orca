@@ -180,6 +180,7 @@ export function buildMobileSessionGroupProjection(
       editorIds,
       browserIds,
       new Set(),
+      new Set(),
       true
     )
     if (visibleOrder.length === 0) {

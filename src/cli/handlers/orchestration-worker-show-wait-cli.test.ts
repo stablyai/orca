@@ -71,4 +71,27 @@ describe('orchestration worker-show interactive wait output', () => {
 
     expect(line).toContain('Interactive wait: unknown (not evaluated)')
   })
+
+  it('passes the optional Run fence to the host', async () => {
+    const result = {
+      dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' },
+      worker: { state: 'ready', stage: 'dispatch_input', agent_terminal_handle: 'term_1' }
+    }
+    callMock.mockResolvedValue(result)
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-show']({
+      flags: new Map<string, string | boolean>([
+        ['dispatch', 'ctx_1'],
+        ['run', 'run_1']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.workerShow', {
+      dispatch: 'ctx_1',
+      run: 'run_1'
+    })
+  })
 })

@@ -289,7 +289,9 @@ describe('worktree agent activation seam', () => {
     expect(activateAndRevealWorktree(worktree.id)).toEqual({ primaryTabId: null })
     await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
-    expect(useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).toHaveLength(0)
+    expect(useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).toEqual([
+      expect.objectContaining({ contentType: 'maestro', systemRole: 'workspace-maestro' })
+    ])
     expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(0)
     expect(runtimeCall).toHaveBeenCalledWith({
       method: 'session.tabs.list',

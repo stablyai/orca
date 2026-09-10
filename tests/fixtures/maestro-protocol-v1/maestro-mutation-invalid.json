@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "protocol": "maestro-mutation/v1",
+  "mutation_id": "mutation-invalid",
+  "workspace": {
+    "repository_id": "repo-1",
+    "execution_host_id": "local",
+    "workspace_key": "id:repo-1::/tmp/not-a-public-key",
+    "run_id": "run-1"
+  },
+  "actor": {
+    "actor_id": "user-1",
+    "kind": "user",
+    "authenticated": false,
+    "session_id": "session-1"
+  },
+  "coordinator_generation": 1,
+  "expected_revision": 0,
+  "operation": { "kind": "move-node", "node_id": "node-1", "position": { "x": 0, "y": 0 } }
+}

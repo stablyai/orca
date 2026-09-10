@@ -9,6 +9,8 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** Explicit user rename. Optional for mixed-version renderer/runtime pairs. */
+  customTitle?: string
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string

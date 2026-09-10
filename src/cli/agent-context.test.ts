@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CommandSpec } from './args'
+import {
+  normalizeCommandPositionals,
+  parseArgs,
+  specPaths,
+  validateCommandAndFlags,
+  type CommandSpec
+} from './args'
 import { buildAgentContext, formatAgentContextSummary } from './agent-context'
 import { COMMAND_SPECS } from './specs'
 
@@ -89,5 +95,43 @@ describe('agent-context over the live registry', () => {
     const claudeTeams = schema.commands.find((command) => command.command === 'claude-teams')
     expect(claudeTeams?.argumentMode).toBe('passthrough')
     expect(claudeTeams?.flags).toEqual([])
+  })
+
+  it('publishes canonical Maestro payload contracts and copy-safe stdin examples', () => {
+    const schema = buildAgentContext(COMMAND_SPECS)
+    const bootstrap = schema.payloadContracts['maestro bootstrap']
+    const browserOpen = schema.payloadContracts['maestro browser-surface open']
+    const browserRelease = schema.payloadContracts['maestro browser-surface release']
+    const browserSnapshot = schema.payloadContracts.snapshot
+    const browserClick = schema.payloadContracts.click
+
+    expect(bootstrap.requiredCapabilities).toContain('maestro.bootstrap.v1')
+    expect(bootstrap.schema).toMatchObject({ type: 'object' })
+    expect(bootstrap.preconditions).not.toHaveLength(0)
+    expect(bootstrap.stdinExample).toContain('--payload-file -')
+    expect(bootstrap.stdinExample).toContain("<<'JSON'")
+    expect(browserOpen.requiredCapabilities).toContain('maestro.browser-surface.v1')
+    expect(browserOpen.schema).toMatchObject({ type: 'object' })
+    expect(browserOpen.stdinExample).toContain('"attempt_id":"dispatch_1"')
+    expect(browserRelease.stdinExample).toContain('"surface_id":"browser-surface-request_1"')
+    expect(browserSnapshot.schema).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      required: ['page']
+    })
+    expect(browserClick.schema).toMatchObject({
+      type: 'object',
+      additionalProperties: false,
+      required: expect.arrayContaining(['page', 'element'])
+    })
+    const commandPaths = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
+    for (const contract of [browserSnapshot, browserClick]) {
+      const parsed = normalizeCommandPositionals(
+        COMMAND_SPECS,
+        parseArgs(contract.stdinExample.split(/\s+/).slice(1), commandPaths)
+      )
+      expect(() => validateCommandAndFlags(COMMAND_SPECS, parsed)).not.toThrow()
+      expect(contract.stdinExample).not.toContain('tab create')
+    }
   })
 })

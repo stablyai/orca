@@ -7,6 +7,7 @@ import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
+const MAX_STAGE_DIAGNOSTIC_BYTES = 4096
 const ROOT_CODE_QUALITY_IGNORED_PREFIXES = ['cloud/']
 export const OXLINT_SCANS = [
   {
@@ -70,6 +71,45 @@ export function parseAddedLineRanges(diff) {
 
 export function overlapsAddedLines(startLine, endLine, ranges) {
   return ranges.some((range) => startLine <= range.end && endLine >= range.start)
+}
+
+function boundedDiagnostic(value) {
+  const text = String(value ?? '').trim()
+  if (Buffer.byteLength(text, 'utf8') <= MAX_STAGE_DIAGNOSTIC_BYTES) {
+    return text
+  }
+  return `${text.slice(0, MAX_STAGE_DIAGNOSTIC_BYTES)}…`
+}
+
+export function expectedNodeMajor(root = process.cwd()) {
+  let manifest
+  try {
+    manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+  } catch (error) {
+    throw new Error(
+      `Node engine preflight stage failed: could not read package.json (${boundedDiagnostic(error.message)})`
+    )
+  }
+  const match = /\d+/.exec(String(manifest.engines?.node ?? ''))
+  if (!match) {
+    throw new Error('Node engine preflight stage failed: package.json engines.node is invalid.')
+  }
+  return Number.parseInt(match[0], 10)
+}
+
+export function assertSupportedNodeEngine(
+  root = process.cwd(),
+  observedVersion = process.versions.node
+) {
+  const expectedMajor = expectedNodeMajor(root)
+  const observedMatch = /^(\d+)/.exec(String(observedVersion))
+  const observedMajor = observedMatch ? Number.parseInt(observedMatch[1], 10) : null
+  if (observedMajor !== expectedMajor) {
+    throw new Error(
+      `Node engine preflight failed: expected Node ${expectedMajor}, observed ${observedVersion}.`
+    )
+  }
+  return { expectedMajor, observedMajor, observedVersion: String(observedVersion) }
 }
 
 function runGit(root, args, options = {}) {
@@ -151,13 +191,64 @@ export function collectAddedLineRanges(root, requestedBase) {
   return { base, comparisonBase, rangesByFile }
 }
 
-function parseOxlintOutput(stdout, label) {
-  const start = stdout.indexOf('{')
-  const end = stdout.lastIndexOf('}')
-  if (start === -1 || end === -1) {
-    throw new Error(`${label} did not return Oxlint JSON output.`)
+function findJsonObjectEnd(text, start) {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (character === '\\') {
+        escaped = true
+      } else if (character === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (character === '"') {
+      inString = true
+    } else if (character === '{') {
+      depth += 1
+    } else if (character === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return index + 1
+      }
+    }
   }
-  return JSON.parse(stdout.slice(start, end + 1))
+  return -1
+}
+
+function isOxlintReport(value) {
+  return value !== null && typeof value === 'object' && Array.isArray(value.diagnostics)
+}
+
+export function parseOxlintOutput(stdout, label) {
+  const text = String(stdout ?? '')
+  const reports = []
+  for (let start = text.indexOf('{'); start !== -1; start = text.indexOf('{', start + 1)) {
+    const end = findJsonObjectEnd(text, start)
+    if (end === -1) {
+      continue
+    }
+    try {
+      const candidate = JSON.parse(text.slice(start, end))
+      if (isOxlintReport(candidate)) {
+        reports.push(candidate)
+      }
+    } catch {
+      continue
+    }
+  }
+  if (reports.length === 0) {
+    throw new Error(`${label} did not return one validated Oxlint JSON report.`)
+  }
+  if (reports.length > 1) {
+    throw new Error(`${label} returned multiple validated Oxlint JSON reports.`)
+  }
+  return reports[0]
 }
 
 function normalizedDiagnosticPath(root, filename) {
@@ -308,61 +399,76 @@ function isSuppressedDiagnostic(diagnostic, root) {
   return files?.has(normalizedDiagnosticPath(root, diagnostic.filename)) ?? false
 }
 
-function runOxlintScan(root, scan, files) {
+export function runOxlintScan(root, scan, files, spawn = spawnSync) {
   const { command, prefixArgs } = resolveOxlintInvocation(root)
-  const result = spawnSync(command, [...prefixArgs, ...scan.args, '--format', 'json', ...files], {
+  const result = spawn(command, [...prefixArgs, ...scan.args, '--format', 'json', ...files], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 128 * 1024 * 1024,
     windowsHide: true
   })
   if (result.error) {
-    throw result.error
+    throw new Error(`${scan.label} spawn stage failed: ${boundedDiagnostic(result.error.message)}`)
   }
-  if (!result.stdout.trim()) {
-    process.stderr.write(result.stderr)
-    throw new Error(`${scan.label} failed before producing diagnostics.`)
+  if (!String(result.stdout ?? '').trim()) {
+    throw new Error(
+      `${scan.label} output stage failed: Oxlint produced no stdout. stderr=${boundedDiagnostic(result.stderr)}`
+    )
   }
-  return parseOxlintOutput(result.stdout, scan.label).diagnostics ?? []
+  let report
+  try {
+    report = parseOxlintOutput(result.stdout, scan.label)
+  } catch (error) {
+    throw new Error(`${scan.label} report stage failed: ${boundedDiagnostic(error.message)}`)
+  }
+  return report.diagnostics
 }
 
 export function main(
   root = process.cwd(),
-  requestedBase = process.argv.slice(2).find((argument) => argument !== '--')
+  requestedBase = process.argv.slice(2).find((argument) => argument !== '--'),
+  options = {}
 ) {
-  const { base, comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
-  const files = [...rangesByFile.keys()]
-  if (files.length === 0) {
-    console.log(`Changed-code quality gate: no changed JavaScript or TypeScript since ${base}.`)
-    return 0
-  }
-
-  const baseBlocks = collectBaseLineBlocks(root, comparisonBase)
-
-  let failures = 0
-  for (const scan of OXLINT_SCANS) {
-    const diagnostics = runOxlintScan(root, scan, files).filter(
-      (diagnostic) =>
-        !isSuppressedDiagnostic(diagnostic, root) &&
-        diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks)
-    )
-    for (const diagnostic of diagnostics) {
-      printDiagnostic(diagnostic, root)
+  try {
+    assertSupportedNodeEngine(root, options.nodeVersion)
+    const { base, comparisonBase, rangesByFile } = collectAddedLineRanges(root, requestedBase)
+    const files = [...rangesByFile.keys()]
+    if (files.length === 0) {
+      console.log(`Changed-code quality gate: no changed JavaScript or TypeScript since ${base}.`)
+      return 0
     }
-    failures += diagnostics.length
-    console.log(
-      `${scan.label}: ${diagnostics.length} new finding(s) across ${files.length} changed file(s).`
-    )
-  }
 
-  if (failures > 0) {
+    const baseBlocks = collectBaseLineBlocks(root, comparisonBase)
+    let failures = 0
+    for (const scan of OXLINT_SCANS) {
+      const diagnostics = runOxlintScan(root, scan, files).filter(
+        (diagnostic) =>
+          !isSuppressedDiagnostic(diagnostic, root) &&
+          diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks)
+      )
+      for (const diagnostic of diagnostics) {
+        printDiagnostic(diagnostic, root)
+      }
+      failures += diagnostics.length
+      console.log(
+        `${scan.label}: ${diagnostics.length} new finding(s) across ${files.length} changed file(s).`
+      )
+    }
+
+    if (failures > 0) {
+      console.error(
+        `Changed-code quality gate failed with ${failures} finding(s) since ${comparisonBase.slice(0, 12)}.`
+      )
+      return 1
+    }
+    console.log(`Changed-code quality gate passed since ${comparisonBase.slice(0, 12)}.`)
+    return 0
+  } catch (error) {
     console.error(
-      `Changed-code quality gate failed with ${failures} finding(s) since ${comparisonBase.slice(0, 12)}.`
+      `Changed-code quality gate failed: ${boundedDiagnostic(error instanceof Error ? error.message : error)}`
     )
     return 1
   }
-  console.log(`Changed-code quality gate passed since ${comparisonBase.slice(0, 12)}.`)
-  return 0
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

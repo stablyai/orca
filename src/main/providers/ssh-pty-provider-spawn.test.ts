@@ -468,6 +468,29 @@ describe('spawn', () => {
     })
   })
 
+  it('injects the exact installed launcher path for managed remote CLI calls', async () => {
+    mux.request.mockResolvedValue({ id: 'pty-launcher' })
+    provider = new SshPtyProvider('conn-1', mux as never, {
+      binDir: '/home/user/.orca-relay/bin',
+      launcherPath: '/home/user/.orca-relay/bin/orca',
+      relayDir: '/home/user/.orca-relay/relay-v1',
+      nodePath: '/usr/bin/node',
+      sockPath: '/home/user/.orca-relay/relay.sock'
+    })
+
+    await provider.spawn({ cols: 120, rows: 40, env: { PATH: '/usr/bin' } })
+
+    expectRequest(
+      mux.request,
+      'pty.spawn',
+      expect.objectContaining({
+        env: expect.objectContaining({
+          ORCA_MANAGED_CLI_EXECUTABLE: '/home/user/.orca-relay/bin/orca'
+        })
+      })
+    )
+  })
+
   it('does not clobber the remote relay PATH when caller env has no PATH', async () => {
     mux.request.mockResolvedValue({ id: 'pty-bridge' })
     provider = new SshPtyProvider('conn-1', mux as never, {

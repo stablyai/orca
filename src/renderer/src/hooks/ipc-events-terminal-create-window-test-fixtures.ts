@@ -118,6 +118,8 @@ export function buildTerminalCreateWindow(args: {
         onSessionTabCloseRequest: () => () => {},
         respondSessionTabClose: () => {},
         onMoveSessionTab: () => () => {},
+        onMaestroWorkspaceTabCommand: () => () => {},
+        respondMaestroWorkspaceTabCommand: () => {},
         onOpenFileFromMobile: () => () => {},
         onOpenDiffFromMobile: () => () => {},
         onCloseTerminal: () => () => {},

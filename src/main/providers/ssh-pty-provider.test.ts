@@ -11,6 +11,14 @@ describe('SshPtyProvider', () => {
   let mux: MockMultiplexer
   let provider: SshPtyProvider
   const scopedPty1 = 'ssh:conn-1@@pty-1'
+  const incarnationId = '11111111-1111-4111-8111-111111111111'
+
+  function mockLegacyShutdown(): void {
+    mux.request
+      .mockResolvedValueOnce([{ id: 'pty-1', incarnationId, cwd: '/workspace', title: 'shell' }])
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+  }
 
   beforeEach(() => {
     mux = createMockMux()
@@ -157,7 +165,14 @@ describe('SshPtyProvider', () => {
   })
 
   it('shutdown sends pty.shutdown request', async () => {
-    await provider.shutdown(scopedPty1, { immediate: true })
+    mockLegacyShutdown()
+    const first = await provider.shutdown(scopedPty1, { immediate: true })
+    expect(first).toMatchObject({
+      verdict: 'capability_limited',
+      processTreeVerified: false
+    })
+    await expect(provider.shutdown(scopedPty1, { immediate: true })).resolves.toBe(first)
+    expect(mux.request).toHaveBeenCalledTimes(3)
     expectRequest(
       mux.request,
       'pty.shutdown',
@@ -170,7 +185,62 @@ describe('SshPtyProvider', () => {
     )
   })
 
+  it('validates and returns the SSH execution owner receipt', async () => {
+    const root = {
+      pid: 41,
+      parentPid: 1,
+      processGroupId: 41,
+      startedAt: 'Mon Aug 24 08:00:00 2026'
+    }
+    mux.request
+      .mockResolvedValueOnce([
+        {
+          id: 'pty-1',
+          incarnationId,
+          cwd: '/workspace',
+          title: 'shell',
+          terminalHandle: 'terminal-1'
+        }
+      ])
+      .mockResolvedValueOnce({ stopReceiptVersion: 1 })
+      .mockResolvedValueOnce({
+        version: 1,
+        capabilityVersion: 1,
+        executionHostId: 'ssh:conn-1',
+        terminalHandle: 'terminal-1',
+        ptyId: 'pty-1',
+        ptyIncarnation: incarnationId,
+        root,
+        descendants: [],
+        observations: [
+          { identity: root, status: 'absent', observedAt: '2026-08-24T08:01:00.000Z' }
+        ],
+        timestamp: '2026-08-24T08:01:00.000Z',
+        verdict: 'exited',
+        processTreeVerified: true
+      })
+
+    await expect(
+      provider.shutdown(scopedPty1, { immediate: true, expectedIncarnationId: incarnationId })
+    ).resolves.toMatchObject({
+      executionHostId: 'ssh:conn-1',
+      terminalHandle: 'terminal-1',
+      ptyId: scopedPty1,
+      ptyIncarnation: incarnationId,
+      verdict: 'exited',
+      processTreeVerified: true
+    })
+    expectRequest(mux.request, 'pty.shutdown', {
+      id: 'pty-1',
+      immediate: true,
+      keepHistory: false,
+      expectedIncarnationId: incarnationId,
+      executionHostId: 'ssh:conn-1'
+    })
+  })
+
   it('shutdown forwards keepHistory: true over the relay', async () => {
+    mockLegacyShutdown()
     await provider.shutdown(scopedPty1, { immediate: true, keepHistory: true })
     expectRequest(
       mux.request,
@@ -184,29 +254,12 @@ describe('SshPtyProvider', () => {
     )
   })
 
-  it('shutdown forwards the expected PTY incarnation over the relay', async () => {
-    await provider.shutdown(scopedPty1, {
-      immediate: true,
-      expectedIncarnationId: 'incarnation-1'
-    })
-    expectRequest(
-      mux.request,
-      'pty.shutdown',
-      {
-        id: 'pty-1',
-        immediate: true,
-        keepHistory: false,
-        expectedIncarnationId: 'incarnation-1'
-      },
-      undefined
-    )
-  })
-
   it('shutdown bounds the relay RPC by the teardown deadline', async () => {
     // Why: freeze Date.now() so the leaf conversion deadline -> remaining relative
     // timeout is exact and the mux receives precisely the leftover budget.
     vi.useFakeTimers()
     try {
+      mockLegacyShutdown()
       await provider.shutdown(scopedPty1, { immediate: true, deadlineMs: Date.now() + 4321 })
       expectRequest(
         mux.request,

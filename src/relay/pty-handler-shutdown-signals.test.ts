@@ -1,7 +1,13 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
-const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = vi.hoisted(() => ({
+const {
+  mockPtySpawn,
+  mockPtyInstance,
+  mockCreateShellPromptReadinessProbe,
+  stopPtyProcessTreeMock
+} = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
+  stopPtyProcessTreeMock: vi.fn(),
   mockCreateShellPromptReadinessProbe: vi.fn(),
   mockPtyInstance: {
     // Why: attach now proves the backing pid is alive before replaying, so the
@@ -31,6 +37,10 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
 
+vi.mock('../main/daemon/terminal-session-teardown', () => ({
+  stopPtyProcessTree: stopPtyProcessTreeMock
+}))
+
 import type { PtyHandler } from './pty-handler'
 import {
   beginPtyHandlerTest,
@@ -50,6 +60,17 @@ describe('PtyHandler', () => {
   const { spawnPty } = createPtyRequestHelpers(() => dispatcher)
 
   beforeEach(() => {
+    stopPtyProcessTreeMock.mockImplementation(async (pid: number, killRoot: () => void) => {
+      killRoot()
+      const root = { pid, parentPid: 1, processGroupId: pid, startedAt: 'captured' }
+      return {
+        root,
+        descendants: [],
+        observations: [{ identity: root, status: 'absent', observedAt: new Date().toISOString() }],
+        verdict: 'exited',
+        processTreeVerified: true
+      }
+    })
     ;({ dispatcher, handler, originalPlatform } = beginPtyHandlerTest({
       mockPtySpawn,
       mockPtyInstance,

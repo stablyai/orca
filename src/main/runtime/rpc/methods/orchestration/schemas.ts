@@ -173,11 +173,16 @@ export const ReplyParams = z.object({
   run: OptionalString
 })
 
-export const InboxParams = z.object({
-  limit: OptionalFiniteNumber,
-  // Why: filters the inbox to a handle so inbox and check --all give agreeing results (design doc §3.3).
-  terminal: OptionalString
-})
+export const InboxParams = z
+  .object({
+    limit: OptionalFiniteNumber,
+    // Why: filters the inbox to a handle so inbox and check --all give agreeing results (design doc §3.3).
+    terminal: OptionalString,
+    run: OptionalString
+  })
+  .refine((params) => !(params.terminal && params.run), {
+    message: 'Choose either --terminal or --run for inbox inspection.'
+  })
 
 export const TaskCreateParams = z.object({
   spec: requiredString('Missing --spec'),

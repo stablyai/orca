@@ -1,6 +1,11 @@
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration-timing-budgets'
 import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { RunRow, TaskRow } from '../../../../orchestration/types'
+import type { WorkerStartModeReceipt } from '../../orchestration-worker-start-mode'
+import type { OrchestrationWorkerLaunchReceipt } from './worker-launch-preferences'
+import type { WorkerEffect, WorkerSetupReceipt } from './worker-topology'
 
 /**
  * Turn-start verdict for a dispatched worker prompt, in the execution-boundary vocabulary:
@@ -83,4 +88,62 @@ export function describeUnobservedWorkerTurnStart(agent: string | null): string 
     'network), or may be holding the task unsent in its composer. If the worker recovers and ' +
     'reports, this Dispatch settles normally.'
   )
+}
+
+export function createUnobservedWorkerStartReceipt(args: {
+  db: OrchestrationDb
+  run: RunRow
+  task: TaskRow
+  dispatchId: string
+  attemptId: string
+  terminalHandle: string
+  leaseId: string
+  agent: string | null
+  setup: WorkerSetupReceipt
+  launch: OrchestrationWorkerLaunchReceipt
+  mode: WorkerStartModeReceipt | undefined
+  timeoutMs: number
+  effects: WorkerEffect[]
+  turnStart: WorkerTurnStartObservation
+  terminalRevealWarning?: string
+}): unknown {
+  const reason = describeUnobservedWorkerTurnStart(args.agent)
+  args.effects.push({
+    kind: 'dispatch_input',
+    role: 'agent',
+    id: args.terminalHandle,
+    state: 'turn_unobserved'
+  })
+  const worker = args.db.markWorkerStartUnknown(
+    args.dispatchId,
+    'turn_start_unobserved',
+    reason,
+    args.effects
+  )
+  return {
+    runId: args.run.id,
+    taskId: args.task.id,
+    attemptId: args.attemptId,
+    terminalHandle: args.terminalHandle,
+    dispatchId: args.dispatchId,
+    leaseId: args.leaseId,
+    readiness: 'unverifiable',
+    state: 'outcome_unknown',
+    stage: worker.stage,
+    turnStart: args.turnStart.verdict,
+    lastError: reason,
+    setup: args.setup,
+    launch: args.launch,
+    mode: args.mode,
+    timeoutMs: args.timeoutMs,
+    effects: args.effects,
+    ...(args.turnStart.prompt ? { prompt: args.turnStart.prompt } : {}),
+    residualResources: JSON.parse(worker.residual_resources) as unknown[],
+    nextCommands: [
+      `orca orchestration worker-show --dispatch ${args.dispatchId} --json`,
+      `orca terminal read --terminal ${args.terminalHandle} --screen`,
+      `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
+    ],
+    ...(args.terminalRevealWarning ? { warning: args.terminalRevealWarning } : {})
+  }
 }

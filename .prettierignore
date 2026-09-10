@@ -1,0 +1,2 @@
+# Content-addressed fixtures use byte-level digests and must not be reformatted.
+/tests/fixtures/harness-maestro-compatibility/

@@ -109,6 +109,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'runtime_timeout',
   'invalid_runtime_response',
   'capability_unsupported',
+  'update_required',
   'relay_quota_exceeded',
   'dispatch_capability_invalid',
   'agent_unconfigured',

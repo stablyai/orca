@@ -1,15 +1,6 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-/**
- * Persisted "disable hardware acceleration for this build" marker.
- *
- * Why a standalone file (not the Store): app.disableHardwareAcceleration() must
- * be called before app.whenReady() resolves, but the settings Store is only
- * constructed inside whenReady. A tiny JSON marker in userData can be read
- * synchronously during early startup, mirroring windows-user-data-acl.ts.
- */
-
 export const GPU_FALLBACK_MARKER_FILE = 'gpu-fallback.json'
 export const GPU_FALLBACK_SCHEME_VERSION = 3
 
@@ -20,6 +11,8 @@ export type GpuFallbackEnvironment = {
 }
 
 export type WindowsGpuFallbackEnvironment = GpuFallbackEnvironment & { platform: 'win32' }
+export type LinuxGpuFallbackEnvironment = GpuFallbackEnvironment & { platform: 'linux' }
+export type GpuFallbackMarkerPlatform = 'win32' | 'linux'
 
 export type GpuFallbackMarker = {
   schemeVersion: number
@@ -28,7 +21,7 @@ export type GpuFallbackMarker = {
   userConfirmed: boolean
   appVersion: string
   electronVersion: string
-  platform: 'win32'
+  platform: GpuFallbackMarkerPlatform
 }
 
 function markerPath(userDataPath: string): string {
@@ -40,10 +33,8 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
     const parsed = JSON.parse(readFileSync(markerPath(userDataPath), 'utf-8')) as Partial<
       Record<keyof GpuFallbackMarker, unknown>
     >
-    if (parsed.schemeVersion !== GPU_FALLBACK_SCHEME_VERSION) {
-      return null
-    }
     if (
+      parsed.schemeVersion !== GPU_FALLBACK_SCHEME_VERSION ||
       typeof parsed.engagedAt !== 'number' ||
       !Number.isFinite(parsed.engagedAt) ||
       typeof parsed.crashesInWindow !== 'number' ||
@@ -51,7 +42,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
       typeof parsed.userConfirmed !== 'boolean' ||
       typeof parsed.appVersion !== 'string' ||
       typeof parsed.electronVersion !== 'string' ||
-      parsed.platform !== 'win32'
+      (parsed.platform !== 'win32' && parsed.platform !== 'linux')
     ) {
       return null
     }
@@ -65,24 +56,23 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
       platform: parsed.platform
     }
   } catch {
-    // missing or corrupt means no fallback requested
+    return null
   }
-  return null
 }
 
 export function writeGpuFallbackMarker(
   userDataPath: string,
-  info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean },
-  environment: WindowsGpuFallbackEnvironment
+  info: { engagedAt: number; crashesInWindow: number; userConfirmed?: boolean },
+  environment: WindowsGpuFallbackEnvironment | LinuxGpuFallbackEnvironment
 ): void {
   const marker: GpuFallbackMarker = {
     schemeVersion: GPU_FALLBACK_SCHEME_VERSION,
     engagedAt: info.engagedAt,
     crashesInWindow: info.crashesInWindow,
-    userConfirmed: info.userConfirmed,
+    userConfirmed: info.userConfirmed ?? environment.platform === 'linux',
     appVersion: environment.appVersion,
     electronVersion: environment.electronVersion,
-    platform: 'win32'
+    platform: environment.platform
   }
   writeFileSync(markerPath(userDataPath), JSON.stringify(marker))
 }
@@ -107,13 +97,10 @@ export function readActiveGpuFallbackMarker(
     return null
   }
   if (
-    environment.platform !== 'win32' ||
     marker.platform !== environment.platform ||
     marker.appVersion !== environment.appVersion ||
     marker.electronVersion !== environment.electronVersion
   ) {
-    // Why: the marker is sticky only for the build that observed the driver
-    // crash burst; updates get one fresh hardware attempt automatically.
     clearGpuFallbackMarker(userDataPath)
     return null
   }

@@ -19,6 +19,21 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:openSettings', listener)
     return () => ipcRenderer.removeListener('ui:openSettings', listener)
   },
+  onOpenMaestroCanvas: (
+    callback: (target: { executionHostId: string; workspaceKey: string }) => boolean
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      target: { requestId: string; executionHostId: string; workspaceKey: string }
+    ): void => {
+      ipcRenderer.send('maestro:canvasOpenReply', {
+        requestId: target.requestId,
+        opened: callback(target)
+      })
+    }
+    ipcRenderer.on('ui:openMaestroCanvas', listener)
+    return () => ipcRenderer.removeListener('ui:openMaestroCanvas', listener)
+  },
   consumePendingOpenSettings: (): Promise<boolean> =>
     ipcRenderer.invoke('ui:consumePendingOpenSettings'),
   onOpenSkillShare: (callback: (shareId: string) => void): (() => void) => {

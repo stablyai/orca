@@ -58,6 +58,24 @@ describe('projectWorktreeTabModelReconciliation identity', () => {
       },
       ptyIdsByTabId: { orphan: [] }
     })
+    store.getState().reconcileWorktreeTabModel(WORKTREE)
+    store.setState({
+      tabsByWorktree: {
+        [WORKTREE]: [
+          {
+            id: 'orphan',
+            ptyId: null,
+            worktreeId: WORKTREE,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: { orphan: [] }
+    })
     const before = store.getState()
 
     const { patch } = projectWorktreeTabModelReconciliation(before, WORKTREE)

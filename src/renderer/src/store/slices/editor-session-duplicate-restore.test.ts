@@ -117,7 +117,13 @@ function closeAndRestart(
   store.getState().hydrateEditorSession(session)
 
   expect.soft(store.getState().openFiles).toHaveLength(1)
-  expect.soft(store.getState().unifiedTabsByWorktree[workspaceId]).toHaveLength(1)
+  expect
+    .soft(
+      store
+        .getState()
+        .unifiedTabsByWorktree[workspaceId]?.filter((tab) => tab.contentType !== 'maestro')
+    )
+    .toHaveLength(1)
 
   const activeFileId = store.getState().activeFileIdByWorktree[workspaceId]
   expect(activeFileId).toBeTruthy()
@@ -130,6 +136,27 @@ function closeAndRestart(
   return restartedStore.getState()
 }
 
+type TestStoreState = ReturnType<ReturnType<typeof createTestStore>['getState']>
+
+function contentTabs(state: TestStoreState, workspaceId: string) {
+  return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(
+    (tab) => tab.contentType !== 'maestro'
+  )
+}
+
+function groupsWithoutMaestro(state: TestStoreState, workspaceId: string) {
+  const maestroIds = new Set(
+    (state.unifiedTabsByWorktree[workspaceId] ?? [])
+      .filter((tab) => tab.contentType === 'maestro')
+      .map((tab) => tab.id)
+  )
+  return (state.groupsByWorktree[workspaceId] ?? []).map((group) => ({
+    ...group,
+    activeTabId: group.activeTabId && maestroIds.has(group.activeTabId) ? null : group.activeTabId,
+    tabOrder: group.tabOrder.filter((tabId) => !maestroIds.has(tabId))
+  }))
+}
+
 describe('corrupt editor session restore', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -138,7 +165,7 @@ describe('corrupt editor session restore', () => {
   it('does not preserve duplicate records that resurrect a closed editor', () => {
     const restarted = closeAndRestart(prepareStore, corruptSession(), WORKTREE_ID)
     expect(restarted.openFiles).toEqual([])
-    expect(restarted.unifiedTabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
+    expect(contentTabs(restarted, WORKTREE_ID)).toEqual([])
   })
 
   it('cleans the same corruption for an SSH-hosted folder workspace', () => {
@@ -148,7 +175,7 @@ describe('corrupt editor session restore', () => {
       SSH_FOLDER_KEY
     )
     expect(restarted.openFiles).toEqual([])
-    expect(restarted.unifiedTabsByWorktree[SSH_FOLDER_KEY] ?? []).toEqual([])
+    expect(contentTabs(restarted, SSH_FOLDER_KEY)).toEqual([])
   })
 
   it('rewrites group references from a duplicate editor row to the survivor', () => {
@@ -163,10 +190,10 @@ describe('corrupt editor session restore', () => {
 
     store.getState().hydrateTabsSession(session)
 
-    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID].map((tab) => tab.id)).toEqual([
+    expect(contentTabs(store.getState(), WORKTREE_ID).map((tab) => tab.id)).toEqual([
       'editor-restored-a'
     ])
-    expect(store.getState().groupsByWorktree[WORKTREE_ID][0]).toEqual(
+    expect(groupsWithoutMaestro(store.getState(), WORKTREE_ID)[0]).toEqual(
       expect.objectContaining({
         activeTabId: 'editor-restored-a',
         tabOrder: ['editor-restored-a'],
@@ -209,7 +236,7 @@ describe('corrupt editor session restore', () => {
 
     store.getState().hydrateTabsSession(session)
 
-    expect(store.getState().groupsByWorktree[WORKTREE_ID]).toEqual([
+    expect(groupsWithoutMaestro(store.getState(), WORKTREE_ID)).toEqual([
       expect.objectContaining({ id: 'group-a', tabOrder: ['editor-group-a-left'] }),
       expect.objectContaining({ id: 'group-b', tabOrder: ['editor-group-b'] })
     ])
@@ -242,7 +269,7 @@ describe('corrupt editor session restore', () => {
     store.getState().hydrateEditorSession(session)
 
     expect(store.getState().openFiles).toHaveLength(1)
-    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID].map((tab) => tab.id)).toEqual([
+    expect(contentTabs(store.getState(), WORKTREE_ID).map((tab) => tab.id)).toEqual([
       'editor-left',
       'editor-right'
     ])
@@ -294,9 +321,13 @@ describe('corrupt editor session restore', () => {
 
     store.getState().hydrateTabsSession(session)
 
-    expect(store.getState().groupsByWorktree[WORKTREE_ID]).toEqual([
+    expect(groupsWithoutMaestro(store.getState(), WORKTREE_ID)).toEqual([
       expect.objectContaining({ id: 'group-a', tabOrder: ['shared-id'] }),
-      expect.objectContaining({ id: 'group-b', tabOrder: ['group-b-only'], activeTabId: null })
+      expect.objectContaining({
+        id: 'group-b',
+        tabOrder: ['group-b-only'],
+        activeTabId: 'group-b-only'
+      })
     ])
   })
 
@@ -346,7 +377,7 @@ describe('corrupt editor session restore', () => {
 
     store.getState().hydrateTabsSession(session)
 
-    expect(store.getState().groupsByWorktree[WORKTREE_ID]).toEqual([
+    expect(groupsWithoutMaestro(store.getState(), WORKTREE_ID)).toEqual([
       expect.objectContaining({ id: 'group-b', tabOrder: ['group-b-only'], activeTabId: null }),
       expect.objectContaining({
         id: 'group-a',

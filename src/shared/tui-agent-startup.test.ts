@@ -539,10 +539,8 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
   })
 
-  it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
-    expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
-      'render-cursor-after-bracketed-paste'
-    )
+  it('uses each agent-specific paste draft readiness signal', () => {
+    expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe('opencode-composer-prompt')
     expect(TUI_AGENT_CONFIG.opencode.draftPromptFlag).toBeUndefined()
     expect(TUI_AGENT_CONFIG.opencode.draftPromptEnvVar).toBeUndefined()
     expect(TUI_AGENT_CONFIG['mimo-code'].draftPasteReadySignal).toBe(

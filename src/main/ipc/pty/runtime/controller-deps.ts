@@ -18,6 +18,7 @@ import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/cod
 import type { StablePaneOwner } from '../pane/stable-owner'
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { finishPtyShutdown } from '../provider/liveness'
+import type { PtyProviderShutdownResult } from '../provider/shutdown-detect'
 
 export type PtyRuntimeControllerDeps = {
   runtime?: OrcaRuntimeService
@@ -67,7 +68,7 @@ export type PtyRuntimeControllerDeps = {
     provider: IPtyProvider,
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ) => Promise<boolean>
+  ) => Promise<PtyProviderShutdownResult>
   rememberSyntheticKillExit: (id: string) => void
   rememberRetiredRejectedPty: (id: string) => void
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void

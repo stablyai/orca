@@ -174,13 +174,14 @@ export function transferWorkerTerminalResourceStatement(
       `Worker terminal resource ${params.resourceId} was not found.`
     )
   }
-  const priorOwners = JSON.parse(resource.prior_owner_dispatch_ids) as string[]
+  const priorOwners = parsePriorOwnerDispatchIds(resource.prior_owner_dispatch_ids)
   priorOwners.push(resource.owner_dispatch_id)
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
        SET owner_dispatch_id = ?, prior_owner_dispatch_ids = ?, release_state = 'not_requested',
-           retained_reason = NULL, release_requested_at = NULL, release_completed_at = NULL,
+           retained_reason = NULL, retention_owner = NULL, retention_expires_at = NULL,
+           review_id = NULL, release_requested_at = NULL, release_completed_at = NULL,
            release_error = NULL, terminal_handle = ?, pane_key = ?, process_incarnation = ?,
            endpoint_id = COALESCE(?, endpoint_id), endpoint_incarnation = ?,
            host_scope = ?, updated_at = datetime('now')
@@ -198,6 +199,19 @@ export function transferWorkerTerminalResourceStatement(
       params.resourceId
     )
   return this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
+}
+
+function parsePriorOwnerDispatchIds(value: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')) {
+      return parsed
+    }
+  } catch {}
+  throw new OrchestrationError(
+    'lease_identity_conflict',
+    'Worker terminal prior-owner identity is invalid.'
+  )
 }
 
 // A new process in the same pane is ordinary user work, not the settled Dispatch's resource.

@@ -23,6 +23,19 @@ types, and a `check` without `--wait` hands that batch over unfiltered.
 `--peek` and `--all` are read-only inspection, not progress through the
 coordinator inbox.
 
+The normal text output includes each message body and structured payload. When
+an old Delivery is replayed, newer questions and high-priority Run mail can be
+returned separately as `pendingAttentionMessages` under a clear attention
+heading. Those rows are not members of the replayed Delivery; acknowledging the
+old `deliveryId` does not acknowledge them. Process the replay, acknowledge it,
+then check again for the next Delivery.
+
+Use `check --run <run_id>` for a named Run Delivery and
+`inbox --run <run_id>` for non-consuming Run history. `worker-show` also accepts
+`--run <run_id>` as an identity fence around its Dispatch. `read: 0` and a null
+delivery timestamp are storage state, not evidence that a message was never
+presented: `--peek`, `--all`, and `inbox` deliberately leave them unchanged.
+
 An empty wait or timeout is a checkpoint. Continue rolling waits until every
 expected Dispatch settles. Heartbeat or visible activity means alive, not done.
 

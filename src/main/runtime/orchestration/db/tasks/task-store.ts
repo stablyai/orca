@@ -1,6 +1,8 @@
 import type Database from '../../../../sqlite/sync-database'
-import type { TaskStatus, TaskRow } from '../../types'
+import type { TaskOperationalOutcome, TaskPurpose, TaskStatus, TaskRow } from '../../types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration-task-display'
+import { OrchestrationError } from '../../orchestration-error'
+import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -15,6 +17,7 @@ export function createTask(
     spec: string
     taskTitle?: string
     displayName?: string
+    purpose?: TaskPurpose
     deps?: string[]
     parentId?: string
     createdByTerminalHandle?: string
@@ -24,10 +27,7 @@ export function createTask(
     runId?: string
   }
 ): TaskRow {
-  const runId = task.runId
-  if (!runId) {
-    throw new Error('Run is required')
-  }
+  const runId = task.runId ?? LEGACY_RUN_ID
   this.requireRun(runId)
   if (task.parentId) {
     const parent = this.getTask(task.parentId)
@@ -53,9 +53,9 @@ export function createTask(
       `INSERT INTO tasks (
          id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
          created_by_process_incarnation, created_by_run_generation,
-         task_title, display_name, spec, status, deps
+         task_title, display_name, spec, purpose, status, deps
        ) VALUES (
-         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          CASE WHEN EXISTS (
            SELECT 1
            FROM json_each(?) requested
@@ -78,6 +78,7 @@ export function createTask(
       display.taskTitle || null,
       display.displayName || null,
       task.spec,
+      task.purpose ?? 'deliverable',
       depsJson,
       runId,
       depsJson
@@ -85,6 +86,53 @@ export function createTask(
   return this.db.prepare(`SELECT ${TASK_COLUMN_LIST} FROM tasks WHERE id = ?`).get(id) as TaskRow
 }
 
+export function recordOperationalTaskOutcome(
+  this: OrchestrationDb,
+  id: string,
+  outcome: TaskOperationalOutcome,
+  successorTaskId?: string
+): TaskRow {
+  const task = this.getTask(id)
+  if (!task || task.purpose !== 'operational') {
+    throw new OrchestrationError(
+      'task_not_startable',
+      `Task ${id} must be an operational Task before recording an operational outcome.`
+    )
+  }
+  if (!['completed', 'failed'].includes(task.status)) {
+    throw new OrchestrationError(
+      'task_not_startable',
+      `Operational Task ${id} must be terminal before recording ${outcome}.`
+    )
+  }
+  if ((outcome === 'superseded') !== Boolean(successorTaskId)) {
+    throw new OrchestrationError(
+      'task_not_startable',
+      'A superseded operational outcome requires exactly one successor Task.'
+    )
+  }
+  if (successorTaskId) {
+    const successor = this.getTask(successorTaskId)
+    if (
+      !successor ||
+      successor.id === id ||
+      successor.run_id !== task.run_id ||
+      successor.purpose !== 'operational'
+    ) {
+      throw new OrchestrationError(
+        'task_not_startable',
+        `Successor Task ${successorTaskId} must be different operational work in Run ${task.run_id}.`
+      )
+    }
+  }
+  this.db
+    .prepare(
+      `UPDATE tasks SET operational_outcome = ?, successor_task_id = ?
+       WHERE id = ? AND purpose = 'operational'`
+    )
+    .run(outcome, successorTaskId ?? null, id)
+  return this.getTask(id) as TaskRow
+}
 // Why wildcard-free: SyncDatabase refuses to cache any statement containing `*`, so a `SELECT *`
 // here recompiles on every call — including the hot dispatch lookups and the coordinator poll.
 const TASK_COLUMN_LIST = selectColumns(TASK_COLUMNS)
@@ -240,6 +288,7 @@ export type TaskStoreMethods = {
   listTasks: typeof listTasks
   listTasksWithDispatch: typeof listTasksWithDispatch
   promoteReadyTasks: typeof promoteReadyTasks
+  recordOperationalTaskOutcome: typeof recordOperationalTaskOutcome
 }
 
 export function attachTaskStore(ctor: { prototype: object }): void {
@@ -248,6 +297,7 @@ export function attachTaskStore(ctor: { prototype: object }): void {
     getTask,
     listTasks,
     listTasksWithDispatch,
-    promoteReadyTasks
+    promoteReadyTasks,
+    recordOperationalTaskOutcome
   })
 }

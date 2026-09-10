@@ -71,6 +71,25 @@ describe('AgentHookServer OpenCode lifecycle', () => {
     ])
   })
 
+  it('attests a live root OpenCode session for Dispatch settlement', async () => {
+    const { server, post } = await setup()
+
+    await post({ hook_event_name: 'SessionBusy', sessionID: 'root' }, 'launch-token')
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        agentType: 'opencode',
+        providerSession: { key: 'session_id', id: 'root' },
+        actorAttestation: expect.objectContaining({
+          provider: 'opencode',
+          role: 'lead',
+          eventName: 'SessionBusy',
+          providerSessionId: 'root'
+        })
+      })
+    ])
+  })
+
   it('accepts a resumed fresh user MessagePart but not arbitrary Busy', async () => {
     const { server, post } = await setup()
     await post({ hook_event_name: 'SessionBusy', sessionID: 'old' }, 'old-token')

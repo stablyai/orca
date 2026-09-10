@@ -16,6 +16,8 @@ import type {
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type {
   RuntimeMobileSessionTabMove,
+  RuntimeMaestroWorkspaceTabCommand,
+  RuntimeMaestroWorkspaceTabCommandResponse,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -203,6 +205,10 @@ export type UiCommandEventApi = {
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ) => () => void
+  onMaestroWorkspaceTabCommand: (
+    callback: (command: RuntimeMaestroWorkspaceTabCommand) => void
+  ) => () => void
+  respondMaestroWorkspaceTabCommand: (response: RuntimeMaestroWorkspaceTabCommandResponse) => void
   onOpenFileFromMobile: (
     callback: (data: {
       worktreeId: string

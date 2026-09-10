@@ -70,7 +70,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
       'terminal.send',
       {
         terminal: 'pty-1',
-        text: `cd '/Users/ada/repo' && CODEX_HOME='${LEGACY_CODEX_HOME}' codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'legacy-1'`,
+        text: `cd '/Users/ada/repo' && CODEX_HOME='${LEGACY_CODEX_HOME}' codex '--yolo' 'resume' 'legacy-1'`,
         enter: true
       },
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
@@ -98,9 +98,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
       { timeoutMs: RESUME_RPC_TIMEOUT_MS }
     )
     expect(prepared).toEqual({ ...legacy, codexHome: null })
-    expect(launch.command).toBe(
-      "cd '/Users/ada/repo' && codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'legacy-1'"
-    )
+    expect(launch.command).toBe("cd '/Users/ada/repo' && codex '--yolo' 'resume' 'legacy-1'")
     expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
   })
 

@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import {
+  runRemoteOrcaCli as runRemoteOrcaCliWithHostPassthrough,
+  type RemoteOrcaCliRequest
+} from './ssh-remote-orca-cli'
+
+const LEGACY_FALLBACK_OPTIONS = {
+  execPath: '/host/electron',
+  cliEntryPath: '/host/app/out/cli/index.js',
+  userDataPath: '/host/user-data',
+  entryExists: () => false
+}
+
+function runRemoteOrcaCli(runtime: OrcaRuntimeService, request: RemoteOrcaCliRequest) {
+  return runRemoteOrcaCliWithHostPassthrough(runtime, request, LEGACY_FALLBACK_OPTIONS)
+}
 
 function createRuntime() {
   const linearSaveIssue = vi.fn(async (request: unknown) => ({

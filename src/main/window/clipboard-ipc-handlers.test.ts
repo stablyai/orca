@@ -236,7 +236,7 @@ describe('registerClipboardHandlers', () => {
     randomUUIDMock.mockReturnValue('00000000-0000-4000-8000-000000000000')
     getSshFilesystemProviderMock.mockReset()
     callRuntimeEnvironmentMock.mockReset()
-    setTrustedClipboardRendererWebContentsId(null)
+    setTrustedClipboardRendererWebContentsId(17)
   })
 
   afterEach(() => {
@@ -434,6 +434,7 @@ describe('registerClipboardHandlers', () => {
   })
 
   it('rejects clipboard IPC from destroyed, browser, and mismatched dev-origin senders', async () => {
+    setTrustedClipboardRendererWebContentsId(null)
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()

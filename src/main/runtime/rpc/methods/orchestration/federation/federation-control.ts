@@ -55,14 +55,41 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.federationRelease',
     params: FederationDispatchParams,
-    handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
-      const attachment = requireHomeAttachment(
-        runtime,
-        params.dispatchId,
-        authenticatedCallerFingerprint
-      )
+    handler: async (params, { runtime, authenticatedCallerFingerprint, orchestrationMutation }) => {
+      if (!orchestrationMutation) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          'Federated worker release requires a durable retry request.'
+        )
+      }
+      const attachment = runtime.getOrchestrationDb().getRemoteDispatchAttachment(params.dispatchId)
+      if (
+        !attachment ||
+        attachment.home_peer_fingerprint !== authenticatedCallerFingerprint ||
+        attachment.home_peer_fingerprint !== orchestrationMutation.callerFingerprint
+      ) {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          `Remote Dispatch ${params.dispatchId} was not found for this Run home.`
+        )
+      }
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
-      return releaseRemoteAttachment({ runtime, attachment, observation })
+      const release = await releaseRemoteAttachment({ runtime, attachment, observation })
+      const runtimeEpoch = runtime.getRuntimeId()
+      return {
+        runtimeEpoch,
+        servingRuntimeEpoch: runtimeEpoch,
+        ...release,
+        ...(attachment.terminal_handle && attachment.pane_key && attachment.process_incarnation
+          ? {
+              attachment: {
+                terminalHandle: attachment.terminal_handle,
+                paneKey: attachment.pane_key,
+                processIncarnation: attachment.process_incarnation
+              }
+            }
+          : {})
+      }
     }
   }),
   defineMethod({

@@ -123,6 +123,7 @@ function makeRendererSnapshot(args: {
   version: number
   epoch?: string
   title?: string
+  customTitle?: string
   ptyId?: string
 }): RuntimeMobileSessionTabsSnapshot {
   const worktree = args.worktree ?? WT
@@ -140,6 +141,7 @@ function makeRendererSnapshot(args: {
         parentTabId: 'tab-1',
         leafId: 'leaf-1',
         title: args.title ?? 'Terminal 1',
+        ...(args.customTitle ? { customTitle: args.customTitle } : {}),
         ...(args.ptyId ? { ptyId: args.ptyId } : {}),
         isActive: true
       }
@@ -448,6 +450,34 @@ describe('graph-sync mobile snapshot gating', () => {
     expect(events).toHaveLength(0)
     expect(internals.mobileSessionTabsByWorktree.get(WT)?.snapshotVersion).toBe(emittedVersion)
     expect(internals.mobileSessionTabsByWorktree.get(WT)?.tabs[0]?.title).toBe('Renamed tab')
+  })
+
+  it('keeps an explicit terminal rename over a live graph title', () => {
+    const { events, sync } = createRuntime(makeSession())
+
+    sync(
+      [
+        makeRendererSnapshot({
+          version: 1,
+          title: 'Renamed terminal',
+          customTitle: 'Renamed terminal'
+        })
+      ],
+      {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: WT,
+            title: 'Live shell title',
+            activeLeafId: 'leaf-1',
+            layout: { type: 'leaf', leafId: 'leaf-1' }
+          }
+        ]
+      }
+    )
+    vi.advanceTimersByTime(60)
+
+    expect(events[0]?.tabs[0]).toMatchObject({ title: 'Renamed terminal' })
   })
 
   it('suppresses repeated unchanged syncs with a serve-owned terminal present', () => {

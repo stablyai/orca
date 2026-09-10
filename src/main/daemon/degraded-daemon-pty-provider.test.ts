@@ -1,3 +1,4 @@
+import { createPtyStopReceipt, type PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import { describe, expect, it, vi } from 'vitest'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
 import { DEGRADED_DAEMON_RECOVERY_RETRY_MS } from './degraded-daemon-fresh-spawn-routing'
@@ -15,6 +16,24 @@ type ProviderMock = IPtyProvider & {
   emitExit: (id: string, code: number) => void
   triggerWriteUnavailable: (id: string) => void
   onWriteUnavailable: (callback: (payload: { id: string }) => void) => () => void
+}
+
+const TEST_STOP_INCARNATION = '11111111-1111-4111-8111-111111111111'
+
+/** The receipt an in-memory provider owes its caller once the pty is gone. */
+function exitedStopReceipt(id: string): PtyStopReceipt {
+  const root = { pid: 41, parentPid: 1, processGroupId: 41, startedAt: 'started-1' }
+  return createPtyStopReceipt({
+    executionHostId: 'local',
+    terminalHandle: `terminal-${id}`,
+    ptyId: id,
+    ptyIncarnation: TEST_STOP_INCARNATION,
+    root,
+    descendants: [],
+    observations: [{ identity: root, status: 'absent', observedAt: new Date().toISOString() }],
+    verdict: 'exited',
+    processTreeVerified: true
+  })
 }
 
 function createProvider(
@@ -45,6 +64,7 @@ function createProvider(
       if (idx !== -1) {
         sessions.splice(idx, 1)
       }
+      return exitedStopReceipt(id)
     }),
     sendSignal: vi.fn(async () => {}),
     getCwd: vi.fn(async () => ''),
@@ -638,6 +658,7 @@ describe('DegradedDaemonPtyProvider', () => {
       if (id === stuck.id) {
         throw new Error('still alive')
       }
+      return exitedStopReceipt(id)
     })
 
     // Why: a single un-killable local PTY must not abort the daemon restart.

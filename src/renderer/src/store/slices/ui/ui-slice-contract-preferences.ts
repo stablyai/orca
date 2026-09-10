@@ -98,6 +98,9 @@ export type UISlicePreferences = {
   /** Transient: the in-window Agent Dashboard companion drawer is open. Not persisted. */
   agentDashboardDrawerOpen: boolean
   setAgentDashboardDrawerOpen: (open: boolean) => void
+  /** Transient: the cross-workspace Maestro navigator is open. Not persisted. */
+  maestroNavigatorOpen: boolean
+  setMaestroNavigatorOpen: (open: boolean) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean

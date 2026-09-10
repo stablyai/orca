@@ -84,16 +84,103 @@ export function isFederatedDispatchRelayEligible(
   )
 }
 
+import {
+  beginLifecycleWriteTransaction,
+  commitLifecycleWriteTransaction,
+  rollbackLifecycleWriteTransaction
+} from '../lifecycle-transition'
+
 export function updateFederatedDispatchResources(
   this: OrchestrationDb,
-  params: {
-    dispatchId: string
-    remoteRuntimeEpoch: string
-    worktreeId: string
-    terminalHandle: string
-  }
+  params: FederatedDispatchResourceBinding
 ): FederatedDispatchRow {
-  this.db
+  const transaction = beginLifecycleWriteTransaction(this.db, 'federated_dispatch_resources')
+  try {
+    const row = bindFederatedDispatchResources(this, params)
+    commitLifecycleWriteTransaction(this.db, transaction)
+    return row
+  } catch (error) {
+    rollbackLifecycleWriteTransaction(this.db, transaction)
+    throw error
+  }
+}
+
+export type FederatedDispatchResourceBinding = {
+  dispatchId: string
+  remoteRuntimeEpoch: string
+  worktreeId: string
+  terminalHandle: string
+  paneKey?: string
+  processIncarnation?: string
+}
+
+export function bindFederatedDispatchResources(
+  db: OrchestrationDb,
+  params: FederatedDispatchResourceBinding
+): FederatedDispatchRow {
+  const row = db.getFederatedDispatch(params.dispatchId)
+  const context = db.getDispatchContextById(params.dispatchId)
+  if (!row || !context) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Federated Dispatch ${params.dispatchId} was not found.`
+    )
+  }
+  const paneKey = params.paneKey
+  const processIncarnation = params.processIncarnation
+  if (
+    (paneKey === undefined) !== (processIncarnation === undefined) ||
+    paneKey === '' ||
+    processIncarnation === ''
+  ) {
+    throw new OrchestrationError(
+      'resource_server_mismatch',
+      `Federated Dispatch ${params.dispatchId} has incomplete process identity.`
+    )
+  }
+  if (
+    (row.remote_worktree_id && row.remote_worktree_id !== params.worktreeId) ||
+    (row.remote_terminal_handle && row.remote_terminal_handle !== params.terminalHandle)
+  ) {
+    throw new OrchestrationError(
+      'resource_server_mismatch',
+      `Federated Dispatch ${params.dispatchId} is already bound to different remote resources.`
+    )
+  }
+  if (paneKey && processIncarnation) {
+    if (!['pending', 'dispatched'].includes(context.status)) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Federated Dispatch ${params.dispatchId} cannot bind process identity in its current state.`
+      )
+    }
+    if (
+      (context.assignee_handle && context.assignee_handle !== params.terminalHandle) ||
+      (context.assignee_pane_key && context.assignee_pane_key !== paneKey) ||
+      (context.process_incarnation && context.process_incarnation !== processIncarnation)
+    ) {
+      throw new OrchestrationError(
+        'resource_server_mismatch',
+        `Federated Dispatch ${params.dispatchId} is already bound to a different process.`
+      )
+    }
+    const updatedContext = db.db
+      .prepare(
+        `UPDATE dispatch_contexts
+         SET assignee_handle = COALESCE(assignee_handle, ?),
+             assignee_pane_key = COALESCE(assignee_pane_key, ?),
+             process_incarnation = COALESCE(process_incarnation, ?)
+         WHERE id = ? AND status IN ('pending', 'dispatched')`
+      )
+      .run(params.terminalHandle, paneKey, processIncarnation, params.dispatchId)
+    if (updatedContext.changes !== 1) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Federated Dispatch ${params.dispatchId} could not bind process identity.`
+      )
+    }
+  }
+  db.db
     .prepare(
       `UPDATE federated_dispatches
        SET remote_runtime_epoch = ?, remote_worktree_id = ?, remote_terminal_handle = ?,
@@ -101,14 +188,7 @@ export function updateFederatedDispatchResources(
        WHERE dispatch_id = ?`
     )
     .run(params.remoteRuntimeEpoch, params.worktreeId, params.terminalHandle, params.dispatchId)
-  const row = this.getFederatedDispatch(params.dispatchId)
-  if (!row) {
-    throw new OrchestrationError(
-      'dispatch_not_found',
-      `Federated Dispatch ${params.dispatchId} was not found.`
-    )
-  }
-  return row
+  return db.getFederatedDispatch(params.dispatchId) as FederatedDispatchRow
 }
 
 export function updateFederatedDispatchRuntimeEpoch(

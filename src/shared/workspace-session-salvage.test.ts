@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { parseWorkspaceSessionSalvaging } from './workspace-session-salvage'
+import {
+  normalizeWorkspaceMaestroTabs,
+  parseWorkspaceSessionSalvaging
+} from './workspace-session-salvage'
 import { collectSalvageDrops, salvagingArray } from './zod-salvage'
 
 const WT = 'repo-1::/home/user/project'
@@ -423,5 +426,79 @@ describe('parseWorkspaceSessionSalvaging', () => {
       expect(result.value.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-keep'])
       expect(result.value.tabGroupLayouts).toEqual({})
     }
+  })
+})
+
+describe('normalizeWorkspaceMaestroTabs', () => {
+  it('creates one fixed Maestro tab and discards duplicate metadata references', () => {
+    const result = normalizeWorkspaceMaestroTabs(
+      {
+        unifiedTabsByWorktree: {
+          w1: [
+            {
+              id: 'duplicate-a',
+              entityId: 'resource-that-must-not-be-used',
+              groupId: 'secondary',
+              worktreeId: 'w1',
+              contentType: 'maestro',
+              label: 'Renamed duplicate',
+              customLabel: 'Custom',
+              color: 'red',
+              sortOrder: 4,
+              createdAt: 2,
+              maestroExecutionHostId: 'local',
+              maestroWorkspaceKey: 'worktree:w1'
+            },
+            {
+              id: 'duplicate-b',
+              entityId: 'duplicate-b',
+              groupId: 'primary',
+              worktreeId: 'w1',
+              contentType: 'maestro',
+              label: 'Maestro',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              maestroExecutionHostId: 'local',
+              maestroWorkspaceKey: 'worktree:w1'
+            }
+          ]
+        },
+        groupsByWorktree: {
+          w1: [
+            {
+              id: 'primary',
+              worktreeId: 'w1',
+              activeTabId: 'duplicate-b',
+              tabOrder: ['duplicate-b']
+            },
+            {
+              id: 'secondary',
+              worktreeId: 'w1',
+              activeTabId: 'duplicate-a',
+              tabOrder: ['duplicate-a']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { w1: 'primary' },
+        layoutByWorktree: { w1: { type: 'leaf', groupId: 'primary' } }
+      },
+      new Set(['w1']),
+      { key: 'worktree:w1', executionHostId: 'local' }
+    )
+
+    expect(result.unifiedTabsByWorktree.w1).toEqual([
+      expect.objectContaining({
+        id: 'duplicate-b',
+        entityId: 'duplicate-b',
+        systemRole: 'workspace-maestro',
+        groupId: 'primary',
+        sortOrder: 0,
+        isPinned: true
+      })
+    ])
+    expect(result.groupsByWorktree.w1[0].tabOrder).toEqual(['duplicate-b'])
+    expect(result.groupsByWorktree.w1[1].tabOrder).toEqual([])
   })
 })

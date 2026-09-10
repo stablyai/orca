@@ -60,9 +60,12 @@ describe('updater', () => {
       setLastUpdateCheckAt
     })
 
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
+    await vi.waitFor(
+      () => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 15_000 }
+    )
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
@@ -106,9 +109,12 @@ describe('updater', () => {
     expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(60 * 1000)
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
+    await vi.waitFor(
+      () => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 15_000 }
+    )
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
@@ -128,9 +134,12 @@ describe('updater', () => {
     appMock.emit('browser-window-focus')
     appMock.emit('browser-window-focus')
 
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
+    await vi.waitFor(
+      () => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 15_000 }
+    )
   })
 
   it('does not persist lastUpdateCheckAt when a focus-triggered check fails benignly', async () => {
@@ -189,17 +198,25 @@ describe('updater', () => {
       setLastUpdateCheckAt: vi.fn()
     })
 
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
+    await vi.waitFor(
+      () => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 15_000 }
+    )
 
     await vi.advanceTimersByTimeAsync(59 * 60 * 1000)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(60 * 1000)
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
-    })
+    // Why: the scheduler resolves on a microtask after the fake clock advances, and
+    // the 1s default wait is too tight under full-suite CPU contention.
+    await vi.waitFor(
+      () => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      },
+      { timeout: 15_000 }
+    )
   })
 
   it('reschedules the next automatic check 24 hours after finding an available update', async () => {

@@ -14,9 +14,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { HeadlessEmulator } from './headless-emulator'
+import type * as PtyDescendantTermination from '../pty-descendant-termination'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
-vi.mock('../pty-descendant-termination', () => ({
+// Why: teardown also reads the process table and sends signals from this module, so
+// replacing the whole module would leave those undefined and stall the stop.
+vi.mock('../pty-descendant-termination', async (importOriginal) => ({
+  ...(await importOriginal<typeof PtyDescendantTermination>()),
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
@@ -134,8 +138,9 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
 
     // Immediate teardown skips the graceful kill and force-kills the child directly. On POSIX
     // that reaches the child pgroup, so no Windows taskkill /T /F descendant sweep is needed.
+    // The root signal now follows the bounded pre-stop process snapshot, so wait for it.
+    await vi.waitFor(() => expect(lastSubprocess.forceKill).toHaveBeenCalled(), { timeout: 4000 })
     expect(lastSubprocess.kill).not.toHaveBeenCalled()
-    expect(lastSubprocess.forceKill).toHaveBeenCalled()
     expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
     expect(emulatorDispose).not.toHaveBeenCalled()
     expect(host.listSessions()).toHaveLength(1)

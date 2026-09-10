@@ -112,6 +112,9 @@ import {
   injectRelayFishHistoryEnv,
   injectRelayHistoryEnv
 } from './terminal-history'
+import { stopPtyProcessTree } from '../main/daemon/terminal-session-teardown'
+import { createPtyStopReceipt, type PtyStopReceipt } from '../shared/pty-stop-receipt'
+import { normalizeExecutionHostId } from '../shared/execution-host'
 import { isFlattenedNodePtyLoaderMessage } from '../main/orcad/node-pty-loader-diagnosis'
 import { collectNodePtyUnavailableDiagnosis } from './node-pty-binding-survey'
 import {
@@ -482,6 +485,14 @@ export type PtySurfaceRetiredListener = (event: { id: string; paneKey: string })
 
 type PtyIdentity = { paneKey?: string; tabId?: string }
 
+type RelayPtyStopOperation = {
+  incarnationId: string
+  immediate: boolean
+  rootSignalled: boolean
+  managed: ManagedPty
+  promise: Promise<PtyStopReceipt>
+}
+
 /**
  * True when a reattach's expected pane identity contradicts the target PTY's own.
  * Rejects legacy cross-relay-generation id collisions (a reset relay reused `pty-N`).
@@ -510,6 +521,8 @@ export type RelayPtyWorktreeRemovalCoordinator = {
 
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
+  private stopReceipts = new Map<string, PtyStopReceipt>()
+  private stopOperations = new Map<string, RelayPtyStopOperation>()
   private readonly ptyIdMintEpoch: string
   private foregroundEvidenceEpoch = 0
   private nextId = 1
@@ -941,6 +954,7 @@ export class PtyHandler {
   /** Wire onData/onExit listeners for a managed PTY and store it. */
   private wireAndStore(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
+    this.stopReceipts.delete(managed.id)
     this.ptys.set(managed.id, managed)
     // Why: a PTY joining the pool under this paneKey means the surface exists again (reopened pane
     // or revive), so a prior retirement no longer describes anything and must not mute its hooks.
@@ -1090,6 +1104,7 @@ export class PtyHandler {
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
       agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      stopReceiptVersion: 1,
       // Additive capability: clients may request the no-process-table inventory
       // projection and consume fenced inspect evidence on this host.
       foregroundProcessEvidenceVersion: 1
@@ -2239,7 +2254,10 @@ export class PtyHandler {
     return { cols: managed.pty.cols, rows: managed.pty.rows }
   }
 
-  private async shutdown(params: Record<string, unknown>, context?: RequestContext): Promise<void> {
+  private async shutdown(
+    params: Record<string, unknown>,
+    context?: RequestContext
+  ): Promise<PtyStopReceipt> {
     const id = params.id as string
     const immediate = params.immediate as boolean
     const expectedIncarnationId = params.expectedIncarnationId
@@ -2257,12 +2275,44 @@ export class PtyHandler {
     ) {
       throw new Error('Invalid expectedOwnerClientInstanceId')
     }
+    const cached = this.stopReceipts.get(id)
+    if (
+      cached &&
+      (expectedIncarnationId === undefined || cached.ptyIncarnation === expectedIncarnationId)
+    ) {
+      return cached
+    }
+    const pending = this.stopOperations.get(id)
+    if (pending) {
+      if (expectedIncarnationId !== undefined && expectedIncarnationId !== pending.incarnationId) {
+        throw new Error('pty_stop_receipt_identity_mismatch')
+      }
+      if (immediate) {
+        pending.immediate = true
+        if (pending.rootSignalled && this.ptys.get(id) === pending.managed) {
+          this.requestForceKill(pending.managed)
+        }
+      }
+      if (expectedOwnerClientInstanceId !== undefined) {
+        this.assertShutdownOwnership(id, pending.managed, expectedOwnerClientInstanceId, context)
+      }
+      return await pending.promise
+    }
     const managed = this.ptys.get(id)
     if (!managed) {
-      return
+      throw new Error('pty_stop_receipt_unavailable')
     }
-    if (expectedIncarnationId !== undefined && expectedIncarnationId !== managed.incarnationId) {
-      throw new Error(`PTY incarnation mismatch for ${id}`)
+    if (
+      expectedIncarnationId !== undefined &&
+      (typeof expectedIncarnationId !== 'string' || expectedIncarnationId !== managed.incarnationId)
+    ) {
+      throw new Error('pty_stop_receipt_identity_mismatch')
+    }
+    const requestedExecutionHostId = normalizeExecutionHostId(
+      typeof params.executionHostId === 'string' ? params.executionHostId : null
+    )
+    if (params.executionHostId !== undefined && !requestedExecutionHostId?.startsWith('ssh:')) {
+      throw new Error('pty_stop_receipt_host_mismatch')
     }
     if (expectedOwnerClientInstanceId !== undefined) {
       this.assertShutdownOwnership(id, managed, expectedOwnerClientInstanceId, context)
@@ -2278,17 +2328,66 @@ export class PtyHandler {
     if (this.retirePaneSurface(managed)) {
       this.armShutdownReapSweep(managed, SHUTDOWN_REAP_MAX_SWEEPS)
     }
-
-    if (immediate) {
-      this.releaseStartupCommand(managed)
-      this.flushPtyOutput(id)
-      this.requestForceKill(managed)
-      // Why: preserve timed-out entries so onExit/retry owns native handles.
-      await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
-    } else {
-      this.releaseStartupCommand(managed)
-      this.requestGracefulKill(managed, 'force-kill')
+    const executionHostId = requestedExecutionHostId ?? 'runtime:ssh-relay'
+    const entry: RelayPtyStopOperation = {
+      incarnationId: managed.incarnationId,
+      immediate,
+      rootSignalled: false,
+      managed,
+      promise: Promise.resolve(undefined as never)
     }
+    const operation = this.stopManagedPty(id, executionHostId, entry)
+    entry.promise = operation
+    this.stopOperations.set(id, entry)
+    try {
+      const receipt = await operation
+      this.stopReceipts.set(id, receipt)
+      return receipt
+    } finally {
+      if (this.stopOperations.get(id) === entry) {
+        this.stopOperations.delete(id)
+      }
+    }
+  }
+
+  private async stopManagedPty(
+    id: string,
+    executionHostId: 'local' | `ssh:${string}` | `runtime:${string}`,
+    operation: RelayPtyStopOperation
+  ): Promise<PtyStopReceipt> {
+    const { managed } = operation
+    const evidence = await stopPtyProcessTree(
+      managed.pty.pid,
+      () => {
+        this.releaseStartupCommand(managed)
+        this.flushPtyOutput(id)
+        operation.rootSignalled = true
+        if (operation.immediate) {
+          this.requestForceKill(managed)
+        } else {
+          this.requestGracefulKill(managed, 'force-kill')
+        }
+      },
+      {
+        ownsRoot: () => this.ptys.get(id) === managed && !managed.disposed
+      }
+    )
+    if (operation.immediate) {
+      await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS).catch(() => undefined)
+    }
+    const receipt = createPtyStopReceipt({
+      executionHostId,
+      terminalHandle: managed.terminalHandle ?? id,
+      ptyId: id,
+      ptyIncarnation: managed.incarnationId,
+      root: evidence.root,
+      descendants: evidence.descendants,
+      observations: evidence.observations,
+      verdict: evidence.verdict,
+      processTreeVerified: evidence.processTreeVerified,
+      ...(evidence.reason ? { reason: evidence.reason } : {})
+    })
+    return receipt
   }
 
   /** Re-decide, on the host, whether the caller may destroy this PTY.

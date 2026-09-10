@@ -1,3 +1,4 @@
+import { stopTerminalHostSession } from './terminal-host-session-stop'
 import type { Session } from './session'
 import {
   SessionNotFoundError,
@@ -20,6 +21,7 @@ import { TerminalHostTombstones } from './terminal-host-tombstones'
 import { listLiveTerminalHostSessions } from './terminal-host-session-listing'
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
+import { WindowsPtyJobObjectReceiptHandoff } from '../providers/windows-pty-job-object'
 import { rejectOnAbort } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
 import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
@@ -54,9 +56,9 @@ export class TerminalHost {
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
   private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
-  private maxTombstones: number
   private creationFenced = false
   private disposePromise: Promise<void> | null = null
+  private readonly windowsJobReceiptHandoff = new WindowsPtyJobObjectReceiptHandoff()
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
@@ -71,8 +73,7 @@ export class TerminalHost {
     this.onSessionReaped = opts.onSessionReaped
     this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
-    this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
-    this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
+    this.killedTombstones = new TerminalHostTombstones(opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES)
   }
 
   async createOrAttach(opts: InternalCreateOrAttachOptions): Promise<CreateOrAttachResult> {
@@ -111,7 +112,7 @@ export class TerminalHost {
           if (options.agentSessionGeneration && this.sessions.get(options.sessionId)?.isAlive) {
             throw new Error('agent_session_claim_unavailable')
           }
-          return await createOrAttachTerminalSession(options, {
+          const result = await createOrAttachTerminalSession(options, {
             sessions: this.sessions,
             assertCreateAllowed: () => this.assertCreateOrAttachAllowed(options),
             sessionTeardown: this.sessionTeardown,
@@ -138,6 +139,11 @@ export class TerminalHost {
               this.reapSession(sessionId)
             }
           })
+          if (result.isNew) {
+            this.sessionTeardown.clearReceipt(options.sessionId)
+            this.windowsJobReceiptHandoff.clearForCreate(options.sessionId)
+          }
+          return result
         }
       })
     } finally {
@@ -180,17 +186,13 @@ export class TerminalHost {
     this.sessions.get(sessionId)?.resumeProducer()
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
-    const pending = this.sessionTeardown.get(sessionId)
-    if (pending) {
-      return Promise.resolve(
-        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
-      )
-    }
-    const session = this.getAliveSession(sessionId)
-    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
-    this.killedTombstones.record(sessionId)
-    return Promise.resolve(killed)
+  kill(sessionId: string, opts: { immediate?: boolean; expectedIncarnationId?: string } = {}) {
+    return stopTerminalHostSession(sessionId, opts, {
+      sessionTeardown: this.sessionTeardown,
+      windowsJobReceiptHandoff: this.windowsJobReceiptHandoff,
+      killedTombstones: this.killedTombstones,
+      getAliveSession: (id) => this.getAliveSession(id)
+    })
   }
 
   // Why: dispose a dead session's emulator so exited terminals don't pin their scrollback window for the daemon's life.
@@ -225,10 +227,7 @@ export class TerminalHost {
   // Why: null-not-throw — fetched for the tab-bar icon, so a vanished pane should quietly yield "no agent".
   getForegroundProcess(sessionId: string): string | null {
     const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      return null
-    }
-    return session.getForegroundProcess()
+    return session?.isAlive ? session.getForegroundProcess() : null
   }
 
   inspectProcess(
@@ -336,6 +335,7 @@ export class TerminalHost {
     }
     await shutdownTerminalHostSessions(this.sessions, this.onFinalCheckpoint)
     this.killedTombstones.clear()
+    this.windowsJobReceiptHandoff.clear()
   }
 
   private getAliveSession(sessionId: string): Session {

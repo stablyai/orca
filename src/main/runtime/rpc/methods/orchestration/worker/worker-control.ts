@@ -1,30 +1,24 @@
 import { z } from 'zod'
-import { ORCHESTRATION_WORKER_READ_SOURCES } from '../../../../../../shared/orchestration-worker-output'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../../../core'
-import { OptionalFiniteNumber, requiredString } from '../../../schemas'
+import { requiredString } from '../../../schemas'
 import {
   exposeDispatchContext,
   exposeObservation,
   exposeWorker,
   inspectWorkerTerminal,
   projectFleetWorker,
-  resolvePinnedFederatedServer,
   showContextOnlyWorker
 } from './worker-observation'
-import { readArchivedWorkerOutput } from './worker-archive-read'
-import { readStructuredWorkerOutput } from '../../orchestration-structured-worker-lifecycle'
-import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
-import { readExactWorkerOutput } from './worker-output'
 import { exposeWorkerTerminalResource } from './worker-release-completion'
-import { readFederatedWorkerOutput } from '../federation/federated-worker-read'
 import { showFederatedWorker } from '../federation/federated-worker-show'
-const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
-const WorkerReadParams = WorkerDispatchParams.extend({
-  cursor: z.union([z.number().int().nonnegative(), z.string().min(1).max(2_048)]).optional(),
-  limit: OptionalFiniteNumber,
-  source: z.enum(ORCHESTRATION_WORKER_READ_SOURCES).optional()
+
+import { WORKER_READ_METHOD } from '../../orchestration-worker-read-method'
+import { releaseStructuredWorkerSession } from '../../orchestration-structured-worker-session'
+const WorkerDispatchParams = z.object({
+  dispatch: requiredString('Missing --dispatch'),
+  run: z.string().min(1).optional()
 })
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
@@ -39,6 +33,13 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
         throw new OrchestrationError(
           'dispatch_not_found',
           `Worker Dispatch ${params.dispatch} was not found.`
+        )
+      }
+      if (params.run && dispatch.run_id !== params.run) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `Worker Dispatch ${params.dispatch} belongs to Run ${dispatch.run_id}, not requested Run ${params.run}.`,
+          { dispatchId: params.dispatch, expectedRunId: params.run, observedRunId: dispatch.run_id }
         )
       }
       const federated = db.getFederatedDispatch(params.dispatch)
@@ -81,123 +82,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
       }
     }
   }),
-  defineMethod({
-    name: 'orchestration.workerRead',
-    params: WorkerReadParams,
-    handler: async (params, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      const federated = db.getFederatedDispatch(params.dispatch)
-      if (federated) {
-        const server = resolvePinnedFederatedServer(runtime, federated)
-        return readFederatedWorkerOutput({
-          runtime,
-          db,
-          server,
-          federated,
-          dispatchId: params.dispatch,
-          source: params.source,
-          cursor: params.cursor,
-          limit: params.limit
-        })
-      }
-      const dispatch = db.getDispatchContextById(params.dispatch)
-      const worker = db.getWorkerDispatch(params.dispatch)
-      const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
-      if (!dispatch) {
-        throw new OrchestrationError(
-          'dispatch_not_found',
-          `Dispatch ${params.dispatch} was not found.`
-        )
-      }
-      if (!terminalHandle) {
-        throw new OrchestrationError(
-          'dispatch_not_found',
-          `Worker Dispatch ${params.dispatch} has no agent terminal.`
-        )
-      }
-      const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
-      if (resource && ['releasing', 'unknown', 'released'].includes(resource.release_state)) {
-        // Archive capture is not close evidence; recheck the execution host while releasing.
-        let liveness: 'live' | 'unverifiable' | 'exited' =
-          resource.release_state === 'released' ? 'exited' : 'unverifiable'
-        if (resource.release_state === 'releasing') {
-          const observed = await inspectWorkerTerminal(runtime, db, params.dispatch)
-          liveness =
-            observed.status === 'live'
-              ? 'live'
-              : observed.status === 'exited'
-                ? 'exited'
-                : 'unverifiable'
-        }
-        const archived = await readArchivedWorkerOutput({
-          db,
-          dispatchId: params.dispatch,
-          workerState: worker?.state ?? 'unsupervised',
-          resource,
-          source: params.source,
-          cursor: params.cursor,
-          limit: params.limit,
-          liveness
-        })
-        return { ...archived, projection: projectFleetWorker(runtime, db, params.dispatch) }
-      }
-      const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
-      if (!observation.exact) {
-        throw new OrchestrationError(
-          'worker_identity_changed',
-          `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
-        )
-      }
-      const structured = readStructuredWorkerOutput({
-        db,
-        dispatchId: params.dispatch,
-        workerState: worker?.state ?? 'unsupervised',
-        // Reused, never re-derived: being able to read the journal proves the host is installed,
-        // not that the provider child is alive.
-        liveness:
-          observation.status === 'live' || observation.status === 'exited'
-            ? observation.status
-            : 'unverifiable',
-        source: params.source,
-        cursor: params.cursor,
-        limit: params.limit
-      })
-      if (structured) {
-        return structured
-      }
-      const output = await readExactWorkerOutput({
-        runtime,
-        dispatchId: params.dispatch,
-        terminalHandle,
-        workerState: worker?.state ?? 'unsupervised',
-        terminalStatus:
-          observation.status === 'exited'
-            ? 'exited'
-            : observation.status === 'unverifiable'
-              ? 'unknown'
-              : 'running',
-        terminalLiveness:
-          observation.status === 'unverifiable'
-            ? 'unverifiable'
-            : observation.status === 'exited'
-              ? 'exited'
-              : 'live',
-        attachedAt: worker?.created_at ?? dispatch.dispatched_at ?? dispatch.created_at,
-        source: params.source,
-        cursor: params.cursor,
-        limit: params.limit
-      })
-      const afterRead = await inspectWorkerTerminal(runtime, db, params.dispatch)
-      if (!afterRead.exact) {
-        throw new OrchestrationError(
-          'worker_identity_changed',
-          `Worker Dispatch ${params.dispatch} changed process while output was read.`
-        )
-      }
-      // Two verdicts: status.liveness is the PTY's, the projection is the agent's.
-      return { ...output, projection: projectFleetWorker(runtime, db, params.dispatch) }
-    }
-  }),
+  WORKER_READ_METHOD,
   defineMethod({
     name: 'orchestration.workerAbandon',
     params: WorkerDispatchParams,
@@ -205,9 +90,6 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
       const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
-          // Abandon settles the Dispatch, so it owes the same hold release stop and release do.
-          // A surviving hold pins the provider child for the life of the app and makes host crash
-          // recovery respawn a worker nobody is waiting on.
           releaseStructuredWorkerSession(params.dispatch, runtime)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         }

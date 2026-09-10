@@ -31,6 +31,7 @@ type RuntimeFileCommandName =
   | 'listRuntimeFiles'
   | 'listRuntimeMarkdownDocuments'
   | 'statRuntimeFile'
+  | 'createMaestroWorkspaceAnnotation'
 
 export type RuntimeFileCommandSurface = Pick<RuntimeFileCommands, RuntimeFileCommandName>
 
@@ -68,6 +69,7 @@ export function installRuntimeFileCommandSurface(
     searchRuntimeFiles: commands.searchRuntimeFiles.bind(commands),
     listRuntimeFiles: commands.listRuntimeFiles.bind(commands),
     listRuntimeMarkdownDocuments: commands.listRuntimeMarkdownDocuments.bind(commands),
-    statRuntimeFile: commands.statRuntimeFile.bind(commands)
+    statRuntimeFile: commands.statRuntimeFile.bind(commands),
+    createMaestroWorkspaceAnnotation: commands.createMaestroWorkspaceAnnotation.bind(commands)
   } satisfies RuntimeFileCommandSurface)
 }

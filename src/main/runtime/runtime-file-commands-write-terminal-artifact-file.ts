@@ -8,8 +8,10 @@ import {
 } from './runtime-file-commands-mobile-file-list-limit'
 import { isBinaryBuffer, isMobileBinaryPath } from './runtime-file-command-host'
 import {
+  assertTerminalFileGrantContentFresh,
   assertTerminalFileGrantFresh,
   readFileHandleBufferBounded,
+  terminalFileContentIdentity,
   terminalFileStatIdentity
 } from './runtime-file-commands-terminal-artifact-access'
 import { openLocalTerminalArtifactGrant } from './runtime-file-commands-terminal-file-paths'
@@ -75,9 +77,12 @@ export class RuntimeFileCommandsWithWriteTerminalArtifactFile extends RuntimeFil
         throw new Error('file_too_large')
       }
       assertTerminalFileGrantFresh(grant, fileStats)
-      if (
-        isBinaryBuffer(await readFileHandleBufferBounded(handle, MOBILE_FILE_READ_MAX_BYTES + 1))
-      ) {
+      const originalContent = await readFileHandleBufferBounded(
+        handle,
+        MOBILE_FILE_READ_MAX_BYTES + 1
+      )
+      assertTerminalFileGrantContentFresh(grant, originalContent)
+      if (isBinaryBuffer(originalContent)) {
         throw new Error('binary_file')
       }
     } finally {
@@ -102,6 +107,7 @@ export class RuntimeFileCommandsWithWriteTerminalArtifactFile extends RuntimeFil
       grant.statIdentity = terminalFileStatIdentity(
         await this.statLocalTerminalPath(grant.absolutePath)
       )
+      grant.contentIdentity = terminalFileContentIdentity(content)
       this.refreshTerminalFileGrant(grant)
       return { ok: true }
     } finally {

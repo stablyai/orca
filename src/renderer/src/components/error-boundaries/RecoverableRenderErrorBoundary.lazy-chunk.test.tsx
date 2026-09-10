@@ -85,6 +85,40 @@ describe('RecoverableRenderErrorBoundary lazy chunk containment', () => {
     expect(reportCrashMock).not.toHaveBeenCalled()
   })
 
+  it('retries a recovered lazy chunk when the fallback remounts it', async () => {
+    window.sessionStorage.setItem(RELOAD_GUARD_KEY, LANDED_RELOAD_GUARD_VALUE)
+    const factory = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new TypeError('Failed to fetch dynamically imported module: file://redacted/chunk.js')
+      )
+      .mockResolvedValueOnce({ default: () => <div>Recovered workbench</div> })
+    const LazyRecoveringImport = lazyWithRetry(factory, { retries: 0 })
+    ;({ container, root } = createContainer())
+
+    await act(async () => {
+      root?.render(
+        <BoundaryHarness>
+          <LazyRecoveringImport />
+        </BoundaryHarness>
+      )
+    })
+    await flushReactWork()
+    await flushReactWork()
+
+    const retry = container?.querySelector('button')
+    expect(retry).not.toBeNull()
+    await act(async () => retry?.click())
+    await flushReactWork()
+    await flushReactWork()
+
+    expect(container?.textContent).toContain('Recovered workbench')
+    expect(container?.querySelector('[role="alert"]')).toBeNull()
+    expect(factory).toHaveBeenCalledTimes(2)
+    expect(window.sessionStorage.getItem(RELOAD_GUARD_KEY)).toBeNull()
+    expect(reportCrashMock).not.toHaveBeenCalled()
+  })
+
   it('still reports ordinary render errors', async () => {
     const error = new Error('ordinary render failure')
     function BrokenSurface(): ReactElement {

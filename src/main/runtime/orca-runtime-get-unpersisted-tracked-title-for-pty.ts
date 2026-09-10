@@ -8,6 +8,15 @@ import { detectAgentStatusFromTitle } from '../../shared/agent-detection'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 
 export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntimeWithEmitDaemonPtyTransientFact {
+  protected resetPtyLaunchAuthorityCommandFence(ptyId: string): void {
+    const tracker = this.ptyTitleTrackersByPtyId.get(ptyId)
+    if (!tracker) {
+      return
+    }
+    tracker.launchAuthorityCommandStarted = false
+    tracker.launchAuthorityRetirementPending = false
+  }
+
   protected getUnpersistedTrackedTitleForPty(ptyId: string | null): string | null {
     if (!ptyId || this.getTrackedRawTitleForPty(ptyId) !== null) {
       return null
@@ -143,8 +152,19 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
         onAgentExited: () => {
           this.confirmPtyAgentExit(ptyId)
         },
+        onCommandStarted: () => {
+          const live = this.ptyTitleTrackersByPtyId.get(ptyId)
+          if (live) {
+            live.launchAuthorityCommandStarted = true
+          }
+        },
         onCommandFinished: (exitCode: number | null) => {
-          this.retirePtyAgentLaunchAuthority(ptyId)
+          const live = this.ptyTitleTrackersByPtyId.get(ptyId)
+          if (live) {
+            const currentLaunchNeedsStart = Boolean(this.ptysById.get(ptyId)?.launchToken)
+            live.launchAuthorityRetirementPending =
+              !currentLaunchNeedsStart || live.launchAuthorityCommandStarted
+          }
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
         },
         onBell: () => {
@@ -171,6 +191,8 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
       lastTitleFactAtMs: null,
       chunkTouchedSessionTabs: false,
       pendingFacts: [],
+      launchAuthorityCommandStarted: false,
+      launchAuthorityRetirementPending: false,
       // Why: command-code facts exist only for the pty:sideEffect channel —
       // headless serve skips the per-chunk scrape entirely. The detector
       // self-arms on the Command Code banner; the spawn command (when main

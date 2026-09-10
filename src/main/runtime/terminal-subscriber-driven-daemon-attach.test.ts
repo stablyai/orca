@@ -280,6 +280,24 @@ function snapshotText(harness: ReturnType<typeof startMultiplex>): string {
 }
 
 describe('subscriber-driven daemon attach (never-activated tab)', () => {
+  it('attaches a raw Canvas preview without taking terminal-query authority', async () => {
+    const { runtime, model } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
+
+    expect(model.emitData(PTY_ID, 'before Canvas')).toBe(false)
+    const release = runtime.registerRawTerminalViewSubscriber(PTY_ID)
+
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    expect(runtime.hasRawTerminalViewSubscriber(PTY_ID)).toBe(true)
+    expect(runtime.hasRemoteTerminalViewSubscriber(PTY_ID)).toBe(false)
+    expect(model.emitData(PTY_ID, 'live in Canvas\r\n')).toBe(true)
+    await expect(runtime.serializeTerminalBuffer(PTY_ID)).resolves.toMatchObject({
+      data: expect.stringContaining('live in Canvas')
+    })
+
+    release()
+    expect(runtime.hasRawTerminalViewSubscriber(PTY_ID)).toBe(false)
+  })
+
   it('attaches on first desktop multiplex subscribe and streams bytes (snapshot-null daemon)', async () => {
     const { runtime, model, handle, mountSpy } = setupNeverAttachedDaemonSession({
       snapshotCapable: false
@@ -441,6 +459,24 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     )
     expect(model.emitData(PTY_ID, 'after inventory\r\n')).toBe(true)
     await vi.waitFor(() => expect(outputText(harness)).toContain('after inventory'))
+  })
+
+  it('retries a raw Canvas subscriber when provider inventory becomes ready', async () => {
+    const { runtime, model } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
+    model.sessions.delete(PTY_ID)
+    const releaseFirstAttach = model.deferNextAttach(false)
+
+    const releasePreview = runtime.registerRawTerminalViewSubscriber(PTY_ID)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    expect(runtime.hasRemoteTerminalViewSubscriber(PTY_ID)).toBe(false)
+
+    model.sessions.set(PTY_ID, { cols: 100, rows: 30, attached: false, screen: '' })
+    await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
+    releaseFirstAttach()
+
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
+    expect(model.emitData(PTY_ID, 'Canvas became live\r\n')).toBe(true)
+    releasePreview()
   })
 
   it('does not subscriber-attach or provider-read a session this app already spawned', async () => {

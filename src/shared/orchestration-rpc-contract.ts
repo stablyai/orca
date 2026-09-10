@@ -21,6 +21,7 @@ export const ORCHESTRATION_UNBOUND_RUN_ID = 'run_unbound'
 const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.runCreate',
   'orchestration.runUse',
+  'orchestration.runComplete',
   'orchestration.send',
   'orchestration.reply',
   'orchestration.taskCreate',

@@ -158,9 +158,7 @@ describe('resolveAgentLaunchRoute', () => {
   })
 
   it('does not classify the resolved default TUI args as customization', () => {
-    expect(hasExplicitTuiAgentArgs('codex', '--dangerously-bypass-approvals-and-sandbox')).toBe(
-      false
-    )
+    expect(hasExplicitTuiAgentArgs('codex', '--yolo')).toBe(false)
     expect(hasExplicitTuiAgentArgs('codex', '--model gpt-5.6-sol')).toBe(true)
   })
 })

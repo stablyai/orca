@@ -21,13 +21,17 @@ export function useMobileSessionFoundation() {
     worktreeId,
     name: routeWorktreeName,
     created,
-    warning: createdWarning
+    warning: createdWarning,
+    tabId: requestedTabId,
+    executionHostId = 'local'
   } = useLocalSearchParams<{
     hostId: string
     worktreeId: string
     name?: string
     created?: string
     warning?: string
+    tabId?: string
+    executionHostId?: string
   }>()
   const isFolderWorkspaceRoute = worktreeId.startsWith('folder:') // Synthetic ids have no repo scope.
   // Why: the floating sentinel has no repo/worktree, so repo-backed surfaces hide.
@@ -91,6 +95,8 @@ export function useMobileSessionFoundation() {
     routeWorktreeName,
     created,
     createdWarning,
+    requestedTabId,
+    executionHostId,
     isFolderWorkspaceRoute,
     isFloatingWorkspaceRoute,
     router,

@@ -23,16 +23,17 @@ describe('orchestration worker-read fleet projection', () => {
     expect(read.projection?.liveness.verdict).toBe('unverifiable')
   })
 
-  it('carries the projection on an archived read after release', async () => {
+  it('does not infer exit from a released archive without host evidence', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
     await h.call('orchestration.workerRelease', { dispatch: dispatchId })
 
     const read = (await h.call('orchestration.workerRead', {
       dispatch: dispatchId
-    })) as ReadWithProjection
+    })) as ReadWithProjection & { status: { liveness: string } }
 
     expect(read.projection?.dispatchId).toBe(dispatchId)
+    expect(read.status.liveness).toBe('unverifiable')
     expect(read.projection?.liveness.verdict).toBe('exited')
   })
 })

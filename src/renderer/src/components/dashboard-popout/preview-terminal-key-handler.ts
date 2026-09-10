@@ -29,6 +29,7 @@ export function installPreviewTerminalKeyHandler(args: {
   claimImeKeyEvent: (event: KeyboardEvent) => boolean
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
   sendInput: (data: string) => void
+  getInputEnabled: () => boolean
   /** Everything but optionKeyLocations, which this installer tracks itself. */
   getShortcutContext: () => Omit<PreviewShortcutContext, 'optionKeyLocations'>
 }): () => void {
@@ -89,6 +90,9 @@ export function installPreviewTerminalKeyHandler(args: {
   window.addEventListener('blur', onWindowBlur)
 
   terminal.attachCustomKeyEventHandler((event) => {
+    if (!args.getInputEnabled()) {
+      return false
+    }
     if (args.claimImeKeyEvent(event)) {
       // Why: bypass xterm's kitty encoder for native-text keydowns so the committed glyph survives via the input event.
       return false

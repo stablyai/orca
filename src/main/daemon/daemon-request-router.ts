@@ -91,7 +91,12 @@ export class DaemonRequestRouter {
           request.payload.background === true
         )
       case 'kill':
-        return this.kill(clientId, request.payload.sessionId, request.payload.immediate)
+        return this.kill(
+          clientId,
+          request.payload.sessionId,
+          request.payload.immediate,
+          request.payload.expectedIncarnationId
+        )
       case 'signal':
         this.options.host.signal(request.payload.sessionId, request.payload.signal)
         return {}
@@ -194,13 +199,16 @@ export class DaemonRequestRouter {
   private async kill(
     clientId: string,
     sessionId: string,
-    immediate: boolean | undefined
-  ): Promise<Record<string, never>> {
+    immediate: boolean | undefined,
+    expectedIncarnationId: string | undefined
+  ): Promise<unknown> {
     const canceledPendingSpawn = this.options.preparations.cancel(sessionId)
     this.options.attachments.clearInput(sessionId)
     const attribution = { sessionId, immediate: immediate === true, clientId }
     try {
-      await this.options.host.kill(sessionId, { immediate })
+      const receipt = await this.options.host.kill(sessionId, { immediate, expectedIncarnationId })
+      this.options.log.log('session-killed', attribution)
+      return receipt
     } catch (error) {
       if (!(canceledPendingSpawn && error instanceof SessionNotFoundError)) {
         this.options.log.log('session-kill-failed', {

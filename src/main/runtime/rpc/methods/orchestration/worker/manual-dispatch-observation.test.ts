@@ -84,6 +84,15 @@ describe('manual Dispatch observation', () => {
       throw new Error('Missing method orchestration.workerShow')
     }
     await expect(
+      workerShowMethod.handler(
+        workerShowMethod.params?.parse({ dispatch: result.dispatch.id, run: 'run-other' }),
+        { runtime }
+      )
+    ).rejects.toMatchObject({
+      code: 'request_mismatch',
+      data: { expectedRunId: 'run-other', observedRunId: run.id }
+    })
+    await expect(
       workerShowMethod.handler(workerShowMethod.params?.parse({ dispatch: result.dispatch.id }), {
         runtime
       })

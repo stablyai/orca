@@ -28,6 +28,7 @@ import {
   startHeadlessPairingRuntime
 } from './start-emulator-pairing-runtime.mjs'
 import { ensureMobileExpoCli, getMobileExpoExecutablePath } from './mobile-expo-cli.mjs'
+import { verifyMobileRuntimePreflight } from './mobile-runtime-preflight.mjs'
 
 const execFileAsync = promisify(execFile)
 const DEFAULT_METRO_PORT = 8081
@@ -538,30 +539,20 @@ async function takeScreenshot(
   }
 }
 
-// Verify Metro is reachable
-async function verifyMetro(url) {
-  const urlObj = new URL(url)
-  const statusUrl = new URL('/status', `${urlObj.protocol}//${urlObj.host}`).toString()
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 5000)
-
-  try {
-    const response = await fetch(statusUrl, { signal: controller.signal })
-    return (await response.text()).includes('packager-status:running')
-  } catch {
-    return false
-  } finally {
-    clearTimeout(timeout)
-  }
-}
-
 async function findReachableMetroUrl(initialUrl) {
+  let lastError = null
   for (const candidate of metroUrlCandidates(initialUrl)) {
-    if (await verifyMetro(candidate)) {
-      return { url: candidate, reachable: true }
+    try {
+      const result = await verifyMobileRuntimePreflight({
+        publishedUrl: candidate,
+        target: 'ios-simulator'
+      })
+      return result.deviceUrl
+    } catch (error) {
+      lastError = error
     }
   }
-  return { url: initialUrl, reachable: false }
+  throw lastError ?? new Error('Metro preflight failed without a diagnostic')
 }
 
 // Main function
@@ -604,18 +595,12 @@ async function main() {
     logSuccess('Metro is running')
 
     // Verify Metro is reachable
-    const reachableMetro = await findReachableMetroUrl(metro.url)
-    if (reachableMetro.url !== metro.url) {
-      logInfo(`Using reachable Metro URL: ${reachableMetro.url}`)
+    const reachableMetroUrl = await findReachableMetroUrl(metro.url)
+    if (reachableMetroUrl !== metro.url) {
+      logInfo(`Using reachable Metro URL: ${reachableMetroUrl}`)
     }
-    metro.url = reachableMetro.url
-
-    if (!reachableMetro.reachable) {
-      logError('Metro is not reachable from this machine.')
-      logInfo('The app may still work if the simulator can access the LAN IP.')
-    } else {
-      logSuccess('Metro is reachable')
-    }
+    metro.url = reachableMetroUrl
+    logSuccess('Metro bundle endpoint is reachable')
 
     // Open in simulator
     if (options.open) {
@@ -679,6 +664,9 @@ async function main() {
   } catch (error) {
     pairingRuntime?.stop()
     logError(error.message)
+    if (typeof error.recoveryCommand === 'string') {
+      logInfo(`Recovery: ${error.recoveryCommand}`)
+    }
     process.exit(1)
   }
 }

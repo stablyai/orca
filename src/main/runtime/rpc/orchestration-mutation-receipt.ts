@@ -183,14 +183,22 @@ export function attachMutationReceipt(
 export function getPendingWorkerStartRecovery(
   method: string,
   receipt: string | null
-): { dispatchId: string } | undefined {
+): { dispatchId: string; transferRequestId?: string } | undefined {
   if (method !== 'orchestration.workerStart' || !receipt) {
     return undefined
   }
   try {
-    const parsed = JSON.parse(receipt) as { accepted?: { dispatchId?: unknown } }
+    const parsed = JSON.parse(receipt) as {
+      accepted?: { dispatchId?: unknown }
+      leaseTransfer?: { requestId?: unknown }
+    }
     return typeof parsed.accepted?.dispatchId === 'string'
-      ? { dispatchId: parsed.accepted.dispatchId }
+      ? {
+          dispatchId: parsed.accepted.dispatchId,
+          ...(typeof parsed.leaseTransfer?.requestId === 'string'
+            ? { transferRequestId: parsed.leaseTransfer.requestId }
+            : {})
+        }
       : undefined
   } catch {
     return undefined
@@ -222,4 +230,16 @@ function isWorkerDoneSend(method: string, params: unknown): boolean {
     !Array.isArray(params) &&
     (params as { type?: unknown }).type === 'worker_done'
   )
+}
+
+// A replayed prompt may name a terminal that is gone; an unreadable binding is a changed one.
+export function readTerminalPromptBindingHash(
+  runtime: OrcaRuntimeService,
+  handle: string
+): string | null {
+  try {
+    return hashCanonical(runtime.getTerminalPromptRequestBinding(handle))
+  } catch {
+    return null
+  }
 }

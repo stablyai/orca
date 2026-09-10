@@ -198,7 +198,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          command: "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'",
+          command: "codex '--yolo' 'run the automation'",
           startupCommandDelivery: 'shell-ready'
         })
       )
@@ -210,10 +210,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
       vi.advanceTimersByTime(50)
 
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
-      )
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "codex '--yolo' 'run the automation'\r")
     } finally {
       vi.useRealTimers()
     }
@@ -237,10 +234,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       dataSidecar('\x1b]777;orca-shell-ready\x07user@remote repo % ')
       vi.advanceTimersByTime(50)
 
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox'\r"
-      )
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "codex '--yolo'\r")
     } finally {
       vi.useRealTimers()
     }
@@ -258,10 +252,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(50)
 
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox'\r"
-      )
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "codex '--yolo'\r")
     } finally {
       vi.useRealTimers()
     }
@@ -284,10 +275,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       expect(mockWrite).not.toHaveBeenCalled()
       vi.advanceTimersByTime(15_050)
 
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
-      )
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "codex '--yolo' 'run the automation'\r")
     } finally {
       vi.useRealTimers()
     }
@@ -308,10 +296,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
       dataSidecar('user@remote repo % ')
       vi.advanceTimersByTime(1_550)
 
-      expect(mockWrite).toHaveBeenCalledWith(
-        'pty-1',
-        "codex '--dangerously-bypass-approvals-and-sandbox' 'run the automation'\r"
-      )
+      expect(mockWrite).toHaveBeenCalledWith('pty-1', "codex '--yolo' 'run the automation'\r")
     } finally {
       vi.useRealTimers()
     }
@@ -336,8 +321,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockSpawn.mock.calls[0]?.[0]).toEqual(
         expect.objectContaining({
-          command:
-            "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'"
+          command: "codex --prefill 'draft from override' '--yolo'"
         })
       )
       expect(mockSpawn.mock.calls[0]?.[0]).not.toHaveProperty('startupCommandDelivery')
@@ -351,7 +335,7 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
 
       expect(mockWrite).toHaveBeenCalledWith(
         'pty-1',
-        "codex --prefill 'draft from override' '--dangerously-bypass-approvals-and-sandbox'\r"
+        "codex --prefill 'draft from override' '--yolo'\r"
       )
     } finally {
       vi.useRealTimers()

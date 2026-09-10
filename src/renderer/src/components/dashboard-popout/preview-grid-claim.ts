@@ -1,4 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
+import { scheduleAgentTerminalPreviewFrameTask } from './agent-terminal-preview-scheduling'
 
 const FIT_REQUEST_DEBOUNCE_MS = 200
 // Mirror the runtime's clampTerminalViewport so a request always matches what lands.
@@ -27,6 +28,7 @@ export function createPreviewGridClaim(args: {
 }): { schedule: () => void; dispose: () => void } {
   let lastRequestedFit: string | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  let cancelQueuedRequest: (() => void) | null = null
   let disposed = false
 
   const request = (): void => {
@@ -76,9 +78,14 @@ export function createPreviewGridClaim(args: {
     if (timer) {
       clearTimeout(timer)
     }
+    cancelQueuedRequest?.()
+    cancelQueuedRequest = null
     timer = setTimeout(() => {
       timer = null
-      request()
+      cancelQueuedRequest = scheduleAgentTerminalPreviewFrameTask(() => {
+        cancelQueuedRequest = null
+        request()
+      })
     }, FIT_REQUEST_DEBOUNCE_MS)
   }
 
@@ -90,6 +97,8 @@ export function createPreviewGridClaim(args: {
         clearTimeout(timer)
         timer = null
       }
+      cancelQueuedRequest?.()
+      cancelQueuedRequest = null
     }
   }
 }

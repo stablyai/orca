@@ -126,6 +126,56 @@ describe('orca cli worktree awareness', () => {
     ])
   })
 
+  it('accepts and forwards terminal send lease input JSON', async () => {
+    const leaseInput = {
+      commandId: 'command-1',
+      idempotencyKey: 'input-1',
+      contentDigest: `sha256:${'a'.repeat(64)}`,
+      enqueueSequence: 1,
+      leaseId: 'lease-1',
+      authority: 'coordinator',
+      runId: 'run-1',
+      coordinatorGeneration: 2,
+      expectedLifecycleState: 'ready',
+      observedInputSurface: 'ready_prompt',
+      expiresAt: '2026-08-25T00:00:00.000Z',
+      expectedGraphRevision: 61
+    }
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_send', {
+        send: { handle: 'term_worker', accepted: true, bytesWritten: 7 }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'send',
+        '--terminal',
+        'term_worker',
+        '--text',
+        'review',
+        '--enter',
+        '--lease-input',
+        JSON.stringify(leaseInput),
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('terminal.send', {
+      terminal: 'term_worker',
+      text: 'review',
+      enter: true,
+      interrupt: false,
+      agentPrompt: true,
+      leaseInput,
+      client: { id: 'orca-cli', type: 'desktop' }
+    })
+  })
+
   it('keeps interactive Codex startup commands backgrounded unless focus is explicit', async () => {
     queueFixtures(
       callMock,

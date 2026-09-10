@@ -124,7 +124,35 @@ export const TerminalSend = TerminalHandle.extend({
       rows: z.number().int().min(1).max(500)
     })
     .optional(),
-  claimViewport: z.literal(true).optional()
+  claimViewport: z.literal(true).optional(),
+  leaseInput: z
+    .object({
+      commandId: requiredString('Missing command ID'),
+      idempotencyKey: requiredString('Missing input idempotency key'),
+      contentDigest: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+      enqueueSequence: z.number().int().positive(),
+      leaseId: requiredString('Missing lease ID'),
+      authority: z.enum(['coordinator', 'worker', 'user']),
+      runId: requiredString('Missing Run ID'),
+      coordinatorGeneration: z.number().int().positive().nullable(),
+      expectedLifecycleState: z.enum([
+        'reserved',
+        'starting',
+        'ready',
+        'active',
+        'input_required',
+        'settled',
+        'retained',
+        'release_pending',
+        'released',
+        'outcome_unknown',
+        'archived'
+      ]),
+      observedInputSurface: z.enum(['ready_prompt', 'working', 'permission', 'input_required']),
+      expiresAt: z.string().datetime(),
+      expectedGraphRevision: z.number().int().nonnegative().nullable()
+    })
+    .optional()
 })
 
 export const TerminalViewport = z.object({

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { homedir } from 'node:os'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
+import { createPtyStopReceipt } from '../shared/pty-stop-receipt'
+import {
+  getWorktreeTeardownExecutionHostId,
+  stopPtyForWorktreeRemoval
+} from '../shared/worktree/removal'
 import {
   canCleanupUnregisteredOrcaLeftoverDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
@@ -44,6 +49,39 @@ function makeReadPath(entries: readonly (readonly [string, unknown])[]) {
     return files.get(path)
   }
 }
+
+describe('PTY stop receipt qualification', () => {
+  it('rejects the same PTY identity when the receipt is authored by another host', async () => {
+    const root = { pid: 41, parentPid: 1, processGroupId: 41, startedAt: 'started-1' }
+    const receipt = createPtyStopReceipt({
+      executionHostId: 'local',
+      terminalHandle: 'terminal-1',
+      ptyId: 'pty-1',
+      ptyIncarnation: '11111111-1111-4111-8111-111111111111',
+      root,
+      descendants: [],
+      observations: [{ identity: root, status: 'absent', observedAt: new Date().toISOString() }],
+      verdict: 'exited',
+      processTreeVerified: true
+    })
+
+    await expect(
+      stopPtyForWorktreeRemoval(
+        { shutdown: vi.fn(async () => receipt) },
+        {
+          ptyId: 'pty-1',
+          terminalHandle: 'terminal-1',
+          incarnationId: '11111111-1111-4111-8111-111111111111',
+          executionHostId: getWorktreeTeardownExecutionHostId({
+            resolvedConnectionId: 'ssh-1'
+          }),
+          deadline: Date.now() + 1_000,
+          rpcDeadline: Date.now() + 500
+        }
+      )
+    ).resolves.toBe(false)
+  })
+})
 
 async function withProcessPlatform<T>(
   platform: NodeJS.Platform,

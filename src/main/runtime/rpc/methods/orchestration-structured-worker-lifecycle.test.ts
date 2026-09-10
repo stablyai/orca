@@ -287,7 +287,7 @@ describe('structured worker output', () => {
     expect(exited.status).toMatchObject({ terminal: 'exited', liveness: 'exited' })
   })
 
-  it('states that a settled release is exited', () => {
+  it('states a settled archive as exited only with explicit host evidence', () => {
     installHost({})
     const archive = captureStructuredWorkerArchive(IDENTITY, 'claude')
     const archived = readArchivedStructuredJournal({
@@ -296,7 +296,8 @@ describe('structured worker output', () => {
       resourceId: 'res_1',
       createdAt: '2026-09-05 00:00:00',
       releaseState: 'released',
-      archive
+      archive,
+      liveness: 'exited'
     })
     expect(archived.status).toMatchObject({ terminal: 'exited', liveness: 'exited' })
   })
@@ -320,10 +321,9 @@ describe('structured worker output', () => {
     }
   })
 
-  it('carries the resource release state through the archived read', async () => {
+  it('keeps release state separate from archived liveness evidence', async () => {
     // The wiring, not just the mapping: `worker-read` reaches the archive through
-    // `readArchivedWorkerOutput`, and the resource row it already holds is the only thing that
-    // knows whether the close landed.
+    // `readArchivedWorkerOutput`, while an explicit host verdict remains separate from the row.
     installHost({})
     const archive = captureStructuredWorkerArchive(IDENTITY, 'claude')
     const db = {
@@ -351,6 +351,24 @@ describe('structured worker output', () => {
       liveness: 'unverifiable'
     })
     expect((await read('released')).status).toMatchObject({
+      terminal: 'unknown',
+      liveness: 'unverifiable'
+    })
+    expect(
+      (
+        await readArchivedWorkerOutput({
+          db: db as never,
+          dispatchId: 'd1',
+          workerState: 'succeeded',
+          resource: {
+            id: 'res_1',
+            terminal_handle: IDENTITY.handle,
+            release_state: 'released'
+          } as never,
+          liveness: 'exited'
+        })
+      ).status
+    ).toMatchObject({
       terminal: 'exited',
       liveness: 'exited'
     })

@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { OrchestrationDb } from '../orchestration/db'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -15,6 +16,10 @@ describe('OpenCode guarded terminal send', () => {
     vi.useFakeTimers()
     const write = vi.fn(() => true)
     const runtime = new OrcaRuntimeService()
+    // Why: every send now asks whether the handle carries a managed lease before writing.
+    const orchestrationDb = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(orchestrationDb)
+    onTestFinished(() => orchestrationDb.close())
     runtime.setPtyController({
       write,
       kill: () => true,

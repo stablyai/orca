@@ -308,7 +308,7 @@
       "oxfmt --write"
     ],
     "{*.{json,css},!(cloud)/**/*.{json,css}}": [
-      "oxfmt --write"
+      "oxfmt --write --no-error-on-unmatched-pattern"
     ]
   },
   "engines": {

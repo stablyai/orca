@@ -102,6 +102,11 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent'
   },
+  maestroTab: {
+    width: 44,
+    maxWidth: 44,
+    paddingHorizontal: 0
+  },
   tabActive: {
     // Neutral grey underline, matching the desktop terminal tab's active
     // indicator (a muted foreground/card mix), not a blue accent.

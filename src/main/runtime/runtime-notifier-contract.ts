@@ -29,6 +29,7 @@ export type RuntimeNotifier = {
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
+  openMaestroCanvas?(target: { executionHostId: string; workspaceKey: string }): Promise<boolean>
   activateWorktree(
     repoId: string,
     worktreeId: string,
@@ -93,6 +94,19 @@ export type RuntimeNotifier = {
     }
   ): void
   renameTerminal(tabId: string, title: string | null): void
+  commandMaestroWorkspaceTab?(
+    command:
+      | {
+          kind: 'open-annotation'
+          worktreeId: string
+          filePath: string
+          relativePath: string
+          title?: string
+        }
+      | { kind: 'rename'; worktreeId: string; tabId: string; title: string }
+      | { kind: 'read-content'; worktreeId: string; tabId: string }
+      | { kind: 'focus'; worktreeId: string; tabId: string }
+  ): Promise<{ tabId: string; content?: string; modelRevision?: string }>
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>

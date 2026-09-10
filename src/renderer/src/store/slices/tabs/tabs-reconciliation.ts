@@ -12,6 +12,9 @@ import {
   writeBatchedWorkspaceRecordEntry,
   type WorktreeTabModelReconciliationBatch
 } from './tabs-reconciliation-batch'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { isWorkspaceKey, worktreeWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { normalizeWorkspaceMaestroTabs } from '../../../../../shared/workspace-session-salvage'
 
 export type WorktreeTabModelReconciliation = {
   patch: Partial<AppState>
@@ -27,8 +30,17 @@ export type WorktreeTabModelReconciliation = {
 export function projectWorktreeTabModelReconciliation(
   state: AppState,
   worktreeId: string,
-  batch?: WorktreeTabModelReconciliationBatch
+  batch?: WorktreeTabModelReconciliationBatch,
+  executionHostId?: string
 ): WorktreeTabModelReconciliation {
+  const workspaceKey = isWorkspaceKey(worktreeId) ? worktreeId : worktreeWorkspaceKey(worktreeId)
+  const expectedHost =
+    executionHostId ??
+    (state.activeWorkspaceKey === workspaceKey ? state.activeWorkspaceExecutionHostId : null) ??
+    state.unifiedTabsByWorktree[worktreeId]?.find(
+      (tab) => tab.contentType === 'maestro' && tab.maestroWorkspaceKey === workspaceKey
+    )?.maestroExecutionHostId ??
+    'local'
   const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const groups = state.groupsByWorktree[worktreeId] ?? []
   const runtimeTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
@@ -114,6 +126,9 @@ export function projectWorktreeTabModelReconciliation(
   const liveBrowserIds = new Set(
     (state.browserTabsByWorktree[worktreeId] ?? []).map((browserTab) => browserTab.id)
   )
+  const expectedMaestroWorkspaceKey = isWorkspaceKey(worktreeId)
+    ? worktreeId
+    : worktreeWorkspaceKey(worktreeId)
 
   const isRenderableTab = (tab: Tab): boolean => {
     if (tab.contentType === 'terminal') {
@@ -124,6 +139,11 @@ export function projectWorktreeTabModelReconciliation(
     }
     if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
       return true
+    }
+    if (tab.contentType === 'maestro') {
+      return Boolean(
+        tab.maestroExecutionHostId && tab.maestroWorkspaceKey === expectedMaestroWorkspaceKey
+      )
     }
     return liveEditorIds.has(tab.entityId)
   }
@@ -256,12 +276,40 @@ export function projectWorktreeTabModelReconciliation(
     }
   }
 
+  if (worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
+    const projected = { ...state, ...patch } as AppState
+    const projectedTabs = projected.unifiedTabsByWorktree[worktreeId] ?? []
+    const projectedGroups = projected.groupsByWorktree[worktreeId] ?? []
+    const maestroTabs = projectedTabs.filter((tab) => tab.contentType === 'maestro')
+    const maestro = maestroTabs[0]
+    const primaryGroup = projectedGroups[0]
+    const normalized =
+      maestroTabs.length === 1 &&
+      maestro?.systemRole === 'workspace-maestro' &&
+      maestro.isPinned &&
+      maestro.groupId === primaryGroup?.id &&
+      maestro.maestroExecutionHostId === expectedHost &&
+      maestro.maestroWorkspaceKey === workspaceKey &&
+      primaryGroup?.tabOrder[0] === maestro.id
+        ? null
+        : normalizeWorkspaceMaestroTabs(projected, new Set([worktreeId]), {
+            key: workspaceKey,
+            executionHostId: expectedHost
+          })
+    if (normalized) {
+      patch = { ...patch, ...normalized }
+    }
+  }
+  const finalTabs = patch.unifiedTabsByWorktree?.[worktreeId] ?? validTabs
+  const finalGroups = patch.groupsByWorktree?.[worktreeId] ?? nextGroups
+  const finalActiveGroupId = patch.activeGroupIdByWorktree?.[worktreeId] ?? nextActiveGroupId
   return {
     patch,
-    renderableTabCount: validTabs.length,
+    // The fixed Maestro tab is chrome, not proof that requested terminal/editor work exists.
+    renderableTabCount: finalTabs.filter((tab) => tab.contentType !== 'maestro').length,
     activeRenderableTabId:
-      nextGroups.find((group) => group.id === nextActiveGroupId)?.activeTabId ??
-      nextGroups.find((group) => group.activeTabId !== null)?.activeTabId ??
+      finalGroups.find((group) => group.id === finalActiveGroupId)?.activeTabId ??
+      finalGroups.find((group) => group.activeTabId !== null)?.activeTabId ??
       null
   }
 }

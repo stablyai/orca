@@ -83,7 +83,7 @@ function selectionState(tab: Tab | null): SelectionState {
         mode: 'edit'
       }
     ]
-  }
+  } as unknown as SelectionState
 }
 
 function activate(state: SelectionState) {

@@ -1,47 +1,10 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { ORCHESTRATION_RUN_COMMAND_SPECS } from './orchestration-run-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
-  {
-    path: ['orchestration', 'run-create'],
-    summary: 'Create and bind a lightweight orchestration Run',
-    usage:
-      'orca orchestration run-create --objective <text> [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'retry-request'],
-    notes: [
-      'A Run is a namespace and home inbox. It never schedules or places workers.',
-      '--retry-request is only for exact recovery after an unknown mutation result.'
-    ]
-  },
-  {
-    path: ['orchestration', 'run-use'],
-    summary: 'Bind this coordinator terminal to an existing Run',
-    usage:
-      'orca orchestration run-use --id <run_id> [--from <handle>] [--takeover-legacy] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'from', 'takeover-legacy', 'retry-request'],
-    notes: [
-      '--takeover-legacy must run in the live coordinator agent terminal it binds; it preserves existing worker assignments.'
-    ]
-  },
-  {
-    path: ['orchestration', 'run-current'],
-    summary: 'Show the Run bound to this coordinator terminal',
-    usage: 'orca orchestration run-current [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'from']
-  },
-  {
-    path: ['orchestration', 'run-list'],
-    summary: 'List lightweight orchestration Runs',
-    usage: 'orca orchestration run-list [--limit <n>] [--cursor <cursor>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'cursor']
-  },
-  {
-    path: ['orchestration', 'run-show'],
-    summary: 'Show one lightweight orchestration Run',
-    usage: 'orca orchestration run-show --id <run_id> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id']
-  },
+  ...ORCHESTRATION_RUN_COMMAND_SPECS,
   {
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',
@@ -112,8 +75,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Only --peek and --all filter their rows.',
-      '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.'
+      'Text output includes every returned body and structured payload. --format uses the same local rendering and never writes to another terminal.',
+      'A bound Run replays the same Delivery until --ack; process every message before acknowledging. Newer questions or high-priority mail can appear separately as pending attention and are not acknowledged with the replayed Delivery.',
+      '--peek, --all, and inbox are non-consuming. read=0 or a null delivery timestamp is not proof that a message was never presented.'
     ]
   },
   {
@@ -126,17 +90,20 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['orchestration', 'inbox'],
     summary: 'Show messages across (or for) recipients',
-    usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full']
+    usage:
+      'orca orchestration inbox [--limit <n>] [--terminal <handle> | --run <run_id>] [--full] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'run', 'full'],
+    notes: ['Inbox inspection is non-consuming; use check --ack to acknowledge a Delivery.']
   },
   {
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
     usage:
-      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration task-create (--spec <text> | --spec-file <path|->) [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'spec',
+      'spec-file',
       'task-title',
       'display-name',
       'deps',
@@ -144,6 +111,10 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'run',
       'from',
       'retry-request'
+    ],
+    examples: [
+      'orca orchestration task-create --spec "Review the bounded change" --json',
+      "orca orchestration task-create --spec-file - --json <<'TASK'\nReview the bounded change without shell interpolation.\nTASK"
     ]
   },
   {

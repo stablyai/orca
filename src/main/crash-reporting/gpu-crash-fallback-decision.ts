@@ -5,7 +5,9 @@ export type GpuCrashFallbackOptions = {
   threshold: number
 }
 
-const GPU_FALLBACK_CRASH_REASONS = new Set(['abnormal-exit', 'crashed', 'launch-failed'])
+// Why exported: the Linux dev watcher (startup/linux-dev-gpu-fallback) gates on the same
+// crash-shaped reasons without inheriting the win32-only platform scope below.
+export const GPU_FALLBACK_CRASH_REASONS = new Set(['abnormal-exit', 'crashed', 'launch-failed'])
 
 // Why: on old/flaky GPU drivers the GPU child process crashes (STATUS_BREAKPOINT
 // / ANGLE-D3D init failure) repeatedly - Windows clusters F0BDNADU79Q and

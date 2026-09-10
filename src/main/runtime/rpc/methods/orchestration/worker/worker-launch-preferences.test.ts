@@ -4,33 +4,52 @@ import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../.
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   assertWorkerLaunchPreferencesRuntimeSupported,
+  attachWorkerLaunchExecutable,
   createPendingWorkerLaunchReceipt,
+  createWorkerLaunchReceipt,
   resolveFederatedWorkerLaunchReceipt,
   resolveWorkerLaunchPreferences
 } from './worker-launch-preferences'
 import { WorkerStartParams } from './worker-start-schema'
+import { boundedRedactedDiagnostic } from './worker-start-receipt'
 
 describe('orchestration worker launch preferences', () => {
   it('passes an opaque Claude model and portable effort through the shared catalog', () => {
-    expect(
-      resolveWorkerLaunchPreferences({
+    const resolved = resolveWorkerLaunchPreferences({
+      agent: 'claude',
+      model: 'aws-bedrock-opus-5',
+      effort: 'high'
+    })
+
+    expect(resolved.preferences).toMatchObject({ model: 'aws-bedrock-opus-5', effort: 'high' })
+    expect(resolved.receipt).toMatchObject({
+      requested: {
         agent: 'claude',
         model: 'aws-bedrock-opus-5',
-        effort: 'high'
-      })
-    ).toEqual({
-      preferences: { model: 'aws-bedrock-opus-5', effort: 'high' },
-      receipt: {
-        requested: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' },
-        effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
+        effort: 'high',
+        permissionMode: 'yolo',
+        executable: null,
+        serviceTier: null
+      },
+      effective: {
+        agent: 'claude',
+        model: 'aws-bedrock-opus-5',
+        effort: 'high',
+        permissionMode: 'yolo',
+        executable: null,
+        serviceTier: null
       }
     })
+    expect(resolved.receipt.effective?.environmentPolicy).toMatch(/^sha256:[a-f0-9]{64}$/)
   })
 
   it('does not invent an effort when only a model is requested', () => {
-    expect(
-      resolveWorkerLaunchPreferences({ agent: 'codex', model: 'gpt-5.6-sol' }).preferences
-    ).toEqual({ model: 'gpt-5.6-sol' })
+    const preferences = resolveWorkerLaunchPreferences({
+      agent: 'codex',
+      model: 'gpt-5.6-sol'
+    }).preferences
+    expect(preferences).toMatchObject({ model: 'gpt-5.6-sol', serviceTier: 'default' })
+    expect(preferences).not.toHaveProperty('effort')
   })
 
   it.each([
@@ -95,7 +114,7 @@ describe('orchestration worker launch preferences', () => {
     for (const effortValue of accepted) {
       expect(
         resolveWorkerLaunchPreferences({ agent: 'codex', model, effort: effortValue }).preferences
-      ).toEqual({ model, effort: effortValue })
+      ).toMatchObject({ model, effort: effortValue })
     }
     for (const effortValue of rejected) {
       expect(() =>
@@ -175,17 +194,14 @@ describe('orchestration worker launch preferences', () => {
     ).toBe(true)
   })
 
-  it('uses the requested launch receipt when an older worker omits it', () => {
+  it('leaves the effective profile unknown when an older worker omits it', () => {
     const requested = createPendingWorkerLaunchReceipt({
       agent: 'codex',
       model: 'gpt-5.6-sol',
       effort: 'high'
     })
 
-    expect(resolveFederatedWorkerLaunchReceipt(undefined, requested, true)).toEqual({
-      requested: requested.requested,
-      effective: requested.requested
-    })
+    expect(resolveFederatedWorkerLaunchReceipt(undefined, requested, true)).toBe(requested)
     expect(resolveFederatedWorkerLaunchReceipt(undefined, requested, false)).toBe(requested)
   })
 
@@ -224,5 +240,67 @@ describe('orchestration worker launch preferences', () => {
     expect(
       WorkerStartParams.safeParse({ spec: 'new work', agent: 'codex', from: 'term_coord' }).success
     ).toBe(true)
+  })
+})
+
+describe('launch receipt executable: requested vs effective', () => {
+  it('attaches the resolved executable to effective only, never requested', () => {
+    const receipt = createWorkerLaunchReceipt({ agent: 'codex' })
+
+    attachWorkerLaunchExecutable(receipt, '/home/user/.orca-relay/bin/orca')
+
+    expect(receipt.requested.executable).toBeNull()
+    expect(receipt.effective?.executable).toBe('/home/user/.orca-relay/bin/orca')
+  })
+})
+
+describe('boundedRedactedDiagnostic', () => {
+  it('redacts a key=value style secret while keeping the key name', () => {
+    expect(boundedRedactedDiagnostic('login failed: token=abc123def456')).toBe(
+      'login failed: token=[redacted]'
+    )
+  })
+
+  it('redacts a Bearer authorization header', () => {
+    expect(
+      boundedRedactedDiagnostic('rejected: Authorization: Bearer sk-abcdefghij1234567890')
+    ).toBe('rejected: Authorization: Bearer [redacted]')
+  })
+
+  it('redacts a GitHub-style installation token with no key= prefix', () => {
+    expect(boundedRedactedDiagnostic('push failed using ghp_1234567890abcdefghij')).toBe(
+      'push failed using [redacted]'
+    )
+  })
+
+  it('redacts a long base64-looking blob', () => {
+    const blob = 'A'.repeat(48)
+    expect(boundedRedactedDiagnostic(`credential file: ${blob}`)).toBe(
+      'credential file: [redacted]'
+    )
+  })
+
+  it('never leaves a numeric match offset in place of the redaction', () => {
+    // Why: the regression this guards — a replace callback that mistakes the
+    // numeric match-offset argument for a capture group renders "37[redacted]"
+    // instead of "[redacted]" for patterns with no capture group.
+    const result = boundedRedactedDiagnostic('Bearer sk-abcdefghij1234567890 at offset 10')
+    expect(result).not.toMatch(/\d+\[redacted\]/)
+    expect(result).toContain('Bearer [redacted]')
+  })
+
+  it('truncates and bounds an overlong message', () => {
+    // Why: spaces every 4 chars keep this well clear of the 40-char
+    // unbroken-run threshold the base64-blob redaction rule matches on.
+    const long = 'word '.repeat(600)
+    const result = boundedRedactedDiagnostic(long)
+    expect(result.length).toBeLessThan(long.length)
+    expect(result).toContain('[truncated 1000 chars]')
+  })
+
+  it('is idempotent — redacting an already-redacted message changes nothing further', () => {
+    const once = boundedRedactedDiagnostic('token=abc123def456 and Bearer sk-oldpeerkey1234567890')
+    const twice = boundedRedactedDiagnostic(once)
+    expect(twice).toBe(once)
   })
 })

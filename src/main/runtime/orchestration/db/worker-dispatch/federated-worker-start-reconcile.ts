@@ -1,7 +1,9 @@
 import type { WorkerDispatchRow } from '../../types'
+import { ORCHESTRATION_FEDERATION_ATTEMPT_BOUND_WORKER_LEASE_PROTOCOL_VERSION } from '../../../../../shared/protocol-version'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
+import { bindFederatedDispatchResources } from '../federation/federated-dispatch-store'
 import {
   beginLifecycleWriteTransaction,
   commitLifecycleWriteTransaction,
@@ -18,6 +20,9 @@ export function reconcileFederatedWorkerStart(
     lastError?: string | null
     worktreeId?: string | null
     terminalHandle?: string | null
+    remoteRuntimeEpoch?: string | null
+    paneKey?: string | null
+    processIncarnation?: string | null
     setupState?: string
     effects?: unknown[]
     residualResources?: unknown[]
@@ -33,12 +38,37 @@ export function reconcileFederatedWorkerStart(
         `Federated Dispatch ${params.dispatchId} was not found.`
       )
     }
-    if (!['starting', 'start_unknown'].includes(worker.state)) {
+    const canRecoverReadyBinding = params.state === 'ready' && worker.state === 'ready'
+    if (!['starting', 'start_unknown'].includes(worker.state) && !canRecoverReadyBinding) {
       commitLifecycleWriteTransaction(this.db, transaction)
       return worker
     }
 
     if (params.state === 'ready') {
+      const federated = this.getFederatedDispatch(params.dispatchId)
+      const requiresExactProcessIdentity =
+        (federated?.protocol_version ?? 0) >=
+        ORCHESTRATION_FEDERATION_ATTEMPT_BOUND_WORKER_LEASE_PROTOCOL_VERSION
+      if (
+        !params.remoteRuntimeEpoch ||
+        !params.worktreeId ||
+        !params.terminalHandle ||
+        (requiresExactProcessIdentity && (!params.paneKey || !params.processIncarnation))
+      ) {
+        throw new OrchestrationError(
+          'resource_server_mismatch',
+          `Federated Dispatch ${params.dispatchId} cannot become ready without exact process identity.`
+        )
+      }
+      bindFederatedDispatchResources(this, {
+        dispatchId: params.dispatchId,
+        remoteRuntimeEpoch: params.remoteRuntimeEpoch,
+        worktreeId: params.worktreeId,
+        terminalHandle: params.terminalHandle,
+        ...(params.paneKey && params.processIncarnation
+          ? { paneKey: params.paneKey, processIncarnation: params.processIncarnation }
+          : {})
+      })
       transitionLifecycleWithDb(this.db, {
         entity: 'worker',
         id: params.dispatchId,

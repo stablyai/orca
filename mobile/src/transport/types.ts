@@ -39,6 +39,18 @@ export type RpcResponse = RpcSuccess | RpcFailure
 
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
+export const PAIRING_STAGES = [
+  'bundle_readiness',
+  'transport_connection',
+  'host_authentication',
+  'relay_reconciliation',
+  'profile_persistence',
+  'client_refresh',
+  'route_commit'
+] as const
+
+export type PairingStage = (typeof PAIRING_STAGES)[number]
+
 export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
 
 export type ConnectionDiagnosticCode =
@@ -68,6 +80,7 @@ export type ConnectionLogEntry = {
   detail?: string
   code?: ConnectionDiagnosticCode
   path?: MobileConnectionDiagnosticPath
+  pairingStage?: PairingStage
 }
 
 export type ConnectionLogSink = (entry: ConnectionLogEntry) => void

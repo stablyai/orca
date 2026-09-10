@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
-import { selectExactWorkerProviderSession } from './worker-provider-session'
+import { OrchestrationNestedAgentActivityListSchema } from '../../../shared/orchestration-nested-agent-activity'
+import {
+  projectNestedAgentActivities,
+  readExactWorkerProviderObservation,
+  selectExactWorkerProviderSession
+} from './worker-provider-session'
 
 function status(
   paneKey: string,
@@ -42,7 +47,9 @@ describe('exact worker provider session selection', () => {
       connectionId: 'ssh-windows',
       agent: 'codex',
       providerSession: { key: 'session_id', id: 'exact' },
-      observedAt: 250
+      observedAt: 250,
+      statusObservedAt: 250,
+      subagents: []
     })
   })
 
@@ -120,6 +127,74 @@ describe('exact worker provider session selection', () => {
         launchToken: undefined,
         observedAfter: 150,
         statuses: [status('tab:worker', 'wrong-distro', { connectionId: 'wsl:Debian' })]
+      })
+    ).toBeNull()
+  })
+
+  it('carries runtime-issued actor lineage and projects bounded parent-owned children', () => {
+    const selected = selectExactWorkerProviderSession({
+      paneKey: 'tab:worker',
+      processIncarnation: 'pty:incarnation',
+      connectionId: null,
+      launchToken: undefined,
+      observedAfter: 150,
+      statuses: [
+        status('tab:worker', 'exact', {
+          receivedAt: 250,
+          actorAttestation: {
+            authorityId: 'agent-hook-main:test',
+            incarnation: 1,
+            revision: 7,
+            observedAt: 250,
+            provider: 'codex',
+            role: 'lead',
+            eventName: 'PreToolUse',
+            providerSessionId: 'exact',
+            toolUseId: 'tool-7'
+          },
+          subagents: [
+            {
+              id: 'child-1',
+              agentType: 'reviewer',
+              model: 'gpt-5',
+              description: 'Reviews settlement boundaries.',
+              state: 'working',
+              startedAt: 200
+            }
+          ]
+        })
+      ]
+    })
+
+    expect(readExactWorkerProviderObservation(selected)).toMatchObject({
+      actorAttestation: { role: 'lead', eventName: 'PreToolUse' },
+      subagents: [{ id: 'child-1', state: 'working' }]
+    })
+    const activities = projectNestedAgentActivities({
+      dispatchId: 'ctx-parent',
+      session: selected!
+    })
+    expect(OrchestrationNestedAgentActivityListSchema.parse(activities)).toEqual(activities)
+    expect(activities).toEqual([
+      expect.objectContaining({
+        parent_dispatch_id: 'ctx-parent',
+        parent_provider_session_id: 'exact',
+        provider_child_id: 'child-1',
+        provider: 'codex',
+        type: 'reviewer',
+        state: 'running'
+      })
+    ])
+  })
+
+  it('does not invent actor authority for legacy exact-session values', () => {
+    expect(
+      readExactWorkerProviderObservation({
+        paneKey: 'tab:worker',
+        processIncarnation: 'pty:incarnation',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'legacy' },
+        observedAt: 250
       })
     ).toBeNull()
   })

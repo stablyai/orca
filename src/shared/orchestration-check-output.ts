@@ -34,6 +34,8 @@ export type LegacyCompatibilityResult = {
 export type OrchestrationCheckOutput = {
   messages: OrchestrationMessageSummary[]
   count: number
+  pendingAttentionMessages?: OrchestrationMessageSummary[]
+  pendingAttentionCount?: number
   formatted?: string
   deliveryId?: string | null
   timedOut?: boolean
@@ -81,7 +83,7 @@ export function formatOrchestrationCheckText(
     : ''
   const deliveryNotice = formatCurrentDeliveryNotice(prepared.legacyCompatibility?.currentDelivery)
   if (prepared.formatted) {
-    return `${legacyHeader}${prepared.formatted}${deliveryNotice}`
+    return `${legacyHeader}${prepared.formatted}${formatPendingAttention(prepared)}${deliveryNotice}`
   }
   if (prepared.count === 0) {
     if (prepared.timedOut) {
@@ -95,17 +97,24 @@ export function formatOrchestrationCheckText(
     }
     return `${legacyHeader}No messages.${deliveryNotice}`
   }
-  const rendered = prepared.messages
-    .map(
-      (message) =>
-        `${message.id}${formatMessageReadOnlyTag(
-          message,
-          compatibilityActive
-        )} [${message.type ?? 'status'}] from=${message.from_handle} "${message.subject}"`
-    )
-    .join('\n')
+  const rendered = formatLegacyAwareCheckMessages(
+    prepared.messages,
+    checkedTerminal,
+    compatibilityActive
+  )
   const output = prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n${rendered}` : rendered
-  return `${legacyHeader}${output}${deliveryNotice}`
+  return `${legacyHeader}${output}${formatPendingAttention(prepared)}${deliveryNotice}`
+}
+
+function formatPendingAttention(result: OrchestrationCheckOutput): string {
+  const messages = result.pendingAttentionMessages ?? []
+  if (messages.length === 0) {
+    return ''
+  }
+  return `\n\n[NEW RUN ATTENTION — NOT ACKNOWLEDGED BY THE DELIVERY ABOVE]\n${formatLegacyAwareCheckMessages(
+    messages,
+    messages[0]?.to_handle ?? 'unknown'
+  )}`
 }
 
 export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutput>(

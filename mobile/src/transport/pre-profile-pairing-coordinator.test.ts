@@ -37,11 +37,11 @@ function success(result: unknown): RpcResponse {
   return { id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
-function failure(code: string): RpcResponse {
+function failure(code: string, message = code): RpcResponse {
   return {
     id: 'rpc-1',
     ok: false,
-    error: { code, message: code },
+    error: { code, message },
     _meta: { runtimeId: 'runtime-1' }
   }
 }
@@ -128,6 +128,17 @@ function dependencies(client: RpcClient, events: string[]) {
   }
 }
 
+function clientCommit(events?: string[]) {
+  return {
+    refreshClient: vi.fn(async () => {
+      events?.push('refresh-client')
+    }),
+    commitRoute: vi.fn(async () => {
+      events?.push('route-commit')
+    })
+  }
+}
+
 describe('pre-profile pairing coordinator', () => {
   it('chooses direct when both post-E2EE status successes settle in the same turn', async () => {
     let resolveDirect!: (response: RpcResponse) => void
@@ -164,6 +175,7 @@ describe('pre-profile pairing coordinator', () => {
     const attempt = startPreProfilePairing({
       offer: directOffer,
       timeoutMs: 5_000,
+      clientCommit: clientCommit(),
       dependencies: deps
     })
 
@@ -194,6 +206,7 @@ describe('pre-profile pairing coordinator', () => {
     const attempt = startPreProfilePairing({
       offer: directOffer,
       timeoutMs: 5_000,
+      clientCommit: clientCommit(),
       dependencies: deps
     })
 
@@ -258,6 +271,7 @@ describe('pre-profile pairing coordinator', () => {
     const attempt = startPreProfilePairing({
       offer: relayOffer,
       timeoutMs: 5_000,
+      clientCommit: clientCommit(),
       dependencies: deps
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
@@ -300,6 +314,7 @@ describe('pre-profile pairing coordinator', () => {
     const attempt = startPreProfilePairing({
       offer: relayOffer,
       timeoutMs: 5_000,
+      clientCommit: clientCommit(),
       dependencies: deps
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
@@ -330,6 +345,7 @@ describe('pre-profile pairing coordinator', () => {
     const attempt = startPreProfilePairing({
       offer: relayOffer,
       timeoutMs: 5_000,
+      clientCommit: clientCommit(),
       dependencies: deps
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
@@ -370,18 +386,32 @@ describe('pre-profile pairing coordinator', () => {
     const attempt = startPreProfilePairing({
       offer: relayOffer,
       timeoutMs: 5_000,
+      clientCommit: clientCommit(),
       connectOptions: { onLog: (entry) => entries.push(entry) },
       dependencies: deps
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
-    expect(entries.map((entry) => entry.message)).toEqual([
+    const transportEntries = entries.filter((entry) => entry.pairingStage === undefined)
+    expect(transportEntries.map((entry) => entry.message)).toEqual([
       'Relay: pairing candidate started',
       'Relay: dialing cell',
       'Pairing path selected'
     ])
-    expect(entries[0]!.detail).toBe('relay-c1.onorca.dev')
-    expect(entries[2]).toMatchObject({ level: 'success', detail: 'winner: relay' })
+    expect(transportEntries[0]!.detail).toBe('relay-c1.onorca.dev')
+    expect(transportEntries[2]).toMatchObject({ level: 'success', detail: 'winner: relay' })
+    expect(
+      entries.filter((entry) => entry.level === 'success').map((entry) => entry.pairingStage)
+    ).toEqual([
+      'bundle_readiness',
+      'transport_connection',
+      'host_authentication',
+      undefined,
+      'relay_reconciliation',
+      'profile_persistence',
+      'client_refresh',
+      'route_commit'
+    ])
   })
 
   it('attributes each racing candidate so direct retries cannot read as relay', async () => {
@@ -424,12 +454,14 @@ describe('pre-profile pairing coordinator', () => {
     const attempt = startPreProfilePairing({
       offer: relayOffer,
       timeoutMs: 5_000,
+      clientCommit: clientCommit(),
       connectOptions: { onLog: (entry) => entries.push(entry) },
       dependencies: deps
     })
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
-    expect(entries.map((entry) => entry.message)).toEqual([
+    const transportEntries = entries.filter((entry) => entry.pairingStage === undefined)
+    expect(transportEntries.map((entry) => entry.message)).toEqual([
       'Direct: Reconnecting (attempt 2)',
       'Relay: pairing candidate started',
       // Already self-labelled: attribution must not stutter into 'Relay: Relay:'.
@@ -437,7 +469,118 @@ describe('pre-profile pairing coordinator', () => {
       'Relay: Cell socket open',
       'Pairing path selected'
     ])
-    expect(entries[0]).toMatchObject({ level: 'warn', detail: '10.5.0.2:6768' })
+    expect(transportEntries[0]).toMatchObject({ level: 'warn', detail: '10.5.0.2:6768' })
+  })
+
+  it('keeps web pairing pending until persistence, refresh, and route commit finish', async () => {
+    const events: string[] = []
+    const client = fakeClient([success({ version: '1.0.0' })])
+    const deps = dependencies(client, events)
+    deps.platform = 'web'
+    let releaseRoute: () => void = () => {}
+    const routeCommit = new Promise<void>((resolve) => {
+      releaseRoute = resolve
+    })
+    const commit = clientCommit(events)
+    commit.commitRoute.mockImplementation(async () => {
+      events.push('route-commit')
+      await routeCommit
+    })
+
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      clientCommit: commit,
+      dependencies: deps
+    })
+    let settled = false
+    void attempt.result.finally(() => {
+      settled = true
+    })
+
+    await vi.waitFor(() => expect(commit.commitRoute).toHaveBeenCalledWith(`host-${now}`))
+    expect(settled).toBe(false)
+    expect(deps.saveJournal).not.toHaveBeenCalled()
+    expect(deps.connectRelay).not.toHaveBeenCalled()
+    expect(events).toEqual(['connect', 'save-host', 'refresh-client', 'route-commit'])
+
+    releaseRoute()
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+  })
+
+  it('lets route navigation dispose its source attempt without suppressing the commit', async () => {
+    const client = fakeClient([success({ version: '1.0.0' })])
+    const deps = dependencies(client, [])
+    let attempt!: ReturnType<typeof startPreProfilePairing>
+    const commit = clientCommit()
+    commit.commitRoute.mockImplementation(() => {
+      attempt.dispose()
+    })
+
+    attempt = startPreProfilePairing({
+      offer: directOffer,
+      timeoutMs: 5_000,
+      clientCommit: commit,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(commit.commitRoute).toHaveBeenCalledOnce()
+    expect(client.close).toHaveBeenCalledOnce()
+  })
+
+  it('reports a server no-result code at host authentication without leaking credentials', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const client = fakeClient([
+      failure('runtime_error', 'UnexpectedServerData: No returned query result; deviceToken=secret')
+    ])
+    const deps = dependencies(client, [])
+    const attempt = startPreProfilePairing({
+      offer: directOffer,
+      timeoutMs: 5_000,
+      clientCommit: clientCommit(),
+      connectOptions: { onLog: (entry) => entries.push(entry) },
+      dependencies: deps
+    })
+
+    await expect(attempt.result).rejects.toMatchObject({
+      stage: 'host_authentication',
+      originalCode: 'UnexpectedServerData'
+    })
+    expect(entries.at(-1)).toMatchObject({
+      level: 'error',
+      pairingStage: 'host_authentication',
+      message: 'Host authentication failed'
+    })
+    expect(entries.at(-1)?.detail).toContain('deviceToken=[redacted]')
+    expect(entries.at(-1)?.detail).not.toContain('secret')
+  })
+
+  it('reports Java I/O transport failure and closes the physical client once', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const client = fakeClient([])
+    const javaIoError = new Error('java.io.IOException: failed to reach Metro')
+    javaIoError.name = 'UnexpectedServerData'
+    ;(client.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(javaIoError)
+    const deps = dependencies(client, [])
+    const attempt = startPreProfilePairing({
+      offer: directOffer,
+      timeoutMs: 5_000,
+      clientCommit: clientCommit(),
+      connectOptions: { onLog: (entry) => entries.push(entry) },
+      dependencies: deps
+    })
+
+    await expect(attempt.result).rejects.toMatchObject({
+      stage: 'transport_connection',
+      originalCode: 'UnexpectedServerData'
+    })
+    expect(entries.at(-1)).toMatchObject({
+      level: 'error',
+      pairingStage: 'transport_connection'
+    })
+    expect(entries.at(-1)?.detail).toContain('java.io.IOException')
+    expect(client.close).toHaveBeenCalledOnce()
   })
 
   it('cancels the disposable physical client without publishing a host', async () => {
@@ -451,6 +594,7 @@ describe('pre-profile pairing coordinator', () => {
     const attempt = startPreProfilePairing({
       offer: directOffer,
       timeoutMs: 5_000,
+      clientCommit: clientCommit(),
       dependencies: deps
     })
     await vi.waitFor(() => expect(client.sendRequest).toHaveBeenCalledWith('status.get'))

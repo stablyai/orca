@@ -44,7 +44,7 @@ export function findTransferableWorkerTerminalResource(
   return exact.find(
     (candidate) =>
       candidate.ownership_state === 'owned' &&
-      ['not_requested', 'retained'].includes(candidate.release_state) &&
+      candidate.release_state === 'not_requested' &&
       ['succeeded', 'failed', 'stopped', 'abandoned'].includes(
         this.getWorkerDispatch(candidate.owner_dispatch_id)?.state ??
           this.getRemoteDispatchAttachment(candidate.owner_dispatch_id)?.state ??

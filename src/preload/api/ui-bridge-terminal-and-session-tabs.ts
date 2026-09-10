@@ -8,6 +8,8 @@ import type {
 import type { TuiAgent } from '../../shared/tui-agent'
 import type {
   RuntimeMobileSessionTabMove,
+  RuntimeMaestroWorkspaceTabCommand,
+  RuntimeMaestroWorkspaceTabCommandResponse,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalPresentation
 } from '../../shared/runtime-types'
@@ -191,6 +193,21 @@ export const uiTerminalAndSessionTabsApi = {
     ) => callback(data)
     ipcRenderer.on('ui:moveSessionTab', listener)
     return () => ipcRenderer.removeListener('ui:moveSessionTab', listener)
+  },
+  onMaestroWorkspaceTabCommand: (
+    callback: (command: RuntimeMaestroWorkspaceTabCommand) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      command: RuntimeMaestroWorkspaceTabCommand
+    ): void => callback(command)
+    ipcRenderer.on('ui:maestroWorkspaceTabCommand', listener)
+    return () => ipcRenderer.removeListener('ui:maestroWorkspaceTabCommand', listener)
+  },
+  respondMaestroWorkspaceTabCommand: (
+    response: RuntimeMaestroWorkspaceTabCommandResponse
+  ): void => {
+    ipcRenderer.send('ui:maestroWorkspaceTabCommandResponse', response)
   },
   onOpenFileFromMobile: (
     callback: (data: {

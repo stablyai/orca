@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../shared/stable-pane-id'
+
 import {
   CANARY_INCARNATION_ID,
   CANARY_LEAF_ID,
@@ -21,13 +22,16 @@ import {
   WORKTREE_ID
 } from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 
+
 describe('terminal close and handle incarnation continuity', () => {
   it('delegates a stale spawn-time tab through its current PTY-backed renderer surface', async () => {
     const harness = await createStaleTabCloseHarness()
     const { terminal } = harness
 
+
     await expect(harness.runtime.closeTerminalTab(terminal.handle)).resolves.toMatchObject({
       handle: terminal.handle,
+
       tabId: TAB_ID,
       closeMode: 'tab'
     })

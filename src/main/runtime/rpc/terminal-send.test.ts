@@ -16,6 +16,10 @@ import {
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    getOrchestrationDb: () =>
+      ({ getMaestroTerminalLeaseByHandle: () => undefined }) as unknown as ReturnType<
+        OrcaRuntimeService['getOrchestrationDb']
+      >,
     beginMobileInputFloor: vi.fn((ptyId: string, clientId: string) => ({
       commit: async () => {
         await overrides.mobileTookFloor?.(ptyId, clientId)
@@ -31,9 +35,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('terminal send RPC', () => {
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  afterEach(() => vi.useRealTimers())
 
   it('reports whether a terminal handle is running a recognized agent', async () => {
     const runtime = stubRuntime({
@@ -108,6 +110,33 @@ describe('terminal send RPC', () => {
     }
     expect(response.error.message).toContain('terminal_handle_stale')
     expect(runtime.sendTerminal).not.toHaveBeenCalled()
+  })
+
+  it('rejects split text and later Enter without correlated lease input', async () => {
+    const sendTerminal = vi.fn()
+    const runtime = stubRuntime({
+      getOrchestrationDb: () =>
+        ({
+          getMaestroTerminalLeaseByHandle: () => ({
+            id: 'lease-1',
+            executionHostId: 'local',
+            workspaceKey: 'folder:one',
+            terminalHandle: 'terminal-1'
+          })
+        }) as unknown as ReturnType<OrcaRuntimeService['getOrchestrationDb']>,
+      sendTerminal
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const responses = await Promise.all(
+      [{ text: 'review' }, { enter: true }].map((input) =>
+        dispatcher.dispatch(makeRequest('terminal.send', { terminal: 'terminal-1', ...input }))
+      )
+    )
+    expect(
+      responses.every((response) => !response.ok && response.error.code === 'invalid_argument')
+    ).toBe(true)
+    expect(sendTerminal).not.toHaveBeenCalled()
   })
 
   it('drops desktop input while a mobile client owns the terminal floor', async () => {

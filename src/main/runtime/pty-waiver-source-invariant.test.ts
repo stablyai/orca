@@ -48,20 +48,28 @@ describe('the PTY-stop waiver is never derived from `force`', () => {
       [...source.matchAll(/stopPtysForDestructiveWorktreeRemoval\(/g)].length - 1
     expect(teardownCallSites).toBeGreaterThan(0)
 
+    // Why: counting is not the point — no teardown call site may omit the waiver.
+    // Assert it directly at each site so extracting a second helper stays legal while
+    // a dropped waiver still fails.
+    const sitesMissingWaiver = [
+      ...source.matchAll(/stopPtysForDestructiveWorktreeRemoval\(([\s\S]{0,600}?)\n\s*\)/g)
+    ]
+      .slice(1)
+      .filter(([, callArgs]) => !/allowUnverifiedStop:/.test(callArgs))
+    expect(sitesMissingWaiver).toHaveLength(0)
+
     const values = [...source.matchAll(/allowUnverifiedStop:\s*([^,\n}]+)/g)].map((match) =>
       match[1].trim()
     )
-    // One per call site, plus the single conditional spread inside the helper.
-    expect(values).toHaveLength(teardownCallSites + 1)
+    expect(values.length).toBeGreaterThanOrEqual(teardownCallSites)
     for (const value of values) {
       expect(value).not.toMatch(/\bforce\b/)
       // Positive check too: "not literally force" would still admit any other
       // in-scope boolean being wired in by mistake.
       expect(value).toMatch(/^(?:args\.)?allowUnverifiedPtyStop$|^true$/)
     }
-    // Only the helper's spread may hardcode `true`; a call site doing so would
-    // waive unconditionally.
-    expect(values.filter((value) => value === 'true')).toHaveLength(1)
+    // Only a conditional spread may hardcode `true`; a call site doing so would
+    // waive unconditionally. Checked against the spread count derived below.
 
     // Why: checking the value alone is not enough — `...(force || allowUnverifiedStop
     // ? { allowUnverifiedStop: true } : {})` re-disables the gate on every confirmed
@@ -71,9 +79,12 @@ describe('the PTY-stop waiver is never derived from `force`', () => {
     const conditions = [
       ...source.matchAll(/\.\.\.\(([\s\S]{0,200}?)\?\s*\{\s*allowUnverifiedStop:/g)
     ].map((match) => match[1].trim())
-    expect(conditions).toHaveLength(1)
+    expect(conditions.length).toBeGreaterThan(0)
     for (const condition of conditions) {
       expect(condition).not.toMatch(/\bforce\b/i)
     }
+    // Every hardcoded `true` must be one of those guarded spreads, never a bare
+    // call-site argument.
+    expect(values.filter((value) => value === 'true')).toHaveLength(conditions.length)
   })
 })

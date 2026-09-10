@@ -5,6 +5,7 @@ import { RuntimeClientError } from '../../runtime-client'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import { readStructuredInput } from '../../structured-input'
 
 const TASK_STATUS_VALUES = [
   'pending',
@@ -18,12 +19,19 @@ const TASK_STATUS_VALUES = [
 export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
   'orchestration task-create': async ({ flags, client, cwd, json }) => {
     const callerTerminalHandle = await resolveCoordinatorTerminalHandle(flags, cwd, client)
+    const spec = await readStructuredInput({
+      flags,
+      cwd,
+      inlineFlag: 'spec',
+      fileFlag: 'spec-file',
+      label: 'Task spec'
+    })
     const result = await callOrchestrationMutation<{ task: { id: string; status: string } }>(
       client,
       flags,
       'orchestration.taskCreate',
       {
-        spec: getRequiredStringFlag(flags, 'spec'),
+        spec,
         taskTitle: getOptionalStringFlag(flags, 'task-title'),
         displayName: getOptionalStringFlag(flags, 'display-name'),
         deps: getOptionalStringFlag(flags, 'deps'),

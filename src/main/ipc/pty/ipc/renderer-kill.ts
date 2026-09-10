@@ -8,6 +8,7 @@ import { ptyOwnership } from '../provider/ownership-state'
 import { getProviderForPty, sshProviders, tryGetProviderForPty } from '../provider/registry'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { recordUndeliveredSshPtyKill } from '../runtime/undelivered-ssh-kill'
+import type { PtyProviderShutdownResult } from '../provider/shutdown-detect'
 
 export type PtyKillIpcDeps = {
   store?: Store
@@ -17,7 +18,7 @@ export type PtyKillIpcDeps = {
     provider: IPtyProvider,
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ) => Promise<boolean>
+  ) => Promise<PtyProviderShutdownResult>
   rememberSyntheticKillExit: (id: string) => void
   sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
 }
@@ -81,10 +82,20 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
     const shutdownProvider = provider ?? getProviderForPty(args.id)
     let providerExitObserved = false
     try {
-      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
+      const stopResult = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
         immediate: true,
         keepHistory: args.keepHistory ?? false
       })
+      providerExitObserved = stopResult.providerExitObserved
+      if (stopResult.receipt.verdict !== 'exited' || !stopResult.receipt.processTreeVerified) {
+        recordUndeliveredSshPtyKill({ store, ptyId: args.id, connectionId, reversible })
+        if (stopResult.receipt.verdict === 'live') {
+          runtime?.markPtyLivenessLive?.(args.id)
+        } else {
+          runtime?.markPtyLivenessUnverifiable?.(args.id, stopResult.receipt.reason)
+        }
+        return
+      }
     } catch (err) {
       if (!isPtyAlreadyGoneError(err)) {
         // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
@@ -99,11 +110,11 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
     // Explicit cleanup is idempotent and covers already-dead PTYs.
     const incarnationId = finishPtyShutdown(args.id, connectionId, store)
     if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1, incarnationId)
+      runtime?.onPtyExit(args.id, 0, incarnationId)
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({
         id: args.id,
-        code: -1,
+        code: 0,
         ...(incarnationId ? { incarnationId } : {})
       })
     }

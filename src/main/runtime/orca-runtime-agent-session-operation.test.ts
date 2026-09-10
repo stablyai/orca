@@ -1,9 +1,25 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type {
   RuntimeCreateAgentSessionRequest,
   RuntimeCreateAgentSessionResult
 } from '../../shared/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
+import {
+  setManagedCliLauncherStatus,
+  clearManagedCliLauncherStatus
+} from '../ssh/ssh-relay-session'
+import { ManagedCliLauncherUnavailableError } from '../../shared/managed-cli-context'
+import { resolveManagedOrchestrationExecutable } from './orchestration/cli-command'
+
+const electronMocks = vi.hoisted(() => ({
+  app: { getPath: vi.fn(() => '/tmp'), isPackaged: true }
+}))
+vi.mock('electron', () => electronMocks)
+
+beforeEach(() => {
+  installFakeAppEnvironment({ isPackaged: () => true })
+})
 
 function operationId(now = Date.now()): string {
   return `${now}-0123456789abcdef0123456789abcdef`
@@ -462,5 +478,186 @@ describe('agent-session create operation ledger', () => {
       failure.message
     )
     expect(createTerminal).toHaveBeenCalledOnce()
+  })
+})
+
+describe('managed CLI launcher gating', () => {
+  it('blocks a managed worker terminal on an SSH host with no installed launcher', () => {
+    const runtime = createRuntime()
+    vi.spyOn(runtime, 'resolveTerminalContext').mockReturnValue({
+      worktreeId: 'worktree-1',
+      connectionId: 'ssh-managed-cli-gate'
+    })
+
+    expect(() => runtime.assertTerminalManagedCliAvailable('term_worker')).toThrow(
+      ManagedCliLauncherUnavailableError
+    )
+  })
+
+  it('allows a managed worker terminal once the launcher is recorded as installed', () => {
+    const runtime = createRuntime()
+    vi.spyOn(runtime, 'resolveTerminalContext').mockReturnValue({
+      worktreeId: 'worktree-1',
+      connectionId: 'ssh-managed-cli-gate'
+    })
+    setManagedCliLauncherStatus('ssh-managed-cli-gate', {
+      state: 'installed',
+      launcherPath: '/home/user/.orca-relay/bin/orca'
+    })
+
+    try {
+      expect(() => runtime.assertTerminalManagedCliAvailable('term_worker')).not.toThrow()
+    } finally {
+      clearManagedCliLauncherStatus('ssh-managed-cli-gate')
+    }
+  })
+
+  it('never gates a local terminal with no SSH connection', () => {
+    const runtime = createRuntime()
+    vi.spyOn(runtime, 'resolveTerminalContext').mockReturnValue({
+      worktreeId: 'worktree-1',
+      connectionId: null
+    })
+
+    expect(() => runtime.assertTerminalManagedCliAvailable('term_local')).not.toThrow()
+  })
+})
+
+function stubPty(
+  runtime: OrcaRuntimeService,
+  handle: string,
+  ptyId: string,
+  pty: { connectionId: string | null; isWsl: boolean | null; worktreeId: string }
+): void {
+  vi.spyOn(runtime, 'resolveLeafForHandle').mockImplementation((h) =>
+    h === handle ? { ptyId } : null
+  )
+  ;(runtime as unknown as { ptysById: Map<string, unknown> }).ptysById.set(ptyId, pty)
+}
+
+describe('ManagedCliContext construction across hosts', () => {
+  it('builds a native local workspace_key and executable for a git-worktree terminal', () => {
+    const runtime = createRuntime()
+    stubPty(runtime, 'term_native', 'pty-native', {
+      connectionId: null,
+      isWsl: false,
+      worktreeId: 'repo::worktree-1'
+    })
+
+    const context = runtime.buildTerminalManagedCliContext('term_native')
+
+    // Why: the exact executable for a native, non-WSL, packaged local host is
+    // this same resolution cli-command.ts already ships (`orca` off-Linux,
+    // `orca-ide` on native Linux packaging) — assert against it directly
+    // rather than hardcoding a platform-specific literal in this test.
+    expect(context.executable).toBe(
+      resolveManagedOrchestrationExecutable({
+        connectionId: null,
+        isWsl: false,
+        worktreeId: 'repo::worktree-1',
+        isPackaged: true
+      })
+    )
+    expect(context).toMatchObject({
+      executionHostId: 'local',
+      workspaceKey: 'worktree:repo::worktree-1',
+      terminalHandle: 'term_native'
+    })
+  })
+
+  it('builds the orca-ide executable for a packaged WSL terminal', () => {
+    const runtime = createRuntime()
+    stubPty(runtime, 'term_wsl', 'pty-wsl', {
+      connectionId: null,
+      isWsl: true,
+      worktreeId: 'repo::worktree-2'
+    })
+
+    const context = runtime.buildTerminalManagedCliContext('term_wsl')
+
+    expect(context.executable).toBe('orca-ide')
+    expect(context.executionHostId).toBe('local')
+  })
+
+  it('builds the orca-dev executable for an unpacked (dev) local build', () => {
+    installFakeAppEnvironment({ isPackaged: () => false })
+    try {
+      const runtime = createRuntime()
+      stubPty(runtime, 'term_dev', 'pty-dev', {
+        connectionId: null,
+        isWsl: false,
+        worktreeId: 'repo::worktree-3'
+      })
+
+      const context = runtime.buildTerminalManagedCliContext('term_dev')
+
+      expect(context.executable).toBe('orca-dev')
+    } finally {
+      installFakeAppEnvironment({ isPackaged: () => true })
+    }
+  })
+
+  it('builds the exact installed launcherPath (never bare orca) for an SSH terminal', () => {
+    const runtime = createRuntime()
+    stubPty(runtime, 'term_ssh', 'pty-ssh', {
+      connectionId: 'ssh-managed-cli-context',
+      isWsl: null,
+      worktreeId: 'repo::worktree-4'
+    })
+    setManagedCliLauncherStatus('ssh-managed-cli-context', {
+      state: 'installed',
+      launcherPath: '/home/user/.orca-relay/bin/orca'
+    })
+
+    try {
+      const context = runtime.buildTerminalManagedCliContext('term_ssh')
+      expect(context).toMatchObject({
+        executable: '/home/user/.orca-relay/bin/orca',
+        executionHostId: 'ssh:ssh-managed-cli-context',
+        workspaceKey: 'worktree:repo::worktree-4'
+      })
+    } finally {
+      clearManagedCliLauncherStatus('ssh-managed-cli-context')
+    }
+  })
+
+  it('throws instead of building a bare-orca context when the SSH launcher never installed', () => {
+    const runtime = createRuntime()
+    stubPty(runtime, 'term_ssh_unavailable', 'pty-ssh-unavailable', {
+      connectionId: 'ssh-managed-cli-missing',
+      isWsl: null,
+      worktreeId: 'repo::worktree-5'
+    })
+
+    expect(() => runtime.buildTerminalManagedCliContext('term_ssh_unavailable')).toThrow(
+      ManagedCliLauncherUnavailableError
+    )
+  })
+
+  it('preserves a folder workspace_key instead of coercing it to worktree:', () => {
+    const runtime = createRuntime()
+    // Why: a folder-derived terminal's pty.worktreeId is ALREADY the exact
+    // `folder:<id>` key (folderWorkspaceToWorktree stamps it that way) — a
+    // raw unprefixed id here would mask the exact bug this test guards:
+    // matching by id-equality against listFolderWorkspaces() never fires
+    // once the id is already prefixed.
+    stubPty(runtime, 'term_folder', 'pty-folder', {
+      connectionId: null,
+      isWsl: false,
+      worktreeId: 'folder:folder-1'
+    })
+
+    const context = runtime.buildTerminalManagedCliContext('term_folder')
+
+    expect(context.workspaceKey).toBe('folder:folder-1')
+  })
+
+  it('fails closed instead of fabricating a context for a terminal with no resolvable pty record', () => {
+    const runtime = createRuntime()
+    vi.spyOn(runtime, 'resolveLeafForHandle').mockReturnValue(null)
+
+    expect(() => runtime.buildTerminalManagedCliContext('term_untracked')).toThrow(
+      'managed_cli_context_terminal_not_found'
+    )
   })
 })

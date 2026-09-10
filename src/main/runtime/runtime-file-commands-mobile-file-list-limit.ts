@@ -169,6 +169,7 @@ export type TerminalFileGrant = {
   clientId?: string
   expiresAt: number
   statIdentity: string | null
+  contentIdentity: string | null
   readOnly: boolean
   provenance: 'terminal-output' | 'native-chat'
   expiryTimer?: ReturnType<typeof setTimeout>

@@ -343,7 +343,7 @@ describe('OrcaRuntimeService', () => {
     expect(nonceMatch?.[1]).toBeTruthy()
     const markerPath = `/tmp/repo/.git/orca/setup-runner.sh.${nonceMatch![1]}.done`
     expect(startupCommand.length).toBeLessThan(256)
-    expect(startupScript).toContain('--dangerously-bypass-approvals-and-sandbox')
+    expect(startupScript).toContain('--yolo')
     expect(setupCommand).toContain('printf')
     expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
     expect(startupScript).toContain(markerPath)
@@ -518,7 +518,7 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-explicit-draft',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+        command: "codex '--yolo'",
         worktreeId: result.worktree.id
       })
     )

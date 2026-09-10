@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from './store-test-helpers'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -27,6 +28,14 @@ describe('TabsSlice', () => {
   })
 
   describe('reconcileWorktreeTabModel', () => {
+    it('avoids creating a Maestro tab in the floating terminal workspace', () => {
+      store.getState().reconcileWorktreeTabModel(FLOATING_TERMINAL_WORKTREE_ID)
+
+      expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).toEqual(
+        []
+      )
+    })
+
     it('drops unified tabs whose backing content no longer exists', () => {
       const groupId = 'g-1'
       store.setState({
@@ -63,10 +72,10 @@ describe('TabsSlice', () => {
       const result = store.getState().reconcileWorktreeTabModel(WT)
 
       expect(result.renderableTabCount).toBe(0)
-      expect(result.activeRenderableTabId).toBeNull()
-      expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([])
-      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([])
-      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBeNull()
+      const maestro = store.getState().unifiedTabsByWorktree[WT][0]
+      expect(maestro).toMatchObject({ contentType: 'maestro', systemRole: 'workspace-maestro' })
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([maestro.id])
+      expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBe(maestro.id)
     })
 
     // Regression for #9911: a reconnecting terminal (ptyId/ptyIdsByTabId cleared
@@ -135,6 +144,10 @@ describe('TabsSlice', () => {
       const state = store.getState()
 
       expect(result.renderableTabCount).toBe(1)
+      expect(state.unifiedTabsByWorktree[WT]?.[0]).toMatchObject({
+        contentType: 'maestro',
+        systemRole: 'workspace-maestro'
+      })
       expect(state.unifiedTabsByWorktree[WT]?.map((tab) => tab.entityId)).toContain(
         'host-lost-terminal'
       )
@@ -282,12 +295,14 @@ describe('TabsSlice', () => {
 
       expect(result.renderableTabCount).toBe(2)
       expect(result.activeRenderableTabId).toBe('simulator-1')
+      const maestroId = state.unifiedTabsByWorktree[WT][0].id
       expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual([
+        maestroId,
         'terminal-1',
         'simulator-1'
       ])
       expect(state.groupsByWorktree[WT].map((group) => group.tabOrder)).toEqual([
-        ['terminal-1'],
+        [maestroId, 'terminal-1'],
         ['simulator-1']
       ])
       expect(state.layoutByWorktree[WT]).toEqual({
@@ -360,18 +375,20 @@ describe('TabsSlice', () => {
 
       const result = store.getState().reconcileWorktreeTabModel(WT)
       const state = store.getState()
+      const maestroId = state.unifiedTabsByWorktree[WT][0].id
 
       expect(result).toEqual({
         renderableTabCount: 2,
         activeRenderableTabId: 'structured-session-1'
       })
       expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual([
+        maestroId,
         'terminal-1',
         'structured-session-1'
       ])
       expect(state.groupsByWorktree[WT][0]).toMatchObject({
         activeTabId: 'structured-session-1',
-        tabOrder: ['terminal-1', 'structured-session-1']
+        tabOrder: [maestroId, 'terminal-1', 'structured-session-1']
       })
     })
 
@@ -455,8 +472,9 @@ describe('TabsSlice', () => {
 
       expect(result.renderableTabCount).toBe(1)
       expect(result.activeRenderableTabId).toBe('terminal-1')
+      const maestroId = state.unifiedTabsByWorktree[WT][0].id
       expect(state.groupsByWorktree[WT]).toEqual([
-        expect.objectContaining({ id: terminalGroupId, tabOrder: ['terminal-1'] })
+        expect.objectContaining({ id: terminalGroupId, tabOrder: [maestroId, 'terminal-1'] })
       ])
       expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: terminalGroupId })
       expect(state.activeGroupIdByWorktree[WT]).toBe(terminalGroupId)
@@ -494,8 +512,11 @@ describe('TabsSlice', () => {
 
       const result = store.getState().reconcileWorktreeTabModel(WT)
       const state = store.getState()
-      const restoredTab = state.unifiedTabsByWorktree[WT]?.[0]
+      const restoredTab = state.unifiedTabsByWorktree[WT]?.find(
+        (tab) => tab.contentType === 'terminal'
+      )
       const restoredGroup = state.groupsByWorktree[WT]?.[0]
+      const maestroId = state.unifiedTabsByWorktree[WT][0].id
 
       expect(result.renderableTabCount).toBe(1)
       expect(result.activeRenderableTabId).toBe(runtimeTerminalId)
@@ -507,7 +528,7 @@ describe('TabsSlice', () => {
       })
       expect(restoredGroup).toMatchObject({
         activeTabId: runtimeTerminalId,
-        tabOrder: [runtimeTerminalId]
+        tabOrder: [maestroId, runtimeTerminalId]
       })
       expect(state.layoutByWorktree[WT]).toEqual({
         type: 'leaf',

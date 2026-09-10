@@ -23,6 +23,7 @@ import type { TabGroup } from '../../../../shared/tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
+import { MaestroSurface } from '../maestro/MaestroSurface'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -63,6 +64,8 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const activateTab = useAppStore((state) => state.activateTab)
+  const focusGroup = useAppStore((state) => state.focusGroup)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const {
     activeTab,
@@ -146,6 +149,11 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onActivateMaestro={(tabId) => {
+        activateTab(tabId, { worktreeId })
+        focusGroup(worktreeId, groupId)
+      }}
+      activeMaestroTabId={activeTab?.contentType === 'maestro' ? activeTab.id : null}
       onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
@@ -161,7 +169,8 @@ export default function TabGroupPanel({
         activeTab?.contentType === 'terminal' ||
         activeTab?.contentType === 'agent-session' ||
         activeTab?.contentType === 'browser' ||
-        activeTab?.contentType === 'simulator'
+        activeTab?.contentType === 'simulator' ||
+        activeTab?.contentType === 'maestro'
           ? null
           : activeTab?.id
       }
@@ -347,11 +356,17 @@ export default function TabGroupPanel({
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
         ) : null}
+        {activeTab?.contentType === 'maestro' && (
+          <div className="absolute inset-0 flex min-h-0 min-w-0">
+            <MaestroSurface tab={activeTab} />
+          </div>
+        )}
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'agent-session' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          activeTab.contentType !== 'simulator' &&
+          activeTab.contentType !== 'maestro' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
               <Suspense

@@ -1,3 +1,4 @@
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -147,7 +148,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     return id
   }
 
-  function stopKeepingHistory(id: string): Promise<void> {
+  function stopKeepingHistory(id: string): Promise<PtyStopReceipt> {
     return adapter.shutdown(id, {
       immediate: true,
       keepHistory: true,

@@ -98,7 +98,12 @@ export const SKILL_GUIDE_GET_HANDLER: Record<string, CommandHandler> = {
       return
     }
 
-    const markdown = selection.full ? guide.fullMarkdown : guide.markdown
+    const { applyVersionMatchedGuideContract } =
+      await import('../version-matched-guide-contract.js')
+    const markdown = applyVersionMatchedGuideContract(
+      guide.name,
+      selection.full ? guide.fullMarkdown : guide.markdown
+    )
     writeStdoutLine(
       json
         ? JSON.stringify({ name: guide.name, full: selection.full, markdown }, null, 2)

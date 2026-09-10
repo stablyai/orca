@@ -27,7 +27,7 @@ import { isENOENT } from '../ipc/filesystem-path-containment'
 import { runtimeFileRouteForTarget, type RuntimeFileRoute } from './runtime-file-command-target'
 
 export class RuntimeFileCommandsWithConstructor extends RuntimeFileCommandsWithActiveRuntimeTextSearches {
-  constructor(private readonly host: RuntimeFileCommandHost) {
+  constructor(protected readonly host: RuntimeFileCommandHost) {
     super()
   }
 

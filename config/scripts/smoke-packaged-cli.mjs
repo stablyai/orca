@@ -50,6 +50,15 @@ try {
     })
 
   await run(['--help'])
+  const invalidAuthoring = await run(['maestro', 'author', '--payload', 'not-json', '--json']).then(
+    () => null,
+    (error) => error
+  )
+  assert.equal(invalidAuthoring?.code, 1)
+  assert.deepEqual(JSON.parse(invalidAuthoring.stdout).error, {
+    code: 'invalid_argument',
+    message: 'Expected --payload to be a JSON object.'
+  })
   const list = JSON.parse((await run(['skills', 'list', '--json'])).stdout)
   assert(list.topics.some((topic) => topic.name === 'orca-cli'))
   assert.match((await run(['skills', 'get', 'orca-cli'])).stdout, /name: orca-cli/)

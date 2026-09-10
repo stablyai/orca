@@ -17,6 +17,7 @@ import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
 import { registerFederatedReleaseRecoveryScenarios } from './federation-release-recovery-scenarios.test-support'
+import { createManagedCliContext } from '../../../../../../shared/managed-cli-context'
 
 describe('orchestration federated worker output', () => {
   const databases: OrchestrationDb[] = []
@@ -215,6 +216,17 @@ describe('orchestration federated worker output', () => {
     )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('windows_runtime:pty:1')
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'preflightWorktreeManagedCliExecutable').mockReturnValue('orca')
+    vi.spyOn(runtime, 'assertTerminalManagedCliAvailable').mockImplementation(() => {})
+    vi.spyOn(runtime, 'buildTerminalManagedCliContext').mockImplementation((handle) =>
+      createManagedCliContext({
+        executable: 'orca',
+        runtimeId: runtime.getRuntimeId(),
+        executionHostId: 'local',
+        workspaceKey: 'repo::windows-worktree',
+        terminalHandle: handle
+      })
+    )
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_windows_worker',
       accepted: true,
@@ -226,6 +238,7 @@ describe('orchestration federated worker output', () => {
       }
       return {
         handle: 'term_windows_worker',
+        tabId: 'tab_worker',
         worktreeId: 'repo::windows-worktree',
         status: 'running'
       } as never
@@ -279,14 +292,16 @@ describe('orchestration federated worker output', () => {
   async function startSettledRemoteWorker(): Promise<string> {
     const dispatchId = await startRemoteWorker()
     const taskId = homeDb.getDispatchContextById(dispatchId)!.task_id
-    expect(
-      homeDb.settleWorkerReport({
-        taskId,
-        dispatchId,
-        outcome: 'succeeded',
-        result: 'remote worker succeeded'
-      })
-    ).toMatchObject({ action: 'settled', outcome: 'succeeded' })
+    const settlement = homeDb.settleWorkerReport({
+      taskId,
+      dispatchId,
+      outcome: 'succeeded',
+      result: 'remote worker succeeded'
+    })
+    expect(settlement).toMatchObject({
+      action: 'settled',
+      outcome: 'succeeded'
+    })
     workerDb.settleRemoteAttachmentInRelayTransaction(
       dispatchId,
       'succeeded',
@@ -514,7 +529,7 @@ describe('orchestration federated worker output', () => {
       result: {
         state: 'release_unknown',
         processAction: 'none',
-        recovery: expect.stringContaining('fresh request ID')
+        recovery: expect.stringContaining('after exact host evidence')
       }
     })
     expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()

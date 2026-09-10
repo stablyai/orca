@@ -1,3 +1,7 @@
+import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
+import type { z } from 'zod'
+import type { TerminalSend } from './unary-schemas'
+import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
 import { InvalidArgumentError } from '../../core'
 import type {
@@ -191,4 +195,43 @@ export function assertTerminalSendExactPtyBinding(
     // Fall through to the stable guarded-send result below.
   }
   throw new Error('terminal_guard_not_writable')
+}
+
+export function assertTerminalQueryReplyRequest(
+  params: z.infer<typeof TerminalSend>,
+  clientId: string | undefined,
+  queryReplyClientId: string | undefined
+): void {
+  if (
+    params.inputKind === 'query-reply' &&
+    (!params.text ||
+      !isTerminalQueryReply(params.text) ||
+      params.enter === true ||
+      params.interrupt === true ||
+      params.agentPrompt === true ||
+      params.requireAgentStatus !== undefined ||
+      params.client?.type !== 'mobile' ||
+      !queryReplyClientId ||
+      (clientId !== undefined && params.client.id !== clientId))
+  ) {
+    throw new InvalidArgumentError('Invalid terminal query reply')
+  }
+}
+
+export async function assertTerminalSendPayload(
+  runtime: OrcaRuntimeService,
+  params: z.infer<typeof TerminalSend>
+): Promise<void> {
+  await assertTerminalSendTextWithinLimit(params.text)
+  await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
+  if (params.text) {
+    await assertLegacyAiVaultResumeCommandAllowed(params.text, () =>
+      runtime.ensureStructuredAgentSessionHost()
+    )
+  }
+  if (params.resolvedLaunchDraft?.text) {
+    await assertLegacyAiVaultResumeCommandAllowed(params.resolvedLaunchDraft.text, () =>
+      runtime.ensureStructuredAgentSessionHost()
+    )
+  }
 }

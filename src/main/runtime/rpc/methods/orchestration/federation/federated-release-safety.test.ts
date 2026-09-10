@@ -197,7 +197,13 @@ describe('federated worker release ownership', () => {
     }
     return method.handler(method.params!.parse(params), {
       runtime,
-      authenticatedCallerFingerprint: HOME_FINGERPRINT
+      authenticatedCallerFingerprint: HOME_FINGERPRINT,
+      orchestrationMutation: {
+        callerFingerprint: HOME_FINGERPRINT,
+        requestId: `release_${dispatchId}`,
+        method: name,
+        payloadHash: `release_hash_${dispatchId}`
+      }
     } as never)
   }
 })

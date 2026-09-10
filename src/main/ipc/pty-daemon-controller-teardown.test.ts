@@ -5,9 +5,17 @@ import {
   registerPtyHandlers,
   registerSshPtyProvider,
   deletePtyOwnership,
+  restorePtyIncarnation,
   setPtyOwnership,
   setLocalPtyProvider
 } from './pty'
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
+import {
+  TEST_PTY_INCARNATION,
+  exitedPtyStopReceipt,
+  livePtyStopReceipt,
+  unverifiablePtyStopReceipt
+} from './pty-ipc-test-constants'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -61,7 +69,9 @@ describe('registerPtyHandlers', () => {
       // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
       it('runtime controller stopAndWait fails when keepHistory allows the PTY to revive', async () => {
         vi.useFakeTimers()
-        const shutdown = vi.fn(async () => undefined)
+        const shutdown = vi.fn(async (id: string, opts: { expectedIncarnationId: string }) =>
+          livePtyStopReceipt(id, opts)
+        )
         const listProcesses = vi
           .fn()
           .mockResolvedValueOnce([])
@@ -94,22 +104,35 @@ describe('registerPtyHandlers', () => {
         }
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
+        restorePtyIncarnation('local-pty', TEST_PTY_INCARNATION)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-          stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
+          stopAndWait: (
+            ptyId: string,
+            opts?: { keepHistory?: boolean }
+          ) => Promise<PtyStopReceipt | null>
         }
 
         const stopPromise = controller.stopAndWait('local-pty', { keepHistory: true })
         await vi.advanceTimersByTimeAsync(200)
 
-        await expect(stopPromise).resolves.toBe(false)
-        expect(shutdown).toHaveBeenCalledWith('local-pty', {
-          immediate: true,
-          keepHistory: true
+        await expect(stopPromise).resolves.toMatchObject({
+          verdict: 'live',
+          processTreeVerified: false
         })
+        expect(shutdown).toHaveBeenCalledWith(
+          'local-pty',
+          expect.objectContaining({
+            immediate: true,
+            keepHistory: true,
+            expectedIncarnationId: TEST_PTY_INCARNATION
+          })
+        )
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
       it('runtime controller stopAndWait preserves ownership when proof fails after shutdown', async () => {
-        const shutdown = vi.fn(async () => undefined)
+        const shutdown = vi.fn(async (id: string, opts: { expectedIncarnationId: string }) =>
+          unverifiablePtyStopReceipt(id, 'legacy unavailable', opts)
+        )
         const listProcesses = vi.fn().mockRejectedValue(new Error('legacy unavailable'))
         setLocalPtyProvider({
           spawn: vi.fn(),
@@ -139,29 +162,38 @@ describe('registerPtyHandlers', () => {
         }
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
+        restorePtyIncarnation('local-pty', TEST_PTY_INCARNATION)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
-          stopAndWait: (ptyId: string, opts?: { keepHistory?: boolean }) => Promise<boolean>
+          stopAndWait: (
+            ptyId: string,
+            opts?: { keepHistory?: boolean }
+          ) => Promise<PtyStopReceipt | null>
         }
 
-        await expect(controller.stopAndWait('local-pty', { keepHistory: true })).resolves.toBe(
-          false
-        )
+        await expect(
+          controller.stopAndWait('local-pty', { keepHistory: true })
+        ).resolves.toMatchObject({ verdict: 'unverifiable', processTreeVerified: false })
 
-        expect(shutdown).toHaveBeenCalledWith('local-pty', {
-          immediate: true,
-          keepHistory: true
-        })
+        expect(shutdown).toHaveBeenCalledWith(
+          'local-pty',
+          expect.objectContaining({
+            immediate: true,
+            keepHistory: true,
+            expectedIncarnationId: TEST_PTY_INCARNATION
+          })
+        )
         expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
-      it('bounds keep-history inventory polls by the settlement deadline', async () => {
+      it('threads the settlement deadline into receipt-backed shutdown', async () => {
         vi.useFakeTimers()
         try {
           const listProcesses = vi.fn(async (_opts?: { deadlineMs?: number }) => [])
+          const shutdown = vi.fn(async (id: string) => exitedPtyStopReceipt(id))
           setLocalPtyProvider({
             spawn: vi.fn(),
             write: vi.fn(),
             resize: vi.fn(),
-            shutdown: vi.fn(async () => undefined),
+            shutdown,
             sendSignal: vi.fn(),
             getCwd: vi.fn(),
             getInitialCwd: vi.fn(),
@@ -188,7 +220,7 @@ describe('registerPtyHandlers', () => {
             stopAndWait: (
               ptyId: string,
               opts?: { keepHistory?: boolean; deadlineMs?: number }
-            ) => Promise<boolean>
+            ) => Promise<ReturnType<typeof exitedPtyStopReceipt> | null>
           }
           const callerDeadlineMs = Date.now() + 5_000
           const stopPromise = controller.stopAndWait('local-pty', {
@@ -197,14 +229,12 @@ describe('registerPtyHandlers', () => {
           })
 
           await vi.advanceTimersByTimeAsync(1_000)
-          await expect(stopPromise).resolves.toBe(true)
+          await expect(stopPromise).resolves.toMatchObject({ verdict: 'exited' })
 
-          expect(listProcesses.mock.calls[0]?.[0]).toEqual({ deadlineMs: callerDeadlineMs })
-          const settlementDeadlines = listProcesses.mock.calls
-            .slice(1)
-            .map(([opts]) => opts?.deadlineMs)
-          expect(settlementDeadlines.length).toBeGreaterThan(0)
-          expect(new Set(settlementDeadlines)).toEqual(new Set([callerDeadlineMs - 4_000]))
+          expect(shutdown).toHaveBeenCalledWith(
+            'local-pty',
+            expect.objectContaining({ keepHistory: true, deadlineMs: callerDeadlineMs })
+          )
         } finally {
           vi.useRealTimers()
         }
@@ -217,10 +247,11 @@ describe('registerPtyHandlers', () => {
           spawn: vi.fn(async () => ({ id: 'local-incarnated', incarnationId: 'incarnation-live' })),
           write: vi.fn(),
           resize: vi.fn(),
-          shutdown: vi.fn(async () => {
+          shutdown: vi.fn(async (id: string, opts: { expectedIncarnationId: string }) => {
             for (const listener of exitListeners) {
               listener({ id: 'local-incarnated', code: 0 })
             }
+            return exitedPtyStopReceipt(id, opts)
           }),
           sendSignal: vi.fn(),
           getCwd: vi.fn(),
@@ -253,11 +284,14 @@ describe('registerPtyHandlers', () => {
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           spawn: (args: { cols: number; rows: number }) => Promise<{ id: string }>
-          stopAndWait: (ptyId: string) => Promise<boolean>
+          stopAndWait: (ptyId: string) => Promise<PtyStopReceipt | null>
         }
 
         await controller.spawn({ cols: 80, rows: 24 })
-        await expect(controller.stopAndWait('local-incarnated')).resolves.toBe(true)
+        await expect(controller.stopAndWait('local-incarnated')).resolves.toMatchObject({
+          verdict: 'exited',
+          processTreeVerified: true
+        })
 
         expect(runtime.onPtyExit).toHaveBeenCalledWith('local-incarnated', 0, 'incarnation-live')
       })
@@ -285,7 +319,9 @@ describe('registerPtyHandlers', () => {
           getDefaultShell: vi.fn(),
           getProfiles: vi.fn()
         } as never)
-        const shutdown = vi.fn(async () => undefined)
+        const shutdown = vi.fn(async (id: string, opts: { expectedIncarnationId: string }) =>
+          exitedPtyStopReceipt(id, opts)
+        )
         const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
         const runtime = {
           setPtyController: vi.fn(),
@@ -322,6 +358,7 @@ describe('registerPtyHandlers', () => {
           undefined,
           store as never
         )
+        restorePtyIncarnation('ssh:ssh-1@@relay-pty', TEST_PTY_INCARNATION)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           kill: (ptyId: string) => boolean
         }
@@ -329,7 +366,10 @@ describe('registerPtyHandlers', () => {
         expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(true)
         await new Promise((resolve) => setImmediate(resolve))
 
-        expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', { immediate: false })
+        expect(shutdown).toHaveBeenCalledWith(
+          'ssh:ssh-1@@relay-pty',
+          expect.objectContaining({ immediate: false, expectedIncarnationId: TEST_PTY_INCARNATION })
+        )
         expect(localShutdown).not.toHaveBeenCalled()
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
       })

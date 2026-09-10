@@ -353,6 +353,49 @@ describe('terminal send CLI', () => {
     ])
   })
 
+  it('forwards the authenticated lease input envelope', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: { send: { handle: 'term-1', accepted: true, bytesWritten: 7 } }
+    })
+    const leaseInput = {
+      commandId: 'command-1',
+      idempotencyKey: 'input-1',
+      contentDigest: `sha256:${'a'.repeat(64)}`,
+      enqueueSequence: 1,
+      leaseId: 'lease-1',
+      authority: 'coordinator',
+      runId: 'run-1',
+      coordinatorGeneration: 2,
+      expectedLifecycleState: 'ready',
+      observedInputSurface: 'ready_prompt',
+      expiresAt: '2026-08-25T00:00:00.000Z',
+      expectedGraphRevision: 61
+    }
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true],
+        ['lease-input', JSON.stringify(leaseInput)]
+      ]),
+      client: promptClient(call, false),
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.send', {
+      terminal: 'term-1',
+      text: 'review',
+      enter: true,
+      interrupt: false,
+      agentPrompt: true,
+      leaseInput,
+      client: { id: 'orca-cli', type: 'desktop' }
+    })
+  })
+
   it('explains that Structured Chat blocked a refused send and how to recover', async () => {
     const call = vi.fn().mockResolvedValue({
       result: {

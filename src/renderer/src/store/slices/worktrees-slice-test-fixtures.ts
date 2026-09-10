@@ -3,6 +3,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { translate } from '@/i18n/i18n'
 
 export function makeWorktree(
   overrides: Partial<Worktree> & { id: string; repoId: string }
@@ -34,7 +35,7 @@ export function makeTerminalTab(
 ) {
   return {
     ptyId: null,
-    title: 'Terminal',
+    title: translate('auto.store.slices.worktrees.slice.test.fixtures.e851268bd6', 'Terminal'),
     customTitle: null,
     color: null,
     sortOrder: 0,

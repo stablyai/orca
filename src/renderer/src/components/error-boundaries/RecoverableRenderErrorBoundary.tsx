@@ -62,6 +62,9 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
   }
 
   handleReset = (): void => {
+    if (isLazyChunkLoadError(this.state.error)) {
+      this.state.error.retryLoader?.()
+    }
     this.setState({ error: null })
   }
 

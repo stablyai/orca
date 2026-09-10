@@ -1,5 +1,6 @@
 import { vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
+import { translate } from '@/i18n/i18n'
 
 export const TEST_COMMIT_OID = '0123456789abcdef0123456789abcdef01234567'
 
@@ -82,7 +83,7 @@ export function writeStoredRuntimeEnvironment(storage: Storage, environmentId = 
         {
           id: `ws-${environmentId}`,
           kind: 'websocket',
-          label: 'WebSocket',
+          label: translate('auto.web.web.preload.api.test.harness.225db77b97', 'WebSocket'),
           endpoint: 'ws://127.0.0.1:1234',
           deviceToken: 'token',
           publicKeyB64: 'public-key'

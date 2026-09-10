@@ -27,11 +27,13 @@ describe('orchestration federated folder placement', () => {
     await expect(
       method.handler(
         method.params!.parse({
-          runId: 'run-home',
           dispatchId: 'ctx_folder',
           taskId: 'task_folder',
+          attemptId: 'attempt_ctx_folder',
+          runId: 'run_ctx_folder',
+          coordinatorGeneration: 1,
           taskSpec: 'work in folder',
-          protocolVersion: 3,
+          protocolVersion: 4,
           worktree: 'new-top-level',
           repo: 'folder-repo',
           name: 'folder-worker',

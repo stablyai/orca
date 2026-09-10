@@ -369,15 +369,13 @@ describe('hydrateEditorSession', () => {
       })
     ])
     expect(s.activeFileIdByWorktree[wt]).toBe(filePath)
-    expect(s.unifiedTabsByWorktree[wt]?.map((tab) => tab.id)).toEqual([filePath, runtimeFileId])
-    expect(s.unifiedTabsByWorktree[wt]?.map((tab) => tab.entityId)).toEqual([
-      filePath,
-      runtimeFileId
-    ])
+    const contentTabs = s.unifiedTabsByWorktree[wt]?.filter((tab) => tab.contentType !== 'maestro')
+    expect(contentTabs?.map((tab) => tab.id)).toEqual([filePath, runtimeFileId])
+    expect(contentTabs?.map((tab) => tab.entityId)).toEqual([filePath, runtimeFileId])
     expect(s.groupsByWorktree[wt]?.[0]).toEqual(
       expect.objectContaining({
         activeTabId: filePath,
-        tabOrder: [filePath, runtimeFileId],
+        tabOrder: [expect.stringContaining('workspace-maestro:'), filePath, runtimeFileId],
         recentTabIds: [runtimeFileId, filePath]
       })
     )

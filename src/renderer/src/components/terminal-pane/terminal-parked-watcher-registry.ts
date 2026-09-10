@@ -52,7 +52,18 @@ export type ParkedTabWatcherEntry = {
   disposersByPtyId: Map<string, () => void>
 }
 
-export const parkedWatchersByTabId = new Map<string, ParkedTabWatcherEntry>()
+export const MAX_PARKED_TERMINAL_WATCHER_TABS = 512
+
+class ParkedTerminalWatcherRegistry extends Map<string, ParkedTabWatcherEntry> {
+  override set(tabId: string, entry: ParkedTabWatcherEntry): this {
+    if (!this.has(tabId) && this.size >= MAX_PARKED_TERMINAL_WATCHER_TABS) {
+      throw new Error('parked_terminal_watcher_limit')
+    }
+    return super.set(tabId, entry)
+  }
+}
+
+export const parkedWatchersByTabId = new ParkedTerminalWatcherRegistry()
 
 export function getParkedTerminalWatcherTabIds(): string[] {
   return Array.from(parkedWatchersByTabId.keys())
@@ -81,9 +92,7 @@ export function isTerminalTabParked(tabId: string): boolean {
  *
  * Built in one pass and reused for a whole publication: the caller checks it
  * once per saved leaf across every tab of every worktree, so a per-PTY scan of
- * the registry would be quadratic in a large workspace. Parked tabs are NOT
- * bounded by the hot-retain limits — those bound what stays warm, not what
- * parks — so this can legitimately hold thousands of entries.
+ * the registry would be quadratic in a large workspace.
  *
  * Reads `disposersByPtyId`, never `paneIdByPtyId`: exit and per-PTY disposal
  * delete only the disposer and deliberately keep the pane-id slot so the dead

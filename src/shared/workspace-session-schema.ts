@@ -34,7 +34,7 @@ import { persistedClientHostedBrowserPageSchema } from './client-hosted-browser-
 import { persistedOpenFileSchema } from './workspace-session-editor-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
 import {
-  tabContentTypeSchema,
+  tabContentTypeSchema as baseTabContentTypeSchema,
   workspaceVisibleTabTypeSchema
 } from './workspace-session-tab-type-schema'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
@@ -115,6 +115,7 @@ const terminalTabSchema = z.object({
 
 // ─── Unified tab model ──────────────────────────────────────────────
 
+const tabContentTypeSchema = baseTabContentTypeSchema.or(z.literal('maestro'))
 const executionHostIdSchema = z.custom<ExecutionHostId>(
   (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
 )
@@ -150,6 +151,9 @@ const tabSchema = z.object({
   lastFocusedAt: z.number().finite().nonnegative().optional().catch(undefined),
   isPreview: z.boolean().optional(),
   isPinned: z.boolean().optional(),
+  systemRole: z.literal('workspace-maestro').optional(),
+  maestroExecutionHostId: z.string().min(1).optional(),
+  maestroWorkspaceKey: z.string().min(1).optional(),
   // Why: persist the per-tab native-chat view mode so 'chat' survives reload /
   // session restore. `.catch('terminal')` tolerates unknown future values (a
   // newer build that wrote an unrecognized mode) by degrading to the safe

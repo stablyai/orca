@@ -606,6 +606,31 @@
           }
         }
       },
+      "maestro": {
+        "MaestroWorkspaceHarnessOverlay": {
+          "host": "Host",
+          "reference": "Reference",
+          "revision": "Revision",
+          "run": "Run",
+          "workspace": "Workspace"
+        },
+        "maestro": {
+          "annotation": {
+            "tone": {
+              "2af310a116": "Decision",
+              "39ef8efa3f": "Observation",
+              "b4f98f49a1": "Blocker",
+              "blockerHint": "Work is stopped here",
+              "c87ad9fa13": "Post-it",
+              "d052036308": "Warning",
+              "decisionHint": "Settled, act on it",
+              "highlightHint": "Pinned for attention",
+              "observationHint": "Context worth keeping, nothing pending",
+              "warningHint": "Needs a human before it moves"
+            }
+          }
+        }
+      },
       "mobile": {
         "MobileHero": {
           "79d2f480da": "Network interface to advertise",

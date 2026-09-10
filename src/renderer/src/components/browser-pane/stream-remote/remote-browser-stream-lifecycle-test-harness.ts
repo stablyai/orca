@@ -9,6 +9,7 @@ import {
   remoteBrowserStreamNotice,
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
+import { translate } from '@/i18n/i18n'
 
 export type Gate = {
   wait: Promise<void>
@@ -88,7 +89,15 @@ export function createHarness() {
         tabShowGate = null
         await gate.wait
       }
-      return { tab: { url: 'https://example.test/', title: 'Example' } }
+      return {
+        tab: {
+          url: 'https://example.test/',
+          title: translate(
+            'auto.components.browser.pane.stream.remote.remote.browser.stream.lifecycle.test.harness.471387f8f8',
+            'Example'
+          )
+        }
+      }
     }
     if (method === 'browser.tabCreate') {
       return { browserPageId: 'page-1' }
@@ -135,7 +144,13 @@ export function createHarness() {
           subscriptionId: 'sub-1',
           browserPageId: params.page,
           format: 'jpeg',
-          tab: { url: 'https://example.test/', title: 'Example' }
+          tab: {
+            url: 'https://example.test/',
+            title: translate(
+              'auto.components.browser.pane.stream.remote.remote.browser.stream.lifecycle.test.harness.471387f8f8',
+              'Example'
+            )
+          }
         }),
       emitEnd: () => respond({ type: 'end', subscriptionId: 'sub-1' }),
       emitStreamError: (message) => respond({ type: 'error', message }),

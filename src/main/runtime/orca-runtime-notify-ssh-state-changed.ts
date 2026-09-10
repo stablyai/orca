@@ -180,6 +180,9 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
 
   setAgentBrowserBridge(bridge: AgentBrowserBridge | null): void {
     this.agentBrowserBridge = bridge
+    if (bridge) {
+      this.scheduleMaestroBrowserSurfaceReconciliation()
+    }
   }
 
   getAgentBrowserBridge(): AgentBrowserBridge | null {

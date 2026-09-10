@@ -173,7 +173,7 @@ describe('mobile rpc-client connection timeout', () => {
     socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
     socket.receive('encrypted:{"type":"e2ee_authenticated"}')
 
-    expect(client.getState()).toBe('connected')
+    expect(socket.sent[1]).toContain('"maestro.run-progress.v2"')
 
     vi.advanceTimersByTime(12_000)
 

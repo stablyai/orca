@@ -14,6 +14,7 @@
  */
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
+import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
@@ -160,7 +161,9 @@ async function createWorkerAgentSurface(
       worktreeId,
       agent: args.agent as TuiAgent,
       dispatchId: args.dispatchId,
-      ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+      ...(args.launchPreferences
+        ? { launchPreferences: narrowStructuredLaunchSeedOptions(args.launchPreferences) }
+        : {}),
       effects: args.effects
     })
     return { terminalHandle: structuredSession.identity.handle, structuredSession }

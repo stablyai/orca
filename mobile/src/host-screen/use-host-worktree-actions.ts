@@ -184,7 +184,11 @@ export function useHostWorktreeActions(args: {
           })
           .catch(() => null)
       }
-      const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
+      const params = new URLSearchParams({
+        name: item.displayName || item.repo,
+        executionHostId: item.hostId ?? 'local'
+      })
+      const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?${params.toString()}`
       navigateFromHostList(target)
     },
     [client, connState, hostId, navigateFromHostList]

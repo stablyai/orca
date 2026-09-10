@@ -382,6 +382,23 @@ describe('handleSwitchTab', () => {
     expect(store.activateTab).not.toHaveBeenCalled()
     expect(store.setActiveTabType).toHaveBeenCalledWith('editor')
   })
+
+  it('activates Maestro by unified id without treating it as a file', () => {
+    const store = makeStore('editor')
+    store.activeFileId = 'file-1'
+    store.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
+    store.groupsByWorktree = { 'wt-1': [{ id: 'group-1', activeTabId: 'file-tab-1' }] }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'editor', id: 'file-1', tabId: 'file-tab-1' },
+      { type: 'editor', id: 'maestro-1', tabId: 'maestro-1', activation: 'maestro' }
+    ])
+
+    expect(handleSwitchTabAcrossAllTypes(1)).toBe(true)
+    expect(store.activateTab).toHaveBeenCalledWith('maestro-1')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('editor')
+    expect(store.setActiveFile).not.toHaveBeenCalled()
+  })
 })
 
 describe('handleSwitchTabAcrossAllTypes', () => {

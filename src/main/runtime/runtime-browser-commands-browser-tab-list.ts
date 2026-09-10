@@ -17,6 +17,7 @@ import type { BrowserCertificateProceedResult } from '../../shared/browser-works
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import { BrowserError } from '../browser/browser-error'
 import { publishSwitchedBrowserSessionTab } from './browser-tab-create-publication'
+import { UNOBSERVED_PANE_PAINT } from './browser-pane-paint-observation'
 
 export class RuntimeBrowserCommandsWithBrowserTabList extends RuntimeBrowserCommandsWithBrowserScreencast {
   async browserTabList(params: { worktree?: string }): Promise<BrowserTabListResult> {
@@ -101,7 +102,13 @@ export class RuntimeBrowserCommandsWithBrowserTabList extends RuntimeBrowserComm
         worktreeId: clientPage.workspaceId,
         focus: params.focus
       })
-      return { switched: switchedIndex, browserPageId: clientPage.browserPageId }
+      return {
+        switched: switchedIndex,
+        browserPageId: clientPage.browserPageId,
+        ...(params.focus
+          ? { focusReceipt: this.paneFocusReceipt(true, UNOBSERVED_PANE_PAINT) }
+          : {})
+      }
     }
     const bridge = this.requireAgentBrowserBridge()
     const worktreeId =
@@ -127,7 +134,20 @@ export class RuntimeBrowserCommandsWithBrowserTabList extends RuntimeBrowserComm
     if (params.focus) {
       this.notifyRendererBrowserPaneFocus(focusWorktreeId, result.browserPageId)
     }
-    return { ...result, switched: switchedIndex }
+    return {
+      ...result,
+      switched: switchedIndex,
+      ...(params.focus
+        ? {
+            focusReceipt: this.paneFocusReceipt(
+              bridge.getActivePageId(focusWorktreeId) === result.browserPageId,
+              await this.observePanePaint(
+                bridge.getRegisteredTabs(focusWorktreeId).get(result.browserPageId)
+              )
+            )
+          }
+        : {})
+    }
   }
 
   async browserHover(

@@ -18,6 +18,8 @@ export {
   type ComputerWindowListWindow
 } from './computer-use-runtime-types'
 export type {
+  BrowserPaneFocusReceipt,
+  BrowserPanePaintVerdict,
   BrowserBackResult,
   BrowserCaptureStartResult,
   BrowserCaptureStopResult,
@@ -187,6 +189,9 @@ export type {
   RuntimeGitLocalBranches,
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
+  RuntimeRunSettlementResult,
+  RuntimeRunWorktreeCleanupDisposition,
+  RuntimeRunWorktreeCleanupResult,
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState,
   RuntimeWorktreeAgentRow,
@@ -205,3 +210,12 @@ export type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
 } from './mobile-markdown-document'
+export type {
+  RuntimeMaestroWorkspaceCanvasMutation,
+  RuntimeMaestroWorkspaceCanvasMutationResult,
+  RuntimeMaestroWorkspaceCanvasQueryResult,
+  RuntimeMaestroWorkspaceCanvasScope,
+  RuntimeMaestroWorkspaceContentReadResult,
+  RuntimeMaestroWorkspaceTabCommand,
+  RuntimeMaestroWorkspaceTabCommandResponse
+} from './runtime-maestro-contracts'

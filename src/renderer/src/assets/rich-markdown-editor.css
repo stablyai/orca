@@ -1308,6 +1308,31 @@
   font-style: italic;
 }
 
+.maestro-mini-markdown-editor .linear-issue-markdown-toolbar {
+  padding: 3px 6px;
+  background: color-mix(in srgb, var(--background) 62%, transparent);
+}
+
+.maestro-mini-markdown-editor .linear-issue-markdown-toolbar-button {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+}
+
+.maestro-mini-markdown-editor .rich-markdown-editor {
+  min-height: 100%;
+  padding: 12px 14px 32px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.maestro-mini-markdown-editor .rich-markdown-editor p,
+.maestro-mini-markdown-editor .rich-markdown-editor ul,
+.maestro-mini-markdown-editor .rich-markdown-editor ol,
+.maestro-mini-markdown-editor .rich-markdown-editor blockquote {
+  margin: 0.5em 0;
+}
+
 .linear-issue-markdown-save-hint {
   opacity: 0;
   transition: opacity 120ms ease;

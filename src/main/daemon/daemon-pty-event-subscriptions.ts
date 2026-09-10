@@ -124,7 +124,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     await this.disconnectOnlyPromise
   }
 
-  protected async finishDisconnectOnly(keepHistoryShutdowns: Promise<void>[]): Promise<void> {
+  protected async finishDisconnectOnly(keepHistoryShutdowns: Promise<unknown>[]): Promise<void> {
     // Why: sleep shutdowns still detect recovery and kill after checkpointing; disconnecting first rejects those admitted operations.
     await Promise.allSettled(keepHistoryShutdowns)
     this.respawnAdoptionClosed = true

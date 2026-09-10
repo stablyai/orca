@@ -8,7 +8,7 @@ import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
 } from '../src/transport/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry } from '../src/transport/types'
+import type { ConnectionLogEntry, PairingStage } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/client-context'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
@@ -16,6 +16,11 @@ import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
+import {
+  appendBoundedPairingLog,
+  pairingFailureMessage,
+  PAIRING_STAGE_LABELS
+} from '../src/transport/pairing-stage'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -33,6 +38,7 @@ export default function PairConfirmScreen() {
   const params = useLocalSearchParams<{ code?: string }>()
   const [status, setStatus] = useState<Status>('awaiting-confirm')
   const [errorMessage, setErrorMessage] = useState('')
+  const [pairingStage, setPairingStage] = useState<PairingStage>('bundle_readiness')
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
   // Why: collect logs in a ref so the rpc-client callback (which closures
   // over the initial state setter) always sees the freshest list and we
@@ -81,26 +87,42 @@ export default function PairConfirmScreen() {
       return
     }
     setStatus('connecting')
+    setPairingStage('bundle_readiness')
     logsRef.current = []
     setLogs([])
     activePairingAttemptRef.current?.dispose()
 
-    const attempt = startPreProfilePairing({
+    let attempt: PreProfilePairingAttempt | undefined
+    attempt = startPreProfilePairing({
       offer,
       timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+      clientCommit: {
+        refreshClient: refreshHostClient,
+        commitRoute: async (hostId) => {
+          const onboardingSteps = await loadMobileOnboardingSteps()
+          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
+            throw new Error('pairing route source is no longer active')
+          }
+          router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
+        }
+      },
+      onStageChange: setPairingStage,
       connectOptions: {
         onLog: (entry) => {
-          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
+          if (
+            !mountedRef.current ||
+            (attempt !== undefined && activePairingAttemptRef.current !== attempt)
+          ) {
             return
           }
-          logsRef.current = [...logsRef.current, entry]
+          logsRef.current = appendBoundedPairingLog(logsRef.current, entry)
           setLogs(logsRef.current)
         }
       }
     })
     activePairingAttemptRef.current = attempt
     try {
-      const { hostId } = await attempt.result
+      await attempt.result
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
       if (activePairingAttemptRef.current === attempt) {
@@ -109,16 +131,6 @@ export default function PairConfirmScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      // Why: re-pairing the same desktop now reuses its existing host id
-      // (STA-1840 dedup), so a client cached under that id from an earlier
-      // pairing would keep the stale endpoint/relay. Close it so the
-      // Refresh any cached client from the newly persisted pairing profile.
-      refreshHostClient(hostId)
-      const onboardingSteps = await loadMobileOnboardingSteps()
-      if (!mountedRef.current) {
-        return
-      }
-      router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
@@ -131,11 +143,7 @@ export default function PairConfirmScreen() {
       }
       console.warn('[pair-confirm] connect failed', err)
       setStatus('error')
-      setErrorMessage(
-        timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
-      )
+      setErrorMessage(pairingFailureMessage(err, timedOut))
     }
   }
 
@@ -168,7 +176,7 @@ export default function PairConfirmScreen() {
         {resolvedStatus === 'connecting' && (
           <>
             <ActivityIndicator size="large" color={colors.textSecondary} />
-            <Text style={styles.connectingText}>Connecting…</Text>
+            <Text style={styles.connectingText}>{PAIRING_STAGE_LABELS[pairingStage]}…</Text>
             <View style={styles.logSlot}>
               <ConnectionLog entries={logs} title="Pairing log" />
             </View>
@@ -184,8 +192,13 @@ export default function PairConfirmScreen() {
               </View>
             )}
             <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
+              {offer && (
+                <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
+                  <Text style={styles.primaryButtonText}>Try again</Text>
+                </Pressable>
+              )}
+              <Pressable style={styles.secondaryButton} onPress={cancel}>
+                <Text style={styles.secondaryButtonText}>Back to home</Text>
               </Pressable>
             </View>
           </>

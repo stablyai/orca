@@ -21,6 +21,17 @@ describe('worker-start --retry-of a context-only Dispatch', () => {
     return { taskId: task.id, dispatchId: result.dispatch.id }
   }
 
+  function retryMutation(requestId: string) {
+    return {
+      orchestrationMutation: {
+        callerFingerprint: 'coordinator-test',
+        requestId,
+        method: 'orchestration.workerStart',
+        payloadHash: `hash-${requestId}`
+      }
+    }
+  }
+
   it('restarts the Task after the attempt is abandoned', async () => {
     const { taskId, dispatchId } = await dispatchContextOnly('unsupervised attempt')
 
@@ -29,12 +40,16 @@ describe('worker-start --retry-of a context-only Dispatch', () => {
     ).resolves.toMatchObject({ state: 'abandoned', alreadySettled: false })
     expect(harness.db.getTask(taskId)?.status).toBe('blocked')
 
-    const retried = (await harness.call('orchestration.workerStart', {
-      task: taskId,
-      from: 'term_coord',
-      terminal: 'term_worker',
-      retryOf: dispatchId
-    })) as { dispatchId: string; state: string }
+    const retried = (await harness.call(
+      'orchestration.workerStart',
+      {
+        task: taskId,
+        from: 'term_coord',
+        terminal: 'term_worker',
+        retryOf: dispatchId
+      },
+      retryMutation('retry-abandoned')
+    )) as { dispatchId: string; state: string }
 
     expect(retried.state).toBe('ready')
     expect(harness.db.getDispatchContextById(retried.dispatchId)?.retry_of_dispatch_id).toBe(
@@ -47,12 +62,16 @@ describe('worker-start --retry-of a context-only Dispatch', () => {
     const { taskId, dispatchId } = await dispatchContextOnly('live attempt')
 
     await expect(
-      harness.call('orchestration.workerStart', {
-        task: taskId,
-        from: 'term_coord',
-        terminal: 'term_worker',
-        retryOf: dispatchId
-      })
+      harness.call(
+        'orchestration.workerStart',
+        {
+          task: taskId,
+          from: 'term_coord',
+          terminal: 'term_worker',
+          retryOf: dispatchId
+        },
+        retryMutation('retry-live')
+      )
     ).rejects.toMatchObject({ code: 'task_not_startable' })
   })
 })

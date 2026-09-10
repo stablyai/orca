@@ -375,6 +375,26 @@ describe('orchestration while Structured Chat owns an agent session', () => {
       paneKey: paneKey(WORKER),
       processIncarnation: runtime.getTerminalProcessIncarnation(WORKER.handle)!
     })
+    vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue({
+      paneKey: paneKey(WORKER),
+      processIncarnation: runtime.getTerminalProcessIncarnation(WORKER.handle)!,
+      connectionId: null,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: SESSION_ID },
+      observedAt: Date.now(),
+      statusObservedAt: Date.now(),
+      subagents: [],
+      actorAttestation: {
+        authorityId: 'agent-hook-main:structured-chat-test',
+        incarnation: 1,
+        revision: 1,
+        observedAt: Date.now(),
+        provider: 'codex',
+        role: 'lead',
+        eventName: 'PreToolUse',
+        providerSessionId: SESSION_ID
+      }
+    } as never)
 
     const response = await rpc(
       'orchestration.send',

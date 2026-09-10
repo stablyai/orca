@@ -287,6 +287,8 @@ export class E2EEChannel {
       onDecryptSuccess: () => (this.consecutiveFailures = 0),
       onAuth: (plaintext) => this.handleAuth(plaintext),
       onBinary: (plaintext) => this.binaryMessageHandler?.(plaintext),
+      onRuntimeClientCapabilities: (value) =>
+        (this.clientCapabilities = parseRuntimeClientCapabilities(value)),
       onText: (plaintext) =>
         this.messageHandler?.(
           plaintext,

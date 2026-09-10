@@ -2,6 +2,7 @@ import { vi, type Mock } from 'vitest'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { RuntimeTerminalListResult } from '../../../shared/runtime-types'
+import { createPtyStopReceipt } from '../../../shared/pty-stop-receipt'
 import { OrcaRuntimeService } from '../orca-runtime'
 import {
   CANARY_INCARNATION_ID,
@@ -25,23 +26,10 @@ import {
 import { createCloseContinuityGraphFixture } from './orca-runtime-terminal-close-continuity-graph-fixture'
 
 export {
-  CANARY_INCARNATION_ID,
-  CANARY_LEAF_ID,
-  CANARY_PTY_ID,
-  CANARY_TAB_ID,
-  INCARNATION_ID,
-  LEAF_ID,
-  OTHER_WORKTREE_ID,
-  PTY_ID,
-  REPO_ID,
-  RUNTIME_OWNED_PTY_ID,
-  SIBLING_INCARNATION_ID,
-  SIBLING_LEAF_ID,
-  SIBLING_PTY_ID,
-  STALE_TAB_ID,
-  TAB_ID,
-  WORKTREE_ID,
-  WORKTREE_PATH,
+  CANARY_INCARNATION_ID, CANARY_LEAF_ID, CANARY_PTY_ID, CANARY_TAB_ID,
+  INCARNATION_ID, LEAF_ID, OTHER_WORKTREE_ID, PTY_ID, REPO_ID, RUNTIME_OWNED_PTY_ID,
+  SIBLING_INCARNATION_ID, SIBLING_LEAF_ID, SIBLING_PTY_ID, STALE_TAB_ID,
+  TAB_ID, WORKTREE_ID, WORKTREE_PATH,
   makeSession
 } from './orca-runtime-terminal-close-continuity-state-fixture'
 
@@ -60,7 +48,7 @@ export type CloseContinuityHarness = {
   closeTerminalTab: Mock<(...args: unknown[]) => unknown>
   flushOrThrow: Mock<() => void>
   kill: Mock<(ptyId: string) => boolean>
-  stopAndWait: Mock<(ptyId: string, ...args: unknown[]) => Promise<boolean | void>>
+  stopAndWait: Mock<(ptyId: string) => Promise<ReturnType<typeof createPtyStopReceipt> | null>>
   syncCanaryGraph: () => void
   syncEmptyGraph: () => void
   syncFixtureGraph: () => void
@@ -136,7 +124,18 @@ function createHarness(
     if (verifiedStopResult instanceof Error) {
       throw verifiedStopResult
     }
-    return verifiedStopResult
+    if (!verifiedStopResult) {
+      return null
+    }
+    const root = { pid: 41, parentPid: 1, processGroupId: 41, startedAt: 'captured' }
+    return createPtyStopReceipt({
+      executionHostId: 'local', terminalHandle: stoppingPtyId, ptyId: stoppingPtyId,
+      ptyIncarnation:
+        stoppingPtyId === SIBLING_PTY_ID ? SIBLING_INCARNATION_ID : incarnationId,
+      root, descendants: [],
+      observations: [{ identity: root, status: 'absent', observedAt: new Date().toISOString() }],
+      verdict: 'exited', processTreeVerified: true
+    })
   })
   const listProcesses = vi.fn(async () => [
     ...(victimPtyListed

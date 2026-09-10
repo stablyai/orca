@@ -12,6 +12,7 @@ const {
   resolveAgentForegroundProcessMock,
   readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
+  stopPtyProcessTreeMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsMock,
   createShellPromptReadinessProbeMock
@@ -26,6 +27,7 @@ const {
   resolveAgentForegroundProcessMock: vi.fn(),
   readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
+  stopPtyProcessTreeMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsMock: vi.fn(),
   createShellPromptReadinessProbeMock: vi.fn()
@@ -60,6 +62,10 @@ vi.mock('./macos-tcc-login-shell', async (importOriginal) => ({
 
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
+}))
+
+vi.mock('../daemon/terminal-session-teardown', () => ({
+  stopPtyProcessTree: stopPtyProcessTreeMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths (the fs mock
@@ -127,6 +133,17 @@ import {
   type LocalPtyMockProcess
 } from './local-pty-provider-test-harness'
 
+function exitedTreeEvidence(pid: number) {
+  const root = { pid, parentPid: 1, processGroupId: pid, startedAt: 'captured' }
+  return {
+    root,
+    descendants: [],
+    observations: [{ identity: root, status: 'absent', observedAt: new Date().toISOString() }],
+    verdict: 'exited',
+    processTreeVerified: true
+  } as const
+}
+
 describe('LocalPtyProvider', () => {
   let provider: LocalPtyProvider
   let mockProc: LocalPtyMockProcess
@@ -158,11 +175,32 @@ describe('LocalPtyProvider', () => {
       }
     })
     spawnMock.mockReturnValue(mockProc)
+    stopPtyProcessTreeMock.mockReset()
+    stopPtyProcessTreeMock.mockImplementation(async (pid: number, killRoot: () => void) => {
+      killRoot()
+      return exitedTreeEvidence(pid)
+    })
 
     provider = new LocalPtyProvider()
   })
 
   describe('shutdown', () => {
+    it('returns the exact verified receipt from the local execution owner', async () => {
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
+      const shutdown = provider.shutdown(id, {
+        immediate: true,
+        expectedIncarnationId: incarnationId
+      })
+      exitCb?.({ exitCode: 0 })
+
+      await expect(shutdown).resolves.toMatchObject({
+        executionHostId: 'local',
+        ptyId: id,
+        ptyIncarnation: incarnationId,
+        verdict: 'exited',
+        processTreeVerified: true
+      })
+    })
     it('kills the PTY process', async () => {
       // Why: capture the spy reference before shutdown triggers onExit →
       // POSIX kill neutralization. After neutralization, mockProc.kill is
@@ -236,7 +274,10 @@ describe('LocalPtyProvider', () => {
       expect(provider.killOrphanedPtys(1)).toEqual([{ id }])
       expect(provider.hasPty(id)).toBe(true)
 
-      await expect(shutdown).resolves.toBeUndefined()
+      await expect(shutdown).resolves.toMatchObject({
+        verdict: 'exited',
+        processTreeVerified: true
+      })
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(provider.hasPty(id)).toBe(false)
     })
@@ -346,7 +387,37 @@ describe('LocalPtyProvider', () => {
       expect(provider.hasPty(id)).toBe(false)
     })
 
-    it('rejects a physical-exit timeout but retains the owner for a successful retry', async () => {
+    it('returns the native Job Object receipt for an assigned Windows process tree', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      let nativeReceipt: unknown
+      Object.defineProperties(mockProc, {
+        windowsJobObjectAssigned: { value: true },
+        windowsJobObjectStopReceipt: { get: () => nativeReceipt }
+      })
+      mockProc.kill.mockImplementation(() => {
+        nativeReceipt = {
+          version: 1,
+          assigned: true,
+          processTreeVerified: true,
+          identities: [
+            { pid: mockProc.pid, parentPid: null, processGroupId: null, startedAt: 'root' },
+            { pid: 12346, parentPid: null, processGroupId: null, startedAt: 'child' }
+          ]
+        }
+        exitCb?.({ exitCode: 1 })
+      })
+
+      const spawned = await provider.spawn({ cols: 80, rows: 24 })
+      expect(spawned.windowsPtyJobObject).toEqual({ version: 1, assigned: true })
+      await expect(provider.shutdown(spawned.id, { immediate: true })).resolves.toMatchObject({
+        verdict: 'exited',
+        processTreeVerified: true,
+        root: { pid: mockProc.pid, startedAt: 'root' },
+        descendants: [{ pid: 12346, startedAt: 'child' }]
+      })
+    })
+
+    it('returns verified OS evidence while retaining native ownership until physical exit', async () => {
       vi.useFakeTimers()
       try {
         const killSpy = vi.fn()
@@ -354,15 +425,15 @@ describe('LocalPtyProvider', () => {
         const { id } = await provider.spawn({ cols: 80, rows: 24 })
 
         const shutdown = provider.shutdown(id, { immediate: true })
-        const rejected = expect(shutdown).rejects.toThrow('Timed out waiting for PTY process exit')
         await vi.advanceTimersByTimeAsync(LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS)
-        await rejected
+        const receipt = await shutdown
+        expect(receipt).toMatchObject({ verdict: 'exited', processTreeVerified: true })
         expect(provider.hasPty(id)).toBe(true)
 
         const retry = provider.shutdown(id, { immediate: true })
         expect(killSpy).toHaveBeenCalledTimes(1)
+        await expect(retry).resolves.toBe(receipt)
         exitCb?.({ exitCode: 137 })
-        await expect(retry).resolves.toBeUndefined()
         expect(provider.hasPty(id)).toBe(false)
       } finally {
         vi.useRealTimers()
@@ -379,7 +450,10 @@ describe('LocalPtyProvider', () => {
       expect(provider.hasPty(id)).toBe(true)
 
       mockProc.kill = vi.fn(() => exitCb?.({ exitCode: 137 }))
-      await expect(provider.shutdown(id, { immediate: true })).resolves.toBeUndefined()
+      await expect(provider.shutdown(id, { immediate: true })).resolves.toMatchObject({
+        verdict: 'exited',
+        processTreeVerified: true
+      })
       expect(provider.hasPty(id)).toBe(false)
     })
 
@@ -398,19 +472,21 @@ describe('LocalPtyProvider', () => {
       }
     })
 
-    it('is a no-op for unknown PTY ids', async () => {
-      await provider.shutdown('nonexistent', { immediate: true })
+    it('fails closed for unknown PTY ids', async () => {
+      await expect(provider.shutdown('nonexistent', { immediate: true })).rejects.toThrow(
+        'pty_stop_receipt_unavailable'
+      )
       expect(mockProc.kill).not.toHaveBeenCalled()
     })
 
     it('waits for an in-flight agent shutdown before reusing the same session id', async () => {
       let releaseSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
-        (_rootPid: number, killRoot: () => void) =>
-          new Promise<void>((resolve) => {
+      stopPtyProcessTreeMock.mockImplementation(
+        (rootPid: number, killRoot: () => void) =>
+          new Promise((resolve) => {
             releaseSweep = () => {
               killRoot()
-              resolve()
+              resolve(exitedTreeEvidence(rootPid))
             }
           })
       )
@@ -436,12 +512,12 @@ describe('LocalPtyProvider', () => {
 
     it('coalesces duplicate shutdown while descendant sweep is pending', async () => {
       let releaseSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
-        (_rootPid: number, killRoot: () => void) =>
-          new Promise<void>((resolve) => {
+      stopPtyProcessTreeMock.mockImplementation(
+        (rootPid: number, killRoot: () => void) =>
+          new Promise((resolve) => {
             releaseSweep = () => {
               killRoot()
-              resolve()
+              resolve(exitedTreeEvidence(rootPid))
             }
           })
       )
@@ -453,25 +529,25 @@ describe('LocalPtyProvider', () => {
 
       const first = provider.shutdown(id, { immediate: true })
       const second = provider.shutdown(id, { immediate: true })
-      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
+      expect(stopPtyProcessTreeMock).toHaveBeenCalledOnce()
       releaseSweep()
       await Promise.all([first, second])
-      expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
+      expect(stopPtyProcessTreeMock).toHaveBeenCalledOnce()
     })
 
     it('does not terminate descendants after the tracked root exits mid-sweep', async () => {
       const terminateDescendants = vi.fn()
       let releaseSweep!: () => void
-      killWithDescendantSweepMock.mockImplementation(
-        (_rootPid: number, killRoot: () => void, deps?: { ownsRoot?: () => boolean }) =>
-          new Promise<void>((resolve) => {
+      stopPtyProcessTreeMock.mockImplementation(
+        (rootPid: number, killRoot: () => void, deps?: { ownsRoot?: () => boolean }) =>
+          new Promise((resolve) => {
             releaseSweep = () => {
               // Production killWithDescendantSweep only signals descendants while ownsRoot.
               if (deps?.ownsRoot?.() ?? true) {
                 terminateDescendants()
               }
               killRoot()
-              resolve()
+              resolve(exitedTreeEvidence(rootPid))
             }
           })
       )
@@ -497,7 +573,7 @@ describe('LocalPtyProvider', () => {
 
       // Why: an orphaned pnpm/node child otherwise keeps the ConPTY console alive and holds
       // the worktree cwd; the sweep taskkill /T /F clears the tree so removal can proceed.
-      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+      expect(stopPtyProcessTreeMock).toHaveBeenCalledWith(
         mockProc.pid,
         expect.any(Function),
         expect.objectContaining({ ownsRoot: expect.any(Function) })
@@ -594,7 +670,10 @@ describe('LocalPtyProvider', () => {
 
       provider.killAll()
 
-      await expect(shutdown).resolves.toBeUndefined()
+      await expect(shutdown).resolves.toMatchObject({
+        verdict: 'exited',
+        processTreeVerified: true
+      })
     })
   })
 })

@@ -1,7 +1,8 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
-const STRUCTURAL_METADATA_FILES = ['HEAD', 'gitdir', 'locked', 'config.worktree']
+const HEAD_FILE = 'HEAD'
+const GATED_STRUCTURAL_METADATA_FILES = ['gitdir', 'locked', 'config.worktree']
 const INDEX_FILE = 'index'
 const HEAD_LOG_FILE = join('logs', 'HEAD')
 
@@ -45,8 +46,8 @@ export async function snapshotGitCommonEntry(
   // worktree lock/unlock, config --worktree, index writes all move it). The one
   // in-place exception is `gitdir` (worktree move/repair), which the periodic
   // forceFullScan backstop (INDEX_BACKSTOP_TICKS) below re-stats regardless of this
-  // gate. Gating all of these leaves on the entry-dir signature turns an unchanged
-  // entry into a single stat per tick instead of stat-ing every leaf every tick.
+  // gate. HEAD remains independently stat'd because a same-granule lock+rename can
+  // leave the directory signature unchanged. The other leaves stay gated.
   const nextDirSignature = await gitCommonDirectorySignature(entryPath)
   if (nextDirSignature === 'missing') {
     return (
@@ -58,16 +59,30 @@ export async function snapshotGitCommonEntry(
       }
     )
   }
+  const headSignature = await gitCommonFileSignature(join(entryPath, HEAD_FILE))
   const shouldRescan = forceFullScan || !previous || previous.dirSignature !== nextDirSignature
   if (!shouldRescan) {
-    return previous
+    const previousHeadSignature = previous.structuralSignatures.get(HEAD_FILE) ?? null
+    if (previousHeadSignature === headSignature) {
+      return previous
+    }
+    const structuralSignatures = new Map(previous.structuralSignatures)
+    if (headSignature === null) {
+      structuralSignatures.delete(HEAD_FILE)
+    } else {
+      structuralSignatures.set(HEAD_FILE, headSignature)
+    }
+    return { ...previous, dirSignature: nextDirSignature, structuralSignatures }
   }
   const structuralSignatures = new Map<string, string>()
+  if (headSignature !== null) {
+    structuralSignatures.set(HEAD_FILE, headSignature)
+  }
   const [headLogSignature, indexSignature] = await Promise.all([
     gitCommonFileSignature(join(entryPath, HEAD_LOG_FILE)),
     gitCommonFileSignature(join(entryPath, INDEX_FILE)),
     Promise.all(
-      STRUCTURAL_METADATA_FILES.map(async (name) => {
+      GATED_STRUCTURAL_METADATA_FILES.map(async (name) => {
         const signature = await gitCommonFileSignature(join(entryPath, name))
         if (signature !== null) {
           structuralSignatures.set(name, signature)

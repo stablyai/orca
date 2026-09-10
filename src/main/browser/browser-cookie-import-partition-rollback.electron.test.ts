@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
+import { resolveElectronFixtureLaunch } from './electron-fixture-display'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -170,12 +171,8 @@ async function runFixture(): Promise<FixtureResult> {
   writeFileSync(fixturePath, buildFixtureMain(bundlePath, resultPath))
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [fixturePath, `--user-data-dir=${join(root, 'profile')}`]
-  const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
-  const args =
-    process.platform === 'linux'
-      ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
-      : electronArgs
-  const run = spawnSync(executable, args, {
+  const launch = resolveElectronFixtureLaunch(electronBinary, electronArgs)
+  const run = spawnSync(launch.command, launch.args, {
     encoding: 'utf8',
     env,
     timeout: 60_000

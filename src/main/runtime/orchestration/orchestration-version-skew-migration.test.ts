@@ -204,7 +204,7 @@ describe('OrchestrationDb version-skew migration', () => {
       'ALTER TABLE worker_terminal_resources DROP COLUMN recovery_attempt_count; ALTER TABLE worker_terminal_resources DROP COLUMN last_recovery_at;'
     )
     raw.pragma('user_version = 32')
-    expect(resolveOrchestrationMigrationStartVersion(raw, 32, 32)).toBe(6)
+    expect(resolveOrchestrationMigrationStartVersion(raw, 32, 32)).toBe(31)
     raw.close()
 
     db = new OrchestrationDb(dbPath)
@@ -275,7 +275,7 @@ describe('OrchestrationDb version-skew migration', () => {
         ON deliveries(mailbox_handle) WHERE status = 'outstanding';
     `)
     raw.pragma('user_version = 34')
-    expect(resolveOrchestrationMigrationStartVersion(raw, 34, SCHEMA_VERSION)).toBe(6)
+    expect(resolveOrchestrationMigrationStartVersion(raw, 34, SCHEMA_VERSION)).toBe(33)
     raw.close()
 
     db = new OrchestrationDb(dbPath)
@@ -439,7 +439,7 @@ describe('OrchestrationDb version-skew migration', () => {
        ALTER TABLE messages DROP COLUMN pointer_enter_pending;`
     )
     raw.pragma('user_version = 33')
-    expect(resolveOrchestrationMigrationStartVersion(raw, 33, SCHEMA_VERSION)).toBe(6)
+    expect(resolveOrchestrationMigrationStartVersion(raw, 33, SCHEMA_VERSION)).toBe(32)
     raw.close()
 
     db = new OrchestrationDb(dbPath)
@@ -572,7 +572,7 @@ describe('OrchestrationDb version-skew migration', () => {
       CREATE UNIQUE INDEX idx_deliveries_one_outstanding
         ON deliveries(mailbox_handle) WHERE status = 'outstanding';
     `)
-    expect(resolveOrchestrationMigrationStartVersion(raw, 35, SCHEMA_VERSION)).toBe(6)
+    expect(resolveOrchestrationMigrationStartVersion(raw, 35, SCHEMA_VERSION)).toBe(34)
     raw.close()
 
     db = new OrchestrationDb(dbPath)
@@ -583,5 +583,125 @@ describe('OrchestrationDb version-skew migration', () => {
           .get() as { sql: string }
       ).sql
     ).toContain("mailbox_handle != ''")
+  })
+
+  it('adds v33 lease, close-intent, and browser-surface tables without changing v30 Maestro documents', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v31-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    db.db
+      .prepare(
+        `INSERT INTO maestro_documents (execution_host_id, workspace_key, revision, document_json)
+       VALUES ('local', 'folder:one', 7, '{"nodes":{}}')`
+      )
+      .run()
+    db.close()
+    db = undefined
+    const raw = new Database(dbPath)
+    raw.exec(`
+      DROP TABLE maestro_coordinator_handoff_receipts;
+      DROP TABLE maestro_terminal_input_receipts;
+      DROP TABLE maestro_terminal_leases;
+    `)
+    raw.pragma('user_version = 30')
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+
+    expect(db.db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
+    expect(
+      db.db
+        .prepare(
+          `SELECT revision FROM maestro_documents
+         WHERE execution_host_id = 'local' AND workspace_key = 'folder:one'`
+        )
+        .get()
+    ).toEqual({ revision: 7 })
+    expect(
+      db.db
+        .prepare(
+          `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name = 'maestro_terminal_leases'`
+        )
+        .get()
+    ).toBeDefined()
+    expect(
+      db.db
+        .prepare(
+          `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name = 'maestro_browser_surfaces'`
+        )
+        .get()
+    ).toBeDefined()
+    expect(
+      db.db
+        .prepare(
+          `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name = 'terminal_close_intents'`
+        )
+        .get()
+    ).toBeDefined()
+  })
+
+  it('rebuilds v31 lease dependents with valid foreign keys and preserves legacy null attempts', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v32-'))
+    const dbPath = join(tempDir, 'orchestration.db')
+    db = new OrchestrationDb(dbPath)
+    db.close()
+    db = undefined
+    const raw = new Database(dbPath)
+    raw.exec(`
+      INSERT INTO maestro_terminal_leases (
+        id, request_id, execution_host_id, workspace_key, run_id, task_id, attempt_id,
+        role, title, launch_profile_json, spawned_by, owner_principal, retention_policy,
+        lifecycle_state
+      ) VALUES (
+        'legacy_lease', 'legacy_request', 'local', 'folder:one', 'run_1', 'task_1', NULL,
+        'worker', 'legacy', '{"agent":"codex","model":null,"effort":null,"permissionMode":"default","routeRef":null}',
+        'legacy', 'dispatch:legacy', 'retain', 'retained'
+      );
+    `)
+    raw.pragma('user_version = 31')
+    raw.close()
+
+    db = new OrchestrationDb(dbPath)
+
+    expect(db.getMaestroTerminalLease('legacy_lease')?.attemptId).toBeNull()
+    expect(
+      (
+        db.db.pragma('foreign_key_list(maestro_terminal_input_receipts)') as { table: string }[]
+      ).map((foreignKey) => foreignKey.table)
+    ).toContain('maestro_terminal_leases')
+    expect(
+      (
+        db.db.pragma('foreign_key_list(maestro_coordinator_handoff_receipts)') as {
+          table: string
+        }[]
+      ).map((foreignKey) => foreignKey.table)
+    ).toContain('maestro_terminal_leases')
+    expect(
+      (
+        db.db.pragma('index_list(maestro_terminal_lease_transfer_receipts)') as { name: string }[]
+      ).map((index) => index.name)
+    ).toContain('idx_maestro_terminal_lease_transfer_mutation')
+    db.db
+      .prepare(
+        `INSERT INTO maestro_terminal_lease_transfer_receipts (
+          request_id, receipt_json, mutation_caller_fingerprint, mutation_request_id,
+          mutation_method, mutation_payload_hash
+        ) VALUES (?, '{}', 'caller_1', 'request_1', 'orchestration.workerStart', 'hash_1')`
+      )
+      .run('transfer_1')
+    expect(() =>
+      db!.db
+        .prepare(
+          `INSERT INTO maestro_terminal_lease_transfer_receipts (
+            request_id, receipt_json, mutation_caller_fingerprint, mutation_request_id,
+            mutation_method, mutation_payload_hash
+          ) VALUES ('transfer_2', '{}', 'caller_1', 'request_1', 'orchestration.workerStart', 'hash_1')`
+        )
+        .run()
+    ).toThrow()
+    expect(db.db.pragma('foreign_key_check')).toEqual([])
   })
 })

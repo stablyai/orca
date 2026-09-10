@@ -135,6 +135,7 @@ export async function createRuntimeFolderWorktree(args: {
         await deps.markTrusted(trustAgent, worktree.path)
       }
       const terminal = await deps.createTerminal(`id:${worktree.id}`, {
+        ...(request.startupTerminalTitle ? { title: request.startupTerminalTitle } : {}),
         command: args.startup.command,
         env: args.startup.env,
         ...(args.startup.launchConfig ? { launchConfig: args.startup.launchConfig } : {}),
@@ -142,6 +143,7 @@ export async function createRuntimeFolderWorktree(args: {
         ...(args.startup.viewMode ? { viewMode: args.startup.viewMode } : {}),
         startupCommandDelivery: args.startup.startupCommandDelivery,
         telemetry: args.startup.telemetry,
+        orchestrationManagedLaunch: request.orchestrationManagedLaunch,
         ...(shouldActivate ? {} : { surfaceOwner: false })
       })
       if (args.draftPaste) {

@@ -18,6 +18,10 @@ export function ZoomOverlay(): React.JSX.Element | null {
 
   useEffect(() => {
     const onZoomLevelChanged = (e: Event): void => {
+      const maestroCanvas = document.querySelector<HTMLElement>('[data-maestro-workspace-canvas]')
+      if (maestroCanvas?.getClientRects().length) {
+        return
+      }
       const customEvent = e as CustomEvent<ZoomLevelChangedEventDetail>
       setDetail(customEvent.detail)
       setVisible(true)

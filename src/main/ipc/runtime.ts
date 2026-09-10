@@ -14,12 +14,24 @@ import {
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
+  MAESTRO_RUN_COMPLETION_RUNTIME_CAPABILITY,
+  MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
+
+const LOCAL_RUNTIME_CLIENT_CAPABILITIES = [
+  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY,
+  MAESTRO_RUN_COMPLETION_RUNTIME_CAPABILITY
+] as const
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -82,13 +94,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
           clientId: 'desktop-renderer',
           clientKind: 'runtime',
           connectionId: desktopSenders.connectionIdFor(event.sender),
-          clientCapabilities: [
-            AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-            AGENT_SESSION_TURN_ITEM_CAPABILITY,
-            AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-            STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-            CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-          ]
+          clientCapabilities: LOCAL_RUNTIME_CLIENT_CAPABILITIES
         }
       )) as RuntimeRpcResponse<unknown>
     }
@@ -133,13 +139,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
             clientId: 'desktop-renderer',
             clientKind: 'runtime',
             connectionId,
-            clientCapabilities: [
-              AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-              AGENT_SESSION_TURN_ITEM_CAPABILITY,
-              AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
-              STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-              CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-            ]
+            clientCapabilities: LOCAL_RUNTIME_CLIENT_CAPABILITIES
           }
         )
         .finally(stop)

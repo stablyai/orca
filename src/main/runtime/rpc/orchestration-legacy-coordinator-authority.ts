@@ -1,5 +1,6 @@
 import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
 import type { OrchestrationDb } from '../orchestration/db'
+import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { LegacyCompatibilityPrincipalRow } from '../orchestration/types'
 import type { LegacyCoordinatorAuthorityProof, RpcRequest } from './core'
 import {
@@ -29,6 +30,27 @@ export class LegacyCoordinatorAuthority {
     if (requestedRun !== adoption.adopted_run_id) {
       return undefined
     }
+    const run = db.getRun(adoption.adopted_run_id)
+    const reservedSuccessor = run
+      ? db.getCoordinatorLease(run.id, run.consumer_generation)
+      : undefined
+    if (run?.coordinator_pane_key === null && reservedSuccessor?.requestId.startsWith('handoff:')) {
+      const requestId = reservedSuccessor.requestId.slice('handoff:'.length)
+      throw new OrchestrationError(
+        'legacy_read_only',
+        'A reserved successor owns this Run generation. No effects were applied; inspect the durable handoff receipt before recovering.',
+        {
+          effectsApplied: false,
+          nextCommandArgs: [
+            'maestro',
+            'coordinator-handoff',
+            '--payload',
+            JSON.stringify({ operation: 'show', requestId }),
+            '--json'
+          ]
+        }
+      )
+    }
     const candidate = db.resolveLegacyCoordinatorCandidate({
       runId: adoption.adopted_run_id,
       terminalHandle: request.orchestrationCompatibilityEvidence?.terminalHandle,
@@ -39,7 +61,6 @@ export class LegacyCoordinatorAuthority {
       if (!evidence) {
         return undefined
       }
-      const run = db.getRun(adoption.adopted_run_id)
       const principal = db.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
       // Why: an unclaimed adopted Run has no coordinator to fence, and a revoked principal is exactly that.
       if (!run?.coordinator_pane_key && principal?.status !== 'committed') {
@@ -69,7 +90,6 @@ export class LegacyCoordinatorAuthority {
       evidence: request.orchestrationCompatibilityEvidence,
       candidate: proofCandidate
     })
-    const run = db.getRun(adoption.adopted_run_id)
     if (!run || !this.bindingMatches(run, proofCandidate)) {
       throw legacyCoordinatorReadOnly()
     }

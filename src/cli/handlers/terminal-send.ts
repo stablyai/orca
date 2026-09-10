@@ -14,7 +14,17 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
   const text = getOptionalStringFlag(flags, 'text')
   const enter = flags.get('enter') === true
   const interrupt = flags.get('interrupt') === true
+  const leaseInputJson = getOptionalStringFlag(flags, 'lease-input')
+  let leaseInput: unknown
+  if (leaseInputJson) {
+    try {
+      leaseInput = JSON.parse(leaseInputJson)
+    } catch {
+      throw new RuntimeClientError('invalid_argument', '--lease-input must be valid JSON')
+    }
+  }
   const promptCandidate = !!text && enter && !interrupt
+  const promptDeliveryCandidate = promptCandidate && !leaseInput
   const retryRequest = readRetryRequestFlag(flags)
   const waitSubmitSeconds = getOptionalPositiveIntegerFlag(flags, 'wait-submit')
   if ((retryRequest || waitSubmitSeconds) && !promptCandidate) {
@@ -29,7 +39,7 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
   const waitSubmitMs = waitSubmitSeconds ? waitSubmitSeconds * 1000 : undefined
   let promptDeliverySupported = false
   let promptDeliveryRuntimeId: string | null = null
-  if (promptCandidate) {
+  if (promptDeliveryCandidate) {
     const status = await client.getCliStatus()
     if (!status.result.runtime.reachable) {
       throw new RuntimeClientError(
@@ -59,6 +69,7 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
     text,
     enter,
     interrupt,
+    ...(leaseInput ? { leaseInput } : {}),
     ...(promptCandidate
       ? {
           agentPrompt: true as const,
@@ -73,14 +84,14 @@ export const terminalSendHandler: CommandHandler = async ({ flags, client, cwd, 
         ...(retryRequest ? { orchestrationRequestId: retryRequest } : {}),
         ...(waitSubmitMs ? { timeoutMs: waitSubmitMs + 10_000 } : {})
       }
-    : promptCandidate
+    : promptDeliveryCandidate
       ? { legacyTerminalPrompt: true as const }
       : undefined
   const result = options
     ? await client.call<TerminalSendResult>('terminal.send', params, options)
     : await client.call<TerminalSendResult>('terminal.send', params)
   const missingPromptReceipt =
-    promptCandidate && result.result.send.accepted && !result.result.send.prompt
+    promptDeliveryCandidate && result.result.send.accepted && !result.result.send.prompt
   if (missingPromptReceipt && promptDeliverySupported) {
     throw attachUnverifiedTerminalPromptRecovery(
       new RuntimeClientError(

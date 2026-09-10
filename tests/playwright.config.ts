@@ -1,5 +1,17 @@
 import { defineConfig } from '@stablyai/playwright-test'
 
+const MAESTRO_E2E_SPEC_PATHS = [
+  'tests/e2e/maestro-navigator.spec.ts',
+  'tests/e2e/maestro-canvas.spec.ts',
+  'tests/e2e/maestro-delegation-worker.spec.ts',
+  'tests/e2e/maestro-worker-lifecycle.spec.ts',
+  'tests/e2e/maestro-browser-evidence.spec.ts'
+] as const
+
+const hasMaestroE2EPath = process.argv.some((argument) =>
+  MAESTRO_E2E_SPEC_PATHS.some((specPath) => argument.includes(specPath))
+)
+
 /**
  * Playwright config for Orca E2E tests.
  *
@@ -29,7 +41,7 @@ export default defineConfig({
   // Why: each CI worker launches a real Electron/Chromium process tree against
   // a mutable seeded repo. Release runners showed two apps per VM can contend
   // on Xvfb/git enough to create false E2E failures, so CI scales by shards.
-  workers: process.env.CI ? 1 : undefined,
+  workers: process.env.CI || hasMaestroE2EPath ? 1 : undefined,
   forbidOnly: !!process.env.CI,
   retries: 0,
   reporter: 'list',

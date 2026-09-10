@@ -93,6 +93,8 @@ export type RuntimePtyTitleTrackerEntry = {
   lastTitleFactAtMs: number | null
   chunkTouchedSessionTabs: boolean
   pendingFacts: TerminalSideEffectFact[]
+  launchAuthorityCommandStarted: boolean
+  launchAuthorityRetirementPending: boolean
   commandCodeDetector: { observe: (data: string) => boolean } | null
 }
 

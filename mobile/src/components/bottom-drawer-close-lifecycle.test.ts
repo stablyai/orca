@@ -10,14 +10,15 @@ vi.mock('./mounted-bottom-drawer', () => ({
 function renderDrawer(
   visible: boolean,
   onClose: () => void,
-  onAfterClose: () => void
+  onAfterClose: () => void,
+  surfaceColor?: string
 ): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
   act(() => {
     renderer = create(
       createElement(
         BottomDrawer,
-        { visible, onClose, onAfterClose },
+        { visible, onClose, onAfterClose, surfaceColor },
         createElement('DrawerContent')
       )
     )
@@ -97,5 +98,13 @@ describe('BottomDrawer close lifecycle', () => {
     expect(firstAfterClose).not.toHaveBeenCalled()
     expect(latestAfterClose).toHaveBeenCalledTimes(1)
     expect(renderer.toJSON()).toBeNull()
+  })
+
+  it('forwards an optional surface override without changing the default', () => {
+    const defaultDrawer = renderDrawer(true, vi.fn(), vi.fn())
+    const themedDrawer = renderDrawer(true, vi.fn(), vi.fn(), '#ffffff')
+
+    expect(mountedDrawer(defaultDrawer).props.surfaceColor).toBeUndefined()
+    expect(mountedDrawer(themedDrawer).props.surfaceColor).toBe('#ffffff')
   })
 })

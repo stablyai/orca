@@ -81,6 +81,8 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --color-terminal-pane-surface-on-dark: var(--terminal-pane-surface-on-dark);
+  --color-terminal-pane-body-on-dark-fg: var(--terminal-pane-body-on-dark-fg);
   --color-terminal-pane-title-on-dark-fg: var(--terminal-pane-title-on-dark-fg);
   --color-terminal-pane-title-on-dark-input-fg: var(--terminal-pane-title-on-dark-input-fg);
   --color-terminal-pane-title-on-dark-placeholder: var(--terminal-pane-title-on-dark-placeholder);
@@ -208,6 +210,8 @@
   --sidebar-accent-foreground: #171717;
   --sidebar-border: #e5e5e5;
   --sidebar-ring: #a1a1a1;
+  --terminal-pane-surface-on-dark: rgb(0 0 0 / 0.95);
+  --terminal-pane-body-on-dark-fg: rgb(255 255 255 / 0.86);
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
@@ -324,6 +328,8 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: rgb(255 255 255 / 0.07);
   --sidebar-ring: #525252;
+  --terminal-pane-surface-on-dark: rgb(0 0 0 / 0.95);
+  --terminal-pane-body-on-dark-fg: rgb(255 255 255 / 0.86);
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
@@ -3029,4 +3035,109 @@ html.native-shell .app-layout {
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.maestro-workspace-window[data-maestro-agent-role='coordinator'] {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 52%, transparent),
+    0 -6px 20px color-mix(in srgb, var(--ai-action-accent) 10%, transparent),
+    0 10px 28px rgba(0, 0, 0, 0.18);
+}
+
+.maestro-workspace-window[data-maestro-agent-role='coordinator']::before {
+  content: '';
+  position: absolute;
+  z-index: 8;
+  top: -4px;
+  right: 12%;
+  left: 12%;
+  height: 2px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--ai-action-accent) 82%, var(--foreground)) 28%,
+    var(--ai-action-accent) 50%,
+    color-mix(in srgb, var(--ai-action-accent) 82%, var(--foreground)) 72%,
+    transparent
+  );
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ai-action-accent) 32%, transparent);
+  pointer-events: none;
+}
+
+.maestro-workspace-window[data-maestro-agent-role='coordinator']::after {
+  content: '';
+  position: absolute;
+  z-index: 8;
+  top: 48px;
+  bottom: 12px;
+  left: -2px;
+  width: 3px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--ai-action-accent) 72%, var(--border));
+  pointer-events: none;
+}
+
+.maestro-workspace-window[data-maestro-selected='true'] {
+  box-shadow:
+    0 0 0 2px var(--ring),
+    0 0 0 5px color-mix(in srgb, var(--ring) 18%, transparent),
+    0 14px 32px rgba(0, 0, 0, 0.24);
+}
+
+.maestro-workspace-window[data-maestro-presence='entering'] {
+  animation: maestro-workspace-surface-enter 180ms cubic-bezier(0, 0, 0.2, 1) both;
+  will-change: opacity;
+}
+
+.maestro-workspace-window[data-maestro-presence='exiting'] {
+  pointer-events: none;
+  animation: maestro-workspace-surface-exit 160ms cubic-bezier(0.4, 0, 1, 1) both;
+  will-change: opacity;
+}
+
+@keyframes maestro-workspace-surface-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes maestro-workspace-surface-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes maestro-workspace-surface-dissolve-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes maestro-workspace-surface-dissolve-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maestro-workspace-window[data-maestro-presence='entering'] {
+    animation: maestro-workspace-surface-dissolve-in 120ms ease-out both;
+  }
+
+  .maestro-workspace-window[data-maestro-presence='exiting'] {
+    animation: maestro-workspace-surface-dissolve-out 100ms ease-in both;
+  }
 }

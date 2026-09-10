@@ -60,6 +60,27 @@ describe('tui agent permissions', () => {
     ).toBe('yolo')
   })
 
+  it.each([
+    ['codex', '--yolo --model gpt-5.6-sol'],
+    ['claude', '--model sonnet --dangerously-skip-permissions'],
+    ['cline', '--auto-approve true --model claude-4']
+  ] as const)(
+    'keeps %s unattended when model arguments are also configured',
+    (agent, agentArgs) => {
+      expect(resolveTuiAgentPermissionMode({ agent, agentArgs, agentEnv: {} })).toBe('yolo')
+    }
+  )
+
+  it('rejects permission-argument substrings', () => {
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'cline',
+        agentArgs: '--auto-approve trueish',
+        agentEnv: {}
+      })
+    ).toBe('mixed')
+  })
+
   it('resolves one empty Codex launch as manual', () => {
     expect(resolveTuiAgentPermissionMode({ agent: 'codex', agentArgs: '', agentEnv: {} })).toBe(
       'manual'

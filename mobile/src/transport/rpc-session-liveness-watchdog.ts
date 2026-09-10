@@ -119,18 +119,22 @@ export class RpcSessionLivenessWatchdog {
     if (delayMs === null) {
       return
     }
-    this.timer = this.setTimer(() => {
-      this.timer = null
-      if (this.identity !== identity) {
-        return
-      }
-      const idleMs = this.now() - this.lastInboundAt
-      if (this.idleProbeMs !== null && idleMs < this.idleProbeMs) {
-        this.armIdle(identity, Math.max(1, this.idleProbeMs - Math.max(0, idleMs)))
-      } else {
-        this.startProbe(identity)
-      }
-    }, delayMs)
+    this.timer = this.setTimer.call(
+      globalThis,
+      () => {
+        this.timer = null
+        if (this.identity !== identity) {
+          return
+        }
+        const idleMs = this.now() - this.lastInboundAt
+        if (this.idleProbeMs !== null && idleMs < this.idleProbeMs) {
+          this.armIdle(identity, Math.max(1, this.idleProbeMs - Math.max(0, idleMs)))
+        } else {
+          this.startProbe(identity)
+        }
+      },
+      delayMs
+    )
   }
 
   private startProbe(identity: RpcSessionIdentity): void {
@@ -150,7 +154,11 @@ export class RpcSessionLivenessWatchdog {
       this.terminateCurrent(identity, 'probe-send-failed')
       return
     }
-    this.timer = this.setTimer(() => this.handleProbeTimeout(identity, sentAt), this.probeTimeoutMs)
+    this.timer = this.setTimer.call(
+      globalThis,
+      () => this.handleProbeTimeout(identity, sentAt),
+      this.probeTimeoutMs
+    )
   }
 
   private handleProbeTimeout(identity: RpcSessionIdentity, sentAt: number): void {
@@ -208,7 +216,7 @@ export class RpcSessionLivenessWatchdog {
 
   private clearActiveTimer(): void {
     if (this.timer !== null) {
-      this.clearTimer(this.timer)
+      this.clearTimer.call(globalThis, this.timer)
       this.timer = null
     }
   }

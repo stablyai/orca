@@ -80,9 +80,59 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
       })
 
       expect(response.status).toBe(204)
+      expect(server.getStatusSnapshot()[0]?.actorAttestation).toMatchObject({
+        provider: 'codex',
+        role: 'lead',
+        eventName: 'PostToolUse'
+      })
       expect(server.getStatusSnapshot()[0]?.subagents).toEqual([
         expect.objectContaining({ id: CHILD_ID, description: '/root/pr_review' })
       ])
+
+      const childResponse = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            agent_id: CHILD_ID,
+            tool_use_id: 'child-tool',
+            tool_name: 'Bash'
+          }
+        })
+      })
+      expect(childResponse.status).toBe(204)
+      expect(server.getStatusSnapshot()[0]?.actorAttestation).toMatchObject({
+        provider: 'codex',
+        role: 'child',
+        providerActorId: CHILD_ID,
+        eventName: 'PreToolUse',
+        toolUseId: 'child-tool'
+      })
+      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            hook_event_name: 'PostToolUse',
+            session_id: 'root-session',
+            transcript_path: parentPath,
+            tool_name: 'collaborationspawn_agent'
+          }
+        })
+      })
 
       appendFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_complete' } }))
       await vi.waitFor(

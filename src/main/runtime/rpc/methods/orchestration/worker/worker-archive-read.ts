@@ -59,6 +59,7 @@ export async function readArchivedWorkerOutput(args: {
       createdAt: archive.created_at,
       releaseState: args.resource.release_state,
       archive: JSON.parse(archive.content) as WorkerStructuredJournalArchive,
+      ...(args.liveness === undefined ? {} : { liveness: args.liveness }),
       ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
       ...(args.limit === undefined ? {} : { limit: args.limit })
     })
@@ -194,8 +195,7 @@ function archivedStatus(args: Parameters<typeof readArchivedWorkerOutput>[0]): {
 } {
   // A durable release is host-confirmed only after the close settles. Unknown and
   // in-flight releases retain their archive, but must not manufacture an exit.
-  const liveness =
-    args.liveness ?? (args.resource.release_state === 'released' ? 'exited' : 'unverifiable')
+  const liveness = args.liveness ?? 'unverifiable'
   return {
     worker: args.workerState,
     terminal: liveness === 'live' ? 'running' : liveness === 'exited' ? 'exited' : 'unknown',

@@ -106,7 +106,8 @@ describe('TabsSlice', () => {
 
       const state = store.getState()
       const tabs = state.unifiedTabsByWorktree[WT]
-      expect(tabs).toHaveLength(3) // 2 terminals + 1 editor
+      expect(tabs).toHaveLength(4) // Maestro + 2 terminals + 1 editor
+      expect(tabs[0]).toMatchObject({ contentType: 'maestro', systemRole: 'workspace-maestro' })
 
       const terminal1 = tabs.find((t) => t.id === 'term-1')
       expect(terminal1?.contentType).toBe('terminal')
@@ -124,7 +125,12 @@ describe('TabsSlice', () => {
       const groups = state.groupsByWorktree[WT]
       expect(groups).toHaveLength(1)
       expect(groups[0].activeTabId).toBe('term-1')
-      expect(groups[0].tabOrder).toEqual(['term-1', 'term-2', '/tmp/feature/src/main.ts'])
+      expect(groups[0].tabOrder).toEqual([
+        expect.stringContaining('workspace-maestro:'),
+        'term-1',
+        'term-2',
+        '/tmp/feature/src/main.ts'
+      ])
     })
 
     it('hydrates floating workspace unified tabs without a repo worktree', () => {
@@ -236,7 +242,11 @@ describe('TabsSlice', () => {
       })
 
       const state = store.getState()
-      expect(state.unifiedTabsByWorktree[WT]).toHaveLength(2)
+      expect(state.unifiedTabsByWorktree[WT]).toHaveLength(3)
+      expect(state.unifiedTabsByWorktree[WT][0]).toMatchObject({
+        contentType: 'maestro',
+        systemRole: 'workspace-maestro'
+      })
       expect(state.groupsByWorktree[WT][0].activeTabId).toBe('/file.ts')
     })
 
@@ -315,7 +325,11 @@ describe('TabsSlice', () => {
         tabGroups: { [WT]: groups }
       })
 
-      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual(['t-1', '/file.ts'])
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([
+        expect.stringContaining('workspace-maestro:'),
+        't-1',
+        '/file.ts'
+      ])
     })
 
     it('filters out invalid worktree IDs during hydration', () => {
@@ -423,12 +437,15 @@ describe('TabsSlice', () => {
         { replaceWorkspaceKeys: [WT] }
       )
 
-      expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([targetNew])
+      expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([
+        expect.objectContaining({ contentType: 'maestro', systemRole: 'workspace-maestro' }),
+        { ...targetNew, sortOrder: 1 }
+      ])
       expect(store.getState().unifiedTabsByWorktree[siblingWorktreeId]).toBe(siblingTabs)
       expect(store.getState().groupsByWorktree[siblingWorktreeId]).toBe(siblingGroups)
     })
 
-    it('deletes omitted target chrome while preserving sibling references', () => {
+    it('keeps only fixed target chrome when scoped hydration omits target tabs', () => {
       const siblingWorktreeId = 'repo2::/tmp/sibling'
       const targetGroup = makeTabGroup({
         id: 'group-target',
@@ -488,10 +505,20 @@ describe('TabsSlice', () => {
       )
 
       const state = store.getState()
-      expect(state.unifiedTabsByWorktree).not.toHaveProperty(WT)
-      expect(state.groupsByWorktree).not.toHaveProperty(WT)
-      expect(state.activeGroupIdByWorktree).not.toHaveProperty(WT)
-      expect(state.layoutByWorktree).not.toHaveProperty(WT)
+      expect(state.unifiedTabsByWorktree[WT]).toEqual([
+        expect.objectContaining({ contentType: 'maestro', systemRole: 'workspace-maestro' })
+      ])
+      expect(state.groupsByWorktree[WT]).toEqual([
+        expect.objectContaining({
+          activeTabId: expect.stringContaining('workspace-maestro:'),
+          tabOrder: [expect.stringContaining('workspace-maestro:')]
+        })
+      ])
+      expect(state.activeGroupIdByWorktree[WT]).toBe(state.groupsByWorktree[WT][0].id)
+      expect(state.layoutByWorktree[WT]).toEqual({
+        type: 'leaf',
+        groupId: state.groupsByWorktree[WT][0].id
+      })
       expect(state.unifiedTabsByWorktree[siblingWorktreeId]).toBe(siblingTabs)
       expect(state.groupsByWorktree[siblingWorktreeId]).toBe(siblingGroups)
       expect(state.layoutByWorktree[siblingWorktreeId]).toBe(siblingLayout)

@@ -135,7 +135,14 @@ export type PreloadApi = {
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
-  ui: Merged<UiCommandEventApi & UiWindowApi>
+  ui: Merged<
+    UiCommandEventApi &
+      UiWindowApi & {
+        onOpenMaestroCanvas?: (
+          callback: (target: { executionHostId: string; workspaceKey: string }) => boolean
+        ) => () => void
+      }
+  >
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi

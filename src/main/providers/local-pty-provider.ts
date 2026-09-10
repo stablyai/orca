@@ -48,7 +48,6 @@ export {
   LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS,
   LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS
 } from './local-pty-termination'
-
 export class LocalPtyProvider implements IPtyProvider {
   private opts: LocalPtyProviderOptions
 
@@ -66,6 +65,7 @@ export class LocalPtyProvider implements IPtyProvider {
    *
    * Windows launches can pre-deliver startup commands in argv, so the stdin fallback only runs when needed.
    */
+
   spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     return spawnLocalPty(args, () => this.opts)
   }
@@ -99,7 +99,10 @@ export class LocalPtyProvider implements IPtyProvider {
     return getLocalPtyAppliedSize(id)
   }
 
-  shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  shutdown(
+    id: string,
+    opts: Parameters<IPtyProvider['shutdown']>[1]
+  ): ReturnType<IPtyProvider['shutdown']> {
     return shutdownLocalPty(id, opts)
   }
 

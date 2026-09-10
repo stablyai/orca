@@ -9,7 +9,11 @@ import {
 import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
+import type {
+  AgentStatusObservation,
+  AgentStatusObservationOrigin
+} from '../../../shared/agent-status-observation'
+import type { AgentActorAttestation } from '../../../shared/agent-status-types'
 import {
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
@@ -18,6 +22,34 @@ import {
 } from './server-claude-status-rules'
 import { isToolProgressWorkingAfterInterrupt } from './server-status-identity'
 import { AgentHookServerStatusApplication } from './server-status-application'
+
+function issueActorAttestation(
+  payload: AgentHookEventPayload,
+  observation: AgentStatusObservation,
+  origin: AgentStatusObservationOrigin
+): AgentActorAttestation | undefined {
+  if (
+    origin !== 'hook' ||
+    payload.isReplay === true ||
+    payload.providerSessionOnly === true ||
+    (payload.source !== 'claude' && payload.source !== 'codex' && payload.source !== 'opencode') ||
+    !payload.hookEventName
+  ) {
+    return undefined
+  }
+  return {
+    authorityId: observation.authorityId,
+    incarnation: observation.incarnation,
+    revision: observation.revision,
+    observedAt: observation.observedAt,
+    provider: payload.source,
+    role: payload.toolAgentId ? 'child' : 'lead',
+    eventName: payload.hookEventName,
+    ...(payload.providerSession ? { providerSessionId: payload.providerSession.id } : {}),
+    ...(payload.toolAgentId ? { providerActorId: payload.toolAgentId } : {}),
+    ...(payload.toolUseId ? { toolUseId: payload.toolUseId } : {})
+  }
+}
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
   protected applyNormalizedStatus(
@@ -179,9 +211,20 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
+    const observation = this.stampObservation(boundaryAwarePayload, origin, observedAt ?? now)
+    const actorAttestation = issueActorAttestation(boundaryAwarePayload, observation, origin)
     const enriched = {
-      ...this.attachStatusTiming(boundaryAwarePayload, now, observedAt),
-      observation: this.stampObservation(boundaryAwarePayload, origin, observedAt ?? now)
+      ...this.attachStatusTiming(
+        actorAttestation
+          ? {
+              ...boundaryAwarePayload,
+              payload: { ...boundaryAwarePayload.payload, actorAttestation }
+            }
+          : boundaryAwarePayload,
+        now,
+        observedAt
+      ),
+      observation
     }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&

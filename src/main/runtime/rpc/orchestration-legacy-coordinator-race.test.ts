@@ -184,6 +184,42 @@ function messageCount(db: OrchestrationDb): number {
 }
 
 describe('legacy coordinator takeover races', () => {
+  it('fences journal mutation as soon as a successor is reserved', async () => {
+    const harness = createHarness()
+    const run = harness.db.getRun(harness.adoptedRunId)!
+    harness.db.reserveCoordinatorHandoff({
+      requestId: 'handoff:fence-predecessor',
+      runId: run.id,
+      executionHostId: 'local',
+      workspaceKey: 'folder:one',
+      title: 'Harness · coordinator successor · Codex',
+      launchProfile: {
+        agent: 'codex',
+        model: null,
+        effort: null,
+        permissionMode: 'yolo',
+        routeRef: null
+      },
+      spawnedBy: COORDINATOR_HANDLE,
+      ownerPrincipal: 'coordinator:successor',
+      capsuleDigest: `sha256:${'a'.repeat(64)}`,
+      inputIdempotencyKey: 'handoff:fence-predecessor:input',
+      expectedGraphRevision: 0,
+      retentionPolicy: 'retain'
+    })
+
+    const response = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.taskCreate',
+        { spec: 'must remain fenced', callerTerminalHandle: COORDINATOR_HANDLE },
+        'handoff-fenced-predecessor'
+      )
+    )
+
+    expect(response).toMatchObject({ ok: false, error: { code: 'legacy_read_only' } })
+    expect(harness.db.listTasks({ runId: run.id })).toHaveLength(1)
+  })
+
   it.each(['dispatch', 'websocket'] as const)(
     '%s routes a pre-bind coordinator send to the retained worker mailbox',
     async (transport) => {

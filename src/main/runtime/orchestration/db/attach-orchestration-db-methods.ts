@@ -42,6 +42,7 @@ import { attachOrchestrationReset } from './reset/orchestration-reset'
 import { attachRunBinding } from './runs/run-binding'
 import { attachRunCoordinatorMailRouting } from './runs/run-coordinator-mail-routing'
 import { attachRunCreate } from './runs/run-create'
+import { attachRunCompletion } from './runs/run-completion'
 import { attachRunDelivery } from './runs/run-delivery'
 import { attachRunLookup } from './runs/run-lookup'
 import { attachLegacyCoordinatorMailTakeover } from './runs/legacy-coordinator-mail-takeover'
@@ -53,6 +54,7 @@ import { attachSchemaMigrate } from './schema/migrate'
 import { attachSchemaColumnProbes } from './schema/schema-column-probes'
 import { attachTaskStore } from './tasks/task-store'
 import { attachTaskStatusTransition } from './tasks/task-status-transition'
+import { attachTerminalCloseIntentStore } from './terminal-close-intent-store'
 import { attachFederatedWorkerStartReconcile } from './worker-dispatch/federated-worker-start-reconcile'
 import { attachWorkerDispatchAbandon } from './worker-dispatch/worker-dispatch-abandon'
 import { attachWorkerDispatchAuthority } from './worker-dispatch/worker-dispatch-authority'
@@ -66,6 +68,11 @@ import { attachWorkerTerminalListing } from './worker-terminal/worker-terminal-l
 import { attachWorkerTerminalRelease } from './worker-terminal/worker-terminal-release'
 import { attachWorkerTerminalResourceStore } from './worker-terminal/worker-terminal-resource-store'
 import { attachWorkerTerminalTransfer } from './worker-terminal/worker-terminal-transfer'
+import { attachMaestroStore } from './maestro/maestro-store'
+import { attachMaestroCoordinatorHandoffStore } from './maestro-terminal-lease/maestro-coordinator-handoff-store'
+import { attachMaestroTerminalInputStore } from './maestro-terminal-lease/maestro-terminal-input-store'
+import { attachMaestroTerminalLeaseStore } from './maestro-terminal-lease/maestro-terminal-lease-store'
+import { attachMaestroBrowserSurfaceStore } from './maestro-browser-surface/maestro-browser-surface-store'
 
 export function attachOrchestrationDbMethods(ctor: { prototype: object }): void {
   attachAttemptObservationStore(ctor)
@@ -76,6 +83,12 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachBackfillLegacyQuestionThreads(ctor)
   attachAdoptLegacyRun(ctor)
   attachMutationReceiptStore(ctor)
+  attachMaestroStore(ctor)
+  attachMaestroTerminalLeaseStore(ctor)
+  attachMaestroTerminalInputStore(ctor)
+  attachMaestroCoordinatorHandoffStore(ctor)
+  attachMaestroBrowserSurfaceStore(ctor)
+  attachTerminalCloseIntentStore(ctor)
   attachLifecycleTransition(ctor)
   attachLegacyCompatibilityPrincipals(ctor)
   attachLegacyCompatibilityCandidates(ctor)
@@ -88,6 +101,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachLegacyQuestionLookup(ctor)
   attachLegacyReplyOperation(ctor)
   attachRunCreate(ctor)
+  attachRunCompletion(ctor)
   attachRunBinding(ctor)
   attachRunLookup(ctor)
   attachRunCoordinatorMailRouting(ctor)

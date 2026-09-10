@@ -63,7 +63,11 @@ export type BrowserTabInfo = {
 }
 
 export type BrowserTabListResult = { tabs: BrowserTabInfo[] }
-export type BrowserTabSwitchResult = { switched: number; browserPageId: string }
+export type BrowserTabSwitchResult = {
+  switched: number
+  browserPageId: string
+  focusReceipt?: BrowserPaneFocusReceipt
+}
 
 export type BrowserTabSetProfileResult = {
   browserPageId: string
@@ -175,7 +179,19 @@ export type BrowserNetworkEntry = {
 export type BrowserNetworkLogResult = { entries: BrowserNetworkEntry[]; truncated: boolean }
 export type BrowserCaptureStartResult = { capturing: boolean }
 export type BrowserCaptureStopResult = { stopped: boolean }
-export type BrowserTabCreateResult = { browserPageId: string }
+export type BrowserPanePaintVerdict = 'painted' | 'unpainted' | 'unobserved'
+
+export type BrowserPaneFocusReceipt = {
+  requested: boolean
+  exactPageSelected: boolean
+  nativePanePaint: BrowserPanePaintVerdict
+  observedAt: string | null
+}
+
+export type BrowserTabCreateResult = {
+  browserPageId: string
+  focusReceipt?: BrowserPaneFocusReceipt
+}
 
 export type BrowserErrorCode =
   | typeof BROWSER_UNAVAILABLE_ERROR_CODE

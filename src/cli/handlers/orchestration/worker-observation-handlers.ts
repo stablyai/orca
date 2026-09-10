@@ -20,7 +20,8 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       projection?: { liveness: { verdict: string }; nextAction: { argv: string[] } } | null
       observation?: { agentWait?: { source: string; reason?: string } | null }
     }>('orchestration.workerShow', {
-      dispatch: getRequiredStringFlag(flags, 'dispatch')
+      dispatch: getRequiredStringFlag(flags, 'dispatch'),
+      run: getOptionalStringFlag(flags, 'run')
     })
     printResult(result, json, (value) => {
       const lines = [

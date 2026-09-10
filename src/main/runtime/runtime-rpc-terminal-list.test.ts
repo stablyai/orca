@@ -1,8 +1,9 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, onTestFinished } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { OrchestrationDb } from './orchestration/db'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { sendRequest } from './runtime-rpc-test-harness'
@@ -28,6 +29,10 @@ describe('OrcaRuntimeRpcServer', () => {
   it('serves terminal.list and terminal.show for live runtime terminals', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService(makeStore() as never)
+    // Why: terminal.send now asks whether the handle carries a managed lease.
+    const orchestrationDb = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(orchestrationDb)
+    onTestFinished(() => orchestrationDb.close())
     const writes: string[] = []
     runtime.setPtyController({
       write: (_ptyId, data) => {
@@ -166,6 +171,10 @@ describe('OrcaRuntimeRpcServer', () => {
   it('serves terminal.list with visual split-group and pane nesting', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService(makeStore() as never)
+    // Why: terminal.send now asks whether the handle carries a managed lease.
+    const orchestrationDb = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(orchestrationDb)
+    onTestFinished(() => orchestrationDb.close())
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
     const worktreeId = 'repo-1::/tmp/worktree-a'
     const leftLeaf = '11111111-1111-4111-8111-111111111111'

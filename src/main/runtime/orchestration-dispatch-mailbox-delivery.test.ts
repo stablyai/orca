@@ -205,6 +205,7 @@ describe('Dispatch mailbox Delivery', () => {
     })
 
     expect(db.getDeliveryRaw(delivery.delivery.id)?.status).toBe('outstanding')
+    expect(db.getDeliveryRaw(delivery.delivery.id)?.consumer_generation).toBe(0)
     expect(
       db.getOrCreateMailboxDelivery({
         runId: run.id,

@@ -29,7 +29,8 @@ describe('federated Dispatch observation fence', () => {
       state: 'ready',
       stage: 'remote_input_accepted',
       worktreeId: 'repo::remote',
-      terminalHandle: 'term_remote'
+      terminalHandle: 'term_remote',
+      remoteRuntimeEpoch: 'epoch-1'
     })
     database.updateFederatedDispatchResources({
       dispatchId: started.dispatch.id,

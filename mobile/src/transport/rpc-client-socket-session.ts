@@ -11,6 +11,7 @@ import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evi
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from './mobile-runtime-client-capabilities'
 
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 5_000
@@ -64,7 +65,6 @@ export class RpcClientSocketSession {
       }
     }
     console.log('[net] sendEncrypted FAILED — channel not ready', {
-      hasWs: this.options.getCurrentSocket() !== null,
       readyState: this.socket.readyState,
       hasKey: this.sharedKey !== null,
       state: this.options.getState()
@@ -208,7 +208,11 @@ export class RpcClientSocketSession {
       const message = JSON.parse(raw) as { type?: unknown }
       if (message.type === 'e2ee_ready') {
         this.options.emitLog('success', 'Received e2ee_ready', 'Sending device token')
-        this.sendEncrypted({ type: 'e2ee_auth', deviceToken: this.options.deviceToken })
+        this.sendEncrypted({
+          type: 'e2ee_auth',
+          deviceToken: this.options.deviceToken,
+          clientCapabilities: MOBILE_RUNTIME_CLIENT_CAPABILITIES
+        })
         return
       }
     } catch {

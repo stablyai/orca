@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "protocol": "maestro-mutation/v1",
+  "mutation_id": "mutation-note-4",
+  "workspace": {
+    "repository_id": "fb2a9411-f3cb-46d4-94f7-067f40719b71",
+    "execution_host_id": "host-local",
+    "workspace_key": "folder:folder-local-01",
+    "run_id": "run-mlk-01"
+  },
+  "actor": {
+    "actor_id": "user-17",
+    "kind": "user",
+    "authenticated": true,
+    "session_id": "session-42"
+  },
+  "coordinator_generation": 3,
+  "expected_revision": 12,
+  "operation": {
+    "kind": "pin-note-snapshot",
+    "task_id": "MLK-01",
+    "snapshot": {
+      "note_id": "design-note",
+      "revision": "rev-4",
+      "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/markdown",
+      "title": "Maestro design constraints",
+      "snapshot_path": "openspec/runs/change/run/artifacts/maestro-notes/design-note/rev-4.md",
+      "byte_count": 384
+    }
+  }
+}

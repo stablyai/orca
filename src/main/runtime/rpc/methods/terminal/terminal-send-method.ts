@@ -1,12 +1,12 @@
+import { acceptManagedTerminalInput } from './managed-terminal-input-acceptance'
 import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
-import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-session-ownership'
-import { InvalidArgumentError, defineMethod, type RpcAnyMethod } from '../../core'
-import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
+import { defineMethod, type RpcAnyMethod } from '../../core'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
 import { TerminalSend } from './unary-schemas'
 import {
   assertTerminalSendExactPtyBinding,
-  assertTerminalSendTextWithinLimit,
+  assertTerminalQueryReplyRequest,
+  assertTerminalSendPayload,
   commitMobileInputFloorClaim,
   getTerminalSendGuardRefusedReason,
   isTerminalInputLockedForClient,
@@ -24,9 +24,8 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (
-      params,
-      {
+    handler: async (params, context) => {
+      const {
         runtime,
         clientId,
         signal,
@@ -34,35 +33,16 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
         recordMutationReceipt,
         markMutationEffectPossible,
         replayedMutationReceipt
-      }
-    ) => {
-      await assertTerminalSendTextWithinLimit(params.text)
-      await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
-      if (params.text) {
-        await assertLegacyAiVaultResumeCommandAllowed(params.text, () =>
-          runtime.ensureStructuredAgentSessionHost()
-        )
-      }
-      if (params.resolvedLaunchDraft?.text) {
-        await assertLegacyAiVaultResumeCommandAllowed(params.resolvedLaunchDraft.text, () =>
-          runtime.ensureStructuredAgentSessionHost()
-        )
-      }
+      } = context
+
+      await assertTerminalSendPayload(runtime, params)
       const queryReplyClientId = clientId ?? params.client?.id
-      if (
-        params.inputKind === 'query-reply' &&
-        (!params.text ||
-          !isTerminalQueryReply(params.text) ||
-          params.enter === true ||
-          params.interrupt === true ||
-          params.agentPrompt === true ||
-          params.requireAgentStatus !== undefined ||
-          params.client?.type !== 'mobile' ||
-          !queryReplyClientId ||
-          (clientId !== undefined && params.client.id !== clientId))
-      ) {
-        throw new InvalidArgumentError('Invalid terminal query reply')
+      const leaseInput = await acceptManagedTerminalInput(params, context)
+      if ('send' in leaseInput) {
+        return leaseInput
       }
+      const durableInputCommandId = leaseInput.commandId
+      assertTerminalQueryReplyRequest(params, clientId, queryReplyClientId)
       const replayObservation = await observeReplayedTerminalPrompt(
         runtime,
         params.terminal,
@@ -243,6 +223,12 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
             )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
+        if (durableInputCommandId) {
+          runtime.getOrchestrationDb().transitionMaestroTerminalInput({
+            commandId: durableInputCommandId,
+            state: 'delivery_unknown'
+          })
+        }
         if (isAgentSessionPtyWriteRefusedError(error)) {
           // Why: name the owner and the stage instead of a bare not-writable, so a client can say
           // who holds the session rather than retrying into a lease it will never win.
@@ -283,6 +269,14 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
       if (result.accepted !== true) {
         mobileFloorClaim.current?.rollback()
       }
+      const deliveryReceipt = durableInputCommandId
+        ? runtime.getOrchestrationDb().transitionMaestroTerminalInput({
+            commandId: durableInputCommandId,
+            state: result.accepted ? 'written_to_pty' : 'delivery_unknown',
+            bytesWritten: result.bytesWritten,
+            enterWritten: result.accepted && params.enter === true
+          })
+        : undefined
       if (
         result.accepted === true &&
         params.enter === true &&
@@ -300,7 +294,7 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
         )
       }
       // Why: deliberate mobile input takes the floor (drives `* → mobile{clientId}`); clientless sends fall back to the current mobile driver.
-      return { send: result }
+      return { send: { ...result, ...(deliveryReceipt ? { deliveryReceipt } : {}) } }
     }
   })
 ]

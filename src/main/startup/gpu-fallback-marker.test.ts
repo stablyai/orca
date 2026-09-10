@@ -73,6 +73,27 @@ describe('gpu-fallback-marker', () => {
     expect(secondRead?.crashesInWindow).toBe(4)
   })
 
+  // Why: the Linux dev watcher (linux-dev-gpu-fallback.ts) reuses this marker so a fatal GPU
+  // child-launch burst disables acceleration for the next dev launch only.
+  it('round-trips a Linux marker and keeps it for the same build', () => {
+    const linuxEnvironment = {
+      appVersion: '1.2.3',
+      electronVersion: '43.1.0',
+      platform: 'linux' as const
+    }
+    writeGpuFallbackMarker(userDataPath, { engagedAt: 5, crashesInWindow: 3 }, linuxEnvironment)
+
+    const active = readActiveGpuFallbackMarker(userDataPath, linuxEnvironment)
+    expect(active).toMatchObject({ engagedAt: 5, crashesInWindow: 3, platform: 'linux' })
+    expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(true)
+
+    // A stray Windows marker is stale on Linux and must clear on read.
+    rmSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE), { force: true })
+    writeGpuFallbackMarker(userDataPath, { engagedAt: 6, crashesInWindow: 2 }, environment)
+    expect(readActiveGpuFallbackMarker(userDataPath, linuxEnvironment)).toBeNull()
+    expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
+  })
+
   it('clears an active marker when the app build changes', () => {
     writeGpuFallbackMarker(
       userDataPath,
@@ -107,7 +128,8 @@ describe('gpu-fallback-marker', () => {
 
   // Why: enableMainProcessGpuFeatures() is skipped while GPU fallback is active, and that function
   // carries the macOS disable-skia-graphite fix. A marker that survived on darwin would silently
-  // strip the fix from the Macs it targets, so pin the platform gate for darwin specifically.
+  // strip the fix from the Macs it targets, so pin the cross-platform clear for darwin specifically.
+  // macOS never writes markers, so it can only ever receive a stray foreign-platform one.
   it('clears an active marker on macOS so the Graphite fix is never skipped', () => {
     writeGpuFallbackMarker(
       userDataPath,
@@ -119,7 +141,7 @@ describe('gpu-fallback-marker', () => {
       readActiveGpuFallbackMarker(userDataPath, {
         ...environment,
         platform: 'darwin'
-      })
+      } as unknown as Parameters<typeof readActiveGpuFallbackMarker>[1])
     ).toBeNull()
     expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
   })

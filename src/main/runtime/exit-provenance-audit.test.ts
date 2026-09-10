@@ -8,6 +8,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import type { DispatchContextRow } from './orchestration/types'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
+import { exitedPtyStopReceipt } from '../ipc/pty-ipc-test-constants'
 
 const TAB_ID = '11111111-1111-4111-8111-111111111111'
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -253,7 +254,7 @@ describe('STA-4603/STA-4536 exit provenance', () => {
       getForegroundProcess: async () => null,
       stopAndWait: async (ptyId: string) => {
         runtime.onPtyExit(ptyId, 0)
-        return true
+        return exitedPtyStopReceipt(ptyId, { expectedIncarnationId: 'audit-incarnation' })
       }
     })
     runtime.registerPty(PTY_ID, WORKTREE_ID, null, {

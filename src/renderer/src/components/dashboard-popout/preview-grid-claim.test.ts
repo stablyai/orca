@@ -41,7 +41,7 @@ describe('createPreviewGridClaim', () => {
     dimension(screen, 'offsetWidth', 800)
     dimension(screen, 'offsetHeight', 384)
     claim.schedule()
-    await vi.advanceTimersByTimeAsync(200)
+    await vi.advanceTimersByTimeAsync(220)
     expect(fit).toHaveBeenCalledWith('pty-1', 90, 30)
     claim.dispose()
   })
@@ -74,7 +74,7 @@ describe('createPreviewGridClaim', () => {
     }
 
     expect(fit).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(200)
+    await vi.advanceTimersByTimeAsync(220)
     expect(fit).toHaveBeenCalledTimes(1)
     expect(fit).toHaveBeenCalledWith('pty-1', 100, 30)
     claim.dispose()

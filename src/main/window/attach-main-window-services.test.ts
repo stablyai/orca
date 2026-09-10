@@ -56,6 +56,9 @@ const {
 vi.mock('electron', () => ({
   app: {},
   clipboard: {},
+  net: {
+    fetch: vi.fn()
+  },
   systemPreferences: {
     askForMediaAccess: systemPreferencesAskForMediaAccessMock,
     getMediaAccessStatus: systemPreferencesGetMediaAccessStatusMock
@@ -243,32 +246,6 @@ describe('attachMainWindowServices', () => {
 
     expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
     expect(setWorktreeCatalogRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
-  })
-
-  it('reloads the app renderer through main and marks expected renderer teardown', async () => {
-    const onBeforeRendererReload = vi.fn()
-    const mainWindow = createMainWindow()
-
-    attachMainWindowServices(
-      mainWindow as never,
-      createStore(),
-      createRuntime() as never,
-      undefined,
-      undefined,
-      { onBeforeRendererReload }
-    )
-
-    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
-    const reloadHandler = handleMock.mock.calls.find(([channel]) => channel === 'app:reload')?.[1]
-    expect(reloadHandler).toBeTypeOf('function')
-
-    await reloadHandler?.({ sender: mainWindow.webContents })
-
-    expect(onBeforeRendererReload).toHaveBeenCalledWith({
-      webContentsId: 1,
-      ignoreCache: false
-    })
-    expect(mainWindow.webContents.reload).toHaveBeenCalledTimes(1)
   })
 
   it('hydrates once after the local PTY provider barrier resolves', async () => {

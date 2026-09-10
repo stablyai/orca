@@ -62,6 +62,30 @@ describe('orchestration commit-notify recovery', () => {
     return { dispatch: db.getDispatchContextById(started.dispatch.id)!, capability }
   }
 
+  function attestLeadWorker(runtime: OrcaRuntimeService, workerPaneKey: string): void {
+    vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue({
+      paneKey: workerPaneKey,
+      processIncarnation: 'runtime_test:term_worker:1',
+      connectionId: null,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'lead-session' },
+      observedAt: Date.now(),
+      statusObservedAt: Date.now(),
+      subagents: [],
+      actorAttestation: {
+        authorityId: 'agent-hook-main:test',
+        incarnation: 1,
+        revision: 1,
+        observedAt: Date.now(),
+        provider: 'codex',
+        role: 'lead',
+        eventName: 'PreToolUse',
+        providerSessionId: 'lead-session',
+        toolUseId: 'worker-done-tool'
+      }
+    } as never)
+  }
+
   async function throwAfterCommitAndReplay(
     dispatcher: RpcDispatcher,
     runtime: OrcaRuntimeService,
@@ -202,6 +226,7 @@ describe('orchestration commit-notify recovery', () => {
     )
     const task = db.createTask({ spec: 'Settle once' })
     const { dispatch, capability } = createReadyLocalWorker(db, task.id, workerPaneKey)
+    attestLeadWorker(runtime, workerPaneKey)
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
     const workerDone = request('rpc_worker_done', 'mutation_worker_done', 'orchestration.send', {
       from: 'term_worker',
@@ -232,7 +257,6 @@ describe('orchestration commit-notify recovery', () => {
     expect(waiterSettled).toBe(false)
 
     const replayed = await dispatcher.dispatch({ ...workerDone, id: 'rpc_worker_done_retry' })
-
     expect(db.getTask(task.id)?.status).toBe('completed')
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
     expect(db.getInbox(100).filter((message) => message.type === 'worker_done')).toHaveLength(1)
@@ -271,6 +295,7 @@ describe('orchestration commit-notify recovery', () => {
     )
     const task = db.createTask({ spec: 'Resume before atomic settlement', runId: run.id })
     const { dispatch, capability } = createReadyLocalWorker(db, task.id, workerPaneKey)
+    attestLeadWorker(runtime, workerPaneKey)
     const workerDone = request(
       'rpc_worker_done_before_crash',
       'mutation_worker_done_before_crash',
@@ -322,6 +347,7 @@ describe('orchestration commit-notify recovery', () => {
     vi.spyOn(restartedRuntime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
       handle.startsWith('term_') ? `runtime_test:${handle}:1` : null
     )
+    attestLeadWorker(restartedRuntime, workerPaneKey)
     vi.spyOn(restartedRuntime, 'notifyMessageArrived').mockImplementation(() => {})
     const restartedDispatcher = new RpcDispatcher({
       runtime: restartedRuntime,
@@ -332,7 +358,6 @@ describe('orchestration commit-notify recovery', () => {
       ...workerDone,
       id: 'rpc_worker_done_after_crash'
     })
-
     expect(resumed).toMatchObject({
       ok: true,
       result: {
@@ -385,6 +410,7 @@ describe('orchestration commit-notify recovery', () => {
     )
     const task = db.createTask({ spec: 'Commit report and settlement together' })
     const { dispatch, capability } = createReadyLocalWorker(db, task.id, workerPaneKey)
+    attestLeadWorker(runtime, workerPaneKey)
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
     const workerDone = request(
       'rpc_atomic_worker_done',
@@ -423,7 +449,6 @@ describe('orchestration commit-notify recovery', () => {
     ).toBeUndefined()
 
     const retried = await dispatcher.dispatch({ ...workerDone, id: 'rpc_atomic_worker_done_retry' })
-
     expect(retried).toMatchObject({
       ok: true,
       result: { lifecycle: { action: 'completed' } }

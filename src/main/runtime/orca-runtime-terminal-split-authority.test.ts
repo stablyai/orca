@@ -5,6 +5,7 @@ import type { TerminalLayoutSnapshot } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
+import { createPtyStopReceipt } from '../../shared/pty-stop-receipt'
 
 const REPO_ID = 'repo-1'
 const WORKTREE_ID = `${REPO_ID}::/workspace`
@@ -118,7 +119,23 @@ function createHarness(
     : vi.fn(async () => ({ id: SPLIT_PTY_ID }))
   const kill = vi.fn(() => true)
   const retireRejectedPty = vi.fn()
-  const stopAndWait = vi.fn(async () => options.stopAndWaitResult ?? true)
+  const stopAndWait = vi.fn(async (ptyId: string) => {
+    if (options.stopAndWaitResult === false) {
+      return null
+    }
+    const root = { pid: 41, parentPid: 1, processGroupId: 41, startedAt: 'captured' }
+    return createPtyStopReceipt({
+      executionHostId: ownerHostId as 'local' | `ssh:${string}`,
+      terminalHandle: ptyId,
+      ptyId,
+      ptyIncarnation: '22222222-2222-4222-8222-222222222222',
+      root,
+      descendants: [],
+      observations: [{ identity: root, status: 'absent', observedAt: new Date().toISOString() }],
+      verdict: 'exited',
+      processTreeVerified: true
+    })
+  })
   let resolveReveal: ((result: { tabId: string }) => void) | undefined
   const revealTerminalSession = options.deferReveal
     ? vi.fn(

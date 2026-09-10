@@ -54,11 +54,11 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       // Why: the native word for "language" only reaches search via the localized
       // title in its own UI locale — index each here so speakers can find (and
       // switch to) their language whatever the current interface locale is.
-      '语言', // Chinese (Simplified)
-      '語言', // Chinese (Traditional)
-      '언어', // Korean
-      '言語', // Japanese
-      'Idioma', // Spanish
+      translate('auto.components.settings.appearance.search.b6035a3def', '语言'), // Chinese (Simplified)
+      translate('auto.components.settings.appearance.search.ab96f8a4b9', '語言'), // Chinese (Traditional)
+      translate('auto.components.settings.appearance.search.0b03f507c2', '언어'), // Korean
+      translate('auto.components.settings.appearance.search.5f4779d525', '言語'), // Japanese
+      translate('auto.components.settings.appearance.search.3a0e3a9fdc', 'Idioma'), // Spanish
       'Langue', // French
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.language.locale',

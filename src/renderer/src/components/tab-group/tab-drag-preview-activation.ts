@@ -57,6 +57,17 @@ function previewActiveSurfacePatch(
       activeTabTypeByWorktree: nextActiveTabTypeByWorktree('simulator')
     }
   }
+  if (unifiedTab.contentType === 'maestro') {
+    return {
+      activeFileId: null,
+      activeFileIdByWorktree: {
+        ...state.activeFileIdByWorktree,
+        [worktreeId]: null
+      },
+      activeTabType: 'editor',
+      activeTabTypeByWorktree: nextActiveTabTypeByWorktree('editor')
+    }
+  }
   return {
     activeFileId: unifiedTab.entityId,
     activeTabType: 'editor',

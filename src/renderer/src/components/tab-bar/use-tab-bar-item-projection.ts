@@ -45,6 +45,7 @@ export function useTabBarItemProjection({
     activeFileId,
     activeBrowserTabId,
     activeSimulatorTabId,
+    activeMaestroTabId,
     activeTabType,
     expandedPaneByTabId
   } = props
@@ -74,6 +75,13 @@ export function useTabBarItemProjection({
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const maestroTabIds = useMemo(
+    () =>
+      unifiedTabs
+        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'maestro')
+        .map((tab) => tab.id),
+    [unifiedTabs, resolvedGroupId]
+  )
   const agentSessionTabIds = useMemo(
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],
     [agentSessionTabs]
@@ -86,6 +94,7 @@ export function useTabBarItemProjection({
         editorFileIds,
         browserTabIds,
         simulatorTabIds,
+        maestroTabIds,
         agentSessionTabIds,
         terminalMap,
         editorMap,
@@ -99,6 +108,7 @@ export function useTabBarItemProjection({
       editorFileIds,
       browserTabIds,
       simulatorTabIds,
+      maestroTabIds,
       agentSessionTabIds,
       terminalMap,
       editorMap,
@@ -121,12 +131,14 @@ export function useTabBarItemProjection({
         activeFileId,
         activeBrowserTabId,
         activeSimulatorTabId,
+        activeMaestroTabId,
         activeTabType
       }),
     [
       activeBrowserTabId,
       activeFileId,
       activeSimulatorTabId,
+      activeMaestroTabId,
       activeTabId,
       activeTabType,
       orderedItems

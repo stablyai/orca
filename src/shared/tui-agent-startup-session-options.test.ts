@@ -54,6 +54,22 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'custom-codex-model', effort: 'high' })
   })
 
+  it('forces the standard Codex service tier over a configured fast tier', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'linux',
+      allowEmptyPromptLaunch: true,
+      sessionOptions: { serviceTier: 'default' },
+      sessionOptionsOverrideAgentArgs: true,
+      agentArgs: '--yolo -c service_tier=fast'
+    })
+
+    expect(plan?.launchCommand).toBe("codex '--yolo' '-c' 'service_tier=default'")
+    expect(plan?.sessionOptions).toEqual({ serviceTier: 'default' })
+  })
+
   it('inserts worker preferences before an argument terminator', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

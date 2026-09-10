@@ -11,8 +11,10 @@ function makeRequest(params: unknown): RpcRequest {
 function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    // Why: every send now asks whether the handle carries a managed lease before writing.
+    getOrchestrationDb: () => ({ getMaestroTerminalLeaseByHandle: () => undefined }),
     ...overrides
-  } as OrcaRuntimeService
+  } as unknown as OrcaRuntimeService
 }
 
 describe('terminal agent prompt send RPC', () => {

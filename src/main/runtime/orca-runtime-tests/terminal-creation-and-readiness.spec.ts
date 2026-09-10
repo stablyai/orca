@@ -92,7 +92,7 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('retires inherited launch authority when the agent command exits', async () => {
+  it('preserves fresh launch authority across stale prompt completion and retires it after the agent exits', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
     const retireAuthority = vi.fn()
     const runtime = new OrcaRuntimeService(store, undefined, {
@@ -148,7 +148,20 @@ describe('OrcaRuntimeService', () => {
       expect.objectContaining({ handle: terminal.handle, agentIdentity: 'codex' })
     ])
 
-    runtime.onPtyData('pty-authority', '\x1b]133;D;0\x07', 100)
+    runtime.onPtyData(
+      'pty-authority',
+      '\x1b]133;D;0\x1b\\\x1b]133;A\x1b\\prompt\x1b]133;B\x1b\\codex\r\n\x1b]133;C\x1b\\',
+      100
+    )
+
+    expect(retireAuthority).not.toHaveBeenCalled()
+    expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).not.toBeNull()
+
+    runtime.onPtyData(
+      'pty-authority',
+      '\x1b]133;D;0\x1b\\\x1b]133;A\x1b\\prompt\x1b]133;B\x1b\\next\r\n\x1b]133;C\x1b\\',
+      101
+    )
 
     expect(retireAuthority).toHaveBeenCalledWith(spawnEnv.ORCA_PANE_KEY)
     expect(runtime.verifyOrchestrationCompatibilityCaller(evidence)).toBeNull()

@@ -15,6 +15,7 @@ import {
   isProvenLivePtyRemovalError
 } from '../../shared/worktree/removal'
 import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
+import { exitedPtyStopReceipt } from '../ipc/pty-ipc-test-constants'
 
 // Why: these tests advance fake timers *before* awaiting the teardown, so a
 // rejection mid-advance had no handler yet — Node reported it as an unhandled
@@ -348,9 +349,10 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
       })
       let shutdownFinished = false
       ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-        async () => {
+        async (id: string) => {
           await new Promise((resolve) => setTimeout(resolve, 20))
           shutdownFinished = true
+          return exitedPtyStopReceipt(id)
         }
       )
       listRegisteredPtysMock.mockReturnValue([

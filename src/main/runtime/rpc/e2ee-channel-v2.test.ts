@@ -11,6 +11,7 @@ import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
 } from '../../../shared/mobile-e2ee-v2-framing'
+import { MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { deriveSharedKey } from './e2ee-crypto'
 import { E2EEChannel } from './e2ee-channel'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
@@ -200,6 +201,28 @@ describe('E2EEChannel v2', () => {
     )
     expect(ctx.resolveAuthenticatedDevice).not.toHaveBeenCalled()
     expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid e2ee_auth')
+  })
+
+  it('accepts runtime capabilities after transcript-bound authentication', () => {
+    const ctx = setup()
+    const { schedule } = startV2(ctx)
+    const onMessage = vi.fn()
+    ctx.channel.onMessage(onMessage)
+    authenticate(ctx, schedule)
+
+    ctx.channel.handleRawMessage(
+      clientText(
+        JSON.stringify({
+          type: 'runtime_client_capabilities',
+          clientCapabilities: [MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY]
+        }),
+        schedule,
+        1n
+      )
+    )
+
+    expect(ctx.channel.clientCapabilities).toEqual([MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY])
+    expect(onMessage).not.toHaveBeenCalled()
   })
 
   it('rejects a captured auth frame replayed onto a fresh desktop nonce', () => {

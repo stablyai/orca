@@ -133,6 +133,13 @@ export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
     params: InboxParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      if (params.run) {
+        if (!db.getRun(params.run)) {
+          throw new OrchestrationError('run_not_found', `Run ${params.run} was not found.`)
+        }
+        const messages = db.getRunMailboxHistory(params.run, params.limit)
+        return { runId: params.run, messages, count: messages.length }
+      }
       // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
       const messages = params.terminal
         ? db.getAllMessagesForHandle(params.terminal, params.limit)

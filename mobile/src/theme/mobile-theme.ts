@@ -1,4 +1,6 @@
-// Orca mobile design tokens — matches desktop graphite/dark palette.
+import type { ColorSchemeName } from 'react-native'
+
+// Orca mobile dark tokens, with a bounded light palette for theme-aware surfaces.
 // All screen files should import from here instead of using inline hex values.
 
 export const colors = {
@@ -48,6 +50,29 @@ export const colors = {
   // Terminal WebView background (Tokyonight) — separate from app chrome
   terminalBg: '#1a1b26'
 } as const
+
+export type MobileThemeColors = { [Key in keyof typeof colors]: string }
+
+export const lightColors: MobileThemeColors = {
+  ...colors,
+  bgBase: '#ffffff',
+  bgPanel: '#ffffff',
+  bgRaised: '#f5f5f5',
+  borderSubtle: '#e5e5e5',
+  editorSurface: '#ffffff',
+  textPrimary: '#0a0a0a',
+  textSecondary: '#525252',
+  textMuted: '#737373',
+  surfaceBright: '#171717',
+  onAccent: '#ffffff',
+  statusGreen: '#15803d',
+  statusAmber: '#b45309',
+  statusRed: '#e40014'
+}
+
+export function mobileThemeColors(colorScheme: ColorSchemeName) {
+  return colorScheme === 'light' ? lightColors : colors
+}
 
 export const spacing = {
   xs: 4,

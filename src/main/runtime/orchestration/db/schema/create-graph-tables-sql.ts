@@ -123,6 +123,11 @@ CREATE TABLE IF NOT EXISTS tasks (
   task_title    TEXT,
   display_name  TEXT,
   spec          TEXT NOT NULL,
+  purpose       TEXT NOT NULL DEFAULT 'deliverable'
+    CHECK(purpose IN ('deliverable', 'operational')),
+  operational_outcome TEXT
+    CHECK(operational_outcome IN ('successful', 'failed', 'superseded', 'unverifiable')),
+  successor_task_id TEXT,
   status        TEXT NOT NULL DEFAULT 'pending'
     CHECK(status IN (
       'pending', 'ready', 'dispatched',

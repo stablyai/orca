@@ -571,6 +571,38 @@ describe('OrcaRuntimeService', () => {
     expect(spawnCall?.launchAgent).toBe('cursor')
   })
 
+  it('authenticates a bare agent command in a repo-less folder workspace', async () => {
+    const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-bare-agent-'))
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const folderWorkspace = makeFolderWorkspace({ folderPath })
+    const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+    const runtime = new OrcaRuntimeService({
+      ...createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup),
+      getSettings: () => ({
+        ...store.getSettings(),
+        disabledTuiAgents: [],
+        agentCmdOverrides: {},
+        agentDefaultArgs: {},
+        agentDefaultEnv: {}
+      })
+    } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`id:${TEST_FOLDER_WORKSPACE_KEY}`, { command: 'codex' })
+
+    const spawnCall = spawn.mock.calls[0]?.[0] as
+      | { command?: string; launchAgent?: string; env?: Record<string, string> }
+      | undefined
+    expect(spawnCall?.command).toMatch(/^codex(?: |$)/)
+    expect(spawnCall?.launchAgent).toBe('codex')
+    expect(spawnCall?.env?.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+  })
+
   // Why: silently returning the caller's opts would spawn a bare shell that can
   // only time out at agent readiness — the failure startupAgent exists to stop.
   it('rejects a startupAgent create that also supplies its own launch', async () => {

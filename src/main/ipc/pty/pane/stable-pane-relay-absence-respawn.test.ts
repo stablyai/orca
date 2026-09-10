@@ -96,7 +96,9 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
         state: 'done' as const,
         capturedAt: 1,
         updatedAt: 1,
-        ...(settledWorker ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' } : {})
+        ...(settledWorker
+          ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' as const }
+          : {})
       }
       store.setWorkspaceSession({
         ...read(),

@@ -25,6 +25,9 @@ export function createTabsMoveActions(
           return {}
         }
         const { tab, worktreeId } = foundTab
+        if (tab.systemRole === 'workspace-maestro' && !opts?.allowSystemTransfer) {
+          return {}
+        }
         if (tab.groupId === targetGroupId) {
           return {}
         }
@@ -39,8 +42,19 @@ export function createTabsMoveActions(
         const sourceOrder = dedupeTabOrder(dedupedSourceGroupOrder.filter((id) => id !== tabId))
         // Why: defensive dedupe so target order can't grow a duplicate id (stale state); see dropUnifiedTab for the same guard.
         const targetOrder = dedupeTabOrder(targetGroup.tabOrder.filter((id) => id !== tabId))
+        const minimumTargetIndex =
+          tab.systemRole === 'workspace-maestro'
+            ? 0
+            : targetOrder.some((id) =>
+                  (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
+                    (candidate) =>
+                      candidate.id === id && candidate.systemRole === 'workspace-maestro'
+                  )
+                )
+              ? 1
+              : 0
         const targetIndex = Math.max(
-          0,
+          minimumTargetIndex,
           Math.min(opts?.index ?? targetOrder.length, targetOrder.length)
         )
         targetOrder.splice(targetIndex, 0, tabId)

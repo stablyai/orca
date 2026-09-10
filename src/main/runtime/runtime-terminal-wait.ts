@@ -65,6 +65,7 @@ export class RuntimeTerminalWait {
       }
       if (
         condition === 'tui-idle' &&
+        pty.pty.lastAgentStatus === null &&
         (this.deps.getAdoptedPtyIdleStatus(pty.pty) === 'idle' ||
           isKnownReadyPromptPreview(ptyWaitText))
       ) {
@@ -118,8 +119,9 @@ export class RuntimeTerminalWait {
           } else if (live.pty.lastAgentStatus === 'idle') {
             this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else if (
-            this.deps.getAdoptedPtyIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
+            live.pty.lastAgentStatus === null &&
+            (this.deps.getAdoptedPtyIdleStatus(live.pty) === 'idle' ||
+              isKnownReadyPromptPreview(livePtyWaitText))
           ) {
             this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
@@ -153,8 +155,9 @@ export class RuntimeTerminalWait {
     if (condition === 'tui-idle') {
       const fastPathTitle = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
       if (
-        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-        isKnownReadyPromptPreview(leafWaitText)
+        leaf.lastAgentStatus === null &&
+        ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+          isKnownReadyPromptPreview(leafWaitText))
       ) {
         return buildTerminalWaitResult(handle, condition, leaf)
       }
@@ -226,8 +229,9 @@ export class RuntimeTerminalWait {
             // preview/title until the waiter resolves or hits its timeout.
             const fastPathTitle = live.leaf.paneTitle ?? this.deps.getTabTitle(live.leaf.tabId)
             if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
+              live.leaf.lastAgentStatus === null &&
+              ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+                isKnownReadyPromptPreview(liveLeafWaitText))
             ) {
               this.waiters.resolve(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
             } else {

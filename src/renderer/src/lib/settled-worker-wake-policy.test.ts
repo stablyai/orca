@@ -22,7 +22,9 @@ it('resumes a settled worker and an ordinary agent once each in the same wake sw
     updatedAt: Date.now(),
     origin: 'worktree-sleep' as const,
     // Old clients can still publish the withdrawn policy field.
-    ...(id === 'settled-worker' ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' } : {})
+    ...(id === 'settled-worker'
+      ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' as const }
+      : {})
   }))
   useAppStore.setState({
     tabsByWorktree: { 'wt-1': [] },

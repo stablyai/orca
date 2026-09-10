@@ -6,6 +6,21 @@ import {
 } from './worker-transcript-payload'
 
 describe('worker transcript wire bounds', () => {
+  it('redacts secret-shaped terminal and provider transcript text', () => {
+    const result = redactWorkerTerminalLines([
+      'Authorization: Bearer ghp_abcdefghijklmnopqrstuvwxyz123456',
+      'failed at /Users/alice/project/.env'
+    ])
+
+    expect(result.lines).toEqual([
+      'Authorization: Bearer [redacted-secret]',
+      'failed at [redacted-path]'
+    ])
+    expect(result.warnings).toContain(
+      'Secret-shaped terminal and error text was redacted from terminal output.'
+    )
+  })
+
   it('clips oversized blocks and omits local image paths', () => {
     const result = boundWorkerTranscriptMessages([
       {

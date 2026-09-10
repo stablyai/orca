@@ -54,6 +54,7 @@ export type TerminalCreateOptions = {
   signal?: AbortSignal
   onPtySpawnCommitted?: () => void
   deferMobileSessionPublish?: boolean
+  orchestrationManagedLaunch?: boolean
 }
 
 /** Identity a fenced spawn can be re-found by in the execution host's own inventory. */

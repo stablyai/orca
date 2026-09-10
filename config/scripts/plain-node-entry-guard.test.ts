@@ -64,7 +64,7 @@ describe('plain Node entry guard', () => {
     expect(() => runWriteBundle(plugin, dir)).not.toThrow()
     writeFileSync(
       join(dir, 'daemon-entry.js'),
-      'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n'
+      'require("node:fs").writeSync(2, "[daemon] Fatal: Error: Usage: daemon-entry <socket>\\n"); process.exit(1)\n'
     )
 
     await expect(runCloseBundle(plugin)).resolves.toBeUndefined()

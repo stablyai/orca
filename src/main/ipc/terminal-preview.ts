@@ -146,6 +146,13 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       if (subscription.disposed) {
         return { snapshot: null, replay: [] }
       }
+      // A live daemon can expose its dimensions before it has emitted the
+      // first byte or can serialize a retained frame. Keep that PTY connected
+      // with an empty xterm so its first live chunk paints immediately instead
+      // of misreporting the pane as closed until another renderer mounts it.
+      if (!snapshot && previewSize) {
+        snapshot = { data: '', cols: previewSize.cols, rows: previewSize.rows }
+      }
       if (!snapshot) {
         // Why: a failed lookup has no future live boundary; release raw presence even if the renderer never invokes unsubscribe.
         subscription.dispose()

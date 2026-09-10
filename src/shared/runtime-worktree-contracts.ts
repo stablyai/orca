@@ -8,6 +8,7 @@ import type {
 } from './worktree/lineage-types'
 import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { GitWorktreeInfo, Worktree } from './worktree/types'
+import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
@@ -125,10 +126,89 @@ export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
   warning?: string
 }
 
+export type RuntimeRunWorktreeCleanupDisposition =
+  | 'removed'
+  | 'already_absent'
+  | 'retained'
+  | 'pending'
+  | 'unverifiable'
+
+export type RuntimeRunWorktreeCleanupResult = {
+  worktreeId: string
+  executionHostId?: string
+  disposition: RuntimeRunWorktreeCleanupDisposition
+  cause?: string
+  action?: string
+}
+
+export type RuntimeRunSettlementResult = {
+  runId: string
+  state: 'settled' | 'pending' | 'unverifiable'
+  worktrees: RuntimeRunWorktreeCleanupResult[]
+  warnings: string[]
+}
+
+export function collectRunOwnedChildWorktrees(rows: readonly { effects: string }[]): {
+  worktrees: {
+    worktreeId: string
+    executionHostId?: ExecutionHostId
+    worktreeInstanceId?: string
+  }[]
+  unreadableEffectRows: number
+} {
+  const owned = new Map<
+    string,
+    { worktreeId: string; executionHostId?: ExecutionHostId; worktreeInstanceId?: string }
+  >()
+  let unreadableEffectRows = 0
+  for (const row of rows) {
+    let effects: unknown
+    try {
+      effects = JSON.parse(row.effects)
+    } catch {
+      unreadableEffectRows += 1
+      continue
+    }
+    if (!Array.isArray(effects)) {
+      continue
+    }
+    for (const effect of effects) {
+      if (
+        !effect ||
+        typeof effect !== 'object' ||
+        (effect as { kind?: unknown }).kind !== 'worktree' ||
+        (effect as { action?: unknown }).action !== 'created_child' ||
+        typeof (effect as { id?: unknown }).id !== 'string'
+      ) {
+        continue
+      }
+      const worktreeId = (effect as { id: string }).id
+      const rawHostId = (effect as { executionHostId?: unknown }).executionHostId
+      const executionHostId = parseExecutionHostId(
+        typeof rawHostId === 'string' ? rawHostId : undefined
+      )?.id
+      const rawInstanceId = (effect as { worktreeInstanceId?: unknown }).worktreeInstanceId
+      const worktreeInstanceId =
+        typeof rawInstanceId === 'string' && rawInstanceId.trim() ? rawInstanceId : undefined
+      owned.set(
+        `${executionHostId ?? 'unverifiable'}\0${worktreeId}\0${worktreeInstanceId ?? 'legacy'}`,
+        {
+          worktreeId,
+          ...(executionHostId ? { executionHostId } : {}),
+          ...(worktreeInstanceId ? { worktreeInstanceId } : {})
+        }
+      )
+    }
+  }
+  return { worktrees: [...owned.values()], unreadableEffectRows }
+}
+
 export type RuntimeWorktreePsResult = {
   worktrees: RuntimeWorktreePsSummary[]
   totalCount: number
   truncated: boolean
+  /** Hosts covered by the live process inventory used for this snapshot. */
+  queriedHostIds?: ExecutionHostId[]
   /** Absent from hosts that predate the field; treat that scope as unverifiable. */
   hostScope?: RuntimeListingHostScope
 }

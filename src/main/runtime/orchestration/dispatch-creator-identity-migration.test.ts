@@ -67,8 +67,8 @@ describe('OrchestrationDb v36 to v37 migration', () => {
     const raw = new Database(v36.path)
     raw.pragma('user_version = 37')
     try {
-      // Why: the skew repair is the only thing that catches a partially-written v37.
-      expect(resolveOrchestrationMigrationStartVersion(raw, 37, SCHEMA_VERSION)).toBe(6)
+      // Replay the first missing migration without sending a modern schema to the legacy floor.
+      expect(resolveOrchestrationMigrationStartVersion(raw, 37, SCHEMA_VERSION)).toBe(36)
     } finally {
       raw.close()
     }

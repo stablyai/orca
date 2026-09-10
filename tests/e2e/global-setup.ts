@@ -16,6 +16,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 
 import path from 'node:path'
 import os from 'node:os'
 import { prepareDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
+import { assertE2eBuildInstrumentation } from './e2e-build-instrumentation'
 
 export const E2E_TEST_REPO_PATH_FILE_ENV = 'ORCA_E2E_TEST_REPO_PATH_FILE'
 /** Temp file where the test repo path is stored for the fixture to read. */
@@ -30,14 +31,16 @@ export default function globalSetup(): void {
   // Why: workers and teardown need this run's path, never another concurrent run's.
   process.env[E2E_TEST_REPO_PATH_FILE_ENV] = TEST_REPO_PATH_FILE
   const root = process.cwd()
-  const outMain = path.join(root, 'out', 'main', 'index.js')
   const outCli = path.join(root, 'out', 'cli', 'index.js')
   const outWeb = path.join(root, 'out', 'web', 'web-index.html')
   const outLinuxRelay = path.join(root, 'out', 'relay', 'linux-x64', 'relay.js')
 
   // ── 1. Build the Electron app ──────────────────────────────────────
-  if (process.env.SKIP_BUILD && existsSync(outMain)) {
-    console.error('[e2e] SKIP_BUILD set and out/main/index.js exists — skipping build')
+  if (process.env.SKIP_BUILD) {
+    assertE2eBuildInstrumentation(root)
+    console.error(
+      '[e2e] SKIP_BUILD set and current renderer output exposes window.__store — skipping build'
+    )
   } else {
     // Why: --mode e2e is the build-time signal that exposes window.__store;
     // the explicit env var keeps older local overrides working too.

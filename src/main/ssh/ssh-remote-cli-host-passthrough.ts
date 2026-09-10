@@ -1,5 +1,4 @@
 // The SSH shim runs the bundled CLI so remote shells get the full command surface.
-import { app } from 'electron'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,6 +17,7 @@ import {
   sshArtifactSourceKey,
   type RemoteArtifactInput
 } from '../../shared/artifact-cli-bridge'
+import { getAppEnvironment } from '../../shared/app-environment'
 
 export type SshCliRuntimeAuthority = {
   kind: 'ssh'
@@ -158,13 +158,16 @@ export async function runHostOrcaCliPassthrough(
   let cliEntryPath: string
   let userDataPath: string
   try {
-    cliEntryPath =
-      options.cliEntryPath ??
-      resolveHostCliEntryPath({
-        isPackaged: app.isPackaged,
+    if (options.cliEntryPath) {
+      cliEntryPath = options.cliEntryPath
+    } else {
+      const appEnvironment = getAppEnvironment()
+      cliEntryPath = resolveHostCliEntryPath({
+        isPackaged: appEnvironment.isPackaged(),
         resourcesPath: process.resourcesPath,
-        appPath: app.getAppPath()
+        appPath: appEnvironment.getAppPath()
       })
+    }
     // Why: must match the userData dir the runtime RPC server writes metadata
     // to (see index.ts OrcaRuntimeRpcServer wiring), or the CLI subprocess
     // reports "Orca is not running" against a healthy app.

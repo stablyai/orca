@@ -24,13 +24,74 @@ Use it when you need ownership, completion tracking, or a DAG. For one-off promp
 
 - **Run** — durable namespace and home inbox. Never schedules or places workers.
 - **Task** — a work item with a spec, dependencies, and status: `pending`, `ready`, `dispatched`, `completed`, `failed`, or `blocked`.
-- **Dispatch** — one attempt of a task on a terminal; lifecycle authority for `worker_done` / heartbeat.
+- **Attempt** — one execution try for a Task. Retries remain visible as history, but only the current Attempt contributes the Task's default state.
+- **Dispatch** — the runtime assignment for one Attempt; it binds lifecycle authority for `worker_done` and heartbeat to an exact worker terminal.
 - **Message** — inbox mail (`status`, `dispatch`, `worker_done`, `escalation`, `question`, `heartbeat`, …).
 - **Decision gate** — a coordinator-owned question that blocks a task until it is resolved.
 
-Completion authority comes from the active dispatch context. Worker completion and heartbeat messages should include both `taskId` and `dispatchId`.
+Worker completion authority comes from the active Dispatch context. Worker completion and heartbeat messages should include both `taskId` and `dispatchId`. Run completion is separate: only the currently bound coordinator generation can explicitly complete the Run with a summary and evidence.
 
 Task IDs printed in terminals, such as `task_...`, are clickable links. Clicking one asks the Orca runtime for the task's current dispatch and focuses the assigned terminal, including when the task lives in a remote or SSH runtime.
+
+## Maestro Canvas
+
+Maestro turns one workspace's orchestration state into a visual coordination map. Open the fixed
+Maestro tab to see Tasks, their current and historical Attempts, Dispatches, terminals, managed
+Browser pages, notes, dependencies, and cleanup state without visiting every terminal first.
+Terminal and Browser previews load only when their cards need them; opening the Canvas does not
+eagerly start every terminal on a paired mobile client.
+
+Use the Canvas to understand and navigate work, not to replace orchestration authority. A Task is
+the durable unit of work; an Attempt is one try. A successful retry remains attached to the same
+Task and superseded failed Attempts stay available as history instead of appearing as extra failed
+Tasks in the default progress list.
+
+Desktop controls:
+
+- Drag empty Canvas space to pan, scroll to zoom, and use **Fit resources** to frame the current map.
+- `Shift+scroll` pans horizontally. `Ctrl+scroll`, or `Command+scroll` on macOS, pans vertically.
+- Drag or resize cards with their visible controls. Manual positions are preserved; newly discovered
+  worker resources are placed near their parent group.
+- Click a preview to select its card. Use **Focus** when you want to switch to the underlying Terminal
+  or Browser tab.
+
+On mobile, drag in any direction to pan, pinch around the gesture midpoint to zoom and pan together,
+and use **Fit** to frame the complete map. Selecting a terminal card loads that one bounded preview;
+the full terminal fleet is not started or streamed eagerly. The mobile route uses the paired
+desktop/server snapshot and therefore cannot substitute for testing on a physical phone or tablet.
+
+Recovery state is deliberately conservative. `live` and `exited` require evidence from the host
+that owns the process. A disconnected SSH host, missing older-client field, timed-out probe, or lost
+runtime contact is `unverifiable`, never proof of exit and never permission to retry or clean up a
+possibly live resource. Open the affected card for the exact recovery action.
+
+Run completion is an explicit coordinator decision, not an aggregate inferred from resource health.
+The Canvas keeps the completion summary, evidence, and any reasoned Task waivers visible beside
+Task progress and cleanup warnings. An `unverifiable` resource therefore remains a warning without
+blocking completion or being mislabeled as exited. Pending, blocked, or failed deliverable Tasks do
+block normal completion unless the coordinator names each Task in an explicit waiver with a reason;
+the waiver does not rewrite Task or Attempt history.
+
+The same Canvas model supports local Git worktrees, plain folder workspaces, and workspaces executed
+through SSH or another connected Orca server. Orca can launch any configured terminal agent; model
+and effort overrides remain limited to the providers named by `worker-start --help`. Clients and
+servers update independently, so an older peer may omit optional progress, materialization, Browser,
+completion, or liveness detail. Missing fields remain unavailable or `unverifiable`; the client must
+not invent a local replacement. An older host may not support `run-complete`; update or reconnect to
+a host that advertises the current orchestration contract instead of treating Task totals as a
+completion receipt.
+
+For bounded automation, use exact identities returned by Orca:
+
+```bash
+orca maestro index --json
+orca maestro show --host <executionHostId> --workspace <workspaceKey> --json
+orca maestro open --host <executionHostId> --workspace <workspaceKey> --json
+```
+
+`maestro show` reports both accepted and materialized node/edge counts. Its exclusion rows explain
+superseded Attempt history and workspace-scoped resources instead of silently presenting a smaller
+graph. `maestro open` focuses the exact native Canvas; it does not launch a worker or create a page.
 
 ## Preferred supervised loop
 
@@ -69,10 +130,27 @@ orca orchestration send \
 
 `worker_done` requires `--outcome succeeded|failed`.
 
+Complete the Run only after required deliverables are done. Repeat `--evidence` for each concise
+proof. A genuinely deferred deliverable needs its exact Task ID and a durable reason:
+
+```bash
+orca orchestration run-complete \
+  --id <runId> \
+  --summary "Implemented the requested flow and verified its contracts." \
+  --evidence "Focused orchestration tests passed." \
+  --evidence "Typecheck passed." \
+  --waive-task "<taskId>=Deferred by the owner to a follow-up." \
+  --json
+```
+
+Repeated identical completion is idempotent. `run-show` returns the recorded completion. Resource
+cleanup is independent: use `run-settle` afterward when the Run owns child worktrees, and follow any
+`unverifiable` recovery action without claiming process exit.
+
 Inspect / recover:
 
 ```bash
-orca orchestration worker-show --dispatch <dispatchId> --json
+orca orchestration worker-show --dispatch <dispatchId> --run <runId> --json
 orca orchestration worker-read --dispatch <dispatchId> --limit 50 --json
 orca orchestration worker-stop --dispatch <dispatchId> --json
 # After an accepted worker_done: reuse the same terminal for a follow-up Dispatch, or release it
@@ -114,7 +192,13 @@ orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
 ## Messaging notes
 
 - Default `check` is the bound Run's oldest unacked Delivery (FIFO). Replay until `--ack`.
-- `--peek` / `--all` do not consume mail.
+- Process the complete body and payload of every message in that Delivery before acknowledging it.
+- A replayed Delivery can include a separate `pendingAttentionMessages` list for newer questions or
+  high-priority Run mail. Those rows are not part of the old Delivery and are not acknowledged with it.
+- `--peek`, `--all`, and `inbox` do not consume mail. Both `check` and `inbox` accept `--run <runId>`;
+  `worker-show` accepts the same Run selector as an identity fence.
+- `read: 0` or a missing delivery timestamp does not prove nondelivery: read-only inspection keeps
+  those fields unchanged, and a successful `send` proves durable enqueue rather than human attention.
 - Group addresses: `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, `@worktree:<id>` — never for `worker_done` / heartbeat.
 - Every group except `@worktree:<id>` means the live Dispatches of the sender's own Run, delivered to their Dispatch mailboxes (or child Run mailboxes for nested coordinators). A sender in no Run is refused; `--run` must match the audience and never grants membership.
 - Run groups exclude their owning coordinator. A worker raising a blocker sends to `run:<id>`. `@worktree:<id>` includes coordinators in that workspace.

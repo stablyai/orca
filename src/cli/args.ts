@@ -22,7 +22,7 @@ const GLOBAL_VALUE_FLAGS = new Set(CLI_GLOBAL_VALUE_FLAGS)
 export const BOOLEAN_FLAGS = CLI_BOOLEAN_FLAGS
 
 export const REPEATED_FLAG_SEPARATOR = '\u0000'
-const REPEATABLE_STRING_FLAGS = new Set(['label', 'skill'])
+const REPEATABLE_STRING_FLAGS = new Set(['evidence', 'label', 'skill', 'waive-task'])
 
 function setFlagValue(flags: Map<string, string | boolean>, name: string, value: string): void {
   const existing = flags.get(name)
@@ -168,6 +168,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'dialog',
         'storage',
         'orchestration',
+        'maestro',
         'computer',
         'emulator',
         'agent',
@@ -178,6 +179,9 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
+    (commandPath.length === 2 &&
+      commandPath[0] === 'maestro' &&
+      ['browser-surface', 'projection'].includes(commandPath[1])) ||
     (commandPath.length === 2 &&
       commandPath[0] === 'storage' &&
       ['local', 'session'].includes(commandPath[1]))

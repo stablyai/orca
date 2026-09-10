@@ -144,6 +144,27 @@ function createUpdateHarness(): Harness {
     vi.spyOn(runtime, 'getTerminalProcessIncarnation')
       .mockImplementationOnce(getProcessIncarnation)
       .mockReturnValue(null)
+    vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue({
+      paneKey: WORKER_PANE,
+      processIncarnation: PROCESS_INCARNATION,
+      connectionId: null,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'retained-worker-session' },
+      observedAt: Date.now(),
+      statusObservedAt: Date.now(),
+      subagents: [],
+      actorAttestation: {
+        authorityId: 'agent-hook-main:test',
+        incarnation: 1,
+        revision: 1,
+        observedAt: Date.now(),
+        provider: 'codex',
+        role: 'lead',
+        eventName: 'PreToolUse',
+        providerSessionId: 'retained-worker-session',
+        toolUseId: 'retained-worker-done-tool'
+      }
+    } as never)
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     return new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
   }
@@ -239,7 +260,6 @@ describe('orchestration runtime update settlement', () => {
     const replay = await harness.createDispatcher().dispatch({ ...completion, id: 'rpc_replay' })
     const firstResult = resultOf(first)
     const replayResult = resultOf(replay)
-
     expect(firstResult).toMatchObject({ message: { type: 'worker_done' } })
     expect(replayResult).toMatchObject({
       message: firstResult.message,

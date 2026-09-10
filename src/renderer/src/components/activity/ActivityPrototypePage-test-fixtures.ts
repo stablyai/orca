@@ -5,6 +5,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { buildActivityEvents, buildAgentPaneThreads } from './ActivityPrototypePage'
+import { translate } from '@/i18n/i18n'
 
 export const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 export const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
@@ -58,7 +59,10 @@ export function makeTab(): TerminalTab {
     id: 'tab-1',
     ptyId: 'pty-1',
     worktreeId: 'wt-1',
-    title: 'Claude',
+    title: translate(
+      'auto.components.activity.ActivityPrototypePage.test.fixtures.43a827f6a7',
+      'Claude'
+    ),
     customTitle: null,
     color: null,
     sortOrder: 0,

@@ -11,30 +11,38 @@ vi.mock('../memory/pty-registry', () => ({
 import { killAllProcessesForWorktree, WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from './worktree-teardown'
 import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
 import { DaemonPtyAdapter } from '../daemon/daemon-pty-adapter'
+import { createPtyStopReceipt, type PtyStopReceipt } from '../../shared/pty-stop-receipt'
+import type { ExecutionHostId } from '../../shared/execution-host'
+
+const TEST_INCARNATION = '11111111-1111-4111-8111-111111111111'
+
+function exitedReceipt(
+  ptyId: string,
+  terminalHandle = `terminal-${ptyId}`,
+  executionHostId: ExecutionHostId = 'local'
+): PtyStopReceipt {
+  const root = { pid: 41, parentPid: 1, processGroupId: 41, startedAt: 'started-1' }
+  return createPtyStopReceipt({
+    executionHostId,
+    terminalHandle,
+    ptyId,
+    ptyIncarnation: TEST_INCARNATION,
+    root,
+    descendants: [],
+    observations: [{ identity: root, status: 'absent', observedAt: new Date().toISOString() }],
+    verdict: 'exited',
+    processTreeVerified: true
+  })
+}
 
 function createProviderStub(listProcesses: () => Promise<PtyProcessInfo[]>): IPtyProvider {
-  return {
-    spawn: vi.fn(),
-    attach: vi.fn(),
-    write: vi.fn(),
-    resize: vi.fn(),
-    shutdown: vi.fn().mockResolvedValue(undefined),
-    sendSignal: vi.fn(),
-    getCwd: vi.fn(),
-    getInitialCwd: vi.fn(),
-    clearBuffer: vi.fn(),
-    acknowledgeDataEvent: vi.fn(),
-    hasChildProcesses: vi.fn(),
-    getForegroundProcess: vi.fn(),
-    serialize: vi.fn(),
-    revive: vi.fn(),
-    listProcesses: vi.fn(listProcesses),
-    getDefaultShell: vi.fn(),
-    getProfiles: vi.fn(),
-    onData: vi.fn().mockReturnValue(() => {}),
-    onReplay: vi.fn().mockReturnValue(() => {}),
-    onExit: vi.fn().mockReturnValue(() => {})
-  } as unknown as IPtyProvider
+  const provider = new DaemonPtyAdapter({
+    socketPath: '/tmp/test.sock',
+    tokenPath: '/tmp/test.tok'
+  })
+  vi.spyOn(provider, 'shutdown').mockImplementation(async (id) => exitedReceipt(id))
+  vi.spyOn(provider, 'listProcesses').mockImplementation(listProcesses)
+  return provider
 }
 
 describe('killAllProcessesForWorktree', () => {
@@ -349,9 +357,9 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReturnValue([])
     const releases: (() => void)[] = []
     ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          releases.push(resolve)
+      (id: string) =>
+        new Promise<PtyStopReceipt>((resolve) => {
+          releases.push(() => resolve(exitedReceipt(id)))
         })
     )
 
@@ -381,13 +389,13 @@ describe('killAllProcessesForWorktree', () => {
     let maxActive = 0
     const releases: (() => void)[] = []
     ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
+      (id: string) =>
+        new Promise<PtyStopReceipt>((resolve) => {
           active += 1
           maxActive = Math.max(maxActive, active)
           releases.push(() => {
             active -= 1
-            resolve()
+            resolve(exitedReceipt(id))
           })
         })
     )
@@ -736,7 +744,9 @@ describe('killAllProcessesForWorktree', () => {
         ): Promise<unknown> => {
           if (type === 'listSessions') {
             return Promise.resolve({
-              sessions: [{ sessionId, isAlive: true, cwd: '/tmp/w1' }]
+              sessions: [
+                { sessionId, incarnationId: TEST_INCARNATION, isAlive: true, cwd: '/tmp/w1' }
+              ]
             })
           }
           if (type === 'kill') {
@@ -773,6 +783,7 @@ describe('killAllProcessesForWorktree', () => {
         },
         (error: Error) => error
       )
+      await vi.advanceTimersByTimeAsync(0)
 
       // Advance past the daemon's 8s physical-exit budget AND the 10s sweep
       // deadline. A bounded adapter shutdown would have rejected inside this
@@ -905,9 +916,9 @@ describe('killAllProcessesForWorktree', () => {
       let resolveShutdown: () => void = () => {}
       const localProvider = createProviderStub(async () => [])
       ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
-        () =>
-          new Promise<void>((resolve) => {
-            resolveShutdown = resolve
+        (id: string) =>
+          new Promise<PtyStopReceipt>((resolve) => {
+            resolveShutdown = () => resolve(exitedReceipt(id))
           })
       )
       listRegisteredPtysMock.mockReturnValue([

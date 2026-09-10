@@ -1,0 +1,8 @@
+{
+  "source": "my-llm-kit/skills/agent-graph/fixtures/maestro-protocol-v1",
+  "upstream_bundle_sha256": "8e65f1111ba4a41be999eb49c90492a371d7d6073db7b04271d9c9044a6eefa1",
+  "files": {
+    "maestro-mutation.json": "62b5ecf862a55ab0c95e78dae1641c8ea661cf18560d708959e8241de11e016e",
+    "delegation-intent.json": "a3e31b5d2f8d8f9038ebef82961ae3624fd81a87ec07beb4439c14d1961cf909"
+  }
+}

@@ -42,7 +42,23 @@ import {
 
 const LONG_POLL_CLIENT_GRACE_MS = 10_000
 
-const loadWebSocketTransport = async () => await import('./websocket-transport.js')
+const COORDINATOR_AUTHORIZED_MAESTRO_METHODS = new Set([
+  'maestro.bootstrap',
+  'maestro.projection.apply',
+  'maestro.delegation.take',
+  'maestro.delegation.settle'
+])
+
+function carriesOrchestrationCompatibilityAuthority(method: string): boolean {
+  return method.startsWith('orchestration.') || COORDINATOR_AUTHORIZED_MAESTRO_METHODS.has(method)
+}
+
+// Why: ws + tweetnacl + the remote-runtime frame stack only matter once a
+// request actually goes over a pairing offer, which local CLI calls never do.
+// Both call sites already await this, so deferring the load changes no ordering.
+async function loadWebSocketTransport() {
+  return await import('./websocket-transport.js')
+}
 
 export class RuntimeClient {
   private readonly userDataPath: string
@@ -121,7 +137,7 @@ export class RuntimeClient {
       }
       return attachDurableMutationRecovery(error, orchestrationRequestId, originalCommand, method)
     }
-    const compatibilityEnvelope = method.startsWith('orchestration.')
+    const compatibilityEnvelope = carriesOrchestrationCompatibilityAuthority(method)
       ? {
           ...this.orchestrationCompatibility,
           compatibilityInvocationId:

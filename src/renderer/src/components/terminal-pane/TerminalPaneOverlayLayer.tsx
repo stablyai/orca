@@ -67,8 +67,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     if (state.activeWorktreeId !== worktreeId) {
       return
     }
-    const { renderableTabCount } = reconcileWorktreeTabModel(worktreeId)
-    if (renderableTabCount === 0) {
+    const { renderableTabCount, activeRenderableTabId } = reconcileWorktreeTabModel(worktreeId)
+    if (renderableTabCount === 0 && !activeRenderableTabId) {
       setActiveWorktree(null)
     }
   }, [reconcileWorktreeTabModel, setActiveWorktree, worktreeId])

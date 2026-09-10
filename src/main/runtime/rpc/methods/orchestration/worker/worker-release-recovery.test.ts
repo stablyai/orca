@@ -19,27 +19,34 @@ describe('orchestration worker release recovery', () => {
   let runtime: OrcaRuntimeService
   let ctx: RpcContext
   let activeRunId: string
+  let workerTerminalIncarnation = 0
 
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
+  function currentWorkerTerminalIncarnation(): string {
+    return `runtime_test:term_worker:${workerTerminalIncarnation}`
+  }
+
   function setup(): void {
     db = new OrchestrationDb(':memory:')
     dbOpen = true
+    workerTerminalIncarnation = 0
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : handle === 'term_worker' ? workerPaneKey : null
     )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-      handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
+      handle === 'term_worker' ? currentWorkerTerminalIncarnation() : null
     )
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
       handle === 'term_worker'
         ? ({
             terminalHandle: handle,
+            worktreeId: 'repo::worktree',
             paneKey: workerPaneKey,
-            processIncarnation: 'runtime_test:term_worker:1',
+            processIncarnation: currentWorkerTerminalIncarnation(),
             hostScope: { kind: 'local', hostId: 'local' }
           } as never)
         : null
@@ -51,10 +58,13 @@ describe('orchestration worker release recovery', () => {
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
       id: 'repo::worktree'
     } as never)
-    vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      worktreeId: 'repo::worktree',
-      title: 'worker'
+    vi.spyOn(runtime, 'createTerminal').mockImplementation(async () => {
+      workerTerminalIncarnation += 1
+      return {
+        handle: 'term_worker',
+        worktreeId: 'repo::worktree',
+        title: 'worker'
+      }
     })
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
       handle: 'term_worker',
@@ -64,6 +74,18 @@ describe('orchestration worker release recovery', () => {
       exitCode: null
     })
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'preflightWorktreeManagedCliExecutable').mockReturnValue('orca')
+    vi.spyOn(runtime, 'assertTerminalManagedCliAvailable').mockImplementation(() => {})
+    vi.spyOn(runtime, 'buildTerminalManagedCliContext').mockImplementation(
+      (handle) =>
+        ({
+          executable: 'orca',
+          runtimeId: runtime.getRuntimeId(),
+          executionHostId: 'local',
+          workspaceKey: 'worktree:repo::worktree',
+          terminalHandle: handle
+        }) as never
+    )
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
       accepted: true,
@@ -71,6 +93,7 @@ describe('orchestration worker release recovery', () => {
     })
     vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
     vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue(null)
+    vi.spyOn(runtime, 'inspectTerminalProcessIncarnationLiveness').mockResolvedValue('exited')
     vi.spyOn(runtime, 'readTerminal').mockResolvedValue({
       handle: 'term_worker',
       status: 'running',
@@ -222,6 +245,15 @@ describe('orchestration worker release recovery', () => {
     setup()
     const { dispatchId } = await startSettledWorker()
     vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({ status: 'exited' })
+    vi.spyOn(runtime, 'inspectTerminalProcessIncarnationLiveness').mockResolvedValue('exited')
+    vi.mocked(runtime.showTerminal).mockResolvedValue({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      connected: false,
+      ptyId: 'runtime_test:term_worker',
+      incarnationId: String(workerTerminalIncarnation),
+      executionHostId: 'local'
+    } as never)
     vi.mocked(runtime.getOrchestrationDispatchAuthority).mockRestore()
     expect(runtime.getOrchestrationDispatchAuthority('term_worker')).toBeNull()
     vi.mocked(runtime.closeTerminal).mockRejectedValueOnce(new Error('Multiplexer disposed'))
@@ -249,6 +281,7 @@ describe('orchestration worker release recovery', () => {
   it('defers instead of settling unknown while inventory is incomplete', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
+    vi.mocked(runtime.inspectTerminalProcessIncarnationLiveness).mockResolvedValue('unverifiable')
     vi.mocked(runtime.closeTerminal).mockRejectedValueOnce(new Error('Multiplexer disposed'))
     await call('orchestration.workerRelease', { dispatch: dispatchId })
     vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
@@ -261,6 +294,7 @@ describe('orchestration worker release recovery', () => {
   it('preserves archived output when an unconfirmed release retry cannot find the terminal', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
+    vi.mocked(runtime.inspectTerminalProcessIncarnationLiveness).mockResolvedValue('unverifiable')
     vi.mocked(runtime.closeTerminal).mockResolvedValueOnce({
       handle: 'term_worker',
       tabId: 'tab-worker',
@@ -309,9 +343,9 @@ describe('orchestration worker release recovery', () => {
     expect(runtime.showTerminal).toHaveBeenCalled()
   })
 
-  it('never touches resources without requested releases', async () => {
+  it('never touches unsettled resources without requested releases', async () => {
     setup()
-    await startSettledWorker()
+    await startWorker()
     const result = await reconcileRequestedWorkerTerminalReleases(runtime)
     expect(result.attempted).toBe(0)
     expect(runtime.closeTerminal).not.toHaveBeenCalled()

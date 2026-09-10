@@ -15,6 +15,9 @@ export function createTabsSecondaryActions(
         return null
       }
       const { tab, worktreeId } = foundTab
+      if (tab.systemRole === 'workspace-maestro') {
+        return null
+      }
       return get().createUnifiedTab(worktreeId, tab.contentType, {
         entityId: init?.entityId ?? tab.entityId,
         executionHostId: tab.executionHostId,
@@ -24,6 +27,8 @@ export function createTabsSecondaryActions(
         customLabel: init?.customLabel ?? tab.customLabel,
         color: init?.color ?? tab.color,
         isPinned: init?.isPinned ?? tab.isPinned,
+        maestroExecutionHostId: init?.maestroExecutionHostId ?? tab.maestroExecutionHostId,
+        maestroWorkspaceKey: init?.maestroWorkspaceKey ?? tab.maestroWorkspaceKey,
         id: init?.id,
         targetGroupId
       })
@@ -50,7 +55,11 @@ export function createTabsSecondaryActions(
         if (!item) {
           continue
         }
-        get().moveUnifiedTabToGroup(item.id, targetGroupId, { recordInteraction: false })
+        get().moveUnifiedTabToGroup(item.id, targetGroupId, {
+          index: item.systemRole === 'workspace-maestro' ? 0 : undefined,
+          recordInteraction: false,
+          allowSystemTransfer: item.systemRole === 'workspace-maestro'
+        })
       }
       get().closeEmptyGroup(worktreeId, groupId)
       get().recordFeatureInteraction?.('terminal-panes')

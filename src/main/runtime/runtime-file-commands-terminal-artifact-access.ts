@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split declarations.
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { realpath } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
@@ -69,6 +70,22 @@ export function assertTerminalFileGrantFresh(
   assertTerminalArtifactNotHardLinked(stats)
   const nextIdentity = terminalFileStatIdentity(stats)
   if (grant.statIdentity !== null && nextIdentity !== null && grant.statIdentity !== nextIdentity) {
+    throw new Error('terminal_file_grant_stale')
+  }
+}
+
+export function terminalFileContentIdentity(content: Buffer | string): string {
+  return createHash('sha256').update(content).digest('hex')
+}
+
+export function assertTerminalFileGrantContentFresh(
+  grant: TerminalFileGrant,
+  content: Buffer
+): void {
+  if (
+    grant.contentIdentity !== null &&
+    grant.contentIdentity !== terminalFileContentIdentity(content)
+  ) {
     throw new Error('terminal_file_grant_stale')
   }
 }

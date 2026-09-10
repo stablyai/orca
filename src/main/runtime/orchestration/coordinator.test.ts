@@ -18,7 +18,7 @@ function createMockRuntime(): CoordinatorRuntime & {
   sentMessages: { handle: string; text: string }[]
   terminals: { handle: string; worktreeId: string; connected: boolean; writable: boolean }[]
   createdTerminals: string[]
-  createdTerminalOptions: { title?: string }[]
+  createdTerminalOptions: { title?: string; orchestrationManagedLaunch?: boolean }[]
   probeDriftCalls: string[]
   probeDriftResult: DriftResult
   cliCommand: 'orca' | 'orca-ide'
@@ -34,7 +34,7 @@ function createMockRuntime(): CoordinatorRuntime & {
       writable: boolean
     }[],
     createdTerminals: [] as string[],
-    createdTerminalOptions: [] as { title?: string }[],
+    createdTerminalOptions: [] as { title?: string; orchestrationManagedLaunch?: boolean }[],
     probeDriftCalls: [] as string[],
     probeDriftResult: null as DriftResult,
     cliCommand: 'orca' as 'orca' | 'orca-ide',
@@ -49,7 +49,10 @@ function createMockRuntime(): CoordinatorRuntime & {
     async listTerminals() {
       return { terminals: mock.terminals }
     },
-    async createTerminal(_worktree?: string, opts?: { title?: string }) {
+    async createTerminal(
+      _worktree?: string,
+      opts?: { title?: string; orchestrationManagedLaunch?: boolean }
+    ) {
       const handle = `term_worker_${mock.createdTerminals.length}`
       mock.createdTerminals.push(handle)
       mock.createdTerminalOptions.push(opts ?? {})
@@ -322,7 +325,10 @@ describe('Coordinator', () => {
     })
 
     expect(runtime.createdTerminals.length).toBe(1)
-    expect(runtime.createdTerminalOptions[0]).not.toHaveProperty('presentation')
+    expect(runtime.createdTerminalOptions[0]).toEqual({
+      title: 'Worker: work',
+      orchestrationManagedLaunch: true
+    })
 
     // Complete the task
     insertWorkerDone(db, { taskId: task.id, from: runtime.createdTerminals[0] })

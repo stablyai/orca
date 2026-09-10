@@ -232,9 +232,10 @@ describe('PtyHandler authorizes a fenced stop against its own attestation', () =
   it('stops a PTY when the connection and the host agree on the owner', async () => {
     const { id } = await spawnFrom(7)
 
-    await expect(
-      stop(id, { expectedOwnerClientInstanceId: 'client-A' }, 7)
-    ).resolves.toBeUndefined()
+    const stopping = stop(id, { expectedOwnerClientInstanceId: 'client-A' }, 7)
+    await vi.waitFor(() => expect(killSignals()).toEqual([['SIGTERM']]))
+    await vi.advanceTimersByTimeAsync(2_050)
+    await expect(stopping).resolves.toMatchObject({ ptyId: id })
     expect(killSignals()).toEqual([['SIGTERM']])
   })
 
@@ -293,7 +294,10 @@ describe('PtyHandler authorizes a fenced stop against its own attestation', () =
     // field. The host must not start refusing a stop it is obliged to honour.
     const { id } = await spawnFrom(7)
 
-    await expect(stop(id, {}, 7)).resolves.toBeUndefined()
+    const stopping = stop(id, {}, 7)
+    await vi.waitFor(() => expect(killSignals()).toEqual([['SIGTERM']]))
+    await vi.advanceTimersByTimeAsync(2_050)
+    await expect(stopping).resolves.toMatchObject({ ptyId: id })
     expect(killSignals()).toEqual([['SIGTERM']])
   })
 

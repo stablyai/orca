@@ -1,3 +1,8 @@
+import type { RuntimeTerminalPromptDelivery } from './runtime-terminal-prompt-contract'
+export type {
+  RuntimeTerminalPromptDelivery,
+  RuntimeTerminalPromptStage
+} from './runtime-terminal-prompt-contract'
 import type { AgentSessionPtyWriteRefusal } from './agent-session-pty-write-admission'
 import type {
   AgentProviderSessionMetadata,
@@ -10,6 +15,8 @@ import type { RuntimeListingHostScope } from './runtime-listing-host-scope'
 import type { RuntimeMobileSessionTabsResult } from './runtime-session-contracts'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalExitCause } from './terminal-exit-cause'
+import type { MaestroTerminalInputReceipt } from './maestro-terminal-lease'
+import type { PtyStopReceipt } from './pty-stop-receipt'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 
@@ -210,28 +217,13 @@ export type RuntimeTerminalSend = {
   accepted: boolean
   bytesWritten: number
   refusedReason?: 'no-agent' | 'permission'
+  deliveryReceipt?: MaestroTerminalInputReceipt
   /**
    * Present only when a durable agent-session lease refused the write. Additive and optional: an
    * old client sees the `accepted: false` it already handles and ignores this field.
    */
   agentSessionRefusal?: AgentSessionPtyWriteRefusal
   prompt?: RuntimeTerminalPromptDelivery
-}
-
-export type RuntimeTerminalPromptStage = 'input_accepted' | 'turn_started'
-
-export type RuntimeTerminalPromptDelivery = {
-  requestId: string
-  stages: RuntimeTerminalPromptStage[]
-  provider: 'claude' | 'codex' | 'unsupported' | 'old-host'
-  observation: 'supported' | 'unsupported' | 'incarnation_replaced' | 'permission'
-  processIncarnation: string
-  generation: number
-  baselineWorkingSequence: number
-  /** Hook turn-start timestamp before this prompt was accepted. */
-  baselineExplicitWorkingStartedAt?: number | null
-  /** Permission observations seen before this prompt was accepted. */
-  baselinePermissionSequence?: number
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
@@ -324,6 +316,7 @@ export type RuntimeTerminalClose = {
   tabId: string
   closeMode?: 'tab'
   ptyKilled: boolean
+  ptyStopReceipt?: PtyStopReceipt
   ptyStopVerdict?: 'live' | 'unverifiable'
   ptyStopReason?: string
 }
@@ -347,4 +340,12 @@ export type RuntimeTerminalWait = {
   exitCode: number | null
   exitCause?: TerminalExitCause
   blockedReason?: RuntimeTerminalWaitBlockedReason
+  observation?: {
+    source: 'agent-status' | 'prompt' | 'process-exit' | 'foreground-process' | 'unknown'
+    revision: number | null
+    observedAt: number | null
+    ptyIncarnation: string | null
+  }
+  settlementInferred?: false
+  cleanupAuthorized?: false
 }

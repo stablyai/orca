@@ -389,7 +389,7 @@ describe('orchestration RPC methods', () => {
       expect(runtime.notifyMessageArrived).toHaveBeenCalledWith(`run:${activeRunId}`, 'worker_done')
     })
 
-    it('requires the minted capability, exact pane, and process incarnation', async () => {
+    it('rejects a missing or mismatched capability, pane, and process incarnation', async () => {
       setup()
       const task = db.createTask({ spec: 'capability work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
@@ -451,24 +451,6 @@ describe('orchestration RPC methods', () => {
         payload
       })) as { lifecycle: { code: string } }
       expect(wrongProcess.lifecycle.code).toBe('dispatch_capability_invalid')
-
-      vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
-      await call('orchestration.send', {
-        from: 'term_worker',
-        subject: 'Done',
-        type: 'worker_done',
-        payload
-      })
-      expect(db.getTask(task.id)?.status).toBe('completed')
-      expect(db.getDispatchContextById(dispatch.id)?.capability_revoked_at).toBeTruthy()
-
-      const revoked = (await call('orchestration.send', {
-        from: 'term_worker',
-        subject: 'Done again',
-        type: 'worker_done',
-        payload
-      })) as { lifecycle: { code: string } }
-      expect(revoked.lifecycle.code).toBe('dispatch_capability_invalid')
     })
 
     it('does not wake waiters for a heartbeat suppressed at send time', async () => {

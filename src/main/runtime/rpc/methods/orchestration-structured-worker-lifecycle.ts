@@ -261,8 +261,10 @@ export function readArchivedStructuredJournal(args: {
   workerState: string
   resourceId: string
   createdAt: string
-  /** Only a SETTLED release proves the session is gone; `releasing` and `unknown` never do. */
+  /** Lifecycle state retained for callers and output metadata; it is not liveness evidence. */
   releaseState: WorkerTerminalReleaseState
+  /** Explicit host evidence; release state alone is not a death certificate. */
+  liveness?: StructuredWorkerObservation['status']
   archive: WorkerStructuredJournalArchive
   cursor?: string | number
   limit?: number
@@ -293,11 +295,9 @@ export function readArchivedStructuredJournal(args: {
     start: cursor?.position ?? 0,
     limit: args.limit,
     archived: true,
-    // The archive is frozen BEFORE the close, so it proves nothing about the child. Only a
-    // settled release row proves the close landed; `releasing` and `unknown` are the states
-    // that exist to say it did not, and answering `exited` from one of them is the death
-    // certificate `docs/reference/ssh-execution-boundary.md` forbids.
-    liveness: args.releaseState === 'released' ? 'exited' : 'unverifiable'
+    // The archive is frozen BEFORE the close, so it proves nothing about the child. Release state
+    // remains lifecycle metadata; only explicit host evidence can produce an exited verdict.
+    liveness: args.liveness ?? 'unverifiable'
   })
 }
 

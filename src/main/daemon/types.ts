@@ -22,6 +22,8 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
+import type { KillRequest } from './daemon-kill-protocol'
+export type { KillRequest } from './daemon-kill-protocol'
 export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
@@ -35,6 +37,8 @@ export {
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
+  PTY_STOP_RECEIPT_DAEMON_PROTOCOL_VERSION,
+  WINDOWS_PTY_JOB_OBJECT_DAEMON_PROTOCOL_VERSION,
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
   MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
@@ -158,15 +162,6 @@ export type SetSessionBackgroundRequest = {
   payload: {
     sessionId: string
     background: boolean
-  }
-}
-
-export type KillRequest = {
-  id: string
-  type: 'kill'
-  payload: {
-    sessionId: string
-    immediate?: boolean
   }
 }
 

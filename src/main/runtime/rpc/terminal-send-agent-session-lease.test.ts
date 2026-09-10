@@ -25,6 +25,7 @@ const rollback = vi.fn()
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    getOrchestrationDb: () => ({ getMaestroTerminalLeaseByHandle: () => undefined }),
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
     beginMobileInputFloor: vi.fn(() => ({ commit: async () => {}, rollback })),

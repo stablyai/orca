@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "protocol": "delegation-intent/v1",
+  "intent_id": "intent-invalid",
+  "workspace": {
+    "repository_id": "repo-1",
+    "execution_host_id": "local",
+    "workspace_key": "folder:folder-1",
+    "run_id": "run-1"
+  },
+  "actor": {
+    "actor_id": "user-1",
+    "kind": "user",
+    "authenticated": true,
+    "session_id": "session-1"
+  },
+  "coordinator_generation": 1,
+  "expected_revision": 0,
+  "parent_task_id": "task-1",
+  "parent_attempt_id": "attempt-1",
+  "purpose": "Invalid context overflow.",
+  "role": "implementation",
+  "requested": { "lane": "balanced", "agent": null, "model": null, "effort": "low" },
+  "placement_request": { "kind": "current-workspace" },
+  "context_refs": ["bad reference with whitespace"],
+  "paths": ["src/main.ts"],
+  "check": "pnpm test"
+}

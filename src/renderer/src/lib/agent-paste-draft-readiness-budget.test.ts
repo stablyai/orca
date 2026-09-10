@@ -88,7 +88,7 @@ describe('pty-bound agent draft readiness budget', () => {
     expect(testState.waitForReady).toHaveBeenCalledWith(
       'pty-1',
       8000,
-      'render-cursor-after-bracketed-paste',
+      'opencode-composer-prompt',
       {}
     )
     expect(onTimeout).toHaveBeenCalledTimes(1)

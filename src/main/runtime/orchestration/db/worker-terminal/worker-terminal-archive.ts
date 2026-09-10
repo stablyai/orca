@@ -7,6 +7,11 @@ import type {
 } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
+import {
+  markLinkedWorkerLeaseReleased,
+  markLinkedWorkerLeaseReleaseUnknown,
+  retainLinkedWorkerLease
+} from './worker-terminal-lease-lifecycle'
 
 export function storeWorkerTerminalArchive(
   this: OrchestrationDb,
@@ -97,18 +102,33 @@ export function getWorkerTerminalArchive(
 
 export function settleWorkerTerminalRelease(
   this: OrchestrationDb,
-  resourceId: string
+  params: {
+    resourceId: string
+    ownerDispatchId: string
+    processIncarnation: string
+  }
 ): WorkerTerminalResourceRow {
-  this.db
+  const update = this.db
     .prepare(
       `UPDATE worker_terminal_resources
        SET release_state = 'released', ownership_state = 'released',
+           retained_reason = NULL, retention_owner = NULL, retention_expires_at = NULL,
+           review_id = NULL,
            release_completed_at = datetime('now'), release_error = NULL,
            updated_at = datetime('now')
-       WHERE id = ? AND release_state IN ('requested', 'releasing', 'unknown')`
+       WHERE id = ? AND owner_dispatch_id = ? AND process_incarnation = ?
+         AND release_state IN ('requested', 'releasing', 'unknown')`
     )
-    .run(resourceId)
-  return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
+    .run(params.resourceId, params.ownerDispatchId, params.processIncarnation)
+  const settled = this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
+  if (
+    update.changes > 0 &&
+    settled.owner_dispatch_id === params.ownerDispatchId &&
+    settled.process_incarnation === params.processIncarnation
+  ) {
+    markLinkedWorkerLeaseReleased(this, params.resourceId)
+  }
+  return settled
 }
 
 export function markWorkerTerminalReleaseUnknown(
@@ -123,6 +143,7 @@ export function markWorkerTerminalReleaseUnknown(
        WHERE id = ? AND release_state IN ('requested', 'releasing')`
     )
     .run(reason, resourceId)
+  markLinkedWorkerLeaseReleaseUnknown(this, resourceId)
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
@@ -134,10 +155,12 @@ export function revertWorkerTerminalReleaseToRetained(
   this.db
     .prepare(
       `UPDATE worker_terminal_resources
-       SET release_state = 'retained', retained_reason = ?, updated_at = datetime('now')
+       SET release_state = 'retained', retained_reason = ?, retention_owner = NULL,
+           retention_expires_at = NULL, review_id = NULL, updated_at = datetime('now')
        WHERE id = ? AND release_state IN ('requested', 'releasing')`
     )
     .run(reason, resourceId)
+  retainLinkedWorkerLease(this, resourceId)
   return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
 }
 
@@ -175,8 +198,11 @@ export function retainWorkerTerminalResource(
       .prepare(
         `UPDATE worker_terminal_resources
          SET release_state = 'retained', retained_reason = 'user_requested',
+             retention_owner = NULL, retention_expires_at = NULL, review_id = NULL,
              updated_at = datetime('now')
-         WHERE id = ? AND release_state IN ('not_requested', 'retained', 'requested')`
+         WHERE id = ? AND release_state IN (
+           'not_requested', 'retained', 'retained_for_review', 'requested'
+         )`
       )
       .run(resource.id)
     const updated = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
@@ -185,8 +211,68 @@ export function retainWorkerTerminalResource(
       return { disposition: 'release_committed', resource: updated }
     }
     this.db.prepare('DELETE FROM worker_terminal_archives WHERE dispatch_id = ?').run(dispatchId)
+    retainLinkedWorkerLease(this, resource.id)
     this.db.exec('COMMIT')
     return { disposition: 'retained', resource: updated }
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+export function retainWorkerTerminalResourceForReview(
+  this: OrchestrationDb,
+  dispatchId: string,
+  retention: { owner: string; reason: string; expiresAt: string; reviewId: string }
+): WorkerTerminalResourceRow {
+  const fields = [retention.owner, retention.reason, retention.expiresAt, retention.reviewId]
+  if (fields.some((field) => !field.trim()) || !Number.isFinite(Date.parse(retention.expiresAt))) {
+    throw new OrchestrationError(
+      'task_not_startable',
+      'Review retention requires an owner, reason, valid expiry, and review ID.'
+    )
+  }
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
+    if (!resource) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Dispatch ${dispatchId} has no worker terminal resource to retain for review.`
+      )
+    }
+    if (resource.release_state === 'released' || resource.ownership_state === 'released') {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Released worker terminal resource ${resource.id} cannot be retained for review.`
+      )
+    }
+    this.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+         SET release_state = 'retained_for_review', retained_reason = ?, retention_owner = ?,
+             retention_expires_at = ?, review_id = ?, updated_at = datetime('now')
+         WHERE id = ? AND release_state IN (
+           'not_requested', 'retained', 'retained_for_review', 'requested', 'unknown'
+         )`
+      )
+      .run(
+        retention.reason.trim(),
+        retention.owner.trim(),
+        new Date(retention.expiresAt).toISOString(),
+        retention.reviewId.trim(),
+        resource.id
+      )
+    const retained = this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
+    if (retained.release_state !== 'retained_for_review') {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Worker terminal resource ${resource.id} has committed release work.`
+      )
+    }
+    retainLinkedWorkerLease(this, resource.id)
+    this.db.exec('COMMIT')
+    return retained
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error
@@ -201,6 +287,7 @@ export type WorkerTerminalArchiveMethods = {
   markWorkerTerminalReleaseUnknown: typeof markWorkerTerminalReleaseUnknown
   revertWorkerTerminalReleaseToRetained: typeof revertWorkerTerminalReleaseToRetained
   retainWorkerTerminalResource: typeof retainWorkerTerminalResource
+  retainWorkerTerminalResourceForReview: typeof retainWorkerTerminalResourceForReview
 }
 
 export function attachWorkerTerminalArchive(ctor: { prototype: object }): void {
@@ -211,6 +298,7 @@ export function attachWorkerTerminalArchive(ctor: { prototype: object }): void {
     settleWorkerTerminalRelease,
     markWorkerTerminalReleaseUnknown,
     revertWorkerTerminalReleaseToRetained,
-    retainWorkerTerminalResource
+    retainWorkerTerminalResource,
+    retainWorkerTerminalResourceForReview
   })
 }

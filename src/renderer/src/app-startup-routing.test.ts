@@ -411,7 +411,9 @@ describe('renderer startup runtime routing', () => {
     const shellSource = readSource(WORKSPACE_SHELL_PATH)
     const layoutSource = readSource(CHROME_LAYOUT_PATH)
 
-    expect(shellSource).toContain("const Terminal = lazy(() => import('../components/Terminal'))")
+    expect(shellSource).toContain(
+      "const Terminal = lazy(() => import('../components/Terminal'), { reloadKey: 'terminal-workbench' })"
+    )
     expect(shellSource).not.toContain("from '../components/Terminal'")
     expect(layoutSource).toContain(
       'const canMountTerminalWorkbenchNow = activeWorktreeId !== null || backgroundTerminalMountRequested'

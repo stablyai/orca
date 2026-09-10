@@ -117,7 +117,7 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
     expect(readdirCalls.count).toBeLessThan(10)
   })
 
-  it('costs exactly one stat per tick for an unchanged entry', async () => {
+  it('uses only the entry and HEAD stats per tick for an unchanged entry', async () => {
     const commonDir = await makeCommonDir(1)
     dirsToRemove.push(commonDir)
     const pollIntervalMs = 20
@@ -134,12 +134,11 @@ describe('startGitCommonPolling fan-out bounds (#17828)', () => {
       },
       { timeout: 2_000 }
     )
-    // Without the entry-dir signature gate, an unchanged entry still costs ~6
-    // stats every tick (HEAD/gitdir/locked/config.worktree/logs/HEAD/index).
-    // With the gate, only the entry dir itself is stat'd once nothing changed —
-    // one stat per tick, in lockstep with the readdir tripwire.
-    expect(entryZeroStatCalls.count).toBeLessThanOrEqual(readdirCalls.count + 1)
-    expect(entryZeroStatCalls.count).toBeGreaterThanOrEqual(readdirCalls.count - 1)
+    // HEAD is the one correctness probe outside the directory gate; all other leaves
+    // remain behind it, so each tick costs two stats instead of the full seven.
+    // One readdir may belong to the in-flight tick whose two stats have not settled yet.
+    expect(entryZeroStatCalls.count).toBeLessThanOrEqual(readdirCalls.count * 2 + 2)
+    expect(entryZeroStatCalls.count).toBeGreaterThanOrEqual((readdirCalls.count - 1) * 2)
   })
 
   it('detects a HEAD rewrite via lock+rename on the next tick', async () => {

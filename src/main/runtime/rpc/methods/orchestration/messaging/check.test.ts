@@ -331,6 +331,50 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages(`run:${activeRunId}`, ['worker_done'])).toHaveLength(1)
     })
 
+    it('surfaces newer Run questions without changing a replayed Delivery', async () => {
+      setup()
+      const oldStatus = db.insertMessage({
+        from: 'worker-old',
+        to: `run:${activeRunId}`,
+        subject: 'Old status',
+        runId: activeRunId
+      })
+      const first = (await call('orchestration.check', {
+        terminal: 'term_coord'
+      })) as { deliveryId: string; messages: { id: string }[] }
+      db.insertMessage({
+        from: 'worker-normal',
+        to: `run:${activeRunId}`,
+        subject: 'New normal status',
+        runId: activeRunId
+      })
+      const question = db.insertMessage({
+        from: 'worker-current',
+        to: `run:${activeRunId}`,
+        subject: 'Current question',
+        body: 'Which source revision should I use?',
+        type: 'question',
+        runId: activeRunId
+      })
+
+      const replay = (await call('orchestration.check', {
+        terminal: 'term_coord'
+      })) as {
+        deliveryId: string
+        messages: { id: string }[]
+        pendingAttentionMessages: { id: string; body: string }[]
+        pendingAttentionCount: number
+      }
+
+      expect(replay.deliveryId).toBe(first.deliveryId)
+      expect(replay.messages.map((message) => message.id)).toEqual([oldStatus.id])
+      expect(replay.pendingAttentionMessages).toMatchObject([
+        { id: question.id, body: 'Which source revision should I use?' }
+      ])
+      expect(replay.pendingAttentionCount).toBe(1)
+      expect(db.getMessageById(question.id)?.read).toBe(0)
+    })
+
     it('reconciles worker_done returned by a waiting manual check', async () => {
       setup()
       const { task, dispatch } = createDispatchedTask()
@@ -833,6 +877,27 @@ describe('orchestration RPC methods', () => {
         terminal: 'does_not_exist'
       })) as { count: number }
       expect(result.count).toBe(0)
+    })
+
+    it('--run inspects the named Run mailbox without consuming it', async () => {
+      setup()
+      const message = db.insertMessage({
+        from: 'worker',
+        to: `run:${activeRunId}`,
+        subject: 'Run question',
+        type: 'question',
+        runId: activeRunId
+      })
+
+      const result = (await call('orchestration.inbox', { run: activeRunId })) as {
+        runId: string
+        messages: { id: string }[]
+        count: number
+      }
+
+      expect(result.runId).toBe(activeRunId)
+      expect(result.messages.map((entry) => entry.id)).toEqual([message.id])
+      expect(db.getMessageById(message.id)?.read).toBe(0)
     })
   })
 })

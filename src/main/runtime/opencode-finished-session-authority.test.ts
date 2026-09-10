@@ -81,6 +81,7 @@ async function launchOpenCodePane(options: {
   const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN as string
   expect(paneKey).toBeTruthy()
   expect(launchToken).toBeTruthy()
+  runtime.onPtyData(options.ptyId, '\x1b]133;C\x07', 99)
   return {
     runtime,
     ptyId: options.ptyId,

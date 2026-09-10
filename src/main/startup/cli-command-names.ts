@@ -41,6 +41,7 @@ export const CLI_COMMAND_NAMES = [
   'is',
   'keypress',
   'linear',
+  'maestro',
   'mouse',
   'network',
   'open',

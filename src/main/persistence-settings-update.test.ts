@@ -461,7 +461,7 @@ describe('Store', () => {
 
     expect(store.getSettings().agentDefaultArgs).toMatchObject({
       claude: '--dangerously-skip-permissions',
-      codex: '--dangerously-bypass-approvals-and-sandbox',
+      codex: '--yolo',
       cursor: '--yolo'
     })
     expect(store.getSettings().agentDefaultEnv).toMatchObject({
@@ -498,7 +498,7 @@ describe('Store', () => {
           agentDefaultArgs: {
             opencode: '--dangerously-skip-permissions --model opencode/gpt-5',
             kilo: '--dangerously-skip-permissions',
-            codex: '--dangerously-bypass-approvals-and-sandbox'
+            codex: '--yolo'
           }
         }
       })
@@ -508,9 +508,7 @@ describe('Store', () => {
 
     expect(store.getSettings().agentDefaultArgs?.opencode).toBe('--model opencode/gpt-5')
     expect(store.getSettings().agentDefaultArgs?.kilo).toBe('')
-    expect(store.getSettings().agentDefaultArgs?.codex).toBe(
-      '--dangerously-bypass-approvals-and-sandbox'
-    )
+    expect(store.getSettings().agentDefaultArgs?.codex).toBe('--yolo')
     expect((readDataFile() as PersistedState).settings.agentDefaultArgs?.opencode).toBe(
       '--model opencode/gpt-5'
     )

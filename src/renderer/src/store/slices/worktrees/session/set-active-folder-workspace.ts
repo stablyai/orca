@@ -3,6 +3,7 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { markInputQuietSchedulerInput } from '@/lib/input-quiet-scheduler'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
+import { projectWorktreeTabModelReconciliation } from '../../tabs'
 import {
   findKnownWorktreeById,
   folderWorkspaceMatchesHost
@@ -26,8 +27,16 @@ export function createSetActiveFolderWorkspace(
     if (get().activeWorktreeId !== workspaceKey) {
       moveFocusToRendererBeforeFocusedWebviewHidden()
     }
-    const reconciledActiveTabId =
-      get().reconcileWorktreeTabModel(workspaceKey).activeRenderableTabId
+    const reconciliation = projectWorktreeTabModelReconciliation(
+      get(),
+      workspaceKey,
+      undefined,
+      executionHostId
+    )
+    if (Object.keys(reconciliation.patch).length > 0) {
+      set(reconciliation.patch)
+    }
+    const reconciledActiveTabId = reconciliation.activeRenderableTabId
     set((s) => {
       const { activeFileId, activeBrowserTabId, activeTabType, activeTabId } =
         deriveActiveSurfaceForWorktree(s, workspaceKey, undefined, {

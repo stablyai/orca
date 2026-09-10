@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
-import { getOptionalStringFlag } from '../../flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
@@ -10,6 +10,33 @@ import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 import { formatWorkerStart } from './worker-output'
 import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
+
+export type WorkerStartCliReceipt = {
+  runId: string
+  taskId: string
+  dispatchId: string
+  state: string
+  failedStage?: string
+  lastError?: string
+  warning?: string
+  nextCommands?: string[]
+  effects: unknown[]
+  residualResources: unknown[]
+}
+
+export function formatWorkerStartReceipt(worker: WorkerStartCliReceipt): string {
+  const lines = [`Worker ${worker.dispatchId} [${worker.state}] for ${worker.taskId}`]
+  if (worker.lastError) {
+    lines.push(`${worker.failedStage ?? 'start'}: ${worker.lastError}`)
+  } else if (worker.warning) {
+    lines.push(`Warning: ${worker.warning}`)
+  }
+  const nextCommand = worker.nextCommands?.[0]
+  if (nextCommand) {
+    lines.push(`Next command: ${nextCommand}`)
+  }
+  return lines.join('\n')
+}
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
@@ -47,6 +74,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       nextCommands?: string[]
     }>(client, flags, 'orchestration.workerStart', {
       task,
+      attemptId: getRequiredStringFlag(flags, 'attempt-id'),
       ...(spec ? { spec } : {}),
       ...(taskTitle ? { taskTitle } : {}),
       ...(deps ? { deps } : {}),
@@ -84,5 +112,33 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
         }
       : result
     printResult(renderedResult, json, formatWorkerStart)
+  },
+  'orchestration replace-worker': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{
+      runId: string
+      taskId: string
+      dispatchId: string
+      state: string
+      failedStage?: string
+      lastError?: string
+      warning?: string
+    }>(client, flags, 'orchestration.workerStart', {
+      task: getRequiredStringFlag(flags, 'task'),
+      replacementOf: getRequiredStringFlag(flags, 'predecessor'),
+      run: getOptionalStringFlag(flags, 'run'),
+      from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
+      devMode: isDevCliInvocation()
+    })
+    if (result.result.state !== 'ready') {
+      process.exitCode = 1
+    }
+    printResult(result, json, (worker) => {
+      const base = `Worker ${worker.dispatchId} [${worker.state}] for ${worker.taskId}`
+      return worker.lastError
+        ? `${base}\n${worker.failedStage ?? 'start'}: ${worker.lastError}`
+        : worker.warning
+          ? `${base}\nWarning: ${worker.warning}`
+          : base
+    })
   }
 }

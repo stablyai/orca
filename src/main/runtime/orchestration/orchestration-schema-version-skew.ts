@@ -43,7 +43,29 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 36, table: 'remote_dispatch_attachments', column: 'consumer_generation' },
   { version: 37, table: 'dispatch_contexts', column: 'creator_handle' },
   { version: 37, table: 'dispatch_contexts', column: 'creator_pane_key' },
-  { version: 40, table: 'remote_dispatch_attachments', column: 'home_run_id' }
+  { version: 40, table: 'remote_dispatch_attachments', column: 'home_run_id' },
+  {
+    version: 41,
+    table: 'maestro_terminal_lease_transfer_receipts',
+    column: 'mutation_caller_fingerprint'
+  },
+  { version: 41, table: 'maestro_terminal_lease_transfer_receipts', column: 'mutation_request_id' },
+  { version: 41, table: 'maestro_terminal_lease_transfer_receipts', column: 'mutation_method' },
+  {
+    version: 41,
+    table: 'maestro_terminal_lease_transfer_receipts',
+    column: 'mutation_payload_hash'
+  },
+  { version: 43, table: 'tasks', column: 'purpose' },
+  { version: 43, table: 'tasks', column: 'operational_outcome' },
+  { version: 43, table: 'tasks', column: 'successor_task_id' },
+  { version: 43, table: 'worker_terminal_resources', column: 'retention_owner' },
+  { version: 43, table: 'worker_terminal_resources', column: 'retention_expires_at' },
+  { version: 43, table: 'worker_terminal_resources', column: 'review_id' },
+  { version: 43, table: 'maestro_run_projections', column: 'home_execution_host_id' },
+  { version: 43, table: 'maestro_run_projections', column: 'home_workspace_key' },
+  { version: 43, table: 'maestro_run_projections', column: 'execution_execution_host_id' },
+  { version: 43, table: 'maestro_run_projections', column: 'execution_workspace_key' }
 ] as const
 
 // Why: v34 shipped without these two, so a v34 stamp proves nothing about them; v35 repairs both
@@ -160,16 +182,7 @@ function hasCompletePostV6Schema(db: Database.Database, storedVersion: number): 
     POST_V6_COLUMNS.every(([table, column]) => hasOrchestrationColumn(db, table, column)) &&
     VERSIONED_POST_V6_COLUMNS.every(
       ({ version, table, column }) =>
-        storedVersion < version || hasOrchestrationColumn(db, table, column)
-    ) &&
-    (storedVersion < 34 || hasNotNullOrchestrationColumn(db, 'deliveries', 'mailbox_handle')) &&
-    VERSIONED_POST_V6_COLUMN_DEFAULTS.every(
-      ({ version, table, column, defaultValue }) =>
-        storedVersion < version || hasOrchestrationColumnDefault(db, table, column, defaultValue)
-    ) &&
-    VERSIONED_POST_V6_INDEX_PREDICATES.every(
-      ({ version, index, predicate }) =>
-        storedVersion < version || hasOrchestrationIndexPredicate(db, index, predicate)
+        version > 30 || storedVersion < version || hasOrchestrationColumn(db, table, column)
     ) &&
     POST_V6_INDEXES.every((index) => hasOrchestrationIndex(db, index)) &&
     messagesAllowQuestions(db) &&
@@ -186,7 +199,25 @@ export function resolveOrchestrationMigrationStartVersion(
     return storedVersion
   }
   if (hasCompletePostV6Schema(db, storedVersion)) {
-    return storedVersion
+    const missingVersions = [
+      ...VERSIONED_POST_V6_COLUMNS.filter(
+        ({ version, table, column }) =>
+          version > 30 && version <= storedVersion && !hasOrchestrationColumn(db, table, column)
+      ).map(({ version }) => version),
+      ...VERSIONED_POST_V6_COLUMN_DEFAULTS.filter(
+        ({ version, table, column, defaultValue }) =>
+          version <= storedVersion &&
+          !hasOrchestrationColumnDefault(db, table, column, defaultValue)
+      ).map(({ version }) => version),
+      ...VERSIONED_POST_V6_INDEX_PREDICATES.filter(
+        ({ version, index, predicate }) =>
+          version <= storedVersion && !hasOrchestrationIndexPredicate(db, index, predicate)
+      ).map(({ version }) => version)
+    ]
+    if (storedVersion >= 34 && !hasNotNullOrchestrationColumn(db, 'deliveries', 'mailbox_handle')) {
+      missingVersions.push(34)
+    }
+    return Math.min(storedVersion, ...missingVersions.map((version) => version - 1))
   }
   // Why: version-skewed pre-Run databases can claim the post-v6 range while retaining v6 tables.
   return Math.min(storedVersion, schemaVersion, 6)

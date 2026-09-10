@@ -131,7 +131,7 @@ describe('OrchestrationDb Run state', () => {
       expect(delivery?.messages.map((message) => message.subject)).toEqual(['status', 'done'])
     })
 
-    it('fences an outstanding batch when the Run consumer changes', () => {
+    it('atomically migrates an outstanding batch when the Run consumer changes', () => {
       const d = createDb()
       const run = createBoundRun(d)
       d.insertMessage({ from: 'a', to: `run:${run.id}`, subject: 'one', runId: run.id })
@@ -160,7 +160,7 @@ describe('OrchestrationDb Run state', () => {
         runId: run.id,
         consumerGeneration: rebound.consumer_generation
       })
-      expect(replacement?.delivery.id).not.toBe(oldDelivery.delivery.id)
+      expect(replacement?.delivery.id).toBe(oldDelivery.delivery.id)
       expect(replacement?.messages.map((message) => message.subject)).toEqual(['one'])
     })
 

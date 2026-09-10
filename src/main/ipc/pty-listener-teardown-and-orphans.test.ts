@@ -5,7 +5,7 @@ import {
   openCodeClearPtyMock,
   piClearPtyMock
 } from './pty-ipc-mock-registry'
-import { posixOnlyIt, makeDisposable } from './pty-ipc-test-constants'
+import { exitedPtyStopReceipt, makeDisposable, posixOnlyIt } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import { registerPtyHandlers, setLocalPtyProvider, getLocalPtyProvider } from './pty'
@@ -164,7 +164,10 @@ describe('registerPtyHandlers', () => {
 
     const killPromise = handlers.get('pty:kill')!(null, { id: spawnResult.id }) as Promise<void>
 
-    expect(killSpy).toHaveBeenCalledTimes(1)
+    // The root signal now follows an async process-tree walk, so wait for it rather
+    // than assuming the same tick; the point is that listeners survive until exit.
+    // The pre-stop process snapshot is bounded at 1s, so allow for it before the root signal.
+    await vi.waitFor(() => expect(killSpy).toHaveBeenCalledTimes(1), { timeout: 4000 })
     expect(onDataDisposable.dispose).not.toHaveBeenCalled()
     expect(onExitDisposable.dispose).not.toHaveBeenCalled()
 
@@ -211,7 +214,8 @@ describe('registerPtyHandlers', () => {
     }
 
     expect(runtimeController.kill(spawnResult.id)).toBe(true)
-    await vi.waitFor(() => expect(killSpy).toHaveBeenCalledTimes(1))
+    // The pre-stop process snapshot is bounded at 1s, so allow for it before the root signal.
+    await vi.waitFor(() => expect(killSpy).toHaveBeenCalledTimes(1), { timeout: 4000 })
     expect(onDataDisposable.dispose).not.toHaveBeenCalled()
     expect(onExitDisposable.dispose).not.toHaveBeenCalled()
 
@@ -307,7 +311,7 @@ describe('registerPtyHandlers', () => {
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(),
-      shutdown: vi.fn(),
+      shutdown: vi.fn(async (id: string) => exitedPtyStopReceipt(id)),
       onData: vi.fn(() => vi.fn()),
       onExit: vi.fn(() => vi.fn()),
       listProcesses: vi.fn(async () => []),

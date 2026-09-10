@@ -10,6 +10,7 @@ import type {
   RuntimeWorktreeTerminalSleepResult
 } from '../../shared/runtime-types'
 import type { WorktreeTerminalMutationKind } from './worktree-terminal-mutation-lock'
+import { ptyStopReceiptProvesExit } from '../../shared/pty-stop-receipt'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
 import {
@@ -212,11 +213,13 @@ export class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntimeWithReso
           if (this.ptyController?.stopAndWait) {
             // Why: the RPC deadline makes shutdown/list RPCs settle before the sweep deadline.
             if (options.deadline !== undefined) {
-              return await this.ptyController.stopAndWait(ptyId, {
-                deadlineMs: teardownRpcDeadline(options.deadline)
-              })
+              return ptyStopReceiptProvesExit(
+                await this.ptyController.stopAndWait(ptyId, {
+                  deadlineMs: teardownRpcDeadline(options.deadline)
+                })
+              )
             }
-            return await this.ptyController.stopAndWait(ptyId)
+            return ptyStopReceiptProvesExit(await this.ptyController.stopAndWait(ptyId))
           }
           return Boolean(this.ptyController?.kill(ptyId))
         } catch (error) {

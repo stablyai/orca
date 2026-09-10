@@ -353,6 +353,27 @@ describe('runRemoteOrcaCli', () => {
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_ssh:leaf_ssh')
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('ssh_runtime:pty:1')
+    vi.spyOn(runtime, 'getExactWorkerProviderSession').mockReturnValue({
+      paneKey: 'tab_ssh:leaf_ssh',
+      processIncarnation: 'ssh_runtime:pty:1',
+      connectionId: null,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'ssh-lead-session' },
+      observedAt: Date.now(),
+      statusObservedAt: Date.now(),
+      subagents: [],
+      actorAttestation: {
+        authorityId: 'agent-hook-main:test',
+        incarnation: 1,
+        revision: 1,
+        observedAt: Date.now(),
+        provider: 'codex',
+        role: 'lead',
+        eventName: 'PreToolUse',
+        providerSessionId: 'ssh-lead-session',
+        toolUseId: 'ssh-worker-done-tool'
+      }
+    } as never)
     const run = db.createRun({
       objective: 'SSH capability transport',
       coordinatorHandle: 'term_coord',

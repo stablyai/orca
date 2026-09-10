@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { win32 as pathWin32 } from 'node:path'
 import type { RecognizedAgentProcess } from '../../../shared/agent-process-recognition'
 import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo'
 import { forceKillPosixPtyProcessGroups } from '../../pty/posix-pty-process-groups'
@@ -9,6 +10,10 @@ import { isValidPtySize } from '../daemon-pty-size'
 import type { SubprocessHandle } from '../session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
+import {
+  registerWindowsPtyJobObjectOwner,
+  releaseWindowsPtyJobObjectOwner
+} from '../../providers/windows-pty-job-object'
 
 type DisposableNativePty = pty.IPty & { destroy?: () => void }
 
@@ -24,6 +29,9 @@ export function createDaemonPtySubprocessHandle(args: {
   startupAgentRecognition: RecognizedAgentProcess | null
 }): SubprocessHandle {
   const proc = args.process
+  registerWindowsPtyJobObjectOwner(args.sessionId, proc, {
+    isWsl: pathWin32.basename(args.shellPath).toLowerCase() === 'wsl.exe'
+  })
   // node-pty exposes destroy at runtime but omits it from IPty.
   const nativeProc = proc as DisposableNativePty
   const events = new PtyPreListenerEvents()
@@ -53,6 +61,7 @@ export function createDaemonPtySubprocessHandle(args: {
     if (process.platform !== 'win32') {
       nativeProc.kill = () => {}
     }
+    releaseWindowsPtyJobObjectOwner(args.sessionId)
     events.acceptExit({
       exitCode,
       signal,
@@ -187,6 +196,7 @@ export function createDaemonPtySubprocessHandle(args: {
       }
       disposed = true
       dead = true
+      releaseWindowsPtyJobObjectOwner(args.sessionId)
       events.clear()
       // POSIX destroy() can asynchronously signal a recycled pid; Windows needs kill() to close ConPTY.
       if (process.platform !== 'win32') {

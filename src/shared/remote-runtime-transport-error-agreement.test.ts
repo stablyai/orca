@@ -316,6 +316,11 @@ const HOST_FORWARDED_TRANSPORT_ERRORS: TransportErrorPair[] = [
     message: 'Remote host does not support this capability.'
   },
   {
+    producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
+    code: 'update_required',
+    message: 'Update required to use this capability.'
+  },
+  {
     producer: 'main/runtime/rpc/errors.ts:161 (runtime_error fallthrough)',
     code: 'runtime_error',
     message: 'Worktree is missing on the remote host.'

@@ -64,7 +64,14 @@ function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): Rea
   )
 }
 
+function taskOccurrenceKey(identity: string, occurrences: Map<string, number>): string {
+  const occurrence = occurrences.get(identity) ?? 0
+  occurrences.set(identity, occurrence + 1)
+  return `${identity}:${occurrence}`
+}
+
 function Checklist({ list }: { list: TaskList }): React.JSX.Element {
+  const occurrences = new Map<string, number>()
   return list.tasks.length === 0 ? (
     <p className="text-xs text-muted-foreground">
       {translate('components.native-chat.taskList.empty', 'No tasks')}
@@ -74,8 +81,8 @@ function Checklist({ list }: { list: TaskList }): React.JSX.Element {
       aria-label={translate('components.native-chat.taskList.title', 'Tasks')}
       className="space-y-1 py-1"
     >
-      {list.tasks.map((task, index) => (
-        <TaskRow key={`${task.content}:${index}`} task={task} />
+      {list.tasks.map((task) => (
+        <TaskRow key={taskOccurrenceKey(task.content, occurrences)} task={task} />
       ))}
     </ul>
   )
@@ -125,6 +132,7 @@ export function NativeChatTaskList({
     )
   }
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null
+  const changeOccurrences = new Map<string, number>()
   return (
     <div className="space-y-1 py-1">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -147,9 +155,12 @@ export function NativeChatTaskList({
         <>
           {changes.length > 0 ? (
             <ul className="space-y-1 py-1">
-              {changes.map((change, index) => (
+              {changes.map((change) => (
                 <TaskRow
-                  key={`${change.kind}:${index}`}
+                  key={taskOccurrenceKey(
+                    `${change.kind}:${change.task.content}`,
+                    changeOccurrences
+                  )}
                   task={change.task}
                   label={changeLabel(change)}
                 />

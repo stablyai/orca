@@ -6,6 +6,7 @@ import type { RuntimeTerminalSplit } from '../../shared/runtime-types'
 import { makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { randomUUID } from 'node:crypto'
 import { REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS, ownerSurfacing } from './orca-runtime-core'
+import { ptyStopReceiptProvesExit } from '../../shared/pty-stop-receipt'
 
 export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitTerminal {
   protected async splitPtyBackedTerminal(
@@ -161,10 +162,11 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
       this.setPairedRendererSessionOwnership(result.id, false)
       let stopped = false
       try {
-        stopped =
-          (await this.ptyController.stopAndWait?.(result.id, {
+        stopped = ptyStopReceiptProvesExit(
+          await this.ptyController.stopAndWait?.(result.id, {
             deadlineMs: Date.now() + REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS
-          })) ?? false
+          })
+        )
       } catch {
         // Best-effort fallback below preserves the original split authority error.
       }

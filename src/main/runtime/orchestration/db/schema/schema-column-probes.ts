@@ -6,6 +6,7 @@ export function hasColumn(this: OrchestrationDb, table: string, column: string):
 }
 
 export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): void {
+  createMaestroTransferMutationIndexIfPossible(this)
   if (this.hasColumn('deliveries', 'mailbox_handle')) {
     // Excluding '' trades the pre-v34 per-run one-outstanding backstop for downgraded binaries; the
     // app-level BEGIN IMMEDIATE still serializes one process.
@@ -60,6 +61,48 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   `)
 }
 
+export function createMaestroTransferMutationIndexIfPossible(db: OrchestrationDb): void {
+  const columns = [
+    'mutation_caller_fingerprint',
+    'mutation_request_id',
+    'mutation_method',
+    'mutation_payload_hash'
+  ]
+  if (
+    !columns.every((column) => db.hasColumn('maestro_terminal_lease_transfer_receipts', column))
+  ) {
+    return
+  }
+  db.db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_maestro_terminal_lease_transfer_mutation
+    ON maestro_terminal_lease_transfer_receipts(
+      mutation_caller_fingerprint, mutation_request_id, mutation_method, mutation_payload_hash
+    ) WHERE mutation_caller_fingerprint IS NOT NULL AND mutation_request_id IS NOT NULL
+      AND mutation_method IS NOT NULL AND mutation_payload_hash IS NOT NULL`)
+}
+
+export function createMaestroTerminalLeaseIndexesIfPossible(db: OrchestrationDb): void {
+  if (!db.hasColumn('maestro_terminal_leases', 'run_id')) {
+    return
+  }
+  db.db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_maestro_terminal_leases_coordinator_generation
+      ON maestro_terminal_leases(run_id, coordinator_generation)
+      WHERE role = 'coordinator';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_maestro_terminal_leases_worker_attempt
+      ON maestro_terminal_leases(run_id, task_id, attempt_id)
+      WHERE role = 'worker' AND attempt_id IS NOT NULL AND lifecycle_state != 'superseded';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_maestro_terminal_leases_worker_resource
+      ON maestro_terminal_leases(worker_terminal_resource_id)
+      WHERE worker_terminal_resource_id IS NOT NULL AND lifecycle_state != 'superseded';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_maestro_terminal_leases_live_terminal_owner
+      ON maestro_terminal_leases(execution_host_id, workspace_key, terminal_handle, pty_incarnation)
+      WHERE terminal_handle IS NOT NULL AND pty_incarnation IS NOT NULL
+        AND lifecycle_state NOT IN ('released', 'superseded', 'archived');
+    CREATE INDEX IF NOT EXISTS idx_maestro_terminal_leases_lifecycle
+      ON maestro_terminal_leases(run_id, lifecycle_state, role);
+  `)
+}
+
 // Why: sqlite_master holds the table's CREATE SQL incl. the CHECK — cheapest reliable probe for whether it already allows 'heartbeat'.
 export function messagesTypeCheckAllowsHeartbeat(this: OrchestrationDb): boolean {
   const row = this.db
@@ -78,6 +121,7 @@ export function messagesTypeCheckAllowsQuestion(this: OrchestrationDb): boolean 
 export type SchemaColumnProbesMethods = {
   hasColumn: typeof hasColumn
   createMailboxDeliveryIndexesIfPossible: typeof createMailboxDeliveryIndexesIfPossible
+  createMaestroTerminalLeaseIndexesIfPossible: typeof createMaestroTerminalLeaseIndexesIfPossible
   messagesTypeCheckAllowsHeartbeat: typeof messagesTypeCheckAllowsHeartbeat
   messagesTypeCheckAllowsQuestion: typeof messagesTypeCheckAllowsQuestion
 }
@@ -86,6 +130,7 @@ export function attachSchemaColumnProbes(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     hasColumn,
     createMailboxDeliveryIndexesIfPossible,
+    createMaestroTerminalLeaseIndexesIfPossible,
     messagesTypeCheckAllowsHeartbeat,
     messagesTypeCheckAllowsQuestion
   })

@@ -50,6 +50,7 @@ export type MountedBottomDrawerProps = {
   // preserved) but must not take touches, stack backdrops, or keyboard-lift.
   interactive?: boolean
   zIndex?: number
+  surfaceColor?: string
 }
 
 export function MountedBottomDrawer({
@@ -61,7 +62,8 @@ export function MountedBottomDrawer({
   contentScrollable = true,
   fillAvailable = false,
   interactive = true,
-  zIndex = 1000
+  zIndex = 1000,
+  surfaceColor
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
@@ -385,6 +387,7 @@ export function MountedBottomDrawer({
             style={[
               styles.drawer,
               fillAvailable ? styles.drawerFill : null,
+              surfaceColor ? { backgroundColor: surfaceColor } : null,
               {
                 width: '100%',
                 maxWidth: isWideLayout ? modalMaxWidth : undefined,
@@ -402,7 +405,12 @@ export function MountedBottomDrawer({
             ]}
           >
             {body}
-            <View style={styles.bottomExtension} />
+            <View
+              style={[
+                styles.bottomExtension,
+                surfaceColor ? { backgroundColor: surfaceColor } : null
+              ]}
+            />
           </Animated.View>
         </View>
       </GestureHandlerRootView>

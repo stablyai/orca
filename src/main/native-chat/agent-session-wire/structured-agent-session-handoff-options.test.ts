@@ -256,13 +256,9 @@ describe('structured session handoff options', () => {
     })
 
     expect(await host.requestHandoff(CALLER, handoff('to-tui'))).toMatchObject({ ok: true })
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'tui' })
-    )
+    await expect(host.handoffStatus(SESSION)).resolves.toMatchObject({ owner: 'tui' })
     expect(await host.requestHandoff(CALLER, handoff('to-native'))).toMatchObject({ ok: true })
-    await vi.waitFor(async () =>
-      expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
-    )
+    await expect(host.handoffStatus(SESSION)).resolves.toMatchObject({ owner: 'native' })
 
     expect(launchedOptions).toEqual([{ model: PICKED_MODEL, effort: PICKED_EFFORT }])
     expect(closedTuiOwners).toHaveLength(1)

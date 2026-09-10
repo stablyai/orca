@@ -32,6 +32,9 @@ export type TabsSlice = {
         | 'color'
         | 'isPreview'
         | 'isPinned'
+        | 'systemRole'
+        | 'maestroExecutionHostId'
+        | 'maestroWorkspaceKey'
       > & {
         targetGroupId: string
         activate: boolean
@@ -59,6 +62,9 @@ export type TabsSlice = {
         | 'color'
         | 'isPreview'
         | 'isPinned'
+        | 'systemRole'
+        | 'maestroExecutionHostId'
+        | 'maestroWorkspaceKey'
       > & {
         activate: boolean
         recordInteraction: boolean
@@ -116,7 +122,12 @@ export type TabsSlice = {
   moveUnifiedTabToGroup: (
     tabId: string,
     targetGroupId: string,
-    opts?: { index?: number; activate?: boolean; recordInteraction?: boolean }
+    opts?: {
+      index?: number
+      activate?: boolean
+      recordInteraction?: boolean
+      allowSystemTransfer?: boolean
+    }
   ) => boolean
   dropUnifiedTab: (
     tabId: string,
@@ -140,6 +151,8 @@ export type TabsSlice = {
         | 'customLabel'
         | 'color'
         | 'isPinned'
+        | 'maestroExecutionHostId'
+        | 'maestroWorkspaceKey'
       >
     >
   ) => Tab | null

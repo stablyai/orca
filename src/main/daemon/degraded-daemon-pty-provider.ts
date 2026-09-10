@@ -11,6 +11,7 @@ import type {
   PtySpawnOptions,
   PtySpawnResult
 } from '../providers/types'
+import { parsePtyStopReceipt, type PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
@@ -135,12 +136,16 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
-    await this.providerFor(id).shutdown(id, opts)
+    opts: Parameters<IPtyProvider['shutdown']>[1]
+  ): Promise<PtyStopReceipt> {
+    const receipt = parsePtyStopReceipt(await this.providerFor(id).shutdown(id, opts), {
+      ptyId: id,
+      ...(opts.expectedIncarnationId ? { ptyIncarnation: opts.expectedIncarnationId } : {})
+    })
     if (!opts.keepHistory) {
       this.sessionProviders.delete(id)
     }
+    return receipt
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {

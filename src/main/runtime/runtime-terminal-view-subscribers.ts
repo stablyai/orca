@@ -42,6 +42,7 @@ export class RuntimeTerminalViewSubscribers {
 
   registerRaw(ptyId: string): () => void {
     this.rawCounts.set(ptyId, (this.rawCounts.get(ptyId) ?? 0) + 1)
+    this.ensureProviderAttach(ptyId)
     this.deps.notifyPresenceChanged(ptyId)
     return this.releaseOnce(() => {
       this.decrement(this.rawCounts, ptyId)
@@ -70,7 +71,7 @@ export class RuntimeTerminalViewSubscribers {
   }
 
   reconcileProviderAttach(ptyId: string): void {
-    if (!this.hasRemote(ptyId)) {
+    if (!this.hasRaw(ptyId)) {
       return
     }
     const pending = this.providerAttaches.get(ptyId)
@@ -84,7 +85,7 @@ export class RuntimeTerminalViewSubscribers {
     this.attachInventoryWaiters.add(ptyId)
     void pending.then((attached) => {
       this.attachInventoryWaiters.delete(ptyId)
-      if (attached || !this.hasRemote(ptyId)) {
+      if (attached || !this.hasRaw(ptyId)) {
         return
       }
       if (this.providerAttaches.get(ptyId) === pending) {

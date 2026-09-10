@@ -80,6 +80,23 @@ function createHarness(): Harness {
           ? CURRENT_COORDINATOR_PANE
           : null
   )
+  vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('process-1')
+  vi.spyOn(runtime, 'showTerminal').mockImplementation(
+    async (handle) =>
+      ({
+        handle,
+        tabId: runtime.getTerminalPaneKey(handle)?.split(':')[0],
+        ptyId: 'legacy-pty'
+      }) as never
+  )
+  vi.spyOn(runtime, 'buildTerminalManagedCliContext').mockImplementation(
+    (handle) =>
+      ({
+        executionHostId: 'local',
+        workspaceKey: 'worktree:legacy-takeover',
+        terminalHandle: handle
+      }) as never
+  )
   vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockImplementation((proof) => {
     const validWorker = proof?.terminalHandle === WORKER_HANDLE && proof.paneKey === WORKER_PANE
     const validCoordinator =

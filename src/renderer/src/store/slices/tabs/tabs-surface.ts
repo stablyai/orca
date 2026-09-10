@@ -75,9 +75,11 @@ export function deriveActiveSurfaceForWorktree(
       activeUnifiedTab.contentType === 'conflict-review' ||
       activeUnifiedTab.contentType === 'check-details'
         ? activeUnifiedTab.entityId
-        : fileStillOpen
-          ? restoredFileId
-          : null
+        : activeUnifiedTab.contentType === 'maestro'
+          ? null
+          : fileStillOpen
+            ? restoredFileId
+            : null
     activeBrowserTabId =
       activeUnifiedTab.contentType === 'browser'
         ? activeUnifiedTab.entityId

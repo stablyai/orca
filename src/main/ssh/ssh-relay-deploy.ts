@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 /* eslint-disable max-lines -- Why: one cohesive contract (version detect, install-locked deploy, native-deps probe, launch, GC); splitting risks install/GC drift. */
 import { existsSync } from 'node:fs'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR, type RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
@@ -1659,7 +1659,7 @@ export function getLocalRelayCandidates(platform: RelayPlatform): string[] {
     candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', platform))
   }
 
-  const appPath = app.getAppPath()
+  const appPath = getAppEnvironment().getAppPath()
   candidates.push(
     join(appPath, 'resources', 'relay', platform),
     join(appPath, 'out', 'relay', platform)

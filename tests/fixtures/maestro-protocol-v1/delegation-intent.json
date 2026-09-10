@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "protocol": "delegation-intent/v1",
+  "intent_id": "intent-api-worker",
+  "workspace": {
+    "repository_id": "fb2a9411-f3cb-46d4-94f7-067f40719b71",
+    "execution_host_id": "host-local",
+    "workspace_key": "folder:folder-local-01",
+    "run_id": "run-mlk-01"
+  },
+  "actor": {
+    "actor_id": "worker-9",
+    "kind": "worker",
+    "authenticated": true,
+    "session_id": "session-worker-9"
+  },
+  "coordinator_generation": 3,
+  "expected_revision": 12,
+  "parent_task_id": "MLK-01",
+  "parent_attempt_id": "attempt-mlk-01",
+  "purpose": "Validate the child-worktree placement contract.",
+  "role": "verification",
+  "requested": { "lane": "fast", "agent": null, "model": null, "effort": "low" },
+  "placement_request": {
+    "kind": "create-child-worktree",
+    "execution_host_id": "host-local",
+    "parent_workspace_key": "folder:folder-local-01",
+    "name_hint": "api-worker"
+  },
+  "context_refs": ["context-design-note"],
+  "paths": ["skills/agent-graph/references/placement.schema.json"],
+  "check": "python3 -m unittest discover -s skills/agent-graph/tests -p test_graph_core.py"
+}

@@ -5,6 +5,7 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 import type { PtyBackgroundStreamEvent, PtyDataEvent } from './pty-provider-events'
 import type { PtySpawnResult } from './pty-spawn-result'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyStopReceipt } from '../../shared/pty-stop-receipt'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
@@ -217,7 +218,7 @@ export type IPtyProvider = {
        *  wherever the caller's authority to destroy comes from that attestation. */
       expectedOwnerClientInstanceId?: string
     }
-  ): Promise<void>
+  ): Promise<PtyStopReceipt>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>

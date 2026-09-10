@@ -317,6 +317,7 @@ describe('registerTerminalPreviewHandlers', () => {
   it('releases output and raw-view presence when no snapshot exists', async () => {
     const runtime = makeRuntime()
     runtime.serializeTerminalBuffer.mockResolvedValueOnce(null)
+    runtime.getTerminalSize.mockReturnValueOnce(null)
     registerTerminalPreviewHandlers(runtime as never)
     const sender = makeSender()
 
@@ -325,6 +326,23 @@ describe('registerTerminalPreviewHandlers', () => {
     ).resolves.toEqual({ snapshot: null, replay: [] })
     expect(runtime.unsubscribe).toHaveBeenCalledTimes(1)
     expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a sized live PTY connected while its first snapshot is empty', async () => {
+    const runtime = makeRuntime()
+    runtime.serializeTerminalBuffer.mockResolvedValueOnce(null)
+    runtime.getTerminalSize.mockReturnValue({ cols: 137, rows: 41 })
+    registerTerminalPreviewHandlers(runtime as never)
+    const sender = makeSender()
+
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'cold-pty' })
+    ).resolves.toEqual({
+      snapshot: { data: '', cols: 137, rows: 41 },
+      replay: []
+    })
+    expect(runtime.unsubscribe).not.toHaveBeenCalled()
+    expect(runtime.releaseRawView).not.toHaveBeenCalled()
   })
 
   it('rejects non-dashboard senders on every preview channel', async () => {

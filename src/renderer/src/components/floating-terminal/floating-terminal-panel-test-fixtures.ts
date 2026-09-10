@@ -4,6 +4,7 @@ import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { OpenFile } from '@/store/slices/editor'
+import { translate } from '@/i18n/i18n'
 
 export type FloatingPanelStoreState = {
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -172,7 +173,10 @@ export function setFloatingSimulatorTab(): Tab {
     groupId,
     worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
     contentType: 'simulator',
-    label: 'Mobile Emulator',
+    label: translate(
+      'auto.components.floating.terminal.floating.terminal.panel.test.fixtures.00cde6717e',
+      'Mobile Emulator'
+    ),
     customLabel: null,
     color: null,
     sortOrder: 0,

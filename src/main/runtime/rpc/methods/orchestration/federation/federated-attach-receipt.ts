@@ -6,6 +6,8 @@ export type RemoteFederatedWorkerStartReceipt = {
   runtimeEpoch?: string
   worktreeId?: string
   terminalHandle?: string
+  paneKey?: string
+  processIncarnation?: string
   setup?: { state: string }
   launch?: OrchestrationWorkerLaunchReceipt
   effects?: unknown[]

@@ -17,6 +17,7 @@ type Props = {
   // letting it take touches, draw a second backdrop, or keyboard-lift.
   interactive?: boolean
   zIndex?: number
+  surfaceColor?: string
 }
 
 export function BottomDrawer({
@@ -28,7 +29,8 @@ export function BottomDrawer({
   contentScrollable = true,
   fillAvailable = false,
   interactive = true,
-  zIndex
+  zIndex,
+  surfaceColor
 }: Props) {
   const [mounted, setMounted] = useState(visible)
   const onAfterCloseRef = useRef(onAfterClose)
@@ -86,6 +88,7 @@ export function BottomDrawer({
       fillAvailable={fillAvailable}
       interactive={interactive}
       zIndex={zIndex}
+      surfaceColor={surfaceColor}
     >
       {children}
     </MountedBottomDrawer>

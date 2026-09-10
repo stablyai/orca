@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
@@ -34,6 +35,11 @@ import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
+import {
+  registerWindowsPtyJobObjectOwner,
+  releaseWindowsPtyJobObjectOwner,
+  WINDOWS_PTY_JOB_OBJECT_CAPABILITY_VERSION
+} from './windows-pty-job-object'
 
 export function activateLocalPtySession(args: {
   id: string
@@ -50,6 +56,9 @@ export function activateLocalPtySession(args: {
   createPtyPhysicalExit(id)
   ptyReportsChildExitStatus.set(id, args.reportsChildExitStatus)
   ptyProcesses.set(id, proc)
+  const windowsPtyJobObjectAssigned = registerWindowsPtyJobObjectOwner(id, proc, {
+    isWsl: process.platform === 'win32' && isWslShellName(plan.shellPath)
+  })
   ptyInitialCwd.set(id, plan.cwd)
   if (spawnedWslDistro !== undefined) {
     ptyWslDistroById.set(id, spawnedWslDistro)
@@ -134,6 +143,7 @@ export function activateLocalPtySession(args: {
     })
     const wasTerminationRequested = ptyTerminationMode.has(id)
     ptyPhysicalExits.get(id)?.markExited()
+    releaseWindowsPtyJobObjectOwner(id)
     // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
     if (process.platform !== 'win32') {
       ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
@@ -191,6 +201,14 @@ export function activateLocalPtySession(args: {
     id,
     incarnationId,
     pid,
+    ...(windowsPtyJobObjectAssigned
+      ? {
+          windowsPtyJobObject: {
+            version: WINDOWS_PTY_JOB_OBJECT_CAPABILITY_VERSION,
+            assigned: true as const
+          }
+        }
+      : {}),
     ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
   }
 }

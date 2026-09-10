@@ -86,10 +86,15 @@ describe('hydrateWorkspaceSession canonical terminal rows', () => {
     const persisted = buildWorkspaceSessionPayload(state)
 
     expect(reconciliation.renderableTabCount).toBe(2)
-    expect(state.unifiedTabsByWorktree[worktreeId]?.map((tab) => tab.entityId)).toEqual([
-      'canonical-tab',
-      'recovery-tab'
-    ])
+    expect(state.unifiedTabsByWorktree[worktreeId]?.[0]).toMatchObject({
+      contentType: 'maestro',
+      systemRole: 'workspace-maestro'
+    })
+    expect(
+      state.unifiedTabsByWorktree[worktreeId]
+        ?.filter((tab) => tab.contentType !== 'maestro')
+        .map((tab) => tab.entityId)
+    ).toEqual(['canonical-tab', 'recovery-tab'])
     expect(state.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual([
       'canonical-tab',
       'recovery-tab'

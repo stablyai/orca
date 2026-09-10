@@ -132,7 +132,7 @@ export function registerFederatedReleaseRecoveryScenarios(harness: RecoveryScena
       result: {
         state: 'release_unknown',
         archive: { source: 'terminal', status: 'captured' },
-        recovery: expect.stringContaining('fresh request ID'),
+        recovery: expect.stringContaining('after exact host evidence'),
         remoteOutput: {
           archived: true,
           status: { terminal: 'unknown', liveness: 'unverifiable' }
@@ -196,7 +196,7 @@ export function registerFederatedReleaseRecoveryScenarios(harness: RecoveryScena
         processAction: 'none',
         archive: { source: 'terminal', status: 'captured' },
         lastError: 'close exploded',
-        recovery: expect.stringContaining('fresh request ID'),
+        recovery: expect.stringContaining('after exact host evidence'),
         remoteOutput: {
           archived: true,
           status: { terminal: 'unknown', liveness: 'unverifiable' }

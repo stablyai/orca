@@ -19,6 +19,7 @@ export function createFederationWorkerStartRequest(
       repo: 'id:windows-repo',
       name: 'windows-audit',
       agent: 'codex',
+      attemptId: 'attempt_windows_worker',
       ...overrides
     }
   }

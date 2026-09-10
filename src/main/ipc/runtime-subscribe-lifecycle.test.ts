@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  MAESTRO_RUN_COMPLETION_RUNTIME_CAPABILITY,
+  MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 
 type StreamRecord = {
+  clientCapabilities: readonly string[] | undefined
   connectionId: string | undefined
   emit: (response: string) => void
   settled: boolean
@@ -8,10 +18,11 @@ type StreamRecord = {
   subscriptionId: string
 }
 
-const { handlers, listeners, streams, unaryConnections } = vi.hoisted(() => ({
+const { handlers, listeners, streams, unaryCapabilities, unaryConnections } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   listeners: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   streams: [] as StreamRecord[],
+  unaryCapabilities: [] as (readonly string[] | undefined)[],
   unaryConnections: [] as (string | undefined)[]
 }))
 
@@ -31,7 +42,11 @@ vi.mock('electron', () => ({
 
 vi.mock('../runtime/rpc/dispatcher', () => ({
   RpcDispatcher: class {
-    dispatch(_request: unknown, options: { connectionId?: string }): Promise<unknown> {
+    dispatch(
+      _request: unknown,
+      options: { clientCapabilities?: readonly string[]; connectionId?: string }
+    ): Promise<unknown> {
+      unaryCapabilities.push(options.clientCapabilities)
       unaryConnections.push(options.connectionId)
       return Promise.resolve({ ok: true, result: {} })
     }
@@ -39,9 +54,14 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
     dispatchStreaming(
       request: { id: string },
       emit: (response: string) => void,
-      options: { connectionId?: string; signal: AbortSignal }
+      options: {
+        clientCapabilities?: readonly string[]
+        connectionId?: string
+        signal: AbortSignal
+      }
     ): Promise<void> {
       const record: StreamRecord = {
+        clientCapabilities: options.clientCapabilities,
         connectionId: options.connectionId,
         emit,
         settled: false,
@@ -153,6 +173,7 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
     handlers.clear()
     listeners.clear()
     streams.length = 0
+    unaryCapabilities.length = 0
     unaryConnections.length = 0
     registerRuntimeHandlers({ cleanupSubscriptionsForConnection: vi.fn() } as never)
   })
@@ -293,6 +314,7 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
     handlers.clear()
     listeners.clear()
     streams.length = 0
+    unaryCapabilities.length = 0
     unaryConnections.length = 0
     registerRuntimeHandlers({ cleanupSubscriptionsForConnection } as never)
     const harness = createSender(11)
@@ -311,5 +333,24 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
 
     harness.emitRenderProcessGone()
     expect(cleanupSubscriptionsForConnection).toHaveBeenCalledWith(replacement)
+  })
+
+  it('advertises local capabilities for unary and streaming dispatches', async () => {
+    const harness = createSender(12)
+
+    await call(harness.sender)
+    subscribe(harness.sender, 'sub-capabilities')
+
+    const expectedCapabilities = [
+      AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
+      AGENT_SESSION_TURN_ITEM_CAPABILITY,
+      AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+      CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      MAESTRO_RUN_PROGRESS_V2_RUNTIME_CAPABILITY,
+      MAESTRO_RUN_COMPLETION_RUNTIME_CAPABILITY
+    ]
+    expect(unaryCapabilities).toEqual([expectedCapabilities])
+    expect(streamFor('sub-capabilities').clientCapabilities).toEqual(expectedCapabilities)
   })
 })

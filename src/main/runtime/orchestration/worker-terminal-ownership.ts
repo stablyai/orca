@@ -10,6 +10,7 @@ export type WorkerTerminalOwnershipState =
 export type WorkerTerminalReleaseState =
   | 'not_requested'
   | 'retained'
+  | 'retained_for_review'
   | 'requested'
   | 'releasing'
   | 'released'
@@ -24,6 +25,7 @@ export type WorkerTerminalRetainedReason =
   | 'identity_unproven'
   | 'legacy_ambiguous'
   | 'federation_unsupported'
+  | 'retained_for_review'
 
 export type WorkerTerminalArchiveStatus = 'captured' | 'empty' | 'unavailable'
 
@@ -42,6 +44,9 @@ export type WorkerTerminalResourceRow = {
   ownership_state: WorkerTerminalOwnershipState
   release_state: WorkerTerminalReleaseState
   retained_reason: string | null
+  retention_owner?: string | null
+  retention_expires_at?: string | null
+  review_id?: string | null
   release_requested_at: string | null
   release_completed_at: string | null
   release_error: string | null
@@ -109,7 +114,11 @@ export function deriveWorkerTerminalListState(params: {
   if (resource.release_state === 'requested' || resource.release_state === 'releasing') {
     return 'release_pending'
   }
-  if (resource.ownership_state !== 'owned' || resource.release_state === 'retained') {
+  if (
+    resource.ownership_state !== 'owned' ||
+    resource.release_state === 'retained' ||
+    resource.release_state === 'retained_for_review'
+  ) {
     return 'retained'
   }
   if (

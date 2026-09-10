@@ -18,6 +18,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
 
     // The agent process later exits on its own; the user's pane and scrollback remain.
     harness.inspectProcessLiveness.mockResolvedValue('exited')
+    harness.observeWorkerAsExited()
     const receipt = (await harness.call('orchestration.workerRelease', {
       dispatch: dispatchId
     })) as { state: string; reason?: string; archive: unknown }
@@ -50,19 +51,20 @@ describe('workerRelease on a retained resource whose process exited', () => {
     }
   )
 
-  it('records the archive as unavailable rather than retaining the pane forever', async () => {
+  it('captures retained output before releasing a proven-exited pane', async () => {
     const { dispatchId } = await harness.startWorker()
     // Abandoned workers never reach `requested`, the only state that writes an archive.
     expect(harness.db.abandonWorkerDispatch(dispatchId).disposition).toBe('abandoned')
     expect(harness.db.getWorkerTerminalArchive(dispatchId)).toBeFalsy()
 
     harness.inspectProcessLiveness.mockResolvedValue('exited')
+    harness.observeWorkerAsExited()
     const receipt = (await harness.call('orchestration.workerRelease', {
       dispatch: dispatchId
     })) as { state: string; archive: { status: string | null } | null }
 
     expect(receipt.state).toBe('released')
-    expect(receipt.archive?.status).toBe('unavailable')
+    expect(receipt.archive?.status).toBe('captured')
   })
 
   it('exits retention after a recovery abandon even once the user retained it', async () => {
@@ -70,6 +72,7 @@ describe('workerRelease on a retained resource whose process exited', () => {
     harness.db.reconcileMissingWorkerTerminal(dispatchId, 'terminal gone')
     expect(harness.db.getWorkerDispatch(dispatchId)?.state).toBe('abandoned')
     harness.inspectProcessLiveness.mockResolvedValue('exited')
+    harness.observeWorkerAsExited()
 
     // retain deletes the archive and parks the row in `retained`: still no route back to `requested`.
     await harness.call('orchestration.workerRetain', { dispatch: dispatchId })

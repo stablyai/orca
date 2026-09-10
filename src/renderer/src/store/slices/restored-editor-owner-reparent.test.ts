@@ -163,11 +163,14 @@ describe('restored editor owner reparent', () => {
       relativePath: 'docs/readme.md'
     })
     expect(next.unifiedTabsByWorktree[SOURCE]).toEqual([])
-    const movedTabId = next.unifiedTabsByWorktree[TARGET]?.[0]?.id
-    expect(next.unifiedTabsByWorktree[TARGET]?.[0]?.entityId).toBe(result.fileId)
+    const movedTab = next.unifiedTabsByWorktree[TARGET]?.find(
+      (tab) => tab.contentType !== 'maestro'
+    )
+    const movedTabId = movedTab?.id
+    expect(movedTab?.entityId).toBe(result.fileId)
     expect(next.groupsByWorktree[TARGET]?.[0]).toMatchObject({
       activeTabId: movedTabId,
-      tabOrder: [movedTabId]
+      tabOrder: [expect.stringContaining('workspace-maestro:'), movedTabId]
     })
     expect(next.tabBarOrderByWorktree[TARGET]).toEqual([result.fileId])
     expect(next.activeFileIdByWorktree[SOURCE]).toBeNull()

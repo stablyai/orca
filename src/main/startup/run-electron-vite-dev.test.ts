@@ -276,6 +276,9 @@ describe('run-electron-vite-dev', () => {
       electronExecPath: string | null
     }
     expect(envSnapshot.args).toContain('--remote-debugging-port=9444')
+    if (process.platform === 'linux') {
+      expect(envSnapshot.args.slice(-2)).toEqual(['--', '--class=orca-dev'])
+    }
     expect(envSnapshot.label).toBe('payment-ui @ feature/billing-shell')
     expect(envSnapshot.branch).toBe('feature/billing-shell')
     expect(envSnapshot.worktreeName).toBe('payment-ui')

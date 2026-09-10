@@ -1,5 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { normalizeWorkspaceMaestroTabs } from '../../../../../shared/workspace-session-salvage'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
 import {
@@ -85,7 +86,16 @@ export function createTabsSessionActions(
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
       addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-      const hydrated = buildHydratedTabState(session, validWorktreeIds)
+      const maestroWorkspaceIds = new Set(validWorktreeIds)
+      maestroWorkspaceIds.delete(FLOATING_TERMINAL_WORKTREE_ID)
+      const hydrated = normalizeWorkspaceMaestroTabs(
+        buildHydratedTabState(session, validWorktreeIds),
+        maestroWorkspaceIds,
+        {
+          key: session.activeWorkspaceKey ?? null,
+          executionHostId: session.activeWorkspaceExecutionHostId ?? null
+        }
+      )
       if (!options?.replaceWorkspaceKeys) {
         set(hydrated)
         return

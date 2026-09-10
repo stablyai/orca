@@ -9,6 +9,8 @@ import {
 } from './pty-pre-handler-buffer'
 import {
   capturedPanesByTabId,
+  disposeAllParkedTerminalWatchers,
+  MAX_PARKED_TERMINAL_WATCHER_TABS,
   parkedWatchersByTabId,
   pruneParkedTerminalWatchers,
   terminalWatcherLiveWorkspaceIds
@@ -89,5 +91,30 @@ describe('terminal parked watcher registry removal', () => {
     expect(parkedWatchersByTabId.has(FLOATING_TAB_ID)).toBe(true)
     expect(capturedPanesByTabId.has(FLOATING_TAB_ID)).toBe(true)
     expect(floatingDispose).not.toHaveBeenCalled()
+  })
+
+  it('bounds watcher admission without disposing an existing live owner', () => {
+    const dispose = vi.fn()
+    for (let index = 0; index < MAX_PARKED_TERMINAL_WATCHER_TABS; index += 1) {
+      parkedWatchersByTabId.set(`bounded-${index}`, {
+        worktreeId: `workspace-${index}`,
+        tabPtyId: `pty-${index}`,
+        paneIdByPtyId: new Map([[`pty-${index}`, index]]),
+        disposersByPtyId: new Map([[`pty-${index}`, dispose]])
+      })
+    }
+
+    expect(() =>
+      parkedWatchersByTabId.set('bounded-overflow', {
+        worktreeId: 'overflow',
+        tabPtyId: 'pty-overflow',
+        paneIdByPtyId: new Map(),
+        disposersByPtyId: new Map()
+      })
+    ).toThrow('parked_terminal_watcher_limit')
+    expect(parkedWatchersByTabId.has('bounded-0')).toBe(true)
+    expect(dispose).not.toHaveBeenCalled()
+
+    disposeAllParkedTerminalWatchers()
   })
 })

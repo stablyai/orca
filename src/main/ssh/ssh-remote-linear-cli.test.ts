@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isLinearProjectListResult } from './ssh-remote-linear-result-guards'
-import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { runRemoteOrcaCli } from './ssh-remote-linear-cli-test-harness'
 
 function createRuntime() {
   const runtime = {

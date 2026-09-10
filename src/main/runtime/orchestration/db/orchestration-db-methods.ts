@@ -41,6 +41,7 @@ import type { OrchestrationResetMethods } from './reset/orchestration-reset'
 import type { RunBindingMethods } from './runs/run-binding'
 import type { RunCoordinatorMailRoutingMethods } from './runs/run-coordinator-mail-routing'
 import type { RunCreateMethods } from './runs/run-create'
+import type { RunCompletionMethods } from './runs/run-completion'
 import type { RunDeliveryMethods } from './runs/run-delivery'
 import type { RunLookupMethods } from './runs/run-lookup'
 import type { LegacyCoordinatorMailTakeoverMethods } from './runs/legacy-coordinator-mail-takeover'
@@ -52,6 +53,7 @@ import type { SchemaMigrateMethods } from './schema/migrate'
 import type { SchemaColumnProbesMethods } from './schema/schema-column-probes'
 import type { TaskStoreMethods } from './tasks/task-store'
 import type { TaskStatusTransitionMethods } from './tasks/task-status-transition'
+import type { TerminalCloseIntentStoreMethods } from './terminal-close-intent-store'
 import type { FederatedWorkerStartReconcileMethods } from './worker-dispatch/federated-worker-start-reconcile'
 import type { WorkerDispatchAbandonMethods } from './worker-dispatch/worker-dispatch-abandon'
 import type { WorkerDispatchAuthorityMethods } from './worker-dispatch/worker-dispatch-authority'
@@ -66,6 +68,11 @@ import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-term
 import type { StructuredPointerOperationStoreMethods } from './messages/structured-pointer-operation-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
+import type { MaestroStoreMethods } from './maestro/maestro-store'
+import type { MaestroCoordinatorHandoffStoreMethods } from './maestro-terminal-lease/maestro-coordinator-handoff-store'
+import type { MaestroTerminalInputStoreMethods } from './maestro-terminal-lease/maestro-terminal-input-store'
+import type { MaestroTerminalLeaseStoreMethods } from './maestro-terminal-lease/maestro-terminal-lease-store'
+import type { MaestroBrowserSurfaceStoreMethods } from './maestro-browser-surface/maestro-browser-surface-store'
 
 export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   CreateTablesMethods &
@@ -74,6 +81,12 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   MigrateLegacyContractStorageMethods &
   BackfillLegacyQuestionThreadsMethods &
   AdoptLegacyRunMethods &
+  MaestroStoreMethods &
+  MaestroTerminalLeaseStoreMethods &
+  MaestroTerminalInputStoreMethods &
+  MaestroCoordinatorHandoffStoreMethods &
+  MaestroBrowserSurfaceStoreMethods &
+  TerminalCloseIntentStoreMethods &
   MutationReceiptStoreMethods &
   LifecycleTransitionMethods &
   LegacyCompatibilityPrincipalsMethods &
@@ -87,6 +100,7 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   LegacyQuestionLookupMethods &
   LegacyReplyOperationMethods &
   RunCreateMethods &
+  RunCompletionMethods &
   RunBindingMethods &
   RunLookupMethods &
   RunCoordinatorMailRoutingMethods &

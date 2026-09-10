@@ -83,7 +83,15 @@ import {
   hasUsableLinuxDisplay,
   MISSING_LINUX_DISPLAY_MESSAGE
 } from './ensure-virtual-display'
-import { maybeApplyGpuFallbackForThisLaunch, registerGpuLifecycleHandlers } from './gpu-lifecycle'
+import {
+  getLinuxDevGpuFallbackEnvironment,
+  maybeApplyGpuFallbackForThisLaunch,
+  registerGpuLifecycleHandlers
+} from './gpu-lifecycle'
+import {
+  installLinuxDevGpuFailureWatch,
+  isLinuxDevGpuFallbackSession
+} from './linux-dev-gpu-fallback'
 import { mainProcessState as state } from './main-process-state'
 import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
 
@@ -312,6 +320,19 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   configureElectronNetworkCompatibility()
   enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
+  if (
+    isLinuxDevGpuFallbackSession({
+      platform: process.platform,
+      isDev: state.devInstanceIdentity?.isDev ?? false,
+      isServeMode: state.isServeMode
+    })
+  ) {
+    installLinuxDevGpuFailureWatch({
+      tracker: state.gpuCrashFallbackTracker,
+      resolveMarkerEnvironment: getLinuxDevGpuFallbackEnvironment,
+      resolveUserDataPath: () => app.getPath('userData')
+    })
+  }
   if (!state.gpuFallbackActiveThisLaunch) {
     enableMainProcessGpuFeatures()
   }
