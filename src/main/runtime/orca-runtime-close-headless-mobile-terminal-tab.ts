@@ -4,7 +4,8 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
+  RuntimeMobileSessionTerminalTab,
+  RuntimeSessionTabProps
 } from '../../shared/runtime-types'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
 import { buildHeadlessMobileSessionTabGroups } from './mobile-session-layout-projection'
@@ -205,25 +206,24 @@ export class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWi
   // was never persisted. Persist to the workspace session + live snapshot.
   async setMobileSessionTabProps(
     worktreeSelector: string,
-    args: {
-      tabId: string
-      color?: string | null
-      isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
-    }
+    args: { tabId: string } & RuntimeSessionTabProps
   ): Promise<{ updated: true }> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    // Why: a renderer-authoritative host owns + republishes tab props, so a
-    // headless write would be overwritten. Persist only when headless.
-    if (this.getAvailableAuthoritativeWindow()) {
-      return { updated: true }
-    }
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const hostTabId = snapshot
       ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
       : args.tabId
+    // Why: a renderer-authoritative host owns + republishes tab props, so a headless write
+    // would be overwritten. A structured chat is the exception: the renderer never publishes
+    // one, the merge preserves the host's copy verbatim, so the host write is the only write.
+    if (
+      this.getAvailableAuthoritativeWindow() &&
+      !snapshot?.tabs.some((tab) => tab.type === 'agent-session' && tab.id === hostTabId)
+    ) {
+      return { updated: true }
+    }
     this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
     this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, args)
     return { updated: true }

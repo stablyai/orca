@@ -94,13 +94,36 @@ export type RuntimeMobileSessionBrowserTab = {
 export type RuntimeMobileSessionAgentTab = {
   type: 'agent-session'
   id: string
+  /** What to render: the user's name for this chat, else this agent's placeholder. */
   title: string
+  /**
+   * The user's name for this chat, separate from the resolved `title` so a client can tell an
+   * unnamed chat from a named one. Three states, and absent must never read as "no name":
+   * - present string — the host owns chat names and this is the one the user gave.
+   * - present `null` — the host owns chat names and this chat has none.
+   * - absent — the host predates host-owned chat names; the client keeps its own local name.
+   */
+  customTitle?: string | null
   sessionId: string
   replacesSessionId?: string
   agent: 'claude' | 'codex'
   color?: string | null
   isPinned?: boolean
   isActive: boolean
+}
+
+const STRUCTURED_AGENT_SESSION_HOST_TAB_PREFIX = 'agent-session:'
+
+/** The id a structured chat is published under on the session-tab sync channel. */
+export function structuredAgentSessionHostTabId(sessionId: string): string {
+  return `${STRUCTURED_AGENT_SESSION_HOST_TAB_PREFIX}${sessionId}`
+}
+
+/** The session behind a host session-tab id, or null when the id names another tab kind. */
+export function structuredAgentSessionIdFromHostTabId(hostTabId: string): string | null {
+  return hostTabId.startsWith(STRUCTURED_AGENT_SESSION_HOST_TAB_PREFIX)
+    ? hostTabId.slice(STRUCTURED_AGENT_SESSION_HOST_TAB_PREFIX.length)
+    : null
 }
 
 export type RuntimeMobileSessionSnapshotTab =

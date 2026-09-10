@@ -2,6 +2,7 @@ import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { findRenamableUnifiedTab } from './renamable-unified-tab'
+import { mirrorTabCustomTitleToHost } from '../slices/tabs/tabs-host-mirroring'
 
 export function createTerminalTabAttentionActions(
   set: TerminalStoreSet,
@@ -91,6 +92,7 @@ export function createTerminalTabAttentionActions(
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {
         get().setTabCustomLabel(item.id, title, opts)
+        mirrorTabCustomTitleToHost(get(), item.id, title)
       }
     },
     setTabColor: (tabId, color) => {

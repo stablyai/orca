@@ -133,7 +133,8 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: defaultAgentChatLabel(input.agent),
+      title: this.resolveStructuredAgentSessionTabName(input) ?? defaultAgentChatLabel(input.agent),
+      customTitle: this.resolveStructuredAgentSessionTabName(input),
       sessionId: input.sessionId,
       ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
       agent: input.agent,
@@ -178,6 +179,18 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     if (input.notify !== false) {
       this.emitMobileSessionTabsSnapshot(stored)
     }
+  }
+
+  /** The name the user gave this chat, which outlives the in-memory tab, or null when it has
+   *  none. Kept separate from the rendered title so a client can tell those two apart. */
+  protected resolveStructuredAgentSessionTabName(input: {
+    workspaceId: string
+    sessionId: string
+  }): string | null {
+    const persisted = this.getWorkspaceSessionForWorktree(input.workspaceId)?.unifiedTabs?.[
+      input.workspaceId
+    ]?.find((tab) => tab.contentType === 'agent-session' && tab.entityId === input.sessionId)
+    return persisted?.customLabel?.trim() || null
   }
 
   async inspectTerminalProcess(

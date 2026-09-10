@@ -1,10 +1,44 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
 import { createTestStore, makeWorktree, seedStore } from '../slices/store-test-helpers'
+import type * as WorktreeRuntimeOwner from '@/lib/worktree-runtime-owner'
+
+type WorktreeRuntimeOwnerModule = typeof WorktreeRuntimeOwner
+
+const hostMocks = vi.hoisted(() => ({
+  callRuntimeRpc: vi.fn(async () => ({ updated: true })),
+  setWebRuntimeTabProps: vi.fn(() => true),
+  runtimeEnvironmentId: null as string | null
+}))
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: hostMocks.callRuntimeRpc,
+  unwrapRuntimeRpcResult: (value: unknown) => value
+}))
+
+vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {
+  const actual = await importOriginal<WorktreeRuntimeOwnerModule>()
+  return {
+    ...actual,
+    getRuntimeEnvironmentIdForWorktree: () => hostMocks.runtimeEnvironmentId
+  }
+})
+
+/** Drain the store action's fire-and-forget host publish before the next test counts calls. */
+async function drainHostPublishes(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 10))
+}
+
+afterEach(async () => {
+  await drainHostPublishes()
+  hostMocks.callRuntimeRpc.mockClear()
+  hostMocks.setWebRuntimeTabProps.mockClear()
+  hostMocks.runtimeEnvironmentId = null
+})
 
 const WORKTREE = 'local-repo::/tmp/app'
 const STRUCTURED_TAB_ID = 'structured-agent-session-codex-1'
@@ -110,5 +144,76 @@ describe('renaming a structured chat tab', () => {
     expect(labelOf(store)).toBe('Flaky retry test')
     store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, null)
     expect(labelOf(store)).toBeNull()
+  })
+})
+
+describe('a chat rename reaching the host that owns the tab', () => {
+  beforeEach(() => {
+    hostMocks.callRuntimeRpc.mockClear()
+    hostMocks.setWebRuntimeTabProps.mockClear()
+  })
+
+  it('names the chat on the local host so paired clients see it', async () => {
+    const store = storeWithStructuredTab()
+
+    store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, 'Flaky retry test')
+
+    await vi.waitFor(() =>
+      expect(hostMocks.callRuntimeRpc).toHaveBeenCalledWith(
+        { kind: 'local' },
+        'session.tabs.setTabProps',
+        { worktree: `id:${WORKTREE}`, tabId: 'agent-session:codex-1', title: 'Flaky retry test' }
+      )
+    )
+  })
+
+  it('clears the name on the host so the placeholder comes back everywhere', async () => {
+    const store = storeWithStructuredTab()
+
+    store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, null)
+
+    await vi.waitFor(() =>
+      expect(hostMocks.callRuntimeRpc).toHaveBeenCalledWith(
+        { kind: 'local' },
+        'session.tabs.setTabProps',
+        { worktree: `id:${WORKTREE}`, tabId: 'agent-session:codex-1', title: null }
+      )
+    )
+  })
+
+  it('routes a runtime-hosted chat to its environment instead of the local host', async () => {
+    hostMocks.runtimeEnvironmentId = 'env-1'
+    vi.doMock('@/runtime/web-runtime-session', () => ({
+      setWebRuntimeTabProps: hostMocks.setWebRuntimeTabProps
+    }))
+    const store = storeWithStructuredTab()
+
+    store.getState().setTabCustomTitle(STRUCTURED_TAB_ID, 'Flaky retry test')
+
+    await vi.waitFor(() =>
+      expect(hostMocks.setWebRuntimeTabProps).toHaveBeenCalledWith({
+        worktreeId: WORKTREE,
+        tabId: STRUCTURED_TAB_ID,
+        title: 'Flaky retry test'
+      })
+    )
+    expect(hostMocks.callRuntimeRpc).not.toHaveBeenCalled()
+    vi.doUnmock('@/runtime/web-runtime-session')
+  })
+
+  it('leaves a terminal rename on its own host channel, with no tab-props round trip', async () => {
+    const store = createTestStore()
+    seedStore(store, {
+      repos: [{ id: 'local-repo', path: '/tmp/app', name: 'app' }] as never,
+      worktreesByRepo: {
+        'local-repo': [makeWorktree({ id: WORKTREE, repoId: 'local-repo', path: '/tmp/app' })]
+      },
+      unifiedTabsByWorktree: { [WORKTREE]: [terminalTab()] }
+    })
+
+    store.getState().setTabCustomTitle(TERMINAL_TAB_ID, 'Build logs')
+
+    await drainHostPublishes()
+    expect(hostMocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 })

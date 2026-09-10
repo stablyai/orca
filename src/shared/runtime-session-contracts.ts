@@ -232,6 +232,16 @@ export type RuntimeMobileSessionTabsSnapshot = {
   tabs: RuntimeMobileSessionSnapshotTab[]
 }
 
+/** Presentation props a client may change on a host-owned session tab.
+ *  undefined = leave unchanged; null on a nullable field = clear it. */
+export type RuntimeSessionTabProps = {
+  color?: string | null
+  isPinned?: boolean
+  /** The user's name for the tab; null clears it and the host republishes the resolved one. */
+  title?: string | null
+  viewMode?: 'terminal' | 'chat'
+}
+
 export type RuntimeMobileSessionRetiredTerminalSurface = {
   parentTabId: string
   leafId: string
