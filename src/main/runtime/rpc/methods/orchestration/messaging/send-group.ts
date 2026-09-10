@@ -2,6 +2,7 @@ import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveGroupAddress } from '../../../../orchestration/groups'
+import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import {
   listAddressableStructuredWorkers,
@@ -17,6 +18,8 @@ import type { z } from 'zod'
 type SendParamsInput = z.infer<typeof SendParams>
 type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipientWarning[] }
 
+type GroupAgentSnapshot = OrchestrationAddressableAgent & { tabId?: string; leafId?: string }
+
 /** Run candidates already identify a durable mailbox. */
 type GroupCandidate = OrchestrationAddressableAgent & { mailbox?: { to: string; runId: string } }
 
@@ -25,7 +28,7 @@ function listRunGroupCandidates(args: {
   runtime: OrcaRuntimeService
   senderRunId: string
   groupAddress: string
-  agents: readonly OrchestrationAddressableAgent[]
+  agents: readonly GroupAgentSnapshot[]
   warnings: SendRecipientWarning[]
 }): GroupCandidate[] {
   const { db, runtime, senderRunId, groupAddress, agents, warnings } = args
@@ -59,7 +62,19 @@ function listRunGroupCandidates(args: {
       to
     // Nested coordinators consume their child Run mailbox, not their parent Dispatch mailbox.
     const coordinated = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
-    const agentIdentity = identityByHandle.get(handle)
+    if (coordinated?.id === row.runId) {
+      return []
+    }
+    // Discovery can precede a handle remint; the pane still owns the captured identity.
+    const agentIdentity =
+      identityByHandle.get(handle) ??
+      agents.find(
+        (agent) =>
+          paneKey &&
+          agent.tabId &&
+          agent.leafId &&
+          isEquivalentPaneKey(`${agent.tabId}:${agent.leafId}`, paneKey)
+      )?.agentIdentity
     return [
       {
         handle,
@@ -125,7 +140,7 @@ export async function sendGroupMessage(args: {
   // `@worktree:<id>` names one workspace explicitly; every other group means the sender's Run.
   const worktreeGroup = groupAddress.toLowerCase().startsWith('@worktree:')
   let audienceRunId = worktreeGroup ? undefined : resolveAudienceRunId()
-  let agents: OrchestrationAddressableAgent[] = []
+  let agents: GroupAgentSnapshot[] = []
   if (worktreeGroup || !['@all', '@idle'].includes(groupAddress.toLowerCase())) {
     const { terminals } = await runtime.listTerminals(undefined, undefined, {
       includeVisualLayouts: false

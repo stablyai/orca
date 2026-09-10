@@ -565,4 +565,67 @@ describe('orchestration.send group addresses', () => {
       message: `No recipients resolved for group address: ${to}`
     })
   })
+  it.each(['@all', '@idle', '@codex'])(
+    'excludes an owning coordinator with a self-Dispatch from %s',
+    async (to) => {
+      setupWithTerminals(
+        [
+          makeSummary('term_coord', { agentIdentity: 'codex' }),
+          makeSummary('term_a', { agentIdentity: 'codex' }),
+          makeSummary('term_b', { agentIdentity: 'codex' })
+        ],
+        { term_coord: 'idle', term_a: 'idle', term_b: 'idle' }
+      )
+      createRootDispatch(
+        db,
+        db.createTask({ spec: 'coordinator context', runId: activeRunId }).id,
+        'term_coord',
+        coordinatorPaneKey
+      )
+      dispatchWorker('term_a')
+      const sibling = dispatchWorker('term_b')
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to,
+        subject: 'siblings only'
+      })) as GroupReceipt
+      expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${sibling}`])
+      expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(0)
+    }
+  )
+
+  it.each(['term_snapshot', 'term_original'])(
+    'preserves pane identity across discovery when the recorded handle is %s',
+    async (recordedHandle) => {
+      const pane = 'tab_worker:11111111-1111-4111-8111-111111111111'
+      const snapshot = makeSummary('term_snapshot', {
+        tabId: 'tab_worker',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        agentIdentity: 'codex'
+      })
+      setupWithTerminals([makeSummary('term_coord'), snapshot])
+      const dispatch = createRootDispatch(
+        db,
+        db.createTask({ spec: 'worker', runId: activeRunId }).id,
+        recordedHandle,
+        pane
+      )
+      vi.spyOn(runtime, 'getTerminalHandleForPaneKey').mockImplementation((key) =>
+        key === pane ? 'term_snapshot' : null
+      )
+      vi.mocked(runtime.listTerminals).mockImplementation(async () => {
+        // The captured identity still belongs to this pane after its handle is reissued.
+        vi.mocked(runtime.getTerminalHandleForPaneKey).mockImplementation((key) =>
+          key === pane ? 'term_new' : null
+        )
+        return { terminals: [snapshot], totalCount: 1, truncated: false }
+      })
+      const result = (await call('orchestration.send', {
+        from: 'term_coord',
+        to: '@codex',
+        subject: 'codex guidance'
+      })) as GroupReceipt
+      expect(result.messages.map((m) => m.to_handle)).toEqual([`dispatch:${dispatch.id}`])
+    }
+  )
 })
