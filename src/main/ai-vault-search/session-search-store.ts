@@ -45,6 +45,21 @@ export class SessionSearchStore {
     this.writer = new SessionSearchIndexWriter(this.db)
   }
 
+  /**
+   * The index handle, for a reader composed over this store (PR 4's engine).
+   *
+   * Two rules come with it, both measured in this PR. **Never hold a read
+   * transaction across an `await`**: a checkpoint cannot pass an open read
+   * snapshot, so a paginated read that opened `BEGIN` and yielded between pages
+   * takes the WAL from 10 MB to 266 MB and it does not come back. And **no
+   * `.iterate()` that outlives its statement**, which is the same pin by
+   * another name. Every retrieval a single synchronous statement is the whole
+   * contract.
+   */
+  get connection(): SyncDatabase {
+    return this.db
+  }
+
   setAcceptingWrites(accept: boolean): void {
     this.acceptingWrites = accept
   }

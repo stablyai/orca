@@ -491,6 +491,14 @@ it('writes nothing for an incomplete read and owes the file a whole re-read', ()
   expect(errors).toEqual([])
 })
 
+it('exposes the handle a composed reader queries through', () => {
+  replayTranscriptRead({ messages: userMessages('composedreader', 3) })
+
+  // PR 4's engine reads through this rather than opening a second connection,
+  // so it sees a write the moment the transaction commits.
+  expect(store.connection.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 3 })
+})
+
 it('closes twice without turning the second call into an error', () => {
   store.close()
   // node:sqlite throws ERR_INVALID_STATE on a second close of one handle, and a
