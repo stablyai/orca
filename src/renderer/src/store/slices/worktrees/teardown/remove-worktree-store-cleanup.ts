@@ -102,6 +102,8 @@ export function applyRemoveWorktreeSuccessState(
       groupsByWorktree: omitByWorktree(s.groupsByWorktree),
       layoutByWorktree: omitByWorktree(s.layoutByWorktree),
       activeGroupIdByWorktree: omitByWorktree(s.activeGroupIdByWorktree),
+      canvasCardsByWorktree: omitByWorktree(s.canvasCardsByWorktree),
+      canvasViewportByWorktree: omitByWorktree(s.canvasViewportByWorktree),
       editorDrafts: omitByFileId(s.editorDrafts),
       markdownViewMode: omitByFileId(s.markdownViewMode),
       markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),

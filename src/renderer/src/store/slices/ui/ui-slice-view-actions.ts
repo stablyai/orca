@@ -92,6 +92,17 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeArtifacts,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
       })),
+    openCanvasPage: () => {
+      set((state) => ({
+        activeView: 'canvas',
+        previousViewBeforeCanvas:
+          state.activeView === 'canvas' ? state.previousViewBeforeCanvas : state.activeView
+      }))
+    },
+    closeCanvasPage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforeCanvas
+      })),
     openMobilePage: () =>
       set((state) => ({
         activeView: 'mobile',
