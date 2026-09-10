@@ -114,6 +114,8 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   completed: boolean
   structuredLaunch: boolean
   visibilityUnknown: boolean
+  /** The structured launch ended without a surface; there is nothing for the legacy path to finish. */
+  failed: boolean
   primaryTabId: string | null
 }> {
   const { plan } = args
@@ -121,32 +123,49 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
     completed: false,
     structuredLaunch,
     visibilityUnknown: false,
+    failed: false,
     primaryTabId: args.primaryTabId
   })
   if (plan?.route !== 'structured-native-chat') {
     return notLaunched(false)
   }
   const { agent } = plan
-  const settlement = await plan.launch({
-    legacyFallback: async () => {
-      await preflightAgentTrust({
-        agent,
-        workspacePath: args.workspacePath,
-        connectionId: args.connectionId
-      })
-      const activation = activateAndRevealWorktree(args.worktreeId, {
-        sidebarRevealBehavior: 'auto',
-        createNewTerminalForStartup: true,
-        ...buildDirectWorkItemStartupOpts(
+  // Why no tab: the pre-launch tab is the setup shell or default tab, never an agent tab, so
+  // handing it back would paste the prompt there.
+  const withoutAgentSurface = {
+    completed: false,
+    structuredLaunch: true,
+    visibilityUnknown: false,
+    failed: true,
+    primaryTabId: null
+  }
+  let settlement: Awaited<ReturnType<typeof plan.launch>>
+  try {
+    settlement = await plan.launch({
+      legacyFallback: async () => {
+        await preflightAgentTrust({
           agent,
-          args.startupPlan,
-          args.launchSource,
-          plan.promptDelivery === 'draft' ? plan.prompt : undefined
-        )
-      })
-      return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
-    }
-  })
+          workspacePath: args.workspacePath,
+          connectionId: args.connectionId
+        })
+        const activation = activateAndRevealWorktree(args.worktreeId, {
+          sidebarRevealBehavior: 'auto',
+          createNewTerminalForStartup: true,
+          ...buildDirectWorkItemStartupOpts(
+            agent,
+            args.startupPlan,
+            args.launchSource,
+            plan.promptDelivery === 'draft' ? plan.prompt : undefined
+          )
+        })
+        return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
+      }
+    })
+  } catch {
+    // Why: this runs outside the caller's try, so an escaped throw would surface as an unhandled
+    // rejection rather than the failure the caller already knows how to report.
+    return withoutAgentSurface
+  }
   if (!settlement) {
     return notLaunched(true)
   }
@@ -156,6 +175,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
         completed: true,
         structuredLaunch: true,
         visibilityUnknown: false,
+        failed: false,
         primaryTabId: args.primaryTabId
       }
     case 'refused-then-legacy':
@@ -163,6 +183,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
         completed: false,
         structuredLaunch: false,
         visibilityUnknown: false,
+        failed: false,
         primaryTabId: settlement.primaryTabId
       }
     case 'visibility-unknown':
@@ -170,17 +191,12 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
         completed: false,
         structuredLaunch: true,
         visibilityUnknown: true,
+        failed: false,
         primaryTabId: args.primaryTabId
       }
     case 'failed':
     case 'cancelled':
-      // Why: the launch layer already toasted the failure, and the pre-launch tab is the setup
-      // shell or default tab, never an agent tab: handing it back would paste the prompt there.
-      return {
-        completed: false,
-        structuredLaunch: true,
-        visibilityUnknown: false,
-        primaryTabId: null
-      }
+      // Why: the launch layer already toasted the failure.
+      return withoutAgentSurface
   }
 }

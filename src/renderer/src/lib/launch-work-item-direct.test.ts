@@ -556,14 +556,16 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
-  it('never pastes into the pre-launch tab after a failed structured settlement', async () => {
+  it('reports a failed structured settlement instead of pasting into the pre-launch tab', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
     // Why: activation seeded a plain shell (`tab-1`); a failed structured launch hands back no tab,
-    // so the PR body must not reach that shell where the Claude readiness heuristic would submit it.
+    // so the PR body must not reach that shell where the Claude readiness heuristic would submit it
+    // — and callers hang irreversible follow-up work off a `true`, so this must not report success.
     vi.mocked(settleDirectWorkItemStructuredLaunch).mockResolvedValueOnce({
       completed: false,
       structuredLaunch: true,
       visibilityUnknown: false,
+      failed: true,
       primaryTabId: null
     })
     const { launchWorkItemDirect } = await import('./launch-work-item-direct')
@@ -583,7 +585,7 @@ describe('launchWorkItemDirect', () => {
           pasteContent: 'rm -rf ./build\nReview the PR body.'
         }
       })
-    ).resolves.toBe(true)
+    ).resolves.toBe(false)
 
     expect(settleDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
       expect.objectContaining({ primaryTabId: 'tab-1' })

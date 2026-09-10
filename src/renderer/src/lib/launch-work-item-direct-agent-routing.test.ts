@@ -58,6 +58,7 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
       completed: true,
       structuredLaunch: true,
       visibilityUnknown: false,
+      failed: false,
       primaryTabId: null
     })
     expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
@@ -81,6 +82,7 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
       completed: false,
       structuredLaunch: false,
       visibilityUnknown: false,
+      failed: false,
       primaryTabId: 'fallback-tab'
     })
     expect(mocks.preflightAgentTrust).toHaveBeenCalledWith({
@@ -104,6 +106,7 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
       completed: false,
       structuredLaunch: true,
       visibilityUnknown: true,
+      failed: false,
       primaryTabId: null
     })
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
@@ -123,6 +126,7 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
         completed: false,
         structuredLaunch: true,
         visibilityUnknown: false,
+        failed: true,
         primaryTabId: null
       })
       expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
@@ -139,6 +143,7 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
       completed: false,
       structuredLaunch: false,
       visibilityUnknown: false,
+      failed: false,
       primaryTabId: null
     })
     expect(mocks.settleStructuredAgentLaunch).not.toHaveBeenCalled()
