@@ -1,5 +1,5 @@
 import type { MountAdapter } from './recording-scenario'
-import { hookMount } from './hook-mount'
+import { hookMount, performHookAction } from './hook-mount'
 import { observableModel, projectObservable } from './observable-model'
 import { operationModuleLoader } from './operation-module-loader'
 
@@ -42,7 +42,7 @@ export function workspaceSettingsMounts(
             return hook.mount()
           }
           if (name === 'submit') {
-            return state.create()
+            return performHookAction(() => state.create())
           }
           throw new Error(`Unknown submit action: ${name}`)
         },

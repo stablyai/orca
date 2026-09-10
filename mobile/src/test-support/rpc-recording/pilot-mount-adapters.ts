@@ -2,7 +2,7 @@ import { observableModel } from './observable-model'
 import { settingsMountAdapters } from './settings-mount-adapters'
 import { workspaceSettingsMounts } from './workspace-settings-mounts'
 import type { MountAdapter } from './recording-scenario'
-import { hookMount } from './hook-mount'
+import { hookMount, performHookAction } from './hook-mount'
 import { operationModuleLoader, type Mutation } from './operation-module-loader'
 
 export function pilotMountAdapters(
@@ -49,7 +49,7 @@ export function pilotMountAdapters(
             return hook.update()
           }
           if (name === 'query') {
-            return state.loadNativeChatFiles(String(args.query))
+            return performHookAction(() => state.loadNativeChatFiles(String(args.query)))
           }
           if (name === 'blur') {
             return

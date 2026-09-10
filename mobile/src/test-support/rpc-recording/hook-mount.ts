@@ -26,3 +26,11 @@ export function hookMount(render: () => void) {
     }
   }
 }
+
+export function performHookAction<T>(action: () => T): T {
+  let result!: T
+  act(() => {
+    result = action()
+  })
+  return result
+}
