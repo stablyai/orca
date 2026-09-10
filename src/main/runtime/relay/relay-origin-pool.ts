@@ -5,7 +5,7 @@ import { RelayControlOrigin } from './relay-control-origin'
 import type { RelayControlClient } from './relay-control-client'
 import type { RelayDrainMessage } from './relay-control-protocol'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
-import { RelayDrainRetrySchedule } from './relay-drain-retry-schedule'
+import { RelayRetrySchedule } from './relay-retry-schedule'
 import { RelayHttpError, requestRelayAssignment, type RelayAssignment } from './relay-http-client'
 import { relayRenewalDelayMs } from './relay-renewal-jitter'
 import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
@@ -39,12 +39,12 @@ export class RelayOriginPool {
   private relayJwt: string | null = null
   private rotationTimer: ReturnType<typeof setTimeout> | null = null
   private rotationPromise: Promise<void> | null = null
-  private readonly drainRetry: RelayDrainRetrySchedule
+  private readonly drainRetry: RelayRetrySchedule
   private closed = false
 
   constructor(options: RelayOriginPoolOptions) {
     this.options = options
-    this.drainRetry = new RelayDrainRetrySchedule(options.random)
+    this.drainRetry = new RelayRetrySchedule(options.random)
   }
 
   get activeAssignment(): RelayAssignment | null {
