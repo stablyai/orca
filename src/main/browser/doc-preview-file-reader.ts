@@ -1,21 +1,22 @@
 import { extname } from 'node:path'
-import type {
-  RuntimeFilePreviewResult,
-  RuntimeFileReadResult
-} from '../../shared/runtime-file-contracts'
+import type { RuntimeFilePreviewResult } from '../../shared/runtime-file-contracts'
 import type { DocPreviewFileFailureReason } from '../../shared/doc-preview-scheme'
 import { callRuntimeEnvironment } from '../ipc/runtime-environment-transport-routing'
 import { FileReadCapExceededError } from '../ssh/ssh-filesystem-stream-reader'
 import { getCanonicalUserDataPath } from '../persistence'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
-  resolveCanonicalDocPreviewPath,
+  resolveDocPreviewAuthorityPaths,
+  resolveDocPreviewCandidatePath,
   resolveDocPreviewTargetPath,
+  toRuntimeWorktreeRelativeDirectoryPath,
   toRuntimeWorktreeRelativePath,
   type DocPreviewGrant
 } from './doc-preview-grant-registry'
 
 const DOC_PREVIEW_READ_TIMEOUT_MS = 15_000
+const DIRECT_SSH_DOC_PREVIEW_TEXT_MAX_BYTES = 10 * 1024 * 1024
+const DIRECT_SSH_DOC_PREVIEW_BINARY_MAX_BYTES = 10 * 1024 * 1024
 
 /** Why not "needs a newer server": the SSH read path only ever serves images and PDFs as bytes, so
  *  a font is refused there by design, not by version. Name the file type, not the host's age. */
@@ -27,6 +28,10 @@ const TRUNCATED_PREVIEW_MESSAGE = 'This document is too large for the server to 
 
 /** The paired host rejects an over-cap asset outright instead of clamping it. */
 const RUNTIME_TOO_LARGE_ERROR = 'file_too_large'
+
+/** Same stance as the SSH relay message: previews fail closed on a host without scoped reads. */
+const RUNTIME_DOC_PREVIEW_UPDATE_REQUIRED_MESSAGE =
+  'Secure document previews require a newer Orca on the paired machine. Update it and try again.'
 
 /** Both owners refuse an over-cap file; only their error shapes differ. */
 function isTooLargeReadError(error: unknown): boolean {
@@ -105,38 +110,35 @@ function toOutcome(source: PreviewFileBytes, contentType: string): DocPreviewRea
 async function readRuntimeDocPreviewFile(
   environmentId: string,
   worktreeSelector: string,
-  relativePath: string
+  relativePath: string,
+  entryRelativePath: string,
+  implicitRootRelativePath: string | null,
+  authorizedRootRelativePaths: string[]
 ): Promise<PreviewFileBytes> {
   const userDataPath = getCanonicalUserDataPath()
   const response = await callRuntimeEnvironment(
     userDataPath,
     environmentId,
-    'files.read',
-    { worktree: worktreeSelector, relativePath },
+    'files.readDocPreview',
+    {
+      worktree: worktreeSelector,
+      relativePath,
+      entryRelativePath,
+      implicitRootRelativePath,
+      authorizedRootRelativePaths
+    },
     DOC_PREVIEW_READ_TIMEOUT_MS
   )
-  if (response.ok) {
-    const result = response.result as RuntimeFileReadResult
-    return { content: result.content, isBinary: false, truncated: result.truncated === true }
+  if (!response.ok) {
+    // Why the rewrite: fail-closed on an old host is deliberate, so tell the reader what to do —
+    // the raw method_not_found wording reads as a broken preview, not an out-of-date machine.
+    throw new Error(
+      response.error.code === 'method_not_found'
+        ? RUNTIME_DOC_PREVIEW_UPDATE_REQUIRED_MESSAGE
+        : response.error.message
+    )
   }
-  // Why: files.read rejects binaries with a typed error; the base64 preview RPC serves
-  // images and fonts the same way it does for markdown previews. Match the exact
-  // message so an unrelated failure can't spoof the fallback.
-  if (response.error.message !== 'binary_file') {
-    throw new Error(response.error.message)
-  }
-  const previewResponse = await callRuntimeEnvironment(
-    userDataPath,
-    environmentId,
-    'files.readPreview',
-    { worktree: worktreeSelector, relativePath },
-    DOC_PREVIEW_READ_TIMEOUT_MS
-  )
-  if (!previewResponse.ok) {
-    throw new Error(previewResponse.error.message)
-  }
-  const preview = previewResponse.result as RuntimeFilePreviewResult
-  // Why: readPreview never clamps — it rejects an over-cap asset — so its body is whole or absent.
+  const preview = response.result as RuntimeFilePreviewResult
   return {
     content: preview.content,
     isBinary: preview.isBinary,
@@ -153,40 +155,70 @@ export async function readDocPreviewFile(
   grant: DocPreviewGrant,
   relativePath: string
 ): Promise<DocPreviewReadOutcome> {
+  const candidatePath = resolveDocPreviewCandidatePath(grant, relativePath)
+  if (!candidatePath) {
+    return notFoundOutcome()
+  }
   const absolutePath = resolveDocPreviewTargetPath(grant, relativePath)
   if (!absolutePath) {
-    return notFoundOutcome()
+    return {
+      ok: false,
+      status: 403,
+      reason: 'authorization-required',
+      message: 'This file needs permission before the preview can read it.'
+    }
   }
   const contentType = docPreviewContentType(relativePath)
   try {
     if (grant.owner.kind === 'ssh') {
       const provider = requireSshFilesystemProvider(grant.owner.connectionId)
-      // Why: the SSH read RPC enforces no root of its own, so containment has to survive a symlink
-      // before the read — the lexical check above only proves the requested path looked contained.
-      const canonicalPath = await resolveCanonicalDocPreviewPath(grant, absolutePath, (path) =>
-        provider.realpath(path)
-      )
-      if (!canonicalPath) {
+      const authority = resolveDocPreviewAuthorityPaths(grant)
+      if (!authority.entryPath || !provider.readDocPreviewFile) {
         return notFoundOutcome()
       }
-      // Why: the SSH reader rejects an over-cap file outright, so its result is never partial.
-      return toOutcome(await provider.readFile(canonicalPath), contentType)
+      return toOutcome(
+        await provider.readDocPreviewFile({
+          boundaryPath: grant.requestBase,
+          entryPath: authority.entryPath,
+          implicitRootPath: authority.implicitRootPath,
+          authorizedRootPaths: authority.authorizedRootPaths,
+          targetPath: absolutePath,
+          maxTextBytes: DIRECT_SSH_DOC_PREVIEW_TEXT_MAX_BYTES,
+          maxBinaryBytes: DIRECT_SSH_DOC_PREVIEW_BINARY_MAX_BYTES
+        }),
+        contentType
+      )
     }
+    const runtimeOwner = grant.owner
     const worktreeRelativePath = toRuntimeWorktreeRelativePath(
-      grant.owner.worktreeRoot,
+      runtimeOwner.worktreeRoot,
       absolutePath
     )
-    if (!worktreeRelativePath) {
+    const authority = resolveDocPreviewAuthorityPaths(grant)
+    const entryRelativePath = authority.entryPath
+      ? toRuntimeWorktreeRelativePath(runtimeOwner.worktreeRoot, authority.entryPath)
+      : null
+    const implicitRootRelativePath = authority.implicitRootPath
+      ? toRuntimeWorktreeRelativeDirectoryPath(
+          runtimeOwner.worktreeRoot,
+          authority.implicitRootPath
+        )
+      : null
+    const authorizedRootRelativePaths = authority.authorizedRootPaths
+      .map((root) => toRuntimeWorktreeRelativeDirectoryPath(runtimeOwner.worktreeRoot, root))
+      .filter((root): root is string => root !== null)
+    if (!worktreeRelativePath || !entryRelativePath) {
       // Why: files.read is worktree-scoped, so a doc outside the worktree has no client-side channel.
       return notFoundOutcome()
     }
-    // Why no realpath pass here: the host resolves this path through resolveAuthorizedPath, which
-    // canonicalizes and re-checks the worktree root server-side before reading.
     return toOutcome(
       await readRuntimeDocPreviewFile(
-        grant.owner.environmentId,
-        grant.owner.worktreeSelector,
-        worktreeRelativePath
+        runtimeOwner.environmentId,
+        runtimeOwner.worktreeSelector,
+        worktreeRelativePath,
+        entryRelativePath,
+        implicitRootRelativePath,
+        authorizedRootRelativePaths
       ),
       contentType
     )

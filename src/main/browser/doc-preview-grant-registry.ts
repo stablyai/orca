@@ -21,9 +21,18 @@ export type DocPreviewOwner =
 export type DocPreviewGrant = {
   id: string
   owner: DocPreviewOwner
-  /** Containing directory of the opened document, on the owning host. */
+  /** Directory relative preview URLs resolve against. */
+  requestBase: string
+  /**
+   * Containing directory of the opened document, on the owning host. It carries silent read
+   * authority only while it sits strictly inside `requestBase`: a document at the workspace root —
+   * or outside any workspace, where its directory IS the request base — starts with the entry file
+   * alone, because that directory is where secrets live and a DNS-prefetch beacon needs no click.
+   */
   root: string
-  /** Path of the opened document relative to `root`. */
+  /** Additional directories the reader approved for this grant. */
+  authorizedRoots: string[]
+  /** Path of the opened document relative to `requestBase`. */
   entryRelativePath: string
   /**
    * Browser page the reader opened this document in. Main registers the guest under it once the
@@ -56,14 +65,23 @@ function normalizeRootPath(root: string): string {
 
 export function mintDocPreviewGrant(params: {
   owner: DocPreviewOwner
+  requestBase?: string
   root: string
   entryRelativePath: string
   browserPageId: string
 }): DocPreviewGrant {
+  const requestBase = normalizeRootPath(params.requestBase ?? params.root)
+  const root = normalizeRootPath(params.root)
+  const flavor = pathFlavorFor(requestBase)
+  if (!isAtOrInsideRoot(requestBase, root, flavor)) {
+    throw new Error('Document preview root is outside its request base')
+  }
   const grant: DocPreviewGrant = {
     id: randomBytes(16).toString('hex'),
     owner: params.owner,
-    root: normalizeRootPath(params.root),
+    requestBase,
+    root,
+    authorizedRoots: [],
     entryRelativePath: params.entryRelativePath.replace(/\\/g, '/'),
     browserPageId: params.browserPageId
   }
@@ -126,12 +144,8 @@ function hasUnsafeSegment(segments: string[]): boolean {
   )
 }
 
-/**
- * Resolves a request path to an absolute path on the owning host, or null when
- * it would escape the grant's root. Path flavor follows the root (the owning
- * host may be Windows while this client is not), never `process.platform`.
- */
-export function resolveDocPreviewTargetPath(
+/** Resolves a safe request inside the workspace boundary, before grant authorization. */
+export function resolveDocPreviewCandidatePath(
   grant: DocPreviewGrant,
   relativePath: string
 ): string | null {
@@ -142,9 +156,9 @@ export function resolveDocPreviewTargetPath(
   if (segments.length === 0 || hasUnsafeSegment(segments)) {
     return null
   }
-  const flavor = pathFlavorFor(grant.root)
-  const resolved = flavor.normalize(flavor.join(grant.root, ...segments))
-  return isInsideRoot(grant.root, resolved, flavor) ? resolved : null
+  const flavor = pathFlavorFor(grant.requestBase)
+  const resolved = flavor.normalize(flavor.join(grant.requestBase, ...segments))
+  return isInsideRoot(grant.requestBase, resolved, flavor) ? resolved : null
 }
 
 function isInsideRoot(
@@ -156,8 +170,82 @@ function isInsideRoot(
   return candidate.startsWith(rootPrefix)
 }
 
+function isAtOrInsideRoot(
+  root: string,
+  candidate: string,
+  flavor: typeof posix | typeof win32
+): boolean {
+  return candidate === root || isInsideRoot(root, candidate, flavor)
+}
+
+function directoryAuthorityRoots(grant: DocPreviewGrant): string[] {
+  return grant.root === grant.requestBase
+    ? [...grant.authorizedRoots]
+    : [grant.root, ...grant.authorizedRoots]
+}
+
+export function resolveDocPreviewAuthorityPaths(grant: DocPreviewGrant): {
+  entryPath: string | null
+  implicitRootPath: string | null
+  authorizedRootPaths: string[]
+} {
+  return {
+    entryPath: resolveEntryAbsolutePath(grant),
+    implicitRootPath: grant.root === grant.requestBase ? null : grant.root,
+    authorizedRootPaths: [...grant.authorizedRoots]
+  }
+}
+
+/** The one path an entry-only grant can read before the reader approves a directory. */
+function resolveEntryAbsolutePath(grant: DocPreviewGrant): string | null {
+  return resolveDocPreviewCandidatePath(grant, grant.entryRelativePath)
+}
+
+/** Resolves a request only when it is the entry document or its directory is authorized. */
+export function resolveDocPreviewTargetPath(
+  grant: DocPreviewGrant,
+  relativePath: string
+): string | null {
+  const resolved = resolveDocPreviewCandidatePath(grant, relativePath)
+  if (!resolved) {
+    return null
+  }
+  if (resolved === resolveEntryAbsolutePath(grant)) {
+    return resolved
+  }
+  const flavor = pathFlavorFor(grant.requestBase)
+  return directoryAuthorityRoots(grant).some((root) => isInsideRoot(root, resolved, flavor))
+    ? resolved
+    : null
+}
+
+/** Expands a live grant to the directory containing one reader-approved request. */
+export function authorizeDocPreviewDirectory(grantId: string, relativePath: string): boolean {
+  const grant = grantsById.get(grantId)
+  if (!grant) {
+    return false
+  }
+  const candidate = resolveDocPreviewCandidatePath(grant, relativePath)
+  if (!candidate) {
+    return false
+  }
+  const flavor = pathFlavorFor(grant.requestBase)
+  const directory = normalizeRootPath(flavor.dirname(candidate))
+  if (!isAtOrInsideRoot(grant.requestBase, directory, flavor)) {
+    return false
+  }
+  if (!directoryAuthorityRoots(grant).some((root) => isAtOrInsideRoot(root, directory, flavor))) {
+    grant.authorizedRoots.push(directory)
+    canonicalRootByGrantId.delete(grant.id)
+  }
+  return true
+}
+
 /** Why: realpath is a host round-trip, and a grant's root is fixed for its lifetime. */
-const canonicalRootByGrantId = new Map<string, Promise<string>>()
+const canonicalRootByGrantId = new Map<
+  string,
+  Promise<{ boundary: string; roots: string[]; entry: string | null }>
+>()
 
 /**
  * Second containment pass for hosts where the lexical one is not enough: a symlink
@@ -171,14 +259,35 @@ export async function resolveCanonicalDocPreviewPath(
   realpath: (path: string) => Promise<string>
 ): Promise<string | null> {
   try {
-    let canonicalRoot = canonicalRootByGrantId.get(grant.id)
-    if (!canonicalRoot) {
-      canonicalRoot = realpath(grant.root).then(normalizeRootPath)
-      canonicalRootByGrantId.set(grant.id, canonicalRoot)
+    let canonicalRoots = canonicalRootByGrantId.get(grant.id)
+    if (!canonicalRoots) {
+      const entryAbsolute = resolveEntryAbsolutePath(grant)
+      canonicalRoots = Promise.all([
+        realpath(grant.requestBase),
+        entryAbsolute === null ? Promise.resolve(null) : realpath(entryAbsolute),
+        ...directoryAuthorityRoots(grant).map((root) => realpath(root))
+      ]).then(([boundaryPath, entryPath, ...rootPaths]) => {
+        const boundary = normalizeRootPath(boundaryPath)
+        const flavor = pathFlavorFor(boundary)
+        return {
+          boundary,
+          roots: rootPaths
+            .map(normalizeRootPath)
+            .filter((root) => isAtOrInsideRoot(boundary, root, flavor)),
+          entry: entryPath !== null && isInsideRoot(boundary, entryPath, flavor) ? entryPath : null
+        }
+      })
+      canonicalRootByGrantId.set(grant.id, canonicalRoots)
     }
-    const [root, canonicalPath] = await Promise.all([canonicalRoot, realpath(absolutePath)])
-    const flavor = pathFlavorFor(root)
-    return isInsideRoot(root, canonicalPath, flavor) ? canonicalPath : null
+    const [{ boundary, roots, entry }, canonicalPath] = await Promise.all([
+      canonicalRoots,
+      realpath(absolutePath)
+    ])
+    const flavor = pathFlavorFor(boundary)
+    return isInsideRoot(boundary, canonicalPath, flavor) &&
+      (canonicalPath === entry || roots.some((root) => isInsideRoot(root, canonicalPath, flavor)))
+      ? canonicalPath
+      : null
   } catch {
     // Why: a root that no longer canonicalizes must not fall back to the lexical answer.
     canonicalRootByGrantId.delete(grant.id)
@@ -205,4 +314,14 @@ export function toRuntimeWorktreeRelativePath(
     return null
   }
   return relative.replace(/\\/g, '/')
+}
+
+export function toRuntimeWorktreeRelativeDirectoryPath(
+  worktreeRoot: string,
+  absolutePath: string
+): string | null {
+  const normalizedRoot = normalizeRootPath(worktreeRoot)
+  return normalizeRootPath(absolutePath) === normalizedRoot
+    ? ''
+    : toRuntimeWorktreeRelativePath(worktreeRoot, absolutePath)
 }

@@ -12,7 +12,7 @@ const CELL_HEIGHT = 17
 type AnchorHarness = {
   terminal: Terminal
   element: HTMLElement
-  style: { top: string; left: string }
+  style: { top: string; left: string; width: string }
   compositionStyle: CSSStyleDeclaration
   counts: { rectReads: number; styleWrites: number }
   setCursor: (cursorX: number, cursorY: number) => void
@@ -57,13 +57,15 @@ function createHarness(): AnchorHarness {
     return { width: COLS * CELL_WIDTH, height: ROWS * CELL_HEIGHT } as DOMRect
   }
 
-  const style = { top: '', left: '' }
+  // `width` is xterm's, not ours: it sizes the textarea to the preedit just before this
+  // listener runs, and the clamp reads it back to keep that box inside the screen.
+  const style = { top: '', left: '', width: '' }
   const textarea = {
     isConnected: true,
     style: new Proxy(style, {
       set(target, key: string, value: string) {
         counts.styleWrites++
-        target[key as 'top' | 'left'] = value
+        target[key as 'top' | 'left' | 'width'] = value
         return true
       }
     })
@@ -148,6 +150,40 @@ describe('installTerminalImeCandidateAnchor', () => {
     expect(harness.style.left).toBe(`${29 * CELL_WIDTH}px`)
   })
 
+  it('pulls an over-wide preedit anchor back inside the terminal at the last column', () => {
+    const harness = createHarness()
+    installTerminalImeCandidateAnchor(harness.terminal)
+    // xterm sized the textarea to a two-cell preedit that starts in the final column.
+    harness.style.width = `${2 * CELL_WIDTH}px`
+
+    typeHangulSyllable(harness, COLS - 1)
+
+    // Without the clamp this is 79 cells, putting the OS candidate window one cell past the
+    // right edge while xterm end-aligns the visible preedit back inside.
+    expect(harness.style.left).toBe(`${(COLS - 2) * CELL_WIDTH}px`)
+  })
+
+  it('never anchors left of the terminal when the preedit outgrows the whole row', () => {
+    const harness = createHarness()
+    installTerminalImeCandidateAnchor(harness.terminal)
+    // A long pinyin phrase in a narrow pane: the preedit is wider than every column together.
+    harness.style.width = `${(COLS + 12) * CELL_WIDTH}px`
+
+    typeHangulSyllable(harness, COLS - 1)
+
+    expect(harness.style.left).toBe('0px')
+  })
+
+  it('leaves the anchor on the cursor cell while the preedit still fits', () => {
+    const harness = createHarness()
+    installTerminalImeCandidateAnchor(harness.terminal)
+    harness.style.width = `${2 * CELL_WIDTH}px`
+
+    typeHangulSyllable(harness, 40)
+
+    expect(harness.style.left).toBe(`${40 * CELL_WIDTH}px`)
+  })
+
   it('does no work for Latin input, which fires no composition events', () => {
     const harness = createHarness()
     installTerminalImeCandidateAnchor(harness.terminal)
@@ -170,7 +206,11 @@ describe('installTerminalImeCandidateAnchor', () => {
     harness.setCursor(6, 2)
     fire(harness.element, 'compositionupdate')
 
-    expect(harness.style).toEqual({ top: `${2 * CELL_HEIGHT}px`, left: `${6 * CELL_WIDTH}px` })
+    expect(harness.style).toEqual({
+      top: `${2 * CELL_HEIGHT}px`,
+      left: `${6 * CELL_WIDTH}px`,
+      width: ''
+    })
   })
 
   it('re-measures mid-composition when the terminal is refit to new dimensions', () => {
@@ -195,7 +235,11 @@ describe('installTerminalImeCandidateAnchor', () => {
     expect(vi.getTimerCount()).toBe(1)
     harness.style.top = '0px'
     vi.runAllTimers()
-    expect(harness.style).toEqual({ top: `${2 * CELL_HEIGHT}px`, left: `${7 * CELL_WIDTH}px` })
+    expect(harness.style).toEqual({
+      top: `${2 * CELL_HEIGHT}px`,
+      left: `${7 * CELL_WIDTH}px`,
+      width: ''
+    })
   })
 
   it("re-queues the correction after xterm's latest composition timer", () => {
@@ -233,7 +277,11 @@ describe('installTerminalImeCandidateAnchor', () => {
     fire(harness.element, 'compositionupdate')
     vi.runAllTimers()
 
-    expect(harness.style).toEqual({ top: `${2 * CELL_HEIGHT}px`, left: `${7 * CELL_WIDTH}px` })
+    expect(harness.style).toEqual({
+      top: `${2 * CELL_HEIGHT}px`,
+      left: `${7 * CELL_WIDTH}px`,
+      width: ''
+    })
     expect(harness.compositionStyle.top).toBe(`${2 * CELL_HEIGHT}px`)
     expect(harness.compositionStyle.left).toBe(`${7 * CELL_WIDTH}px`)
     expect(harness.compositionStyle.height).toBe(`${CELL_HEIGHT}px`)
@@ -251,7 +299,11 @@ describe('installTerminalImeCandidateAnchor', () => {
     fire(harness.element, 'compositionupdate')
     vi.runAllTimers()
 
-    expect(harness.style).toEqual({ top: `${2 * CELL_HEIGHT}px`, left: `${7 * CELL_WIDTH}px` })
+    expect(harness.style).toEqual({
+      top: `${2 * CELL_HEIGHT}px`,
+      left: `${7 * CELL_WIDTH}px`,
+      width: ''
+    })
     expect(harness.compositionStyle.left).toBe(`${7 * CELL_WIDTH}px`)
   })
 
@@ -267,7 +319,11 @@ describe('installTerminalImeCandidateAnchor', () => {
     vi.runAllTimers()
 
     expect(harness.counts.rectReads).toBe(2)
-    expect(harness.style).toEqual({ top: `${3 * CELL_HEIGHT}px`, left: `${14 * CELL_WIDTH}px` })
+    expect(harness.style).toEqual({
+      top: `${3 * CELL_HEIGHT}px`,
+      left: `${14 * CELL_WIDTH}px`,
+      width: ''
+    })
   })
 
   it('stops writing once the textarea has been detached', () => {

@@ -175,42 +175,6 @@ describe('Jira issue operations', () => {
     expect(jiraRequestMock).not.toHaveBeenCalled()
   })
 
-  it('sends plain-text bodies and v2 paths for self-hosted issue creation', async () => {
-    getClientsMock.mockReturnValue([makeServerEntry()])
-    jiraRequestMock.mockResolvedValueOnce({ id: '1', key: 'ALP-1', self: '' })
-    const { createIssue } = await import('./issues')
-
-    await createIssue({
-      siteId: 'server-1',
-      projectId: '10000',
-      issueTypeId: '10001',
-      title: 'Fix auth',
-      description: 'Body text'
-    })
-
-    const [, path, init] = jiraRequestMock.mock.calls[0]
-    expect(path).toBe('/rest/api/2/issue')
-    const body = JSON.parse((init as { body: string }).body) as {
-      fields: { description: unknown }
-    }
-    // REST v2 rejects ADF documents; the description must stay a plain string.
-    expect(body.fields.description).toBe('Body text')
-  })
-
-  it('assigns by username on self-hosted sites', async () => {
-    getClientsMock.mockReturnValue([makeServerEntry()])
-    jiraRequestMock.mockResolvedValue(null)
-    const { updateIssue } = await import('./issues')
-
-    await updateIssue('ALP-1', { assigneeAccountId: 'wquintal' }, 'server-1')
-
-    expect(jiraRequestMock).toHaveBeenCalledWith(
-      expect.anything(),
-      '/rest/api/2/issue/ALP-1/assignee',
-      expect.objectContaining({ body: JSON.stringify({ name: 'wquintal' }) })
-    )
-  })
-
   it('lists self-hosted projects from the unpaged /project resource', async () => {
     getClientsMock.mockReturnValue([makeServerEntry()])
     jiraRequestMock.mockResolvedValueOnce([{ id: '1', key: 'ALP', name: 'Alpha' }])

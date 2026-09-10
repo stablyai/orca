@@ -15,7 +15,6 @@ type PreviewHostRenderer = {
 type PreviewGuestRegistration = {
   host: PreviewHostRenderer
   readBoundGrantId: () => string | null
-  isFocused: () => boolean
 }
 
 /**
@@ -125,8 +124,7 @@ export function installDocPreviewGuestPolicy(
 
   previewGuests.set(guest, {
     host,
-    readBoundGrantId: () => boundGrantId,
-    isFocused: () => guest.isFocused()
+    readBoundGrantId: () => boundGrantId
   })
   const forgetGuest = (): void => {
     previewGuests.delete(guest)
@@ -221,9 +219,9 @@ function isWebUrl(url: string): boolean {
 }
 
 /**
- * The only way a URL leaves a preview. Every condition is load-bearing: the sender must be a live
- * preview guest still bound to a grant, it must be the contents the reader is looking at, and the
- * target must be the web. Anything else is dropped without a trace the document could observe.
+ * The only way a URL leaves a preview. Every condition is load-bearing: the isolated preload must
+ * report a trusted anchor click, the sender must be a live preview guest still bound to a grant,
+ * and the target must be the web. Anything else is dropped without a trace the document can observe.
  */
 export function reportDocPreviewLinkClick(sender: Electron.WebContents, rawUrl: string): void {
   const registration = previewGuests.get(sender)
@@ -232,11 +230,6 @@ export function reportDocPreviewLinkClick(sender: Electron.WebContents, rawUrl: 
   }
   const boundGrantId = registration.readBoundGrantId()
   if (boundGrantId === null || !getDocPreviewGrant(boundGrantId)) {
-    return
-  }
-  // Why focus and not just the preload's trusted-click check: that check runs inside the guest, so
-  // it holds only while the guest renderer does. Focus is the half main can verify for itself.
-  if (!registration.isFocused()) {
     return
   }
   const externalUrl = normalizeExternalBrowserUrl(rawUrl)

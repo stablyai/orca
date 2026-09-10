@@ -5,7 +5,11 @@ import type {
 } from '../../shared/runtime-types'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import {
+  getOptionalStringFlag,
+  getRequiredStringFlag,
+  getRequiredStringFlagAllowingEmpty
+} from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
 
@@ -41,7 +45,8 @@ export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
   },
   'cookie set': async ({ flags, client, cwd, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
-    const value = getRequiredStringFlag(flags, 'value')
+    // CookieSet.value accepts '' (clearing a cookie's value is a real operation).
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const params: Record<string, unknown> = { name, value }
     const domain = getOptionalStringFlag(flags, 'domain')
     const path = getOptionalStringFlag(flags, 'path')

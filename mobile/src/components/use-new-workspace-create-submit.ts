@@ -16,6 +16,7 @@ import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
+import type { WorktreeCreateIdempotencySupport } from '../tasks/worktree-create-idempotency-policy'
 import {
   pickPreferredNewWorktreeAgent,
   type NewWorktreeAgentOption,
@@ -54,7 +55,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   runSetup: boolean
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
-  getWorktreeCreateCutoverSupport: () => Promise<boolean>
+  getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
   transitionDrawer: (view: Exclude<NewWorktreeDrawerView, 'transition'>) => void
   setError: Dispatch<SetStateAction<string>>
   onCreated: (worktreeId: string, name: string) => void
@@ -163,7 +164,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
-            supportsIdempotentCutoverRetry: args.getWorktreeCreateCutoverSupport()
+            worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport()
           })
         : await createBlankWorkspace({
             client,
@@ -173,7 +174,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             createdWithAgentId,
             comment: trimmedNote,
             setupDecision,
-            supportsIdempotentCutoverRetry: args.getWorktreeCreateCutoverSupport()
+            worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport()
           })
       if ('error' in result) {
         args.setError(result.error)

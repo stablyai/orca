@@ -6,6 +6,7 @@ import { RelayContext, expandTilde } from './context'
 import { PtyHandler } from './pty-handler'
 import { FsHandler } from './fs-handler'
 import { GitHandler } from './git-handler'
+import { GitResponseStreamRegistry } from './git-response-stream'
 import { PreflightHandler } from './preflight-handler'
 import { ExternalAutomationsHandler } from './external-automations-handler'
 import { PortScanHandler } from './port-scan-handler'
@@ -44,6 +45,11 @@ export class RelayRuntimeServices {
       (id, paused) => this.ptyHandler.setConsumerDeliveryPaused(id, paused),
       (id) => this.ptyHandler.handleSourceCreditAvailable(id)
     )
+    // Why wired after construction: the handler is built first, but PTY ownership has to be
+    // attested from the consumer grant the adapter holds.
+    this.ptyHandler.setConsumerIdentityResolver((clientId) =>
+      this.ptyConsumerSessionAdapter.clientInstanceIdFor(clientId)
+    )
     this.ptySourcePublication = new RelayPtySourcePublication(
       dispatcher,
       this.ptyConsumerSessionAdapter,
@@ -51,13 +57,17 @@ export class RelayRuntimeServices {
     )
     this.ptyHandler.setSourcePublication(this.ptySourcePublication)
 
-    this.fsHandler = new FsHandler(dispatcher, context)
+    // Why one instance for both handlers: a client reassembles a streamed reply by `streamId` alone,
+    // so two registries would hand out the same id, and only GitHandler routes the `git.responseAck`
+    // credit every pump waits on. A second registry is not an option — see git-response-stream.ts.
+    const responseStreams = new GitResponseStreamRegistry()
+    this.fsHandler = new FsHandler(dispatcher, context, undefined, responseStreams)
     const watchRegistry = this.fsHandler.getWatchRegistry()
     this.ptyHandler.setWorktreeRemovalCoordinator(watchRegistry)
     watchRegistry.setWorktreePtyTeardown((rootPath) =>
       this.ptyHandler.shutdownForWorktreePath(rootPath)
     )
-    this.gitHandler = new GitHandler(dispatcher, context, watchRegistry)
+    this.gitHandler = new GitHandler(dispatcher, context, watchRegistry, responseStreams)
     const preflightHandler = new PreflightHandler(dispatcher)
     this.skillInstallHandler = new SkillInstallHandler(dispatcher)
     const externalAutomationsHandler = new ExternalAutomationsHandler(dispatcher)

@@ -90,6 +90,8 @@ export type AutomationPrecheckResult = {
 
 export type Automation = {
   id: string
+  /** Optional client request key used to make cross-authority creates retry-safe. */
+  creationKey?: string
   name: string
   prompt: string
   precheck: AutomationPrecheck | null
@@ -168,7 +170,15 @@ export type AutomationRun = {
   lastOccurrenceAt?: number
 }
 
+/** A bounded history response; older hosts may continue returning `runs` only. */
+export type AutomationRunsPage = {
+  runs: AutomationRun[]
+  nextCursor: string | null
+}
+
 export type AutomationCreateInput = {
+  /** Optional idempotency key; repeated creates return the original record. */
+  creationKey?: string
   name: string
   prompt: string
   precheck?: AutomationPrecheck | null

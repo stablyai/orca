@@ -55,7 +55,7 @@ export function formatEndpoint(endpoint: string): string {
     const url = new URL(endpoint)
     return url.host
   } catch {
-    return endpoint
+    return 'invalid endpoint'
   }
 }
 

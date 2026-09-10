@@ -21,6 +21,9 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }))
 
 import { gitExecFileAsync } from './runner'
+import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
+
+afterEach(() => _resetGitAdmissionForTests())
 import {
   resetWslLinkedWorktreeGitRoutingForTests,
   WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS

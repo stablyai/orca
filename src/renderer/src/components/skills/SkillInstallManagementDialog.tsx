@@ -1,14 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
+import { Dialog } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import type {
   ManagedSkillInstall,
@@ -17,18 +8,15 @@ import type {
 import type { SkillBundleInstallResult } from '../../../../shared/skill-bundle-install-contract'
 import type { SkillCloudPackageDetails } from '../../../../shared/skill-cloud-contract'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
-import { skillInstallResultLabel } from './skill-install-result-label'
 import { skillInstallManagementCopy } from './skill-install-management-copy'
 import { useSkillInstallProgress } from './skill-install-progress-state'
-import { SkillManagedInstallRow } from './SkillManagedInstallRow'
 import { summarizeManagedSkillRemoval } from './skill-managed-removal-summary'
 import {
   groupManagedSkillInstalls,
   type SkillManagedInstallGroup
 } from './skill-managed-install-groups'
-import { SkillInstallMachineSelect } from './SkillInstallMachineSelect'
-import { SkillInstallManagementStatus } from './SkillInstallManagementStatus'
 import { translate } from '@/i18n/i18n'
+import { SkillInstallManagementDialogContent } from './SkillInstallManagementDialogContent'
 
 export function SkillInstallManagementDialog({
   open,
@@ -91,7 +79,12 @@ export function SkillInstallManagementDialog({
         return
       }
       console.warn('[skills] managed install listing failed:', cause)
-      setError(translate('auto.components.skills.install.inspectManagedFailed', 'Orca could not inspect managed installs on this machine.'))
+      setError(
+        translate(
+          'auto.components.skills.install.inspectManagedFailed',
+          'Orca could not inspect managed installs on this machine.'
+        )
+      )
     } finally {
       if (generation === loadGeneration.current) {
         setBusy(false)
@@ -121,7 +114,10 @@ export function SkillInstallManagementDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? translate('auto.components.skills.install.reconnectForVersionHistory', 'Reconnect your Orca account to load version history.')
+            ? translate(
+                'auto.components.skills.install.reconnectForVersionHistory',
+                'Reconnect your Orca account to load version history.'
+              )
             : operation.message
         )
         return
@@ -133,7 +129,12 @@ export function SkillInstallManagementDialog({
         return
       }
       console.warn('[skills] package history failed:', cause)
-      setError(translate('auto.components.skills.install.versionHistoryUnavailable', 'Version history is unavailable for this skill.'))
+      setError(
+        translate(
+          'auto.components.skills.install.versionHistoryUnavailable',
+          'Version history is unavailable for this skill.'
+        )
+      )
     } finally {
       if (generation === detailGeneration.current) {
         setBusy(false)
@@ -169,7 +170,12 @@ export function SkillInstallManagementDialog({
           installedNames.has(skill.name)
         )
         if (selectedSkills.length === 0) {
-          setError(translate('auto.components.skills.install.bundleSkillsMissing', 'This version does not contain any of the installed bundle skills.'))
+          setError(
+            translate(
+              'auto.components.skills.install.bundleSkillsMissing',
+              'This version does not contain any of the installed bundle skills.'
+            )
+          )
           return
         }
         const operation = await window.api.skills.installBundlePackageVersion({
@@ -194,7 +200,10 @@ export function SkillInstallManagementDialog({
         if (operation.status !== 'ok') {
           setError(
             operation.status === 'reconnect-required'
-              ? translate('auto.components.skills.install.reconnectBeforeVersionChange', 'Reconnect your Orca account before changing versions.')
+              ? translate(
+                  'auto.components.skills.install.reconnectBeforeVersionChange',
+                  'Reconnect your Orca account before changing versions.'
+                )
               : operation.message
           )
           return
@@ -220,7 +229,10 @@ export function SkillInstallManagementDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? translate('auto.components.skills.install.reconnectBeforeVersionChange', 'Reconnect your Orca account before changing versions.')
+            ? translate(
+                'auto.components.skills.install.reconnectBeforeVersionChange',
+                'Reconnect your Orca account before changing versions.'
+              )
             : operation.message
         )
         return
@@ -234,7 +246,12 @@ export function SkillInstallManagementDialog({
       }
     } catch (cause) {
       console.warn('[skills] version installation failed:', cause)
-      setError(translate('auto.components.skills.install.versionVerificationFailed', 'Orca could not verify the requested version.'))
+      setError(
+        translate(
+          'auto.components.skills.install.versionVerificationFailed',
+          'Orca could not verify the requested version.'
+        )
+      )
     } finally {
       installProgress.finish()
       setBusy(false)
@@ -250,7 +267,12 @@ export function SkillInstallManagementDialog({
       ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
     })
     if (!cancelled.cancelled) {
-      setError(translate('auto.components.skills.install.destinationAlreadyFinished', 'The destination had already finished this installation.'))
+      setError(
+        translate(
+          'auto.components.skills.install.destinationAlreadyFinished',
+          'The destination had already finished this installation.'
+        )
+      )
     }
   }
 
@@ -295,7 +317,12 @@ export function SkillInstallManagementDialog({
       }
     } catch (cause) {
       console.warn('[skills] managed removal failed:', cause)
-      setError(translate('auto.components.skills.install.removeFailed', 'Orca could not safely remove this skill.'))
+      setError(
+        translate(
+          'auto.components.skills.install.removeFailed',
+          'Orca could not safely remove this skill.'
+        )
+      )
     } finally {
       setBusy(false)
     }
@@ -312,77 +339,39 @@ export function SkillInstallManagementDialog({
     onOpenChange(false)
   }
 
-  const destructiveConflict =
-    result?.status === 'conflict' ||
-    Boolean(selected?.installs.some((install) => install.state === 'modified'))
-
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !busy && close()}>
-      <DialogContent className="max-h-[calc(100vh-3rem)] overflow-x-hidden overflow-y-auto scrollbar-sleek sm:max-w-2xl [&>*]:min-w-0">
-        <DialogHeader>
-          <DialogTitle>{copy.title}</DialogTitle>
-          <DialogDescription>{copy.description}</DialogDescription>
-        </DialogHeader>
-        <SkillInstallMachineSelect
-          value={environmentId}
-          onChange={setEnvironmentId}
-          localLabel={copy.localMachine}
-          sshLabel={copy.ssh}
-          disconnectedLabel={copy.disconnected}
-          environments={runtimeEnvironments}
-          sshTargets={[...sshTargetLabels.entries()].map(([id, label]) => ({
-            id: `ssh:${id}`,
-            label,
-            connected: sshConnectionStates.get(id)?.status === 'connected'
-          }))}
-        />
-
-        {busy && installs.length === 0 ? <Loader2 className="mx-auto size-5 animate-spin" /> : null}
-        {!busy && installs.length === 0 ? (
-          <p className="rounded-md border border-border p-4 text-sm text-muted-foreground">
-            {copy.noInstalls}
-          </p>
-        ) : null}
-        {groups.length > 0 ? (
-          <ul className="divide-y divide-border rounded-md border border-border">
-            {groups.map((group) => (
-              <SkillManagedInstallRow
-                key={group.key}
-                group={group}
-                open={selectedKey === group.key}
-                details={selectedKey === group.key ? details : null}
-                versionId={selectedKey === group.key ? versionId : ''}
-                busy={busy}
-                confirmRemove={selectedKey === group.key && confirmRemove}
-                installActive={Boolean(installProgress.activeOperationId)}
-                editedWarning={selectedKey === group.key && destructiveConflict}
-                bundleResult={selectedKey === group.key ? bundleResult : null}
-                result={selectedKey === group.key ? result : null}
-                onOpenChange={(next) => (next ? void selectInstall(group) : collapse())}
-                onVersionChange={setVersionId}
-                onInstall={(discardLocal) => void installVersion(discardLocal)}
-                onCancelInstall={() => void cancelInstall()}
-                onSendToMachine={(shareId) => {
-                  close()
-                  useAppStore.getState().openSkillShare(shareId)
-                }}
-                onRemove={(discardLocal) => void remove(discardLocal)}
-              />
-            ))}
-          </ul>
-        ) : null}
-        <SkillInstallManagementStatus
-          resultLabel={result ? skillInstallResultLabel(result) : null}
-          progressLabel={installProgress.phaseLabel}
-          error={error}
-          notice={notice}
-        />
-        <DialogFooter>
-          <Button type="button" variant="ghost" onClick={close} disabled={busy}>
-            {copy.close}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
+      <SkillInstallManagementDialogContent
+        bundleResult={bundleResult}
+        busy={busy}
+        confirmRemove={confirmRemove}
+        copy={copy}
+        details={details}
+        environmentId={environmentId}
+        error={error}
+        groups={groups}
+        installs={installs}
+        installActive={Boolean(installProgress.activeOperationId)}
+        notice={notice}
+        progressLabel={installProgress.phaseLabel}
+        result={result}
+        runtimeEnvironments={runtimeEnvironments}
+        selectedKey={selectedKey}
+        sshConnectionStates={sshConnectionStates}
+        sshTargetLabels={sshTargetLabels}
+        versionId={versionId}
+        onCancelInstall={() => void cancelInstall()}
+        onClose={close}
+        onEnvironmentChange={setEnvironmentId}
+        onInstall={(discardLocal) => void installVersion(discardLocal)}
+        onOpenChange={(group, next) => (next ? void selectInstall(group) : collapse())}
+        onRemove={(discardLocal) => void remove(discardLocal)}
+        onSendToMachine={(shareId) => {
+          close()
+          useAppStore.getState().openSkillShare(shareId)
+        }}
+        onVersionChange={setVersionId}
+      />
     </Dialog>
   )
 }

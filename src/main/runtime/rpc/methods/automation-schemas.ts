@@ -1,6 +1,6 @@
 // Why: the automation method table stays readable only if its field-level validation lives beside it rather than inside it.
 import { z } from 'zod'
-import { isValidAutomationSchedule } from '../../../../shared/automation-schedules'
+import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
@@ -137,10 +137,13 @@ export const AutomationId = z.object({
 
 export const AutomationRuns = z.object({
   automationId: OptionalString,
-  expectedOwner: ExpectedOwner
+  expectedOwner: ExpectedOwner,
+  limit: OptionalPositiveInt,
+  cursor: OptionalString
 })
 
 export const AutomationCreate = z.object({
+  creationKey: OptionalString,
   name: requiredString('Missing automation name'),
   prompt: requiredString('Missing automation prompt'),
   precheck: AutomationPrecheck,

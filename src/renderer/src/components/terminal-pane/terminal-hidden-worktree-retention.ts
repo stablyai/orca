@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { isRemoteExecutionHostPtyId } from './remote-execution-host-pty'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
@@ -81,7 +81,7 @@ export function classifyEvictionExemptTerminalPty(
   ptyId: string | null | undefined,
   worktreeId: string
 ): EvictionExemptTerminalPtyRoute | null {
-  if (!ptyId || isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
+  if (!ptyId || isRemoteExecutionHostPtyId(ptyId)) {
     return null
   }
   const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)

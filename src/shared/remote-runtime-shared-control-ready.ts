@@ -16,6 +16,12 @@ export function isSharedControlReady(args: {
   return args.state === 'ready' && args.ws?.readyState === WebSocket.OPEN && !!args.sharedKey
 }
 
+export function openIfSocketClosed(ws: WebSocket | null, open: () => void): void {
+  if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+    open()
+  }
+}
+
 export function waitForSharedControlReadyWithTimeout(args: {
   readyWaiters: SharedControlReadyWaiter[]
   timeoutMs: number

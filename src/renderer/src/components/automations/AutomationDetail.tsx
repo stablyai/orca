@@ -14,6 +14,8 @@ import {
   summarizeAutomationRunUsage
 } from './automation-usage-model'
 import type { AutomationTargetAvailability } from './automation-target-availability'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import { getAutomationHostDetailDisplay } from './automation-host-detail-display'
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
 import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
@@ -24,6 +26,8 @@ type AutomationDetailProps = {
   projectName: string
   workspaceName: string
   projectDefaultBaseRef: string | null
+  /** The catalog entry the selected row was listed from; absent for legacy unscoped rows. */
+  hostEntry?: AutomationHostCatalogEntry | null
   hostLabelById?: ReadonlyMap<string, string>
   runNowAvailability: AutomationTargetAvailability | null
   now: number
@@ -101,6 +105,7 @@ export function AutomationDetail({
   projectName,
   workspaceName,
   projectDefaultBaseRef,
+  hostEntry,
   hostLabelById,
   runNowAvailability,
   now,
@@ -133,6 +138,11 @@ export function AutomationDetail({
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
       : workspaceName
   const sourceDisplay = getAutomationSourceDisplay(automation.sourceContext, hostLabelById)
+  const hostDisplay = getAutomationHostDetailDisplay({
+    automation,
+    entry: hostEntry,
+    hostLabelById
+  })
   const runNowDisabled = runNowAvailability?.canRunNow === false
 
   return (
@@ -237,6 +247,11 @@ export function AutomationDetail({
               ? formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
               : 'Paused'
           }
+        />
+        <DetailMetric
+          label={translate('auto.components.automations.AutomationDetail.host', 'Host')}
+          value={hostDisplay.label}
+          title={hostDisplay.title}
         />
         <DetailMetric
           label={

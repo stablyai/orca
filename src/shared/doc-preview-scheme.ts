@@ -11,10 +11,11 @@ export const DOC_PREVIEW_PARTITION = 'orca-doc-preview'
 
 export const DOC_PREVIEW_MINT_GRANT_CHANNEL = 'docPreview:mintGrant'
 export const DOC_PREVIEW_REVOKE_GRANT_CHANNEL = 'docPreview:revokeGrant'
+export const DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL = 'docPreview:authorizeDirectory'
 export const DOC_PREVIEW_EXTERNAL_LINK_CHANNEL = 'docPreview:externalLink'
 /**
  * The preview guest's preload reports a trusted anchor click here. Renderer↔main only — no paired
- * client ever sees it, and main gates every report on the sender being a focused preview guest.
+ * client ever sees it, and main gates every report on the sender being a live, grant-bound preview guest.
  */
 export const DOC_PREVIEW_LINK_CLICK_CHANNEL = 'docPreview:linkClick'
 /** The one out-of-band route from the preview's main-side fences to the shell hosting it. */
@@ -22,7 +23,11 @@ export const DOC_PREVIEW_LOAD_FAILURE_CHANNEL = 'docPreview:loadFailure'
 
 /** Why: an unreadable document still answers with a real HTTP status, so the guest paints the
  *  handler's plain-text body instead of failing to load. The shell needs the reason out-of-band. */
-export type DocPreviewFileFailureReason = 'too-large' | 'unsupported-asset' | 'unreadable'
+export type DocPreviewFileFailureReason =
+  | 'authorization-required'
+  | 'too-large'
+  | 'unsupported-asset'
+  | 'unreadable'
 
 export type DocPreviewFileFailure = {
   grantId: string

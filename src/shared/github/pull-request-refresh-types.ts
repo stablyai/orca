@@ -74,7 +74,9 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedChecksStatus?: CheckStatus | null
   cachedMergeable?: PRMergeableState | null
   cachedMergeStateStatus?: string | null
-  localGitOptions?: { wslDistro?: string }
+  localGitOptions?: {
+    wslDistro?: string
+  }
 }
 
 export type GitHubPRRefreshSkippedReason =

@@ -82,9 +82,20 @@ __orca_deferred_init() {
       esac
       return 1
     }
-    __orca_omp() {
-      local __orca_use_extension=1
-      __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+    __orca_omp_cwd_is_usable() {
+      local __orca_physical_cwd
+      [[ -x . ]] || return 1
+      if [[ -n "${PWD:-}" && -d "${PWD:-}" ]]; then
+        [[ "${PWD}" -ef . ]]
+      else
+        # Why compare the path: shell builtins can print a cached path for a deleted cwd.
+        __orca_physical_cwd="$(builtin pwd -P 2>/dev/null)" || return 1
+        [[ -d "$__orca_physical_cwd" && "$__orca_physical_cwd" -ef . ]]
+      fi
+    }
+    __orca_omp_invoke() {
+      local __orca_use_extension="$1"
+      shift
       if [[ $__orca_use_extension -eq 1 && -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
         if [[ "${1:-}" == "launch" ]]; then
           shift
@@ -94,6 +105,27 @@ __orca_deferred_init() {
         fi
       else
         command omp "$@"
+      fi
+    }
+    __orca_omp() {
+      local __orca_use_extension=1
+      __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+      if ! __orca_omp_cwd_is_usable; then
+        local __orca_logical_cwd="${PWD:-${ORCA_WORKTREE_PATH:-${ORCA_ROOT_PATH:-}}}"
+        # Why: a restored shell can retain the deleted directory inode after its path is recreated.
+        (
+          if [[ -z "$__orca_logical_cwd" ]]; then
+            printf 'Orca: OMP cannot start because no terminal working directory is available. Open a new terminal in an existing directory.\n' >&2
+            return 1
+          fi
+          if ! builtin cd -P -- "$__orca_logical_cwd" 2>/dev/null; then
+            printf 'Orca: OMP cannot access the terminal working directory "%s". Open a new terminal in an existing directory.\n' "$__orca_logical_cwd" >&2
+            return 1
+          fi
+          __orca_omp_invoke "$__orca_use_extension" "$@"
+        )
+      else
+        __orca_omp_invoke "$__orca_use_extension" "$@"
       fi
     }
     if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then

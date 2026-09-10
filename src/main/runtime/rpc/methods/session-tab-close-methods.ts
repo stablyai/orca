@@ -2,26 +2,34 @@ import { withSpan } from '../../../observability/tracer'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { defineMethod, type RpcAnyMethod } from '../core'
 import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
-import {
-  assertProjectedSessionTabVisible,
-  clientCanObserveClientHostedBrowserPages,
-  projectSessionTabBrowserPlacements
-} from './session-tab-browser-placement-projection'
+import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
+import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
+import { projectSessionTabsForClient } from './session-tabs-inventory'
+import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 
 export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.close',
     params: CloseTab,
     handler: async (params, context) => {
-      if (
-        context.clientKind &&
-        !clientCanObserveClientHostedBrowserPages(context.clientCapabilities)
-      ) {
-        const visible = projectSessionTabBrowserPlacements(
-          await context.runtime.listMobileSessionTabs(params.worktree, context.pairedDeviceId),
-          context.clientCapabilities
+      if (context.clientKind) {
+        const raw = await context.runtime.listMobileSessionTabs(
+          params.worktree,
+          context.pairedDeviceId
+        )
+        const visible = projectSessionTabsForClient(
+          raw,
+          context.clientKind,
+          context.clientCapabilities,
+          isStructuredNativeChatEnabled(context.runtime)
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
+        assertAgentSessionTabDestructiveMutationSupported(
+          raw,
+          params.tabId,
+          context.clientKind,
+          context.clientCapabilities
+        )
       }
       const requiresIntent =
         context.clientKind === undefined ||
@@ -80,8 +88,27 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.closeLifecycle',
     params: CloseLifecycleTab,
-    handler: async (params, context) =>
-      withSpan(
+    handler: async (params, context) => {
+      if (context.clientKind) {
+        const raw = await context.runtime.listMobileSessionTabs(
+          params.worktree,
+          context.pairedDeviceId
+        )
+        const visible = projectSessionTabsForClient(
+          raw,
+          context.clientKind,
+          context.clientCapabilities,
+          isStructuredNativeChatEnabled(context.runtime)
+        )
+        assertProjectedSessionTabVisible(visible, params.tabId)
+        assertAgentSessionTabDestructiveMutationSupported(
+          raw,
+          params.tabId,
+          context.clientKind,
+          context.clientCapabilities
+        )
+      }
+      return withSpan(
         'runtime.session-tabs.close-lifecycle',
         async (span) => {
           const result = await context.runtime.closeMobileSessionTab(
@@ -117,5 +144,6 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           }
         }
       )
+    }
   })
 ]

@@ -239,7 +239,6 @@ test('restored pane recovers input after the daemon un-wedges', async (// oxlint
 
     const second = await session.launch()
     secondApp = second.app
-    await settleRestoredLaunch(second.page)
 
     // Field-fidelity check, not a hard gate: does the pane paint restored
     // content while its PTY attach cannot complete? That visible-but-dead
@@ -258,6 +257,8 @@ test('restored pane recovers input after the daemon un-wedges', async (// oxlint
     }
     stoppedDaemonPid = null
 
+    // Session readiness requires a daemon response; resume it before waiting for restoration.
+    await settleRestoredLaunch(second.page)
     await expectRestoredPaneAcceptsInput(
       second.page,
       `daemon wedged during relaunch (painted while wedged: ${paintedWhileWedged}, ` +

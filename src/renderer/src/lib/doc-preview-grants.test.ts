@@ -33,25 +33,25 @@ beforeEach(() => {
 })
 
 describe('buildDocPreviewGrantRequest', () => {
-  // Why: SSH previews are unrestricted by design, and a document outside every workspace has no
-  // boundary to root a grant in.
+  // A document outside every workspace resolves and authorizes from its own directory.
   it('roots an SSH grant outside the workspace at the document directory', () => {
     mocks.connectionId = 'ssh-1'
 
     expect(buildDocPreviewGrantRequest(state, 'wt-1', '/home/alice/docs/report.html')).toEqual({
       owner: { kind: 'ssh', connectionId: 'ssh-1' },
+      requestBase: '/home/alice/docs',
       root: '/home/alice/docs',
       entryRelativePath: 'report.html'
     })
   })
 
-  // Why: reports keep their assets in a sibling directory, so `../assets/app.css` has to resolve.
-  it('roots a document inside the workspace at the workspace root', () => {
+  it('resolves from the workspace but authorizes only the document directory', () => {
     mocks.connectionId = 'ssh-1'
 
     expect(buildDocPreviewGrantRequest(state, 'wt-1', '/srv/repo/docs/report.html')).toEqual({
       owner: { kind: 'ssh', connectionId: 'ssh-1' },
-      root: '/srv/repo',
+      requestBase: '/srv/repo',
+      root: '/srv/repo/docs',
       entryRelativePath: 'docs/report.html'
     })
   })
@@ -66,7 +66,8 @@ describe('buildDocPreviewGrantRequest', () => {
         worktreeSelector: 'id:wt-1',
         worktreeRoot: '/srv/repo'
       },
-      root: '/srv/repo',
+      requestBase: '/srv/repo',
+      root: '/srv/repo/docs',
       entryRelativePath: 'docs/report.html'
     })
   })
@@ -87,6 +88,7 @@ describe('doc preview grant lifetime', () => {
   it('mints once for repeated mounts of the same preview tab', async () => {
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
+      requestBase: '/d',
       root: '/d',
       entryRelativePath: 'a.html'
     }
@@ -106,6 +108,7 @@ describe('doc preview grant lifetime', () => {
   it('revokes on release and mints fresh afterwards', async () => {
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
+      requestBase: '/d',
       root: '/d',
       entryRelativePath: 'a.html'
     }
@@ -129,6 +132,7 @@ describe('doc preview grant lifetime', () => {
   it('leaves the entry of a later mint alone when an earlier one rejects', async () => {
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
+      requestBase: '/d',
       root: '/d',
       entryRelativePath: 'a.html'
     }
@@ -157,6 +161,7 @@ describe('doc preview grant lifetime', () => {
     mocks.mintGrant.mockRejectedValueOnce(new Error('runtime offline'))
     const request = {
       owner: { kind: 'ssh' as const, connectionId: 'ssh-1' },
+      requestBase: '/d',
       root: '/d',
       entryRelativePath: 'a.html'
     }

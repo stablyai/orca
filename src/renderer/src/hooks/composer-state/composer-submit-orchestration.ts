@@ -98,12 +98,16 @@ export function useComposerSubmitOrchestration(
     normalizedSparseDirectories: target.derivedComposerState.normalizedSparseDirectories,
     note: target.sourceContextState.note,
     onCreated: target.composerTargetStore.onCreated,
+    parentWorktreeId: target.workspaceIdentityState.parentWorktreeId,
     persistDraft: target.composerTargetStore.persistDraft,
     persistSetupAgentStartupPolicy: target.providerRuntimeSync.persistSetupAgentStartupPolicy,
     prepareFullSubmit: fullSubmitPreparation.prepareFullSubmit,
     resolvedInitialWorkspaceStatus: target.initialTargetState.resolvedInitialWorkspaceStatus,
+    selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
+    selectedRepoIsRemote: target.runtimeTargetSelection.selectedRepoIsRemote,
     setSidebarOpen: target.composerTargetStore.setSidebarOpen,
+    settings: target.composerTargetStore.settings,
     sparseEnabled: target.asyncComposerState.sparseEnabled,
     taskSourceContext: target.sourceContextState.taskSourceContext,
     telemetrySource: target.composerTargetStore.telemetrySource,
@@ -136,27 +140,14 @@ export function useComposerSubmitOrchestration(
     workspaceSeedName: target.derivedComposerState.workspaceSeedName
   })
   const multipleCreateReset = useMultipleCreateReset({
+    handleClearSmartNameSelection: source.issueSourceActions.handleClearSmartNameSelection,
     lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
     nameInputRef: target.asyncComposerState.nameInputRef,
     setAgentPrompt: target.sourceContextState.setAgentPrompt,
     setAttachmentPaths: target.sourceContextState.setAttachmentPaths,
-    setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
-    setBranchNameOverridePreservesNameEdits:
-      target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,
-    setCompareBaseRef: target.workspaceIdentityState.setCompareBaseRef,
     setCreateError: target.asyncComposerState.setCreateError,
-    setForkPushWarning: target.workspaceIdentityState.setForkPushWarning,
-    setLinkedGitLabIssue: target.workspaceIdentityState.setLinkedGitLabIssue,
-    setLinkedGitLabMR: target.workspaceIdentityState.setLinkedGitLabMR,
-    setLinkedIssue: target.workspaceIdentityState.setLinkedIssue,
-    setLinkedPR: target.workspaceIdentityState.setLinkedPR,
-    setLinkedTaskSourceContext: target.sourceContextState.setLinkedTaskSourceContext,
-    setLinkedWorkItem: target.sourceContextState.setLinkedWorkItem,
     setName: target.sourceContextState.setName,
-    setNote: target.sourceContextState.setNote,
-    setPushTarget: target.workspaceIdentityState.setPushTarget,
-    setReuseSelectedBranch: target.workspaceIdentityState.setReuseSelectedBranch,
-    setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint
+    setNote: target.sourceContextState.setNote
   })
   const quickSubmitSourcePreparation = useQuickSubmitSourcePreparation({
     baseBranch: target.workspaceIdentityState.baseBranch,
@@ -210,6 +201,7 @@ export function useComposerSubmitOrchestration(
     linkedGitLabMR: target.workspaceIdentityState.linkedGitLabMR,
     normalizedSparseDirectories: target.derivedComposerState.normalizedSparseDirectories,
     onCreated: target.composerTargetStore.onCreated,
+    parentWorktreeId: target.workspaceIdentityState.parentWorktreeId,
     persistDraft: target.composerTargetStore.persistDraft,
     persistSetupAgentStartupPolicy: target.providerRuntimeSync.persistSetupAgentStartupPolicy,
     prepareQuickSubmit: quickSubmitPreparation.prepareQuickSubmit,

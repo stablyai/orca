@@ -17,14 +17,17 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import {
-  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY
+  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY as LIST_HOST_SCOPE,
+  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY
 } from '../../../../shared/protocol-version'
 import type { AppState } from '@/store'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { AutomationListRow } from './automation-list-row-identity'
+import type { AutomationListViewItem } from './automation-list-view'
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
@@ -37,8 +40,7 @@ export const RUNTIME_REPO_ID = RUNTIME_REPO_ID_FIXTURE
 export const RUNTIME_WORKSPACE_ID = RUNTIME_WORKSPACE_ID_FIXTURE
 
 export type ListPanelProps = {
-  filteredAutomations: Automation[]
-  filteredExternalAutomationEntries: ExternalAutomationListEntry[]
+  sortedListItems: readonly AutomationListViewItem[]
   selectedExternal: ExternalAutomationListEntry | null
   openEditExternalDialog: (
     manager: ExternalAutomationListEntry['manager'],
@@ -54,7 +56,6 @@ export type ListPanelProps = {
   ) => void
   hasListItems: boolean
   hasFilteredListItems: boolean
-  filteredRows: readonly AutomationListRow[]
   selectedRowKey: string | null
   selectedExternalKey: string | null
   hostCatalog: AutomationHostCatalogView
@@ -76,6 +77,7 @@ export type ListPanelProps = {
 
 export type DetailPaneProps = {
   selected: Automation | null
+  selectedHostEntry: AutomationHostCatalogEntry | null
   selectedRuns: AutomationRun[]
   selectedRunsNotice: { message: string } | null
   runNow: (automation: Automation) => void
@@ -95,6 +97,7 @@ export type EditorDialogProps = {
   open: boolean
   isEditing: boolean
   createDestination?: AutomationCreateDestinationControl
+  editDestination?: AutomationCreateDestinationControl
   notice?: { message: string; recovery: string | null } | null
   onNoticeRecover?: (action: string) => void
   repos?: { id: string }[]
@@ -208,30 +211,31 @@ vi.mock('./AutomationsListPanel', () => ({
     return (
       <div data-testid="list-panel">
         <button aria-label="Refresh automations" onClick={props.onRefresh} />
-        {props.filteredRows.map((row) => (
-          <button
-            type="button"
-            data-testid="automation-row"
-            key={row.key}
-            onClick={() => selectAutomationRow(row.key)}
-          >
-            {row.automation.name}
-          </button>
-        ))}
-        {props.filteredExternalAutomationEntries.map((entry) => (
-          <button
-            type="button"
-            data-testid="external-row"
-            key={entry.key}
-            onClick={() => {
-              props.selectAutomationRow(null)
-              props.selectExternalKey(entry.key)
-              props.onOpenDetail()
-            }}
-          >
-            {entry.job.name}
-          </button>
-        ))}
+        {props.sortedListItems.map((item) =>
+          item.kind === 'local' ? (
+            <button
+              type="button"
+              data-testid="automation-row"
+              key={item.id}
+              onClick={() => selectAutomationRow(item.id)}
+            >
+              {item.row.automation.name}
+            </button>
+          ) : (
+            <button
+              type="button"
+              data-testid="external-row"
+              key={item.id}
+              onClick={() => {
+                props.selectAutomationRow(null)
+                props.selectExternalKey(item.id)
+                props.onOpenDetail()
+              }}
+            >
+              {item.entry.job.name}
+            </button>
+          )
+        )}
         {props.hasListItems ? null : <div data-testid="empty-state" />}
       </div>
     )
@@ -300,10 +304,7 @@ export const DESKTOP_SELF_OWNER = { authority: { kind: 'desktop' }, selector: { 
 
 export const RUNTIME_ID = 'gpu'
 /** A runtime that advertises both automation capabilities, so its rows carry owners. */
-const RUNTIME_CAPABILITIES = [
-  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY
-]
+const RUNTIME_CAPABILITIES = [LIST_HOST_SCOPE, OWNER_FENCING, CREATE_IDEMPOTENCY]
 export const RUNTIME_SELF_FILTER = {
   kind: 'host' as const,
   host: {
@@ -405,18 +406,6 @@ export async function refreshOnFocus(): Promise<void> {
     window.dispatchEvent(new Event('focus'))
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
-}
-
-/**
- * The row the page actually listed for an ID, so tests act through the same
- * authority-qualified key the user's click carries rather than a synthesized one.
- */
-export function listedRow(automationId: string): AutomationListRow {
-  const row = mocks.listPanel?.filteredRows.find((entry) => entry.automation.id === automationId)
-  if (!row) {
-    throw new Error(`no listed row for ${automationId}`)
-  }
-  return row
 }
 
 export function rows(container: HTMLElement, testId: string): string[] {

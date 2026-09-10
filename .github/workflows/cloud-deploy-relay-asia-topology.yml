@@ -1,0 +1,243 @@
+name: Deploy Relay Asia Topology
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target Relay environment
+        required: true
+        type: choice
+        options: [staging, production]
+      mode:
+        description: Validate a saved plan or apply that exact plan
+        required: true
+        default: plan
+        type: choice
+        options: [plan, apply]
+      cell-ids:
+        description: Exact reviewed comma-separated Asia cell set
+        required: true
+        type: string
+      image:
+        description: Full environment Relay image pinned by sha256 digest
+        required: true
+        type: string
+      confirmation:
+        description: Enter APPLY_RELAY_ASIA_TOPOLOGY for apply mode
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ inputs.environment == 'production' && 'production-cloud-sql-rollout' || 'relay-staging-mutation' }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  topology:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' && (github.ref == 'refs/heads/main') }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    timeout-minutes: 30
+    environment: ${{ inputs.environment }}
+    env:
+      DEPLOY_MODE: ${{ inputs.mode }}
+      TARGET_ENVIRONMENT: ${{ inputs.environment }}
+      TARGET_CELL_IDS: ${{ inputs.cell-ids }}
+      TARGET_IMAGE: ${{ inputs.image }}
+      TARGET_REGION: asia-east2
+      GCP_PROJECT_ID: ${{ inputs.environment == 'production' && 'onorca-cloud' || 'onorca-cloud-staging' }}
+      CLOUD_SQL_INSTANCE: ${{ inputs.environment == 'production' && 'orca-cloud-auth-db' || 'orca-cloud-staging-auth-db' }}
+      VERIFIED_DEFAULT_MAX_CONNECTIONS_TIER: db-custom-4-15360
+      VERIFIED_DEFAULT_MAX_CONNECTIONS_DATABASE_VERSION: POSTGRES_17
+      TF_BACKEND: ${{ inputs.environment == 'production' && 'backend/production.hcl' || 'backend/staging.hcl' }}
+      TF_VARS: ${{ inputs.environment == 'production' && 'environments/production.tfvars' || 'environments/staging.tfvars' }}
+      TOPOLOGY_WORKLOAD_IDENTITY_PROVIDER: ${{ inputs.environment == 'production' && vars.PRODUCTION_GCP_RELAY_ASIA_TOPOLOGY_WORKLOAD_IDENTITY_PROVIDER || vars.STAGING_GCP_RELAY_ASIA_TOPOLOGY_WORKLOAD_IDENTITY_PROVIDER }}
+      TOPOLOGY_SERVICE_ACCOUNT: ${{ inputs.environment == 'production' && vars.PRODUCTION_GCP_RELAY_ASIA_TOPOLOGY_SERVICE_ACCOUNT || vars.STAGING_GCP_RELAY_ASIA_TOPOLOGY_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate the reviewed request before authentication
+        shell: bash
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          set -euo pipefail
+          test -n "${TOPOLOGY_WORKLOAD_IDENTITY_PROVIDER}"
+          test -n "${TOPOLOGY_SERVICE_ACCOUNT}"
+          case "${TARGET_ENVIRONMENT}:${TARGET_CELL_IDS}" in
+            staging:staging-gce-c4) ;;
+            production:production-gce-c27,production-gce-c28,production-gce-c29) ;;
+            *) echo "cell-ids do not match the reviewed environment topology" >&2; exit 1 ;;
+          esac
+          [[ "${TARGET_IMAGE}" =~ ^us-central1-docker\.pkg\.dev/${GCP_PROJECT_ID}/orca-cloud/relay@sha256:[0-9a-f]{64}$ ]]
+          if test "${DEPLOY_MODE}" = apply; then
+            test "${CONFIRMATION}" = APPLY_RELAY_ASIA_TOPOLOGY
+          else
+            test "${DEPLOY_MODE}" = plan
+            test -z "${CONFIRMATION}"
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.TOPOLOGY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.TOPOLOGY_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: ${{ inputs.environment == 'production' && 'onorca-cloud-terraform-state' || 'onorca-cloud-staging-terraform-state' }}
+          object: ${{ inputs.environment == 'production' && 'terraform/state/cloud-sql-rollout/production.lock' || 'terraform/state/cloud-sql-rollout/staging.lock' }}
+
+      - name: Require the checked Cloud SQL connection budget
+        shell: bash
+        run: |
+          set -euo pipefail
+          budget="$(node dev/scripts/relay-cloud-sql-connection-budget.mjs)"
+          checked_max="$(jq -er '.maxConnections' <<< "${budget}")"
+          jq -e '.withinBudget == true' <<< "${budget}" >/dev/null
+          if test "${TARGET_ENVIRONMENT}" = production; then
+            instance="$(gcloud sql instances describe "${CLOUD_SQL_INSTANCE}" \
+              --project "${GCP_PROJECT_ID}" --format=json)"
+            live_flag="$(jq -er '[.settings.databaseFlags[]? |
+              select(.name == "max_connections") | .value] |
+              if length <= 1 then (.[0] // "") else error("duplicate max_connections flags") end' \
+              <<< "${instance}")"
+            if test -n "${live_flag}"; then
+              live_max="${live_flag}"
+              live_source=explicit-flag
+            else
+              # The verified production database uses Cloud SQL's 400-connection
+              # default for this exact shape; fail closed if its shape changes.
+              test "$(jq -er '.settings.tier' <<< "${instance}")" = \
+                "${VERIFIED_DEFAULT_MAX_CONNECTIONS_TIER}"
+              test "$(jq -er '.databaseVersion' <<< "${instance}")" = \
+                "${VERIFIED_DEFAULT_MAX_CONNECTIONS_DATABASE_VERSION}"
+              live_max=400
+              live_source=verified-shape-default
+            fi
+            test "${live_max}" = "${checked_max}"
+          else
+            live_max="not-read-for-staging"
+            live_source=not-read-for-staging
+          fi
+          {
+            echo "### Relay Cloud SQL connection budget"
+            echo "- Checked maximum: ${checked_max}"
+            echo "- Configured maximum: $(jq -er '.configuredMaximum' <<< "${budget}")"
+            echo "- Rollout operating maximum: $(jq -er '.operatingMaximum' <<< "${budget}")"
+            echo "- Explicit reserve: $(jq -er '.explicitReserve' <<< "${budget}")"
+            echo "- Production live max_connections: ${live_max}"
+            echo "- Production live maximum source: ${live_source}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Initialize the exact environment state
+        run: terraform -chdir=infra/terraform init -reconfigure -input=false -backend-config="${TF_BACKEND}"
+
+      - id: targets
+        name: Build the exact additive target set
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="${RUNNER_TEMP}/relay-asia-targets"
+          : > "${file}"
+          printf '%s\n' \
+            '-target=google_compute_subnetwork.relay_gce_additional["asia-east2"]' \
+            '-target=google_compute_router.relay_gce_additional["asia-east2"]' \
+            '-target=google_compute_router_nat.relay_gce_additional["asia-east2"]' \
+            '-target=google_compute_url_map.relay_gce[0]' >> "${file}"
+          IFS=, read -ra cells <<< "${TARGET_CELL_IDS}"
+          for cell_id in "${cells[@]}"; do
+            printf '%s\n' \
+              "-target=google_compute_instance_template.relay_gce_cell[\"${cell_id}\"]" \
+              "-target=google_compute_instance_group_manager.relay_gce_cell[\"${cell_id}\"]" \
+              "-target=google_compute_backend_service.relay_gce_cell[\"${cell_id}\"]" >> "${file}"
+          done
+          echo "file=${file}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create and validate the saved topology plan
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="${RUNNER_TEMP}/relay-asia-topology.tfplan"
+          plan_json="${RUNNER_TEMP}/relay-asia-topology.json"
+          mapfile -t targets < "${{ steps.targets.outputs.file }}"
+          terraform -chdir=infra/terraform plan -input=false -lock-timeout=30s \
+            -var-file="${TF_VARS}" \
+            "${targets[@]}" -out="${plan}"
+          terraform -chdir=infra/terraform show -json "${plan}" > "${plan_json}"
+          committed="${RUNNER_TEMP}/relay-committed-asia-topology.json"
+          jq -e '{
+            relay_gce_cells: .variables.relay_gce_cells.value,
+            relay_gce_additional_region_subnetwork_cidrs:
+              .variables.relay_gce_additional_region_subnetwork_cidrs.value
+          }' "${plan_json}" > "${committed}"
+          node dev/scripts/prepare-relay-asia-topology-input.mjs \
+            --existing-json "${committed}" \
+            --environment "${TARGET_ENVIRONMENT}" \
+            --cell-ids "${TARGET_CELL_IDS}" \
+            --image "${TARGET_IMAGE}"
+          result="$(node dev/scripts/validate-relay-asia-topology-plan.mjs \
+            --plan-json "${plan_json}" \
+            --environment "${TARGET_ENVIRONMENT}" \
+            --cell-ids "${TARGET_CELL_IDS}" \
+            --region "${TARGET_REGION}" \
+            --image "${TARGET_IMAGE}")"
+          changes="$(jq -er '.changes' <<< "${result}")"
+          digest="$(sha256sum "${plan}" | awk '{print $1}')"
+          echo "plan=${plan}" >> "${GITHUB_OUTPUT}"
+          echo "changes=${changes}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "### Relay Asia topology saved plan"
+            echo "- Environment: ${TARGET_ENVIRONMENT}"
+            echo "- Cells: ${TARGET_CELL_IDS}"
+            echo "- Region: ${TARGET_REGION}"
+            echo "- Mutating resources: ${changes}"
+            echo "- Saved-plan SHA-256: ${digest}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Apply only the validated saved plan
+        if: ${{ inputs.mode == 'apply' }}
+        run: terraform -chdir=infra/terraform apply -input=false -auto-approve "${{ steps.plan.outputs.plan }}"
+
+      - name: Prove the exact topology targets converged
+        if: ${{ inputs.mode == 'apply' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t targets < "${{ steps.targets.outputs.file }}"
+          plan="${RUNNER_TEMP}/relay-asia-topology-readback.tfplan"
+          plan_json="${RUNNER_TEMP}/relay-asia-topology-readback.json"
+          terraform -chdir=infra/terraform plan -input=false -lock-timeout=30s \
+            -var-file="${TF_VARS}" \
+            "${targets[@]}" -out="${plan}"
+          terraform -chdir=infra/terraform show -json "${plan}" > "${plan_json}"
+          result="$(node dev/scripts/validate-relay-asia-topology-plan.mjs \
+            --plan-json "${plan_json}" \
+            --environment "${TARGET_ENVIRONMENT}" \
+            --cell-ids "${TARGET_CELL_IDS}" \
+            --region "${TARGET_REGION}" \
+            --image "${TARGET_IMAGE}")"
+          test "$(jq -er '.changes' <<< "${result}")" = 0
+
+      - name: Record the required selector-safe next step
+        if: ${{ inputs.mode == 'apply' }}
+        run: |
+          {
+            echo "### Required next step"
+            echo "The VMs are not eligible for ordinary placement yet."
+            echo "Register the exact new cells atomically as migration-only before any director configuration lists them."
+            echo "Rollback is migration-only admission; do not destroy the Asia network on rollout day."
+          } >> "${GITHUB_STEP_SUMMARY}"

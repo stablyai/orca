@@ -1,4 +1,5 @@
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
 import { findTransport } from '../../shared/runtime-bootstrap'
 import { tryReadMetadata } from './metadata'
 import { sendRequest } from './transport'
@@ -51,6 +52,10 @@ export async function getCliStatus(
       runtime: {
         state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
         reachable: true,
+        connectionState: runtimeHostConnectionState({
+          hasStatusEntry: true,
+          status: response.result
+        }),
         runtimeId: response.result.runtimeId,
         ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
         ...(response.result.remoteUpdateSupport
@@ -73,6 +78,7 @@ export async function getCliStatus(
       runtime: {
         state: running ? 'starting' : 'stale_bootstrap',
         reachable: false,
+        connectionState: 'disconnected',
         runtimeId: null
       },
       graph: {

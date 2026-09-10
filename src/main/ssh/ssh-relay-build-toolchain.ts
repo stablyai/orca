@@ -16,7 +16,9 @@ export {
   shouldProbeBuildToolchainAfterNativeDepsFailure,
   toolchainInstallHintLines,
   formatSkippedNodePtyWarning,
-  formatMissingToolchainError
+  formatMissingToolchainError,
+  formatNodeHeadersDownloadError,
+  isNodeHeadersDownloadFailure
 } from './build-toolchain-diagnosis'
 export type { BuildToolchainStatus } from './build-toolchain-diagnosis'
 

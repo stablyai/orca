@@ -3,6 +3,7 @@ import type {
   BrowserPageDocLocation,
   BrowserWorkspace
 } from './browser-workspace-types'
+import { relativePathInsideRoot, resolveRuntimePath } from './cross-platform-path'
 
 /**
  * Why an explicit comparison and not object identity: the mirror rebuilds the workspace's copy of
@@ -24,4 +25,27 @@ export function isWorkspaceDocSurface(
   surface: Pick<BrowserPage | BrowserWorkspace, 'docLocation'>
 ): boolean {
   return Boolean(surface.docLocation)
+}
+
+export function remapBrowserPageDocLocation(
+  location: BrowserPageDocLocation,
+  oldWorktreeId: string,
+  newWorktreeId: string,
+  oldWorktreePath?: string,
+  newWorktreePath?: string
+): BrowserPageDocLocation {
+  if (location.worktreeId !== oldWorktreeId) {
+    return location
+  }
+  const relativePath =
+    oldWorktreePath && newWorktreePath
+      ? relativePathInsideRoot(oldWorktreePath, location.filePath)
+      : null
+  return {
+    ...location,
+    worktreeId: newWorktreeId,
+    ...(relativePath !== null && newWorktreePath
+      ? { filePath: resolveRuntimePath(newWorktreePath, relativePath) }
+      : {})
+  }
 }

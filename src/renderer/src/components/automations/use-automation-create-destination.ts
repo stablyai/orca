@@ -35,6 +35,8 @@ export type AutomationCreateDestinationControl = {
   onSelect: (stableKey: string) => void
   /** Projects the resolved destination can hold; the whole list until one resolves. */
   projects: readonly Repo[]
+  /** Set when saving would move the record to another host; replaces the plain line. */
+  moveWarning?: string | null
 }
 
 export type AutomationCreateDestinationCheck =
@@ -73,7 +75,7 @@ function choiceMessage(reason: AutomationCreateDestinationChoiceReason): string 
   }
   return translate(
     'auto.components.automations.createDestination.unselected',
-    'Choose the host this automation will be created on.'
+    'Choose the host that stores and schedules this automation.'
   )
 }
 

@@ -2,9 +2,24 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 import { RepoSelector, SlugRepo } from './github-repo-target-schemas'
+import type { GitHubPRRefreshReason } from '../../../../shared/github/pull-request-refresh-types'
+
+const OptionalPRRefreshReason = z
+  .unknown()
+  .optional()
+  .transform((value): GitHubPRRefreshReason | undefined => {
+    return value === 'visible' ||
+      value === 'active' ||
+      value === 'post-push' ||
+      value === 'manual' ||
+      value === 'swr'
+      ? value
+      : undefined
+  })
 
 const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
+  reason: OptionalPRRefreshReason,
   linkedPRNumber: z.number().int().positive().nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
   acceptMergedFallbackPR: z.boolean().optional(),
@@ -75,7 +90,8 @@ export const GITHUB_PULL_REQUEST_METHODS: RpcMethod[] = [
         params.linkedPRNumber,
         params.fallbackPRNumber,
         params.acceptMergedFallbackPR,
-        params.currentHeadOid
+        params.currentHeadOid,
+        params.reason
       )
   }),
   defineMethod({

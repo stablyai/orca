@@ -23,7 +23,7 @@ function finalizeResolvedMultiplexPty(
     return null
   }
   // Why: a competing subscribe may own this streamId after the PTY await; detach it so an orphaned view subscriber can't silence the model responder (terminal-query-authority.md).
-  state.detachStream(request.streamId, false)
+  state.detachStream(request.streamId, null)
   if (state.streams.size >= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION) {
     state.sendStreamError(request.streamId, TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR)
     state.emit({ type: 'end', streamId: request.streamId })
@@ -37,7 +37,7 @@ export function resolveMultiplexSubscribePty(
   request: MultiplexSubscribeRequest
 ): string | null | Promise<string | null> {
   const { runtime, pendingPtyWaitControllers, registerBinaryStreamHandler, signal, emit } = state
-  state.detachStream(request.streamId, false)
+  state.detachStream(request.streamId, null)
   state.cancelPendingPtyWaits(request.streamId)
 
   let leaf: { ptyId: string | null } | null
@@ -71,7 +71,7 @@ export function resolveMultiplexSubscribePty(
   const unregisterPendingHandler = registerBinaryStreamHandler(request.streamId, (frame) => {
     if (frame.opcode === TerminalStreamOpcode.Unsubscribe) {
       state.cancelPendingPtyWaits(request.streamId)
-      state.detachStream(request.streamId, false)
+      state.detachStream(request.streamId, null)
     }
   })
   return (async () => {
