@@ -1,3 +1,5 @@
+import { ProviderResourceObservations } from '../main/diagnostics/provider-resource-observations'
+import { isProviderResourceDiagnosticOperation } from '../shared/provider-resource-diagnostics'
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
@@ -509,6 +511,7 @@ export type RelayPtyWorktreeRemovalCoordinator = {
 }
 
 export class PtyHandler {
+  readonly providerResourceObservations = new ProviderResourceObservations()
   private ptys = new Map<string, ManagedPty>()
   private readonly ptyIdMintEpoch: string
   private foregroundEvidenceEpoch = 0
@@ -1092,8 +1095,27 @@ export class PtyHandler {
       agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
       // Additive capability: clients may request the no-process-table inventory
       // projection and consume fenced inspect evidence on this host.
-      foregroundProcessEvidenceVersion: 1
+      foregroundProcessEvidenceVersion: 1,
+      providerResourceDiagnosticVersion: 1
     }))
+    this.dispatcher.onRequest('pty.providerResourceDiagnostic', async (operation) => {
+      if (!isProviderResourceDiagnosticOperation(operation)) {
+        return null
+      }
+      if (operation.kind === 'hook') {
+        return null
+      }
+      return this.providerResourceObservations.query(operation.query, (id, incarnationId) => {
+        const managed = this.ptys.get(id)
+        if (managed?.incarnationId === incarnationId && !managed.disposed) {
+          return 'live'
+        }
+        if (this.retiredIncarnations.get(id)?.incarnationId === incarnationId) {
+          return 'exited'
+        }
+        return 'unverifiable'
+      })
+    })
     this.dispatcher.onRequest('pty.listProcesses', (params) => this.listProcesses(params))
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
@@ -1936,6 +1958,11 @@ export class PtyHandler {
     // includes Homebrew, nvm, and user-installed CLIs (claude, codex, gh).
     // When overlays are injected, the launch wrapper keeps those paths after
     // user startup files re-export their defaults.
+    const finalSpawnEnv = {
+      ...spawnEnv,
+      [SHELL_STARTUP_FEATURE_ENV]: '',
+      ...shellLaunch.env
+    }
     let term: IPty
     try {
       term = pty.spawn(shell, shellLaunch.args, {
@@ -1946,11 +1973,7 @@ export class PtyHandler {
         cwd,
         // Why the empty default: relay shells inherit process.env, and the launch
         // config is the only thing allowed to name features for this shell.
-        env: {
-          ...spawnEnv,
-          [SHELL_STARTUP_FEATURE_ENV]: '',
-          ...shellLaunch.env
-        }
+        env: finalSpawnEnv
       })
     } catch (error) {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
@@ -2025,6 +2048,13 @@ export class PtyHandler {
           }
         : {})
     }
+    this.providerResourceObservations.captureLaunch({
+      ptyId: id,
+      incarnationId: managed.incarnationId,
+      env: finalSpawnEnv,
+      pid: term.pid,
+      wsl: wslShell
+    })
     this.retiredIncarnations.delete(id)
     this.sourcePublication?.activate(id, managed.incarnationId, context)
     const sourceActivation =
@@ -3122,6 +3152,7 @@ export class PtyHandler {
   }
 
   dispose(options: { waitForPhysicalExit?: boolean } = {}): Promise<void> {
+    this.providerResourceObservations.dispose()
     // Why: fence synchronously before the first await so a spawn/revive can't slip past disposal and escape exit.
     this.creationFenced = true
     if (this.disposePromise) {

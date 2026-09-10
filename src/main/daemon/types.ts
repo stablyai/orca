@@ -1,3 +1,4 @@
+import type { DaemonDiagnosticRequest } from './daemon-diagnostic-protocol'
 import type {
   ConfirmForegroundProcessRequest,
   ConfirmShellForegroundRequest,
@@ -221,10 +222,7 @@ export type ShutdownRequest = {
   }
 }
 
-export type PingRequest = {
-  id: string
-  type: 'ping'
-}
+export type { PingRequest } from './daemon-diagnostic-protocol'
 
 export type SystemResolverHealthRequest = {
   id: string
@@ -302,6 +300,7 @@ export type TakePendingOutputResult = {
 }
 
 export type DaemonRequest =
+  | DaemonDiagnosticRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest
@@ -322,7 +321,6 @@ export type DaemonRequest =
   | ConfirmShellForegroundRequest
   | ClearScrollbackRequest
   | ShutdownRequest
-  | PingRequest
   | SystemResolverHealthRequest
   | PtySpawnHealthRequest
   | GetSnapshotRequest

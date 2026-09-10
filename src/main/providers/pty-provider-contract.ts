@@ -1,3 +1,7 @@
+import type {
+  ProviderResourceDiagnosticOperation,
+  ProviderResourceDiagnosticResult
+} from '../../shared/provider-resource-diagnostics'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
@@ -116,6 +120,9 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  providerResourceDiagnostic?: (
+    operation: ProviderResourceDiagnosticOperation
+  ) => Promise<ProviderResourceDiagnosticResult | null>
   requestHostRpc?: (
     method: string,
     params: unknown,

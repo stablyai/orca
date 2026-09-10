@@ -1,3 +1,5 @@
+import { ProviderResourceObservations } from '../diagnostics/provider-resource-observations'
+import { SessionNotFoundError } from './daemon-errors'
 import type { Session } from './session'
 import type { TakePendingOutputResult, TerminalSnapshot } from './types'
 
@@ -67,4 +69,31 @@ export function takeTerminalHostPendingOutput(
     return null
   }
   return session.takePendingOutput(includeSnapshot, opts)
+}
+
+export function createTerminalHostResourceObservations(
+  sessions: ReadonlyMap<string, Session>,
+  retired: ReadonlyMap<string, { incarnationId: string }>
+): ProviderResourceObservations {
+  return new ProviderResourceObservations(Date.now, (id, incarnationId) => {
+    const session = sessions.get(id)
+    if (session?.incarnationId === incarnationId && session.isAlive) {
+      return 'live'
+    }
+    if (retired.get(id)?.incarnationId === incarnationId) {
+      return 'exited'
+    }
+    return 'unverifiable'
+  })
+}
+
+export function requireAliveTerminalHostSession(
+  sessions: ReadonlyMap<string, Session>,
+  sessionId: string
+): Session {
+  const session = sessions.get(sessionId)
+  if (!session || !session.isAlive) {
+    throw new SessionNotFoundError(sessionId)
+  }
+  return session
 }

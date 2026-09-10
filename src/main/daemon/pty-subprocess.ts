@@ -13,6 +13,7 @@ import {
 import { createDaemonPtySubprocessHandle } from './pty-subprocess/subprocess-handle'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 
@@ -99,7 +100,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     throw error
   }
 
-  return createDaemonPtySubprocessHandle({
+  const handle = createDaemonPtySubprocessHandle({
     process: spawned.process,
     shellPath: spawned.shellPath,
     spawnCwd: spawned.spawnCwd,
@@ -111,4 +112,20 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     sessionId: opts.sessionId,
     startupAgentRecognition: launch.startupAgentRecognition
   })
+  if (
+    env.ORCA_PROVIDER_RESOURCE_DIAGNOSTICS === '1' &&
+    resolvePtyOwnerBackend({
+      platform: process.platform,
+      shellPath: spawned.shellPath,
+      wslDistro: opts.terminalWindowsWslDistro
+    }) !== 'windows-wsl'
+  ) {
+    handle.providerResourceLaunch = {
+      ORCA_PROVIDER_RESOURCE_DIAGNOSTICS: '1',
+      ORCA_PANE_KEY: env.ORCA_PANE_KEY ?? '',
+      ORCA_AGENT_LAUNCH_TOKEN: env.ORCA_AGENT_LAUNCH_TOKEN ?? '',
+      CLAUDE_CONFIG_DIR: env.CLAUDE_CONFIG_DIR ?? ''
+    }
+  }
+  return handle
 }

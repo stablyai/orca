@@ -49,6 +49,7 @@ import {
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
 export type RelayHookServerOptions = {
+  observeDiagnosticHook?: (event: AgentHookEventPayload, source: AgentHookSource) => void
   /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
   endpointDir?: string
   /** Env tag forwarded into hook payloads. Defaults to "remote", which main excludes from dev-vs-prod mismatch warnings. */
@@ -96,7 +97,7 @@ export class RelayAgentHookServer {
   private portFallbackApplied = false
   private retryScheduler: AgentHookResultRetryScheduler
 
-  constructor(options: RelayHookServerOptions) {
+  constructor(private readonly options: RelayHookServerOptions) {
     this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
     this.endpointDir = options.endpointDir ?? defaultEndpointDir()
     this.endpointFilePath = join(this.endpointDir, getEndpointFileName())
@@ -280,6 +281,7 @@ export class RelayAgentHookServer {
         deferCompactOwnershipToClient: true
       })
       if (event) {
+        this.options.observeDiagnosticHook?.(event, source)
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = hookBodyEnv(hookBody)
         const version = hookBodyVersion(hookBody)

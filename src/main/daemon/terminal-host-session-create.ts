@@ -1,3 +1,4 @@
+import type { ProviderResourceObservations } from '../diagnostics/provider-resource-observations'
 import { accessSync, constants as fsConstants } from 'node:fs'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
@@ -17,6 +18,7 @@ import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
 
 type TerminalHostSessionCreateDependencies = {
+  providerResourceObservations?: ProviderResourceObservations
   sessions: Map<string, Session>
   /** Re-checks the host's shutdown fence and this request's cancellation after any await. */
   assertCreateAllowed: () => void
@@ -169,6 +171,21 @@ async function spawnAndPublishSession(
     throw new TerminalAttachCanceledError(opts.sessionId)
   }
 
+  if (subprocess.providerResourceLaunch) {
+    deps.providerResourceObservations?.captureLaunch({
+      ptyId: opts.sessionId,
+      incarnationId: session.incarnationId,
+      env: subprocess.providerResourceLaunch,
+      pid: subprocess.pid,
+      wsl:
+        resolvePtyOwnerBackend({
+          platform: process.platform,
+          shellPath: subprocess.shellPath,
+          wslDistro
+        }) === 'windows-wsl'
+    })
+    delete subprocess.providerResourceLaunch
+  }
   deps.sessions.set(opts.sessionId, session)
   deps.onSessionCreated(opts.sessionId, opts.agentSessionGeneration, session.isAlive)
   const token = session.attachClient(opts.streamClient)

@@ -3,6 +3,12 @@ import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 
 export type SubprocessHandle = {
+  providerResourceLaunch?: {
+    ORCA_PROVIDER_RESOURCE_DIAGNOSTICS: string
+    ORCA_PANE_KEY: string
+    ORCA_AGENT_LAUNCH_TOKEN: string
+    CLAUDE_CONFIG_DIR: string
+  }
   pid: number
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */

@@ -22,12 +22,14 @@ import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { rejectOnAbort } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
-import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
+import * as retiredPtys from '../../shared/retired-pty-incarnations'
 import {
   inspectTerminalHostProcess,
   type TerminalHostProcessInspection
 } from './terminal-host-process-inspection'
 import {
+  createTerminalHostResourceObservations,
+  requireAliveTerminalHostSession,
   confirmTerminalHostForegroundProcess,
   confirmTerminalHostShellForeground,
   getSettledTerminalHostSnapshot,
@@ -61,10 +63,12 @@ export class TerminalHost {
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
   private observationEpoch = 0
-  private readonly retiredIncarnations = new Map<
-    string,
-    { incarnationId: string; code: number; expiresAt: number }
-  >()
+  private readonly retiredIncarnations = new Map<string, retiredPtys.RetiredPtyIncarnation>()
+
+  readonly providerResourceObservations = createTerminalHostResourceObservations(
+    this.sessions,
+    this.retiredIncarnations
+  )
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
@@ -117,6 +121,7 @@ export class TerminalHost {
             sessionTeardown: this.sessionTeardown,
             killedTombstones: this.killedTombstones,
             spawnSubprocess: this.spawnSubprocess,
+            providerResourceObservations: this.providerResourceObservations,
             onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
             onSessionCreated: (sessionId, generation, isAlive) =>
               this.agentSessionGenerations.remember(sessionId, generation, isAlive),
@@ -126,7 +131,7 @@ export class TerminalHost {
             onSessionExit: (sessionId, generation) => {
               const session = this.sessions.get(sessionId)
               if (session) {
-                pruneRetiredPtyIncarnations(this.retiredIncarnations)
+                retiredPtys.pruneRetiredPtyIncarnations(this.retiredIncarnations)
                 this.retiredIncarnations.set(sessionId, {
                   incarnationId: session.incarnationId,
                   code: session.exitCode ?? 0,
@@ -235,7 +240,7 @@ export class TerminalHost {
     sessionId: string,
     options?: { expectedIncarnationId?: string; steadyState?: boolean }
   ): Promise<TerminalHostProcessInspection> {
-    pruneRetiredPtyIncarnations(this.retiredIncarnations)
+    retiredPtys.pruneRetiredPtyIncarnations(this.retiredIncarnations)
     const session = this.sessions.get(sessionId)
     if (
       (!session || !session.isAlive) &&
@@ -314,6 +319,7 @@ export class TerminalHost {
   }
 
   dispose(): Promise<void> {
+    this.providerResourceObservations.dispose()
     this.creationFenced = true
     if (this.disposePromise) {
       return this.disposePromise
@@ -338,11 +344,6 @@ export class TerminalHost {
     this.killedTombstones.clear()
   }
 
-  private getAliveSession(sessionId: string): Session {
-    const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      throw new SessionNotFoundError(sessionId)
-    }
-    return session
-  }
+  private getAliveSession = (sessionId: string): Session =>
+    requireAliveTerminalHostSession(this.sessions, sessionId)
 }

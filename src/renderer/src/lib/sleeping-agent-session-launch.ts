@@ -1,4 +1,9 @@
 import { toast } from 'sonner'
+import {
+  beginProviderResourceDiagnostic,
+  providerResourceDiagnosticEnv
+} from './provider-resource-diagnostic-request'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
@@ -68,6 +73,15 @@ export function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
+  const diagnosticRequestId = beginProviderResourceDiagnostic({
+    consumer: 'wake',
+    executionHostId: record.connectionId
+      ? toSshExecutionHostId(record.connectionId)
+      : getExecutionHostIdForWorktree(state, record.worktreeId),
+    agent: record.agent,
+    sessionId: record.providerSession.id,
+    transcriptPath: record.providerSession.transcriptPath
+  })
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
@@ -103,6 +117,9 @@ export function launchSleepingAgentSession(
     pendingStartup: {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
+      ...(diagnosticRequestId
+        ? { env: providerResourceDiagnosticEnv(diagnosticRequestId, startupPlan.env) }
+        : {}),
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: record.providerSession,
       launchAgent: record.agent,

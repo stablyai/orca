@@ -1,0 +1,249 @@
+{
+  "repository": "stablyai/orca",
+  "pr": 19526,
+  "base": "dcb89c048af1b2298f11d7a7a8e8f000582262b9",
+  "validatedSource": "dfa76867286c1e995fce215be235e91f2a1ef333",
+  "status": "implementation_and_requested_local_validation_complete_independent_review_pending",
+  "authorityApproved": false,
+  "ticketsClosed": [],
+  "headVerification": {
+    "baselineLocalLsRemoteGithub": true,
+    "sourceLocalLsRemoteGithub": true
+  },
+  "validation": {
+    "focused": {
+      "files": 11,
+      "passed": 125,
+      "failed": 0,
+      "exit": 0
+    },
+    "restored": {
+      "files": 11,
+      "passed": 125,
+      "failed": 0,
+      "exit": 0
+    },
+    "realPtyHttp": [
+      {
+        "runtime": "v18.20.8",
+        "checks": [
+          "negotiated-diagnostic-capability",
+          "resource-authority-not-promoted",
+          "actual-final-root-observed",
+          "actual-pty-incarnation-correspondence",
+          "targeted-root-start-time-correspondence",
+          "closed-provider-file-not-exit",
+          "normalized-hook-join",
+          "hardlink-resource-correspondence",
+          "same-session-object-transition",
+          "failed-read-clears-current-correspondence",
+          "same-object-hook-alias-retains-id",
+          "omitted-path-clears-current-correspondence",
+          "session-resume-does-not-match-old-session",
+          "same-path-replacement-before-hook-unobserved",
+          "same-path-replacement-hook-owns-new-object",
+          "pty-exit-is-not-resource-exit",
+          "own-recorded-pty-pid-absent",
+          "path-replacement-remains-unverifiable"
+        ],
+        "count": 18,
+        "failures": [],
+        "ptyPid": 80805,
+        "exited": true
+      },
+      {
+        "runtime": "v24.18.0",
+        "checks": [
+          "negotiated-diagnostic-capability",
+          "resource-authority-not-promoted",
+          "actual-final-root-observed",
+          "actual-pty-incarnation-correspondence",
+          "targeted-root-start-time-correspondence",
+          "closed-provider-file-not-exit",
+          "normalized-hook-join",
+          "hardlink-resource-correspondence",
+          "same-session-object-transition",
+          "failed-read-clears-current-correspondence",
+          "same-object-hook-alias-retains-id",
+          "omitted-path-clears-current-correspondence",
+          "session-resume-does-not-match-old-session",
+          "same-path-replacement-before-hook-unobserved",
+          "same-path-replacement-hook-owns-new-object",
+          "pty-exit-is-not-resource-exit",
+          "own-recorded-pty-pid-absent",
+          "path-replacement-remains-unverifiable"
+        ],
+        "count": 18,
+        "failures": [],
+        "ptyPid": 80980,
+        "exited": true
+      }
+    ],
+    "ablation": {
+      "committedSource": "d65f3b45146cea9008611ad3e4362650312cad85",
+      "ablatedSource": "dcb89c048af1b2298f11d7a7a8e8f000582262b9",
+      "exit": 1,
+      "failureLines": 16,
+      "passed": 2,
+      "failed": 12,
+      "cpRestored": true,
+      "cmpPassed": true
+    },
+    "lintExit": 0,
+    "diffCheckExit": 0,
+    "typechecks": [
+      {
+        "project": "node",
+        "exit": 0,
+        "seconds": 1.7
+      },
+      {
+        "project": "tc.web",
+        "exit": 0,
+        "seconds": 1.11
+      },
+      {
+        "project": "tc.cli",
+        "exit": 0,
+        "seconds": 0.38
+      }
+    ],
+    "finalFocused": {
+      "files": 11,
+      "passed": 126,
+      "failed": 0,
+      "exit": 0,
+      "log": "correspondence-final-focused.log"
+    },
+    "finalRealPtyHttp": [
+      {
+        "runtime": "v18.20.8",
+        "checks": [
+          "negotiated-diagnostic-capability",
+          "resource-authority-not-promoted",
+          "actual-final-root-observed",
+          "actual-pty-incarnation-correspondence",
+          "targeted-root-start-time-correspondence",
+          "closed-provider-file-not-exit",
+          "normalized-hook-join",
+          "hardlink-resource-correspondence",
+          "same-session-object-transition",
+          "failed-read-clears-current-correspondence",
+          "same-object-hook-alias-retains-id",
+          "omitted-path-clears-current-correspondence",
+          "session-resume-does-not-match-old-session",
+          "same-path-replacement-before-hook-unobserved",
+          "same-path-replacement-hook-owns-new-object",
+          "pty-exit-is-not-resource-exit",
+          "own-recorded-pty-pid-absent",
+          "path-replacement-remains-unverifiable"
+        ],
+        "count": 18,
+        "failures": [],
+        "ptyPid": 33592,
+        "exited": true
+      },
+      {
+        "runtime": "v24.18.0",
+        "checks": [
+          "negotiated-diagnostic-capability",
+          "resource-authority-not-promoted",
+          "actual-final-root-observed",
+          "actual-pty-incarnation-correspondence",
+          "targeted-root-start-time-correspondence",
+          "closed-provider-file-not-exit",
+          "normalized-hook-join",
+          "hardlink-resource-correspondence",
+          "same-session-object-transition",
+          "failed-read-clears-current-correspondence",
+          "same-object-hook-alias-retains-id",
+          "omitted-path-clears-current-correspondence",
+          "session-resume-does-not-match-old-session",
+          "same-path-replacement-before-hook-unobserved",
+          "same-path-replacement-hook-owns-new-object",
+          "pty-exit-is-not-resource-exit",
+          "own-recorded-pty-pid-absent",
+          "path-replacement-remains-unverifiable"
+        ],
+        "count": 18,
+        "failures": [],
+        "ptyPid": 33821,
+        "exited": true
+      }
+    ],
+    "expiryAblation": {
+      "exit": 1,
+      "failureLines": 4,
+      "committedSource": "dfa76867286c1e995fce215be235e91f2a1ef333",
+      "failed": 1,
+      "skipped": 14,
+      "cpRestored": true,
+      "cmpPassed": true
+    }
+  },
+  "failuresObserved": [
+    {
+      "stage": "initial new tests",
+      "failed": 4,
+      "passed": 17,
+      "cause": "ESM fs exports not configurable for spyOn; corrected mutable real-module wrapper",
+      "wrapperExit": 0,
+      "note": "Initial tail wrapper masked test exit; all later runners preserve exits"
+    },
+    {
+      "stage": "initial lint",
+      "failed": 1,
+      "cause": "missing curly block; corrected before commit"
+    },
+    {
+      "stage": "intentional baseline ablation",
+      "failed": 12,
+      "passed": 2,
+      "exit": 1
+    },
+    {
+      "stage": "intentional expiry cleanup ablation",
+      "failed": 1,
+      "skipped": 14,
+      "exit": 1,
+      "cause": "removed pendingHook cancellation at expired query completion; descriptor stat unexpectedly succeeds"
+    }
+  ],
+  "judgments": {
+    "functional": "Stale correspondence regression controls pass, baseline ablation fails them; fresh review pending.",
+    "architecture": "Atomic observation identity removes stale diagnostic join at existing execution owner; no resource authority or invocation architecture fix.",
+    "precedent": "Actual native/relay final env, normalized ingress, retained-adapter routing and targeted start-time reader inspected; ownership and delivery reused, no writer authority inferred.",
+    "gaps": [
+      "no rendered Electron wake/sidebar",
+      "no network SSH or packaged mixed versions",
+      "no native Windows/Linux/WSL or paired runtime",
+      "no cold restoration",
+      "no real provider, writer lifetime or detached/exclusive writer proof",
+      "filesystem I/O has no cancellation deadline"
+    ]
+  },
+  "cleanup": {
+    "ownPidsAbsent": [
+      80805,
+      80980,
+      33592,
+      33821
+    ],
+    "signalsSent": 0,
+    "newSyntheticHomesRemoved": 4,
+    "inheritedDirtyFilesAndReportsPreserved": true
+  },
+  "safety": {
+    "realProfilesUsed": false,
+    "credentialValuesPrinted": false,
+    "electronLaunched": false,
+    "nestedWorkers": false,
+    "forcePushOrMerge": false,
+    "bootstrapAttempted": false
+  },
+  "prStatus": {
+    "posted": "pending fresh independent review; local validation complete",
+    "comment": "https://github.com/stablyai/orca/pull/19526#issuecomment-5579114383",
+    "standaloneBodyUpdated": true
+  }
+}

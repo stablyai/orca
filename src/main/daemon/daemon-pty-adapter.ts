@@ -1,8 +1,25 @@
 import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
+import { parseProviderResourceDiagnosticResult } from '../../shared/provider-resource-diagnostics'
 import { supportsMode2031UnsubscribeFact, type DaemonEvent } from './types'
 import type { IPtyProvider } from '../providers/types'
 
 export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyProvider {
+  providerResourceDiagnostic: NonNullable<IPtyProvider['providerResourceDiagnostic']> = async (
+    operation
+  ) => {
+    const capability = await this.client.request<{ providerResourceDiagnosticVersion?: number }>(
+      'ping',
+      {},
+      1000
+    )
+    if (capability.providerResourceDiagnosticVersion !== 1) {
+      return null
+    }
+    const result = await this.client.request('providerResourceDiagnostic', operation, 1000)
+    return operation.kind === 'query'
+      ? parseProviderResourceDiagnosticResult(result, operation.query.requestId)
+      : null
+  }
   protected setupEventRouting(): void {
     if (this.removeEventListener) {
       return

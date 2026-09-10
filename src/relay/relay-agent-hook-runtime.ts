@@ -31,6 +31,22 @@ export class RelayAgentHookRuntime {
     this.hookServer = new RelayAgentHookServer({
       endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
       forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
+      observeDiagnosticHook: (event, source) => {
+        if (source !== 'claude') {
+          return
+        }
+        void ptyHandler.providerResourceObservations.observeHook({
+          paneKey: event.paneKey,
+          launchToken: event.launchToken,
+          hookEventName: event.hookEventName,
+          providerSession: event.providerSession
+            ? {
+                id: event.providerSession.id,
+                transcriptPath: event.providerSession.transcriptPath
+              }
+            : undefined
+        })
+      },
       // Why: the PTY handler is the only component that knows which panes still have a client
       // surface, so it — not the client — decides whether a hook post describes a live pane.
       isPaneSurfaceRetired: (paneKey) => ptyHandler.isPaneSurfaceRetired(paneKey)

@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks'
+import { isProviderResourceDiagnosticOperation } from '../../shared/provider-resource-diagnostics'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { ConnectedDaemonClient, DaemonClientConnections } from './daemon-client-connections'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -144,7 +145,16 @@ export class DaemonRequestRouter {
           { teardownSnapshot: request.payload.teardownSnapshot === true }
         )
       case 'ping':
-        return { pong: true }
+        return { pong: true, providerResourceDiagnosticVersion: 1 }
+      case 'providerResourceDiagnostic':
+        if (!isProviderResourceDiagnosticOperation(request.payload)) {
+          return null
+        }
+        if (request.payload.kind === 'hook') {
+          await this.options.host.providerResourceObservations.observeHook(request.payload.hook)
+          return null
+        }
+        return this.options.host.providerResourceObservations.query(request.payload.query)
       case 'systemResolverHealth':
         return { health: await readCurrentProcessMacSystemResolverHealth() }
       case 'ptySpawnHealth':

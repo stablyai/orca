@@ -71,6 +71,9 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       : null
   ctx.stablePaneKey = verifiedPaneKey ?? ctx.migrationUnsupportedPaneKey ?? ctx.metadataPaneKey
   ctx.baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+  if (process.env.ORCA_PROVIDER_RESOURCE_DIAGNOSTICS === '1') {
+    ctx.baseEnv = { ...ctx.baseEnv, ORCA_PROVIDER_RESOURCE_DIAGNOSTICS: '1' }
+  }
   const shouldRefreshAgentTeamsEnv =
     !ctx.preAdoptedStablePane &&
     !args.connectionId &&

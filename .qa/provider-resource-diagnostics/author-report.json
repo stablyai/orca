@@ -1,0 +1,150 @@
+{
+  "status": "Draft PR created; pending fresh independent review",
+  "baseline": "7adb5b3dc4cbee526434167e0281ba4d3cda708f",
+  "branch": "brennanb2025/provider-resource-diagnostics-3fe00094",
+  "contract": "Opt-in, bounded execution-owner diagnostics connected to wake and legacy AI Vault Resume; no authority or launch-decision changes.",
+  "functional_correctness": "Actual native/relay final launch environment and normalized hook ingress feed retained host-local observations; consumers issue before destination preparation and carry opaque request correlation to actual pty:spawn outcome.",
+  "architectural_fit": "The original failure is placement/profile claims selecting invocation before execution-host resource correspondence. This diagnostic slice does not remove that failure or add a decision guard; it gathers missing evidence before a separately reviewed authority change.",
+  "precedent": [
+    {
+      "source": "src/main/daemon/terminal-host-session-create.ts",
+      "mechanism": "Existing execution owner and actual subprocess ownership; diagnostics transfer only allowlisted final env metadata."
+    },
+    {
+      "source": "src/relay/pty-handler.ts",
+      "mechanism": "Actual final env augmenter output used by node-pty; host-local PTY incarnation and retired-incarnation observations."
+    },
+    {
+      "source": "src/main/agent-hooks/server/server-lifecycle.ts; src/relay/agent-hook-server.ts",
+      "mechanism": "Validated normalized shipping HTTP ingress before pane cache projection or retirement."
+    },
+    {
+      "source": "src/main/runtime/agent-session-process-identity-probe.ts",
+      "mechanism": "Reuses targeted bounded POSIX root-process start-time reader; deliberately does not adopt process identity as provider-resource authority."
+    },
+    {
+      "source": "src/main/daemon/daemon-pty-router.ts; src/main/providers/ssh-pty-provider.ts",
+      "mechanism": "Existing authenticated JSON providers and retained native adapters; additive negotiated diagnostic capability with no stream opcode."
+    }
+  ],
+  "deviations": [
+    "No provider lifecycle authority, persistent storage, admission lock, new provider invocation, inventory scan, or stop/recovery change.",
+    "Host read descriptors are bounded historical object witnesses, not provider open-holder evidence.",
+    "WSL launches/UNC resources and paired runtimes remain unsupported.",
+    "Controller selects existing SSH connection; unreachable never falls back to local host."
+  ],
+  "limits": {
+    "retained_records": 128,
+    "pending_probes": 8,
+    "per_record_probes": 1,
+    "trial_minutes": 15,
+    "rpc_timeout_ms": 1000,
+    "native_adapters": 8
+  },
+  "privacy": "No content reads, environment dumps, credential/key/cookie logging, commands, paths or provider session IDs in diagnostic output; token equality evaluated only in memory. Synthetic homes only.",
+  "validation": {
+    "focused": {
+      "files": 10,
+      "passed": 111,
+      "failed": 0,
+      "log": "focused-tests-final-verified.log"
+    },
+    "typechecks_second": {
+      "node": 0,
+      "web": 0,
+      "cli": 0
+    },
+    "manual": [
+      {
+        "runtime": "v18.20.8",
+        "checks": [
+          "negotiated-diagnostic-capability",
+          "resource-authority-not-promoted",
+          "actual-final-root-observed",
+          "actual-pty-incarnation-correspondence",
+          "targeted-root-start-time-correspondence",
+          "closed-provider-file-not-exit",
+          "normalized-hook-join",
+          "hardlink-resource-correspondence",
+          "pty-exit-is-not-resource-exit",
+          "own-recorded-pty-pid-absent",
+          "path-replacement-remains-unverifiable"
+        ],
+        "count": 11,
+        "failures": [],
+        "ptyPid": 50059,
+        "exited": true
+      },
+      {
+        "runtime": "v24.18.0",
+        "checks": [
+          "negotiated-diagnostic-capability",
+          "resource-authority-not-promoted",
+          "actual-final-root-observed",
+          "actual-pty-incarnation-correspondence",
+          "targeted-root-start-time-correspondence",
+          "closed-provider-file-not-exit",
+          "normalized-hook-join",
+          "hardlink-resource-correspondence",
+          "pty-exit-is-not-resource-exit",
+          "own-recorded-pty-pid-absent",
+          "path-replacement-remains-unverifiable"
+        ],
+        "count": 11,
+        "failures": [],
+        "ptyPid": 50082,
+        "exited": true
+      }
+    ],
+    "lint": "Final changed-source oxlint exit 0; oxfmt applied; git diff --check exit 0",
+    "typechecks_final": [
+      {
+        "name": "node",
+        "exit": 0
+      },
+      {
+        "name": "web",
+        "exit": 0
+      },
+      {
+        "name": "cli",
+        "exit": 0
+      }
+    ],
+    "typecheck_rerun_reason": "Shared diagnostic schema affects node/web/CLI; final execution-store and renderer logging changes warranted sequential revalidation."
+  },
+  "historical_failures": [
+    "Initial consumer suite: 16 existing wake cases failed from unguarded window access, 24 passed; fixed feature guard.",
+    "First focused suite: 2 failed, 47 passed: long macOS Unix socket path EINVAL and synthetic SessionStart missing source startup; fixed fixtures.",
+    "First node tsc: 3 new SSH mux unknown/generic typing errors; web/CLI passed. Fixed with allowlist response parser; second sequential three passed.",
+    "Focused run 3: 1 failed, 107 passed: eviction test queried during bounded probe capacity. Polling settled state fixed expectation.",
+    "First actual Node18/24 smokes reached PTY exit but synchronous fixture transport settlement caused recursive dispatcher capacity callback. Node18 diagnostic rerun exposed stack; corrected fixture to supported asynchronous write settlement. Both final smokes passed 11/11.",
+    "Post-commit lint found daemon router 302 effective lines after refusal reason additions; reused existing unavailable-result constructor for conflict response, final lint passes without disable or limit changes."
+  ],
+  "gaps": [
+    "No real provider authentication/profile or real conversation experiment; no proof during provider closed-file lifetime, descendant containment, old-writer enrollment, or profile/key admission.",
+    "No Electron app launch, rendered UI, packaged app, native Windows/Linux execution, WSL UI, or actual network SSH validation.",
+    "Actual Node18/24 source relay smoke uses same-bundle in-memory protocol transport and real macOS node-pty; does not establish cross-bundle relay replacement/reconnect or cold-host restoration.",
+    "Native authenticated daemon consumer tests use mocked node-pty; renderer consumer tests exercise actual functions/hooks with mocked surrounding store/bridge.",
+    "PTY exit scope is only retained host-observed incarnation; tombstone expiry and contact loss stay unverifiable.",
+    "Actions that abort before pty:spawn have no eventual spawn outcome; positive attach authorization and zero-start authority flows are outside this diagnostic change."
+  ],
+  "ablation": [
+    {
+      "name": "wake",
+      "exit": 1,
+      "failed": 1,
+      "failure_count_verified": true
+    },
+    {
+      "name": "relay-hook",
+      "exit": 1,
+      "failed": 1,
+      "failure_count_verified": true
+    }
+  ],
+  "pr": "https://github.com/stablyai/orca/pull/19526",
+  "source_commit_before_ablations": "561209685f",
+  "ablation_restore": "cp backup/restore plus cmp and git diff verified exact source; rg confirmed nonzero failure counts; restored and final suite each 111 pass/0 fail.",
+  "validated_source_commit": "d705f068c86f1ee7d06d82c99c8adda0af00e339"
+}

@@ -1,3 +1,7 @@
+import type {
+  ProviderResourceDiagnosticQuery,
+  ProviderResourceDiagnosticResult
+} from '../../shared/provider-resource-diagnostics'
 import type { TelemetryConsentState } from '../../shared/telemetry-consent-types'
 import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
 
@@ -35,6 +39,11 @@ export type MemoryApi = {
 }
 
 export type DiagnosticsApi = {
+  providerResourceEnabled?: boolean
+  observeProviderResource?: (args: {
+    executionHostId?: string
+    query: ProviderResourceDiagnosticQuery
+  }) => Promise<ProviderResourceDiagnosticResult | null>
   getStatus: () => Promise<DiagnosticsStatusPayload>
   collectBundle: (lookbackMinutes?: number) => Promise<DiagnosticsBundlePayload>
   openBundlePreview: (bundleSubmissionId: string) => Promise<void>

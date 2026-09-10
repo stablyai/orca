@@ -1,4 +1,8 @@
 import { useCallback, useState } from 'react'
+import {
+  beginProviderResourceDiagnostic,
+  providerResourceDiagnosticEnv
+} from '@/lib/provider-resource-diagnostic-request'
 import { toast } from 'sonner'
 import {
   buildAiVaultResumeCopyCommandForWorktree,
@@ -11,7 +15,10 @@ import {
 } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import type { AiVaultAgent, AiVaultSession } from '../../../../shared/ai-vault-types'
-import { prepareAiVaultSessionForResume } from '@/lib/ai-vault-session-resume-preparation'
+import {
+  prepareAiVaultSessionForResume,
+  notifyAiVaultSessionPreparationFailure
+} from '@/lib/ai-vault-session-resume-preparation'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from './ai-vault-session-filters'
@@ -89,6 +96,13 @@ export function useAiVaultSessionLaunchActions({
         void activateAiVaultStructuredSession(session)
         return
       }
+      const diagnosticRequestId = beginProviderResourceDiagnostic({
+        consumer: 'ai-vault-resume',
+        executionHostId: session.executionHostId ?? 'local',
+        agent: session.agent,
+        sessionId: session.sessionId,
+        transcriptPath: session.filePath
+      })
       const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
@@ -111,10 +125,14 @@ export function useAiVaultSessionLaunchActions({
       }
       void prepareAiVaultSessionForResume(session)
         .then((preparedSession) => {
+          const startup = buildResumeStartup(preparedSession, targetId.worktreeId)
           const launchResult = launchAiVaultSessionInNewTab({
             agent: session.agent,
             worktreeId: targetId.worktreeId,
-            ...buildResumeStartup(preparedSession, targetId.worktreeId)
+            ...startup,
+            ...(diagnosticRequestId
+              ? { env: providerResourceDiagnosticEnv(diagnosticRequestId, startup.env) }
+              : {})
           })
           if (launchResult.tabId === null) {
             void launchResult.runtimeLaunch.then((outcome) => {
@@ -265,17 +283,6 @@ function notifyAiVaultSessionResumeInChatFailure(error: unknown): void {
       'auto.components.right.sidebar.AiVaultPanel.resumeInChatFailed',
       'Could not resume this session in a new chat.'
     )
-  )
-}
-
-function notifyAiVaultSessionPreparationFailure(error: unknown): void {
-  toast.error(
-    error instanceof Error
-      ? error.message
-      : translate(
-          'auto.components.right.sidebar.AiVaultPanel.prepareSessionResumeFailed',
-          'Could not prepare this session for resume.'
-        )
   )
 }
 

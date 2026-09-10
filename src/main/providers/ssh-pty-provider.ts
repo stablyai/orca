@@ -1,3 +1,4 @@
+import { parseProviderResourceDiagnosticResult } from '../../shared/provider-resource-diagnostics'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
@@ -33,6 +34,25 @@ function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: numbe
 
 /** Remote PTY provider that proxies IPtyProvider operations through the relay. */
 export class SshPtyProvider implements IPtyProvider {
+  providerResourceDiagnostic: NonNullable<IPtyProvider['providerResourceDiagnostic']> = async (
+    operation
+  ) => {
+    const capability = await this.mux.request('pty.getCapabilities', {}, { timeoutMs: 1000 })
+    if (
+      !capability ||
+      typeof capability !== 'object' ||
+      !('providerResourceDiagnosticVersion' in capability) ||
+      capability.providerResourceDiagnosticVersion !== 1
+    ) {
+      return null
+    }
+    const result = await this.mux.request('pty.providerResourceDiagnostic', operation, {
+      timeoutMs: 1000
+    })
+    return operation.kind === 'query'
+      ? parseProviderResourceDiagnosticResult(result, operation.query.requestId)
+      : null
+  }
   private mux: SshChannelMultiplexer
   private connectionId: string
   private livePtyIds = new Set<string>()

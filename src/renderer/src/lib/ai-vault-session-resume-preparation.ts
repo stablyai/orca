@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import {
   isLegacySharedCodexHome,
@@ -41,5 +43,16 @@ export function aiVaultSessionNeedsResumePreparation(
   return (
     isPerAccountManagedCodexHome(session.codexHome) &&
     (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
+  )
+}
+
+export function notifyAiVaultSessionPreparationFailure(error: unknown): void {
+  toast.error(
+    error instanceof Error
+      ? error.message
+      : translate(
+          'auto.components.right.sidebar.AiVaultPanel.prepareSessionResumeFailed',
+          'Could not prepare this session for resume.'
+        )
   )
 }

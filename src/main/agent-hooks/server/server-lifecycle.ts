@@ -15,6 +15,8 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 
+let pendingDiagnosticForwards = 0
+
 export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv {
   /** Start the loopback listener after hydration and spool replay have settled. */
   async start(options?: {
@@ -92,6 +94,32 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         trackEmptyPaneKeyHook(hookBody)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        if (
+          source === 'claude' &&
+          normalized.event &&
+          process.env.ORCA_PROVIDER_RESOURCE_DIAGNOSTICS === '1' &&
+          pendingDiagnosticForwards < 8
+        ) {
+          pendingDiagnosticForwards++
+          const event = normalized.event
+          const hook = {
+            paneKey: event.paneKey,
+            launchToken: event.launchToken,
+            hookEventName: event.hookEventName,
+            providerSession: event.providerSession
+              ? {
+                  id: event.providerSession.id,
+                  transcriptPath: event.providerSession.transcriptPath
+                }
+              : undefined
+          }
+          void import('../../diagnostics/provider-resource-diagnostic-routing')
+            .then(({ forwardLocalProviderResourceHook }) => forwardLocalProviderResourceHook(hook))
+            .catch(() => {})
+            .finally(() => {
+              pendingDiagnosticForwards--
+            })
+        }
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
               source,

@@ -1,3 +1,4 @@
+import { unavailableProviderResourceDiagnostic } from '../../shared/provider-resource-diagnostics'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
 import type {
@@ -15,6 +16,39 @@ import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DaemonPtyRouter implements IPtyProvider {
+  providerResourceDiagnostic: NonNullable<IPtyProvider['providerResourceDiagnostic']> = async (
+    operation
+  ) => {
+    const adapters = this.allAdapters()
+    if (adapters.length > 8) {
+      return operation.kind === 'query'
+        ? unavailableProviderResourceDiagnostic(operation.query.requestId, 'probe-capacity')
+        : null
+    }
+    const settled = await Promise.allSettled(
+      adapters.map((adapter) => adapter.providerResourceDiagnostic(operation))
+    )
+    const results = settled.flatMap((result) =>
+      result.status === 'fulfilled' && result.value ? [result.value] : []
+    )
+    const matches = results.filter((result) => result.observationId)
+    if (operation.kind === 'hook') {
+      return null
+    }
+    if (matches.length > 1) {
+      return unavailableProviderResourceDiagnostic(
+        operation.query.requestId,
+        'conflicting-candidates'
+      )
+    }
+    return (
+      matches[0] ??
+      results[0] ??
+      (settled.some((result) => result.status === 'rejected')
+        ? unavailableProviderResourceDiagnostic(operation.query.requestId, 'unreachable')
+        : null)
+    )
+  }
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
