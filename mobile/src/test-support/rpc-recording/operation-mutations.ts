@@ -113,4 +113,14 @@ export const OPERATION_MUTATIONS = {
 } as const satisfies Record<string, OperationMutation>
 
 export type Mutation = keyof typeof OPERATION_MUTATIONS
-export const MUTATION_NAMES = Object.keys(OPERATION_MUTATIONS) as Mutation[]
+
+/**
+ * Appended to a mounted module after transpile, keyed by file suffix. An adapter drives a real
+ * operation the product keeps module-private; exposing it here beats editing the pinned source.
+ */
+export const OPERATION_EXPOSURES: readonly (readonly [string, string])[] = [
+  [
+    'MobileAgentSessionHistoryPanel.tsx',
+    '\nexports.loadMobileResumeMetadata = loadMobileResumeMetadata;'
+  ]
+]

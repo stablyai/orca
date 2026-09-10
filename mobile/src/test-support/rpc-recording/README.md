@@ -96,6 +96,15 @@ raw reply partitions at the scripted sender port; they do not claim malformed-fr
 through direct/relay frame validation. Caches
 are tested by follow-up requests; no private cache maps are inspected.
 
+Each family runs the nine partitions in `reply-matrix.ts` once, and nothing is crossed against
+consumed fields. The partitions are the reply shapes a host can send: a normal result, an absent
+result, `null`, an inner `{ok: false}` envelope with a string or object error, an inner envelope
+missing `ok`, an outer refusal, `method_not_found`, and a transport rejection. Shapes that were
+recorded before and are gone were unreachable: `successResponse` always sets `result`, so JSON
+carries no explicit-undefined slot, and no mounted method's handler returns a number, a string, an
+array, a bare `{}`, or a boolean. `null` stays because `linear.getIssue` returns it for a missing
+issue and the b2 seed is a shipped null-result bug.
+
 Detached unhandled rejections are captured as effects in a sequential process-scoped window,
 with prior process listeners restored afterward. This preserves the known main bug recorded
 as `new-workspace-runtime-context-null-settings-typeerror`; it does not repair the effect.
@@ -111,15 +120,6 @@ test-support path is compared against the baseline like product code:
 ORCA_BACKGROUND_LAUNCH=1 RPC_FOUNDATION_RECORD=1 pnpm --dir mobile exec tsx scripts/rpc-recording.mts --record
 ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test src/test-support/rpc-recording
 ```
-
-`run-step1-exit.ts` exports `runStep1Exit({scenarios, goldens, determinismRuns, requireMutants})`.
-The first two arguments are filesystem paths, `determinismRuns` is an integer >=2, and
-`requireMutants` contains `acceptance`, `order`, and/or `race`. It runs candidate parity,
-family matrices, schedules, deterministic repeat checks, and all three B-seed mutants in
-Vitest through the cross-platform `runProcess` launcher. It forces candidate mode and
-checks that golden file bytes did not change. It throws for invalid inputs or failing tests;
-success returns `{ok:true, stdout, stderr, scenarios, mutants}`. It never writes goldens.
-The checker is owned by lane A and was absent on this baseline.
 
 Mutants are the defect evidence. `operation-mutations.ts` holds one anchored source edit per
 adapter family, and every family's recording must change visible state when its mutant is applied,

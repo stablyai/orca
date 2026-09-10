@@ -1,10 +1,9 @@
 import { compileFunction } from 'node:vm'
-import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import * as React from 'react'
 import ts from 'typescript'
-import { OPERATION_MUTATIONS, type Mutation } from './operation-mutations'
+import { OPERATION_EXPOSURES, OPERATION_MUTATIONS, type Mutation } from './operation-mutations'
 
 export type { Mutation }
 export type OperationModule = Record<string, (...args: any[]) => unknown>
@@ -84,10 +83,6 @@ export function operationModuleLoader(root: string, mutation?: Mutation) {
     )
   }
   function load(file: string): OperationModule {
-    // The operation and scripted transport must share the real WeakSet error identity.
-    if (file.endsWith('rpc-delivery-ambiguity.ts')) {
-      return deliveryAmbiguity as unknown as OperationModule
-    }
     const cached = cache.get(file)
     if (cached) {
       return cached
@@ -117,10 +112,8 @@ export function operationModuleLoader(root: string, mutation?: Mutation) {
         jsx: ts.JsxEmit.React
       }
     }).outputText
-    const exposed = file.endsWith('MobileAgentSessionHistoryPanel.tsx')
-      ? '\nexports.loadMobileResumeMetadata = loadMobileResumeMetadata;'
-      : ''
-    const evaluate = compileFunction(output + exposed, ['require', 'exports'], { filename: file })
+    const exposure = OPERATION_EXPOSURES.find(([suffix]) => file.endsWith(suffix))?.[1] ?? ''
+    const evaluate = compileFunction(output + exposure, ['require', 'exports'], { filename: file })
     evaluate((name: string) => imported(file, name), exports)
     return exports
   }

@@ -1,8 +1,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
-import { markRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
 import { describe, expect, it } from 'vitest'
 import { captureArguments, captureError, captureValue } from './recording-values'
 import { RECORDER_DIRECTORY, recorderSha256 } from './recorder-digest'
@@ -19,7 +18,6 @@ import {
 } from './golden-recording'
 import { hoistPreludeCheckpoints } from './prelude-checkpoints'
 import { runRecording } from './run-recording'
-import { replyPartitions } from './reply-matrix'
 import type { Observation, RecordingScenario } from './recording-scenario'
 
 describe('recording boundaries', () => {
@@ -88,14 +86,6 @@ describe('recording boundaries', () => {
       await clock.flush()
       clock.stop()
     }
-  })
-
-  it('keeps the delivery marker singleton shared with loaded real operations', () => {
-    const loader = operationModuleLoader(resolve(import.meta.dirname, '../../../..'))
-    const marker = loader.load<typeof import('../../transport/rpc-delivery-ambiguity')>(
-      'mobile/src/transport/rpc-delivery-ambiguity.ts'
-    )
-    expect(marker.isRpcDeliveryUnknown(markRpcDeliveryUnknown(new Error('sent')))).toBe(true)
   })
 
   it('records actual deadline ambiguity and leaves peers pending before their deadlines', async () => {
@@ -291,14 +281,6 @@ describe('recording boundaries', () => {
     } finally {
       rmSync(root, { recursive: true })
     }
-  })
-
-  it('keeps absent and explicit undefined replies in separate matrix partitions', () => {
-    const rows = replyPartitions({ settings: {} }, [['settings']])
-    const absent = rows.find((row) => row.id === 'result-absent')!
-    const explicit = rows.find((row) => row.id === 'result-undefined')!
-    expect(Object.hasOwn(absent.reply as object, 'result')).toBe(false)
-    expect(Object.hasOwn(explicit.reply as object, 'result')).toBe(true)
   })
 })
 

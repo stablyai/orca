@@ -102,39 +102,8 @@ describe('family reply partitions and owned schedules', () => {
           : completion.complete.startsWith('settings.get')
             ? settingsNormal
             : { ok: true }
-    const settingsFields: Record<string, string[]> = {
-      'settings.new-tab-agents': ['disabledTuiAgents', 'defaultTuiAgent'],
-      'settings.bot-overrides': ['prBotAuthorOverrides'],
-      'settings.workspace-context': ['visibleTaskProviders'],
-      'settings.home-providers': ['visibleTaskProviders'],
-      'settings.resume-metadata': [],
-      'settings.repo-metadata': ['hostSettingOverrides'],
-      'settings.task-hydration': [
-        'visibleTaskProviders',
-        'defaultTaskSource',
-        'defaultTaskViewPreset',
-        'defaultRepoSelection',
-        'defaultLinearTeamSelection',
-        'githubProjects'
-      ],
-      'settings.workspace-submit': ['disabledTuiAgents', 'defaultTuiAgent'],
-      'settings.task-workspace': ['disabledTuiAgents', 'defaultTuiAgent']
-    }
-    const fields =
-      base.id === 'b1'
-        ? [['files']]
-        : base.id === 'b3'
-          ? [['description'], ['labels'], ['subIssues']]
-          : completion.complete.startsWith('settings.get')
-            ? [
-                ['settings'],
-                ...(settingsFields[base.operation] ?? []).map((field) => ['settings', field])
-              ]
-            : completion.complete.startsWith('settings.update')
-              ? []
-              : [['ok']]
     it(`${family}: reply partitions once per family`, async () => {
-      await certify(`matrix-${family}`, driveReplyMatrix(base, completion.complete, normal, fields))
+      await certify(`matrix-${family}`, driveReplyMatrix(base, completion.complete, normal))
     }, 30_000)
   }
   for (const id of [

@@ -4,9 +4,7 @@ import { runProcess } from '../../src/shared/child-process/run-process.ts'
 import { readScenarios } from '../src/test-support/rpc-recording/scenario-input.ts'
 
 if (process.argv[2] !== '--record' || process.env.RPC_FOUNDATION_RECORD !== '1') {
-  throw new Error(
-    'Recording requires --record and RPC_FOUNDATION_RECORD=1; candidates use runStep1Exit'
-  )
+  throw new Error('Recording requires --record and RPC_FOUNDATION_RECORD=1')
 }
 const root = resolve(import.meta.dirname, '../..')
 const input = readScenarios(resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json'))
