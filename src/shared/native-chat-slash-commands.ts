@@ -93,9 +93,10 @@ export function getAgentSlashCommands(agent: AgentType): readonly SlashCommandSu
 }
 
 /** The command rows for a session that reports its own `/` surface. The report
- *  is the authority on WHICH commands exist; the curated catalog above is kept
- *  only as the description source for the names both know about. Skills are
- *  excluded — they render in the picker's own skills group. */
+ *  is the authority on WHICH commands exist and, when it carries one, on how a
+ *  command is described; the curated catalog above only covers the names whose
+ *  report is text-free. Skills are excluded — they render in the picker's own
+ *  skills group. */
 export function sessionSlashCommandSuggestions(
   agent: AgentType,
   reported: readonly AgentSessionSlashCommand[]
@@ -106,7 +107,7 @@ export function sessionSlashCommandSuggestions(
   return reported
     .filter((entry) => entry.kind === 'command')
     .map((entry) => {
-      const description = described.get(entry.name)
+      const description = entry.description ?? described.get(entry.name)
       return {
         name: entry.name,
         ...(description ? { description } : {}),

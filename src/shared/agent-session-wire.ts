@@ -343,6 +343,10 @@ export type AgentSessionSlashCommand = {
   kind: 'command' | 'skill'
   /** Membership is authoritative, but this provider report did not classify the name. */
   kindUnspecified?: true
+  /** Provider-authored row text; absent when the report carried names only. */
+  description?: string
+  /** Provider-authored argument sketch, e.g. `<issue-url>`. */
+  argumentHint?: string
 }
 
 /** The provider's own command surface, read per session. Additive read-only
