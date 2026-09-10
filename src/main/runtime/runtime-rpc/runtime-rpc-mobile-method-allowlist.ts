@@ -6,6 +6,7 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.selectCodexForTarget',
   'accounts.subscribe',
   'accounts.unsubscribe',
+  'agent.launch',
   'aiVault.listSessions',
   'aiVault.resolveSessionTitles',
   'aiVault.prepareSessionResume',

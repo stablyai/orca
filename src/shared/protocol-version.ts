@@ -197,6 +197,22 @@ export const AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE =
 export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'automation.create-idempotency.v1' as const
 
+/**
+ * `agent.launch` exists: one host-side method that decides structured-vs-terminal and creates the
+ * surface, instead of each client routing for itself.
+ *
+ * Negotiated rather than assumed because a client that cannot see it must keep using
+ * `worktree.create` + `startupAgent`, which stays supported verbatim. The reverse skew is the
+ * dangerous one: `worktree.create` returns `agentTerminalHandle` only when a startup agent was
+ * requested, so a host that quietly routed that call to a structured session would hand an old
+ * client a response with no handle and no error.
+ *
+ * Advertising it is a statement that the client understands EITHER outcome, since the host is what
+ * picks: a structured session it can open, or a terminal agent. A client that renders only one of
+ * the two keeps using the surface-specific methods.
+ */
+export const AGENT_LAUNCH_RUNTIME_CAPABILITY = 'agent.launch.v1' as const
+
 // Generic native clients include the CLI and must not claim Electron-only page
 // placement support.
 export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
@@ -206,7 +222,8 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
 ] as const
 
 // Electron clients can decode client-hosted page placement; becoming a page
@@ -292,7 +309,8 @@ export const RUNTIME_CAPABILITIES = [
   SKILL_DELETE_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
+  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITY
 ] as const
 
 export type RuntimeCapability = (typeof RUNTIME_CAPABILITIES)[number] | (string & {})
