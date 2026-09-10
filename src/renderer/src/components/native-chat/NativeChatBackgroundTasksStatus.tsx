@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Activity, Bot, ChevronDown, CircleHelp, SquareTerminal, Workflow } from 'lucide-react'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import { AgentStateDot } from '@/components/AgentStateDot'
@@ -141,7 +141,11 @@ export function NativeChatBackgroundTasksStatus(props: {
   const taskListId = useId()
   const stripRef = useRef<HTMLDivElement>(null)
   const narrow = useNarrowStrip(stripRef)
-  const groups = buildBackgroundTaskGroups(props.tasks, props.settledTasks)
+  // The 1 Hz elapsed tick must not re-group, re-sort and re-translate the whole roster.
+  const groups = useMemo(
+    () => buildBackgroundTaskGroups(props.tasks, props.settledTasks),
+    [props.tasks, props.settledTasks]
+  )
   const singleLiveCommand =
     groups.length === 1 && groups[0].kind === 'command' && groups[0].tasks.length === 1
   const hasElapsed = groups.some((group) =>
