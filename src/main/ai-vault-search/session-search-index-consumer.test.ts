@@ -62,6 +62,31 @@ it('appends onto its own cursor and carries the content hash forward', async () 
   expect(store.takeStale()).toEqual([])
 })
 
+it('appends onto a file it read through and decoded no session from', async () => {
+  // An excluded Codex worker transcript: read through, nothing to index, and
+  // still growing. Its cursor is sound, so a re-read of the whole file every
+  // pass buys nothing.
+  replayTranscriptRead({
+    messages: userMessages('excluded span', 3),
+    outcome: { session: null, byteOffset: 100 }
+  })
+  await store.settled()
+  expect(cursor()).toBe(100)
+  expect(store.takeStale()).toEqual([])
+
+  replayTranscriptRead({
+    mode: 'append',
+    previousByteOffset: 100,
+    messages: userMessages('decoded at last', 2),
+    outcome: { byteOffset: 220 }
+  })
+  await store.settled()
+
+  expect(visibleMessages()).toBe(2)
+  expect(cursor()).toBe(220)
+  expect(store.takeStale()).toEqual([])
+})
+
 it('declines an append that starts past its own cursor and records the file', async () => {
   replayTranscriptRead({ messages: userMessages('indexed span', 3), outcome: { byteOffset: 100 } })
   await store.settled()

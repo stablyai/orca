@@ -110,14 +110,14 @@ export class SessionSearchIndexWriter {
   ): SessionSearchStagedWrite | null {
     const path = candidate.file.path
     const existing = this.file(path)
-    const append =
-      mode === 'append' &&
-      existing?.session_row_id != null &&
-      existing.byte_offset === previousByteOffset
-    if (mode === 'append' && !append) {
+    if (mode === 'append' && existing?.byte_offset !== previousByteOffset) {
       return null
     }
-    return this.stage(candidate, existing, append)
+    // A file the index read through and decoded no session from still has a
+    // cursor worth continuing: it has no session row to hang new rows off, so
+    // this read makes one. Declining instead would force a whole re-read of
+    // that file on every pass for as long as it grows.
+    return this.stage(candidate, existing, mode === 'append' ? existing.session_row_id : null)
   }
 
   /** Invalidation hides the generation immediately; cleanup does the expensive deletes later. */
@@ -146,19 +146,20 @@ export class SessionSearchIndexWriter {
       .get(path) as ExistingFile | undefined
   }
 
+  /** `resumed` is the session row this read continues, or null when it starts one. */
   private stage(
     candidate: SessionFileCandidate,
     existing: ExistingFile | undefined,
-    append: boolean
+    resumed: number | null
   ): SessionSearchStagedWrite {
     const db = this.db
     const path = candidate.file.path
-    let hash = append ? this.records.contentHash(existing!.session_row_id!) : EMPTY_CONTENT_HASH
+    let hash = resumed === null ? EMPTY_CONTENT_HASH : this.records.contentHash(resumed)
     let sessionId: number
     let batchId: number
     db.exec('BEGIN IMMEDIATE')
     try {
-      sessionId = append ? existing!.session_row_id! : this.records.createStagingSession(candidate)
+      sessionId = resumed ?? this.records.createStagingSession(candidate)
       batchId = Number(
         db.prepare('INSERT INTO search_write_batches(session_row_id) VALUES (?)').run(sessionId)
           .lastInsertRowid
@@ -241,7 +242,7 @@ export class SessionSearchIndexWriter {
         try {
           if (outcome.session) {
             this.records.updateSession(outcome.session, sessionId, hash)
-            if (!append && existing?.session_row_id != null) {
+            if (resumed === null && existing?.session_row_id != null) {
               retireSearchSession(db, existing.session_row_id)
             }
             db.prepare('UPDATE sessions SET index_ready=1 WHERE id=?').run(sessionId)
@@ -272,7 +273,9 @@ export class SessionSearchIndexWriter {
         // A surviving batch row means publish never made these rows visible,
         // whatever ended the stage.
         if (db.prepare('SELECT 1 FROM search_write_batches WHERE id=?').get(batchId)) {
-          discardSearchBatch(db, sessionId, batchId, !append)
+          // Owning the session means this read created it, so retiring it takes
+          // the whole staging generation with it.
+          discardSearchBatch(db, sessionId, batchId, resumed === null)
         }
       }
     }
