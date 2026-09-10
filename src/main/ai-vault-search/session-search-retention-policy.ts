@@ -5,7 +5,7 @@ const HISTORY_DAYS_MAX = 3_650
  * The retention window, as the indexer's callers state it and as the store
  * consumes it. Settings storage is PR 3b's problem; this is the arithmetic.
  */
-export function normalizeSessionSearchHistoryDays(value: number | null): number | null {
+function normalizeSessionSearchHistoryDays(value: number | null): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return null
   }

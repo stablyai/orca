@@ -84,6 +84,17 @@ function indexedSessionCount(): number {
   )
 }
 
+/** The row the store holds for a path, which is the indexer's whole memory of it. */
+function rowFor(path: string) {
+  return harness.read((db: SyncDatabase) =>
+    db.prepare('SELECT state, fail_count AS failCount FROM files WHERE path = ?').get(path)
+  ) as { state: string; failCount: number } | undefined
+}
+
+function fileState(path: string): string | undefined {
+  return rowFor(path)?.state
+}
+
 /** The byte offset the index recorded; PR 2 stores -1 for a half-written file. */
 function indexedByteOffset(path: string): number | undefined {
   return harness.read(
@@ -242,9 +253,9 @@ it('resumes after close and reopen without re-reading what it already indexed', 
   const reopened = newIndexer()
   await reopened.start()
 
-  // Bytes, not files: `filesIndexed` is what the index holds, so it stays 2.
-  // Zero bytes read is the claim that matters — nothing was opened again.
-  expect(reopened.status()).toMatchObject({ filesIndexed: 2, bytesIndexed: 0 })
+  // `filesIndexed` is the count of rows the index holds at their current stat,
+  // so it stays 2. That nothing was opened again is the read loop's own test.
+  expect(reopened.status()).toMatchObject({ filesIndexed: 2, filesDue: 0 })
   expect(
     harness.read((db: SyncDatabase) => db.prepare('SELECT count(*) AS n FROM messages').get())
   ).toEqual(indexedRows)
@@ -302,10 +313,9 @@ it.skipIf(!CAN_DENY_READ)(
   }
 )
 
-// The one bound on a pass: what it does not reach goes back on the queue, and
-// the pass after it picks up exactly that. A file handed back and then unchanged
-// still has to settle -- the re-read is whole, so it writes an identical cursor,
-// and judging that by cursor movement would owe the file for ever.
+// The one bound on a pass. What it does not reach is owed on the next pass for
+// the same reason it was owed on this one -- its row says so, or it has no row
+// -- so nothing is written down and nothing can be lost.
 it('reads what one pass has time for and finishes the rest on the next', async () => {
   // The sweep is behind us, so this is the reconciler fitting four new files
   // into a deadline that stops it after two.
@@ -319,17 +329,17 @@ it('reads what one pass has time for and finishes the rest on the next', async (
     )
   }
   await indexer?.reconcile()
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 3, filesPending: 2 })
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 3, filesDue: 0 })
 
   await indexer?.reconcile()
-  expect(indexer?.status().filesPending).toBe(0)
   expect(sessionsMatching('deadlined')).toHaveLength(4)
+  expect(indexer?.status().filesIndexed).toBe(5)
 
   // Settled, and it stays settled: nothing changed, so the cycle after this
-  // one opens none of them, and reports reading nothing.
+  // one opens none of them.
   clock.costPerNowMs = 0
   await nextCycle()
-  expect(indexer?.status()).toMatchObject({ filesPending: 0, bytesIndexed: 0 })
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 5, phase: 'current' })
 })
 
 // First enablement inside a running app is the normal case, not an edge: the
@@ -403,20 +413,6 @@ it('moves the retention window with the clock instead of freezing it at construc
   expect(sessionsMatching('ages')).toEqual([])
 })
 
-// Finding 4d: a declined read returns without throwing, and counting it as
-// indexed is how a status claims files the index does not hold.
-it('counts a file as indexed only when the index actually took it', async () => {
-  await writeClaudeTranscript(transcriptPath(), ['a real read'], SESSION_ID)
-  await newIndexer().start()
-  const afterSweep = indexer?.status().bytesIndexed ?? 0
-  expect(afterSweep).toBeGreaterThan(0)
-
-  // Nothing changed, so the next cycle reads nothing and must claim nothing.
-  // `bytesIndexed` is what the pass that just ran read, so it is zero here.
-  await indexer?.reconcile()
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 1, bytesIndexed: 0 })
-})
-
 // Round 10, H1. A cycle proves a deletion by comparing what the previous pass
 // watched against what it discovers. A sweep used to watch only what it could
 // not settle, which is nothing on a healthy machine, so the cycle after a sweep
@@ -487,14 +483,11 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
       await nextCycle()
     }
 
-    // Held out, not queued: the queue is empty, the count is a gauge of files
-    // being held rather than a tally of attempts, and the phase says the index
-    // knows it is not covering something.
-    expect(indexer?.status()).toMatchObject({
-      filesPending: 0,
-      unreadableFiles: 1,
-      phase: 'degraded'
-    })
+    // Held out by its own row: three failures at one unchanged stat, counted on
+    // the row itself, and a phase that says the index knows it is not covering
+    // something rather than one that describes work it will never do.
+    expect(indexer?.status()).toMatchObject({ filesDue: 0, filesFailed: 1, phase: 'degraded' })
+    expect(rowFor(path)?.failCount).toBeGreaterThanOrEqual(3)
 
     // And the hold is released by the only thing that can mean the file
     // changed: its stat.
@@ -504,7 +497,7 @@ it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async 
     await nextCycle()
 
     expect(sessionsMatching('mode')).toEqual([SESSION_ID])
-    expect(indexer?.status()).toMatchObject({ unreadableFiles: 0, phase: 'current' })
+    expect(indexer?.status()).toMatchObject({ filesFailed: 0, phase: 'current' })
   } finally {
     await chmod(path, 0o644)
   }
@@ -577,8 +570,8 @@ it('re-reads a file a chunked read left half written, and settles it in one pass
 
   // Nothing about the file changed, and it was read anyway: the whole of it,
   // because there is no cursor to continue from.
-  expect(indexer?.status().bytesIndexed).toBe(whole)
   expect(indexedByteOffset(path)).toBe(whole)
+  expect(fileState(path)).toBe('current')
   expect(indexer?.status().phase).toBe('current')
   indexer?.close()
 
@@ -590,7 +583,7 @@ it('re-reads a file a chunked read left half written, and settles it in one pass
   await newIndexer().start()
 
   expect(sessionsMatching('lost')).toEqual([SESSION_ID])
-  expect(indexer?.status()).toMatchObject({ filesPending: 0, phase: 'current' })
+  expect(indexer?.status()).toMatchObject({ filesDue: 0, phase: 'current' })
 })
 
 it('reports closed once it is closed, whatever it was doing before', async () => {
@@ -604,8 +597,8 @@ it('reports closed once it is closed, whatever it was doing before', async () =>
 // Finding 6: a queued entry carries the stat it was recorded with. Reading at
 // that stat writes a cursor describing a file that no longer looks like this,
 // so the next cycle distrusts it and re-reads it, forever.
-it('reads a queued file at its current stat, not the one it was queued with', async () => {
-  // One file a pass, so the older one is queued carrying this stat.
+it('reads a deferred file at its current stat, not the one the pass first saw', async () => {
+  // One file a pass, so the older one is left for the pass after this.
   await startAfterASweep(readsPerPass(1))
   const older = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(older, ['the deferred conversation'], OTHER_SESSION_ID)
@@ -614,17 +607,18 @@ it('reads a queued file at its current stat, not the one it was queued with', as
   await utimes(transcriptPath(), ahead, ahead)
 
   await indexer?.reconcile()
-  expect(indexer?.status().filesPending).toBe(1)
+  // No row for it at all, which is exactly why the next pass reads it.
+  expect(rowFor(older)).toBeUndefined()
 
   await appendFile(
     older,
-    `${claudeLines(['appended while queued'], OTHER_SESSION_ID, 10).join('\n')}\n`
+    `${claudeLines(['appended while deferred'], OTHER_SESSION_ID, 10).join('\n')}\n`
   )
   await indexer?.reconcile()
 
   expect(sessionsMatching('appended')).toEqual([OTHER_SESSION_ID])
   // The cursor has to describe the file as it is now; recorded against the
-  // queued stat it would be re-read on every cycle from here on.
+  // stat the earlier pass saw it would be re-read on every cycle from here on.
   const cursor = indexedCursor(older)
   const current = await stat(older)
   expect(cursor).toEqual({ mtime_ms: current.mtimeMs, size_bytes: current.size })
@@ -646,11 +640,13 @@ it('reads a declined file at its current stat, not the one it was recorded with'
   newIndexer()
   await appendFile(path, `${claudeLines(['declined turn'], SESSION_ID, 10).join('\n')}\n`)
   await parseTranscript(path)
-  expect(indexer?.status().filesPending).toBe(1)
+  // The index holds nothing for it, which is the record: a path the file table
+  // does not name is read from the start by the next pass.
+  expect(indexer?.status().filesIndexed).toBe(0)
 
   await appendFile(path, `${claudeLines(['later turn'], SESSION_ID, 20).join('\n')}\n`)
   // The sweep is declined too -- the list's cursor is still ahead of the index
-  // -- so it is the cycle draining the queue that reads the file whole.
+  // -- so it is the pass after it that reads the file whole.
   await indexer?.start()
   await nextCycle()
 
@@ -918,14 +914,14 @@ it('stops the opening sweep at its deadline and drains the rest over the passes 
     await writeClaudeTranscript(transcriptPath(session), [`backlogged session ${index}`], session)
   }
   await newIndexer(readsPerPass(2)).start()
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 2, filesPending: 3 })
+  expect(indexer?.status().filesIndexed).toBe(2)
 
   await nextCycle()
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 4, filesPending: 1 })
+  expect(indexer?.status().filesIndexed).toBe(4)
 
   await nextCycle()
   expect(sessionsMatching('backlogged')).toHaveLength(5)
-  expect(indexer?.status()).toMatchObject({ filesPending: 0, phase: 'current' })
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 5, filesDue: 0 })
 })
 
 // The sweep cadence, with nobody asking for it: a file outside the recency
@@ -948,22 +944,33 @@ it('sweeps on its cadence without anyone asking', async () => {
   expect(sessionsMatching('older')).toEqual([OTHER_SESSION_ID])
 })
 
-// A sweep used to watch every path it discovered, which made the next cycle
-// walk the whole machine to learn that nothing had changed. What it could not
-// settle is the only thing worth carrying.
-it('watches what a sweep could not settle, not everything it discovered', async () => {
-  const older = transcriptPath(OTHER_SESSION_ID)
-  await writeClaudeTranscript(older, ['an older conversation'], OTHER_SESSION_ID)
-  await writeClaudeTranscript(transcriptPath(), ['the newest conversation'], SESSION_ID)
-  await newIndexer({ recentPerAgent: 1 }).start()
+// A cycle lists the newest N per agent, so every older row it holds is
+// undiscovered and would be walked every twenty seconds. It proves the newest
+// slice of them instead, capped: a transcript recent enough for the window is
+// recent enough to be in the slice, and the rest are the next sweep's to reach.
+it('proves deletions for the newest rows it holds, and leaves the tail to a sweep', async () => {
+  const total = 530
+  const paths: string[] = []
+  for (let index = 0; index < total; index++) {
+    const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
+    const path = transcriptPath(session)
+    await writeClaudeTranscript(path, [`capped session ${index}`], session)
+    // Oldest first, so the file deleted below is at the far end of the slice.
+    const at = new Date(Date.now() - (total - index) * 60_000)
+    await utimes(path, at, at)
+    paths.push(path)
+  }
+  await newIndexer().start()
+  expect(indexedSessionCount()).toBe(total)
 
-  await rm(older)
+  // Older than the cap reaches: 530 rows, twelve of them rediscovered by the
+  // cycle, leaves 518 undiscovered against a cap of 512.
+  await rm(paths[0] ?? '')
   await nextCycle()
-  // Outside the recency window, so a cycle makes no promise about it.
-  expect(sessionsMatching('older')).toEqual([OTHER_SESSION_ID])
+  expect(indexedSessionCount()).toBe(total)
 
   await indexer?.reconcile({ full: true })
-  expect(sessionsMatching('older')).toEqual([])
+  expect(indexedSessionCount()).toBe(total - 1)
 })
 
 // F1: `fullSweepDue` stayed set across the sweep's await and was cleared on the
@@ -1011,9 +1018,9 @@ it('hands the rest of a pass back when it runs out of wall time', async () => {
   }
   await newIndexer(readsPerPass(16)).start()
 
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 16, filesPending: 4 })
+  expect(indexer?.status().filesIndexed).toBe(16)
 
-  // And the pass after it picks up exactly what was handed back.
+  // And the pass after it picks up exactly the four it did not reach.
   await nextCycle()
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 20, filesPending: 0 })
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 20, filesDue: 0 })
 })

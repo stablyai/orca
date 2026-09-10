@@ -56,8 +56,25 @@ async function candidates() {
   ).candidates
 }
 
+/** What a pass hands the read loop: the store's rows, read once. */
+function rows() {
+  return new Map(store.files().map((row) => [row.path, row]))
+}
+
+function pass(options: { overdue?: () => boolean } = {}) {
+  return runSessionSearchIndexPass(store, [], { rows: rows(), ...options })
+}
+
+async function passOverAll(options: { overdue?: () => boolean } = {}) {
+  return runSessionSearchIndexPass(store, await candidates(), { rows: rows(), ...options })
+}
+
+function states(): Record<string, string> {
+  return Object.fromEntries(store.files().map((row) => [row.path, row.state]))
+}
+
 it('re-reads nothing it already holds, even with a cold session-list cache', async () => {
-  const first = await runSessionSearchIndexPass(store, await candidates())
+  const first = await passOverAll()
   expect(first.stats.fullParses).toBe(2)
 
   // A restart: the parse cache is gone, the index's `files` table is not.
@@ -66,52 +83,54 @@ it('re-reads nothing it already holds, even with a cold session-list cache', asy
   resetSessionParseCacheForTests()
   store = openStore()
 
-  const second = await runSessionSearchIndexPass(store, await candidates())
+  const second = await passOverAll()
   expect(second.stats).toMatchObject({ fullParses: 0, incremental: 0, reused: 0, bytesRead: 0 })
   expect(errors).toEqual([])
 })
 
 it('resumes into a grown transcript instead of re-reading it whole', async () => {
-  await runSessionSearchIndexPass(store, await candidates())
+  await passOverAll()
   await appendFile(transcript(FIRST), `${claudeLines(['a later turn'], FIRST, 10).join('\n')}\n`)
 
-  const second = await runSessionSearchIndexPass(store, await candidates())
+  const second = await passOverAll()
   expect(second.stats).toMatchObject({ incremental: 1, fullParses: 0 })
 })
 
-it('hands back everything it ran out of time for, in order', async () => {
+// Nothing is recorded about what a deadline cut off, because being owed is a
+// fact about the row: the file is read on the next pass for the same reason it
+// was owed on this one.
+it('leaves what it ran out of time for owed, with nothing written down', async () => {
   const all = await candidates()
-  const pass = await runSessionSearchIndexPass(store, all, { overdue: () => true })
+  const cut = await runSessionSearchIndexPass(store, all, { rows: rows(), overdue: () => true })
 
-  expect(pass.deferred.map((one) => one.file.path)).toEqual(
-    all.slice(1).map((one) => one.file.path)
-  )
-  expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
-    n: 1
-  })
+  expect(cut.outOfTime).toBe(true)
+  expect(store.files()).toHaveLength(1)
+  const second = await passOverAll()
+  expect(second.stats.fullParses).toBe(1)
+  expect(store.files()).toHaveLength(2)
 })
 
 // The deadline is never applied before the pass has read anything, so a single
-// transcript larger than one deadline is read alone rather than deferred for
-// ever behind a bound it can never fit inside.
+// transcript larger than one deadline is read alone rather than starved.
 it('reads one file even when the deadline has already expired', async () => {
   const only = (await candidates()).slice(0, 1)
-  const pass = await runSessionSearchIndexPass(store, only, { overdue: () => true })
+  const alone = await runSessionSearchIndexPass(store, only, { rows: rows(), overdue: () => true })
 
-  expect(pass.deferred).toEqual([])
-  expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
-    n: 1
-  })
+  expect(alone.outOfTime).toBe(false)
+  expect(store.files()).toHaveLength(1)
 })
 
 it('skips a source the reader cannot even open without failing the pass', async () => {
   const all = await candidates()
   await rm(transcript(FIRST))
-  const pass = await runSessionSearchIndexPass(store, all)
-  expect(pass.deferred).toEqual([])
+  await runSessionSearchIndexPass(store, all, { rows: rows() })
+
+  // One session indexed, and the missing one recorded as a failed read rather
+  // than as content the index holds.
   expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
     n: 1
   })
+  expect(states()[transcript(FIRST)]).toBe('failed')
 })
 
 // Finding 6: mtime alone is not the freshness key. A transcript that grows
@@ -122,13 +141,13 @@ it('re-reads a file that grew without its mtime moving', async () => {
   // A whole-millisecond stamp, so restoring it later reproduces it exactly.
   const frozen = new Date(1_740_000_000_000)
   await utimes(path, frozen, frozen)
-  await runSessionSearchIndexPass(store, await candidates())
+  await passOverAll()
 
   await appendFile(path, `${claudeLines(['a same-mtime append'], FIRST, 20).join('\n')}\n`)
   await utimes(path, frozen, frozen)
   expect((await stat(path)).mtimeMs).toBe(frozen.getTime())
 
-  const second = await runSessionSearchIndexPass(store, await candidates())
+  const second = await passOverAll()
   expect(second.stats.fullParses + second.stats.incremental).toBe(1)
 })
 
@@ -143,57 +162,33 @@ it('is not overtaken by a list parse racing the same path', async () => {
   // The list parses this path first, so its cursor covers the file, and again
   // concurrently with the index's pass so the two interleave.
   await parseTranscript(path)
-  const [, pass] = await Promise.all([
+  await Promise.all([
     parseTranscript(path),
-    runSessionSearchIndexPass(store, only)
+    runSessionSearchIndexPass(store, only, { rows: rows() })
   ])
 
-  expect(pass.deferred).toEqual([])
   expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
     n: 1
   })
 })
 
-// A read that dies between chunks leaves rows for a prefix and a cursor no
-// append continues, under the whole file's mtime and size. Counting that as
-// indexed drops the file from the queue, and nothing ever finishes it.
-it('does not count a file a chunked read left half written as indexed', async () => {
-  const only = (await candidates()).slice(0, 1)
-  const indexed: string[] = []
-  const reported = store.indexedFile.bind(store)
-  store.indexedFile = (path, identity) => {
-    const row = reported(path, identity)
-    return row === null ? null : { ...row, byteOffset: null }
-  }
-
-  const pass = await runSessionSearchIndexPass(store, only, {
-    onIndexed: (candidate) => indexed.push(candidate.file.path)
-  })
-
-  // The read ran and the rows landed; what it did not do is claim the file is
-  // covered, because the cursor it left continues nothing.
-  expect(pass.stats.fullParses).toBe(1)
-  expect(indexed).toEqual([])
-})
-
 // Finding 4d: a declined read is a parse that returns normally and indexes
-// nothing. Counting it makes a status claim files the index does not hold.
-it('does not count a read the index declined, even though the parse succeeded', async () => {
+// nothing. It has to leave the row owing a read, not looking covered.
+it('leaves a declined read owed rather than recorded as held', async () => {
   const only = (await candidates()).slice(0, 1)
-  const indexed: string[] = []
-  // What a WAL-budget refusal or a store that stopped accepting looks like from
-  // the consumer's side: the read runs, and nothing is written.
+  // What a store that refuses a write looks like from the consumer's side: the
+  // read runs, and nothing is written.
   store.beginWrite = () => null
 
-  const pass = await runSessionSearchIndexPass(store, only, {
-    onIndexed: (candidate) => indexed.push(candidate.file.path)
-  })
+  const stats = await runSessionSearchIndexPass(store, only, { rows: rows() })
 
-  expect(pass.stats.fullParses).toBe(1)
-  expect(indexed).toEqual([])
+  expect(stats.stats.fullParses).toBe(1)
   expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
     n: 0
   })
-  // Declined, not forgotten: the store records it for a later whole re-read.
-  expect(store.takeStale()).toHaveLength(1)
+  expect(store.files()).toEqual([])
+})
+
+it('reads nothing when there is nothing to read', async () => {
+  expect((await pass()).stats).toMatchObject({ fullParses: 0 })
 })
