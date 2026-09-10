@@ -7,6 +7,7 @@ import type {
   StructuredAgentSessionAppendOptions,
   StructuredAgentSessionEventSink
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 import { acquired, fakeClaude } from './claude-structured-session-test-support'
@@ -26,11 +27,10 @@ function sinkState() {
     publish: vi.fn()
   }
   const lifecycle = () =>
-    items.flatMap((item) =>
-      item.body.kind === 'status' && item.body.turnLifecycle
-        ? [{ ...item.body.turnLifecycle, options: item.options }]
-        : []
-    )
+    items.flatMap((item) => {
+      const turn = readAgentJournalTurn(item.body)
+      return turn ? [{ ...turn, options: item.options }] : []
+    })
   return { sink, items, tombstones, lifecycle }
 }
 

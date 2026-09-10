@@ -9,6 +9,10 @@ import type {
   AgentJournalRenderItem,
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session-journal-types'
+import {
+  agentJournalTurnBody,
+  readAgentJournalTurn
+} from '../../../shared/agent-session-turn-record'
 import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
@@ -37,7 +41,8 @@ export function runningTurnLifecycleRevisions(
 ): JournalLifecycleMutationInput[] {
   const revisions: JournalLifecycleMutationInput[] = []
   for (const item of items) {
-    if (item.body.kind !== 'status' || item.body.turnLifecycle?.state !== 'running') {
+    const turn = readAgentJournalTurn(item.body)
+    if (turn?.state !== 'running') {
       continue
     }
     const identity = parseAgentJournalItemKey(item.itemId)
@@ -47,7 +52,7 @@ export function runningTurnLifecycleRevisions(
     revisions.push({
       kind: 'item',
       identity,
-      body: { ...item.body, turnLifecycle: settledLifecycle(item.body.turnLifecycle, verdict) }
+      body: agentJournalTurnBody(settledLifecycle(turn, verdict))
     })
   }
   return revisions
@@ -58,6 +63,9 @@ function settledLifecycle(
   verdict: StructuredAgentSessionTurnVerdict
 ): AgentJournalTurnLifecycle {
   const settled: AgentJournalTurnLifecycle = { turnId: lifecycle.turnId, state: verdict.state }
+  if (lifecycle.userItemId !== undefined) {
+    settled.userItemId = lifecycle.userItemId
+  }
   if (lifecycle.startedAt !== undefined) {
     settled.startedAt = lifecycle.startedAt
   }

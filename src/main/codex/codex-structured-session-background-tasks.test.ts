@@ -199,10 +199,7 @@ describe('codex background tasks reach the strip', () => {
       // The open turn's lifecycle row is revised to interrupted, never tombstoned.
       expect(appendItem.mock.calls.map((call) => call[1])).toEqual([
         { kind: 'status', text: 'Provider exited: notification admission failed (failed)' },
-        expect.objectContaining({
-          kind: 'status',
-          turnLifecycle: expect.objectContaining({ state: 'interrupted' })
-        })
+        expect.objectContaining({ kind: 'turn', state: 'interrupted' })
       ])
       expect(observed).toEqual([
         expect.objectContaining({

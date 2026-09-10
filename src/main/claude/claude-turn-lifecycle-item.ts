@@ -1,8 +1,8 @@
 import type {
   AgentJournalItemIdentity,
-  AgentJournalStatusItem
+  AgentJournalTurnItem
 } from '../../shared/agent-session-journal-types'
-import { agentTurnLifecycleText } from '../../shared/agent-turn-lifecycle-text'
+import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { claudeText } from './claude-structured-item-translation'
 
@@ -57,17 +57,15 @@ export function claudeTurnLifecycleItem(
   end?: ClaudeTurnEnd
 ): {
   identity: AgentJournalItemIdentity
-  body: AgentJournalStatusItem
+  body: AgentJournalTurnItem
   options: StructuredAgentSessionAppendOptions
   publishCoalescingKey: string
 } {
   const { sessionId, turnId, startedAt, userItemId } = turn
   return {
     identity: claudeTurnLifecycleIdentity(sessionId, turnId),
-    body: {
-      kind: 'status',
-      text: agentTurnLifecycleText('Claude', end ? end.state : 'running'),
-      turnLifecycle: end
+    body: agentJournalTurnBody(
+      end
         ? {
             turnId,
             state: end.state,
@@ -77,7 +75,7 @@ export function claudeTurnLifecycleItem(
             ...(end.durationMs === undefined ? {} : { durationMs: end.durationMs })
           }
         : { turnId, state: 'running', startedAt, userItemId }
-    },
+    ),
     // The running row's ts is the turn start itself, so clients read no append lag.
     options: end ? {} : { observedAt: startedAt },
     publishCoalescingKey: end ? 'publish' : `turn-start:${sessionId}:${turnId}`

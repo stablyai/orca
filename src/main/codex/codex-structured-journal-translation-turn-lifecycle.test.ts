@@ -104,22 +104,35 @@ describe('codex turn lifecycle rows', () => {
       primaryThreadId: () => THREAD_ID
     })
     deferred.bind({ journal, fence: 1, publish: () => {} })
+    const before = journal.cursor()
 
     translator.handle(notification('turn/started', { turn: { id: TURN_ID } }, 1_000))
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
 
+    const appended = journal.readSince(before)
+    expect(appended.ok && appended.rows).toEqual([
+      expect.objectContaining({
+        kind: 'item',
+        v: 3,
+        ts: 1_000,
+        body: {
+          kind: 'turn',
+          turnId: TURN_ID,
+          state: 'running',
+          userItemId: USER_ITEM_ID,
+          startedAt: 1_000
+        }
+      })
+    ])
     expect(journal.snapshot().items).toEqual([
       expect.objectContaining({
         observedAt: 1_000,
         body: {
-          kind: 'status',
-          text: 'Codex is working…',
-          turnLifecycle: {
-            turnId: TURN_ID,
-            state: 'running',
-            userItemId: USER_ITEM_ID,
-            startedAt: 1_000
-          }
+          kind: 'turn',
+          turnId: TURN_ID,
+          state: 'running',
+          userItemId: USER_ITEM_ID,
+          startedAt: 1_000
         }
       })
     ])
@@ -141,16 +154,15 @@ describe('codex turn lifecycle rows', () => {
 
     expect(tap.rows.at(-1)).toEqual({
       key: LIFECYCLE_KEY,
-      body: expect.objectContaining({
-        turnLifecycle: {
-          turnId: TURN_ID,
-          state: 'completed',
-          userItemId: USER_ITEM_ID,
-          startedAt: 1_000,
-          completedAt: 4_500,
-          durationMs: 3_250
-        }
-      })
+      body: {
+        kind: 'turn',
+        turnId: TURN_ID,
+        state: 'completed',
+        userItemId: USER_ITEM_ID,
+        startedAt: 1_000,
+        completedAt: 4_500,
+        durationMs: 3_250
+      }
     })
   })
 
@@ -167,15 +179,14 @@ describe('codex turn lifecycle rows', () => {
       expect(reduced(tap.rows)).toEqual([
         {
           key: LIFECYCLE_KEY,
-          body: expect.objectContaining({
-            turnLifecycle: {
-              turnId: TURN_ID,
-              state: 'interrupted',
-              userItemId: USER_ITEM_ID,
-              startedAt: 1_000,
-              completedAt: 2_000
-            }
-          })
+          body: {
+            kind: 'turn',
+            turnId: TURN_ID,
+            state: 'interrupted',
+            userItemId: USER_ITEM_ID,
+            startedAt: 1_000,
+            completedAt: 2_000
+          }
         }
       ])
     }
@@ -190,8 +201,8 @@ describe('codex turn lifecycle rows', () => {
     translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
 
     expect(tap.rows.map((row) => row.body)).toMatchObject([
-      { turnLifecycle: { state: 'running', startedAt: 10_250 } },
-      { turnLifecycle: { state: 'completed', startedAt: 10_250, completedAt: 10_500 } }
+      { kind: 'turn', state: 'running', startedAt: 10_250 },
+      { kind: 'turn', state: 'completed', startedAt: 10_250, completedAt: 10_500 }
     ])
   })
 
@@ -205,14 +216,11 @@ describe('codex turn lifecycle rows', () => {
       {
         key: LIFECYCLE_KEY,
         body: {
-          kind: 'status',
-          text: 'Codex turn completed',
-          turnLifecycle: {
-            turnId: TURN_ID,
-            state: 'completed',
-            userItemId: USER_ITEM_ID,
-            completedAt: 3_000
-          }
+          kind: 'turn',
+          turnId: TURN_ID,
+          state: 'completed',
+          userItemId: USER_ITEM_ID,
+          completedAt: 3_000
         }
       }
     ])
@@ -276,30 +284,24 @@ describe('codex turn lifecycle rows', () => {
       {
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-done',
         body: {
-          kind: 'status',
-          text: 'Codex turn completed',
-          turnLifecycle: {
-            turnId: 'turn-done',
-            state: 'completed',
-            userItemId: 'codex:thread-abc:turn-done:0',
-            startedAt: 1_700_000_000_000,
-            completedAt: 1_700_000_042_000,
-            durationMs: 41_900
-          }
+          kind: 'turn',
+          turnId: 'turn-done',
+          state: 'completed',
+          userItemId: 'codex:thread-abc:turn-done:0',
+          startedAt: 1_700_000_000_000,
+          completedAt: 1_700_000_042_000,
+          durationMs: 41_900
         }
       },
       {
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-cut',
         body: {
-          kind: 'status',
-          text: 'Codex turn interrupted',
-          turnLifecycle: {
-            turnId: 'turn-cut',
-            state: 'interrupted',
-            userItemId: 'codex:thread-abc:turn-cut:0',
-            startedAt: 1_700_000_100_000,
-            completedAt: 1_700_000_101_000
-          }
+          kind: 'turn',
+          turnId: 'turn-cut',
+          state: 'interrupted',
+          userItemId: 'codex:thread-abc:turn-cut:0',
+          startedAt: 1_700_000_100_000,
+          completedAt: 1_700_000_101_000
         }
       }
     ])

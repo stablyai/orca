@@ -1,3 +1,4 @@
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey,
@@ -108,7 +109,7 @@ export async function rewindStructuredAgentSession(
                 (identity?.provider === 'codex' &&
                   identity.threadId === key.threadId &&
                   identity.turnId === key.turnId) ||
-                (item.body.kind === 'status' && item.body.turnLifecycle?.turnId === key.turnId)
+                readAgentJournalTurn(item.body)?.turnId === key.turnId
               )
             })
           } else if (key.provider === 'claude' && head.provider === 'claude') {

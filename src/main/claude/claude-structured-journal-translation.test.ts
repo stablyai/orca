@@ -20,6 +20,7 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from '../native-chat/agent-session-journal/journal-payload-bounds'
 import type { ClaudePendingPrompt } from './claude-structured-prompt-replies'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
 
 function sinkState() {
@@ -37,11 +38,11 @@ function sinkState() {
 function lifecycleAppends(
   items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]
 ) {
-  return items.flatMap((item) =>
-    item.identity.provider === 'legacy' && item.body.kind === 'status' && item.body.turnLifecycle
-      ? [[item.identity.recordId, item.body.turnLifecycle.state]]
-      : []
-  )
+  return items.flatMap((item) => {
+    const identity = item.identity
+    const turn = identity.provider === 'legacy' ? readAgentJournalTurn(item.body) : null
+    return turn && identity.provider === 'legacy' ? [[identity.recordId, turn.state]] : []
+  })
 }
 
 function message(
@@ -354,9 +355,7 @@ describe('Claude structured journal translation', () => {
         item.body.kind === 'message' && item.body.role === 'user' ? [item.body.blocks] : []
       )
     ).toEqual([])
-    expect(
-      state.items.some((item) => item.body.kind === 'status' && !item.body.turnLifecycle)
-    ).toBe(false)
+    expect(state.items.some((item) => item.body.kind === 'status')).toBe(false)
     expect(state.tombstones).toEqual([])
     expect(lifecycleAppends(state.items)).toEqual([
       ['turn-lifecycle:user-replay-1', 'running'],
@@ -386,7 +385,7 @@ describe('Claude structured journal translation', () => {
     liveTranslator.handle(resultFrame('success', { is_error: false, result: '' }))
     expect(live.items.at(-1)).toMatchObject({
       identity: { provider: 'legacy', recordId: 'turn-lifecycle:picker-command-1' },
-      body: { turnLifecycle: { turnId: 'picker-command-1', state: 'completed' } }
+      body: { kind: 'turn', turnId: 'picker-command-1', state: 'completed' }
     })
     liveTranslator.dispose()
 
@@ -532,11 +531,9 @@ describe('Claude structured journal translation', () => {
       state: 'completed',
       output: { head: 'a.ts\nb.ts', truncated: false }
     })
-    expect(
-      state.items.some(
-        (item) => item.body.kind === 'status' && item.body.turnLifecycle?.turnId === 'user-1'
-      )
-    ).toBe(true)
+    expect(state.items.some((item) => readAgentJournalTurn(item.body)?.turnId === 'user-1')).toBe(
+      true
+    )
 
     translator.handle(
       message(
@@ -586,14 +583,11 @@ describe('Claude structured journal translation', () => {
     )
 
     expect(state.items.at(-1)?.body).toEqual({
-      kind: 'status',
-      text: 'Claude is working…',
-      turnLifecycle: {
-        turnId: 'user-image',
-        state: 'running',
-        startedAt: expect.any(Number),
-        userItemId: 'claude:claude-session:user-image'
-      }
+      kind: 'turn',
+      turnId: 'user-image',
+      state: 'running',
+      startedAt: expect.any(Number),
+      userItemId: 'claude:claude-session:user-image'
     })
   })
 
@@ -615,11 +609,7 @@ describe('Claude structured journal translation', () => {
       state: 'completed',
       output: { head: 'done' }
     })
-    expect(
-      state.items.some(
-        (item) => item.body.kind === 'status' && item.body.turnLifecycle !== undefined
-      )
-    ).toBe(false)
+    expect(state.items.some((item) => readAgentJournalTurn(item.body) !== null)).toBe(false)
   })
 
   it('paints nothing for a user frame that carries no content', () => {

@@ -27,7 +27,19 @@ function lifecycleItem(
     revision: 1,
     sequence,
     observedAt: sequence,
-    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId, state, ...extra } }
+    body: { kind: 'turn', turnId, state, ...extra }
+  }
+}
+
+/** The status-form carrier an older host wrote; still read, never written back. */
+function legacyLifecycleItem(turnId: string, startedAt: number): AgentJournalRenderItem {
+  return {
+    ...lifecycleItem(turnId, 'running', 2),
+    body: {
+      kind: 'status',
+      text: 'Working',
+      turnLifecycle: { turnId, state: 'running', startedAt }
+    }
   }
 }
 
@@ -59,26 +71,31 @@ describe('running turn lifecycle revisions', () => {
           kind: 'item',
           identity: RUNNING_IDENTITY,
           body: {
-            kind: 'status',
-            text: 'Working',
-            turnLifecycle: {
-              turnId: 'turn-2',
-              state: 'interrupted',
-              startedAt: 30,
-              completedAt: 40
-            }
+            kind: 'turn',
+            turnId: 'turn-2',
+            state: 'interrupted',
+            startedAt: 30,
+            completedAt: 40
           }
         }
       ]
     )
     expect(runningTurnLifecycleRevisions(items, { state: 'unverifiable' })).toEqual([
       expect.objectContaining({
-        body: {
-          kind: 'status',
-          text: 'Working',
-          turnLifecycle: { turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
-        }
+        body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
       })
+    ])
+  })
+
+  it('revises a legacy status-form running row from an older host into a typed turn', () => {
+    expect(
+      runningTurnLifecycleRevisions([legacyLifecycleItem('turn-2', 30)], { state: 'unverifiable' })
+    ).toEqual([
+      {
+        kind: 'item',
+        identity: RUNNING_IDENTITY,
+        body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
+      }
     ])
   })
 
@@ -122,11 +139,7 @@ describe('stale running turns on a cold acquire', () => {
         {
           kind: 'item',
           identity: RUNNING_IDENTITY,
-          body: {
-            kind: 'status',
-            text: 'Working',
-            turnLifecycle: { turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
-          }
+          body: { kind: 'turn', turnId: 'turn-2', state: 'unverifiable', startedAt: 30 }
         }
       ]
     })

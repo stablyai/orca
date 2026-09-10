@@ -9,6 +9,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycleState
 } from './agent-session-journal-types'
+import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatSettledTurn } from './native-chat-turn-status'
 
 export type StructuredAgentTurnTiming = {
@@ -25,11 +26,11 @@ export type StructuredAgentTurnTiming = {
 }
 
 function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | null {
-  const body = item.body
-  if (body.kind !== 'status' || !body.turnLifecycle) {
+  const turn = readAgentJournalTurn(item.body)
+  if (!turn) {
     return null
   }
-  const { state, startedAt, completedAt, durationMs } = body.turnLifecycle
+  const { state, startedAt, completedAt, durationMs } = turn
   if (startedAt === undefined || !Number.isFinite(startedAt) || startedAt <= 0) {
     return null
   }
@@ -78,7 +79,7 @@ export function selectStructuredAgentTurnTimings(
     if (!timing) {
       continue
     }
-    const key = item.body.kind === 'status' ? item.body.turnLifecycle?.userItemId : undefined
+    const key = readAgentJournalTurn(item.body)?.userItemId
     const userItemId =
       key === undefined ? precedingUserItemId : itemIds.has(key) ? key : (aliases.get(key) ?? null)
     if (userItemId !== null) {
@@ -96,7 +97,7 @@ export function selectStructuredAgentRunningTurnTiming(
 ): StructuredAgentTurnTiming | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
-    if (item?.body.kind === 'status' && item.body.turnLifecycle?.turnId === turnId) {
+    if (item && readAgentJournalTurn(item.body)?.turnId === turnId) {
       return readTiming(item)
     }
   }

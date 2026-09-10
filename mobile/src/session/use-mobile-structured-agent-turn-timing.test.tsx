@@ -3,8 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalTurnLifecycle
 } from '../../../src/shared/agent-session-journal-types'
+import { agentJournalTurnBody } from '../../../src/shared/agent-session-turn-record'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 
 // Host clock sits an hour ahead of the client's so any leak of a host timestamp
@@ -25,10 +27,7 @@ function user(itemId: string, sequence: number): AgentJournalRenderItem {
 function lifecycle(
   turnId: string,
   sequence: number,
-  turnLifecycle: Omit<
-    NonNullable<Extract<AgentJournalRenderItem['body'], { kind: 'status' }>['turnLifecycle']>,
-    'turnId'
-  >,
+  turn: Omit<AgentJournalTurnLifecycle, 'turnId'>,
   observedAt: number
 ): AgentJournalRenderItem {
   return {
@@ -36,7 +35,7 @@ function lifecycle(
     revision: 1,
     sequence,
     observedAt,
-    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId, ...turnLifecycle } }
+    body: agentJournalTurnBody({ turnId, ...turn })
   }
 }
 

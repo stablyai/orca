@@ -154,9 +154,7 @@ describe('codex journal translation', () => {
     expect(
       translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
     ).toEqual({ accepted: false, reason: 'backpressure' })
-    expect(tap.rows.filter((row) => row.body.kind === 'status')).toHaveLength(
-      MAX_CODEX_ACTIVE_TURNS
-    )
+    expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(MAX_CODEX_ACTIVE_TURNS)
 
     expect(translator.handle(notification('turn/completed', { turn: { id: 'turn-0' } }))).toEqual({
       accepted: true
@@ -233,28 +231,22 @@ describe('codex journal translation', () => {
       {
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-1',
         body: {
-          kind: 'status',
-          text: 'Codex is working…',
-          turnLifecycle: {
-            turnId: TURN_ID,
-            state: 'running',
-            userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
-            startedAt: expect.any(Number)
-          }
+          kind: 'turn',
+          turnId: TURN_ID,
+          state: 'running',
+          userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
+          startedAt: expect.any(Number)
         }
       },
       {
         key: 'legacy:codex:session-1:turn-lifecycle%3Aturn-1',
         body: {
-          kind: 'status',
-          text: 'Codex turn completed',
-          turnLifecycle: {
-            turnId: TURN_ID,
-            state: 'completed',
-            userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
-            startedAt: expect.any(Number),
-            completedAt: expect.any(Number)
-          }
+          kind: 'turn',
+          turnId: TURN_ID,
+          state: 'completed',
+          userItemId: `codex:${THREAD_ID}:${TURN_ID}:0`,
+          startedAt: expect.any(Number),
+          completedAt: expect.any(Number)
         }
       }
     ])
@@ -272,21 +264,13 @@ describe('codex journal translation', () => {
     translator.handle(notification('turn/started', { turn: { id: 'turn-later' } }))
     translator.handle({ type: 'ended', sessionId: SESSION_ID, reason: 'app-server exited' })
 
-    expect(tap.rows.filter((row) => row.body.kind === 'status')).toHaveLength(5)
+    expect(tap.rows.filter((row) => row.body.kind === 'turn')).toHaveLength(4)
     expect(tap.rows.map((row) => row.body)).toEqual([
-      expect.objectContaining({
-        turnLifecycle: expect.objectContaining({ turnId: 'turn-stale', state: 'running' })
-      }),
-      expect.objectContaining({
-        turnLifecycle: expect.objectContaining({ turnId: 'turn-later', state: 'running' })
-      }),
+      expect.objectContaining({ kind: 'turn', turnId: 'turn-stale', state: 'running' }),
+      expect.objectContaining({ kind: 'turn', turnId: 'turn-later', state: 'running' }),
       expect.objectContaining({ text: 'Provider exited: app-server exited' }),
-      expect.objectContaining({
-        turnLifecycle: expect.objectContaining({ turnId: 'turn-stale', state: 'interrupted' })
-      }),
-      expect.objectContaining({
-        turnLifecycle: expect.objectContaining({ turnId: 'turn-later', state: 'interrupted' })
-      })
+      expect.objectContaining({ kind: 'turn', turnId: 'turn-stale', state: 'interrupted' }),
+      expect.objectContaining({ kind: 'turn', turnId: 'turn-later', state: 'interrupted' })
     ])
     expect(tap.tombstones).toEqual([])
     // Both running rows are revised to interrupted, so no lifecycle identity
@@ -318,12 +302,8 @@ describe('codex journal translation', () => {
 
     expect(tap.tombstones).toEqual([])
     expect(reduced(tap.rows).map((row) => row.body)).toEqual([
-      expect.objectContaining({
-        turnLifecycle: expect.objectContaining({ turnId: 'turn-stale', state: 'completed' })
-      }),
-      expect.objectContaining({
-        turnLifecycle: expect.objectContaining({ turnId: 'turn-later', state: 'completed' })
-      })
+      expect.objectContaining({ kind: 'turn', turnId: 'turn-stale', state: 'completed' }),
+      expect.objectContaining({ kind: 'turn', turnId: 'turn-later', state: 'completed' })
     ])
     expect(
       projectStructuredAgentSessionStatus(
@@ -526,9 +506,7 @@ describe('codex journal translation', () => {
       }),
       expect.objectContaining({
         kind: 'item',
-        body: expect.objectContaining({
-          turnLifecycle: expect.objectContaining({ turnId: TURN_ID, state: 'interrupted' })
-        })
+        body: expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'interrupted' })
       })
     ])
   })
@@ -722,10 +700,7 @@ describe('codex journal translation', () => {
     await expect(deferred.lifecycleBarrier()).resolves.toEqual({ ok: true })
 
     expect(bodies).toEqual([
-      expect.objectContaining({
-        kind: 'status',
-        turnLifecycle: expect.objectContaining({ turnId: TURN_ID, state: 'running' })
-      })
+      expect.objectContaining({ kind: 'turn', turnId: TURN_ID, state: 'running' })
     ])
     expect(publishes).toHaveLength(1)
   })

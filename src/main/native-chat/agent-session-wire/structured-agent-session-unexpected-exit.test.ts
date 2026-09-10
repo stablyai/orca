@@ -54,7 +54,7 @@ function lifecycleItem(
     revision: 1,
     sequence,
     observedAt: sequence,
-    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId, ...turnLifecycle } }
+    body: { kind: 'turn', turnId, ...turnLifecycle }
   }
 }
 
@@ -127,14 +127,11 @@ describe('provider-exit recovery tickets', () => {
           kind: 'item',
           identity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-2', ordinal: 0 },
           body: {
-            kind: 'status',
-            text: 'Working',
-            turnLifecycle: {
-              turnId: 'turn-2',
-              state: 'interrupted',
-              startedAt: 30,
-              completedAt: 1_234
-            }
+            kind: 'turn',
+            turnId: 'turn-2',
+            state: 'interrupted',
+            startedAt: 30,
+            completedAt: 1_234
           }
         }
       ]

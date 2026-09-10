@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
@@ -238,8 +239,8 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       appendItem: (identity, body) => {
         if (body.kind === 'message') {
           bodies.push(body)
-        } else if (body.kind === 'status' && body.turnLifecycle) {
-          lifecycles.push({ identity, turnLifecycle: body.turnLifecycle })
+        } else if (readAgentJournalTurn(body)) {
+          lifecycles.push({ identity, turnLifecycle: readAgentJournalTurn(body) })
         }
       },
       appendTombstone: (identity) => {

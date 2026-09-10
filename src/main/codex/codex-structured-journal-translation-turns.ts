@@ -1,11 +1,11 @@
 import type {
   AgentJournalItemIdentity,
-  AgentJournalStatusItem,
+  AgentJournalTurnItem,
   AgentJournalTurnLifecycle,
   AgentJournalTurnLifecycleState
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { agentTurnLifecycleText } from '../../shared/agent-turn-lifecycle-text'
+import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
 import { CODEX_USER_MESSAGE_ORDINAL } from './codex-structured-turn-start'
 import type {
   StructuredAgentSessionEventSink,
@@ -38,12 +38,8 @@ export function codexTurnUserItemId(threadId: string, turnId: string): string {
 
 export function codexTurnLifecycleBody(
   turnLifecycle: AgentJournalTurnLifecycle
-): AgentJournalStatusItem {
-  return {
-    kind: 'status',
-    text: agentTurnLifecycleText('Codex', turnLifecycle.state),
-    turnLifecycle
-  }
+): AgentJournalTurnItem {
+  return agentJournalTurnBody(turnLifecycle)
 }
 
 /** `turn/completed` is Codex's only turn-end notification; a missing status is a clean finish. */

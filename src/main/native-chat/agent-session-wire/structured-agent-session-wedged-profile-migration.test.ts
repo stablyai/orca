@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { evaluateAgentSessionAcquisition } from '../../../shared/agent-session-lease-adjudication'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type {
   AgentSessionClaimStatus,
   AgentSessionHandoffStage,
@@ -197,11 +198,7 @@ async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<
     provider === 'codex'
       ? { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
       : { provider: 'claude', sessionId: 'provider-session-alpha-1', uuid: 'uuid-running' },
-    {
-      kind: 'status',
-      text: 'Agent is working...',
-      turnLifecycle: { turnId: 'turn-1', state: 'running', startedAt: NOW - 5_000 }
-    },
+    { kind: 'turn', turnId: 'turn-1', state: 'running', startedAt: NOW - 5_000 },
     { fence: 13 }
   )
   await journal.close()
@@ -210,13 +207,8 @@ async function seedRunningTurn(provider: 'codex' | 'claude' = 'codex'): Promise<
 function turnLifecycle(turnId: string) {
   const item = restoredJournal()
     .snapshot()
-    .items.find(
-      (candidate) =>
-        candidate.body.kind === 'status' && candidate.body.turnLifecycle?.turnId === turnId
-    )
-  return item?.body.kind === 'status'
-    ? { ...item.body.turnLifecycle, recovered: item.recovered }
-    : null
+    .items.find((candidate) => readAgentJournalTurn(candidate.body)?.turnId === turnId)
+  return item ? { ...readAgentJournalTurn(item.body), recovered: item.recovered } : null
 }
 
 function restoredJournal(): AgentSessionJournal {
@@ -385,11 +377,7 @@ describe('already-wedged profiles become usable on load', () => {
     const fence = store.getRecord(SESSION)!.lease.runtimeFence
     await restoredJournal().appendItem(
       { provider: 'codex', threadId: THREAD, turnId: 'turn-2', ordinal: 0 },
-      {
-        kind: 'status',
-        text: 'Agent is working...',
-        turnLifecycle: { turnId: 'turn-2', state: 'running', startedAt: NOW }
-      },
+      { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: NOW },
       { fence }
     )
 

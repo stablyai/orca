@@ -4,8 +4,10 @@ import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalTurnLifecycle
 } from '../../../../shared/agent-session-journal-types'
+import { agentJournalTurnBody } from '../../../../shared/agent-session-turn-record'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
 
 // Host clock sits an hour ahead of the client's so any leak of a host timestamp
@@ -26,10 +28,7 @@ function user(itemId: string, sequence: number): AgentJournalRenderItem {
 function lifecycle(
   turnId: string,
   sequence: number,
-  turnLifecycle: Omit<
-    NonNullable<Extract<AgentJournalRenderItem['body'], { kind: 'status' }>['turnLifecycle']>,
-    'turnId'
-  >,
+  turn: Omit<AgentJournalTurnLifecycle, 'turnId'>,
   observedAt: number
 ): AgentJournalRenderItem {
   return {
@@ -37,7 +36,20 @@ function lifecycle(
     revision: 1,
     sequence,
     observedAt,
-    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId, ...turnLifecycle } }
+    body: agentJournalTurnBody({ turnId, ...turn })
+  }
+}
+
+/** The status carrier an older host writes in place of the turn item. */
+function legacyLifecycle(
+  turnId: string,
+  sequence: number,
+  turn: Omit<AgentJournalTurnLifecycle, 'turnId'>,
+  observedAt: number
+): AgentJournalRenderItem {
+  return {
+    ...lifecycle(turnId, sequence, turn, observedAt),
+    body: { kind: 'status', text: 'Working', turnLifecycle: { turnId, ...turn } }
   }
 }
 
@@ -104,10 +116,11 @@ describe('useStructuredAgentTurnTiming', () => {
     expect(result.current.workingStartedAt).toBeNull()
 
     vi.setSystemTime(CLIENT_NOW + 60_000)
+    // An older host's status carrier still anchors the counter.
     const next = [
       ...running,
       user('u3', 5),
-      lifecycle(
+      legacyLifecycle(
         't3',
         6,
         { state: 'running', startedAt: HOST_START + 150_000 },

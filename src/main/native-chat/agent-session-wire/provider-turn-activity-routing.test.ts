@@ -263,9 +263,6 @@ describe('provider turn activity routing', () => {
     )
     expect(state.activities.at(-1)).toBeNull()
     expect(state.tombstones).toHaveLength(0)
-    expect(state.rows.at(-1)).toMatchObject({
-      kind: 'status',
-      turnLifecycle: { turnId: TURN_ID, state: 'completed' }
-    })
+    expect(state.rows.at(-1)).toMatchObject({ kind: 'turn', turnId: TURN_ID, state: 'completed' })
   })
 })

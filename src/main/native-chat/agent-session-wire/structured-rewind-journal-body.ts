@@ -50,9 +50,10 @@ export function restoreRewindJournalBody(body: StoredBody): AgentJournalItemBody
   ) {
     normalized = fallback()
   } else if (
-    body.kind === 'status' &&
-    body.turnLifecycle &&
-    !(AGENT_JOURNAL_TURN_LIFECYCLE_STATES as readonly string[]).includes(body.turnLifecycle.state)
+    (body.kind === 'turn' || (body.kind === 'status' && body.turnLifecycle)) &&
+    !(AGENT_JOURNAL_TURN_LIFECYCLE_STATES as readonly string[]).includes(
+      body.kind === 'turn' ? body.state : body.turnLifecycle!.state
+    )
   ) {
     normalized = fallback()
   }
