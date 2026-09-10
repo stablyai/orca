@@ -170,6 +170,18 @@ describe('recording boundaries', () => {
     )
   })
 
+  it('accepts a dependency bump but still refuses a different baseline', () => {
+    const expected = sampleGolden('provenance')
+    const bumped = sampleGolden('provenance')
+    bumped.lockfileSha256 = 'd'.repeat(64)
+    expect(() => compareGolden(expected, bumped)).not.toThrow()
+    const rebased = sampleGolden('provenance')
+    rebased.baseline = 'e'.repeat(40)
+    expect(() => compareGolden(expected, rebased)).toThrow(
+      /Recording differs: provenance header baseline/
+    )
+  })
+
   it('records a shared prefix once and refuses a variant that already diverged', () => {
     const base: RecordingScenario = {
       id: 'family',

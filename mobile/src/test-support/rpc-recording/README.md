@@ -57,9 +57,11 @@ visible, it does not make the reduction itself observable.
 
 ## Golden schema
 
-Each file pins `runnerVersion`, `baseline`, `lockfileSha256` (mobile's lockfile),
+Each file records `runnerVersion`, `baseline`, `lockfileSha256` (mobile's lockfile),
 `recorderSha256`, `platform`, `scenarioVersion`, `projectionVersion`, `goldenFormatVersion`,
-`operation`, `family`, and `namedDeltas`. `recorderSha256` covers every non-markdown file under
+`operation`, `family`, and `namedDeltas`. `platform` and `lockfileSha256` are provenance and are
+not compared: a dependency or OS that changes behaviour changes the trace itself, so comparing
+them would only fail candidates on unrelated bumps. The rest are pinned. `recorderSha256` covers every non-markdown file under
 this directory plus `pilot-scenarios.json`, so the runner that produced a golden is as pinned as
 the product baseline: editing an adapter projection, a fixture or a scenario fails candidate mode
 on the header and forces a deliberate re-record. Checkpoints

@@ -102,8 +102,9 @@ function goldenPath(directory: string, id: string): string {
 }
 export function compareGolden(expected: GoldenRecording, actual: GoldenRecording): void {
   const scenario = actual.recording.scenario
-  // Platform is provenance; cross-platform candidates still compare the complete behavioral trace.
-  const pinned = { ...expected, platform: actual.platform }
+  // Platform and lockfile are provenance: a dependency that changes behaviour changes the trace
+  // below, and one that does not must not fail the compare on every unrelated bump.
+  const pinned = { ...expected, platform: actual.platform, lockfileSha256: actual.lockfileSha256 }
   const { recording: _expectedRecording, ...expectedHeader } = pinned
   const { recording: _actualRecording, ...actualHeader } = actual
   for (const [key, value] of Object.entries(expectedHeader)) {
